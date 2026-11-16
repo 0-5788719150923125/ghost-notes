@@ -15,7 +15,7 @@ extends SceneTree
 ##     [Clock] - against a made-up source that does, which the same scan must catch (the control).
 
 ## What may write the clock's digits all the same: a time of day is not a length.
-const NOT_CLOCKS := {"media/tablet.gd": "the tablet's status bar shows the time of day, not how long something runs"}
+const NOT_CLOCKS := {"media/tablet_chrome.gd": "a tablet's status bar shows the time of day, not how long something runs"}
 const TIMELINES := ["res://src/masking/mask_timeline.gd", "res://src/timeline/track_lane.gd", "res://src/timeline/flag_strip.gd",
 	"res://src/timeline/storyboard_strip.gd", "res://src/timeline/timeline_lanes.gd"]
 
