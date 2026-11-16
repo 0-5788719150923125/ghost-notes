@@ -1867,7 +1867,7 @@ RULES: List[Rule] = [
          (("a.gd", "\tvar box := TextEdit.new()", 1), ("a.gd", "\tvar list := ScrollContainer.new()", 1),
           ("a.gd", "\tvar t := SceneTree.new()\n\tvar f := TextField.new()", 0)),
          skip=("side_panel.gd", "text_field.gd", "script_writer.gd", "reading_cast.gd", "reader_browser.gd", "voice_fishing.gd", "mask_editor.gd",
-               "storyboard_editor.gd", "timeline_dock.gd", "source_window.gd", "design_window.gd", "note_kept.gd", "note_grid.gd", "assistant.gd", "dex_window.gd")),
+               "storyboard_editor.gd", "timeline_dock.gd", "source_window.gd", "design_window.gd", "note_kept.gd", "note_grid.gd", "assistant.gd", "dex_window.gd", "prop_refine.gd")),
     # `Films.pump()` is called from main's `_process`: a window cut is an ffmpeg child, and something with a
     # frame must notice it exit and promote its output out of the `.part` name. A probe replaces the main scene,
     # so no gate sees this.

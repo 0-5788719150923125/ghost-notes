@@ -16,11 +16,15 @@ class_name DispatchFormat
 ## The desk's number is the note's own file's unless the Seed row gives one ([method desk_seed]): it places the things that
 ## can wander, grows the roots and draws the radar's aircraft - never what the script does. Changed while the note plays, it
 ## is handed to the reading's live document and the desk is drawn again at once ([method _redress_live]).
+##
+## What is on the desk is on the Props card ([DispatchProps]): the parts any make can play (the mug, the cup of pencils) are
+## chosen there, kept in the block's `things` (`{role: choice}`, [PropMakes]) and handed to the desk as the seed is.
 
 ## Its format's key in [constant Medium.REGISTRY].
 const KEY := "dispatch"
-## Its keys in the Medium's block: the desk's seed (0: the note's own).
-const KNOBS := {"seed": 0}
+## Its keys in the Medium's block: the desk's seed (0: the note's own), and the makes chosen for its parts (`{role: choice}`,
+## none for the desk's own).
+const KNOBS := {"seed": 0, "things": {}}
 
 signal noted(text: String)
 
@@ -33,6 +37,7 @@ var _typing := ""                # the words as last looked at, and how long the
 var _rested := 0.0
 var _seed_box: SpinBox
 var _about: Label
+var _wants := {}                 # what the script last read asks the desk to build only for it ([method wants])
 
 
 static func for_note(ctx: Dictionary) -> DispatchFormat:
@@ -41,6 +46,8 @@ static func for_note(ctx: Dictionary) -> DispatchFormat:
 	if card._panel != null:
 		card._panel.walk = DispatchWalk.new()
 		card._panel.publish = Publish.new(card)
+		# what is on the desk, on the Props card ([DispatchProps])
+		card._panel.prop_sections.append(DispatchProps.new(card))
 	card._build()
 	return card
 
@@ -75,6 +82,11 @@ func apply(cfg: Dictionary) -> void:
 	_knobs = KNOBS.duplicate(true)
 	if cfg.has("seed"):
 		_knobs["seed"] = int(cfg["seed"])
+	if cfg.get("things") is Dictionary:
+		for role in (cfg["things"] as Dictionary):
+			var c: Variant = (cfg["things"] as Dictionary)[role]
+			if DispatchSet.MAKE_SALTS.has(String(role)) and PropMakes.valid(c) and not (c as Dictionary).is_empty():
+				_knobs["things"][String(role)] = (c as Dictionary).duplicate(true)
 	_show_knobs()
 
 
@@ -117,7 +129,38 @@ func document() -> Dictionary:
 		var path := Illustrations.path_for(key)
 		if not path.is_empty():
 			pictures[key] = ProjectSettings.globalize_path(path)
-	return {"seed": desk_seed(), "pictures": pictures, "clips": clips, "head": _head()}
+	return {"seed": desk_seed(), "things": things().duplicate(true), "pictures": pictures, "clips": clips, "head": _head()}
+
+
+## The makes chosen for the desk's parts: `{role: choice}` ([PropMakes]), a part not in it the desk's own.
+func things() -> Dictionary:
+	return _knobs["things"]
+
+
+## Role [param role] played by [param choice] from here ({} the desk's own): kept in the block and drawn at once while the note
+## plays. "" done, else why not.
+func choose(role: String, choice: Dictionary) -> String:
+	if not DispatchSet.MAKE_SALTS.has(role):
+		return "the desk has no such part to choose"
+	if not PropMakes.valid(choice):
+		return "that is not something the part can be played by"
+	if choice.is_empty():
+		(_knobs["things"] as Dictionary).erase(role)
+	else:
+		_knobs["things"][role] = choice.duplicate(true)
+	_touch()
+	_redress_live()
+	return ""
+
+
+## The note as written, its frontmatter on it ([method _note]).
+func note() -> String:
+	return _note()
+
+
+## What the script asks the desk to build only for it, as last read: `clock`, `tablet` ([method DispatchMedium.wants_of]).
+func wants() -> Dictionary:
+	return _wants
 
 
 func _body() -> String:
@@ -182,6 +225,7 @@ func _say_about(body: String) -> void:
 	if _about == null:
 		return
 	var p := DispatchScript.parse(body)
+	_wants = DispatchMedium.wants_of(p, body)
 	var phones: PackedStringArray = p["phones"]
 	var n := (p["actions"] as Array).size()
 	var line := "%d phones (%s); %d things the desk does." % [phones.size(), ", ".join(phones), n]
@@ -208,8 +252,8 @@ func _touch() -> void:
 		_panel.touch()
 
 
-## The desk drawn again while the note plays: the seed as it stands, in the reading's live document ([DispatchMedium] draws
-## the desk again when it changes).
+## The desk drawn again while the note plays: the seed and the parts' makes as they stand, in the reading's live document
+## ([DispatchMedium] draws the desk again when either changes).
 func _redress_live() -> void:
 	var subs: Node = _panel.subtitles if _panel != null and is_instance_valid(_panel) else null
 	if subs == null or not is_instance_valid(subs):
@@ -217,3 +261,4 @@ func _redress_live() -> void:
 	var doc: Dictionary = subs.get("document")
 	if doc.get("dispatch") is Dictionary:
 		(doc["dispatch"] as Dictionary)["seed"] = desk_seed()
+		(doc["dispatch"] as Dictionary)["things"] = things().duplicate(true)

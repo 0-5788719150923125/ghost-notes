@@ -1,14 +1,15 @@
 extends Window
 class_name DexWindow
 
-## DexWindow - the Dex: what the library keeps, a shelf at a time, a tile an entry. Its sections ([ShelfSection]) are props and voices
-## when it is opened on its own (the bottom-right row's button), or the one section a card hands it ("+ Add a prop" on the Props
-## card, whose section adds what is picked: Use). Each tile shows an entry's picture, its name (renamed in place where it can be), its
-## line and its verbs - Use, Hear for a voice, Export… to hand it on in a file, and what its section offers besides; Import… takes such
-## a file in. A filter by words narrows the shelf. Pictures are asked for in view and near it first ([method
-## ShelfSection.want_pictures]), every other on the shelf behind them ([method ShelfSection.prepare_pictures]), and each is shown
-## as it arrives; a click on a prop's opens it whole, in 3D ([PropViewer]). It opens centered in
-## the room beside the side panel, never under it ([method Shell.center_beside]). Escape or the window's close hides it.
+## DexWindow - the Dex: what the library keeps and what scenes build, a shelf at a time, a tile an entry. Its sections
+## ([ShelfSection]) are props, voices and what scenes build when it is opened on its own (the bottom-right row's button), or the one
+## section a card hands it ("+ Add a prop" on the Props card, or a row's Choose…, whose section adds what is picked: Use). Each tile
+## shows an entry's picture, its name (renamed in place where it can be), its line and its verbs - Use, Hear for a voice, Export… to
+## hand it on in a file, and what its section offers besides; Import… takes such a file in. A filter by words narrows the shelf,
+## opened with the words a section asks for ([method ShelfSection.find]). Pictures are asked for in view and near it first ([method
+## ShelfSection.want_pictures]), every other on the shelf behind them ([method ShelfSection.prepare_pictures]), and each is shown as
+## it arrives; a click on a prop's opens it whole, in 3D ([PropViewer]). It opens centered in the room beside the side panel, never
+## under it ([method Shell.center_beside]). Escape or the window's close hides it.
 
 ## Its size, at most, against the room beside the panel.
 const MOST := Vector2(0.86, 0.86)
@@ -47,6 +48,11 @@ func _init() -> void:
 	window_input.connect(func(e: InputEvent) -> void:
 		if e is InputEventKey and (e as InputEventKey).pressed and (e as InputEventKey).keycode == KEY_ESCAPE:
 			_close())
+	# a shelf hidden, however it was, takes no more of its pictures ahead of time
+	visibility_changed.connect(func() -> void:
+		if not visible:
+			for sec in _sections:
+				(sec as ShelfSection).prepare_pictures([]))
 	_player = AudioStreamPlayer.new()
 	_player.finished.connect(func() -> void: _playing = "")
 	add_child(_player)
@@ -129,6 +135,11 @@ func open(sections: Array, told := Callable(), first := "") -> void:
 				break
 	title = "Dex" if _sections.size() != 1 else "Dex - %s" % (_sections[0] as ShelfSection).title()
 	_status.text = ""
+	var words := ""
+	for sec in _sections:
+		if not (sec as ShelfSection).find().is_empty():
+			words = (sec as ShelfSection).find()
+	_filter.text = words
 	_fill()
 	var host := get_parent()
 	var room := Shell.room_beside(host)
@@ -422,6 +433,4 @@ func _show_pictures() -> void:
 func _close() -> void:
 	_player.stop()
 	_playing = ""
-	for sec in _sections:
-		(sec as ShelfSection).prepare_pictures([])
 	hide()

@@ -5,7 +5,9 @@ class_name PropPictures
 ## [PropStudio] one at a time, kept on the library's `pictures` shelf where the library may be written ([method Library.writable]),
 ## and held here once taken or read. A picture kept on the shelf is read on a worker, a few at a time; one never taken is taken in
 ## the order asked, the props wanted now ([method want], [method of]) before those only made ready ([method prepare]), which wait no
-## longer once the shelf asking for them closes. A process that takes no pictures answers null for each.
+## longer once the shelf asking for them closes. A prop built by code rather than from a spec is asked for with what makes it
+## ([method of_made]): asked as `[hash, maker, null]`, wherever a spec's `[hash, thing, materials]` goes. A process that takes no
+## pictures answers null for each.
 
 ## How many kept pictures one worker reads before the next are asked for.
 const READ_AT_ONCE := 24
@@ -37,6 +39,22 @@ func of(h: String, thing: Dictionary, mats: Dictionary) -> Variant:
 	elif not _queue.any(func(q: Array) -> bool: return String(q[0]) == h):
 		_ready = _ready.filter(func(q: Array) -> bool: return String(q[0]) != h)
 		_queue.append([h, thing, mats])
+		_pump()
+	return null
+
+
+## The picture of a prop built by code ([param maker]: `() -> {node, size}`, [method PropStudio.picture_made]), kept by [param h],
+## as [method of] answers for a spec.
+func of_made(h: String, maker: Callable) -> Variant:
+	if h.is_empty():
+		return null
+	if _images.has(h):
+		return _images[h]
+	if _kept(h):
+		_read(h)
+	elif not _queue.any(func(q: Array) -> bool: return String(q[0]) == h):
+		_ready = _ready.filter(func(q: Array) -> bool: return String(q[0]) != h)
+		_queue.append([h, maker, null])
 		_pump()
 	return null
 
@@ -142,7 +160,13 @@ func _pump() -> void:
 		var q: Array = _queue.pop_front() if not _queue.is_empty() else _ready.pop_front()
 		if _images.has(String(q[0])):
 			continue
-		var got: Dictionary = await take.call(q[1], q[2], String(q[0]), Library.writable())
+		var got := {}
+		if q[1] is Callable:
+			var made: Dictionary = (q[1] as Callable).call()
+			if not made.is_empty():
+				got = await PropStudio.picture_made(made, String(q[0]), Library.writable())
+		else:
+			got = await take.call(q[1], q[2], String(q[0]), Library.writable())
 		if got.is_empty():
 			_images[String(q[0])] = null
 			if not PropStudio.can_see():

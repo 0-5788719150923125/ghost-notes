@@ -38,6 +38,7 @@ var provision: Node
 var environment: DepsPanel
 var graphics: GraphicsPanel
 var dex: DexWindow
+var _dex_shelves: Array = []    # what the Dex opened on its own shows: the library's props and voices, and what scenes build
 
 var _env_layer: CanvasLayer
 var _env_button: Button
@@ -209,12 +210,12 @@ func _build_dex() -> void:
 	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	b.focus_mode = Control.FOCUS_NONE
 	b.custom_minimum_size = Vector2(40, 40)
-	b.tooltip_text = "Dex: what your library keeps - props and voices - to look at, hear, rename, hand on or take in."
+	b.tooltip_text = "Dex: what your library keeps - props and voices - and what scenes build, to look at, hear, rename, keep, hand on or take in."
 	b.pressed.connect(func() -> void: open_dex(not (dex != null and dex.visible)))
 	row_button(&"dex", b)
 
 
-## The Dex opened on every shelf the library has ([param on]), or closed.
+## The Dex opened on every shelf the library has and every scene's things ([param on]), or closed.
 func open_dex(on: bool) -> void:
 	if not on:
 		if dex != null:
@@ -223,7 +224,9 @@ func open_dex(on: bool) -> void:
 	if dex == null:
 		dex = DexWindow.new()
 		add_child(dex)
-	dex.open([LibraryProps.new(), LibraryVoices.new()])
+	if _dex_shelves.is_empty():
+		_dex_shelves = [LibraryProps.new(), LibraryVoices.new(), DeskRecipes.new(), DispatchProps.new()]
+	dex.open(_dex_shelves)
 
 
 # --- the feedback console -----------------------------------------------------------------------

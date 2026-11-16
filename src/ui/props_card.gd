@@ -173,7 +173,13 @@ func _row(sec: PropSection, r: Dictionary, live: Dictionary) -> Control:
 			b.toggle_mode = true
 			b.button_pressed = bool(vd["pressed"])
 		b.add_theme_font_size_override("font_size", 12)
-		b.pressed.connect(func() -> void: _said(sec.act(key, String(vd["key"]))))
+		if bool(vd.get("opens", false)):
+			b.pressed.connect(func() -> void:
+				var other := sec.choices(key)
+				if other != null:
+					open_shelf(other))
+		else:
+			b.pressed.connect(func() -> void: _said(sec.act(key, String(vd["key"]))))
 		verbs.add_child(b)
 	return row
 

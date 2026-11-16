@@ -6,6 +6,11 @@ class_name ThingLibrary
 ## the thing alone - its parts, its scale and the materials they use - never where it stood on the table it came from, its
 ## group or why it was there ([constant OWN]).
 ##
+## A prop refined is still one prop: its file keeps every version (`versions`, oldest first, [method versions]) and which of them
+## is used (`at`), and its own `thing`, `materials` and `hash` are that one's ([method use_version]). A new version is added
+## beside the rest and used only when a person says so ([method add_version]); none is ever taken away. It is found as kept by
+## the hash of any of its versions ([method kept_as], [method hashes_of]), so the prop it was kept from is never kept again.
+##
 ## Put on a table ([method put_on]) it is that thing again: named so no other thing there shares its name, each material it
 ## uses added under its own name, and renamed where the table has another of that name, so it looks the same on every table.
 ## A file from anywhere (one handed on, or edited by hand) comes in through [method sanitized], bounded as a made one is
@@ -18,6 +23,8 @@ const OWN := ["name", "parts", "scale"]
 const FOUND := 6
 ## The longest line saying what a prop is.
 const LINE_MOST := 200
+## The longest direction a version keeps as what made it.
+const NOTE_MOST := 2000
 ## The ending of a prop handed on as a file ([method export_to]).
 const EXPORT := ".prop.json"
 
@@ -128,12 +135,104 @@ static func read_file(path: String) -> Dictionary:
 	return e
 
 
-## The name of the prop kept whose hash is [param h] ([method hash_of]), "" for none.
+## The name of the prop kept whose hash, or one of whose versions' hashes, is [param h] ([method hash_of]), "" for none.
 static func kept_as(h: String) -> String:
 	for e in entries():
-		if String((e as Dictionary)["hash"]) == h:
+		if hashes_of(e).has(h):
 			return String((e as Dictionary)["name"])
 	return ""
+
+
+# --- versions ------------------------------------------------------------------------------------------------------------
+
+## Entry [param e]'s versions, oldest first: each `{thing, materials, hash, note, by, made}` - `note` the direction that made it from
+## the one before ("" for the first), `by` who made it (an agent and its model), `made` when (unix seconds, 0 unknown). An entry
+## never refined has one, itself. [] for no entry.
+static func versions_of(e: Dictionary) -> Array:
+	if e.is_empty():
+		return []
+	var out: Array = []
+	for v in (e.get("versions", []) if e.get("versions") is Array else []):
+		if not (v is Dictionary) or not ((v as Dictionary).get("thing") is Dictionary):
+			continue
+		var vd: Dictionary = v
+		var thing: Dictionary = (vd["thing"] as Dictionary).duplicate(true)
+		thing["name"] = String(e["name"])
+		var mats: Dictionary = (vd["materials"] as Dictionary).duplicate(true) if vd.get("materials") is Dictionary else {}
+		var h := String(vd["hash"]) if vd.get("hash") is String and not String(vd["hash"]).is_empty() else hash_of(thing, mats)
+		out.append({"thing": thing, "materials": mats, "hash": h, "note": String(vd.get("note", "")) if vd.get("note") is String else "",
+			"by": String(vd.get("by", "")) if vd.get("by") is String else "", "made": int(vd.get("made", 0)) if (vd.get("made") is float or vd.get("made") is int) else 0})
+	if out.is_empty():
+		out.append({"thing": (e["thing"] as Dictionary).duplicate(true), "materials": (e["materials"] as Dictionary).duplicate(true),
+			"hash": String(e["hash"]), "note": "", "by": "", "made": 0})
+	return out
+
+
+## The prop kept as [param name]'s versions ([method versions_of]).
+static func versions(name: String) -> Array:
+	return versions_of(read(name))
+
+
+## Which of entry [param e]'s versions is the one used: its index in [method versions_of], the last where it does not say.
+static func used_of(e: Dictionary) -> int:
+	var n := versions_of(e).size()
+	if n == 0:
+		return -1
+	var at: Variant = e.get("at")
+	return clampi(int(at), 0, n - 1) if (at is float or at is int) else n - 1
+
+
+## The hash of every one of entry [param e]'s versions.
+static func hashes_of(e: Dictionary) -> Array:
+	return versions_of(e).map(func(v: Dictionary) -> String: return String(v["hash"]))
+
+
+## A version of the prop kept as [param name] added after the rest: [param thing] built of [param materials] (made safe, as a file
+## from anywhere is, [method sanitized]), made by [param by] as [param note] directed. The version used is left as it is. Its index,
+## or -1 with [param why] told why not.
+static func add_version(name: String, thing: Dictionary, materials: Dictionary, note: String, by: String, why: Array = []) -> int:
+	var e := read(name)
+	if e.is_empty():
+		why.append("%s is not in the library" % name)
+		return -1
+	var t := thing.duplicate(true)
+	t["name"] = String(e["name"])
+	var made := sanitized({"name": String(e["name"]), "thing": t, "materials": materials, "line": String(e["line"])})
+	if made.is_empty():
+		why.append("the revision builds nothing")
+		return -1
+	var vs := versions_of(e)
+	var at := used_of(e)
+	vs.append({"thing": made["thing"], "materials": made["materials"], "hash": String(made["hash"]), "note": note.strip_edges().left(NOTE_MOST),
+		"by": by.left(100), "made": int(Time.get_unix_time_from_system())})
+	e.erase("file")
+	e["versions"] = vs
+	e["at"] = at
+	var err := _write(e)
+	if not err.is_empty():
+		why.append(err)
+		return -1
+	return vs.size() - 1
+
+
+## Version [param i] of the prop kept as [param name] made the one used: its thing, materials and hash become the prop's. "" done,
+## else why not.
+static func use_version(name: String, i: int) -> String:
+	var e := read(name)
+	if e.is_empty():
+		return "%s is not in the library" % name
+	var vs := versions_of(e)
+	if i < 0 or i >= vs.size():
+		return "%s has no version %d" % [name, i + 1]
+	var v: Dictionary = vs[i]
+	e.erase("file")
+	e["thing"] = (v["thing"] as Dictionary).duplicate(true)
+	(e["thing"] as Dictionary)["name"] = String(e["name"])
+	e["materials"] = (v["materials"] as Dictionary).duplicate(true)
+	e["hash"] = String(v["hash"])
+	e["versions"] = vs
+	e["at"] = i
+	return _write(e)
 
 
 ## The prop kept as [param name] taken off the shelf, to the trash ([method Library.trash]). "" done, else why not.
@@ -384,6 +483,9 @@ static func export_to(name: String, path: String) -> String:
 	if e.is_empty():
 		return "%s is not in the library" % name
 	e.erase("file")
+	# handed on as the version used, alone
+	e.erase("versions")
+	e.erase("at")
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
 		return "could not write " + path

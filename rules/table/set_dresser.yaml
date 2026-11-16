@@ -200,26 +200,7 @@ prompt:
           stands it larger or smaller than you built it (1 as built). A `group` (any word) only names
           things that belong together, for you; where each stands is its own `at`.
   - ""
-  - HOW A THING IS DESCRIBED
-  - >-
-      In centimeters. Each thing has its own origin, the middle of its base on the cloth: y is up, x
-      is the reader's right, and +z is toward the reader - the thing's front.
-  - >-
-      A thing is one or more PARTS. A part is one SHAPE of one MATERIAL, placed by `at` [x, y, z]
-      (where the shape's own origin goes - the middle of its base) and turned by `turn` ([x, y, z]
-      degrees, or one number for a turn about the vertical).
-  - ""
-  # the shapes, materials and their ornament: Props.describe()
-  - insert: props
-  - ""
-  - >-
-      DETAIL: the camera sees a thing 10 cm tall at about a sixth of the picture's height, so
-      anything under a few millimeters is lost - engraving, glaze, grain and pattern belong in the
-      material and its ornament, not in extra parts. Most things need 1 to 5 parts; none more than
-      {{max_parts}}.
-  - >-
-      SIZES are the real sizes of the real things.{{^cardless}} For scale, a card here is {{card_w}} x
-      {{card_h}} cm across and tall as it is read, and the deck stands 3 cm high.{{/cardless}}{{#tools}} On the blueprint a thing's foot is drawn at its real size.{{/tools}}
+  - include: thing_language
   - ""
   # WORK AT THE TABLE (next/table_work.md; the user, 2026-10-25: "I want to build a system that is flexible
   # enough to allow agents to do this for themselves"): what the plan has done at the table, so what it is
@@ -544,6 +525,30 @@ in_one_reply:
 
 # THE SHAPES TO COPY - each a thing, a table and a light no episode has, so none is copied whole
 # (an example in a prompt is copied every run: name it as never belonging)
+# HOW A THING IS DESCRIBED: the prop language, shared with the prop refiner (table/prop_refiner.yaml). The code gives {{props}}
+# (Props.describe()), {{max_parts}}, and for a table {{card_w}}, {{card_h}} with the flags `cardless` and `tools`.
+thing_language:
+  - HOW A THING IS DESCRIBED
+  - >-
+      In centimeters. Each thing has its own origin, the middle of its base on the cloth: y is up, x
+      is the reader's right, and +z is toward the reader - the thing's front.
+  - >-
+      A thing is one or more PARTS. A part is one SHAPE of one MATERIAL, placed by `at` [x, y, z]
+      (where the shape's own origin goes - the middle of its base) and turned by `turn` ([x, y, z]
+      degrees, or one number for a turn about the vertical).
+  - ""
+  # the shapes, materials and their ornament: Props.describe()
+  - insert: props
+  - ""
+  - >-
+      DETAIL: the camera sees a thing 10 cm tall at about a sixth of the picture's height, so
+      anything under a few millimeters is lost - engraving, glaze, grain and pattern belong in the
+      material and its ornament, not in extra parts. Most things need 1 to 5 parts; none more than
+      {{max_parts}}.
+  - >-
+      SIZES are the real sizes of the real things.{{^cardless}} For scale, a card here is {{card_w}} x
+      {{card_h}} cm across and tall as it is read, and the deck stands 3 cm high.{{/cardless}}{{#tools}} On the blueprint a thing's foot is drawn at its real size.{{/tools}}
+
 thing_example: |-
   {
     "idea": "two or three sentences: this table, and the reader who set it",

@@ -23,8 +23,11 @@ block (the author's, never ghost's `ghost:` block).
   are nodes of their own. The `desk:` block's words are kept for a later set dresser (phase two, as the letter's); today
   only `phones` (the labels, in order) is read.
 - **The camera sits in the chair and turns to what is active** (a phone ringing, the terminal typing, the radar on a
-  ping, a picture landing on a screen, the receiver while it plays static), leaning a little toward it on critically
-  damped springs: nothing jumps or whips. With nothing new for a while it eases back to the whole desk, with a breath of
+  ping, a picture landing on a screen, the receiver while it plays static), leaning a little toward it slowly and gently,
+  as the night is: a lead that eases every move in, then critically damped springs (`LEAD_TAU`, `SPRING_TAU`; half a move
+  in about 4 s, nearly all of it in 8): nothing jumps, whips or lurches. Two looks at the same thing are one, held between
+  (`SAME_BRIDGE`); in a live reading the camera holds on for a next look that comes soon, before its words are heard
+  (`_said_by`), rather than pull back to the whole desk for nothing. What happens in the black turns it to nothing. With nothing new for a while it eases back to the whole desk, with a breath of
   slow wander under it.
 - **A phone in hand is held to the ear**: it floats up beside the camera on the right, open and tilted, in the corner of
   the frame. A phone on hold lies open on the desk in front of the rows.
@@ -73,6 +76,7 @@ stays a note. The ScriptMarks registry has a row for each (docs/script.md).
 | `dispatch_screens.gd` | the 2D faces drawn into the screens: the terminal (its redacted words as written, and where they lie), the radar and its clutter, the scope, a phone's two screens and keypad, the receiver's dial, the gain knob's scale |
 | `dispatch_censor.gd` | `DispatchCensor`: redacted words hidden over the finished frame - a tracked box cracked into flat shards (`shaders/dispatch_redact.gdshader`) |
 | `dispatch_sounds.gd` | `DispatchSounds`: every sound of the desk, a function of show time |
+| `dispatch_props.gd` | `DispatchProps`: the desk's things on the note's Props card and the Dex - the mug and the cup of pencils as roles any make can play (Choose…, kept in the Medium block's `things`; next/library.md, "Roles"), and every thing the desk builds, pictured alone |
 | `dispatch_format.gd`, `dispatch_walk.gd` | its own rows on the Medium card (the desk's number) and what they hand the reading; the pictures are the note's Pictures card's (next/pictures.md), `DispatchMedium.pictures_in` saying which marks they are |
 
 And in the voice: `Manuscript.HEARD`, a passage's `heard` through [ReadingPlan], a mark in [ReadingJoin], applied by the
@@ -107,7 +111,7 @@ it is made on a worker while the show waits, as the table's is; a frame's pose a
 
 Open:
 
-- The author's eye: the camera's pace (springs of 0.95 s), the props' look, the roots, the lair's light, the censor's box
+- The author's eye: the camera's pace (a lead of 1.1 s and springs of 1.7 s, every look held at least 10 s, a ping 12 to 16 s), the props' look, the roots, the lair's light, the censor's box
   size, waver and shard darkness, and the gain, bell and lamp marks.
 - The intro's pace with the real voice, by ear and eye: the walks' length is the prose's.
 - A real voice and an export; the seven pictures painted from the Pictures card.
@@ -155,8 +159,13 @@ The opening, the radar, the terminal and the desk's props were reworked; what st
 - **The desk is its number's** (`DispatchSet._lay_out`, `_pack`): mirrored or not (the radio's things right or left, the
   phones and printer opposite), each end a little off as one, each thing turned; the small things packed into free room
   (the mug at arm's reach, 25-40 cm in, beside the keyboard; the switch by the keyboard; the handbook, its spine to the
-  chair; the chart, the pencil cup, the stamp, the tracker). Everything the medium and the roots read follows it (`at_of`,
-  `desk_at`, `held_rect`, the camera's spots). The glossy desk top (polish 0.22, an old desk) and the lamp's soft shadow
+  chair; the chart, the pencil cup, the stamp, the tracker). EVERYTHING IS WHERE ITS MESHES ARE: a thing is packed by its
+  own meshes' outlines turned as it stands (`bounds`, `_parts_of`), never a typed footprint; nothing packed stands between
+  the chair and a label, dial, screen or the clock's cards, nor in a face's own close-up (`_sights`, `hidden`: lines from the
+  eye through each mesh's box); what the camera reads is packed first, and the stamp and pencil cup are left off a desk with
+  no room. The satellite's monitor is on an arm low over the printer and the security monitor, clamped to the back edge
+  where it is free, turned to the chair (`_satellite`). Everything the medium and the roots read follows it (`at_of`,
+  `desk_at`, `held_rect`, the camera's spots). `dispatch_check` holds it on forty desks. The glossy desk top (polish 0.22, an old desk) and the lamp's soft shadow
   (blur 6, never empty of its own light: `shadow_opacity` 0.62, the room's bounce) avoid a crisp pale-blue disc under the
   mug that the screens' cool glows (which cast no shadows) otherwise light. The coffee ring is a thin opaque, matte rim with
   an older arc beside it, a little off the mug's foot (a translucent disc read as glass, and a `Decal` drew its footprint
@@ -214,14 +223,14 @@ A probe sprang the camera through the whole episode on the rehearsal's voice, an
 at a time, 9 s ahead, as the live reading's do. The springs take about 3 s to settle, and a ping held the radar 3.1 s and
 let go a second later where 4 s was wanted. `DispatchMedium._settled` now makes every look the camera takes:
 
-- **Held long enough to be seen**: `LOOK_LEAST` (5 s) from its start, unless something else begins first, and the hold never
-  runs past what begins next, so nothing is gone back to. A ping holds the radar `PING_HOLD` (5 s) at least, on to the end
-  of the sentence said over it if that ends within `PING_HOLD_MOST` (9 s; `DispatchScript.sentence_ends`, since the spoken
+- **Held long enough to be seen**: `LOOK_LEAST` (10 s) from its start, unless something else begins first, and the hold never
+  runs past what begins next, so nothing is gone back to. A ping holds the radar `PING_HOLD` (12 s) at least, on to the end
+  of the sentence said over it if that ends within `PING_HOLD_MOST` (16 s; `DispatchScript.sentence_ends`, since the spoken
   words have lost their punctuation), then lets go in a second.
 - **Never left only to come straight back**: the camera stays on what it was on rather than ease home for less than
-  `AWAY_LEAST` (7 s) before it turns again (a walk's look runs into the ping where he arrives, a ping's into the walk after
+  `AWAY_LEAST` (12 s) before it turns again (a walk's look runs into the ping where he arrives, a ping's into the walk after
   it), unless what comes next is the whole desk.
-- **No swerve**: a look cut before the camera could get there (`GLANCE_LEAST`, 2.5 s - a phone hung up as the radar pings)
+- **No swerve**: a look cut before the camera could get there (`GLANCE_LEAST`, 3 s - a phone hung up as the radar pings)
   is not taken, nor a short turn away between two looks at the same thing - but words to be read are always looked at
   (`TO_READ`: a typed word is never captioned).
 - **The mug, drunk from**: brought up over 2 s, held at the mouth 3 s for the sip, set down over 1.8 s; the voice waits

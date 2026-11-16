@@ -22,6 +22,11 @@ func version() -> int:
 	return 0
 
 
+## The words the Dex is first filtered by when opened on it ("mug" for a choice of mugs), "" for none.
+func find() -> String:
+	return ""
+
+
 ## The shelves its offers stand on, in order: each `{key, label, tip}`.
 func shelves() -> Array:
 	return []

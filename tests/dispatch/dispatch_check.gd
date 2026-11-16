@@ -13,8 +13,10 @@ extends SceneTree
 ##   the voice talks of it and through to what comes soon, going home only when nothing comes for long;
 ## - the black and the clock: fades down and up; in the black the camera is on the clock, its cards turned over to the time
 ##   given and running on a minute a minute; what is marked in the black is unseen; no track is drawn across it; a note
-##   opening in the black shows its title over the blurred desk first, going black as the title goes (control: no title,
-##   black from the start);
+##   opening in the black shows its title over the blurred desk first, going black as the title goes, its blur never lifting
+##   on the desk (controls: no title, black from the start; the usual pull lifting by then);
+## - two looks at the same thing are one, the camera held between them; in a live reading the camera holds on for a next
+##   look that comes soon, before its words are heard (controls: a look at something else between; a next look far off);
 ## - the tablet: picked up before the eye and put down dark; an address typed into its bar, a link on the page tapped; a
 ##   page following the words said on it, else easing down; its player dark until the desk is played live into it;
 ## - a clip: the screen's static until it is imported, then its frames looping;
@@ -29,9 +31,12 @@ extends SceneTree
 ## - captions: a typed word is read on the terminal, a spoken line is captioned;
 ## - a live reading, words arriving a sentence at a time: an action begun keeps its start when the plan is made again;
 ## - the roots: some on the desk, grown further at the end than at the start, none under an open phone or its lid;
-## - the desk is its number's: the same number is the same desk, across numbers it is mirrored and packed differently, nothing
-##   on anything standing, the mug 25-40 cm in from the edge beside the keyboard; the keyboard is a standard layout (every
-##   row fifteen units) with every key on its case;
+## - the desk is its number's: the same number is the same desk, across numbers it is mirrored and packed differently; on
+##   forty desks no two things meet by their own meshes' outlines, nothing packed hides a label, dial, screen or the clock's
+##   cards from the chair and nothing hides one in its own close-up (controls: a mug just before the clock hides it; a switch
+##   at the radar's face meets it), the satellite's monitor is on its arm turned to the chair, the handbook's spine faces the
+##   chair, the mug 25-40 cm in from the edge beside the keyboard; the keyboard is a standard layout (every row fifteen
+##   units) with every key on its case;
 ## - the mug is drunk from: upright, brought to the mouth and out of the picture for the sip, back in its ring;
 ## - the gain knob turns from three to nine a click a step with the camera on the radar: at three only the target is on the
 ##   scope, at nine the clutter round it and the chair's own on the desk (not at eight), each blip painted once the sweep
@@ -237,7 +242,7 @@ func _run() -> void:
 				into_next = true
 		# (a sound is watched as long as it is heard: the jet crosses the scope; a walk until he arrives)
 		if from.is_empty() or (from == "ping" and not into_next and (float(wd["t1"]) - float(wd["t0"])
-				> maxf(DispatchMedium.PING_HOLD_MOST, DispatchMedium.LOOK_LEAST) + 0.5 or float(wd.get("linger", DispatchMedium.HOME_AFTER)) > 1.5)):
+				> maxf(DispatchMedium.PING_HOLD_MOST, DispatchMedium.LOOK_LEAST) + 0.5 or float(wd.get("linger", DispatchMedium.HOME_AFTER)) > DispatchMedium.PING_LINGER + 0.01)):
 			at_sounds = false
 		if from == "moving":
 			var ends_at_ping := into_next
@@ -352,6 +357,7 @@ func _run() -> void:
 	_receiver(st, md.feed)
 	_glass_hold(st, md.feed)
 	_opens_black(st)
+	_bridge_live(st, md.feed)
 	# captions
 	md._follower.extend(words)
 	_ok(not md._captioned(mid, mid, 0.0) and md._captioned(hello, hello, 0.0), "a typed word is captioned, or a spoken one is not")
@@ -757,10 +763,40 @@ func _opens_black(st: SubViewport) -> void:
 		and titled.fade_at(up + DispatchScript.FADE + 0.05) == 0.0,
 		"opening in the black on a title: the title over the blurred desk, then black as it goes, then up on the clock (%.2f under the title, %.2f after)" % [
 			titled.fade_at(op - 2.0), titled.fade_at(op + DispatchMedium.BLACK_TAIL + 0.05)])
+	var held := titled._pull(op - 0.3, op) == 0.0 and titled._pull(op + DispatchMedium.BLACK_TAIL + 0.05, op) == 1.0
+	var usual := ShowOpening.pull("title", op - 0.3, op, true) > 0.0
+	_ok(held and usual, "...its blur never lifts on the desk: held as it goes black, gone in the black (the control: a show's usual pull is lifting by then)")
 	var plain: DispatchMedium = made.call("none")
 	_ok(plain.fade_at(0.5) == 1.0 and plain.fade_at(plain._opening() - 2.0) == 1.0, "the control: with no title to open on, black from the start")
 	titled.queue_free()
 	plain.queue_free()
+
+
+## A live reading knows only the words heard so far: after a block, with the next look's words not heard yet, the camera
+## holds on for it when it comes soon - the glass again, or the radar - rather than pull back to the whole desk for nothing
+## (the control: the next look a long talk away - not held).
+func _bridge_live(st: SubViewport, feed: ShowFeed) -> void:
+	var talk := "He keeps a log. Of course he keeps a log. He has a column for could be nothing, and he uses it for most of the night. "
+	var made := func(next: String, long := false) -> Array:
+		var body := ("<!-- speaker: Control -->\n\nHere.\n\n```terminal\n> x\npanel: menu = MENU | NIGHT 1\n  1  SUBJECTS\n```\n\n"
+			+ "Forty-one thousand of them on the council's books, and I only have the one.\n\n"
+			+ ("\n\n".join(range(12).map(func(_n: int) -> String: return talk)) + "\n\n" if long else "") + next + "\n\nThere.\n")
+		var words := DispatchScript.rehearsal(DispatchScript.parse(body), 0.32)
+		var md := DispatchMedium.new()
+		md.feed = feed
+		md.mount(st)
+		md.load_note(body, {"seed": 3})
+		md._now = 0.0
+		md.take_words(words.slice(0, 6))
+		var last: Dictionary = md._attn.back() if not md._attn.is_empty() else {}
+		var held := float(last.get("t1", 0.0))
+		md.queue_free()
+		return [String(last.get("kind", "")), held]
+	var again: Array = made.call("```terminal\n> 1\npanel: subjects = SUBJECTS\n```")
+	var radar: Array = made.call("<!-- look: radar -->")
+	var later: Array = made.call("<!-- look: radar -->", true)
+	_ok(String(again[0]) == "session" and float(again[1]) == INF and float(radar[1]) == INF and float(later[1]) < INF,
+		"live, with the next look's words not heard yet, the camera holds on for it when it comes soon (the control: a long talk away, not held - %s, %s, %s)" % [str(again), str(radar), str(later)])
 
 
 static func _first(actions: Array, kind: String) -> int:
@@ -778,24 +814,37 @@ func _layout() -> void:
 	var labels := PackedStringArray(["AISLE", "VAN", "COUGH", "LIGHTS"])
 	var flips := {}
 	var mugs := {}
-	var packed_clear := true
+	var clear := ""
+	var seen := ""
+	var arm := ""
+	var spine := ""
 	var mug_reach := true
 	var spots_follow := true
 	var ring_ok := true
 	var first: Dictionary = {}
-	for seed in range(1, 9):
+	for seed in range(1, 41):
 		var s := DispatchSet.new()
-		var node := s.build(labels, seed, tex)
+		var node := s.build(labels, seed, tex, {"clock": true, "tablet": true} if seed % 2 == 0 else {})
 		flips[int(s.flip)] = true
 		var m: Vector2 = s.at["mug"]
 		mugs[snappedf(m.x, 0.01)] = true
 		if seed == 1:
 			first = s.at.duplicate()
-		var n_big := s.footprints.size() - 6
-		for i in range(n_big, s.footprints.size()):
-			for j in s.footprints.size():
-				if i != j and (s.footprints[i] as Rect2).intersects(s.footprints[j] as Rect2):
-					packed_clear = false
+		var keys := s.bodies.keys()
+		for i in keys.size():
+			for j in range(i + 1, keys.size()):
+				if clear.is_empty() and _meet(s, keys[i], keys[j]):
+					clear = "%s and %s, desk %d" % [keys[i], keys[j], seed]
+		if seen.is_empty():
+			seen = _hidden_on(s, seed)
+		var panel := (s.things["satellite"] as Node3D).get_node("Panel") as Node3D
+		var to := (DispatchSet.EYE - panel.transform.origin).normalized()
+		if arm.is_empty() and (s._arm_fold(panel.transform, s.at_of("satellite")).is_empty() or panel.transform.basis.z.dot(to) < 0.95):
+			arm = "desk %d" % seed
+		var label: Node3D = (s._faces["handbook"] as Array)[0]
+		var spine_xf := (s.things["handbook"] as Node3D).transform * label.transform
+		if spine.is_empty() and spine_xf.basis.z.dot((DispatchSet.EYE - spine_xf.origin).normalized()) < 0.5:
+			spine = "desk %d" % seed
 		var inward := DispatchSet.NEAR - m.y
 		if inward < 0.24 or inward > 0.42 or absf(m.x) > 0.65:
 			mug_reach = false
@@ -833,10 +882,69 @@ func _layout() -> void:
 	_ok(again.at == first, "the control: the same number is the same desk")
 	again_node.free()
 	_ok(flips.size() == 2 and mugs.size() >= 4, "across numbers the desk is mirrored both ways and its small things packed elsewhere (%d mug places)" % mugs.size())
-	_ok(packed_clear, "nothing packed stands on anything standing")
+	_ok(clear.is_empty(), "no two things on the desk meet, by their own meshes' outlines - the satellite's arm and panel and the printer's paper too (%s)" % clear)
+	_ok(seen.is_empty(), "nothing packed hides a label, dial, screen or the clock's cards from the chair, and nothing hides one in its own close-up (%s)" % seen)
+	_ok(arm.is_empty(), "the satellite's monitor is held on its arm, turned to the chair (%s)" % arm)
+	_ok(spine.is_empty(), "the handbook's spine faces the chair (%s)" % spine)
+	_layout_controls(labels, tex)
 	_ok(mug_reach, "the mug is at arm's reach, 25 to 40 cm in from the edge, beside the keyboard")
 	_ok(spots_follow, "the camera turns to where each thing is")
 	_ok(ring_ok, "the old coffee ring is a thin opaque rim, never a clear disc")
+
+
+## Whether things [param a] and [param b] of desk [param s] meet: any part of one ([method DispatchSet._parts_of]) inside any
+## part of the other.
+static func _meet(s: DispatchSet, a: String, b: String) -> bool:
+	if not (s.bodies[a] as AABB).intersects(s.bodies[b] as AABB):
+		return false
+	for part in s._parts[a]:
+		if DispatchSet._meets(part["outline"], part["lo"], part["hi"], s._parts[b]):
+			return true
+	return false
+
+
+## The first face of desk [param s] hidden past what it allows ("" for none): from the chair by a thing packed, or of a thing
+## packed by anything; from its own close-up by anything.
+static func _hidden_on(s: DispatchSet, seed: int) -> String:
+	for k in s._faces:
+		if not s.bodies.has(k):
+			continue
+		var eyes := {"chair": DispatchSet.EYE, "close-up": s.spot_of(k).get("eye", DispatchSet.EYE)}
+		for f in s._faces[k]:
+			var pts := s._face_points(f, s.bodies[k] if f == s.things.get(k) else null)
+			for e in eyes:
+				var sg := DispatchSet._sight(pts, eyes[e], k)
+				for o in s.bodies:
+					if o == k or e == "chair" and not (DispatchSet.PACK.has(o) or DispatchSet.PACK.has(k)):
+						continue
+					var h := DispatchSet.hidden(s._blocks[o], sg)
+					if h > float(sg["most"]) + 0.001:
+						return "%s hides %.0f%% of %s from the %s, desk %d" % [o, h * 100.0, k, e, seed]
+	return ""
+
+
+## The layout's measures can fail: the mug set just before the clock hides its cards from the chair; a switch at the foot of
+## the radar's face, clear of the footprint the radar was once typed with (32 x 34 cm about its middle), meets the radar.
+func _layout_controls(labels: PackedStringArray, tex: Dictionary) -> void:
+	var s := DispatchSet.new()
+	var node := s.build(labels, 2, tex, {"clock": true})
+	var face := s.bounds(s.clock_face)
+	var c := face.get_center()
+	var toward := Vector2(DispatchSet.EYE.x - c.x, DispatchSet.EYE.z - c.z).normalized()
+	var at := Vector2(c.x, c.z) + toward * 0.10
+	var blocks: Array = []
+	DispatchSet._mesh_boxes(s.mug, Transform3D(s.mug.transform.basis, Vector3(at.x, DispatchSet.DESK_Y, at.y)), blocks)
+	var share := DispatchSet.hidden(blocks, DispatchSet._sight(s._face_points(s.clock_face), DispatchSet.EYE, "clock"))
+	var radar := s.at_of("radar")
+	var facing := Vector2(sin(deg_to_rad(float(s.turn["radar"]))), cos(deg_to_rad(float(s.turn["radar"]))))
+	var foot := radar + facing * 0.22
+	var sw := Rect2(foot - Vector2(0.045, 0.035), Vector2(0.09, 0.07))
+	var typed := Rect2(radar - Vector2(0.16, 0.17), Vector2(0.32, 0.34))
+	var outline := PackedVector2Array([sw.position, Vector2(sw.end.x, sw.position.y), sw.end, Vector2(sw.position.x, sw.end.y)])
+	var meets := DispatchSet._meets(outline, DispatchSet.DESK_Y, DispatchSet.DESK_Y + 0.055, s._parts["radar"])
+	_ok(share > DispatchSet.HIDE_MOST and meets and not typed.intersects(sw),
+		"the control: a mug just before the clock hides %.0f%% of its cards; a switch at the radar's face meets it, though the radar's old typed footprint called it clear" % [share * 100.0])
+	node.free()
 
 
 ## What the camera turns to ([method DispatchMedium._settled]), on looks made by hand, each against its control: a glance is
@@ -863,8 +971,8 @@ func _settling(md: DispatchMedium, radar: Dictionary) -> void:
 	var glance := {"t0": 0.0, "t1": 1.0, "spot": radar, "linger": DispatchMedium.PING_LINGER}
 	var held: Array = md._settled([glance.duplicate()])
 	_ok(on.call(held, DispatchMedium.LOOK_LEAST - 0.3) == radar and on.call(held, DispatchMedium.LOOK_LEAST + DispatchMedium.PING_LINGER + 0.5) == home
-		and on.call([glance.duplicate()], 2.5) == home,
-		"a look is held %.0f s to be seen, then let go of (the control: as it was, gone at 2.5 s)" % DispatchMedium.LOOK_LEAST)
+		and on.call([glance.duplicate()], 1.0 + DispatchMedium.PING_LINGER + 0.5) == home,
+		"a look is held %.0f s to be seen, then let go of (the control: as it was, gone after its linger)" % DispatchMedium.LOOK_LEAST)
 	# a ping to its hold - and a hold gives way to what begins next, never gone back to
 	var ping := {"t0": 0.0, "t1": 3.1, "hold": 8.0, "spot": radar, "linger": DispatchMedium.PING_LINGER}
 	var phone := {"t0": 4.0, "t1": 6.0, "spot": phones}
@@ -897,7 +1005,12 @@ func _settling(md: DispatchMedium, radar: Dictionary) -> void:
 		"no turn away and straight back for a short look between two at the same thing, and never a typed block passed over (the control: as it was, to the receiver and back)")
 	# the camera goes home as it would when home is next: nothing is stretched into it
 	var to_home: Array = md._settled([{"t0": 0.0, "t1": 5.0, "spot": radar, "linger": 1.0}, {"t0": 9.0, "t1": 15.0, "spot": home}])
-	_ok(float(to_home[0]["t1"]) < 5.01, "a look before the whole desk is not stretched into it (%.1f)" % float(to_home[0]["t1"]))
+	_ok(float(to_home[0]["t1"]) < maxf(5.0, DispatchMedium.LOOK_LEAST) + 0.01, "a look before the whole desk is not stretched into it, past being seen (%.1f)" % float(to_home[0]["t1"]))
+	# the same thing looked at again, even a while later, is one look: held between (the control: two things that far apart are not)
+	var twice: Array = md._settled([{"t0": 0.0, "t1": 6.0, "spot": term, "kind": "session"}, {"t0": 40.0, "t1": 50.0, "spot": term, "kind": "session"}])
+	var apart: Array = md._settled([{"t0": 0.0, "t1": 6.0, "spot": term, "kind": "session"}, {"t0": 40.0, "t1": 50.0, "spot": radar}])
+	_ok(always.call(twice, term, 0.0, 50.0) and on.call(apart, 30.0) == home,
+		"two looks at the same thing are bridged, held between them (the control: a look at something else that far off is not - home between)")
 	md._attn = kept
 
 

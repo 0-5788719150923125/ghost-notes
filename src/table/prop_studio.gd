@@ -3,8 +3,8 @@ class_name PropStudio
 
 ## PropStudio - a thing photographed alone, as it is built: every part at its real size on a ground ruled in centimeters (a brighter
 ## line every five), lit as [StudioLook] lights it, its flames lit. The set dresser's close looks ([TablePreview]) and a prop's picture
-## on the Props card and its shelves ([method picture], [method cached]) are taken here; a prop built whole to be turned in the hand
-## is [method model].
+## on the Props card and its shelves ([method picture], [method cached]; one a scene builds by code, [method picture_made]) and the
+## pictures an agent refining one is shown ([method views]) are taken here; a prop built whole to be turned in the hand is [method model].
 ##
 ## Rendered in this process, off screen: a SubViewport drawn only while a picture is being taken, then stopped ([method render]). A
 ## process with no renderer (headless) takes none ([method can_see]). A prop's picture is kept on the library's `pictures` shelf by
@@ -19,6 +19,9 @@ const UNDRAWN := 4
 ## A prop's picture on the Props card and the shelves (pixels), and the shelf it is kept on.
 const TILE := Vector2i(320, 240)
 const SHELF := "pictures"
+## The pictures of a prop an agent is shown ([method views]): their size, and each side's name and the direction it is seen from.
+const VIEW := Vector2i(768, 576)
+const VIEWS := [["front", Vector3(0.0, 0.55, 1.0)], ["side", Vector3(1.0, 0.35, 0.0)], ["above", Vector3(0.0, 1.0, 0.0)]]
 
 ## A candle's flame, as the table draws one ([constant TableMedium.FLAME_SHADER]), turned to face whichever side the studio shoots
 ## from.
@@ -223,31 +226,51 @@ static func picture(thing: Dictionary, materials: Dictionary, h: String, store :
 	_busy = true
 	var out := {}
 	var got := await _built(thing, materials, h)
-	if not got.is_empty():
-		var b: Dictionary = got["built"]
-		if b.get("node") is Node3D:
-			if _shared == null:
-				_shared = PropStudio.new()
-			var k := float(got["scale"])
-			var box: AABB = _shared.hold_built(b)
-			_shared._held.scale = Vector3(k, k, k)
-			box = AABB(box.position * k, box.size * k)
-			var img: Image = await _shared.shot(box, Vector3(0.0, 0.55, 1.0), TILE, "")
-			_shared.clear()
-			if img != null and not store:
-				out = {"image": img, "size": size_text(box)}
-			elif img != null:
-				var size := size_text(box)
-				DirAccess.make_dir_recursive_absolute(Library.shelf(SHELF))
-				var path := kept_path(h)
-				img.save_png(path)
-				var f := FileAccess.open(path.get_basename() + ".txt", FileAccess.WRITE)
-				if f != null:
-					f.store_string(size)
-					f.close()
-				out = {"image": img, "size": size}
+	if not got.is_empty() and (got["built"] as Dictionary).get("node") is Node3D:
+		out = await _shoot(got["built"], float(got["scale"]), h, store)
 	_busy = false
 	return out
+
+
+## A thing built some other way than from a spec - by code, as a scene builds what it works - pictured as [method picture]
+## pictures one and kept by [param h] where [param store]: [param b] is `{node, size}` (its node out of any tree, its bounds in
+## the node's own space), and the node is the studio's from here.
+static func picture_made(b: Dictionary, h: String, store := true) -> Dictionary:
+	var have := cached(h)
+	if not have.is_empty() or not can_see():
+		if b.get("node") is Node:
+			(b["node"] as Node).free()
+		return have
+	while _busy:
+		await tree().process_frame
+	_busy = true
+	var out: Dictionary = await _shoot({"node": b["node"], "size": b["size"], "wicks": []}, 1.0, h, store)
+	_busy = false
+	return out
+
+
+## Built thing [param b] ([method Props.build]'s answer) photographed at scale [param k] and kept by [param h] where
+## [param store]: `{image, size}`, {} where the picture went.
+static func _shoot(b: Dictionary, k: float, h: String, store: bool) -> Dictionary:
+	if _shared == null:
+		_shared = PropStudio.new()
+	var box: AABB = _shared.hold_built(b)
+	_shared._held.scale = Vector3(k, k, k)
+	box = AABB(box.position * k, box.size * k)
+	var img: Image = await _shared.shot(box, Vector3(0.0, 0.55, 1.0), TILE, "")
+	_shared.clear()
+	if img == null:
+		return {}
+	var size := size_text(box)
+	if store:
+		DirAccess.make_dir_recursive_absolute(Library.shelf(SHELF))
+		var path := kept_path(h)
+		img.save_png(path)
+		var f := FileAccess.open(path.get_basename() + ".txt", FileAccess.WRITE)
+		if f != null:
+			f.store_string(size)
+			f.close()
+	return {"image": img, "size": size}
 
 
 ## Thing [param thing] built of [param materials] (made safe first, [method Props.sanitize]) on a worker, seeded by [param h]:
@@ -264,6 +287,36 @@ static func _built(thing: Dictionary, materials: Dictionary, h: String) -> Dicti
 		await tree().process_frame
 	WorkerThreadPool.wait_for_task_completion(task)
 	return {"built": built[0], "scale": float(t.get("scale", 1.0))}
+
+
+## Thing [param thing] built of [param materials] photographed from three sides for an agent to look at ([constant VIEWS]: from a
+## little above its front, its right side and above, each [constant VIEW]), written into [param dir] as `prop_<side>.png`: their
+## paths, [] where no picture can be taken. Seeded by [param h] as its picture is; one studio, one picture at a time.
+static func views(thing: Dictionary, materials: Dictionary, h: String, dir: String) -> Array:
+	if not can_see():
+		return []
+	while _busy:
+		await tree().process_frame
+	_busy = true
+	var out: Array = []
+	var got := await _built(thing, materials, h)
+	if not got.is_empty() and (got["built"] as Dictionary).get("node") is Node3D:
+		if _shared == null:
+			_shared = PropStudio.new()
+		var k := float(got["scale"])
+		var box: AABB = _shared.hold_built(got["built"])
+		_shared._held.scale = Vector3(k, k, k)
+		box = AABB(box.position * k, box.size * k)
+		DirAccess.make_dir_recursive_absolute(dir)
+		for v in VIEWS:
+			var img: Image = await _shared.shot(box, v[1] as Vector3, VIEW, "")
+			if img != null:
+				var path := dir.path_join("prop_%s.png" % String(v[0]))
+				img.save_png(path)
+				out.append(path)
+		_shared.clear()
+	_busy = false
+	return out
 
 
 ## Thing [param thing] built of [param materials] whole, to be looked at and turned ([PropViewer]): `{node, box, size}` - its node

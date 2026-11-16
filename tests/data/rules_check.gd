@@ -8,7 +8,7 @@ extends SceneTree
 ## - Every rules file parses, is a map of parts, and every item is a line, an empty line or a map of known keys
 ##   (when, say, insert, include, each); every `include` names a part that exists (control: a file naming one
 ##   that does not is found).
-## - Every prompt renders whole: the producer, the designer, the set dresser (with tools and without), a reader's
+## - Every prompt renders whole: the producer, the designer, the set dresser (with tools and without), the prop refiner, a reader's
 ##   intro, card and close, every picture, what Grok is told beside them, and an episode's YouTube tags and
 ##   painted thumbnail, over a fixture plan, leave nothing unfilled ([member Rules.missing] empty, no `{{`
 ##   left); control: a part asked for a name nobody gives is said.
@@ -216,6 +216,10 @@ func _prompts() -> bool:
 	for looks in [0, 40]:
 		texts.append(TablePrompts.set_dresser("Show", "a brief", plan, 7, CardTable.headroom(7), ["a bell"], true, looks, ["fog"], "by me",
 			["a table"], ["a light"], true, false)["prompt"])
+	# a prop refined (table/prop_refiner.yaml), the prop language shared with the set dresser
+	var refine_vars := {"name": "a cup", "line": "a clay cup", "spec": "{}", "direction": "taller", "props": Props.describe(),
+		"max_parts": Props.MAX_PARTS, "cardless": true, "tools": false, "pictured": true}
+	texts.append(Rules.say("table/prop_refiner.system", refine_vars) + "\n" + Rules.say("table/prop_refiner.prompt", refine_vars))
 	for step in ["intro", "1", "2", "close"]:
 		var upto := 0 if step == "intro" else (3 if step == "close" else int(step))
 		texts.append(TablePrompts.reader("Show", "a brief", plan, step, ["hello"], [card, card, card].slice(0, upto), 3, true, [], [], ["Moth"])["prompt"])

@@ -8,8 +8,9 @@ class_name PropSection
 ## A row is a prop as it stands now: `{key, name, line, group, picture, on, verbs}` - `picture` an Image (null until it is taken),
 ## `on` whether the scene uses it (null for a row with no tick; `on_tip` its tick's words on hover), `verbs` the buttons it has, each
 ## `{key, label, tip}` with `pressed` (a toggle's state) and `off` (grayed, `tip` saying why) where they apply, done by [method
-## act]. Rows are shown under their group ([method groups]). A row's prop whole, to be looked at in 3D, is [method prop_of] and
-## [method model_of]. These defaults show nothing.
+## act] - or with `opens`, which opens the Dex on what may take the row's place ([method choices]). Rows are shown under their
+## group ([method groups]). A row's prop whole, to be looked at in 3D, is [method prop_of] and [method model_of]. These defaults
+## show nothing.
 
 
 func title() -> String:
@@ -43,3 +44,21 @@ func set_on(_key: String, _on: bool) -> String:
 ## and the materials its parts use - or {} where it has none.
 func prop_of(_key: String) -> Dictionary:
 	return {}
+
+
+## Where its props keep their versions and are refined ([PropVersions]), null where they have none.
+func versions_of() -> PropVersions:
+	return null
+
+
+## Row or offer [param key] is now played by the prop kept as [param name] - kept so it could be refined, or another of its versions
+## made the one used: the scene follows where it should (a desk's part chooses it; a table's thing takes its version). "" done, else
+## why not.
+func refined(_key: String, _name: String) -> String:
+	return ""
+
+
+## What may take row [param key]'s place, offered on the Dex (a choice of mugs for the mug), whose Use puts the one picked there;
+## null where nothing can.
+func choices(_key: String) -> PropSection:
+	return null

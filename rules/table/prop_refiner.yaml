@@ -1,0 +1,44 @@
+# THE PROP REFINER - a prop's Refine in its 3D view (PropViewer, PropRefine; LibraryVersions; next/library.md, "Refining a prop").
+# A prop that is mostly right is changed where the author says - a part's shape, a size, a color - and the rest is left as it is
+# written. The reply is a new version of the same prop, which the author compares with the others and may choose; it never
+# replaces one by itself.
+#
+# THE AUTHOR'S ASK IS KEPT AND NOTHING ELSE CHANGES: every part, size, color and material the direction does not touch stays
+# exactly as written, so two versions differ only where they were asked to.
+#
+# The code gives: {{name}} (the prop's name), {{line}} (what it is, maybe empty), {{spec}} (the prop as written: its parts and
+# materials as JSON), {{direction}} (as the author wrote it), {{props}}, {{max_parts}} (the prop language), and the flag
+# `pictured` (pictures of it as built come with the prompt).
+system: >-
+  You revise one prop of a 3D scene, written as parts and materials. Answer with the revised prop as one JSON object and nothing
+  else.
+prompt:
+  - "THE PROP, \"{{name}}\"{{#line}} - {{line}}{{/line}}, as it is written now:"
+  - ""
+  - "<prop>"
+  - "{{spec}}"
+  - "</prop>"
+  - ""
+  - when: pictured
+    say: >-
+      The pictures show it as it is built now, on a ground ruled in centimeters, a brighter line every five: from a little above
+      its front, from its right side, and from above.
+  - when: pictured
+    say: ""
+  - "WHAT TO CHANGE, as the author asks:"
+  - ""
+  - "<direction>"
+  - "{{direction}}"
+  - "</direction>"
+  - ""
+  - >-
+      Change what the author asks, and what that change needs so the prop still holds together - a part moved where another
+      meets it, a material added for a new part - and nothing else. Every other part, size, color and material stays exactly as
+      it is written. Where the author's words leave a choice open, make the smallest change that does what they ask.
+  - ""
+  - include: "table/set_dresser.thing_language"
+  - ""
+  - >-
+      Answer with the whole prop, changed and unchanged parts alike: {"thing": {"parts": [...]}, "materials": {...}} - every
+      material its parts use, under the names its parts give. Keep `scale` where it is written. Write no name, no `at` for the
+      prop itself, and nothing outside the JSON.

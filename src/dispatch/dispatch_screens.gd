@@ -278,7 +278,9 @@ func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 		var text := String(DispatchScript.unredacted(String(lines[k]))["text"])
 		var ink := PHOSPHOR
 		if k == 0 and bar.x >= 0:
-			c.draw_rect(Rect2(TERM_MARGIN.x + cw * float(bar.x) - 4.0, y - TERM_LINE * 0.74, cw * float(bar.y - bar.x) + 8.0, TERM_LINE * 0.98), PHOSPHOR)
+			var x0 := TERM_MARGIN.x + _advance(text.substr(0, bar.x)) - 4.0
+			var x1 := TERM_MARGIN.x + _advance(text.substr(0, bar.y)) + 4.0
+			c.draw_rect(Rect2(x0, y - TERM_LINE * 0.74, x1 - x0, TERM_LINE * 0.98), PHOSPHOR)
 			ink = SCREEN_DARK
 		c.draw_string(_mono, Vector2(TERM_MARGIN.x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT, ink)
 	if bool(st.get("cursor", false)):

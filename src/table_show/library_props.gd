@@ -71,6 +71,10 @@ func act(key: String, verb: String) -> String:
 	return "nothing here does that"
 
 
+func versions_of() -> PropVersions:
+	return LibraryVersions.new(self)
+
+
 func want_pictures(keys: Array) -> void:
 	pictures.want(_asked(keys))
 
@@ -187,11 +191,13 @@ func entry(name: String) -> Dictionary:
 	return {}
 
 
-## Each prop kept, by its hash: hash -> its name.
+## Each prop kept, by the hash of every one of its versions ([method ThingLibrary.hashes_of]): hash -> its name. A prop refined
+## is found by the hash it was kept with, so the one it was kept from says Kept.
 func kept_by_hash() -> Dictionary:
 	var out := {}
 	for e in entries():
-		out[String((e as Dictionary)["hash"])] = String((e as Dictionary)["name"])
+		for h in ThingLibrary.hashes_of(e):
+			out[String(h)] = String((e as Dictionary)["name"])
 	return out
 
 

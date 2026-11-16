@@ -60,10 +60,16 @@ const SPOTS := {
 	"clock": {"label": "The clock", "blurb": "Close on the little flip clock's cards."},
 	"tablet": {"label": "The tablet", "blurb": "The tablet held up before the eye."},
 }
-## The camera's springs (seconds): how long it takes to settle on what it turns to (critically damped); and how long after
-## the last thing it looked at it waits before easing back to the whole desk.
-const SPRING_TAU := 0.95
-const HOME_AFTER := 7.0
+## The camera's springs (seconds): how long it takes to settle on what it turns to (critically damped), after a lead that
+## eases every move in so none starts with a jolt - slow and gentle, as the night is; and how long after the last thing it
+## looked at it waits before easing back to the whole desk.
+const SPRING_TAU := 1.7
+const LEAD_TAU := 1.1
+const HOME_AFTER := 9.0
+## Two looks at the same thing this close (seconds; words said at WORD_EST each, for one whose words are not heard yet) are
+## one: the camera holds between them rather than ease away and straight back.
+const SAME_BRIDGE := 45.0
+const WORD_EST := 0.4
 ## Its wander (m at the aim, a slow breath) and how fast.
 const WANDER := Vector3(0.010, 0.006, 0.006)
 const WANDER_RATE := 0.11
@@ -110,17 +116,19 @@ const LAMP_FADE := 0.18
 const MOVING_LOOK := 3.0
 const MOVING_HOLD_MOST := 12.0
 ## A ping holds the radar (seconds from its ring): at least this long, on to the end of the sentence being said then if it
-## ends by the most; then it lingers this long and goes home. A still blip is not watched for long.
-const PING_HOLD := 5.0
-const PING_HOLD_MOST := 9.0
-const PING_LINGER := 1.0
-## What the camera turns to is seen (seconds; the springs take about three of them to settle): every look holds at least
+## ends by the most; then it lingers this long before it goes home - time for the camera to get there and the blip to be
+## seen, at the camera's slow pace.
+const PING_HOLD := 12.0
+const PING_HOLD_MOST := 16.0
+const PING_LINGER := 4.0
+## What the camera turns to is seen (seconds; the camera takes about eight of them to arrive): every look holds at least
 ## [constant LOOK_LEAST] from its start, unless something else begins first; and the camera never leaves a thing for less
-## than [constant AWAY_LEAST] - a look back at it sooner than that joins the two, and it stays.
-const LOOK_LEAST := 5.0
-const AWAY_LEAST := 7.0
+## than [constant AWAY_LEAST] - it stays on what it was on rather than pull back to the whole desk for less than that before
+## it turns again.
+const LOOK_LEAST := 10.0
+const AWAY_LEAST := 12.0
 ## A look cut by the next sooner than this (seconds) is not taken: the camera would only swerve toward it.
-const GLANCE_LEAST := 2.5
+const GLANCE_LEAST := 3.0
 ## What the camera turns to to read (the terminal's words, a phone's message, a picture): always looked at.
 const TO_READ := ["session", "type", "strike", "text", "reply", "picture", "live", "tablet", "fade"]
 const PAINT_JITTER := 0.006
@@ -217,6 +225,7 @@ var _rings := 4.0                       # the radar's range rings: a ping's rang
 var _term_key := Vector2(NAN, NAN)      # the moment [method terminal_at] last drew, and whether whole...
 var _term_at := {}                      # ...and what it drew
 var _wants := {}                        # the things the script uses that only some desks have: clock, tablet
+var _makes := {}                        # the makes chosen for the desk's parts ([method makes_of])
 var _dark0 := false                     # the note opens in the black, until its first fade up
 var _tablet_doc := {}                   # the tablet's pages as the tablet medium reads them ([TabletScript])
 var _tablet_pages := {}                 # ...a page's index -> its [TabletPage], set when first shown
@@ -261,6 +270,9 @@ var _stage_was := {}
 var _fill: DirectionalLight3D
 var _mats := {}                         # a screen's or phone face's ShaderMaterial, by name
 
+var _f_aim := Vector3.ZERO                # where the camera is led toward, eased in ([constant LEAD_TAU])...
+var _f_eye := Vector3.ZERO
+var _f_fov := 50.0
 var _c_aim := Vector3.ZERO
 var _v_aim := Vector3.ZERO
 var _c_eye := Vector3.ZERO
@@ -364,7 +376,7 @@ func _build_world() -> void:
 ## they land ([method _land_set]). A render and a gate build where they stand: their frames wait for nothing ([method
 ## TablePhysics.render_waits]).
 func _build_set(labels: PackedStringArray, seed: int) -> void:
-	var key := "%s|%d|%s" % [",".join(labels), seed, ",".join(PackedStringArray(_wants.keys()))]
+	var key := "%s|%d|%s|%s" % [",".join(labels), seed, ",".join(PackedStringArray(_wants.keys())), JSON.stringify(_makes)]
 	if key == _built_for:
 		return
 	_built_for = key
@@ -376,15 +388,17 @@ func _build_set(labels: PackedStringArray, seed: int) -> void:
 	if is_inside_tree() and (away_in_tests or not TablePhysics.render_waits()):
 		_waiting = true
 		feed.wait_for(WAIT_FOR, true)
-		_build_task = WorkerThreadPool.add_task(_make_set.bind(labels, seed, tex, _wants.duplicate()), false, "the dispatch desk")
+		_build_task = WorkerThreadPool.add_task(_make_set.bind(labels, seed, tex, _wants.duplicate(), _makes.duplicate(true)), false,
+			"the dispatch desk")
 		return
-	_make_set(labels, seed, tex, _wants.duplicate())
+	_make_set(labels, seed, tex, _wants.duplicate(), _makes.duplicate(true))
 	_land_set()
 
 
-## The set and its roots, made out of the tree (a worker's, or the caller's).
-func _make_set(labels: PackedStringArray, seed: int, tex: Dictionary, wants: Dictionary) -> void:
+## The set and its roots, made out of the tree (a worker's, or the caller's), its parts played by the makes [param makes] chooses.
+func _make_set(labels: PackedStringArray, seed: int, tex: Dictionary, wants: Dictionary, makes: Dictionary) -> void:
 	var s := DispatchSet.new()
+	s.makes = makes
 	var node := s.build(labels, seed, tex, wants)
 	var r := DispatchRoots.new()
 	var rn := r.build(seed, s.footprints, s.held_rect())
@@ -568,7 +582,7 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	if black >= 0.999:
 		_snap = true
 	var opening := _opening()
-	ShowOpening.lens(ShowOpening.pull(feed.opening, _now, opening, _built_n > 0), _blur, _attrs)
+	ShowOpening.lens(_pull(_now, opening), _blur, _attrs)
 	_title.alpha = ShowOpening.title_alpha(feed.opening, _now, opening, _built_n > 0)
 	_title.queue_redraw()
 	if _set != null:
@@ -631,10 +645,43 @@ func _ensure_doc() -> void:
 		if seed != _doc_seed:
 			_doc_seed = seed
 			reseed(_seed_of(seed, src))
+		# another make chosen for one of the desk's parts: the desk built again, the reading kept where it is
+		var makes := makes_of(dispatch)
+		if makes != _makes:
+			_makes = makes
+			_build_set(_labels, _seed)
 		return
 	_doc_key = key
 	_doc_seed = seed
 	load_note(src, dispatch, start, int(d.get("start_index", -1)))
+
+
+## What the desk builds only where the script uses it, for the script [param parsed] read from [param source]: `clock` (its
+## `desk:` names one, or a fade tells the hour), `tablet` (named, or read from).
+static func wants_of(parsed: Dictionary, source: String) -> Dictionary:
+	var out := {}
+	var desk := DispatchScript.desk_of(source)
+	for k in ["clock", "tablet"]:
+		if desk.has(k):
+			out[k] = true
+	for a in parsed.get("actions", []):
+		match String((a as Dictionary)["kind"]):
+			"fade":
+				if int(a.get("clock", -1)) >= 0:
+					out["clock"] = true
+			"tablet", "page":
+				out["tablet"] = true
+	return out
+
+
+## The makes a document's [param dispatch] chooses for the desk's parts: `{role: choice}` ([DispatchProps], [PropMakes]).
+static func makes_of(dispatch: Dictionary) -> Dictionary:
+	var out := {}
+	var things: Dictionary = dispatch.get("things", {}) if dispatch.get("things") is Dictionary else {}
+	for role in things:
+		if PropMakes.valid(things[role]) and not (things[role] as Dictionary).is_empty():
+			out[String(role)] = (things[role] as Dictionary).duplicate(true)
+	return out
 
 
 ## The desk's number a document's [param seed] names, or the words' own where it names none.
@@ -683,18 +730,8 @@ func load_note(text: String, dispatch: Dictionary, start := PackedStringArray(),
 					_typed_words[si] = 1
 	_term = _parsed.get("terminal", DispatchTerminal.config_of(""))
 	_dark0 = bool(_parsed.get("dark", false))
-	_wants = {}
-	var desk := DispatchScript.desk_of(source)
-	for k in ["clock", "tablet"]:
-		if desk.has(k):
-			_wants[k] = true
-	for a in _actions:
-		match String((a as Dictionary)["kind"]):
-			"fade":
-				if int(a.get("clock", -1)) >= 0:
-					_wants["clock"] = true
-			"tablet", "page":
-				_wants["tablet"] = true
+	_wants = wants_of(_parsed, source)
+	_makes = makes_of(dispatch)
 	_tablet_doc = TabletScript.parse(_tablet_source(_parsed.get("pages", [])))
 	_tablet_pages = {}
 	_clips = dispatch.get("clips", {}) if dispatch.get("clips") is Dictionary else {}
@@ -1034,7 +1071,8 @@ func _build_attention() -> void:
 	for i in _actions.size():
 		var a: Dictionary = _actions[i]
 		var t := _t0[i]
-		if t == INF or bool(a.get("dark", false)):
+		# what happens in the black is unseen (the clock it comes up on aside): it turns the camera to nothing
+		if t == INF or bool(a.get("dark", false)) or (String(a["kind"]) != "fade" and fade_at(t) >= 0.999):
 			continue
 		var e := _end_of(i)
 		var n0 := _attn.size()
@@ -1110,7 +1148,7 @@ func _build_attention() -> void:
 					continue
 				var from := _black_from(i)
 				var held := t + float(a["rest"]) / _sp[i]
-				_attn.append({"t0": from, "t1": held, "spot": _spot("clock"), "linger": 0.0, "kind": "fade"})
+				_attn.append({"t0": from, "t1": held, "spot": _spot("clock"), "linger": 0.0, "kind": "fade", "seen": t})
 				_attn.append({"t0": held, "t1": held + 2.0, "spot": _spot("home")})
 			"tablet":
 				if not bool(a["up"]) or not _set.spots.has("tablet"):
@@ -1124,7 +1162,22 @@ func _build_attention() -> void:
 				_attn.append({"t0": t, "t1": down, "spot": _spot("tablet"), "kind": "tablet"})
 		if _attn.size() > n0:
 			(_attn.back() as Dictionary)["kind"] = String(a["kind"])
+			(_attn.back() as Dictionary)["i"] = i
 	_attn = _settled(_attn)
+	# the next look the script holds, its words not heard yet (a live reading knows a sentence or so ahead): when it comes as
+	# soon as a placed one would be held for (the same thing within SAME_BRIDGE, anything but the whole desk within the
+	# linger and AWAY_LEAST), the camera holds on until it is placed, rather than pull back to the whole desk for nothing
+	if not _attn.is_empty():
+		var last: Dictionary = _attn.back()
+		var li := int(last.get("i", -1))
+		var nk := _next_look(li) if li >= 0 else -1
+		if nk >= 0 and _t0[nk] == INF and float(last["t1"]) < INF:
+			var key := _look_key(_actions[nk])
+			var comes := _said_by(int((_actions[nk] as Dictionary)["after"]))
+			var same := key == _look_key(_actions[li]) and not key.is_empty()
+			var soon := comes - float(last["t1"]) <= (SAME_BRIDGE if same else float(last.get("linger", HOME_AFTER)) + AWAY_LEAST)
+			if soon and key != "home":
+				last["t1"] = INF
 
 
 ## What is turned to is seen: [param attn]'s looks in order, those the camera would only swerve through or turn away and
@@ -1145,9 +1198,64 @@ func _settled(attn: Array) -> Array:
 	for k in range(out.size() - 1):
 		var w: Dictionary = out[k]
 		var nxt: Dictionary = out[k + 1]
-		if nxt["spot"] != home and float(nxt["t0"]) < float(w["t1"]) + float(w.get("linger", HOME_AFTER)) + AWAY_LEAST:
+		var near := float(nxt["t0"]) < float(w["t1"]) + float(w.get("linger", HOME_AFTER)) + AWAY_LEAST
+		# the same thing again before long is one look: held between them
+		var again: bool = nxt["spot"] == w["spot"] and float(nxt["t0"]) - float(w["t1"]) <= SAME_BRIDGE
+		if (nxt["spot"] != home and near) or again:
 			w["t1"] = maxf(float(w["t1"]), float(nxt["t0"]))
 	return out
+
+
+## When spoken word [param si] is about to be said, as near as the words heard so far tell: the last heard word's end, and
+## [constant WORD_EST] a word after it.
+func _said_by(si: int) -> float:
+	var k := mini(si, _spoken_n) - 1
+	while k >= 0 and _word_t1(k) == INF:
+		k -= 1
+	var from := _word_t1(k) if k >= 0 else _now
+	return from + float(si - maxi(k, 0)) * WORD_EST
+
+
+## The next action after [param i] that turns the camera ([method _look_key]), in the script's order: -1 for none.
+func _next_look(i: int) -> int:
+	for k in range(i + 1, _actions.size()):
+		var b: Dictionary = _actions[k]
+		if not bool(b.get("dark", false)) and not _look_key(b).is_empty():
+			return k
+	return -1
+
+
+## What action [param a] turns the camera to (a key of [member DispatchSet.spots], "phone" for a phone's own), "" for
+## nothing - as [method _build_attention] has it.
+static func _look_key(a: Dictionary) -> String:
+	match String(a["kind"]):
+		"session", "type", "strike", "sleep", "bell":
+			return "terminal"
+		"ping", "sound", "gain":
+			return "radar"
+		"moving":
+			return "" if bool(a.get("passing", false)) else "radar"
+		"static", "receiver":
+			return "receiver"
+		"print":
+			return "printer"
+		"switch":
+			return "switch"
+		"look":
+			return String(a["at"])
+		"picture", "live", "off":
+			return String(a.get("screen", ""))
+		"call", "ring":
+			return "phone"
+		"hang_up":
+			return "phones"
+		"text", "reply", "lift", "lamp":
+			return "home"
+		"fade":
+			return "clock" if not bool(a["to"]) and int(a.get("clock", -1)) >= 0 else ""
+		"tablet":
+			return "tablet" if bool(a["up"]) else ""
+	return ""
 
 
 ## The looks the camera takes of [param attn] (sorted by start): none cut by the next before it could be got to
@@ -1168,7 +1276,8 @@ func _looks_taken(attn: Array) -> Array:
 				break
 			cover = maxf(cover, float((attn[j] as Dictionary)["t1"]))
 		var outlasts := float(w["t1"]) > cover + 0.5
-		var cut := float(nxt["t0"]) - float(w["t0"]) < GLANCE_LEAST
+		# (a look that begins in the black is seen from when the picture comes up: the camera's way there is unseen)
+		var cut := float(nxt.get("seen", nxt["t0"])) - float(w["t0"]) < GLANCE_LEAST
 		var was: Dictionary = out.back() if not out.is_empty() else {}
 		var between: bool = not was.is_empty() and nxt["spot"] == was["spot"] and w["spot"] != was["spot"] \
 			and float(nxt["t0"]) - float(w["t0"]) < LOOK_LEAST \
@@ -2291,6 +2400,16 @@ func _opened_black(t: float) -> float:
 	return _ease((t - (opening - BLACK_LEAD)) / (BLACK_LEAD + BLACK_TAIL))
 
 
+## How far the opening's focus pull is at [param t] ([method ShowOpening.pull]), its opening at [param opening]. Where the
+## note opens in the black the title's blur never lifts on the desk: it holds as the picture goes down to black, and is
+## gone once it is black, so the night comes up sharp.
+func _pull(t: float, opening: float) -> float:
+	var p := ShowOpening.pull(feed.opening, t, opening, _built_n > 0)
+	if not _dark0 or opening == INF:
+		return p
+	return 1.0 if _opened_black(t) >= 1.0 else 0.0
+
+
 ## When the black before fade up [param i] is whole: the fade down's end; where the note opens in the black, when the
 ## title has gone ([method _opened_black]) - the show's start with no title.
 func _black_from(i: int) -> float:
@@ -2669,6 +2788,9 @@ func _tick_camera(delta: float) -> void:
 		sin(_now * WANDER_RATE * 0.53 * TAU + 2.1) * WANDER.z)
 	aim += w
 	if _snap:
+		_f_aim = aim
+		_f_eye = eye
+		_f_fov = fov
 		_c_aim = aim
 		_c_eye = eye
 		_c_fov = fov
@@ -2680,14 +2802,19 @@ func _tick_camera(delta: float) -> void:
 		var dt := clampf(delta, 0.0, 0.1)
 		var steps := maxi(1, ceili(dt / 0.02))
 		var h := dt / float(steps)
+		var lead := 1.0 - exp(-h / LEAD_TAU)
 		for _s in steps:
+			# the lead first, so the spring is pulled toward a target that moves off gently, never one that jumps
+			_f_aim = _f_aim.lerp(aim, lead)
+			_f_eye = _f_eye.lerp(eye, lead)
+			_f_fov = lerpf(_f_fov, fov, lead)
 			var k := h / (SPRING_TAU * SPRING_TAU)
 			var c := 2.0 * h / SPRING_TAU
-			_v_aim += (aim - _c_aim) * k - _v_aim * c
+			_v_aim += (_f_aim - _c_aim) * k - _v_aim * c
 			_c_aim += _v_aim * h
-			_v_eye += (eye - _c_eye) * k - _v_eye * c
+			_v_eye += (_f_eye - _c_eye) * k - _v_eye * c
 			_c_eye += _v_eye * h
-			_v_fov += (fov - _c_fov) * k - _v_fov * c
+			_v_fov += (_f_fov - _c_fov) * k - _v_fov * c
 			_c_fov += _v_fov * h
 	_cam.fov = _c_fov
 	_cam.look_at_from_position(_c_eye, _c_aim, Vector3.UP)

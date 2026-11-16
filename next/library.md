@@ -7,7 +7,9 @@ person finds them, and everything else the app has.
 ## Status
 
 Built: step 1, kept voices (step 2), the Dex with its Props and Voices shelves (step 3, not Keys), the desk's ticks (step 4,
-half), the set dresser's `library` tool (step 5), and Export and Import of props and voices (step 6).
+half), the set dresser's `library` tool (step 5), Export and Import of props and voices (step 6), roles (step 7: the
+Dispatch desk's mug and cup of pencils; its Props card and the Dex's shelves of what scenes build), and refining a prop (step 8).
+The user judges: a first real Refine (gates use a stand-in agent; a probe may not start one).
 The user judges: the names (Props, Dex, Used), the 3D view, the Dex, kept voices by ear, and where the setting goes (Proposed,
 "The setting").
 
@@ -45,13 +47,33 @@ The user judges: the names (Props, Dex, Used), the 3D view, the Dex, kept voices
 - **The desk** (step 4, half): its ticks are rows of the Props card (`DeskProps`, handed by the Letter's and the Desk's formats),
   each pictured as the desk's number draws it (`DeskLook.spec_of`); `DeskRows` keeps the number, the light and the cards' words.
   Pictures on both come through one queue (`PropPictures`).
+- **Roles** (step 7; `PropMakes`, `MakeShelf` in `desk/`): a part a scene's prop plays, and the make chosen for it ("Roles",
+  below). The Dispatch desk's mug and cup of pencils are roles: its Props card (`DispatchProps`, handed by `DispatchFormat`) shows
+  them under Swappable, each with Choose… (the Dex on its makes: the recipe drawn from 24 numbers, every kept prop and every seen
+  one, filtered by the part's word; Use chooses, a seen one kept first), the desk's own, and Keep; the choice is kept in the Medium
+  block's `things` and the desk is built again with it, the reading kept where it is. Under Built for the desk, every thing the
+  desk builds by code (terminal, phones, radar, receiver, printer, screens, switch, handbook, stamp, tracker, chart, chair; the
+  clock and tablet where the script uses them), each pictured alone (`PropStudio.picture_made`, kept by a hash of what it is
+  built of) and turned in 3D.
+- **Refining a prop** (step 8; "Refining a prop", below): Refine… in the 3D view (`PropViewer`, `PropRefine`) asks the writer a person
+  picks (`AgentPick`: agent, model, effort) to change the version shown as they say, with three pictures of it as built
+  (`PropStudio.views`) and `rules/table/prop_refiner.yaml` (the prop language shared with the set dresser, `thing_language`);
+  the bar moves and the agent's activity line ticks until it lands. Its answer is a new version of the same kept prop
+  (`ThingLibrary.add_version`, `LibraryVersions.land`), stepped through with ‹ › and made the prop by Use this one
+  (`use_version`); a prop not kept yet is kept first, once. What uses it follows (`PropSection.refined`): a table's thing
+  takes the version used as a hand's version, a Dispatch part is played by the kept prop. The Dex shows one prop, found by
+  any version's hash, so the one it was kept from says Kept.
+- **The Dex opened on its own** shows, beside the library, what scenes build: Desk things (`DeskRecipes`: a desk's 13 recipes
+  as the first desk draws them, Keep) and Dispatch desk (`DispatchProps` with no note: its built things and its parts, Keep).
 - Gates: `tests/table/thing_library_check.gd`, `tests/table_show/episode_props_check.gd` (the card, the 3D view, the Dex),
+  `tests/dispatch/dispatch_props_check.gd` (roles, the Dispatch card, the Dex's scene shelves), `tests/table_show/prop_refine_check.gd`
+  (versions, an answer landing, the view, what follows),
   `tests/voice/voice_library_check.gd` and `tests/reading/kept_voice_check.gd` (kept voices), `letter_format_check` (the desk's
   rows), `tests/table/shot_reach_check.gd` (what a table played hides out of the shot); a look: `props_card_probe.gd`. A voice's
   sample is so far made only against a stand-in host in a gate: the first Keep on the real voice host is its test.
 
-Not built: the `Keys` registry and its shelf (step 3), a Built in shelf of the desk's recipes, kept props on a desk
-(`DeskLook._pack` from a built size).
+Not built: the `Keys` registry and its shelf (step 3), kept props on a desk (`DeskLook._pack` from a built size), Choose… on
+the Letter desk's things (`DeskProps`), and roles with a working face (a screen, a keyboard: "Roles", below).
 
 ## What is there
 
@@ -138,6 +160,37 @@ table's top, cloths and lights, which its set dresser writes. Two homes fit:
 Recommended: both, split by kind - the choice for this note on the Props card, the ones worth keeping on the Dex - built once the
 user has seen the Props card and the Dex as they stand.
 
+### Roles: a part any make can play
+
+A scene works its props by what they are for, never by their shape: the Dispatch desk lifts its mug to the mouth and sets it
+down in its ring, a table's television shows a picture, a terminal types. A role is that part, and a make is whatever plays
+it - the scene's recipe drawn from a number, another draw, a prop kept in the library. The role owns the behavior; the make
+owns the geometry; the role fits the make so the behavior holds (`PropMakes.made`: its foot on y = 0, centered, its front
+toward +z, its height inside the role's range).
+
+- A role is a row (`PropMakes.ROLES`: its recipe, its words on the Dex, its height). A scene asks for a role's make and
+  stores the choice in its note (`{}`, `{recipe, seed}`, `{kept}`); the Dex offers makes the same way for every role
+  (`MakeShelf`), so a new role costs a row and the line that builds it.
+- A role whose behavior needs a part of the make (a television's screen, a computer's screen and keys, a phone's lid and
+  hinge) names it: the make carries it as a named part, found by name, and a make without one is not offered for that
+  role. Recipes that build such things by code (the Dispatch desk's terminal, phones and screens) become recipes that write
+  a spec with their working parts named, the step that makes computers, televisions and phones swappable with the same
+  behaviors wherever they are used.
+- Kept props from tables have no named working parts yet: they can play roles that need none (a mug, a cup, a lamp's
+  body), and the set dresser could name them when it builds one.
+
+### Refining a prop
+
+A prop is mostly right and a few things are wrong: a part's shape, a size, a color. Refine says which in words, and an agent
+changes those and nothing else; the answer is a version of the same prop, never another prop, and none is ever deleted.
+
+- A kept prop's file holds every version (`versions`, oldest first, each with the direction that made it, who, when) and which
+  is used (`at`); its `thing`, `materials` and `hash` are the used one's, so every reader of the library is unchanged.
+- The agent is shown the version as written and three pictures of it on the ruled ground, and answers the whole prop as JSON;
+  what it leaves out of the scale is kept. A reply that is no prop, or builds nothing, adds nothing.
+- The version made is shown but not used: a person compares it with ‹ and › (it stays turned as it was) and chooses.
+- Open: the writer picked is kept for the run, not saved; a refine runs on while its view is closed and lands its version.
+
 ### Voices (`voice/`, `reading/`)
 
 - A kept voice is who speaks and how: a name, a line, the model and reader, the blend or the formant voice, the tone,
@@ -175,6 +228,9 @@ user has seen the Props card and the Dex as they stand.
 4. The desk on the Props card; kept props on the desk.
 5. The set dresser's `library` tool.
 6. Export and Import.
+7. Roles: the Dispatch desk's mug and cup first, then a working face (screens, keys, lids) as named parts, then the desks'
+   things and a table's lights as roles.
+8. Refining a prop: versions in the kept prop's file, an agent's revision from the 3D view.
 
 Gates, each two-sided: a kept prop built on another table and on a desk matches its picture (a control with a changed
 material must not); a note reading a kept voice says what the voice written out whole says (a control with one dial

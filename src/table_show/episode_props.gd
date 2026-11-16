@@ -171,6 +171,60 @@ func offers() -> Array:
 	return library.offers()
 
 
+func versions_of() -> PropVersions:
+	return library.versions_of()
+
+
+## A thing on the table refined takes the version of the prop kept from it that is used: its parts, scale and materials, written
+## as a hand's version of the table; where it stands, its name, group and why stay. A thing already that version is left alone.
+func refined(key: String, name: String) -> String:
+	var kind := key.get_slice(":", 0)
+	if kind != "thing" and kind != "aside":
+		return ""
+	var thing_name := key.substr(kind.length() + 1)
+	var e := ThingLibrary.read(name)
+	if e.is_empty():
+		return "%s is not in the library" % name
+	var th := _thing_of(kind, thing_name)
+	var mats: Dictionary = _table.get("materials", {}) if _table.get("materials") is Dictionary else {}
+	if th.is_empty() or ThingLibrary.hash_of(th, mats) == String(e["hash"]):
+		return ""
+	var err := card._hand_write("table", func() -> String: return replace_thing(thing_name, kind, e))
+	card._after_hand("table", err)
+	return err
+
+
+## Thing [param name] on the table's [param kind] list ("thing" used, "aside" set aside) made the kept prop [param e] ([method
+## ThingLibrary.read]): its parts and scale, and the materials they use added as [method ThingLibrary.put_on] adds them, renamed
+## where the table has another of the name. "" written, else why not.
+func replace_thing(name: String, kind: String, e: Dictionary) -> String:
+	var ep := card._episode
+	if ep == null or not ep.has("table"):
+		return "this episode has no table yet"
+	var raw: Variant = ep.read_json("table")
+	if not (raw is Dictionary):
+		return "the table is not readable"
+	var t: Dictionary = (raw as Dictionary).duplicate(true)
+	var list := "things" if kind == "thing" else "aside"
+	var things: Array = t.get(list, []) if t.get(list) is Array else []
+	for i in things.size():
+		if not (things[i] is Dictionary) or String((things[i] as Dictionary).get("name", "")) != name:
+			continue
+		var placed := ThingLibrary.put_on({"things": [], "materials": t.get("materials", {}) if t.get("materials") is Dictionary else {}}, e, null)
+		var made: Dictionary = (placed["things"] as Array)[0]
+		var th: Dictionary = (things[i] as Dictionary).duplicate(true)
+		th["parts"] = made["parts"]
+		if made.has("scale"):
+			th["scale"] = made["scale"]
+		else:
+			th.erase("scale")
+		things[i] = th
+		t[list] = things
+		t["materials"] = placed["materials"]
+		return ep.write_json("table", t)
+	return "%s is not on this table" % name
+
+
 func want_pictures(keys: Array) -> void:
 	library.want_pictures(keys)
 
