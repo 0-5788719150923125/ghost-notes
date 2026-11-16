@@ -23,11 +23,3 @@ func spoken(text: String, _title: String) -> Dictionary:
 		LetterScript.lengths_of(records, int(d["seed"]), fonts), records, String(d["hand"])), "title": ""}
 
 
-## A letter's minute: what is written as it is said.
-func test_passage(_fallback: String) -> String:
-	return ("I don't know where to start, so I'll start with the weather. It rained all week, the kind "
-		+ "of rain that never quite commits, and the street outside my window has been grey since Monday. "
-		+ "I keep meaning to write to you properly, with news, and then the evening goes. So here is what "
-		+ "there is. The tree by the gate came down in the wind. Nobody was hurt. The lamp still works, "
-		+ "and the desk still wobbles if you lean on its left side. I think of you most when it is quiet. "
-		+ "Write back when you can. Tell me something small, and true.")

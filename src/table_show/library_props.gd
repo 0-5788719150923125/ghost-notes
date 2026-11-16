@@ -4,8 +4,9 @@ class_name LibraryProps
 ## LibraryProps - the library's props on the Dex's shelves ([DexWindow]): the props kept ("Kept props", [ThingLibrary]) and every
 ## thing any episode's set dresser made, read where it stands ("Seen props", read on a worker, never copied until it is kept). A
 ## kept prop is renamed in place, exported to a `.prop.json` to hand on, or removed to the trash; a seen one is kept; any is turned
-## whole in 3D ([method model_of]). A prop's picture is taken once and kept by its hash ([PropStudio], [PropPictures]); a tile's when
-## it comes into view. Opened on its own it adds nothing; a presentation's section adds what it offers ([EpisodeProps]).
+## whole in 3D ([method model_of]). A prop's picture is taken once and kept by its hash ([PropStudio], [PropPictures]): those near
+## the view first, then every other on the shelf shown. Opened on its own it adds nothing; a presentation's section adds what it
+## offers ([EpisodeProps]).
 
 const SHELVES := [
 	{"key": "kept", "label": "Kept props", "tip": "The props in your library, kept from any show."},
@@ -23,6 +24,7 @@ var _seen: Array = []             # every thing every episode stands: {key, name
 var _seen_t := -INF
 var _seen_task := -1
 var _seen_out: Array = []
+var _seen_at := {}                # offer key -> its index in _seen
 
 
 func shelves() -> Array:
@@ -70,10 +72,26 @@ func act(key: String, verb: String) -> String:
 
 
 func want_pictures(keys: Array) -> void:
+	pictures.want(_asked(keys))
+
+
+func prepare_pictures(keys: Array) -> void:
+	pictures.prepare(_asked(keys))
+
+
+func picture(key: String) -> Variant:
+	var p := prop_of(key)
+	return pictures.image(String(p["hash"])) if not p.is_empty() else null
+
+
+## The props of offers [param keys], as [PropPictures] is asked for them: each `[hash, thing, materials]`.
+func _asked(keys: Array) -> Array:
+	var out: Array = []
 	for k in keys:
 		var p := prop_of(String(k))
 		if not p.is_empty():
-			pictures.of(String(p["hash"]), p["thing"], p["materials"])
+			out.append([String(p["hash"]), p["thing"], p["materials"]])
+	return out
 
 
 func rename(key: String, name: String) -> String:
@@ -182,7 +200,7 @@ func seen_list() -> Array:
 	if _seen_task >= 0 and WorkerThreadPool.is_task_completed(_seen_task):
 		WorkerThreadPool.wait_for_task_completion(_seen_task)
 		_seen_task = -1
-		_seen = _seen_out
+		_took_seen()
 		_seen_t = Time.get_ticks_msec() * 0.001
 	if _seen_task < 0 and Time.get_ticks_msec() * 0.001 - _seen_t > SEEN_FRESH:
 		var root := ProjectSettings.globalize_path(TableEpisode.root)
@@ -196,15 +214,20 @@ func settle() -> void:
 	if _seen_task >= 0:
 		WorkerThreadPool.wait_for_task_completion(_seen_task)
 		_seen_task = -1
-		_seen = _seen_out
+		_took_seen()
+
+
+## What the worker read of the episodes taken as the seen props.
+func _took_seen() -> void:
+	_seen = _seen_out
+	_seen_at = {}
+	for i in _seen.size():
+		_seen_at[String((_seen[i] as Dictionary)["key"])] = i
 
 
 ## The seen thing of offer [param key], {} for none.
 func seen_of(key: String) -> Dictionary:
-	for s in _seen:
-		if String((s as Dictionary)["key"]) == key:
-			return s
-	return {}
+	return _seen[int(_seen_at[key])] if _seen_at.has(key) else {}
 
 
 ## Every thing the episodes under [param root] (absolute: `<show>/<seed>/table.json`) stand, once each by what it is ([method

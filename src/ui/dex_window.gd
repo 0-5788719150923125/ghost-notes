@@ -5,16 +5,21 @@ class_name DexWindow
 ## when it is opened on its own (the bottom-right row's button), or the one section a card hands it ("+ Add a prop" on the Props
 ## card, whose section adds what is picked: Use). Each tile shows an entry's picture, its name (renamed in place where it can be), its
 ## line and its verbs - Use, Hear for a voice, Export… to hand it on in a file, and what its section offers besides; Import… takes such
-## a file in. A filter by words narrows the shelf. A picture is asked for when its tile comes into view ([method
-## ShelfSection.want_pictures]) and shown as it arrives; a click on a prop's opens it whole, in 3D ([PropViewer]). It opens centered in
+## a file in. A filter by words narrows the shelf. Pictures are asked for in view and near it first ([method
+## ShelfSection.want_pictures]), every other on the shelf behind them ([method ShelfSection.prepare_pictures]), and each is shown
+## as it arrives; a click on a prop's opens it whole, in 3D ([PropViewer]). It opens centered in
 ## the room beside the side panel, never under it ([method Shell.center_beside]). Escape or the window's close hides it.
 
 ## Its size, at most, against the room beside the panel.
 const MOST := Vector2(0.86, 0.86)
 const SIZE := Vector2i(860, 640)
-## A tile's picture (pixels), and how often the shelf looks for pictures that arrived (seconds).
+## A tile's picture (pixels), how often the shelf looks for pictures that arrived and how often it reads what is offered again
+## (seconds).
 const PICTURE := Vector2(176, 132)
-const LOOK_EVERY := 0.4
+const LOOK_EVERY := 0.1
+const FRESH_EVERY := 0.5
+## How far past the view a picture is wanted ahead of the rest: views above it, and below.
+const NEAR := Vector2(1.0, 2.0)
 
 var _sections: Array = []          # ShelfSection, in the order their shelves are shown
 var _told: Callable = Callable()   # (err: String) -> void: what a press answered
@@ -27,6 +32,7 @@ var _grid: HFlowContainer
 var _status: Label
 var _tiles := {}                   # offer key -> {pic: TextureRect, has: bool}
 var _look_t := 0.0
+var _fresh_t := 0.0
 var _count := -1                   # how many offers there were when the shelf was last filled
 var _version := -1                 # the sections' versions, summed, when the shelf was last filled ([method ShelfSection.version])
 var _viewer: PropViewer = null
@@ -76,6 +82,7 @@ func _init() -> void:
 	_scroll = ScrollContainer.new()
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.get_v_scroll_bar().value_changed.connect(func(_v: float) -> void: _look_t = 0.0)
 	col.add_child(_scroll)
 	_grid = HFlowContainer.new()
 	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -93,13 +100,16 @@ func _process(dt: float) -> void:
 	if not visible or _sections.is_empty():
 		return
 	_look_t -= dt
+	_fresh_t -= dt
+	if _fresh_t <= 0.0:
+		_fresh_t = FRESH_EVERY
+		# a shelf read on a worker arrives after the window opens: filled again when what is offered grows or shrinks, or changes
+		if _offers().size() != _count or _versions() != _version:
+			_fill()
+			return
 	if _look_t > 0.0:
 		return
 	_look_t = LOOK_EVERY
-	# a shelf read on a worker arrives after the window opens: filled again when what is offered grows or shrinks, or changes
-	if _offers().size() != _count or _versions() != _version:
-		_fill()
-		return
 	_show_pictures()
 
 
@@ -220,7 +230,13 @@ func _fill() -> void:
 		none.text = "Nothing here yet." if words.is_empty() else "Nothing here shares those words."
 		none.modulate = Color(1, 1, 1, 0.6)
 		_grid.add_child(none)
+	for other in _sections:
+		if other != sec:
+			(other as ShelfSection).prepare_pictures([])
+	if sec != null:
+		sec.prepare_pictures(_tiles.keys())
 	_look_t = 0.0
+	_fresh_t = FRESH_EVERY
 
 
 ## One entry's tile: its picture, name, line and verbs.
@@ -371,33 +387,41 @@ func _pick_file(mode: FileDialog.FileMode, named: String, kind: Dictionary, then
 	fd.popup_centered(Vector2i(720, 480))
 
 
-## The pictures of the tiles in view asked for, and those that arrived shown.
+## The pictures of the tiles in view and near it ([constant NEAR]) asked for, those in view first and then the nearest, and those
+## that arrived shown.
 func _show_pictures() -> void:
 	var sec := _section()
 	if sec == null:
 		return
 	var view := Rect2(Vector2(0, _scroll.scroll_vertical), _scroll.size)
-	var want: Array = []
+	var near := Rect2(view.position - Vector2(0, view.size.y * NEAR.x), Vector2(view.size.x, view.size.y * (1.0 + NEAR.x + NEAR.y)))
+	var want: Array = []                 # [how far, key]
 	for k in _tiles:
 		var t: Dictionary = _tiles[k]
 		if bool(t["has"]):
 			continue
-		var pic: TextureRect = t["pic"]
-		var at := pic.get_parent() as Control
-		if at != null and view.intersects(Rect2(at.position, at.size)):
-			want.append(k)
+		var at := (t["pic"] as TextureRect).get_parent() as Control
+		if at == null:
+			continue
+		var r := Rect2(at.position, at.size)
+		if near.intersects(r):
+			want.append([(0.0 if view.intersects(r) else near.size.y) + absf(r.position.y - view.position.y), k])
 	if want.is_empty():
 		return
-	sec.want_pictures(want)
-	for o in sec.offers():
-		var k := String((o as Dictionary)["key"])
-		if want.has(k) and (o as Dictionary).get("picture") is Image:
+	want.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	var keys: Array = want.map(func(w: Array) -> String: return String(w[1]))
+	sec.want_pictures(keys)
+	for k in keys:
+		var img: Variant = sec.picture(k)
+		if img is Image and not (img as Image).is_empty():
 			var t: Dictionary = _tiles[k]
-			(t["pic"] as TextureRect).texture = ImageTexture.create_from_image((o as Dictionary)["picture"] as Image)
+			(t["pic"] as TextureRect).texture = ImageTexture.create_from_image(img as Image)
 			t["has"] = true
 
 
 func _close() -> void:
 	_player.stop()
 	_playing = ""
+	for sec in _sections:
+		(sec as ShelfSection).prepare_pictures([])
 	hide()

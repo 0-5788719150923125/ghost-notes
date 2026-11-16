@@ -41,15 +41,12 @@ func _init(owner: ReadingCast) -> void:
 	VoiceLibrary.maker = sample_later
 
 
-## The row under the Voice row: Keep…, and on a tab reading a kept voice, "Make it this note's own".
+## The row right under the Voice row, in [param box] from its left edge: Keep…, and on a tab reading a kept voice, "Make it
+## this note's own". On the Voice row itself it would leave the picker too narrow to read a voice's name.
 func build(box: VBoxContainer) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	box.add_child(row)
-	var pad := Control.new()
-	pad.custom_minimum_size = Vector2(72, 0)
-	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(pad)
 	_keep_btn = Button.new()
 	_keep_btn.text = "Keep…"
 	_keep_btn.focus_mode = Control.FOCUS_NONE

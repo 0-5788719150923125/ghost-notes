@@ -23,6 +23,12 @@ const PAPER_SIZE := Vector2i(768, 3072)
 const GAIN_SIZE := Vector2i(256, 256)
 const TAPE_CELL := Vector2i(256, 96)
 const TAPE_COLS := 4
+## The flip clock's face and the digits its cards are cut from (one atlas, drawn once: a card's halves are its regions);
+## the tablet's screen, landscape, and its browser bar's height (px).
+const CLOCK_SIZE := Vector2i(448, 200)
+const DIGIT_CELL := Vector2i(96, 160)
+const TABLET_SIZE := Vector2i(1280, 896)
+const BAR_H := 92.0
 ## How many phone screens can be lit at once (the one in hand, the ones on the desk, one ringing or texting).
 const PHONE_FACES := 5
 ## The terminal's type: its face, its size (px), its line (px), where its first line and first column are.
@@ -46,12 +52,17 @@ var chart: SubViewport
 var spine: SubViewport
 var dial: SubViewport
 var gain: SubViewport
+var clock: SubViewport
+var digits: SubViewport
+var tablet: SubViewport
 var faces: Array = []             # the phone screens' viewports
 var _words := {}                  # a word on tape -> its viewport
 var _term: Face
 var _radar: Face
 var _scope: Face
 var _paper: Face
+var _clock: Face
+var _tablet: Face
 var _faces: Array = []
 var _mono: Font
 var _marker: Font
@@ -95,6 +106,15 @@ func build(labels: PackedStringArray) -> void:
 		gain.add_child(Face.new(self, "gain"))
 		keypad = _vp(KEYPAD_SIZE, false)
 		keypad.add_child(Face.new(self, "keypad"))
+		digits = _vp(Vector2i(DIGIT_CELL.x * 10, DIGIT_CELL.y), false)
+		digits.transparent_bg = true
+		digits.add_child(Face.new(self, "digits"))
+		clock = _vp(CLOCK_SIZE, true)
+		_clock = Face.new(self, "clock")
+		clock.add_child(_clock)
+		tablet = _vp(TABLET_SIZE, true)
+		_tablet = Face.new(self, "tablet")
+		tablet.add_child(_tablet)
 	word("GOOD")
 	word("BAD")
 	if tape != null:
@@ -170,8 +190,8 @@ func _advance(text: String) -> float:
 	return _mono.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT).x if not text.is_empty() else 0.0
 
 
-## The radar: `{t (the sweep's clock), blip: {at: Vector2, label, since}, trail: [{at, age}], ping (seconds into the last
-## ping, or -1), planes: [{at, heading}], clutter: [{at, fade, chair?}]}`.
+## The radar: `{t (the sweep's clock), rings, blip: {at: Vector2, label, since}, trail: [{at, age}], ping (seconds into the
+## last ping, or -1), planes: [{at, heading}], clutter: [{at, fade, chair?}]}`.
 func show_radar(st: Dictionary) -> void:
 	_show(radar, _radar, st)
 
@@ -185,6 +205,17 @@ func show_scope(st: Dictionary) -> void:
 ## being printed)}`.
 func show_paper(st: Dictionary) -> void:
 	_show(paper, _paper, st)
+
+
+## The flip clock: `{from, to (HH:MM), u (0-1 of the cards turning from one to the other)}`.
+func show_clock(st: Dictionary) -> void:
+	_show(clock, _clock, st)
+
+
+## The tablet: `{power (0-1), url (as far as it is typed), page: TabletPage, scroll, load (0-1), tap: Vector2 and tap_u,
+## textures: Callable}`; dark with no page.
+func show_tablet(st: Dictionary) -> void:
+	_show(tablet, _tablet, st)
 
 
 ## Phone screen [param k]: `{mode: call | hold | calling | text | ring | idle, label, words, secs}`.
@@ -226,26 +257,51 @@ class Face extends Node2D:
 			"dial": screens._draw_dial(self)
 			"gain": screens._draw_gain(self)
 			"keypad": screens._draw_keypad(self)
+			"digits": screens._draw_digits(self)
+			"clock": screens._draw_clock(self, state)
+			"tablet": screens._draw_tablet(self, state)
 
 
-## The terminal: its lines from the top (redacted words as themselves; [DispatchCensor] hides them over the picture), a
-## block cursor after the last when it is on; dark when asleep.
+## The terminal ([method DispatchTerminal.rows_of]): its rows from the top (redacted words as themselves; [DispatchCensor]
+## hides them over the picture), the title row in inverse across the panel (`bar`, its columns), a block cursor at
+## `cursor_at` (column, row) when `cursor` is on, and an `alert` boxed over the middle of the panel; dark when asleep.
 func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(TERM_SIZE)
 	c.draw_rect(Rect2(Vector2.ZERO, size), SCREEN_DARK)
 	if bool(st.get("asleep", true)):
 		return
 	var lines: PackedStringArray = st.get("lines", PackedStringArray())
-	var y := TERM_MARGIN.y
-	for line in lines:
-		var text := String(DispatchScript.unredacted(String(line))["text"])
-		c.draw_string(_mono, Vector2(TERM_MARGIN.x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT, PHOSPHOR)
-		y += TERM_LINE
+	var cw := _mono.get_string_size("M", HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT).x
+	var bar: Vector2i = st.get("bar", Vector2i(-1, -1))
+	for k in lines.size():
+		var y := TERM_MARGIN.y + TERM_LINE * float(k)
+		var text := String(DispatchScript.unredacted(String(lines[k]))["text"])
+		var ink := PHOSPHOR
+		if k == 0 and bar.x >= 0:
+			c.draw_rect(Rect2(TERM_MARGIN.x + cw * float(bar.x) - 4.0, y - TERM_LINE * 0.74, cw * float(bar.y - bar.x) + 8.0, TERM_LINE * 0.98), PHOSPHOR)
+			ink = SCREEN_DARK
+		c.draw_string(_mono, Vector2(TERM_MARGIN.x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT, ink)
 	if bool(st.get("cursor", false)):
-		var last := String(lines[lines.size() - 1]) if not lines.is_empty() else ""
-		var cw := _mono.get_string_size("M", HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT).x
-		var cy := TERM_MARGIN.y + TERM_LINE * float(maxi(lines.size() - 1, 0))
-		c.draw_rect(Rect2(TERM_MARGIN.x + cw * float(last.length()) + 2.0, cy - float(TERM_FONT) * 0.78, cw * 0.9, float(TERM_FONT) * 0.95), PHOSPHOR)
+		var at: Vector2i = st.get("cursor_at", Vector2i(0, maxi(lines.size() - 1, 0)))
+		var cy := TERM_MARGIN.y + TERM_LINE * float(at.y)
+		c.draw_rect(Rect2(TERM_MARGIN.x + cw * float(at.x) + 2.0, cy - float(TERM_FONT) * 0.78, cw * 0.9, float(TERM_FONT) * 0.95), PHOSPHOR)
+	var alert: PackedStringArray = st.get("alert", PackedStringArray())
+	if not alert.is_empty():
+		var wide := 0
+		for l in alert:
+			wide = maxi(wide, String(l).length())
+		var cols := float(wide + 6)
+		var mid_col := float(DispatchTerminal.COLUMNS) * 0.5
+		var top_row := float(DispatchTerminal.BODY_TOP + DispatchTerminal.BODY_ROWS / 2) - float(alert.size() + 2) * 0.5
+		var box := Rect2(TERM_MARGIN.x + cw * (mid_col - cols * 0.5), TERM_MARGIN.y + TERM_LINE * (top_row - 0.74),
+			cw * cols, TERM_LINE * float(alert.size() + 2))
+		c.draw_rect(box, SCREEN_DARK)
+		c.draw_rect(box, PHOSPHOR, false, 3.0)
+		c.draw_rect(box.grow(-7.0), PHOSPHOR, false, 1.5)
+		for k in alert.size():
+			var l := String(alert[k])
+			var x := TERM_MARGIN.x + cw * (mid_col - float(l.length()) * 0.5)
+			c.draw_string(_mono, Vector2(x, TERM_MARGIN.y + TERM_LINE * (top_row + 1.0 + float(k))), l, HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT, PHOSPHOR)
 
 
 ## The radar: dark green glass, its range rings and cross, the sweep going round with its glow fading behind it, the desk
@@ -266,8 +322,9 @@ func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
 		var a1 := sweep - float(k) * 0.035
 		var al := 0.32 * pow(1.0 - float(k) / 48.0, 2.0)
 		c.draw_colored_polygon(PackedVector2Array([mid, mid + Vector2.from_angle(a0) * rad, mid + Vector2.from_angle(a1) * rad]), Color(RADAR_GREEN, al))
-	for k in 4:
-		c.draw_arc(mid, rad * float(k + 1) / 4.0, 0.0, TAU, 96, Color(RADAR_GREEN, 0.28), 1.6, true)
+	var rings := clampi(int(st.get("rings", DispatchScript.SCOPE_RINGS)), 1, 12)
+	for k in rings:
+		c.draw_arc(mid, rad * float(k + 1) / float(rings), 0.0, TAU, 96, Color(RADAR_GREEN, 0.28), 1.6, true)
 	c.draw_line(mid - Vector2(rad, 0), mid + Vector2(rad, 0), Color(RADAR_GREEN, 0.18), 1.2)
 	c.draw_line(mid - Vector2(0, rad), mid + Vector2(0, rad), Color(RADAR_GREEN, 0.18), 1.2)
 	for k in 36:
@@ -640,3 +697,95 @@ func _draw_dial(c: CanvasItem) -> void:
 	var x := 40.0 + (20.1 - 18.0) / 5.0 * 432.0
 	c.draw_line(Vector2(x, 90), Vector2(x, 230), Color(0.7, 0.05, 0.03), 4.0)
 	c.draw_string(_mono, Vector2(x - 40, 250), "20.1", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.7, 0.05, 0.03))
+
+
+## The digits 0-9 a flip clock's cards show, white, one to a cell: drawn once, each card's halves cut from it.
+func _draw_digits(c: CanvasItem) -> void:
+	for d in 10:
+		var x := float(DIGIT_CELL.x * d)
+		var fs := int(DIGIT_CELL.y * 0.86)
+		var w := _mono.get_string_size(str(d), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		c.draw_string(_mono, Vector2(x + (float(DIGIT_CELL.x) - w) * 0.5, float(DIGIT_CELL.y) * 0.80), str(d), HORIZONTAL_ALIGNMENT_LEFT, -1, fs,
+			Color(0.93, 0.92, 0.88))
+
+
+## The flip clock: four cards and a colon, each card a dark rounded slab split across its middle; a card whose digit changes
+## turns over - the top half of the old falling forward to the hinge, then the bottom half of the new swinging down from it.
+func _draw_clock(c: CanvasItem, st: Dictionary) -> void:
+	c.draw_rect(Rect2(Vector2.ZERO, Vector2(CLOCK_SIZE)), Color(0.015, 0.015, 0.018))
+	var old := String(st.get("from", "--:--")).replace(":", "")
+	var now := String(st.get("to", "--:--")).replace(":", "")
+	var u := clampf(float(st.get("u", 1.0)), 0.0, 1.0)
+	var xs := [16.0, 120.0, 236.0, 340.0]
+	var top := 20.0
+	var cell := Vector2(DIGIT_CELL)
+	var tex := digits.get_texture()
+	var card := Color(0.09, 0.09, 0.10)
+	for i in 4:
+		var x: float = xs[i]
+		var r := Rect2(x, top, cell.x, cell.y)
+		var a := old[i] if i < old.length() and old[i].is_valid_int() else ""
+		var b := now[i] if i < now.length() and now[i].is_valid_int() else ""
+		var turning := a != b and u < 1.0
+		var half := cell.y * 0.5
+		var hinge := top + half
+		# the top half: the new digit behind; the old one's top falls forward over it in the first half of the turn
+		_card_half(c, tex, Rect2(x, top, cell.x, half), b, true, card)
+		if turning and u < 0.5:
+			var k := cos(u * PI)
+			_card_half(c, tex, Rect2(x, hinge - half * k, cell.x, half * k), a, true, card.darkened(0.25 * (1.0 - k)))
+		# the bottom half: the old digit until the new one's bottom swings down over it
+		_card_half(c, tex, Rect2(x, hinge, cell.x, half), a if turning else b, false, card)
+		if turning and u >= 0.5:
+			var k := -cos(u * PI)
+			_card_half(c, tex, Rect2(x, hinge, cell.x, half * k), b, false, card.lightened(0.05 * (1.0 - k)))
+		c.draw_line(Vector2(x, hinge), Vector2(x + cell.x, hinge), Color(0.0, 0.0, 0.0), 3.0)
+		c.draw_rect(r, Color(0.0, 0.0, 0.0, 0.6), false, 2.0)
+	for dy in [-24.0, 24.0]:
+		c.draw_circle(Vector2(224.0, top + cell.y * 0.5 + dy), 7.0, Color(0.85, 0.84, 0.8))
+
+
+func _card_half(c: CanvasItem, tex: Texture2D, dest: Rect2, digit: String, upper: bool, card: Color) -> void:
+	if dest.size.y <= 0.5:
+		return
+	c.draw_rect(dest, card)
+	if digit.is_empty():
+		return
+	var d := int(digit)
+	var src := Rect2(float(DIGIT_CELL.x * d), 0.0 if upper else float(DIGIT_CELL.y) * 0.5, float(DIGIT_CELL.x), float(DIGIT_CELL.y) * 0.5)
+	c.draw_texture_rect_region(tex, dest, src)
+
+
+## The tablet: dark when off; awake, a browser - its bar with the address (typed as it is typed, a cursor after it while
+## it is, a line loading under it) - and the page below, set by the tablet medium ([TabletPage]) and scrolled; a finger's
+## tap a ring where it lands.
+func _draw_tablet(c: CanvasItem, st: Dictionary) -> void:
+	var size := Vector2(TABLET_SIZE)
+	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.0, 0.0, 0.0))
+	var power := float(st.get("power", 0.0))
+	if power <= 0.0:
+		return
+	var page: TabletPage = st.get("page", null)
+	if page != null:
+		page.draw(c, BAR_H, float(st.get("scroll", 0.0)), BAR_H, size.y, {}, 0.0, st.get("textures", func(_k: String) -> Texture2D: return null))
+	else:
+		c.draw_rect(Rect2(0.0, BAR_H, size.x, size.y - BAR_H), Color(0.96, 0.96, 0.97))
+	c.draw_rect(Rect2(0.0, 0.0, size.x, BAR_H), Color(0.16, 0.16, 0.18))
+	var field := Rect2(28.0, 18.0, size.x - 56.0, BAR_H - 36.0)
+	c.draw_rect(field, Color(0.26, 0.26, 0.29))
+	var font := TabletPage.face(false, 0)
+	var url := String(st.get("url", ""))
+	c.draw_string(font, Vector2(field.position.x + 22.0, field.position.y + field.size.y * 0.72), url, HORIZONTAL_ALIGNMENT_LEFT,
+		field.size.x - 44.0, 30, Color(0.92, 0.92, 0.94))
+	if bool(st.get("typing", false)):
+		var w := font.get_string_size(url, HORIZONTAL_ALIGNMENT_LEFT, -1, 30).x
+		c.draw_rect(Rect2(field.position.x + 24.0 + w, field.position.y + 12.0, 3.0, field.size.y - 24.0), Color(0.6, 0.75, 1.0))
+	var load := float(st.get("load", 1.0))
+	if load < 1.0:
+		c.draw_rect(Rect2(0.0, BAR_H - 5.0, size.x * load, 5.0), Color(0.35, 0.55, 1.0))
+	var tap_u := float(st.get("tap_u", -1.0))
+	if tap_u >= 0.0 and tap_u < 1.0:
+		var at: Vector2 = st.get("tap", size * 0.5)
+		c.draw_circle(at, 26.0 + 30.0 * tap_u, Color(0.4, 0.4, 0.45, 0.35 * (1.0 - tap_u)))
+	if power < 1.0:
+		c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.0, 0.0, 0.0, 1.0 - power))

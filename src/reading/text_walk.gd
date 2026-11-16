@@ -1,8 +1,9 @@
 extends RefCounted
 class_name TextWalk
 
-## TextWalk - what a reading reads of its note: the words the voice says, the title it announces, the text its
-## cast of speakers and its fingerprint come from, and the passage a voice is auditioned with. This one is the
+## TextWalk - what a reading reads of its note: the words the voice says, the title it announces, and the text its
+## cast of speakers and its fingerprint come from (a voice's Test reads the one shared passage in every kind of note,
+## [constant ReadingAudition.PASSAGE]). This one is the
 ## note's own words (a tablet chapter read off its screen); a component that rewrites what the voice reads hands
 ## the reading another (a table show's [EpisodeWalk] reads the episode it produced, never the brief).
 ##
@@ -28,11 +29,6 @@ func spoken(text: String, title: String) -> Dictionary:
 ## fingerprinted by. [param written] is the note's text as the editor holds it now.
 func cast_text(written: String) -> String:
 	return written
-
-
-## The passage every voice is auditioned with by Test; [param fallback] is the panel's own.
-func test_passage(fallback: String) -> String:
-	return fallback
 
 
 ## Whether the words read are the note's as written - so an edit by hand leaves a reading already

@@ -87,7 +87,7 @@ note and does nothing: the behavior it describes is written as `<!-- still -->`.
   breaks is read on to its end, and the voice waits for the pen at the next sentence. The words said before a line begins
   are written at the pen's quickest (`LetterMedium._ahead_times`). Over a 20-turn chapter: after a mark, about 4 s rested;
   a broken sentence, 3.5 to 4.3 s at the next sentence; the pen never past 2.5 times the hand's pace over the page seen.
-- **The desk is lit as the card table is.** The Desk number is the seed of the desk's whole look. Each desk has a mood
+- **The desk is lit as the card table is.** The Seed row's number is the seed of the desk's whole look. Each desk has a mood
   (`DeskLook.MOODS`): lamplight (the lamp, a dark room - a screen's glow, a street lamp, a fire or the moon in a window),
   candlelight (the lamp off, one to three candles on the desk, the one that lights the page most the key), daylight (the
   sun through a window across the desk, clouds now and then) and dusk (a low gold sun through it, the lamp part on). The

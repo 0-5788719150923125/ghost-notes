@@ -586,6 +586,8 @@ func _set_table(args: Dictionary = {}) -> Dictionary:
 		(st as Dictionary)["worked"] = i >= 0 and built_to_work(_things[i])
 	var stood := stood_lines(got, _numbers())
 	lines.append_array(stood["lines"])
+	for l in got.get("laid", []):
+		lines.append(laid_line(l))
 	_idle = idle(got)
 	if not waiting.is_empty():
 		lines.append("Not yet placed, so not on the table: %s - place them with blueprint." % ", ".join(waiting))
@@ -673,6 +675,16 @@ static func idle(got: Dictionary) -> Array:
 		if d.has("shown") and float(d["shown"]) < OUT_OF_SHOT and (d.get("gives", []) as Array).is_empty() and not bool(d.get("worked", false)):
 			out.append(String(d["name"]))
 	return out
+
+
+## A free part or loose thing built into what is round it, as the table found it ([method TablePhysics.lay_loose]; [param l]
+## `{what, in, deep, laid}`, deep in millimeters): laid out of it, or standing through it where nothing gives it room.
+static func laid_line(l: Dictionary) -> String:
+	if bool(l.get("laid", false)):
+		return "- %s was built %s mm into %s, and is laid out of it as a hand would set it down: write it resting there" % [
+			String(l["what"]), Effects._mm(float(l["deep"])), String(l["in"])]
+	return "- %s stands %s mm through %s, which has no room for it: give it room (a hole, a ring, a box with `wall`) or stand it elsewhere" % [
+		String(l["what"]), Effects._mm(float(l["deep"])), String(l["in"])]
 
 
 ## Whether thing [param t] (as written) is built to be worked: a part of it held or reached by named `points`, jointed, given a

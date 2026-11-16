@@ -175,6 +175,14 @@ func want_pictures(keys: Array) -> void:
 	library.want_pictures(keys)
 
 
+func prepare_pictures(keys: Array) -> void:
+	library.prepare_pictures(keys)
+
+
+func picture(key: String) -> Variant:
+	return library.picture(key)
+
+
 func rename(key: String, name: String) -> String:
 	return library.rename(key, name)
 

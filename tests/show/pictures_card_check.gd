@@ -28,6 +28,15 @@ extends SceneTree
 ## Generate all is on the card, saying how many have none (a page captured is never counted) and grayed
 ## with none to paint; read-only, it is grayed and, pressed, says why. It is the Pipeline card's Generate:
 ## one function behind both.
+##
+## A picture that stands for a clip (its row has `clip`) is imported from a video, never painted: its row
+## offers Import… and no Generate, its Pipeline row has no ⟳, and it is never owed (control: the same
+## picture without `clip` is owed and offers Generate). Imported ([method Illustrations.import_clip]; the
+## fixtures are made by ffmpeg's lavfi in the gate's own folder, the library is the test seam's), a video is
+## decoded in the background into a version of frames: the first frame its picture, 12 fps, 480 px wide at
+## most and never upscaled, 20 s at most, `clip.json` beside them, its sound a mono WAV only where the video
+## had sound (control: the silent one has none). ‹ › step between clips, ✕ takes a clip's folder, a file
+## that is no video fails with a reason and keeps nothing, and a read-only session refuses.
 
 const WORDS := ("Words. <!-- image: A harbor at dawn. --> More.\n\n<!-- sketch: a tree of dots -->\n\n"
 	+ "Then. <!-- image: A storm over the bay. -->\n")
@@ -35,6 +44,11 @@ const DESK := ("<!-- speaker: Control -->\nThe feed. <!-- image (feed): The car 
 	+ "<!-- image (full): Dawn over the field. -->\n")
 const TABLET := ("<!-- url: news.test/a -->\n\n# An article\n\nRead this. <!-- image: A harbor at dawn. -->\n\n"
 	+ "Then [the listing](https://www.shop.test/item/42).\n\n<!-- url: https://www.shop.test/item/42 -->\n")
+## A picture entry for a clip, as a medium hands it to the card.
+const CLIP := {"kind": "image", "prompt": "a small brown dog on a kitchen floor, spinning after its own tail",
+	"placement": "screen", "clip": "dog-tail.webm"}
+## The gate's own folder for the videos it decodes.
+const CLIP_DIR := "user://pictures_card_check_clip"
 
 var _fails := 0
 
@@ -51,6 +65,8 @@ func _run() -> void:
 	_which()
 	_comes_with()
 	await _one_card()
+	await _clip_rows()
+	await _clip_decode()
 	Illustrations.use_for_test()
 	print("pictures_card_check: %s" % ("ALL OK" if _fails == 0 else "%d FAILED" % _fails))
 	quit(0 if _fails == 0 else 1)
@@ -69,6 +85,9 @@ func _which() -> void:
 	_ok(tab.size() == 2 and String(tab[0]["prompt"]) == "A harbor at dawn." and String(tab[1].get("url", "")) == "https://www.shop.test/item/42",
 		"a tablet adds its real page, captured, with its url: %s" % str(_prompts(tab)))
 	_ok(Medium.pictures_of("full", WORDS).is_empty() and Medium.pictures_of("comic", WORDS).is_empty(), "the full frame and the comic show none")
+	var twice := "<!-- image: A pen on a desk. -->\n\nOne.\n\n<!-- image: A pen on a desk. -->\n\nTwo.\n"
+	_ok(Medium.pictures_of("book", twice).size() == 1 and Manuscript.images(twice).size() == 2,
+		"a picture shown twice is one picture to make (the control: its marks are two)")
 
 
 ## It comes with what shows pictures: the Medium (whose formats include the Letter and the Dispatch desk)
@@ -170,6 +189,157 @@ func _one_card() -> void:
 	panel.queue_free()
 	await process_frame
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(made))
+
+
+## A clip's row offers Import… and no Generate, and is never owed; the same picture without `clip` is.
+func _clip_rows() -> void:
+	Illustrations.use_for_test({}, true)
+	var im := _clip_entry()
+	var plain := im.duplicate()
+	plain.erase("clip")
+	var panel = load("res://src/media/illustration_panel.gd").new()
+	root.add_child(panel)
+	panel.set_pictures([im])
+	var row: Control = panel._row(im)
+	var said := _buttons(row)
+	_ok(said.has("Import…") and said.has("Generate") and panel._owed().size() == 1 and panel._missing(),
+		"a clip's row offers Generate (a painted loop) and Import…, and is owed until it has one: %s" % str(said))
+	var steps: Array = panel._step_rows()
+	_ok(steps.size() == 1 and String(steps[0].again).contains("loop") and String(steps[0].said) == "clip: dog-tail.webm",
+		"...its Pipeline row's ⟳ paints the loop, and names the video its script wants: %s" % (String(steps[0].said) if not steps.is_empty() else "none"))
+	row.free()
+	panel.set_pictures([plain])
+	row = panel._row(plain)
+	said = _buttons(row)
+	_ok(said.has("Generate") and said.has("Import…") and panel._owed().size() == 1 and panel._missing(),
+		"the same picture without `clip` is owed and offers Generate as well: %s" % str(said))
+	row.free()
+	panel.queue_free()
+	await process_frame
+
+
+## A video imported as a clip: decoded in the background into a version of frames, with its sound where it had one.
+func _clip_decode() -> void:
+	var im := _clip_entry()
+	var key := String(im["key"])
+	var dir := ProjectSettings.globalize_path(CLIP_DIR)
+	DirAccess.make_dir_recursive_absolute(dir)
+	var talking := dir.path_join("talking.mkv")
+	var silent := dir.path_join("silent.mkv")
+	var broken := dir.path_join("broken.webm")
+	OS.execute("ffmpeg", ["-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=640x360:rate=25:duration=1",
+		"-f", "lavfi", "-i", "sine=frequency=220:duration=1", "-c:v", "mpeg4", "-c:a", "pcm_s16le", "-shortest", talking], [])
+	OS.execute("ffmpeg", ["-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=25:duration=21",
+		"-c:v", "mpeg4", silent], [])
+	var f := FileAccess.open(broken, FileAccess.WRITE)
+	f.store_string("no video in here")
+	f.close()
+	if not FileAccess.file_exists(talking) or not FileAccess.file_exists(silent):
+		_ok(false, "the clip fixtures could not be made (is ffmpeg on PATH?)")
+		return
+	Illustrations.use_for_test({}, true)
+	_ok(Illustrations.import_clip(im, talking).contains("read-only"), "a read-only session refuses to import a clip")
+	Illustrations.use_for_test({}, false)
+	var asked := Illustrations.request_of(im)
+	var still := im.duplicate()
+	still.erase("clip")
+	_ok(String(asked["placement"]) == Illustrations.LOOP and String(Illustrations.request_of(still)["placement"]) == "screen"
+		and Illustrations.placement_guide(Illustrations.LOOP).contains("6 CELLS"),
+		"a clip is painted as a loop, one sheet of cells (the control: the same words as a still are a screen's picture)")
+	await _painted_loop(im)
+	var err := Illustrations.import_clip(im, talking)
+	_ok(err.is_empty() and Illustrations.status(key) == "running" and Illustrations.activity(key).contains("talking.mkv"),
+		"a video imported decodes in the background, its row running and saying so: %s %s" % [err, Illustrations.activity(key)])
+	await _decoded(key)
+	var c := Illustrations.clip_of(key)
+	_ok(not c.is_empty() and int(c["fps"]) == 12 and int(c["frames"]) in [12, 13] and c["size"] == Vector2i(480, 270)
+		and c.has("sound") and FileAccess.file_exists(String(c["sound"])),
+		"kept as a clip: 12 fps, a second of frames, 480 px wide, its sound beside them: %s %s" % [str(c), Illustrations.error_of(key)])
+	_ok(Illustrations.path_for(key) == Illustrations.clip_frame(c, 0) and Illustrations.path_for(key).ends_with("/0000.jpg")
+		and Illustrations.clip_frame(c, int(c.get("frames", 0))) == Illustrations.clip_frame(c, 0) and Illustrations.is_imported(key)
+		and not Illustrations.is_stale(key), "its picture is its first frame, and past the last it wraps")
+	var said: Variant = JSON.parse_string(FileAccess.get_file_as_string(String(c.get("dir", "")).path_join("clip.json")))
+	_ok(said is Dictionary and int(said.get("fps", 0)) == 12 and int(said.get("frames", 0)) == int(c.get("frames", -1))
+		and said.get("size", []) == [480.0, 270.0] and String(said.get("sound", "")) == "sound.wav",
+		"clip.json beside the frames says the same: %s" % str(said))
+	var panel_script: GDScript = load("res://src/media/illustration_panel.gd")
+	_ok(String(panel_script.call("_clip_label", im)).begins_with("clip, 12 fps, 1."), "the row says it is a clip: %s" % panel_script.call("_clip_label", im))
+	Illustrations.import_clip(im, silent)
+	await _decoded(key)
+	var s := Illustrations.clip_of(key)
+	_ok(Illustrations.versions(key).size() == 2 and int(s.get("frames", 0)) == 240 and s.get("size") == Vector2i(320, 180)
+		and not s.has("sound") and not FileAccess.file_exists(String(s.get("dir", "")).path_join("sound.wav")),
+		"the control: a silent video longer than 20 s keeps 240 frames, its own smaller size and no sound: %s" % str(s))
+	Illustrations.select_version(key, 0)
+	_ok(Illustrations.clip_of(key).has("sound"), "‹ steps back to the first clip")
+	_ok(Illustrations.delete_version(key, 1) and not DirAccess.dir_exists_absolute(String(s.get("dir", "")))
+		and Illustrations.versions(key).size() == 1, "✕ takes a clip's folder with it")
+	Illustrations.import_clip(im, broken)
+	await _decoded(key)
+	_ok(Illustrations.versions(key).size() == 1 and Illustrations.status(key) == "ready" and not Illustrations.error_of(key).is_empty(),
+		"a file that is no video fails with a reason and keeps nothing: %s" % Illustrations.error_of(key))
+	Illustrations.delete_version(key, 0)
+	_ok(Illustrations.versions(key).is_empty() and Illustrations.clip_of(key).is_empty() and Illustrations.status(key) == "error",
+		"with the last clip deleted there is none")
+	var lib := ProjectSettings.globalize_path("user://illustrations_test").path_join(key)
+	for g in DirAccess.get_directories_at(lib):
+		_ok(false, "left behind in the library: %s" % g)
+	DirAccess.remove_absolute(lib)
+	for p in [talking, silent, broken]:
+		DirAccess.remove_absolute(p)
+	DirAccess.remove_absolute(dir)
+	Illustrations.use_for_test({}, true)
+
+
+## A painted loop's sheet, as a painter hands it back: cut into its cells, a frame each in order, at the loop's pace, the
+## sheet kept beside them; made under the look, a version like any other (the control: a cell's middle is its own color).
+func _painted_loop(im: Dictionary) -> void:
+	var key := String(im["key"])
+	var cells := Illustrations.LOOP_CELLS
+	var sheet := Image.create(1536, 1024, false, Image.FORMAT_RGB8)
+	var colors: Array = []
+	for k in cells.x * cells.y:
+		colors.append(Color.from_hsv(float(k) / float(cells.x * cells.y), 0.8, 0.9))
+		var cw := 1536 / cells.x
+		var ch := 1024 / cells.y
+		sheet.fill_rect(Rect2i((k % cells.x) * cw, (k / cells.x) * ch, cw, ch), colors[k])
+	var err := Illustrations._keep_loop(key, sheet, {"sig": Illustrations.current_signature("image"), "backend": "test", "description": String(im["prompt"])})
+	var c := Illustrations.clip_of(key)
+	var right := true
+	for k in int(c.get("frames", 0)):
+		var f := Image.load_from_file(Illustrations.clip_frame(c, k))
+		var mid := f.get_pixel(f.get_width() / 2, f.get_height() / 2) if f != null else Color.BLACK
+		right = right and f != null and absf(mid.h - (colors[k] as Color).h) < 0.03
+	var panel_script: GDScript = load("res://src/media/illustration_panel.gd")
+	_ok(err.is_empty() and int(c.get("frames", 0)) == cells.x * cells.y and int(c.get("fps", 0)) == Illustrations.LOOP_FPS and right
+		and FileAccess.file_exists(String(c.get("dir", "")).path_join(Illustrations.LOOP_SHEET)) and not Illustrations.is_imported(key)
+		and not Illustrations.is_stale(key) and String(panel_script.call("_clip_label", im)) == "painted loop, 6 frames at 8 fps",
+		"a painted sheet is cut into a loop, a cell a frame in order, its sheet kept: %s %s" % [err, str(c)])
+	Illustrations.delete_version(key, 0)
+
+
+## Until [param key]'s decode ends (a guard against a hang, never a measure of the machine).
+func _decoded(key: String) -> void:
+	var until := Time.get_ticks_msec() + 120000
+	while Illustrations.status(key) == "running" and Time.get_ticks_msec() < until:
+		Illustrations.pump()
+		await process_frame
+
+
+static func _clip_entry() -> Dictionary:
+	var im: Dictionary = CLIP.duplicate()
+	im["key"] = Manuscript.image_key(String(im["prompt"]))
+	return im
+
+
+## The words on every button under [param node].
+static func _buttons(node: Node) -> Array:
+	var out: Array = []
+	if node is Button:
+		out.append((node as Button).text)
+	for c in node.get_children():
+		out.append_array(_buttons(c))
+	return out
 
 
 ## An episode whose agents painted what the gate says.

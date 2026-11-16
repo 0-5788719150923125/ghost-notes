@@ -19,6 +19,8 @@ extends Node
 ##   it shares none of find nothing), and put's `{kept}` stands one on the draft with its materials.
 ## - The Seen shelf reads every episode's things once each by what it is; Add puts a kept prop on the open episode's table; a kept
 ##   prop is exported to a file and imported again.
+## - A prop's picture kept on the shelf is read, never taken again. The pictures wanted are taken before those only made ready, in
+##   the order wanted; made ready ones stop when the shelf asks for none (the control: not stopped, every one is taken).
 
 const ROOT := "user://episode_props_check"
 
@@ -206,11 +208,56 @@ func _run() -> void:
 	dex.free()
 	lib.settle()
 	sec.library.settle()
+	await _pictures()
 	show._episode = null
 	_ok(sec.adds().is_empty() and not sec.add("kept:brass bell").is_empty(), "with no table yet there is nothing to add to")
 	show._episode = ep
 	card.free()
 	_finish(ed, was_root, was_library)
+
+
+## The pictures of props ([PropPictures]) on a taker of the gate's own, which records the order and takes a frame each.
+func _pictures() -> void:
+	var pics := PropPictures.new()
+	var order: Array = []
+	pics.take = func(_t: Dictionary, _m: Dictionary, h: String, _store: bool) -> Dictionary:
+		order.append(h)
+		await get_tree().process_frame
+		return {"image": Image.create(4, 3, false, Image.FORMAT_RGB8), "size": "1 cm"}
+	var kept := "0f0f0f"
+	DirAccess.make_dir_recursive_absolute(Library.shelf(PropStudio.SHELF))
+	Image.create(8, 6, false, Image.FORMAT_RGB8).save_png(PropStudio.kept_path(kept))
+	var f := FileAccess.open(PropStudio.kept_path(kept).get_basename() + ".txt", FileAccess.WRITE)
+	f.store_string("3 cm")
+	f.close()
+	_ok(pics.of(kept, {}, {}) == null, "a kept picture is read on a worker, not on the asking frame")
+	for i in 120:
+		if pics.image(kept) != null:
+			break
+		await get_tree().process_frame
+	_ok(pics.image(kept) is Image and pics.size_of(kept) == "3 cm" and order.is_empty(),
+		"a kept picture is read with its size, never taken again (%s, %s)" % [pics.size_of(kept), str(order)])
+	pics.prepare([["r1", {}, {}], ["r2", {}, {}], ["r3", {}, {}]])
+	pics.want([["w1", {}, {}], ["r3", {}, {}], [kept, {}, {}]])
+	await _drained(pics)
+	_ok(order == ["r1", "w1", "r3", "r2"], "the pictures wanted are taken first, then those made ready (%s)" % str(order))
+	order.clear()
+	pics.prepare([["s1", {}, {}], ["s2", {}, {}], ["s3", {}, {}]])
+	pics.prepare([])
+	await _drained(pics)
+	_ok(order == ["s1"], "made ready ones stop when none are asked for (%s)" % str(order))
+	order.clear()
+	pics.prepare([["t1", {}, {}], ["t2", {}, {}]])
+	await _drained(pics)
+	_ok(order == ["t1", "t2"], "the control: made ready and not stopped, every one is taken (%s)" % str(order))
+
+
+## Until [param pics] has no picture left to take, and the one being taken is in.
+func _drained(pics: PropPictures) -> void:
+	for i in 240:
+		if pics.waiting() == 0 and not pics._pumping:
+			return
+		await get_tree().process_frame
 
 
 func _finish(ed: ReadingPanel, was_root: String, was_library: String) -> void:

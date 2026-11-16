@@ -35,7 +35,7 @@ var _card_box: TextField         # what is written on the index cards, shown whi
 var _card_due := 0.0             # seconds till a playing desk takes the cards' words, 0 for nothing waiting
 
 
-## Rows whose number 0 is [param own] (a Callable returning the desk's number), said on the Desk row as [param own_said].
+## Rows whose number 0 is [param own] (a Callable returning the desk's number), said on the Seed row as [param own_said].
 func _init(own: Callable = Callable(), own_said := "the note's own desk, the same every time") -> void:
 	own_seed = own if own.is_valid() else func() -> int: return 1
 	_build(own_said)
@@ -115,7 +115,7 @@ func _build(own_said: String) -> void:
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 6)
 	add_child(srow)
-	srow.add_child(_label("Desk"))
+	srow.add_child(_label("Seed"))
 	_seed_box = SpinBox.new()
 	_seed_box.min_value = 0
 	_seed_box.max_value = 99999
@@ -134,7 +134,7 @@ func _build(own_said: String) -> void:
 		redress.emit())
 	srow.add_child(_seed_box)
 	var again := Button.new()
-	again.text = "New desk"
+	again.text = "Roll"
 	again.tooltip_text = "Another desk, drawn at random: the same things, the same light, placed and colored anew."
 	again.pressed.connect(func() -> void: _seed_box.value = randi_range(1, 99999))
 	srow.add_child(again)

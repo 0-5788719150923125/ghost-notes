@@ -13,8 +13,9 @@ class_name DispatchFormat
 ## read ([DispatchWalk]) and how it goes out ([DispatchFormat.Publish]: the document a render draws the desk from).
 ## `seed` is kept in the Medium's one block.
 ##
-## The desk's number is the note's own file's unless the rows give one ([method desk_seed]): it places the things that
-## can wander, grows the roots and draws the radar's aircraft - never what the script does.
+## The desk's number is the note's own file's unless the Seed row gives one ([method desk_seed]): it places the things that
+## can wander, grows the roots and draws the radar's aircraft - never what the script does. Changed while the note plays, it
+## is handed to the reading's live document and the desk is drawn again at once ([method _redress_live]).
 
 ## Its format's key in [constant Medium.REGISTRY].
 const KEY := "dispatch"
@@ -53,7 +54,7 @@ func _process(delta: float) -> void:
 	if _row_t > 0.0:
 		return
 	_row_t = 0.25
-	var body := _body()
+	var body := _note()
 	if body != _typing:
 		_typing = body
 		_rested = 0.0
@@ -100,14 +101,23 @@ func desk_seed() -> int:
 	return 1 if path.is_empty() else 1 + absi(hash(path)) % 99999
 
 
-## The document's `dispatch`: the desk's seed and each picture's file - what [DispatchMedium] reads.
+## The document's `dispatch`: the desk's seed, each picture's file, each clip's frames ([method Illustrations.clip_of]) and
+## the note's frontmatter (`head`, its `desk:` and `terminal:` blocks; the words a synced note is read with have none) -
+## what [DispatchMedium] reads.
 func document() -> Dictionary:
 	var pictures := {}
+	var clips := {}
 	for im in DispatchMedium.pictures_in(_body()):
-		var path := Illustrations.path_for(String((im as Dictionary)["key"]))
+		var key := String((im as Dictionary)["key"])
+		if (im as Dictionary).has("clip"):
+			var clip := Illustrations.clip_of(key)
+			if not clip.is_empty():
+				clips[key] = clip
+			continue
+		var path := Illustrations.path_for(key)
 		if not path.is_empty():
-			pictures[String(im["key"])] = ProjectSettings.globalize_path(path)
-	return {"seed": desk_seed(), "pictures": pictures}
+			pictures[key] = ProjectSettings.globalize_path(path)
+	return {"seed": desk_seed(), "pictures": pictures, "clips": clips, "head": _head()}
 
 
 func _body() -> String:
@@ -115,6 +125,18 @@ func _body() -> String:
 	if _panel != null and _panel.source_box() != null:
 		return _panel.source_box().text
 	return doc.pull() if doc != null else ""
+
+
+## The note's frontmatter as written ("" for none): where the desk's `desk:` and `terminal:` blocks are - a synced note's
+## words, as the box and the voice have them, come without it.
+func _head() -> String:
+	var doc := _panel.doc_source() if _panel != null else null
+	return doc.head() if doc != null else ""
+
+
+## The note as written: its words, with its frontmatter on them where they come without it.
+func _note() -> String:
+	return DispatchMedium.whole(_body(), _head())
 
 
 # --- the rows ----------------------------------------------------------------------------------------------------------
@@ -125,7 +147,7 @@ func _build() -> void:
 	srow.add_theme_constant_override("separation", 6)
 	add_child(srow)
 	var sl := Label.new()
-	sl.text = "Desk"
+	sl.text = "Seed"
 	sl.custom_minimum_size.x = 64.0
 	sl.add_theme_font_size_override("font_size", 12)
 	srow.add_child(sl)
@@ -135,14 +157,16 @@ func _build() -> void:
 	_seed_box.step = 1
 	_seed_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_seed_box.tooltip_text = ("Which desk, by number: how the roots grow, how the phones lie in their rows, the aircraft "
-		+ "on the radar - never what the script does. 0 is the note's own desk, the same every time. Takes effect at the next Play.")
+		+ "on the radar - never what the script does. 0 is the note's own desk, the same every time. Seen at once while the "
+		+ "show plays, paused or not.")
 	_seed_box.value_changed.connect(func(v: float) -> void:
 		if not _syncing:
 			_knobs["seed"] = int(v)
-			_touch())
+			_touch()
+			_redress_live())
 	srow.add_child(_seed_box)
 	var again := Button.new()
-	again.text = "New desk"
+	again.text = "Roll"
 	again.tooltip_text = "Another desk, drawn at random: the roots grown anew, the phones laid again."
 	again.pressed.connect(func() -> void: _seed_box.value = randi_range(1, 99999))
 	srow.add_child(again)
@@ -162,8 +186,11 @@ func _say_about(body: String) -> void:
 	var n := (p["actions"] as Array).size()
 	var line := "%d phones (%s); %d things the desk does." % [phones.size(), ", ".join(phones), n]
 	var warn: PackedStringArray = p["warnings"]
+	StatusLog.say("dispatch desk", "\n".join(warn))
 	if not warn.is_empty():
 		line += "\n⚠  " + "\n⚠  ".join(warn.slice(0, 4))
+		if warn.size() > 4:
+			line += "\n⚠  ...and %d more (the log has them all)" % (warn.size() - 4)
 	_about.text = line
 	noted.emit(line)
 
@@ -179,3 +206,14 @@ func _show_knobs() -> void:
 func _touch() -> void:
 	if _panel != null:
 		_panel.touch()
+
+
+## The desk drawn again while the note plays: the seed as it stands, in the reading's live document ([DispatchMedium] draws
+## the desk again when it changes).
+func _redress_live() -> void:
+	var subs: Node = _panel.subtitles if _panel != null and is_instance_valid(_panel) else null
+	if subs == null or not is_instance_valid(subs):
+		return
+	var doc: Dictionary = subs.get("document")
+	if doc.get("dispatch") is Dictionary:
+		(doc["dispatch"] as Dictionary)["seed"] = desk_seed()

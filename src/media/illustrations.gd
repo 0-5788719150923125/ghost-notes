@@ -21,6 +21,10 @@ class_name Illustrations
 ## ([method look_signature]); one made under a different look is flagged stale and still used until
 ## rerolled.
 ##
+## A picture can stand for a short clip instead ([method clip_of]): imported from a video ([method import_clip]), or
+## painted as a loop, one sheet of cells cut into frames ([method generate], [method _keep_loop]). Its frames are a version
+## like any other, the first one its still.
+##
 ## Settings is reached by name at runtime so this file loads in a bare `--script` gate where no
 ## autoload exists (see [method use_for_test]).
 
@@ -67,6 +71,7 @@ static func use_for_test(store := {}, read_only := false) -> void:
 	_jobs = {}
 	_queue = []
 	_errors = {}
+	_decoding = {}
 	_chapter = []
 	_memo = {}
 
@@ -510,6 +515,14 @@ static func placement_guide(placement: String) -> String:
 	if placement == "full":
 		return ("a full-page book illustration plate, PORTRAIT orientation, 2:3 aspect "
 			+ "(1024x1536), composed to fill the whole page edge to edge.")
+	if placement == LOOP:
+		return ("one sheet of cells for a short looping animation, LANDSCAPE 3:2 (1536x1024): %d CELLS in a grid of %d "
+			+ "across and %d down, each exactly the same size and filling its cell edge to edge, read left to right, top "
+			+ "row first, with nothing between them - no gaps, lines, numbers or captions. Every cell is the same picture "
+			+ "from the same fixed camera, with the same framing, setting and light; only the subject moves, one even step "
+			+ "further along one smooth movement in each cell, so that the step after the last cell is the first again and "
+			+ "the cells play as a seamless loop. Each cell is composed to read on the screen of a small old television, "
+			+ "nearly square.") % [LOOP_CELLS.x * LOOP_CELLS.y, LOOP_CELLS.x, LOOP_CELLS.y]
 	if placement == "screen":
 		return ("a picture that fills a widescreen video frame edge to edge, LANDSCAPE, 3:2 "
 			+ "(1536x1024), composed so it still reads when its top and bottom are cropped to 16:9 "
@@ -578,7 +591,10 @@ static func delete_version(key: String, i: int) -> bool:
 	if i < 0 or i >= vs.size():
 		return false
 	var file := String((vs[i] as Dictionary)["file"])
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(file))
+	if (vs[i] as Dictionary).has("clip"):
+		_remove_tree(ProjectSettings.globalize_path(file.get_base_dir()))     # a clip's frames are its folder
+	else:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(file))
 	var at := current_index(key)
 	vs.remove_at(i)
 	var e := entry(key)
@@ -607,7 +623,7 @@ static func is_stale(key: String) -> bool:
 
 ## "missing", "queued", "running", "ready" or "error".
 static func status(key: String) -> String:
-	if _jobs.has(key) or PageCapture.busy(key):
+	if _jobs.has(key) or _decoding.has(key) or PageCapture.busy(key):
 		return "running"
 	for q in _queue:
 		if String((q as Dictionary)["key"]) == key:
@@ -622,6 +638,8 @@ static func status(key: String) -> String:
 static func activity(key: String) -> String:
 	if _jobs.has(key):
 		return TextGen.status_of(_jobs[key])
+	if _decoding.has(key):
+		return "decoding %s" % String((_decoding[key] as Dictionary)["name"])
 	for q in _queue:
 		if String((q as Dictionary)["key"]) == key:
 			return "waiting its turn"
@@ -669,17 +687,25 @@ static func generate(image: Dictionary) -> String:
 	if not ImageGen.make(backend()).available():
 		return "%s is not installed" % Registry.label(ImageGen.REGISTRY, backend())
 	_errors.erase(key)
-	_queue.append({"key": key, "prompt": String(image["prompt"]),
-		"placement": String(image.get("placement", "inline"))})
+	_queue.append(request_of(image))
 	pump()
 	return ""
 
 
+## What painting [param image] asks the painter for: `{key, prompt, placement}` - a clip painted as a loop, one sheet of
+## cells cut into its frames as it lands ([method _keep_loop]).
+static func request_of(image: Dictionary) -> Dictionary:
+	return {"key": String(image.get("key", "")), "prompt": String(image.get("prompt", "")),
+		"placement": LOOP if image.has("clip") else String(image.get("placement", "inline"))}
+
+
 ## Stop painting [param keys]: each waiting is taken out of the line, each being painted has its painter
-## stopped. What was painted before stays.
+## stopped, each clip being decoded is stopped and its frames dropped. What was made before stays.
 static func stop(keys: Array) -> void:
 	_queue = _queue.filter(func(q: Dictionary) -> bool: return not keys.has(String(q["key"])))
 	for key in keys:
+		if _decoding.has(key):
+			_drop_decode(String(key))
 		if not _jobs.has(key):
 			continue
 		Subprocess.stop(int((_jobs[key] as Dictionary)["pid"]))
@@ -700,6 +726,7 @@ static func pump() -> void:
 			"url": String(c["url"])}, String(c["url"]), "page")
 		if err.is_empty():
 			print("ghost: page %s captured" % String(c["url"]))
+	_advance_clips()
 	_advance_jobs()
 	while _jobs.size() < MAX_JOBS:
 		var i := _next_startable()
@@ -815,6 +842,14 @@ static func _land(key: String, job: Dictionary) -> void:
 		_errors[key] = gen.failure(job)
 		push_warning("ghost: illustration %s failed - %s" % [key, _errors[key]])
 		return
+	if String(job["placement"]) == LOOP:
+		var cut := _keep_loop(key, img, job)
+		if not cut.is_empty():
+			_errors[key] = cut
+			return
+		print("ghost: illustration %s is a painted loop (v%d)" % [key, versions(key).size()])
+		_remove_tree(String(job.get("dir", "")))
+		return
 	var err := _add_version(key, img, {"sig": String(job["sig"]), "backend": String(job["backend"])},
 		String(job["description"]), String(job["placement"]))
 	if not err.is_empty():
@@ -830,18 +865,30 @@ static func _land(key: String, job: Dictionary) -> void:
 ## version's record beyond its file and time. "" on success, else why not.
 static func _add_version(key: String, img: Image, rec: Dictionary, prompt: String,
 		placement: String) -> String:
-	var e := entry(key)
-	var vs: Array = e.get("versions", [])
-	# The first free number, not the count: after a delete the count names an existing file.
-	var num := vs.size() + 1
-	while FileAccess.file_exists(_root.path_join(key).path_join("v%03d.png" % num)):
-		num += 1
-	var file := _root.path_join(key).path_join("v%03d.png" % num)
+	var file := _root.path_join(key).path_join("v%03d.png" % _free_number(key))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(file.get_base_dir()))
 	# Re-encoded rather than copied, so the library holds a real PNG whatever the painter wrote.
 	if img.save_png(ProjectSettings.globalize_path(file)) != OK:
 		return "could not write %s" % file
 	rec["file"] = file
+	_keep_version(key, rec, prompt, placement)
+	return ""
+
+
+## The number [param key]'s next version takes: the first free one, not the count (after a delete the count
+## names an existing file), free of a picture `vNNN.png` and of a clip's folder `vNNN/` alike.
+static func _free_number(key: String) -> int:
+	var num := (entry(key).get("versions", []) as Array).size() + 1
+	while FileAccess.file_exists(_root.path_join(key).path_join("v%03d.png" % num)) \
+			or DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(_root.path_join(key).path_join("v%03d" % num))):
+		num += 1
+	return num
+
+
+## [param rec], whose `file` is on disk, as [param key]'s newest version, chosen.
+static func _keep_version(key: String, rec: Dictionary, prompt: String, placement: String) -> void:
+	var e := entry(key)
+	var vs: Array = e.get("versions", [])
 	rec["at"] = int(Time.get_unix_time_from_system())
 	vs.append(rec)
 	e["versions"] = vs
@@ -851,7 +898,6 @@ static func _add_version(key: String, img: Image, rec: Dictionary, prompt: Strin
 	_put_entry(key, e)
 	_errors.erase(key)
 	revision += 1
-	return ""
 
 
 ## Use a picture from disk instead of painting one: [param path] becomes [param image]'s newest version
@@ -877,6 +923,210 @@ static func import_file(image: Dictionary, path: String) -> String:
 static func is_imported(key: String) -> bool:
 	var i := current_index(key)
 	return i >= 0 and (versions(key)[i] as Dictionary).has("imported")
+
+
+# --- clips -------------------------------------------------------------------
+
+## A clip is a version whose frames fill its own folder, `<key>/vNNN/0000.jpg`…, with [constant CLIP_JSON]
+## beside them (`fps`, `frames`, `size` as [w, h], and `sound` when the video had sound: [constant CLIP_SOUND],
+## mono). Its record keeps `file` (the first frame, so whatever shows a still shows that), `imported` (the
+## video's name) and `clip` (what the JSON says).
+const CLIP_EXTS := ["webm", "mp4", "mov", "mkv", "ogv", "gif"]
+const CLIP_WIDTH := 480
+const CLIP_FPS := 12
+const CLIP_SECONDS := 20
+const CLIP_FRAME := "%04d.jpg"
+const CLIP_JSON := "clip.json"
+const CLIP_SOUND := "sound.wav"
+## A decode that runs this long is stopped: twenty seconds of video decode in a few.
+const CLIP_TIMEOUT_S := 120
+## A clip painted rather than imported ([method generate] on a picture with `clip`): its placement, one sheet of
+## LOOP_CELLS cells (across, down), each a step of one looping movement, cut into frames played at LOOP_FPS; each cell's
+## edges trimmed by LOOP_TRIM of it (a seam the painter left); the sheet kept beside the frames as LOOP_SHEET.
+const LOOP := "loop"
+const LOOP_CELLS := Vector2i(3, 2)
+const LOOP_FPS := 8
+const LOOP_TRIM := 0.02
+const LOOP_SHEET := "sheet.png"
+
+## key -> {pids, dir (absolute), name, prompt, placement, started}, for the clips being decoded now.
+static var _decoding := {}
+
+
+## Use a video from disk as [param image]'s clip: decoded by FFmpeg into frames ([constant CLIP_WIDTH] px wide
+## at most, [constant CLIP_FPS] fps, the first [constant CLIP_SECONDS] s) in the background, kept as a new
+## version once [method pump] sees it end. "" when started, else why not; a decode that fails says so in
+## [method error_of].
+static func import_clip(image: Dictionary, path: String) -> String:
+	if read_only():
+		return "this session is read-only (a render or a probe) - nothing is imported here"
+	var key := String(image.get("key", ""))
+	if key.is_empty():
+		return "no picture to import for"
+	if not CLIP_EXTS.has(path.get_extension().to_lower()):
+		return "%s is not a video (%s)" % [path.get_file(), ", ".join(PackedStringArray(CLIP_EXTS))]
+	if not FileAccess.file_exists(path):
+		return "there is no file at %s" % path
+	if _decoding.has(key):
+		return "a clip is being decoded for this one already"
+	if not Deps.has("ffmpeg"):
+		Provision.ensure("ffmpeg")
+		return Deps.hint("ffmpeg")
+	var dir := ProjectSettings.globalize_path(_root.path_join(key).path_join("v%03d" % _free_number(key)))
+	DirAccess.make_dir_recursive_absolute(dir)
+	var frames := Subprocess.start("ffmpeg", _frame_args(path, dir), "clip frames")
+	if frames <= 0:
+		_remove_tree(dir)
+		return "could not start ffmpeg"
+	var pids := [frames]
+	var sound := Subprocess.start("ffmpeg", _sound_args(path, dir), "clip sound")
+	if sound > 0:
+		pids.append(sound)
+	_errors.erase(key)
+	_decoding[key] = {"pids": pids, "dir": dir, "name": path.get_file(),
+		"prompt": String(image.get("prompt", "")), "placement": String(image.get("placement", "inline")),
+		"started": int(Time.get_unix_time_from_system())}
+	print("ghost: decoding %s for illustration %s" % [path, key])
+	return ""
+
+
+## [param key]'s current version as a clip: `{dir (absolute), fps, frames, size: Vector2i, sound}` (`sound` an
+## absolute path, there only when the video had sound); {} when the current version is a still or there is none.
+static func clip_of(key: String) -> Dictionary:
+	var i := current_index(key)
+	if i < 0:
+		return {}
+	var v: Dictionary = versions(key)[i]
+	var c: Variant = v.get("clip")
+	if not (c is Dictionary):
+		return {}
+	var dir := ProjectSettings.globalize_path(String(v["file"]).get_base_dir())
+	var wh: Array = (c as Dictionary).get("size", [0, 0])
+	var out := {"dir": dir, "fps": int((c as Dictionary).get("fps", CLIP_FPS)),
+		"frames": int((c as Dictionary).get("frames", 0)),
+		"size": Vector2i(int(wh[0]), int(wh[1])) if wh.size() >= 2 else Vector2i.ZERO}
+	if (c as Dictionary).has("sound") and FileAccess.file_exists(dir.path_join(String(c["sound"]))):
+		out["sound"] = dir.path_join(String(c["sound"]))
+	return out
+
+
+## Frame [param i] of [param clip] (a [method clip_of]), absolute; past the last it wraps, as a clip loops.
+static func clip_frame(clip: Dictionary, i: int) -> String:
+	return String(clip.get("dir", "")).path_join(CLIP_FRAME % posmod(i, maxi(int(clip.get("frames", 1)), 1)))
+
+
+## The frames: the first video stream, never upscaled, numbered from 0.
+static func _frame_args(src: String, dir: String) -> PackedStringArray:
+	return PackedStringArray(["-y", "-nostdin", "-loglevel", "error", "-t", str(CLIP_SECONDS), "-i", src,
+		"-map", "0:v:0", "-frames:v", str(CLIP_FPS * CLIP_SECONDS),
+		"-vf", "fps=%d,scale=w='min(%d,iw)':h=-2" % [CLIP_FPS, CLIP_WIDTH],
+		"-q:v", "3", "-start_number", "0", dir.path_join(CLIP_FRAME)])
+
+
+## The sound, mono. Quiet: a video without sound is the usual case, and the run then ends at once, writing nothing.
+static func _sound_args(src: String, dir: String) -> PackedStringArray:
+	return PackedStringArray(["-y", "-nostdin", "-loglevel", "quiet", "-t", str(CLIP_SECONDS), "-i", src,
+		"-map", "0:a:0", "-vn", "-ac", "1", "-ar", "44100", "-c:a", "pcm_s16le", "-f", "wav", dir.path_join(CLIP_SOUND)])
+
+
+## Notice which decodes ended: keep each as a version, or record why not and drop its folder.
+static func _advance_clips() -> void:
+	for key in _decoding.keys():
+		var d: Dictionary = _decoding[key]
+		if (d["pids"] as Array).any(func(pid: int) -> bool: return Subprocess.alive(pid)):
+			if int(Time.get_unix_time_from_system()) - int(d["started"]) > CLIP_TIMEOUT_S:
+				_drop_decode(String(key))
+				_errors[key] = "decoding %s timed out after %d s" % [d["name"], CLIP_TIMEOUT_S]
+			continue
+		_decoding.erase(key)
+		if Subprocess.closing():
+			continue
+		var err := _keep_clip(String(key), d)
+		if not err.is_empty():
+			_errors[key] = err
+			_remove_tree(String(d["dir"]))
+			push_warning("ghost: clip for illustration %s failed - %s" % [key, err])
+
+
+## A finished decode into the library as [param key]'s newest version. "" on success, else why not.
+static func _keep_clip(key: String, d: Dictionary) -> String:
+	var dir := String(d["dir"])
+	var name := String(d["name"])
+	var n := 0
+	while FileAccess.file_exists(dir.path_join(CLIP_FRAME % n)):
+		n += 1
+	if n == 0:
+		return "no frames could be read from %s" % name
+	var first := Image.new()
+	if first.load(dir.path_join(CLIP_FRAME % 0)) != OK or first.is_empty():
+		return "the frames of %s could not be read" % name
+	var clip := {"fps": CLIP_FPS, "frames": n, "size": [first.get_width(), first.get_height()]}
+	var wav := FileAccess.open(dir.path_join(CLIP_SOUND), FileAccess.READ)
+	var length := wav.get_length() if wav != null else 0
+	if wav != null:
+		wav.close()
+	# a WAV with no samples is its header alone
+	if length > 1024:
+		clip["sound"] = CLIP_SOUND
+	elif wav != null:
+		DirAccess.remove_absolute(dir.path_join(CLIP_SOUND))
+	var f := FileAccess.open(dir.path_join(CLIP_JSON), FileAccess.WRITE)
+	if f == null:
+		return "could not write %s" % dir.path_join(CLIP_JSON)
+	f.store_string(JSON.stringify(clip, "\t"))
+	f.close()
+	var file := _root.path_join(key).path_join(dir.get_file()).path_join(CLIP_FRAME % 0)
+	_keep_version(key, {"sig": "", "imported": name, "clip": clip, "file": file}, String(d["prompt"]),
+		String(d["placement"]))
+	print("ghost: illustration %s is a clip of %s (%d frames%s)" % [key, name, n,
+		", with sound" if clip.has("sound") else ""])
+	return ""
+
+
+## A painted loop's sheet [param img] cut into a clip, kept as [param key]'s newest version: each cell of
+## [constant LOOP_CELLS] (its edges trimmed by [constant LOOP_TRIM]) a frame, at [constant LOOP_FPS], the sheet beside them
+## ([constant LOOP_SHEET]). Made under the look it was painted in, so a change of look calls it stale. "" or why not.
+static func _keep_loop(key: String, img: Image, job: Dictionary) -> String:
+	var dir := ProjectSettings.globalize_path(_root.path_join(key).path_join("v%03d" % _free_number(key)))
+	DirAccess.make_dir_recursive_absolute(dir)
+	var cw := img.get_width() / LOOP_CELLS.x
+	var ch := img.get_height() / LOOP_CELLS.y
+	var tx := int(float(cw) * LOOP_TRIM)
+	var ty := int(float(ch) * LOOP_TRIM)
+	var n := 0
+	var size := Vector2i.ZERO
+	for row in LOOP_CELLS.y:
+		for col in LOOP_CELLS.x:
+			var cell := img.get_region(Rect2i(col * cw + tx, row * ch + ty, cw - tx * 2, ch - ty * 2))
+			if cell.get_width() > CLIP_WIDTH:
+				cell.resize(CLIP_WIDTH, maxi(1, roundi(float(cell.get_height()) * float(CLIP_WIDTH) / float(cell.get_width()))),
+					Image.INTERPOLATE_LANCZOS)
+			if cell.save_jpg(dir.path_join(CLIP_FRAME % n), 0.92) != OK:
+				_remove_tree(dir)
+				return "could not write the loop's frames in %s" % dir
+			size = cell.get_size()
+			n += 1
+	img.save_png(dir.path_join(LOOP_SHEET))
+	var clip := {"fps": LOOP_FPS, "frames": n, "size": [size.x, size.y]}
+	var f := FileAccess.open(dir.path_join(CLIP_JSON), FileAccess.WRITE)
+	if f == null:
+		_remove_tree(dir)
+		return "could not write %s" % dir.path_join(CLIP_JSON)
+	f.store_string(JSON.stringify(clip, "\t"))
+	f.close()
+	var file := _root.path_join(key).path_join(dir.get_file()).path_join(CLIP_FRAME % 0)
+	_keep_version(key, {"sig": String(job.get("sig", "")), "backend": String(job.get("backend", "")), "clip": clip, "file": file,
+		"loop": LOOP_SHEET}, String(job.get("description", "")), LOOP)
+	return ""
+
+
+## Stop [param key]'s decode and drop what it wrote.
+static func _drop_decode(key: String) -> void:
+	var d: Dictionary = _decoding[key]
+	for pid in d["pids"]:
+		Subprocess.stop(int(pid))
+	_remove_tree(String(d["dir"]))
+	_decoding.erase(key)
 
 
 static func _remove_tree(dir: String) -> void:

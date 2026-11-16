@@ -201,7 +201,8 @@ acts:
       A PART THAT RUNS ALL THE TIME (`parts` says "runs") already moves through the whole video: never
       give it a turn of your own - a clock keeps its own time.
   - >-
-      NOTHING PASSES THROUGH ANYTHING: a tool working in a vessel is `press`ed onto it, a thing set down
+      NOTHING PASSES THROUGH ANYTHING: a tool working in a vessel is `press`ed onto it (a thing's name, or
+      "thing/part" to keep it on that one part: a pot standing on its brazier, not the coals), a thing set down
       is set on what is under it (a carry's `down` does it exactly, however the thing is turned), and
       what `act` tells you passes through something is fixed before you hand the work in. A part
       built standing in its place - a vial in its rack, a ladle in its pot, a stopper in its bottle -

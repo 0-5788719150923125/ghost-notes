@@ -60,7 +60,8 @@ extends SceneTree
 ##   and it throws its shadow in (control: the candle's reach short of it, none); one below the frame's foot that steams sends it up
 ##   into view (control: the same thing without `emits`, nothing); a thing carrying a flame gives light. Out of the shot and giving
 ##   nothing, a thing is a fault and idle unless built to be worked (named points, a joint, a start, loose, grains; controls: a plain
-##   box is not, nor a strand's `loose` number), and one that gives something is neither.
+##   box is not, nor a strand's `loose` number), and one that gives something is neither. A part built into what is round it is
+##   said laid out of it, or standing through it with no room ([method SetDresserTools.laid_line]).
 const ROOT := "user://set_dresser_check"
 
 const FixtureDeck := preload("res://tests/fixture_deck.gd")
@@ -943,4 +944,8 @@ func _out_of_shot() -> bool:
 	_ok(SetDresserTools.built_to_work({"parts": [{"shape": "grains", "size": [3, 3, 3]}]}), "grains are worked")
 	_ok(not SetDresserTools.built_to_work({"parts": [{"shape": "box", "size": [3, 3, 3]}]}), "the control: a plain box is not")
 	_ok(not SetDresserTools.built_to_work({"parts": [{"shape": "strand", "loose": 0.4}]}), "the control: a strand's loose number is not")
+	var laid := SetDresserTools.laid_line({"what": "the mortar's pestle", "in": "the mortar", "deep": 6.3, "laid": true})
+	var through := SetDresserTools.laid_line({"what": "the rack's vial 1", "in": "the rack's bar", "deep": 4.0, "laid": false})
+	_ok(laid.contains("6.3 mm into the mortar") and laid.contains("laid out of it") and through.contains("4 mm through the rack's bar")
+		and through.contains("give it room"), "what the table laid out, or left through, is not said: %s / %s" % [laid, through])
 	return true

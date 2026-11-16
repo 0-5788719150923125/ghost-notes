@@ -20,11 +20,14 @@ class_name DispatchScript
 ##                                     unless it texts again in a moment.
 ##     <!-- reply -->, <!-- reply: AISLE -->   the room's next words are typed into that phone (the last to text) as they are
 ##                                     said, a key at a time, under the message, and sent.
-##     <!-- ping: a place -->          the target comes to that place on the radar: a ping, the place written beside the
-##                                     blip (the first: the radar finds him there). He goes there along a track while the
-##                                     voice goes on, the sweep painting him a step further each round, from where a
-##                                     `moving` mark says he set off, else over the moments before. A place named again is
-##                                     the same spot; what follows a comma in its name is a little off it.
+##     <!-- ping: a place | 110, 2.9 -->   the target comes to that place on the radar: a ping, the place written beside
+##                                     the blip (the first: the radar finds him there). The numbers place it as a radar
+##                                     reports a contact: bearing in degrees clockwise from the scope's top, range in range
+##                                     rings out from the desk (`bearing 110, range 2.9` too). He goes there along a track
+##                                     while the voice goes on, the sweep painting him a step further each round, from where
+##                                     a `moving` mark says he set off, else over the moments before. A place named again
+##                                     bare is the same spot; one with no numbers ever is laid out from the words, and warned
+##                                     of.
 ##     <!-- moving -->                 the target sets off from where he is, toward the next ping's place: the radar sounds
 ##                                     its alarm and the camera turns to it. Straight after a ping he passes through it (a
 ##                                     place on the way: `driving south`) with no alarm.
@@ -38,39 +41,55 @@ class_name DispatchScript
 ##     <!-- lift: mug -->              a thing on the desk is lifted toward the chair, held for a sip and set back down.
 ##     <!-- switch: BAD -->            the switch box's toggle is thrown to that side.
 ##     <!-- live: tv -->               that screen shows this desk, live, seen from just behind the empty chair (words
-##                                     after a comma say so for a reader: `live: tv, this desk from behind the chair`).
+##                                     after a comma say so for a reader: `live: tv, this desk from behind the chair`);
+##                                     `live: tablet` plays it into the player on the tablet's page.
+##     <!-- tablet --> ... <!-- /tablet -->   the tablet is picked up and held before the eye, its screen waking, and put
+##                                     back down dark. Each ```page fence while it is up is a page, in the tablet medium's
+##                                     own markdown ([TabletScript]), its first line `url: address` or `search: words`:
+##                                     reached by tapping a link to it on the page up, else typed into the address bar.
+##                                     Shown and never said; it follows the room's words, scrolling what is said into
+##                                     view, else easing down the page. `<!-- player -->` on a page is a video player.
+##     <!-- replay: tablet | words --> the room's own earlier words said again through the tablet's speaker, as the
+##                                     video's soundtrack (found among what was said, else warned of).
 ##     <!-- image (feed): words -->    a picture on that screen (feed, satellite, tv) until the next there or `off`.
+##     <!-- video (tv): clip.webm | words -->   a moving picture on that screen, looping under its snow, until the next
+##                                     there or `off`: the clip imported on the Pictures card for those words (the file
+##                                     name a hint for the author); the screen's static until one is.
 ##     <!-- image (full): words --> ... <!-- /image -->   a picture over the whole screen for the passage, one straight
 ##                                     after another dissolving into it.
-##     <!-- strike -->                 after a typed block: the writer stops to decide, then backspaces it off the screen.
+##     <!-- strike -->                 after a typed line: the writer stops to decide, then backspaces it off the screen.
 ##     <!-- gain: 9 -->                the radar's gain knob is turned to that number (1 to 10; it starts at 3), a click a
 ##                                     step. Above 3 the scope paints clutter round the target, more the higher it is;
 ##                                     from 9, one more on the desk itself, the chair's.
 ##     <!-- bell -->                   the terminal's bell, one short beep as the block after it goes up.
 ##     <!-- lamp: off -->, <!-- lamp: on -->   the gooseneck lamp is switched off (or on), with a click.
+##     <!-- fade: to-black, 4 -->      the picture goes down to black over that many seconds (2 bare), the voice waiting.
+##                                     In the black the desk is still heard; what is marked there happens unseen and at
+##                                     once (a hesitation holds the black, a sound plays in it, a voice may speak in it).
+##     <!-- fade: from-black, 01:14, 3 -->   the picture comes back up (2 seconds bare) on the clock, its cards turning over
+##                                     to that time, held a beat, before the camera eases to the desk; the clock runs on a
+##                                     minute a minute. The first mark of a note may be one: the night opens on the clock.
+##                                     The first ping after it puts the target where it says, with no track across the
+##                                     black. A said line opening on a time (`22:54.`) more than five minutes off the
+##                                     clock, by a steady voice's estimate, is warned of.
 ##
-## And the terminal's text, as fenced blocks:
+## The terminal is one program on a fixed screen, worked through ```terminal blocks ([DispatchTerminal] says every line
+## kind): commands typed on the command line, panels kept by id that come back as they last stood, lines typed into
+## them, rows changed in place, waits and alerts, the desk's marks at their points. A block is silent and the voice waits
+## for it, except a `type:` line, typed and said behind the keys as the room's words; `type (Name):` says it in that voice.
+## The glass is simulated through the whole note, so each action at the terminal carries the glass it starts from.
 ##
-##     ```type ... ```                 typed on the terminal while the voice says it, word for word, each word's keys as
-##                                     it is said; a hesitation inside stops the keys with the voice.
-##     ```screen ... ```               put up on the terminal, replacing what it showed, drawn down the glass a line at a
-##                                     time; never said.
-##     ```terminal ... ```             a silent session, the voice waiting: a line opening `>` is a command, typed at the
-##                                     prompt a key at a time and entered; the lines after it are what the terminal
-##                                     answers, printed a line at a time. Asleep, it wakes to a bare prompt first.
+## A voice with no phone on the desk comes in on the receiver ([constant RECEIVER]): its paragraphs (unless a phone is at
+## the ear: then it is somebody in the caller's room) and the lines typed in its name are heard through it, the receiver opening under them on the storm it last opened on (Io-B's crackle when it
+## has not). `<!-- heard: tablet -->` on the line after a cue says what that turn is heard through, over what the desk
+## works out from its phones.
 ##
-## A typed block and a session are added under what the terminal shows; a shown one replaces it.
-##
-## A typed block is the room's words, except after the cue of a voice with no phone on the desk: that voice comes in on
-## the receiver, and the room takes it down. It is said in that voice, heard through the receiver ([constant RECEIVER]),
-## behind the keys as any typed block is, and the receiver opens under it on the storm it last opened on (Io-B's crackle
-## when it has not).
-##
-## Redacted words, inside a shown block or a session: `NAME ........ <!-- redact: DOE, JANE -->`. The words are put up
-## as any others and hidden over the camera's finished picture ([DispatchCensor]), never replaced by a word. A redacted
-## character travels as itself moved into a private plane of Unicode ([constant REDACT_BASE]), so typing, wrapping,
-## scrolling and a strike count it as the one character it is; the screens take it back out ([method unredacted]). A
-## typed block is said, and the voice cannot say what is hidden: there the mark is warned of and its words left out.
+## Redacted words, on any line of a terminal block but a said one: `NAME ........ <!-- redact: DOE, JANE -->`. The words are
+## put up as any others and hidden over the camera's finished picture ([DispatchCensor]), never replaced by a word. A
+## redacted character travels as itself moved into a private plane of Unicode ([constant REDACT_BASE]), so typing,
+## wrapping, scrolling and a strike count it as the one character it is; the screens take it back out ([method
+## unredacted]). A `type:` line is said, and the voice cannot say what is hidden: there the mark is warned of and its words
+## left out.
 ##
 ## The voice opens on [constant OPENING] seconds of the desk at rest, the camera home, before any action or word. What
 ## moves on the radar moves under the voice: a walk is the words between a `moving` and a `ping`, and the camera turns
@@ -86,10 +105,12 @@ class_name DispatchScript
 ## out here from the calls.
 
 ## Own-line desk marks: group 1 the verb, 2 its argument.
-const MARK := "^\\s*<!--\\s*(call|/\\s*call|ring|text|reply|ping|moving|sound|static|print|sleep|off|look|lift|switch|live|strike|gain|bell|lamp|/\\s*image)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
+const MARK := "^\\s*<!--\\s*(call|/\\s*call|ring|text|reply|ping|moving|sound|static|print|sleep|off|look|lift|switch|live|strike|gain|bell|lamp|fade|tablet|/\\s*tablet|replay|/\\s*image)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
+## A moving picture: group 1 its screen, 2 the clip's file name, 3 its words.
+const VIDEO := "^\\s*<!--\\s*video\\s*\\(\\s*([a-z]+)\\s*\\)\\s*:\\s*([^|]*?)\\s*\\|\\s*([\\s\\S]*?)\\s*-->\\s*$"
 ## A picture: group 1 where (full, feed, satellite, tv; none is full), 2 its words.
 const IMAGE := "^\\s*<!--\\s*image\\s*(?:\\(\\s*([a-z]+)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->\\s*$"
-const FENCE_OPEN := "^\\s*```\\s*(type|screen|terminal)\\s*$"
+const FENCE_OPEN := "^\\s*```\\s*(terminal|page)\\s*$"
 const FENCE_CLOSE := "^\\s*```\\s*$"
 ## Words redacted inside a shown block or a session: group 1 the words.
 const REDACT := "<!--\\s*redact\\s*:\\s*([\\s\\S]*?)\\s*-->"
@@ -100,7 +121,9 @@ const VOICE_LINE := "^\\s*(?:<!--\\s*(?:hesitation|delivery)\\b[\\s\\S]*?-->\\s*
 const HESITATION := Manuscript.HESITATION
 const COMMENT := Manuscript.COMMENT
 ## What makes a note a dispatch script: nothing is rewritten for any other.
-const IS_DISPATCH := "(?m)^\\s*(?:<!--\\s*(?:call|ring|ping)\\s*:|```\\s*(?:type|screen|terminal)\\s*$)"
+const IS_DISPATCH := "(?m)^\\s*(?:<!--\\s*(?:call|ring|ping)\\s*:|```\\s*terminal\\s*$)"
+## What a turn is heard through, said outright on the line after its cue: group 1 the band ([constant VoiceFX.HEARD]).
+const HEARD_LINE := "^\\s*<!--\\s*heard\\s*:\\s*([A-Za-z_]+)\\s*-->\\s*$"
 
 ## The screens a picture may be pinned to, each a thing on the desk ([DispatchSet]).
 const SCREENS := ["feed", "satellite", "tv"]
@@ -108,6 +131,15 @@ const SCREENS := ["feed", "satellite", "tv"]
 ## ([constant VoiceFX.HEARD]).
 const RECEIVER := "receiver"
 
+## The tablet (seconds): picked up and its screen woken; put down; a key of an address typed, then the page loading; a link
+## looked at before it is tapped; a page come up looked at before anything else, or one come back to.
+const TABLET_UP := 1.2
+const TABLET_DOWN := 1.0
+const TABLET_KEY := 0.11
+const TABLET_GO := 0.6
+const TABLET_TAP := 1.4
+const TABLET_LOOK := 2.5
+const TABLET_AGAIN := 1.0
 ## The timing of each action (seconds). `rest` is what the voice waits for it; an action may move on past its rest,
 ## under the next words (`len`). A phone: out of its row, opened and to the ear; dialed; the two rings in the earpiece,
 ## each a pair of short rings on a cycle, answered as the second's pair ends; answered at once when it was ringing;
@@ -164,40 +196,17 @@ const PRINT_LEAST := 2.4
 const PRINT_MOST := 9.0
 ## The printer's paper is this many characters across.
 const PRINT_COLUMNS := 80
-## The terminal's screen: columns and rows (inside what its curved glass and bezel leave seen - the widest shown block is
-## 66 characters).
-const COLUMNS := 70
-const ROWS := 22
-## The terminal: before typed words, the camera there and the cursor waiting; a shown screen looked at; the screen saver
-## comes on.
+## The terminal: before a said line, the camera there and the cursor waiting; the screen saver coming on.
 const TYPE_LEAD := 1.0
-const SCREEN_REST := 1.4
 const SLEEP := 1.2
-## A typed block is said behind its keys, as a letter is read behind its pen ([constant LetterScript.AHEAD_WORDS]): a
+## A said line is typed behind its keys, as a letter is read behind its pen ([constant LetterScript.AHEAD_WORDS]): a
 ## word is typed while the voice says the one this many before it, so the voice reads what is already on the screen and
-## goes on unbroken. The first words are typed at a typist's pace ([constant KEY_EACH]) in the rest before them, each
-## after at most this quick a key, never still being typed when it is said. A reply on a phone is typed as it is said,
-## its keys this long before each word.
+## goes on unbroken. The first words are typed at a typist's pace ([constant DispatchTerminal.KEY_EACH]) in the rest
+## before them, each after at most this quick a key, never still being typed when it is said. A reply on a phone is typed
+## as it is said, its keys this long before each word.
 const AHEAD_WORDS := 2
 const KEY_QUICK := 0.035
 const REPLY_AHEAD := 0.35
-## A shown screen is drawn down the glass a line every this many seconds.
-const SCREEN_LINE := 0.045
-## A session at the terminal (seconds): the bare prompt waiting before the first key (and a sleeping screen waking before
-## it); a key, give or take [constant KEY_JITTER] of it, a space a little longer; Enter after the last; the machine
-## answering; each line it prints; then the operator reading it before the next command - at least, and a line more. The
-## voice waits until the last answer is printed, and goes on as it is read.
-const WAKE := 0.6
-const PROMPT_WAIT := 0.6
-const KEY_EACH := 0.1
-const KEY_JITTER := 0.45
-const ENTER_AFTER := 0.25
-const ANSWER_AFTER := 0.45
-const LINE_EACH := 0.06
-const READ_LEAST := 0.7
-const READ_LINE := 0.18
-## What a command is typed after: its line opens with this.
-const PROMPT := "> "
 ## A strike: the writer decides (the letter's), then backspaces at this many characters a second, held to at most.
 const DECIDE := 3.0
 const DECIDE_MOST := 30.0
@@ -217,6 +226,9 @@ const SWITCH_AT := 0.65
 const PICTURE := 1.6
 ## The letter's pictures over the whole screen: the fade (seconds), every one; the voice rests for the last to clear.
 const IMAGE_FADE := 2.5
+## The radar's range rings when the `desk:` block gives none (`rings:`): a ping's range is in rings, the scope's edge the
+## last.
+const SCOPE_RINGS := 4
 ## The radar's gain knob: its least and most, where it stands when the night begins; the hand reaching it, each step
 ## turned (a click), and the beat the voice waits after, as the sweep comes round.
 const GAIN_LEAST := 1
@@ -225,6 +237,15 @@ const GAIN_REST := 3
 const GAIN_REACH := 0.25
 const GAIN_STEP := 0.14
 const GAIN_BEAT := 0.6
+## A fade (seconds): how long the picture takes to go down or come up, bare; on the clock, the cards turning over after it
+## comes up, and the beat they are held before the camera eases to the desk. A said line's time this many minutes off the
+## clock is warned of, the clock's time estimated at a steady voice's pace (seconds a word).
+const FADE := 2.0
+const FADE_MOST := 20.0
+const CLOCK_TURN := 0.7
+const CLOCK_BEAT := 1.4
+const CLOCK_OFF := 5
+const CLOCK_WORD := 0.42
 ## The terminal's bell: the half beat the voice waits for it.
 const BELL := 0.35
 ## The lamp: the hand reaching its switch (the click), and the voice's rest.
@@ -323,9 +344,10 @@ static func _logical_lines(src: String) -> PackedStringArray:
 	return out
 
 
-## The note as blocks, in order: `{kind: "para", text}`, `{kind: "speaker", name}`, `{kind: "voice", text}` (an own-line
-## hesitation or delivery), `{kind: "mark", verb, arg}`, `{kind: "image", where, prompt}`, `{kind: "type" | "screen",
-## text}`. Notes are dropped.
+## The note as blocks, in order: `{kind: "para", text}`, `{kind: "speaker", name}`, `{kind: "heard", band}`, `{kind:
+## "voice", text}` (an own-line hesitation or delivery), `{kind: "mark", verb, arg}`, `{kind: "image", where, prompt}`; and
+## from a terminal block `{kind: "run", lines}` (its silent steps) and `{kind: "type", text, voice}` (a said line), its
+## marks as marks. Notes are dropped.
 static func blocks(body: String) -> Array:
 	var src := Manuscript.strip_frontmatter(body)
 	var out: Array = []
@@ -336,7 +358,7 @@ static func blocks(body: String) -> Array:
 		var s := String(line)
 		if not fence.is_empty():
 			if _rx(FENCE_CLOSE).search(s) != null:
-				out.append({"kind": fence, "text": "\n".join(fenced)})
+				_end_fence(out, fence, fenced)
 				fence = ""
 				fenced = PackedStringArray()
 			else:
@@ -347,37 +369,62 @@ static func blocks(body: String) -> Array:
 			_end_para(out, para)
 			fence = fo.get_string(1)
 			continue
-		if s.strip_edges().is_empty():
-			_end_para(out, para)
+		var b := _classify(s)
+		if b.is_empty():
+			para.append(s)
 			continue
-		var who := Manuscript.speaker_of_line(s)
-		if not who.is_empty():
-			_end_para(out, para)
-			out.append({"kind": "speaker", "name": who})
-			continue
-		var m := _rx(MARK).search(s)
-		if m != null:
-			_end_para(out, para)
-			out.append({"kind": "mark", "verb": m.get_string(1).replace(" ", "").to_lower(), "arg": m.get_string(2).strip_edges()})
-			continue
-		var im := _rx(IMAGE).search(s)
-		if im != null:
-			_end_para(out, para)
-			var where := im.get_string(1).to_lower()
-			out.append({"kind": "image", "where": where if (where in SCREENS) else "full", "prompt": im.get_string(2).strip_edges()})
-			continue
-		if _rx(VOICE_LINE).search(s) != null:
-			_end_para(out, para)
-			out.append({"kind": "voice", "text": s.strip_edges()})
-			continue
-		if _rx("^\\s*<!--[\\s\\S]*?-->\\s*$").search(s) != null:
-			_end_para(out, para)
-			continue
-		para.append(s)
+		_end_para(out, para)
+		if not String(b["kind"]) in ["blank", "note"]:
+			out.append(b)
 	_end_para(out, para)
 	if not fence.is_empty():
-		out.append({"kind": fence, "text": "\n".join(fenced)})
+		_end_fence(out, fence, fenced)
 	return out
+
+
+## A fenced block's blocks: a page as one (`{kind: page, text}`); a terminal block's runs, said lines and marks
+## ([method DispatchTerminal.split]).
+static func _end_fence(out: Array, fence: String, lines: PackedStringArray) -> void:
+	if fence == "page":
+		out.append({"kind": "page", "text": "\n".join(lines)})
+		return
+	for item in DispatchTerminal.split("\n".join(lines)):
+		var it: Dictionary = item
+		if String(it["kind"]) == "line":
+			var b := _classify(String(it["text"]))
+			if not b.is_empty() and not String(b["kind"]) in ["blank", "note"]:
+				out.append(b)
+		else:
+			out.append(it)
+
+
+## What one line of the note is: a block ({} for a line of a paragraph; `blank` and `note` for what ends one and is
+## dropped).
+static func _classify(s: String) -> Dictionary:
+	if s.strip_edges().is_empty():
+		return {"kind": "blank"}
+	var who := Manuscript.speaker_of_line(s)
+	if not who.is_empty():
+		return {"kind": "speaker", "name": who}
+	var hd := _rx(HEARD_LINE).search(s)
+	if hd != null:
+		return {"kind": "heard", "band": hd.get_string(1).to_lower()}
+	var m := _rx(MARK).search(s)
+	if m != null:
+		return {"kind": "mark", "verb": m.get_string(1).replace(" ", "").to_lower(), "arg": m.get_string(2).strip_edges()}
+	var vd := _rx(VIDEO).search(s)
+	if vd != null:
+		return {"kind": "video", "where": vd.get_string(1).to_lower(), "file": vd.get_string(2).strip_edges(),
+			"prompt": vd.get_string(3).strip_edges()}
+	var im := _rx(IMAGE).search(s)
+	if im != null:
+		var where := im.get_string(1).to_lower()
+		return {"kind": "image", "where": where if (where in SCREENS) else "full", "prompt": im.get_string(2).strip_edges()}
+	if _rx(VOICE_LINE).search(s) != null:
+		return {"kind": "voice", "text": s.strip_edges()}
+	if _rx("^\\s*<!--[\\s\\S]*?-->\\s*$").search(s) != null:
+		return {"kind": "note"}
+	return {}
 
 
 static func _end_para(out: Array, para: PackedStringArray) -> void:
@@ -486,34 +533,6 @@ static func typed_spans(shown: String) -> Array:
 	return out
 
 
-## [param text]'s lines wrapped at words to [param width] columns (a word longer than a line is cut): what a terminal shows.
-static func wrapped(text: String, width: int) -> PackedStringArray:
-	var out := PackedStringArray()
-	for line in text.split("\n"):
-		var s := String(line)
-		if s.length() <= width:
-			out.append(s)
-			continue
-		var cur := ""
-		for w in s.split(" ", true):
-			var word := String(w)
-			while word.length() > width:
-				if not cur.is_empty():
-					out.append(cur)
-					cur = ""
-				out.append(word.substr(0, width))
-				word = word.substr(width)
-			if cur.is_empty():
-				cur = word
-			elif cur.length() + 1 + word.length() <= width:
-				cur += " " + word
-			else:
-				out.append(cur)
-				cur = word
-		out.append(cur)
-	return out
-
-
 ## A typed block as the printer prints it: its lines, each cut to the paper's width.
 static func printed_lines(text: String) -> PackedStringArray:
 	var out := PackedStringArray()
@@ -576,13 +595,15 @@ static func label_of(s: String) -> String:
 	return s.strip_edges().to_upper()
 
 
-## The whole note, walked: `{speakable, spoken, actions, spans, phones, room, warnings}`.
+## The whole note, walked: `{speakable, spoken, actions, spans, phones, room, warnings, terminal (its config), pages (the
+## tablet's), dark (it opens in the black), rings}`.
 ##
 ## `actions`, in order, are each `{kind, after, rest, len, fwd, back, ...}`: `after` the spoken word it comes before (its
 ## count of words before it), `rest` what the voice waits for it, `len` how long it moves, and where it falls in its
 ## silence - `fwd` the seconds written into the silence before it (hesitations and the rests of the actions before it),
-## `back` after it. A typed block is an action too (its `rest` the lead before its words), with `from` and `to` its
-## spoken words and `spans` where each is on the screen ([method typed_spans]). `spans` are the pictures over the whole
+## `back` after it. A said line is an action too (its `rest` the lead before its words), with `from` and `to` its
+## spoken words and `spans` where each is on the screen ([method typed_spans]); every action at the terminal carries the
+## `glass` it starts from. `spans` are the pictures over the whole
 ## screen: `{key, prompt, from, to, blend}` in spoken words.
 static func parse(body: String) -> Dictionary:
 	var phones := phones_of(body)
@@ -608,15 +629,36 @@ static func parse(body: String) -> Dictionary:
 	var reply_to := ""                    # the phone the room's next words are typed into
 	var gain := GAIN_REST                 # where the radar's gain knob stands
 	var storm := "popcorn"                # the storm the receiver last opened on
-	gap.append([OPENING, -1])
-	pending.append("<!-- action-hold: %s -->" % String.num(OPENING, 2))
-	for b in blocks(body):
+	var term := DispatchTerminal.config_of(body)
+	var glass := DispatchTerminal.blank() # the terminal's glass as the script has left it
+	var told := ""                        # what this turn is heard through, said outright (`heard:`)
+	var placed := {}                      # the places a ping has given a bearing and range
+	var all := blocks(body)
+	var dark := _opens_dark(all)          # in the black (before a fade up, or between two fades): what is marked happens at once
+	var hush_from := -1                   # ...the first action made in the black not yet hushed
+	var jump := false                     # come back up from the black: the next ping has no track
+	var tablet_up := false                # the tablet held up
+	var pages: Array = []                 # the tablet's pages, in order: {url, search, text}
+	var on_page := -1                     # the page up on the tablet
+	if not dark:
+		gap.append([OPENING, -1])
+		pending.append("<!-- action-hold: %s -->" % String.num(OPENING, 2))
+	for b in all:
 		var blk: Dictionary = b
+		if hush_from >= 0:
+			_hush(actions, gap, pending, hush_from)
+			hush_from = actions.size()
 		match String(blk["kind"]):
 			"speaker":
 				speaker = String(blk["name"])
+				told = ""
 				if room.is_empty():
 					room = speaker
+			"heard":
+				told = String(blk["band"])
+				if not VoiceFX.HEARD.has(told):
+					warnings.append("heard: %s is no band (%s)" % [told, ", ".join(PackedStringArray(VoiceFX.HEARD.keys()))])
+					told = ""
 			"voice":
 				var t := String(blk["text"])
 				pending.append(t)
@@ -636,29 +678,56 @@ static func parse(body: String) -> Dictionary:
 				else:
 					_act(actions, gap, pending, spoken.size(), {"kind": "picture", "screen": where,
 						"key": Manuscript.image_key(prompt), "prompt": prompt}, PICTURE, PICTURE)
-			"terminal":
-				var steps := session_of(redacted(String(blk["text"])))
-				if steps.is_empty():
+			"video":
+				var where := String(blk["where"])
+				if not where in SCREENS:
+					warnings.append("video (%s): a clip plays on a screen of the desk (%s)" % [where, ", ".join(PackedStringArray(SCREENS))])
 					continue
-				var plan := session_plan(steps)
-				_act(actions, gap, pending, spoken.size(), {"kind": "session", "steps": steps, "plan": plan},
-					float(plan["rest"]), float(plan["len"]))
+				var prompt := String(blk["prompt"])
+				_act(actions, gap, pending, spoken.size(), {"kind": "picture", "screen": where, "key": Manuscript.image_key(prompt),
+					"prompt": prompt, "clip": String(blk["file"])}, PICTURE, PICTURE)
+			"page":
+				var pg := page_of(String(blk["text"]))
+				if String(pg["url"]).is_empty():
+					warnings.append("page: its first line is url: or search: (%s)" % String(blk["text"]).get_slice("\n", 0))
+					continue
+				if not tablet_up:
+					warnings.append("page: %s with the tablet down (<!-- tablet --> picks it up)" % String(pg["url"]))
+				var how := "type"
+				var rest := TABLET_GO + TABLET_LOOK
+				var was: Dictionary = pages[on_page] if on_page >= 0 else {}
+				if not was.is_empty() and String(was["url"]) == String(pg["url"]):
+					how = "again"
+					rest = TABLET_AGAIN
+				elif not was.is_empty() and links_to(String(was["text"]), String(pg["url"])):
+					how = "tap"
+					rest = TABLET_TAP + TABLET_GO + TABLET_LOOK
+				else:
+					how = "search" if not String(pg["search"]).is_empty() else "type"
+					rest += TABLET_KEY * float((String(pg["search"]) if how == "search" else String(pg["url"])).length())
+				_act(actions, gap, pending, spoken.size(), {"kind": "page", "page": pages.size(), "url": String(pg["url"]), "how": how},
+					rest, rest)
+				on_page = pages.size()
+				pages.append(pg)
+			"run":
+				var run := DispatchTerminal.compile(blk["lines"], glass, term, warnings)
+				if (run["ops"] as Array).is_empty():
+					continue
+				_act(actions, gap, pending, spoken.size(), {"kind": "session", "ops": run["ops"], "glass": glass},
+					float(run["rest"]), float(run["len"]))
+				glass = run["glass"]
 				ringing = ""
-			"type", "screen":
-				var kind := String(blk["kind"])
+			"type":
 				var raw := String(blk["text"])
-				var shown := shown_of(raw) if kind == "type" else redacted(raw)
-				if kind == "type" and _rx(REDACT).search(raw) != null:
-					warnings.append("redact: a typed block is said, so its redacted words are left out (redact in a screen or terminal block)")
-				if kind == "screen":
-					var drawn := SCREEN_LINE * float(raw.split("\n").size())
-					_act(actions, gap, pending, spoken.size(), {"kind": "screen", "text": shown}, SCREEN_REST + drawn, SCREEN_REST + drawn)
-					continue
+				var voice := String(blk.get("voice", ""))
+				if _rx(REDACT).search(raw) != null:
+					warnings.append("redact: a type: line is said, so its redacted words are left out (redact on a line that is not said)")
+				var shown := "\n".join(DispatchTerminal.wrapped(shown_of(raw), int(term["width"])))
 				var who := room if not room.is_empty() else speaker
 				var heard := ""
-				if on_receiver(speaker, room, phones):
-					who = speaker
-					heard = RECEIVER
+				if not voice.is_empty() and voice != room:
+					who = voice
+					heard = RECEIVER if on_receiver(voice, room, phones) else _heard(voice, room, in_hand, held)
 				_flush(speak, pending, who, heard, said_as, heard_as)
 				said_as = who
 				heard_as = heard
@@ -666,12 +735,13 @@ static func parse(body: String) -> Dictionary:
 				var words := words_of(voice_text)
 				var keyed := typed_spans(shown)
 				var from := spoken.size()
-				var ahead := TYPE_LEAD + KEY_EACH * float(int((keyed[mini(AHEAD_WORDS, keyed.size()) - 1] as Dictionary)["c1"])) \
+				var ahead := TYPE_LEAD + DispatchTerminal.KEY_EACH * float(int((keyed[mini(AHEAD_WORDS, keyed.size()) - 1] as Dictionary)["c1"])) \
 					if not keyed.is_empty() else TYPE_LEAD
-				var typed_as := {"kind": "type", "text": shown, "from": from, "to": from + words.size(), "spans": keyed}
+				var typed_as := {"kind": "type", "text": shown, "from": from, "to": from + words.size(), "spans": keyed, "glass": glass}
 				if heard == RECEIVER:
 					typed_as["heard"] = RECEIVER
 					typed_as["storm"] = storm
+				glass = DispatchTerminal.typed(glass, shown, shown.length())
 				var i := _act(actions, gap, pending, from, typed_as, ahead, ahead)
 				_flush(speak, pending, who, heard, said_as, heard_as)
 				speak.append(voice_text)
@@ -686,9 +756,17 @@ static func parse(body: String) -> Dictionary:
 				var who := speaker if not speaker.is_empty() else Manuscript.NARRATOR
 				if room.is_empty():
 					room = who
-				var heard := _heard(who, room, in_hand, held)
+				var heard := told
+				if heard.is_empty():
+					# a voice with no phone of its own: somebody in the caller's room while a phone is at the ear, else the
+					# receiver
+					heard = RECEIVER if on_receiver(who, room, phones) and in_hand.is_empty() else _heard(who, room, in_hand, held)
 				if who != room and heard.is_empty():
 					warnings.append("%s speaks with no phone open: heard in the room" % who)
+				if heard == RECEIVER:
+					var wn := words_of(text).size()
+					_act(actions, gap, pending, spoken.size(), {"kind": "receiver", "heard": RECEIVER, "storm": storm,
+						"from": spoken.size(), "to": spoken.size() + wn}, 0.0, 0.0)
 				if not reply_to.is_empty() and who == room:
 					var shown := " ".join(text.split("\n", false))
 					var wn := words_of(text).size()
@@ -775,7 +853,17 @@ static func parse(body: String) -> Dictionary:
 						var stop := ping_of(arg)
 						if float(stop["travel"]) > 0.0:
 							warnings.append("ping: %s - seconds are not read; mark where he sets off with <!-- moving -->" % arg)
-						_act(actions, gap, pending, at, {"kind": "ping", "place": String(stop["place"])}, PING, PING_LEN)
+						if bool(stop.get("bad", false)):
+							warnings.append("ping: %s - after the bar, a bearing in degrees and a range in rings: | 110, 2.9" % arg)
+						var key := String(stop["place"]).to_lower()
+						if float(stop["range"]) < INF:
+							placed[key] = true
+						elif not placed.has(key) and not placed.has(key.get_slice(",", 0).strip_edges()):
+							warnings.append("ping: %s has no bearing and range (| 110, 2.9): laid out from its words" % String(stop["place"]))
+							placed[key] = true
+						_act(actions, gap, pending, at, {"kind": "ping", "place": String(stop["place"]), "bearing": float(stop["bearing"]),
+							"range": float(stop["range"]), "jump": jump}, PING, PING_LEN)
+						jump = false
 					"moving":
 						# straight after a ping, in the same silence: he passes through it and goes on - no alarm, no wait
 						var passing := not gap.is_empty() and int((gap.back() as Array)[1]) >= 0 \
@@ -796,11 +884,15 @@ static func parse(body: String) -> Dictionary:
 							if not bool(a.get("struck", false)):
 								text.append(String(a["text"]))
 						typed = []
+						if text.is_empty():
+							text.append(plain("\n".join(DispatchTerminal.up(glass).get("body", PackedStringArray()))))
 						var lines := printed_lines("\n\n".join(text))
 						var secs := clampf(PRINT_LEAD + PRINT_LINE * float(lines.size()) + PRINT_FEED, PRINT_LEAST, PRINT_MOST)
 						_act(actions, gap, pending, at, {"kind": "print", "lines": lines}, secs, secs)
 					"sleep":
-						_act(actions, gap, pending, at, {"kind": "sleep"}, SLEEP, SLEEP)
+						_act(actions, gap, pending, at, {"kind": "sleep", "glass": glass}, SLEEP, SLEEP)
+						glass = glass.duplicate()
+						glass["awake"] = false
 					"off":
 						var screen := arg.strip_edges().to_lower()
 						if not screen in SCREENS:
@@ -816,9 +908,11 @@ static func parse(body: String) -> Dictionary:
 						_act(actions, gap, pending, at, {"kind": "switch", "side": arg.strip_edges().to_upper()}, SWITCH, SWITCH)
 					"live":
 						var screen := arg.get_slice(",", 0).strip_edges().to_lower()
-						if not screen in SCREENS:
+						if not screen in SCREENS and screen != "tablet":
 							warnings.append("live: %s is no screen" % screen)
 							continue
+						if screen == "tablet" and not tablet_up:
+							warnings.append("live: tablet with the tablet down")
 						_act(actions, gap, pending, at, {"kind": "live", "screen": screen}, PICTURE, PICTURE)
 					"strike":
 						if last_typed < 0:
@@ -828,7 +922,9 @@ static func parse(body: String) -> Dictionary:
 						a["struck"] = true
 						var wait := decide_of(arg)
 						var back := minf(float(String(a["text"]).length()) / BACKSPACE, BACKSPACE_MOST)
-						_act(actions, gap, pending, at, {"kind": "strike", "block": last_typed, "decide": wait}, wait + back, wait + back)
+						_act(actions, gap, pending, at, {"kind": "strike", "block": last_typed, "decide": wait, "glass": glass},
+							wait + back, wait + back)
+						glass = DispatchTerminal.struck(glass, 1.0)
 						last_typed = -1
 					"gain":
 						var to := gain_of(arg)
@@ -840,6 +936,56 @@ static func parse(body: String) -> Dictionary:
 						gain = to
 					"bell":
 						_act(actions, gap, pending, at, {"kind": "bell"}, BELL, BELL)
+					"tablet":
+						if tablet_up:
+							warnings.append("tablet: it is already up")
+							continue
+						tablet_up = true
+						_act(actions, gap, pending, at, {"kind": "tablet", "up": true}, TABLET_UP, TABLET_UP)
+					"/tablet":
+						if not tablet_up:
+							warnings.append("/tablet: it is not up")
+							continue
+						tablet_up = false
+						_act(actions, gap, pending, at, {"kind": "tablet", "up": false}, TABLET_DOWN, TABLET_DOWN)
+					"replay":
+						var where := arg.get_slice("|", 0).strip_edges().to_lower()
+						var said := arg.get_slice("|", 1).strip_edges() if arg.contains("|") else ""
+						var words := words_of(said)
+						if where != "tablet" or words.is_empty():
+							warnings.append("replay: %s - the tablet and the words it plays: replay: tablet | words" % arg)
+							continue
+						if TabletScript.find_run(spoken, words) < 0:
+							warnings.append("replay: \"%s\" was not said before it" % said)
+						var who := room if not room.is_empty() else speaker
+						_act(actions, gap, pending, at, {"kind": "replay", "from": spoken.size(), "to": spoken.size() + words.size()}, 0.0, 0.0)
+						_flush(speak, pending, who, "tablet", said_as, heard_as)
+						said_as = who
+						heard_as = "tablet"
+						speak.append(said)
+						spoken.append_array(words)
+						said_any = true
+						gap = []
+					"fade":
+						var f := fade_of(arg)
+						if f.is_empty():
+							warnings.append("fade: %s - to-black or from-black, a time and seconds after it" % arg)
+							continue
+						var down := bool(f["to"])
+						if down == dark:
+							warnings.append("fade: %s while the picture is %s" % [arg, "black" if dark else "up"])
+						if not down and hush_from >= 0:
+							_hush(actions, gap, pending, hush_from)
+							hush_from = -1
+						var secs := float(f["secs"])
+						var turned := CLOCK_TURN + CLOCK_BEAT if int(f["clock"]) >= 0 else 0.0
+						if down and int(f["clock"]) >= 0:
+							warnings.append("fade: %s - the clock is shown coming up from black" % arg)
+						_act(actions, gap, pending, at, {"kind": "fade", "to": down, "secs": secs, "clock": int(f["clock"]) if not down else -1},
+							secs + (0.0 if down else turned), secs + (0.0 if down else turned))
+						dark = down
+						jump = jump or not down
+						hush_from = actions.size() if down else -1
 					"lamp":
 						var said := arg.strip_edges().to_lower()
 						if not said in ["on", "off"]:
@@ -851,6 +997,12 @@ static func parse(body: String) -> Dictionary:
 							(spans[open_image] as Dictionary)["to"] = at
 							open_image = -1
 							_act(actions, gap, pending, at, {"kind": "clear"}, IMAGE_FADE + 0.1, IMAGE_FADE + 0.1)
+	if hush_from >= 0:
+		_hush(actions, gap, pending, hush_from)
+	if dark:
+		warnings.append("fade: the note ends in the black")
+	if tablet_up:
+		warnings.append("tablet: still up at the end (<!-- /tablet --> puts it down)")
 	if open_image >= 0:
 		(spans[open_image] as Dictionary)["to"] = spoken.size()
 	if in_hand != "" or not held.is_empty():
@@ -861,8 +1013,11 @@ static func parse(body: String) -> Dictionary:
 		else:
 			speak[speak.size() - 1] = String(speak[speak.size() - 1]) + " " + " ".join(pending)
 	_silences(actions)
+	warnings.append_array(_clock_check(actions, spoken.size()))
+	var rings: Variant = desk_of(body).get("rings", SCOPE_RINGS)
 	return {"speakable": "\n\n".join(speak), "spoken": spoken, "actions": actions, "spans": spans,
-		"phones": phones, "room": room, "warnings": warnings}
+		"phones": phones, "room": room, "warnings": warnings, "terminal": term, "pages": pages, "dark": _opens_dark(all),
+		"rings": maxf(float(rings), 1.0) if str(rings).is_valid_float() else float(SCOPE_RINGS)}
 
 
 ## How long a dialed phone rings in the earpiece before it is answered: [constant RINGS] rings' cycles, answered as the
@@ -871,98 +1026,156 @@ static func _rung() -> float:
 	return RING_CYCLE * float(RINGS - 1) + RING_ON + ANSWER
 
 
-## A ping's words: `{place, travel}` - a comma inside the place kept (`the grocery store, aisle seven`); a number after
-## its last comma is taken off it (`travel`) and not read - where he sets off is a `moving` mark - so the parse can say so.
+## A ping's words: `{place, bearing, range, travel, bad?}` - a comma inside the place kept (`the store, aisle seven`); after
+## a bar, its bearing (degrees clockwise from the scope's top) and range (range rings from the desk), INF without (`bad` for
+## a bar with no such numbers); a number after its place's last comma is taken off it (`travel`) and not read - where he
+## sets off is a `moving` mark - so the parse can say so.
 static func ping_of(arg: String) -> Dictionary:
 	var place := arg.strip_edges()
-	var travel := 0.0
+	var out := {"bearing": INF, "range": INF, "travel": 0.0}
+	if place.contains("|"):
+		var m := _rx("^\\s*(?:bearing\\s+)?(-?[0-9]+(?:\\.[0-9]+)?)\\s*,\\s*(?:range\\s+)?([0-9]+(?:\\.[0-9]+)?)\\s*$") \
+			.search(place.get_slice("|", 1).to_lower())
+		if m != null:
+			out["bearing"] = fposmod(float(m.get_string(1)), 360.0)
+			out["range"] = float(m.get_string(2))
+		else:
+			out["bad"] = true
+		place = place.get_slice("|", 0).strip_edges()
 	var cut := place.rfind(",")
 	if cut >= 0:
 		var m := _rx("^\\s*([0-9]+(?:\\.[0-9]+)?)\\s*(?:s|secs?|seconds)?\\s*$").search(place.substr(cut + 1))
 		if m != null:
-			travel = float(m.get_string(1))
+			out["travel"] = float(m.get_string(1))
 			place = place.substr(0, cut).strip_edges()
-	return {"place": place, "travel": travel}
-
-
-## A session's steps from a ```terminal block: `[{typed, out: PackedStringArray}]` - each line opening `>` a command (what
-## follows the `>`, typed), the lines after it its answer. Lines before the first command are what the terminal shows as
-## it wakes (a step with nothing typed). Blank lines at a step's end are dropped; inside, kept.
-static func session_of(text: String) -> Array:
-	var out: Array = []
-	var typed := ""
-	var command := false
-	var lines := PackedStringArray()
-	var open := false
-	for raw in text.split("\n"):
-		var line := String(raw).rstrip(" \t")
-		if line.strip_edges().begins_with(">"):
-			if open:
-				out.append(_session_step(typed, command, lines))
-			typed = line.strip_edges().substr(1).strip_edges()
-			command = true
-			lines = PackedStringArray()
-			open = true
-			continue
-		if not open:
-			if line.strip_edges().is_empty():
-				continue
-			typed = ""
-			command = false
-			lines = PackedStringArray()
-			open = true
-		lines.append(line)
-	if open:
-		out.append(_session_step(typed, command, lines))
+	out["place"] = place
 	return out
 
 
-## One step of a session, its answer's blank lines at the end dropped. (A packed array is built whole before it goes into
-## the step: one read back out of a Dictionary is a copy, and appending to it changes nothing.)
-static func _session_step(typed: String, command: bool, lines: PackedStringArray) -> Dictionary:
-	var kept := lines.duplicate()
-	while not kept.is_empty() and kept[kept.size() - 1].strip_edges().is_empty():
-		kept.remove_at(kept.size() - 1)
-	return {"typed": typed, "out": kept, "command": command}
+## A fade's words: `{to (bool), secs, clock (minutes into the day, -1 for none)}`; {} when it is neither way.
+static func fade_of(arg: String) -> Dictionary:
+	var out := {"secs": FADE, "clock": -1}
+	var parts := arg.split(",", false)
+	if parts.is_empty():
+		return {}
+	var way := String(parts[0]).strip_edges().to_lower().replace(" ", "-")
+	if not way in ["to-black", "from-black"]:
+		return {}
+	out["to"] = way == "to-black"
+	for k in range(1, parts.size()):
+		var p := String(parts[k]).strip_edges()
+		var hm := _rx("^([0-9]{1,2}):([0-9]{2})$").search(p)
+		if hm != null:
+			out["clock"] = (int(hm.get_string(1)) % 24) * 60 + int(hm.get_string(2)) % 60
+		elif p.is_valid_float():
+			out["secs"] = clampf(float(p), 0.1, FADE_MOST)
+		else:
+			return {}
+	return out
 
 
-## When each thing in a session happens, in seconds from its start (the screen waking first, [constant WAKE]): per step
-## `{prompt (its prompt up), keys: PackedFloat32Array (each typed character's), enter, lines: PackedFloat32Array (each
-## answering line's)}` - a step with nothing typed has its lines printed as the screen wakes - then `prompt`, when the bare
-## prompt comes back after the last; `rest`, what the voice waits (the last answer printed), and `len`: the operator reads
-## each answer before the next command, and the last one before the session ends. A key's give-or-take is drawn from the
-## session's own words, so it is typed the same way every time.
-static func session_plan(steps: Array) -> Dictionary:
-	var t := WAKE
-	var wait := PROMPT_WAIT
-	var out: Array = []
-	var last_n := 0
-	for k in steps.size():
-		var st: Dictionary = steps[k]
-		var typed := String(st["typed"])
-		var prompt := -1.0
-		var keys := PackedFloat32Array()
-		var enter := -1.0
-		if bool(st.get("command", true)):
-			prompt = t
-			t += wait
-			for c in typed.length():
-				var j := DispatchSounds.hash01(hash([typed, k]), c) * 2.0 - 1.0
-				var space := typed[c] == " " or typed.unicode_at(c) == REDACT_BASE + 32
-				t += KEY_EACH * (1.0 + KEY_JITTER * j) * (1.35 if space else 1.0)
-				keys.append(t)
-			t += ENTER_AFTER
-			enter = t
-			t += ANSWER_AFTER
-		var lines := PackedFloat32Array()
-		var n := (st["out"] as PackedStringArray).size()
-		for i in n:
-			lines.append(t + LINE_EACH * float(i))
-		t += LINE_EACH * float(n)
-		wait = READ_LEAST + READ_LINE * float(n)
-		last_n = n
-		out.append({"prompt": prompt, "keys": keys, "enter": enter, "lines": lines})
-	return {"steps": out, "prompt": t, "rest": t + 0.2, "len": t + (wait if last_n > 0 else 0.3)}
+## A page fence's words: `{url, search, text}` - its first line `url: address` (or `search: words`, the results page at a
+## search engine's address), the rest the page in the tablet medium's markdown.
+static func page_of(text: String) -> Dictionary:
+	var lines := text.strip_edges().split("\n")
+	var head := String(lines[0]).strip_edges() if not lines.is_empty() else ""
+	var body := "\n".join(lines.slice(1)).strip_edges()
+	var out := {"url": "", "search": "", "text": body}
+	if head.to_lower().begins_with("url:"):
+		out["url"] = head.substr(4).strip_edges()
+	elif head.to_lower().begins_with("search:"):
+		out["search"] = head.substr(7).strip_edges()
+		out["url"] = "search?q=" + String(out["search"]).uri_encode()
+	return out
+
+
+## Does page text [param text] link to [param url] (`[words](url)`, a scheme or `www.` aside)?
+static func links_to(text: String, url: String) -> bool:
+	var want := TabletScript.url_key(url)
+	for m in _rx(TabletScript.LINK).search_all(text):
+		if TabletScript.url_key(m.get_string(2)) == want:
+			return true
+	return false
+
+
+## A clock's minutes into the day as it shows them: `HH:MM`.
+static func clock_text(minutes: int) -> String:
+	var m := posmod(minutes, 24 * 60)
+	return "%02d:%02d" % [m / 60, m % 60]
+
+
+## Does the note open in the black: its first block that shows or says anything a fade up from it?
+static func _opens_dark(all: Array) -> bool:
+	for b in all:
+		var blk: Dictionary = b
+		match String(blk["kind"]):
+			"speaker", "heard", "voice":
+				continue
+			"mark":
+				var f := fade_of(String(blk["arg"])) if String(blk["verb"]) == "fade" else {}
+				return not f.is_empty() and not bool(f["to"])
+			_:
+				return false
+	return false
+
+
+## The actions made in the black from [param from] on happen at once: the voice waits for none of them but a sound and a
+## fade (their rests out of the silence and out of the voice's text).
+static func _hush(actions: Array, gap: Array, pending: PackedStringArray, from: int) -> void:
+	for i in range(from, actions.size()):
+		var a: Dictionary = actions[i]
+		if String(a["kind"]) in ["sound", "fade"] or float(a["rest"]) <= 0.0:
+			continue
+		var hold := "<!-- action-hold: %s -->" % String.num(float(a["rest"]) + REST_PAD, 2)
+		var k := pending.rfind(hold)
+		if k >= 0:
+			pending.remove_at(k)
+		for g in gap:
+			if int((g as Array)[1]) == i:
+				(g as Array)[0] = 0.0
+		a["rest"] = 0.0
+		a["dark"] = true
+
+
+## A said line that opens on a time (`22:54.`) more than [constant CLOCK_OFF] minutes off the desk's clock when it is typed,
+## both placed by a steady voice ([constant CLOCK_WORD] seconds a word, the rests at their lengths): the warnings.
+static func _clock_check(actions: Array, words: int) -> PackedStringArray:
+	var out := PackedStringArray()
+	var at := PackedFloat32Array()             # each word's moment, and one past the last
+	at.resize(words + 1)
+	var t := 0.0
+	var k := 0
+	for w in words + 1:
+		while k < actions.size() and int((actions[k] as Dictionary)["after"]) <= w:
+			t += float((actions[k] as Dictionary)["rest"])
+			k += 1
+		at[w] = t
+		t += CLOCK_WORD
+	var set_at := -1.0
+	var set_to := -1
+	for a in actions:
+		var act: Dictionary = a
+		if String(act["kind"]) == "fade" and int(act.get("clock", -1)) >= 0:
+			set_at = at[int(act["after"])]
+			set_to = int(act["clock"])
+		elif String(act["kind"]) == "type" and set_to >= 0:
+			var m := _rx("^\\s*([0-9]{1,2}):([0-9]{2})\\b").search(String(act["text"]))
+			if m == null:
+				continue
+			var said := int(m.get_string(1)) * 60 + int(m.get_string(2))
+			var clock := set_to + int((at[int(act["from"])] - set_at) / 60.0)
+			var off := posmod(said - clock + 720, 1440) - 720
+			if absi(off) > CLOCK_OFF:
+				out.append("clock: %s is typed about %s on the clock (%+d minutes, by a steady voice)" % [m.get_string(), clock_text(clock), off])
+	return out
+
+
+## [param text] with every redacted character as an X: what the printer prints of it.
+static func plain(text: String) -> String:
+	var out := ""
+	for i in text.length():
+		out += "X" if is_redacted(text.unicode_at(i)) else text[i]
+	return out
 
 
 ## What a turn of [param who] is heard through: the room's own voice in the room; a voice whose phone is in hand

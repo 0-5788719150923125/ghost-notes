@@ -6,15 +6,24 @@ extends SceneTree
 ## - actions fit the voice's rests: each placed and done before the next word; two pings a hesitation apart stay apart;
 ## - phones: the one called is at the ear while its voice speaks, the previous one laid open, picked back up, all back at the end;
 ## - the desk is seen first: nothing happens and the camera stays home through the opening rest;
-## - the terminal: dark until a block wakes it; a session types each command a key at a time and prints its answer; a shown
-##   block draws a line at a time; redacted words are one run on their own line, hidden over the frame by one box round
-##   them as the camera sees them, and covered whole from their first key; a typed block is said behind its keys; a strike removes it;
+## - the terminal: dark until a block wakes it to its command line; a command typed there a key at a time and cleared as the
+##   panel it opens comes up, the header at once and the body a line at a time; redacted words are one run on their row,
+##   hidden over the frame by one box round them as the camera sees them, and covered whole from their first key; a typed
+##   line is said behind its keys under the panel up; a strike removes it; after a block the camera stays on the glass while
+##   the voice talks of it and through to what comes soon, going home only when nothing comes for long;
+## - the black and the clock: fades down and up; in the black the camera is on the clock, its cards turned over to the time
+##   given and running on a minute a minute; what is marked in the black is unseen; no track is drawn across it; a note
+##   opening in the black shows its title over the blurred desk first, going black as the title goes (control: no title,
+##   black from the start);
+## - the tablet: picked up before the eye and put down dark; an address typed into its bar, a link on the page tapped; a
+##   page following the words said on it, else easing down; its player dark until the desk is played live into it;
+## - a clip: the screen's static until it is imported, then its frames looping;
 ## - the camera turns to what is active (terminal typing, receiver in a storm, ringing phone) and a look holds while nothing else
 ##   is; it goes to the radar only at its sounds; the radar target moves in small steps under the voice, never a jump, with its
 ##   old place written beside it until it arrives; the receiver is open only in its storm;
-## - a voice with no phone comes in on the receiver: open from the static before it straight on through its words, the storm
-##   brought down under them and the needle swelling in a word, shut after its tail, one stretch of sound (the control: the
-##   room's own typed block opens nothing);
+## - a voice with no phone comes in on the receiver, typed or said: open from the static before it straight on through its
+##   words, the storm brought down under them and the needle swelling in a word, shut after its tail, one stretch of sound
+##   (the control: the room's own typed line opens nothing);
 ## - a text is read on its phone (chime, phone up, message on screen, never captioned, reply typed as said and sent); a call
 ##   is speed-dialed (1 held, Send, ear);
 ## - captions: a typed word is read on the terminal, a spoken line is captioned;
@@ -27,7 +36,8 @@ extends SceneTree
 ## - the gain knob turns from three to nine a click a step with the camera on the radar: at three only the target is on the
 ##   scope, at nine the clutter round it and the chair's own on the desk (not at eight), each blip painted once the sweep
 ##   has passed it; turned back, they fade;
-## - the bell rings as the block after it goes up; the lamp goes out at its click, the camera on the whole desk;
+## - the bell rings as the block after it goes up, an alert beeps; the lamp goes out at its click, the camera on the whole desk;
+## - a seed changed while the note plays draws a new desk and keeps the reading's place (control: changed words load again);
 ## - built on a worker, as the app builds it: the show is held until it lands.
 ##
 ## Run: godot --headless --path . --script tests/dispatch/dispatch_check.gd
@@ -100,34 +110,39 @@ func _run() -> void:
 	_ok(t0[0] >= DispatchScript.OPENING and md.looking_at(t0[0] - 1.0) == "home",
 		"THE DESK IS SEEN FIRST: nothing before the opening rest is over, the camera home (%.1f s)" % t0[0])
 	var session_i := _first(actions, "session")
-	var plan: Dictionary = actions[session_i]["plan"]
-	var s1: Dictionary = plan["steps"][1]
+	var ops: Array = actions[session_i]["ops"]
 	var s0 := t0[session_i]
-	var woke := "\n".join(md.terminal_at(s0 + float(plan["steps"][0]["prompt"]) + 0.05)["lines"])
-	var keys: PackedFloat32Array = s1["keys"]
-	var typing := "\n".join(md.terminal_at(s0 + keys[5] + 0.01)["lines"])
-	var answered := "\n".join(md.terminal_at(s0 + float(s1["lines"][0]) + 0.01)["lines"])
-	var after := "\n".join(md.terminal_at(s0 + float(plan["prompt"]) + 0.05)["lines"])
-	_ok(bool(md.terminal_at(s0 - 0.1)["asleep"]) and woke == DispatchScript.PROMPT, "a session wakes the terminal to a bare prompt (%s)" % woke)
-	_ok(typing.ends_with("> search") and not typing.contains("1 MATCH"), "a command is typed a key at a time, unanswered yet (%s)" % typing.replace("\n", " / "))
-	_ok(answered.ends_with("> search subject\n1 MATCH") and after.ends_with("> open 1\n" + DispatchScript.PROMPT),
-		"its answer is printed after it, and the prompt comes back at the end (%s)" % after.replace("\n", " / "))
-	_ok(md.looking_at(s0 + keys[5]) == "terminal", "the camera is on the terminal through a session (%s)" % md.looking_at(s0 + keys[5]))
-	var screen_i := _first(actions, "screen")
-	var begun := "\n".join(md.terminal_at(t0[screen_i] + 0.01)["lines"])
-	var shown := md.terminal_at(t0[screen_i] + 1.0)
-	_ok(not bool(shown["asleep"]) and "\n".join(shown["lines"]).contains("STATUS ...... CONTAINED") and begun.contains("NAME ...") and not begun.contains("STATUS"),
-		"a shown block is drawn down the glass a line at a time (the control, just begun: %s)" % begun.replace("\n", " / "))
+	var pad := " ".repeat((DispatchTerminal.COLUMNS - 60) / 2)
+	var cmds: Array = ops.filter(func(o: Dictionary) -> bool: return String(o["op"]) == "command")
+	var opens: Array = ops.filter(func(o: Dictionary) -> bool: return String(o["op"]) == "open")
+	var woke: PackedStringArray = md.terminal_at(s0 + 0.05)["lines"]
+	var keys: PackedFloat32Array = cmds[0]["keys"]
+	var typing: PackedStringArray = md.terminal_at(s0 + keys[3] + 0.01)["lines"]
+	var menu_up: PackedStringArray = md.terminal_at(s0 + float(opens[0]["t"]) + 0.01)["lines"]
+	var rec_t := s0 + float(opens[2]["t"])
+	var rec_head: PackedStringArray = md.terminal_at(rec_t + 0.01)["lines"]
+	var rec_some: PackedStringArray = md.terminal_at(rec_t + DispatchTerminal.LINE_EACH * 1.5)["lines"]
+	_ok(bool(md.terminal_at(s0 - 0.1)["asleep"]) and String(woke[DispatchTerminal.COMMAND_ROW]) == pad + DispatchTerminal.PROMPT and String(woke[0]).is_empty(),
+		"a block wakes the terminal to its bare command line (%s)" % str(woke))
+	_ok(String(typing[DispatchTerminal.COMMAND_ROW]) == pad + "> coun" and String(typing[0]).is_empty(),
+		"a command is typed on the command line a key at a time, nothing opened yet (%s)" % String(typing[DispatchTerminal.COMMAND_ROW]))
+	_ok(String(menu_up[0]).ends_with("MENU") and String(menu_up[DispatchTerminal.COMMAND_ROW]) == pad + DispatchTerminal.PROMPT,
+		"entered, the command line clears and the panel comes up (%s)" % String(menu_up[0]))
+	_ok(String(rec_head[0]).ends_with("RECORD") and String(rec_head[DispatchTerminal.BODY_TOP]).is_empty()
+		and String(rec_some[DispatchTerminal.BODY_TOP]).contains("NAME") and String(rec_some[DispatchTerminal.BODY_TOP + 2]).is_empty(),
+		"a panel's header at once, its body drawn down the glass a line at a time")
+	_ok(md.looking_at(s0 + keys[3]) == "terminal", "the camera is on the terminal through a block (%s)" % md.looking_at(s0 + keys[3]))
+	var shown_t := s0 + float(actions[session_i]["rest"]) + 0.2
+	var shown := md.terminal_at(shown_t)
 	var shown_lines: PackedStringArray = shown["lines"]
 	var covers: Array = md._screens.redactions(shown_lines)
-	var plates := shown_lines.slice(shown_lines.size() - 1)
-	_ok(covers.size() == 1 and not "\n".join(shown_lines).contains("XKC") and String(DispatchScript.unredacted(plates[0])["text"]).ends_with("XKC 4417")
-		and (covers[0]["rect"] as Rect2).get_center().y > DispatchScreens.TERM_MARGIN.y + DispatchScreens.TERM_LINE * float(shown_lines.size() - 2),
-		"a shown block's redacted words are a run on their own line, and nowhere as written (%d runs)" % covers.size())
+	var plate_row := DispatchTerminal.BODY_TOP + 2
+	_ok(covers.size() == 1 and not "\n".join(shown_lines).contains("XKC") and String(DispatchScript.unredacted(shown_lines[plate_row])["text"]).ends_with("XKC 4417")
+		and absf((covers[0]["rect"] as Rect2).get_center().y - (DispatchScreens.TERM_MARGIN.y + DispatchScreens.TERM_LINE * float(plate_row) - float(DispatchScreens.TERM_FONT) * 0.32)) < 1.0,
+		"a panel's redacted words are one run on their row, and nowhere as written (%d runs)" % covers.size())
 	_ok(md._screens.redactions(PackedStringArray(["NAME ........ SUBJECT", "STATUS ...... CONTAINED"])).is_empty(),
 		"the control: plain lines have no runs")
 	# hidden over the frame: the camera on the terminal, one box round the plate as it sees it, a small part of the glass
-	var shown_t := t0[screen_i] + 1.0
 	md._now = shown_t
 	md._snap = true
 	md._tick_camera(0.016)
@@ -143,22 +158,23 @@ func _run() -> void:
 	md._censor_at(0.5)
 	_ok(md._censor.boxes.is_empty() and not md._censor.visible, "the control: the terminal asleep, no box")
 	# a redacted run being typed is covered whole from its first key (control: the key before it, as typed)
-	var hid := DispatchScript.parse("```terminal\n> search <!-- redact: jane doe -->\n```\n\nThere.\n")
+	var hid := DispatchScript.parse("```terminal\n> search <!-- redact: jane doe -->\npanel: MATCHES | 1 MATCH\n```\n\nThere.\n")
 	var ha: Dictionary = hid["actions"][0]
-	var hkeys: PackedFloat32Array = ha["plan"]["steps"][0]["keys"]
-	var typed_j := String(DispatchScript.unredacted(md.session_text(ha, hkeys[7] + 0.001))["text"])
-	var whole_j := String(DispatchScript.unredacted(md.session_text(ha, hkeys[7] + 0.001, true))["text"])
-	var whole_before := String(DispatchScript.unredacted(md.session_text(ha, hkeys[6] + 0.001, true))["text"])
-	_ok(typed_j.ends_with("> search j") and whole_j.ends_with("> search jane doe") and whole_before.ends_with("> search "),
+	var hcmd: Dictionary = (ha["ops"] as Array).filter(func(o: Dictionary) -> bool: return String(o["op"]) == "command")[0]
+	var hkeys: PackedFloat32Array = hcmd["keys"]
+	var typed_j := String(DispatchScript.unredacted(String(DispatchTerminal.at(ha["glass"], ha["ops"], hkeys[7] + 0.001)["command"]))["text"])
+	var whole_j := String(DispatchScript.unredacted(String(DispatchTerminal.at(ha["glass"], ha["ops"], hkeys[7] + 0.001, true)["command"]))["text"])
+	var whole_before := String(DispatchScript.unredacted(String(DispatchTerminal.at(ha["glass"], ha["ops"], hkeys[6] + 0.001, true)["command"]))["text"])
+	_ok(typed_j == "search j" and whole_j == "search jane doe" and whole_before == "search ",
 		"a redacted run being typed is covered whole from its first key (%s / %s / %s)" % [typed_j, whole_j, whole_before])
 	var type_i := _first(actions, "type")
 	var ty: Dictionary = actions[type_i]
 	var mid := int(ty["from"]) + 2
 	var halfway := "\n".join(md.terminal_at(at.call(int(ty["from"])) + 0.05)["lines"])
 	var done := "\n".join(md.terminal_at(at.call(int(ty["to"]) - 1) + 1.0)["lines"])
-	_ok(halfway.contains("23:21. Grocery") and not halfway.contains("Watcher"),
-		"the first words are typed before the voice begins (the control: the rest is not typed all at once - %s)" % halfway.replace("\n", " / "))
-	_ok(done.contains("Watcher in place."), "a typed block is typed out by its last word (%s)" % done.replace("\n", " / "))
+	_ok(halfway.contains("23:21. Grocery") and not halfway.contains("Watcher") and halfway.contains("22:40. Shift opened."),
+		"the first words are typed under the panel up before the voice begins (the control: the rest is not typed all at once - %s)" % halfway.replace("\n", " / "))
+	_ok(done.contains("Watcher in place."), "a typed line is typed out by its last word (%s)" % done.replace("\n", " / "))
 	var keys_t: PackedFloat32Array = md._chars.get(type_i, PackedFloat32Array())
 	var behind := not keys_t.is_empty()
 	var tspans: Array = ty["spans"]
@@ -169,7 +185,8 @@ func _run() -> void:
 	var strike_i := _first(actions, "strike")
 	var gone := "\n".join(md.terminal_at(md._end_of(strike_i) + 0.2)["lines"])
 	var before_strike := "\n".join(md.terminal_at(t0[strike_i] + 0.5)["lines"])
-	_ok(before_strike.contains("WHAT DO WE DO") and not gone.contains("WHAT DO WE DO"), "a strike backspaces the block off the screen")
+	_ok(before_strike.contains("WHAT DO WE DO") and not gone.contains("WHAT DO WE DO") and gone.contains("Watcher in place."),
+		"a strike backspaces the line off the glass, what was there before it kept")
 	# camera, radar, receiver
 	var static_i := _first(actions, "static")
 	var ring_i := _first(actions, "ring")
@@ -286,8 +303,12 @@ func _run() -> void:
 	var pass_alarm := heard.filter(func(x: Dictionary) -> bool: return String(x.get("what", "")) == "alarm" and absf(float(x["t"]) - t0[pass_i]) < 0.01).size()
 	var pass_look := md._attn.filter(func(w: Dictionary) -> bool: return absf(float(w["t0"]) - t0[pass_i]) < 0.01 and w["spot"] == radar_spot).size()
 	_ok(pass_i >= 0 and pass_alarm == 0 and pass_look == 0, "passing through a place on the way, the radar sounds no alarm and the camera stays (%d, %d)" % [pass_alarm, pass_look])
-	_ok(float(md.storm_at(t0[static_i] + 1.0).get("level", 0.0)) > 0.0 and md.storm_at(md._end_of(static_i) + 0.5).is_empty(),
-		"the receiver is open only in its storm")
+	var stretch: Dictionary = {}
+	for o in md._open:
+		if float((o as Dictionary)["t"]) <= t0[static_i] + 1.0 and t0[static_i] + 1.0 < float(o["t1"]):
+			stretch = o
+	_ok(float(md.storm_at(t0[static_i] + 1.0).get("level", 0.0)) > 0.0 and not stretch.is_empty() and md.storm_at(float(stretch["t1"]) + 0.5).is_empty()
+		and md.storm_at(t0[static_i] - 0.5).is_empty(), "the receiver is open only in its storm and under the voice it carries")
 	# a text is read on its phone: a chime, the phone up before the eye and open, the message on its screen, no caption
 	var text_i := _first(actions, "text")
 	var reply_i := _first(actions, "reply")
@@ -325,8 +346,12 @@ func _run() -> void:
 	_ok(not dial_mv.is_empty() and md.phone_at(String(dial_mv["label"]), pressed_t) == "read" and dialed_one == 1
 		and md.phone_at(String(dial_mv["label"]), float(dial_mv["dialed"]) + DispatchScript.DIAL + 0.2) == "ear",
 		"a call is speed-dialed: up before the eye, 1 held, then to the ear for the rings (%s)" % str(dial_mv.get("label")))
-	_gain_bell_lamp(md, actions, t0, plan_r, screen_i)
+	var bell_block := _first(actions, "bell") + 1
+	_gain_bell_lamp(md, actions, t0, plan_r, bell_block)
+	_black_tablet_clip(md, actions, t0, plan_r, st)
 	_receiver(st, md.feed)
+	_glass_hold(st, md.feed)
+	_opens_black(st)
 	# captions
 	md._follower.extend(words)
 	_ok(not md._captioned(mid, mid, 0.0) and md._captioned(hello, hello, 0.0), "a typed word is captioned, or a spoken one is not")
@@ -355,6 +380,7 @@ func _run() -> void:
 		elif absf(live.starts()[kept] - was) > 0.001:
 			moved = true
 	_ok(kept >= 0 and not moved, "a live reading's begun action keeps its start as the plan is made again")
+	_reseed_live(live, body, words, end_t * 0.5)
 	# roots
 	_ok(md._roots.on_desk.size() >= 2 and DispatchRoots.grown(end_t + 2000.0) > DispatchRoots.grown(0.0),
 		"roots reach onto the desk, and grow through the night (%d on the desk)" % md._roots.on_desk.size())
@@ -385,8 +411,42 @@ func _run() -> void:
 		quit(1)
 
 
+## What a [DispatchMedium] reads of the reading's subtitles: its live document.
+class LiveSubs extends RefCounted:
+	var document := {}
+
+
+## A seed changed in the live document while the note plays, [param at] seconds in: a new desk, the reading's place kept
+## (every begun action where it began, the words heard still heard). Control: the note's words changed load it again.
+func _reseed_live(md: DispatchMedium, body: String, words: Array, at: float) -> void:
+	var subs := LiveSubs.new()
+	subs.document = {"source": body, "dispatch": {"seed": 3}}
+	md._subs = subs
+	md._doc_key = ""
+	md._ensure_doc()
+	var fed := 0
+	while fed < words.size() and float((words[fed] as Dictionary)["t0"]) < at + 3.0:
+		fed += 1
+	md._now = at
+	md.take_words(words.slice(0, fed))
+	var held := md._held.duplicate(true)
+	var starts := md.starts()
+	var set_was: DispatchSet = md._set
+	var feet_was := str(set_was.footprints)
+	(subs.document["dispatch"] as Dictionary)["seed"] = 11
+	md._ensure_doc()
+	var kept := not held.is_empty() and md._held == held and md._built_n == fed
+	for i in held:
+		kept = kept and absf(md.starts()[i] - starts[i]) < 0.001
+	_ok(md._seed == 11 and md._set != set_was and str(md._set.footprints) != feet_was and md._clutter == DispatchMedium.clutter_of(11)
+		and kept, "a new seed while the note plays draws a new desk and keeps the reading's place (%d begun actions)" % held.size())
+	subs.document["source"] = body + "\n\nOne more line."
+	md._ensure_doc()
+	_ok(md._held.is_empty() and md._built_n == -1, "control: the note's words changed load it again")
+
+
 ## The gain, the bell and the lamp, on the fixture's night.
-func _gain_bell_lamp(md: DispatchMedium, actions: Array, t0: PackedFloat32Array, heard: Array, screen_i: int) -> void:
+func _gain_bell_lamp(md: DispatchMedium, actions: Array, t0: PackedFloat32Array, heard: Array, block_i: int) -> void:
 	var up := _first(actions, "gain")
 	var down := -1
 	for i in range(up + 1, actions.size()):
@@ -437,8 +497,10 @@ func _gain_bell_lamp(md: DispatchMedium, actions: Array, t0: PackedFloat32Array,
 		"turned back to three, the clutter fades, and is gone in a sweep or two (%d fading)" % fading.size())
 	# the bell, as the block after it goes up
 	var rung := heard.filter(func(x: Dictionary) -> bool: return String(x.get("kind", "")) == "bell")
-	_ok(rung.size() == 1 and absf(float(rung[0]["t"]) - t0[screen_i]) < 0.01 and float(rung[0]["t1"]) > float(rung[0]["t"]),
-		"the bell rings as the block after it goes up (%s)" % str(rung))
+	var alert_i := _first(actions.slice(block_i + 1), "session") + block_i + 1
+	_ok(rung.size() == 2 and absf(float(rung[0]["t"]) - t0[block_i]) < 0.01 and float(rung[0]["t1"]) > float(rung[0]["t"])
+		and absf(float(rung[1]["t"]) - t0[alert_i]) < 0.01,
+		"the bell rings as the block after it goes up, and an alert beeps as it does (%s)" % str(rung))
 	# the lamp
 	var lamp_i := _first(actions, "lamp")
 	var click := t0[lamp_i] + DispatchScript.LAMP_AT / md._sp[lamp_i]
@@ -464,11 +526,12 @@ func _gain_bell_lamp(md: DispatchMedium, actions: Array, t0: PackedFloat32Array,
 		"the outro waits for what the desk does after the last word, black as it runs out (the control: from the last word, %.2f at 2 s; %.1f s of desk)" % [by_word, after])
 
 
-## A voice with no phone, typed as it comes in on the receiver after a static; then the room's own typed block (the control).
+## A line typed in a voice with no phone, said as it comes in on the receiver after a static; then the room's own typed line
+## (the control).
 func _receiver(st: SubViewport, feed: ShowFeed) -> void:
 	var body := ("---\ndesk:\n  phones: [VAN]\n---\n\n<!-- speaker: Control -->\n\nListen.\n\n<!-- static: 3 -->\n\n"
-		+ "<!-- speaker: Council -->\n\n```type\nWHAT DO WE DO ABOUT HIM\n```\n\n<!-- speaker: Control -->\n\nAlways.\n\n"
-		+ "```type\nLOGGED\n```\n\nThere.\n")
+		+ "```terminal\ntype (Council): WHAT DO WE DO ABOUT HIM\n```\n\nAlways.\n\n"
+		+ "```terminal\ntype: LOGGED\n```\n\nThere.\n")
 	var md := DispatchMedium.new()
 	md.feed = feed
 	md.mount(st)
@@ -507,7 +570,197 @@ func _receiver(st: SubViewport, feed: ShowFeed) -> void:
 		"the static and the voice on it are one stretch of the receiver's sound (%d)" % stretches.size())
 	var room_mid := md._word_t0(int(acts[r_i]["from"])) + 0.05
 	_ok(not (acts[r_i] as Dictionary).has("heard") and md.storm_at(room_mid).is_empty(),
-		"the control: the room's own typed block opens nothing on the receiver")
+		"the control: the room's own typed line opens nothing on the receiver")
+
+
+## The camera on the terminal: after a block it stays on the glass while the voice talks of what is up, and through to
+## what comes next when that is soon, rather than pull back to the whole desk for nothing; with nothing coming for long,
+## it goes home in the end (the controls: a block's look as it was, home within seconds; the same note talked on long).
+func _glass_hold(st: SubViewport, feed: ShowFeed) -> void:
+	var talk := "He keeps a log. Of course he keeps a log. He has a column for could be nothing, and he uses it for most of the night. "
+	var made := func(paras: int) -> DispatchMedium:
+		var body := ("<!-- speaker: Control -->\n\nHere.\n\n```terminal\n> x\npanel: menu = MENU | NIGHT 1\n  1  SUBJECTS\n  2  LOG\n```\n\n"
+			+ "\n\n".join(range(paras).map(func(_n: int) -> String: return talk)) + "\n\n<!-- look: radar -->\n\nThere.\n")
+		var md := DispatchMedium.new()
+		md.feed = feed
+		md.mount(st)
+		md.load_note(body, {"seed": 3})
+		md._now = 0.0
+		md.take_words(DispatchScript.rehearsal(DispatchScript.parse(body), 0.32))
+		return md
+	var near: DispatchMedium = made.call(1)
+	var s_i := _first(near._actions, "session")
+	var done := near.starts()[s_i] + float(near._actions[s_i]["rest"])
+	var look := near.starts()[_first(near._actions, "look")]
+	var stays := true
+	var t := done
+	while t < look - 0.3:
+		if near.looking_at(t) != "terminal":
+			stays = false
+		t += 0.5
+	var bare := {"t0": near.starts()[s_i], "t1": near._end_of(s_i) + 1.5, "spot": near._spot("terminal")}
+	var was: Array = near._attn
+	near._attn = [bare]
+	var old_home := near.looking_at(done + DispatchMedium.HOME_AFTER + 5.0) == "home"
+	near._attn = was
+	var far: DispatchMedium = made.call(12)
+	var f_done := far.starts()[_first(far._actions, "session")] + float(far._actions[_first(far._actions, "session")]["rest"])
+	var f_look := far.starts()[_first(far._actions, "look")]
+	_ok(stays and look - done > DispatchMedium.GLASS_LEAST and old_home and far.looking_at(f_done + 4.0) == "terminal"
+		and far.looking_at(f_look - 3.0) == "home",
+		"after a block the camera stays on the glass while the voice talks of it, on to what comes next when that is soon, and goes home when nothing comes for long (the controls: as it was, home by %.0f s; talked on, home before the look) - %s %.1f %s %s %s" % [DispatchMedium.HOME_AFTER + 5.0,
+			stays, look - done, old_home, far.looking_at(f_done + 4.0), far.looking_at(f_look - 3.0)])
+	near.queue_free()
+	far.queue_free()
+
+
+## The black and the clock, the tablet and a clip, on the fixture's night.
+func _black_tablet_clip(md: DispatchMedium, actions: Array, t0: PackedFloat32Array, heard: Array, st: SubViewport) -> void:
+	var down := -1
+	var up := -1
+	for i in actions.size():
+		if String(actions[i]["kind"]) == "fade":
+			if bool(actions[i]["to"]):
+				down = i
+			else:
+				up = i
+	var black0 := md._end_of(down)
+	var turn := t0[up] + DispatchScript.FADE / md._sp[up]
+	_ok(md.fade_at(t0[down] - 0.1) == 0.0 and md.fade_at(black0 + 0.01) == 1.0 and md.fade_at(t0[up] - 0.01) == 1.0
+		and md.fade_at(turn + 0.05) == 0.0 and md.fade_at(t0[up] + DispatchScript.FADE * 0.5 / md._sp[up]) > 0.0,
+		"the picture goes down to black and comes back up over its fades")
+	var before: Dictionary = md.clock_at(turn - 0.2)
+	var turning: Dictionary = md.clock_at(turn + DispatchScript.CLOCK_TURN * 0.5)
+	var turned: Dictionary = md.clock_at(turn + DispatchScript.CLOCK_TURN + 0.1)
+	var minute: Dictionary = md.clock_at(turn + 60.0 + DispatchScript.CLOCK_TURN + 0.1)
+	_ok(String(before["to"]) == "23:39" and String(turning["from"]) == "23:39" and String(turning["to"]) == "23:40" and float(turning["u"]) > 0.0
+		and float(turning["u"]) < 1.0 and String(turned["to"]) == "23:40" and float(turned["u"]) == 1.0 and String(minute["to"]) == "23:41",
+		"coming up, the clock's cards turn over to the time given, and it runs on a minute a minute (%s, %s, %s)" % [before, turned, minute])
+	var flips := heard.filter(func(x: Dictionary) -> bool: return String(x.get("what", "")) == "detent" and float(x["t"]) > turn and float(x["t"]) < turn + 1.0).size()
+	var held_t := t0[up] + float(actions[up]["rest"]) / md._sp[up]
+	_ok(md.looking_at(black0 + 0.5) == "clock" and md.looking_at(turn + 0.3) == "clock" and md.looking_at(held_t + 1.5) != "clock" and flips == 2,
+		"in the black the camera is on the clock, held while two cards turn and a beat, then eases away (%s, %s, %d flips)" % [md.looking_at(turn + 0.3), md.looking_at(held_t + 1.5), flips])
+	var thrown := actions.filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "switch" and bool(a.get("dark", false)))
+	var switch_looks := md._attn.filter(func(w: Dictionary) -> bool: return w["spot"] == md._spot("switch") and float(w["t0"]) > black0 - 0.1 and float(w["t0"]) < turn)
+	_ok(thrown.size() == 1 and switch_looks.is_empty(), "what is marked in the black happens unseen: no look for it")
+	var ping_back := -1
+	for i in actions.size():
+		if String(actions[i]["kind"]) == "ping" and bool(actions[i].get("jump", false)):
+			ping_back = i
+	var leg: Dictionary = md._legs.filter(func(l: Dictionary) -> bool: return int(l["i"]) == ping_back)[0]
+	_ok(is_equal_approx(float(leg["t0"]), float(leg["t1"])), "the first ping after the black has no track across it")
+	# the tablet
+	var tab_up := _first(actions, "tablet")
+	var tab_down := -1
+	for i in actions.size():
+		if String(actions[i]["kind"]) == "tablet" and not bool(actions[i]["up"]):
+			tab_down = i
+	var held := t0[tab_up] + DispatchScript.TABLET_UP / md._sp[tab_up] + 0.1
+	md._pose(held)
+	var in_hand := md._set.tablet.global_transform.origin.distance_to(md._cam.global_position) < 0.4
+	md._pose(md._end_of(tab_down) + 0.2)
+	var home := md._set.tablet.global_transform.origin.distance_to(md._set.tablet_home.origin) < 0.001
+	var off := float(md.tablet_at(md._end_of(tab_down) + 0.2)["face"]["power"]) == 0.0
+	_ok(in_hand and home and off and float(md.tablet_at(t0[tab_up] - 0.1)["face"]["power"]) == 0.0 and md.looking_at(held + 2.0) == "tablet",
+		"the tablet is picked up before the eye, its screen woken, and put back down dark")
+	var pages: Array = []
+	for i in actions.size():
+		if String(actions[i]["kind"]) == "page":
+			pages.append(i)
+	var p1 := int(pages[0])
+	var p2 := int(pages[1])
+	var pt1 := md._page_times(p1)
+	var typing: Dictionary = md.tablet_at((pt1["keys"] as PackedFloat32Array)[4] + 0.01)["face"]
+	var first_up: Dictionary = md.tablet_at(float(pt1["shown"]) + 0.1)["face"]
+	_ok(String(typing["url"]) == "forum" and bool(typing.get("typing", false)) and first_up.get("page") != null and String(first_up["url"]) == "forum.board",
+		"a page's address is typed into the bar a key at a time, then the page comes up (%s)" % String(typing["url"]))
+	var pt2 := md._page_times(p2)
+	var tapping: Dictionary = md.tablet_at(float(pt2["tap"]) + 0.1)["face"]
+	var second_up: Dictionary = md.tablet_at(float(pt2["shown"]) + 0.1)["face"]
+	_ok(String(md._actions[p2]["how"]) == "tap" and tapping.has("tap") and float(tapping["tap_u"]) >= 0.0 and tapping.get("page") == first_up.get("page")
+		and second_up.get("page") != first_up.get("page") and String(second_up["url"]) == "forum.board/t/headlights",
+		"the next page is found on the one up and tapped, then it comes up")
+	var follow := md._page_follow(p1, float(DispatchScreens.TABLET_SIZE.y) - DispatchScreens.BAR_H, 99999.0)
+	var drift0 := md._page_scroll(p2, float(pt2["shown"]) + DispatchScript.TABLET_LOOK + 0.5)
+	var drift1 := md._page_scroll(p2, md._page_end(p2) - 0.5)
+	_ok(not follow.is_empty() and drift1 > drift0, "a page follows the words said that are on it, and with none, eases down (%d words followed, %.0f to %.0f px)" % [follow.size(), drift0, drift1])
+	var live_i := -1
+	for i in actions.size():
+		if String(actions[i]["kind"]) == "live" and String(actions[i]["screen"]) == "tablet":
+			live_i = i
+	var player := Manuscript.image_key(DispatchMedium.PLAYER)
+	md._now = t0[live_i] - 0.05
+	var dark_player := md._page_tex(player)
+	md._now = t0[live_i] + 0.5
+	var live_player := md._page_tex(player)
+	_ok(dark_player != null and dark_player != md._live_vp.get_texture() and live_player == md._live_vp.get_texture(),
+		"the page's player is dark until the desk is played live into it")
+	# a clip: the screen's static until one is imported, then its frames, looping
+	var clip_i := -1
+	for i in actions.size():
+		if String(actions[i]["kind"]) == "picture" and (actions[i] as Dictionary).has("clip"):
+			clip_i = i
+	var on_tv := t0[clip_i] + 1.0
+	md._pose_screens(on_tv)
+	var tv: ShaderMaterial = md._mats["tv"]
+	var snowing := float(tv.get_shader_parameter("snow")) > 0.5 and not bool(tv.get_shader_parameter("has_face"))
+	var dir := OS.get_temp_dir().path_join("ghost_dispatch_clip_%d" % OS.get_process_id())
+	DirAccess.make_dir_recursive_absolute(dir)
+	for k in 3:
+		var img := Image.create(16, 9, false, Image.FORMAT_RGB8)
+		img.fill(Color(float(k) / 2.0, 0.2, 0.4))
+		img.save_jpg(dir.path_join("%04d.jpg" % k))
+	var key := String(actions[clip_i]["key"])
+	md._clips = {key: {"dir": dir, "fps": 12, "frames": 3, "size": Vector2i(16, 9)}}
+	md._clip_tex = {}
+	md._pose_screens(on_tv)
+	var frames: Array = []
+	for secs in [0.0, 1.0 / 12.0 + 0.001, 2.0 / 12.0 + 0.001, 3.0 / 12.0 + 0.001]:
+		var tex := md._clip_frame(key, secs)
+		frames.append(int(md._clip_tex[key]["i"]) if tex != null else -1)
+	var showing := bool(tv.get_shader_parameter("has_face"))
+	for k in 3:
+		DirAccess.remove_absolute(dir.path_join("%04d.jpg" % k))
+	DirAccess.remove_absolute(dir)
+	md._clips = {}
+	_ok(snowing and showing and frames == [0, 1, 2, 0],
+		"a clip not imported is the screen's static; imported, its frames play at its pace and loop (%s %s %s)" % [snowing, showing, str(frames)])
+	# a voice with no phone, said as a paragraph, comes in on the receiver
+	var said_i := _first(actions, "receiver")
+	var w0 := md._word_t0(int(actions[said_i]["from"]))
+	var w1 := md._word_t1(int(actions[said_i]["from"]))
+	_ok(float(md.storm_at((w0 + w1) * 0.5).get("voice", 0.0)) > 0.0, "a paragraph in a voice with no phone comes in on the receiver, the needle moving with it")
+
+
+
+## A note that opens in the black, on a title: the title stands over the blurred desk, the camera home; the picture goes
+## down to black as the title goes, the camera on the clock in it; then up on the clock (the control: with no title to
+## open on, black from the start).
+func _opens_black(st: SubViewport) -> void:
+	var body := "<!-- fade: from-black, 22:40 -->\n\n<!-- speaker: Control -->\n\nTwenty to eleven. The quiet hours. Every night at this hour.\n"
+	var made := func(opening: String) -> DispatchMedium:
+		var feed := ShowFeed.new()
+		feed.opening = opening
+		var md := DispatchMedium.new()
+		md.feed = feed
+		md.mount(st)
+		md.load_note(body, {"seed": 3})
+		md._now = 0.0
+		md.take_words(DispatchScript.rehearsal(DispatchScript.parse(body), 0.32, 0.35, 9.0))
+		return md
+	var titled: DispatchMedium = made.call("title")
+	var op := titled._opening()
+	var up := titled.starts()[_first(titled._actions, "fade")]
+	var shows := ShowOpening.title_alpha("title", op - 2.0, op, true)
+	_ok(op < INF and titled.fade_at(op - 2.0) == 0.0 and shows > 0.9 and titled.looking_at(op - 2.0) == "home"
+		and titled.fade_at(op + DispatchMedium.BLACK_TAIL + 0.05) == 1.0 and titled.looking_at(up - 0.5) == "clock"
+		and titled.fade_at(up + DispatchScript.FADE + 0.05) == 0.0,
+		"opening in the black on a title: the title over the blurred desk, then black as it goes, then up on the clock (%.2f under the title, %.2f after)" % [
+			titled.fade_at(op - 2.0), titled.fade_at(op + DispatchMedium.BLACK_TAIL + 0.05)])
+	var plain: DispatchMedium = made.call("none")
+	_ok(plain.fade_at(0.5) == 1.0 and plain.fade_at(plain._opening() - 2.0) == 1.0, "the control: with no title to open on, black from the start")
+	titled.queue_free()
+	plain.queue_free()
 
 
 static func _first(actions: Array, kind: String) -> int:

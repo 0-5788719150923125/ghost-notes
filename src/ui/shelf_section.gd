@@ -37,9 +37,20 @@ func act(_key: String, _verb: String) -> String:
 	return "nothing here does that"
 
 
-## The offers [param keys] are in view: their pictures are wanted, and taken one at a time.
+## The offers [param keys] are in view or near it, the nearest first: their pictures are wanted ahead of any other.
 func want_pictures(_keys: Array) -> void:
 	pass
+
+
+## The offers [param keys] are on the shelf shown, in place of those before: each picture never taken is taken behind those
+## wanted, so the shelf scrolls without waiting. [] when the shelf closes: those not yet taken wait no longer.
+func prepare_pictures(_keys: Array) -> void:
+	pass
+
+
+## The picture of offer [param key] if it is to hand, null otherwise; never asks for one.
+func picture(_key: String) -> Variant:
+	return null
 
 
 ## Offer [param key] renamed [param name]. "" done, else why not.

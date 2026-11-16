@@ -76,6 +76,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **A week behind the edge, and helpers in a sandbox**
       Take nothing from upstream until it is seven days old (no pins), and run every helper program in a sandbox that is on by default, asked about once if it fails, with a checkbox on the Environment panel - not Docker. Decided 2026-10-26, waiting. See [supply_chain.md](supply_chain.md).
 
+- [ ] **Run only the gates whose inputs changed**
+      Trace what each gate reads; on a pass keep a hash per file, and skip it next time while every hash holds. A static graph misses directory walks, paths in strings, shaders, rules and data. Every gate compiles the autoloads' 126 scripts, the floor; strace is the user's call. See [test_cache.md](test_cache.md).
+
 - [ ] **Portrait beyond full frame**
       Full frame shows and exports at 9:16 (step 10). Open: `cloth` and `two_eyes` tuned for the tall frame (cloth leaves most of it empty, two_eyes sits against its edges), the tablet's distances, the tarot's 16:9 values, and single-page comic, book and notebook layouts and a portrait tarot table - each design work of its own.
 

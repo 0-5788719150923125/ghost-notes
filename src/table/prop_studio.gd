@@ -190,10 +190,15 @@ func shot(box: AABB, side: Vector3, size: Vector2i, caption: String) -> Image:
 
 # --- a prop's picture ----------------------------------------------------------------------------
 
+## The file prop [param h]'s picture is kept in, its size in one beside it named `.txt` ([method cached]). Touches no tree.
+static func kept_path(h: String) -> String:
+	return Library.shelf(SHELF).path_join(h + ".png")
+
+
 ## The picture of the prop whose hash is [param h], once taken: `{image, size}` (size as [method size_text] says it),
 ## {} until then.
 static func cached(h: String) -> Dictionary:
-	var path := Library.shelf(SHELF).path_join(h + ".png")
+	var path := kept_path(h)
 	if h.is_empty() or not FileAccess.file_exists(path):
 		return {}
 	var img := Image.load_from_file(path)
@@ -234,7 +239,7 @@ static func picture(thing: Dictionary, materials: Dictionary, h: String, store :
 			elif img != null:
 				var size := size_text(box)
 				DirAccess.make_dir_recursive_absolute(Library.shelf(SHELF))
-				var path := Library.shelf(SHELF).path_join(h + ".png")
+				var path := kept_path(h)
 				img.save_png(path)
 				var f := FileAccess.open(path.get_basename() + ".txt", FileAccess.WRITE)
 				if f != null:

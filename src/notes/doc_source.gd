@@ -245,6 +245,16 @@ func set_field(key: String, value: String) -> bool:
 	return true
 
 
+## The document's frontmatter as written, without its fences ("" for none): the file's as it is now when synced (the
+## words read for the voice have none of it), else the box's own.
+func head() -> String:
+	if is_sync():
+		if not FileAccess.file_exists(_path):
+			return ""
+		return String(FrontMatter_.split(FileAccess.get_file_as_string(_path)).head)
+	return String(FrontMatter_.split(_text.text).head) if _text != null else ""
+
+
 ## The document's path, or "" when the script is synced to nothing.
 func doc_path() -> String:
 	return _path if is_sync() else ""

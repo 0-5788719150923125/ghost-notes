@@ -17,7 +17,8 @@ The user judges: the names (Props, Dex, Used), the 3D view, the Dex, kept voices
   hash of what it is (`hash_of`: the same prop on any table hashes the same). Put on a table, a material the table holds
   otherwise is renamed, so it looks the same everywhere. A file from anywhere comes in bounded (`sanitized`).
 - **Its picture** is taken by `PropStudio` (`table/`): built on a worker, one at a time, kept on the `pictures` shelf by its
-  hash, with its size, lit by `StudioLook` (`render/`).
+  hash, with its size, lit by `StudioLook` (`render/`). On the Dex (`PropPictures`) those in view and near it come first - a
+  kept one read on a worker - and every other on the shelf shown is taken behind them until the Dex closes.
 - **The Props card** (`PropsCard`, `PropSection` in `ui/`) stands on the panel while a section has rows; a table episode hands
   `EpisodeProps`. Each row has a Used tick (unticked moves a thing to the table's `aside` list, which nothing stands and no
   agent reads, and the table becomes a hand's version), Keep, and Select (picks it on the stage); groups Used and Set aside. A
@@ -108,7 +109,7 @@ Not built: the `Keys` registry and its shelf (step 3), a Built in shelf of the d
   `group` or `why`. Its materials go with it under names of its own, so it looks the same on any table (today a table's
   material of the same name wins).
 - Its picture is made when it is kept (`TablePreview.thing`, on a worker), cached by the spec's hash; a Seen thing's
-  when its tile comes into view.
+  while its shelf is open, the nearest the view first.
 - **The Props card** is one card for every presentation that sets things down, as the Pictures card is for pictures.
   Whatever shows things hands it a `PropSection`, as a show hands the Pacing card a `TuneSection`; the card draws, the
   section does, and with no section there is no card. No card names another.

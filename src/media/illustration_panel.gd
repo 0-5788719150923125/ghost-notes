@@ -7,7 +7,9 @@ class_name IllustrationPanel
 ## Top to bottom: which painter, its model and effort ([AgentPick]); the style every picture shares; the
 ## reference images that show that style; Generate all (every picture with none yet); and the note's pictures,
 ## one row each, with what exists and buttons to make or remake it or import a file instead (Import…). The same
-## pictures are rows of the note's Pipeline card ([Section]; next/pipeline.md).
+## pictures are rows of the note's Pipeline card ([Section]; next/pipeline.md). A picture that stands for a clip (its
+## row has `clip`, the video the script names) is painted as a short loop (Generate) or imported from a video (Import…),
+## owed like any picture until it has one.
 ##
 ## The list follows the text, not the library: [method set_pictures] is handed the pictures the note's words
 ## call for whenever they are read (which marks those are is the presentation's to say, [method Medium.pictures_of]),
@@ -180,8 +182,8 @@ func sync_from_library() -> void:
 ## reading order, as the presentation shows them ([method Medium.pictures_of]). Cheap enough on every edit.
 func set_pictures(rows: Array) -> void:
 	_images = rows.duplicate(true)
-	# the painter's self-reference chain is the painted ones alone: a page is captured, never painted
-	Illustrations.set_chapter(_images.filter(func(im: Dictionary) -> bool: return not im.has("url")))
+	# the painter's self-reference chain is the painted stills alone: a page is captured, and a clip may be a video's
+	Illustrations.set_chapter(_images.filter(func(im: Dictionary) -> bool: return _paintable(im) and not im.has("clip")))
 	_seen = ""
 	if is_inside_tree():
 		_refresh()
@@ -212,7 +214,7 @@ func _refresh() -> void:
 		var live: Array = _live[key]
 		if is_instance_valid(live[0]):
 			var doing := Illustrations.activity(String(key))
-			(live[0] as Label).text = String(live[1]) + (("  -  painter " + doing) if not doing.is_empty() else "")
+			(live[0] as Label).text = String(live[1]) + (("  -  " + String(live[2]) + doing) if not doing.is_empty() else "")
 	if sig == _seen:
 		return
 	_seen = sig
@@ -238,7 +240,7 @@ func _refresh() -> void:
 ## Generate all says how many it would paint, and is grayed with nothing to paint.
 func _show_all() -> void:
 	var owed := _owed().size()
-	var painted := _images.filter(func(im: Dictionary) -> bool: return not im.has("url")).size()
+	var painted := _images.filter(_paintable).size()
 	_all.visible = painted > 0
 	_all.text = ("Generate all (%d)" % owed) if owed > 0 else "Generate all"
 	_all.disabled = owed == 0 or Illustrations.read_only()
@@ -293,24 +295,26 @@ func _row(im: Dictionary) -> Control:
 	desc.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	col.add_child(desc)
 	var st := Illustrations.status(key)
+	var clip := im.has("clip")
 	var meta := Label.new()
-	var parts := PackedStringArray([_placement_label(im), String(im.get("side", "")), st])
+	var parts := PackedStringArray([_clip_label(im) if clip else _placement_label(im), String(im.get("side", "")), st])
 	parts = PackedStringArray(Array(parts).filter(func(p: String) -> bool: return not p.is_empty()))
 	var vs := Illustrations.versions(key)
 	if vs.size() > 1:
 		parts.append("v%d/%d" % [Illustrations.current_index(key) + 1, vs.size()])
 	if Illustrations.is_stale(key):
 		parts.append("stale")
-	if Illustrations.is_imported(key):
+	if Illustrations.is_imported(key) and not clip:
 		parts.append("imported")
 	meta.text = "  ·  ".join(parts)
 	if st in ["queued", "running"]:
-		_live[key] = [meta, meta.text]
+		_live[key] = [meta, meta.text, "" if clip else "painter "]
 	meta.add_theme_font_size_override("font_size", 10)
 	# Always wraps: a status line that does not wrap sets the whole panel's width.
 	meta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	meta.modulate = Color(1, 1, 1, 0.6)
-	if st == "error":
+	# a clip that did not take says so beside the one kept: it was the author's own file
+	if st == "error" or (clip and st == "ready" and not Illustrations.error_of(key).is_empty()):
 		meta.text += "  -  " + Illustrations.error_of(key)
 		meta.tooltip_text = Illustrations.error_of(key)
 		meta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -343,6 +347,8 @@ func _row(im: Dictionary) -> Control:
 	go.text = "Regenerate" if not path.is_empty() else "Generate"
 	go.tooltip_text = ("Paint it again. The current picture is kept as an earlier version."
 		if not path.is_empty() else "Paint this picture.")
+	if clip:
+		go.tooltip_text = _loop_tip(not path.is_empty())
 	if im.has("url"):
 		go.text = "Recapture" if not path.is_empty() else "Capture"
 		go.tooltip_text = "Capture this page from the web as it is now (headless Chromium, via Playwright). Any current capture is kept as an earlier version."
@@ -361,6 +367,12 @@ func _import_button(im: Dictionary) -> Button:
 	b.text = "Import…"
 	b.tooltip_text = "Use a picture from disk for this one. Any current picture is kept as an earlier version."
 	b.disabled = Illustrations.read_only()
+	if im.has("clip"):
+		b.tooltip_text = ("Use a video from disk for this clip (the script names %s): %s\n\nDecoded into frames, %d fps and "
+			+ "%d px wide at most, its first %d s, with its sound. Any current clip is kept as an earlier version.") % [
+			String(im["clip"]), String(im.get("prompt", "")), Illustrations.CLIP_FPS, Illustrations.CLIP_WIDTH,
+			Illustrations.CLIP_SECONDS]
+		b.disabled = b.disabled or Illustrations.status(String(im["key"])) == "running"
 	b.pressed.connect(func() -> void: _open_dialog(im))
 	return b
 
@@ -374,7 +386,7 @@ func _ask(im: Dictionary) -> void:
 
 func _generate_all() -> void:
 	for im in _images:
-		if im.has("url"):
+		if not _paintable(im):
 			continue              # a real page is captured, never painted
 		if Illustrations.status(String(im["key"])) in ["queued", "running"]:
 			continue
@@ -400,18 +412,20 @@ func _open_preview(im: Dictionary) -> void:
 				_preview.hide()
 			else:
 				_open_preview(im)))
-	var again := Button.new()
-	again.text = "Regenerate"
-	again.focus_mode = Control.FOCUS_NONE
-	again.disabled = Illustrations.status(key) in ["queued", "running"] or Illustrations.read_only()
-	again.pressed.connect(func() -> void:
-		_ask(im)
-		_preview.hide())
-	extras.append(again)
+	if _paintable(im):
+		var again := Button.new()
+		again.text = "Regenerate"
+		again.focus_mode = Control.FOCUS_NONE
+		again.disabled = Illustrations.status(key) in ["queued", "running"] or Illustrations.read_only()
+		again.pressed.connect(func() -> void:
+			_ask(im)
+			_preview.hide())
+		extras.append(again)
 	var imp := _import_button(im)
 	imp.pressed.connect(func() -> void: _preview.hide())
 	extras.append(imp)
-	_preview.fill("Picture  ·  %s" % _placement_label(im), Illustrations.path_for(key), String(im["prompt"]), at,
+	_preview.fill("Picture  ·  %s" % (_clip_label(im) if im.has("clip") else _placement_label(im)),
+		Illustrations.path_for(key), String(im["prompt"]), at,
 		Illustrations.versions(key).size(), "(stale)" if Illustrations.is_stale(key) else "",
 		func(dir: int) -> void:
 			Illustrations.select_version(key, at + dir)
@@ -450,7 +464,32 @@ func _generate_missing() -> void:
 ## The pictures that can be painted and have none (or failed). A page is captured, never painted: its own Capture.
 func _owed() -> Array:
 	return _images.filter(func(im: Dictionary) -> bool:
-		return not im.has("url") and Illustrations.status(String(im["key"])) in ["missing", "error"])
+		return _paintable(im) and Illustrations.status(String(im["key"])) in ["missing", "error"])
+
+
+## Whether [param im] is painted: a page is captured instead (a clip is painted as a loop, or imported).
+static func _paintable(im: Dictionary) -> bool:
+	return not im.has("url")
+
+
+## What a clip's Generate does, in words.
+static func _loop_tip(has_one: bool) -> String:
+	return ("Paint a short looping animation for this clip: one sheet of %d cells in the note's look, each a step of one "
+		+ "movement, cut into frames and played at %d fps under the screen's static.%s") % [Illustrations.LOOP_CELLS.x
+		* Illustrations.LOOP_CELLS.y, Illustrations.LOOP_FPS, " The current clip is kept as an earlier version." if has_one else ""]
+
+
+## How a clip's row says what it is: "clip, 12 fps, 8.0 s" for a video, "painted loop, 6 frames at 8 fps" for a loop,
+## else the video its script names.
+static func _clip_label(im: Dictionary) -> String:
+	var key := String(im["key"])
+	var c := Illustrations.clip_of(key)
+	if c.is_empty():
+		return "clip: %s" % String(im["clip"])
+	var at := Illustrations.current_index(key)
+	if at >= 0 and (Illustrations.versions(key)[at] as Dictionary).has("loop"):
+		return "painted loop, %d frames at %d fps" % [int(c["frames"]), int(c["fps"])]
+	return "clip, %d fps, %.1f s" % [int(c["fps"]), float(c["frames"]) / maxf(float(c["fps"]), 1.0)]
 
 
 # --- on the Pipeline card ------------------------------------------------------------------------
@@ -511,13 +550,14 @@ func _step_rows() -> Array:
 		return out
 	var ro := Illustrations.read_only()
 	var painting := _painting()
-	if _images.size() > 1:
+	var painted := _images.filter(_paintable).size()
+	if painted > 1:
 		var all := PipelineRow.new("all", "All pictures")
 		all.state = "none"
 		all.again = "Paint every picture in this note again"
 		all.open = not ro and not painting
 		all.asks = ("That is all %d pictures, one request each against your image quota. Pictures already made are kept as "
-			+ "earlier versions.") % _images.size()
+			+ "earlier versions.") % painted
 		all.redo = _generate_all
 		out.append(all)
 	for im in _images:
@@ -543,7 +583,13 @@ func _step_rows() -> Array:
 			_:
 				r.state = "missing"
 		var has_one := not Illustrations.path_for(key).is_empty()
-		if captured:
+		if im.has("clip"):
+			# a clip is painted as a loop, or a video imported for it on the Pictures card
+			if st in ["ready", "missing"]:
+				r.said = _clip_label(im) + ((" - " + r.said) if not r.said.is_empty() else "")
+			r.tip = "%s\n\nA clip: painted as a short loop, or a video imported for it on the Pictures card (Import…)." % String(im["prompt"])
+			r.again = _loop_tip(has_one)
+		elif captured:
 			r.again = "Capture this page from the web as it is now (headless Chromium, via Playwright). Any current capture is kept as an earlier version."
 		else:
 			r.again = "Paint it again. The current picture is kept as an earlier version." if has_one else "Paint this picture."
@@ -608,10 +654,11 @@ func _refresh_refs() -> void:
 
 
 ## The file dialog: style references when [param for_image] is empty, otherwise one picture to
-## use for that image.
+## use for that image (a video, for a clip, opened on the file its script names where that is there).
 func _open_dialog(for_image := {}) -> void:
 	if _dialog != null and is_instance_valid(_dialog):
 		return
+	var clip := for_image.has("clip")
 	_dialog = FileDialog.new()
 	_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILES if for_image.is_empty() else FileDialog.FILE_MODE_OPEN_FILE
 	_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -619,12 +666,17 @@ func _open_dialog(for_image := {}) -> void:
 	_dialog.use_native_dialog = false
 	_dialog.title = "Import style references" if for_image.is_empty() else "Use a picture from disk"
 	_dialog.filters = PackedStringArray(["*.png, *.jpg, *.jpeg, *.webp ; Images"])
-	var pics := OS.get_system_dir(OS.SYSTEM_DIR_PICTURES)
+	var pics := OS.get_system_dir(OS.SYSTEM_DIR_MOVIES if clip else OS.SYSTEM_DIR_PICTURES)
 	if not pics.is_empty():
 		_dialog.current_dir = pics
+	if clip:
+		_dialog.title = "Use a video from disk for the clip %s" % String(for_image["clip"])
+		_dialog.filters = PackedStringArray([", ".join(PackedStringArray(Illustrations.CLIP_EXTS.map(func(e: String) -> String:
+			return "*." + e))) + " ; Videos"])
+		_dialog.current_file = String(for_image["clip"]).get_file()
 	_dialog.size = Vector2i(820, 560)
 	_dialog.file_selected.connect(func(path: String) -> void:
-		var err := Illustrations.import_file(for_image, path)
+		var err := Illustrations.import_clip(for_image, path) if clip else Illustrations.import_file(for_image, path)
 		_status.text = "" if err.is_empty() else "⚠  " + err
 		_seen = ""
 		_close_dialog())

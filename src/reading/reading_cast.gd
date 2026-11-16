@@ -286,6 +286,8 @@ func build_voice(box: VBoxContainer) -> void:
 		+ "is this tab's. Every change reaches the reading as it is made.")
 	lab.pressed.connect(_open_lab)
 	vrow.add_child(lab)
+	keep = VoiceKeep.new(self)
+	keep.build(box)
 
 	_speaker_about = Label.new()
 	_speaker_about.add_theme_font_size_override("font_size", 11)
@@ -295,8 +297,6 @@ func build_voice(box: VBoxContainer) -> void:
 	_speaker_about.mouse_filter = Control.MOUSE_FILTER_STOP
 	_speaker_about.tooltip_text = "Who reads, on a voice of more than one reader: perceived gender and a description - for libritts how the voice sounds (LibriTTS-P, LINE Corporation, CC BY 4.0), for kokoro its accent and Kokoro's own grade of its training data - or the blend made in Lab…; on formant, the seed the tab reads in and the traits it leans on."
 	box.add_child(_speaker_about)
-	keep = VoiceKeep.new(self)
-	keep.build(box)
 
 		# The rest of the voice is the Lab's: built once, hung on the Voice row, so its rows are in the tree with the card.
 	_lab = ReaderBrowser.new(self)

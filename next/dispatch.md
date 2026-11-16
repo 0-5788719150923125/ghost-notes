@@ -53,17 +53,20 @@ block (the author's, never ghost's `ghost:` block).
 
 ## The marks
 
-As `MEDIUM.md` has them, with the changes above: `call:`, `/call`, `/call: X`, `ring:`, `text: X | words`, `ping:`,
-`sound:`, `static:`, `print`, `sleep`, `off:`, `look:`, `lift:`, `switch:`, `live:`, `image (feed|satellite|tv|full)`,
-`/image`, fenced ` ```type `, ` ```screen ` and ` ```terminal ` blocks, `strike` after a typed block, `<!-- redact: words -->`
-inside a shown block or a session, `gain: N`, `bell` and `lamp: off|on` (below), and the voice's own (`speaker`,
-`hesitation`, `delivery`). `act:` stays a note.
+As `MEDIUM.md` has them, with the changes above: `call:`, `/call`, `/call: X`, `ring:`, `text: X | words`, `ping: place |
+bearing, range`, `sound:`, `static:`, `print`, `sleep`, `off:`, `look:`, `lift:`, `switch:`, `live:` (a screen or the tablet),
+`image (feed|satellite|tv|full)`, `/image`, `video (feed|satellite|tv): file | words`, ` ```terminal ` blocks (one program,
+`DispatchTerminal`'s line kinds), `strike` after a typed line, `<!-- redact: words -->` on a line of a terminal block,
+`gain: N`, `bell`, `lamp: off|on`, `fade: to-black|from-black, HH:MM, secs`, `tablet` / `/tablet` with ` ```page ` fences and
+`<!-- player -->`, `replay: tablet | words`, and the voice's own (`speaker`, `heard:`, `hesitation`, `delivery`). `act:`
+stays a note. The ScriptMarks registry has a row for each (docs/script.md).
 
 ## Files (`src/dispatch/`, a folder after `letter`)
 
 | File | What it is |
 |---|---|
 | `dispatch_script.gd` | `DispatchScript`: the note into the voice's text (rests, `heard` marks, typed words said), the spoken words, and the desk's actions anchored to them |
+| `dispatch_terminal.gd` | `DispatchTerminal`: the terminal's one program - the glass (a fixed 70 by 22 screen), panels kept by id, keys, every line kind of a block, timed; simulated through the whole note, played at a moment |
 | `dispatch.gd` | `DispatchMedium`: the world, the schedule (a [ReadingFollower]), the state of every thing at a moment, the camera, the opening, the pictures, the captions |
 | `dispatch_set.gd` | `DispatchSet`: the desk and everything on it, built - terminal, keyboard, phones, radar, receiver and scope, printer and its heap, the three screens, the switch, the chart, the handbook, the things, the chair, the room |
 | `dispatch_roots.gd` | `DispatchRoots`: the roots grown and meshed |
@@ -78,8 +81,9 @@ stream and the export, the band in [VoiceFX].
 ## Gates
 
 `tests/dispatch/dispatch_script_check.gd` (the parser on a fixture with every mark: the phones' state, the voice's text,
-the actions), `tests/dispatch/dispatch_check.gd` (the medium built headless and played through on rehearsed words: what is
-in hand, on the terminal and on the radar at moments, the camera's target), `tests/dispatch/dispatch_sounds_check.gd` (the
+the actions, the glass panel by panel, pings, fades, the tablet's pages), `tests/dispatch/dispatch_check.gd` (the medium
+built headless and played through on rehearsed words: what is in hand, on the terminal and on the radar at moments, the
+camera's target and its hold on the glass, the black and the clock, the tablet, a clip's frames), `tests/dispatch/dispatch_sounds_check.gd` (the
 jet's pitch falls, nothing is louder than the voice, the two storms differ, the same twice), `tests/voice/heard_check.gd`
 (the band, the plan, the join's marks), `tests/dispatch/dispatch_redact_check.gd` (GPU: the terminal on a bulged quad
 through a camera, the censor over it - no letter of the hidden words outside a box, every shard one color and the average
@@ -276,3 +280,57 @@ Looked at (the look probe on a note cut from the episode's three passages, seed 
 the clutter fading and gone, the knob at three and at nine, an invalid option after its bell, the lamp's light gone from
 beside the terminal, the last line printed in full light. On the episode itself (rehearsed): both bells sound as their
 screens go up, nine paints 33 blips, the lamp clicks after the last word.
+
+### The night in pieces: one terminal, bearings, fades, the tablet, clips
+
+The revised night (rift's `MEDIUM.md`, its design and what differs from it) is told in pieces and leans on seven marks:
+
+- **The terminal is one program** (`DispatchTerminal`): a fixed screen - the title bar in inverse with the panel's name,
+  its second line, sixteen rows of body that alone scroll, the keys spread across, the command line - never a scrolling
+  shell. A ` ```terminal ` block is its lines in order: commands typed on the command line, panels kept by id (`panel: id =
+  NAME | LEFT | RIGHT`) that a key or `> open id` brings back as they last stood, `type:` lines typed and said behind the
+  keys (`type (Name):` in that voice), `key:` lines typed and never said, `show:`, `set:` (a row changed in place, what
+  differs backspaced and typed), `wait:`, `alert:` (its beep), `print`, `strike`, `clear`, `{N}` holding a line part-drawn,
+  any desk mark at its point. The note's `terminal:` block holds the title, the width and the keys every panel shares. The
+  parse simulates the glass through the whole note, so every action at the terminal carries the glass it starts from and
+  the medium plays its own steps at a moment (`DispatchMedium.terminal_at`). A panel is read before the next step - a new
+  one by its words, one come back to a glance - unless a `wait:` says how long.
+- **The camera stays on the glass** after a block or a typed line while the voice talks of what is up
+  (`DispatchMedium._glass_hold`: the panel's words read, `GLASS_LEAST` to `GLASS_MOST`, to the end of the sentence), and on
+  through to what comes next when that is soon (`GLASS_LINGER` and `AWAY_LEAST`), rather than pull back to the whole desk
+  for nothing; with nothing coming for long, it goes home.
+- **A ping is where a radar reports it**: bearing clockwise from the scope's top, range in the desk's range rings
+  (`rings:`, the scope's edge the last; `DispatchMedium.scope_at`). A place named again bare is the same spot; a place
+  never given numbers is laid out from the words, as before, and warned of.
+- **Fades and the clock**: the picture goes down to black and comes back up (`fade_at`, the environment's brightness and
+  the pictures over the frame); what is marked in the black happens at once, unseen (no rest, no look); a fade up with a
+  time comes up on the flip clock (`DispatchSet` builds it where the script uses one), its cards turned over to the time
+  (`DispatchScreens` cuts each card's halves from one digit atlas), held a beat, then the camera eases to the desk; the clock
+  runs a minute a minute. The camera is on the clock in the black. A note may open on a fade up: its title stands over the blurred desk as any show's does, the picture goes down to black as the title goes, and the night comes up on the clock. The first
+  ping after it has no track across the black. A typed line opening on a time far off the clock (by a steady voice) is
+  warned of.
+- **The tablet** (built where the script uses one) is lifted before the eye and put back down dark. Its pages are the
+  tablet medium's own (`TabletScript` reads the fences as one source, `TabletPage` sets each page on the tablet's screen
+  under a browser bar): an address typed into the bar, or a link on the page up found and tapped, the page loading, then
+  held to be looked at; shown and never said, it scrolls to each word the room says that is on it (`_page_follow`), else
+  eases down. `<!-- player -->` is a picture slot that `live: tablet` fills with the desk seen from behind the chair; the
+  tablet in that picture shows the same picture. `replay: tablet | words` says the room's earlier words again through the
+  tablet's speaker (`heard: tablet`, a VoiceFX row).
+- **Clips on a screen**: `video (tv): file | words` is a picture whose slot on the Pictures card takes a clip: Generate
+  paints it as a short loop (one sheet of six cells in the note's look, cut into frames at 8 fps: `Illustrations._keep_loop`),
+  Import… decodes a video into frames (`Illustrations.import_clip`, FFmpeg), and the screen plays them by show time,
+  looping under its snow - the screen's static until it has one.
+- **The receiver**: a voice with no phone on the desk is heard on it, typed or said, unless a phone is at the ear (then it
+  is somebody in the caller's room); `<!-- heard: band -->` after a cue says outright.
+- **The note as written**: a synced note's words reach the card and the reading without their frontmatter, where the
+  `desk:` and `terminal:` blocks are. The format reads the file's (`DocSource.head`), checks the whole note, and hands it in
+  the document (`head`); the medium puts it back on the words (`DispatchMedium.whole`). The card lists four problems and
+  logs them all.
+
+Looked at (the look probe on the fixture, seed 3): a panel on the glass with its title bar and command line, the clock at
+23:40 close up and from the chair, the forum page held up with the radar behind it, the player showing the desk live.
+Run on the episode with a steady voice: no script error, every fade up on its clock, every page reached as written, the
+night about 49 minutes.
+
+Open: the author's eye and ear on the night in pieces - the glass's pace and the camera's hold on it, the clock shot, the
+tablet's size and its pages' scroll, the dog clip once imported (its sound is kept and not played yet).

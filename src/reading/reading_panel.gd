@@ -726,6 +726,7 @@ func _sync_medium_rows() -> void:
 
 
 func _set_status(msg: String) -> void:
+	StatusLog.say("status", msg)
 	if _status != null:
 		_status.text = msg
 
@@ -849,12 +850,10 @@ func _has_reading() -> bool:
 	return not _cast_text().strip_edges().is_empty()
 
 
-## The passage every voice is auditioned with by Test: a format's own words first where its walk has them (a table
-## show's reader, a letter), then the shared passage, so every Test is long enough to work the voice's dials while it
-## reads.
+## The passage every voice is auditioned with by Test, in every kind of note: the one shared passage
+## ([constant ReadingAudition.PASSAGE]), long enough to work a voice's dials while it reads.
 func _test_passage() -> String:
-	var own := walk.test_passage(ReadingAudition.PASSAGE)
-	return own if own == ReadingAudition.PASSAGE else own + "\n\n" + ReadingAudition.PASSAGE
+	return ReadingAudition.PASSAGE
 
 
 # --- persistence -----------------------------------------------------------------------------------

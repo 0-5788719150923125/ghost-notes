@@ -300,7 +300,7 @@ Gates: physics_check `_pours_loose`, `_world_from_table`, and the hold tests (`_
 `_held_up`, `_aloft`. Probes: `act_calls_probe`, `episode_bake_probe --profile-bake` (a bake's cost by section, and
 why each frame was stepped) and `--profile` (a live frame's).
 
-### Seen on 398525 (`--audit`, 21 kinds of finding, 13 after)
+### Seen on 398525 (`--audit`: 21 kinds of finding, then 13, then 14 with the stir now reaching the pot floor)
 
 - **A rod over a sheet** leaves it on the table, never in it: tubes run before the per-point solids, the table's push before
   the still walls' crossing check, and a sheet's fallback carries only the points near the tube (`_sheet_pinned`,
@@ -311,7 +311,15 @@ why each frame was stepped) and `--profile` (a live frame's).
 - **A dissolving thing** stays drawn whole, shrinking, until little of it is left.
 - **A thing set down on the bare table** is laid as it would rest (`TableWork._lay`; table_work_check `_laid_at_rest`).
 - **The audit** moves a part with no body of its own (a stopper) with what it rides on and skips what is hidden, and says
-  an overlap present at 0 s as built.
+  an overlap present at 0 s as built; `--trace` says where a loose part's middle is drawn and solved, and what holds it.
+- **A loose thing beside a vessel** is never carried by it: a body rides or sleeps in a vessel only with more than half its
+  spheres inside, and a woken one is hosted on what holds it up (physics_check `_beside_not_carried`).
+- **`press` and `around` name a part** (`"kettle/pot"`, `"kettle/pot.floor"`): a part's own points and surface alone; a name
+  that cannot be found refuses the whole track, said under WHAT COULD NOT BE KEPT (table_work_check `_press_part`).
+- **A free part or loose thing built into a solid** is laid out of it at build (`TablePhysics.lay_loose`), lowered from above
+  to where it first touches, and the set dresser is told so; one through something with no room for it is left as built and
+  said (`SetDresserTools.laid_line`). A thing's rest finds what is under it from rays started above its points
+  (`Props._rest_free`; physics_check `_laid_out_of`).
 
 ## What a framework for any desk needs
 
@@ -346,10 +354,11 @@ swings by weight (a balance, a hinge); particles with shape matching (grains, cr
   nothing moves faster than a hand; what was poured for a target lands in it (done: `_pour_said`); a thing set down is
   where it was set. `episode_bake_probe --audit` says them by hand for one episode; telling the puppeteer, in `act`, is
   what is left.
-- **398525's copper curl** falls from the ladle beside a vial, then moves with the vial when it is lifted and ends 6.8 mm
-  through its wall: what a resting loose thing is carried by. `--trace` prints a stale pose for loose things.
-- **`press` and `around` naming a part** (`"kettle/iron pot"`) never resolve, so such a press is ignored. Resolving `press`
-  alone drives a ladle into a coal bed; the two have to be resolved together and every act using them checked.
+- **A vessel set down on a resting loose thing** takes its spheres in through its thin floor (398525's curl, 12.4 mm through
+  the finishing vial at 757.9 s): the set-down should keep clear of loose things, or the solver keep squeezed spheres out of
+  moving walls (tried, no help).
+- **A coarse loose body** (a 2 mm wire as four 5.4 mm spheres) can slide down both sides of a thin wall.
+- **A sheet under a tool stirring at a pot's floor** is stretched by the sheet solver (398525's slip, 5.4 cm).
 - **One model of where a thing is.** The work plans the hand; the physics should be the only answer to where a thing
   is, and `check`'s PASSES THROUGH (the plan's poses) folded into the physics' HELD BACK, so one event is said once.
 - **A plan's guesses.** A live plan places the moves after an act that runs "under" the words on a guessed end, and

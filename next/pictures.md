@@ -49,6 +49,17 @@ thumbnail had also grown its own two-press delete and its own full-size window w
   (`EpisodeFeed.made_pictures`, `MadePictures`; next/face_layers.md), and the card comes with a table show too. Making one
   again is its row on the Pipeline card.
 
+## Clips, and a picture shown twice
+
+- **A picture may be a clip** (a medium's `pictures_in` row with `clip`, the file its script names: the dispatch desk's
+  `video (screen): file | words`). Its row offers Generate - painted as a loop, one sheet of `Illustrations.LOOP_CELLS`
+  cells in the note's look, each a step of one movement, cut into frames as it lands (`_keep_loop`, the sheet kept beside
+  them) - and Import…, a video decoded into frames in the background by FFmpeg (`import_clip`, its sound kept beside them).
+  Either is a version of frames like any other, its first frame its still (`clip_of`, `clip_frame`); it is owed until it
+  has one. A clip is never a reference for the painter's later pictures.
+- **A picture shown twice is one picture to make**: `Medium.pictures_of` lists each once, at its first mark, so a card and
+  its Pipeline rows never hold two rows of one key.
+
 ## Gates
 
 `tests/show/pictures_card_check.gd`: which marks each medium shows (with controls); the card comes with its hosts and never

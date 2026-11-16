@@ -97,13 +97,13 @@ it travels round and round a circle, keeping its turn - a spoon stirring, a whis
 
 | Field | What it is |
 | --- | --- |
-| `around` | the middle: a thing's point ("bowl.middle") or [x, y, z] |
+| `around` | the middle: a thing's point ("bowl.middle"), a part's own point ("kettle/pot.floor") or [x, y, z] |
 | `lift` | centimeters above the middle |
 | `radius` | centimeters, or [across, deep] for an ellipse |
 | `period` | seconds a round takes |
 | `dir` | 1 clockwise seen from above, -1 against |
 | `start` | degrees round where it begins (0 its right, 90 toward the reader) |
-| `press` | a thing's name: kept on that thing's surface below it, never through it |
+| `press` | a thing's name, or "thing/part" for one part's surface alone: kept on that surface below it, never through it |
 
 ### `aim` - Aim
 

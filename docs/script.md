@@ -11,7 +11,7 @@ An entry does not implement its mark. The parsers of record stay where they are 
 
 A table brief is not a script, and has marks of its own: a show's document is the brief its agents work from, never read aloud, so a mark in it does something only where the code reads it out of the brief or an agent is told to honor it. Those are offered ("table" in `modes`), each saying what it does there (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its deck, a macro reads as its default and a note to self is taken out before any agent sees the brief (`TablePrompts.brief`), and a hesitation, a delivery or a stressed word stands in a line the brief gives the host word for word (rules/table/reader.yaml, `spoken`). The marks of a page or a tablet (pictures, scene lines, web pages) and the inline pronunciation are not offered: the table is the only medium there, and a reader's passage keeps no bracket (`TableProducer.clean_spoken`).
 
-Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (71 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
+Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (76 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
 
 ## Voices
 
@@ -20,7 +20,7 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | Speaker cue | `<!-- speaker: Name -->` | Generative, Table | Hands everything after it to the named voice, until the next cue. The panel's voices list follows the names the script uses. Must be a line of its own, or it is only a note. **In a Table brief:** Gives the show another voice by this name: a tab of its own on the Voice card, and the reader writes its lines and hands them over. Say in the brief who it is and when it speaks. Must be a line of its own. |
 | Talk over | `<!-- over: 0.6 -->` | Generative, Table | At the top of a speaker's turn: this turn comes in before the last one has ended, on its last words, by a third of a second or the seconds given. Each voice stays where it sits, and both are heard. **In a Table brief:** In a line the brief gives word for word, on the line after a speaker's cue: this turn comes in over the last. Elsewhere a game's master writes these with its tools. |
 | All at once | `<!-- together -->` | Generative, Table | At the top of a speaker's turn: this turn comes in with the last one, just after it began, as a table reacts as one. Several in a row all come in together. **In a Table brief:** In a line the brief gives word for word, on the line after a speaker's cue: this turn comes in with the last. Elsewhere a game's master writes these with its tools. |
-| Heard through | `<!-- heard: radio -->` | Generative | On the line after a speaker's cue: this whole turn is heard through something - phone (held to the ear), desk (a phone lying on the desk), far (a voice in the caller's room, through their phone), radio (a two-way radio under crackling static, its squelch hissing as the voice keys up and off) or receiver (a shortwave receiver: a voice from very far off inside the signal, sinking into its hiss and crackle as the signal fades). The band, the grit and the line's static are the voice's; a turn with none is heard in the room. A dispatch desk writes these itself. |
+| Heard through | `<!-- heard: radio -->` | Generative | On the line after a speaker's cue: this whole turn is heard through something - phone (held to the ear), desk (a phone lying on the desk), far (a voice in the caller's room, through their phone), radio (a two-way radio under crackling static, its squelch hissing as the voice keys up and off), receiver (a shortwave receiver: a voice from very far off inside the signal, sinking into its hiss and crackle as the signal fades) or tablet (a tablet's small speaker lying on the desk, brighter than a phone, no line's hiss). The band, the grit and the line's static are the voice's; a turn with none is heard in the room. A dispatch desk writes these itself; one written there wins. |
 
 ## Timing
 
@@ -113,33 +113,42 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | Ring | `<!-- ring: LIGHTS -->` | Generative | Dispatch desk: that phone buzzes and rattles against its neighbors. A call to it straight after answers it; with none, it rings out. |
 | Text | `<!-- text: AISLE \| He looked at me -->` | Generative | Dispatch desk: a chime and a buzz, and that phone comes up out of its row, flips open and is held up to be read - the words on its screen, never said and never captioned. The voice waits long enough to read it; the phone goes home after, unless it texts again in a moment. |
 | Reply | `<!-- reply -->` | Generative | Dispatch desk: the room's next words are typed into the phone that texted last (or the one named) as they are said, a key at a time under its message, and sent - the voice still says them. |
-| Ping | `<!-- ping: the stairwell -->` | Generative | Dispatch desk: the target comes to this place on the radar - a sonar ping, the place written small beside the blip (the first ping: the radar finds him there). He goes there along a track while the voice goes on, the sweep painting him a step further each round, never a jump - from where a Moving mark set him off, else over the moments before. A place named again is the same spot; what follows a comma in a name is a little off it (the grocery store, aisle seven). |
+| Ping | `<!-- ping: the stairwell \| 210, 0.7 -->` | Generative | Dispatch desk: the target comes to this place on the radar - a sonar ping, the place written small beside the blip (the first ping: the radar finds him there). After the bar, where a radar reports a contact: its bearing in degrees clockwise from the scope's top, and its range in range rings out from the desk (the scope's edge the last ring). He goes there along a track while the voice goes on, the sweep painting him a step further each round, never a jump - from where a Moving mark set him off, else over the moments before. A place named again bare is the same spot. |
 | Moving | `<!-- moving -->` | Generative | Dispatch desk: the target sets off from where he is toward the next ping's place - the radar sounds its alarm and the camera turns to it. The voice goes on while he goes: write what is said over the walk between this and the ping where he arrives. |
 | Sound | `<!-- sound: a jet passes low over the building -->` | Generative | Dispatch desk: a sound in the room or outside it, named by a word among these the desk knows (a jet passing over); the voice waits for it. |
 | Static | `<!-- static: 5 -->` | Generative | Dispatch desk: the receiver opens up for that many seconds, its needle swinging and the scope's trace jumping - Jupiter's crackle; static: 5, surf is its sea. The voice waits. |
-| Print | `<!-- print -->` | Generative | Dispatch desk: the printer prints what was typed since it last printed, with its screech, the paper feeding off the desk to the heap. The voice waits. |
-| Screen saver | `<!-- sleep -->` | Generative | Dispatch desk: the terminal's screen goes dark. A typed, shown or session block wakes it. |
+| Print | `<!-- print -->` | Generative | Dispatch desk: the printer prints what was typed since it last printed (with nothing typed, the panel up), with its screech, the paper feeding off the desk to the heap. The voice waits. |
+| Screen saver | `<!-- sleep -->` | Generative | Dispatch desk: the terminal's screen goes dark. The next terminal block wakes it. |
 | Bell | `<!-- bell -->` | Generative | Dispatch desk: the terminal's bell, one short beep, as an old terminal gives for an alert or a refused entry - it sounds as the block after it goes up, and the voice waits half a beat. |
 | Screen off | `<!-- off: tv -->` | Generative | Dispatch desk: that screen goes dark - tv, feed or satellite. |
-| Look | `<!-- look: radar -->` | Generative | Dispatch desk: the camera turns to that thing on the desk - phones, terminal, radar, receiver, printer, chart, handbook, switch, mug, feed, satellite, tv, or home - and stays until something else is active. |
+| Look | `<!-- look: radar -->` | Generative | Dispatch desk: the camera turns to that thing on the desk - phones, terminal, radar, receiver, printer, chart, handbook, switch, mug, feed, satellite, tv, clock, tablet, or home - and stays until something else is active. |
 | Gain | `<!-- gain: 9 -->` | Generative | Dispatch desk: the radar's gain knob is turned to that number, one to ten, a click a step (it starts at three, where only the target is painted). Above three the scope paints clutter - the people round him as faint blips with no name, more the higher it goes, most of them still, and from nine one more on the desk at its middle, the chair's own; turned back down, they fade over a sweep or two. The camera stays on the radar, and the voice waits a beat. |
 | Lift | `<!-- lift: mug -->` | Generative | Dispatch desk: a thing on the desk (the mug) is lifted toward the chair, held a moment, and set back down where it stood. |
 | Switch | `<!-- switch: BAD -->` | Generative | Dispatch desk: the switch box's toggle is thrown to that side, GOOD (up) or BAD (down). |
 | Lamp | `<!-- lamp: off -->` | Generative | Dispatch desk: the gooseneck lamp is switched off (or on), with a click, and the desk is left to the light of its screens. The camera takes in the whole desk. |
-| Live picture | `<!-- live: tv -->` | Generative | Dispatch desk: that screen shows this desk, live, seen from just behind the empty chair - whatever lies on it. Words after a comma say so for whoever reads the note. |
+| Live picture | `<!-- live: tv -->` | Generative | Dispatch desk: that screen shows this desk, live, seen from just behind the empty chair - whatever lies on it; live: tablet plays it into the player on the tablet's page. Words after a comma say so for whoever reads the note. |
 | Picture on a screen | `<!-- image (feed): what the picture shows -->` | Generative | Dispatch desk: a picture on one of the desk's screens - feed, satellite or tv - until the next picture there or off. Painted by the Illustrations library from its words. |
-| Typed | ````type
-23:21. Grocery store, aisle seven.
-```` | Generative | Dispatch desk: typed on the terminal and said a little behind the keys, as a letter is read behind its pen - the first two words typed before the voice begins, each word after while it says the one two before, so the line is said straight through. A block in capitals is said in sentence case (a short word in capitals is read as letters). Added under what the terminal shows. The room's words, unless it follows the cue of a voice with no phone on the desk: that voice comes in on the receiver and is taken down - said in its voice, heard through the receiver, the receiver open on its last static under it. |
-| Shown | ````screen
-STATUS ...... CONTAINED
-```` | Generative | Dispatch desk: put up on the terminal, replacing what it showed - drawn down the glass a line at a time, as a terminal draws - and never said; the voice reads aloud only what it says after it. |
-| Session | ````terminal
-> search ryan brooks
-1 MATCH
-> open 1
-```` | Generative | Dispatch desk: a session at the terminal, silent, the voice waiting - each line opening > is a command, typed at the prompt a key at a time and entered, and the lines after it are what the terminal answers, printed a line at a time. Asleep, the terminal wakes to a bare prompt first; the prompt comes back after the last answer. A shown block straight after is what the last command opened. |
-| Redacted | `<!-- redact: DOE, JANE -->` | Generative | Dispatch desk: inside a shown or session block, these words are on the terminal as written but hidden over the picture, as an editor hides a name in a video: a box that follows them, cracked into large flat shards, each the average color of what lies under it. Typed in a session, the box goes up whole at the first key. Not in a typed block, which is said aloud. |
+| Clip on a screen | `<!-- video (tv): dog.webm \| a small dog spinning after its own tail -->` | Generative | Dispatch desk: a moving picture on one of the desk's screens - feed, satellite or tv - looping under the screen's snow until the next picture there or off: the clip imported on the Pictures card for these words (the file name says which for the author). The screen's static until one is imported. |
+| Terminal | ````terminal
+> 3
+panel: assets = ASSETS \| 12 ON THE BOOKS
+AISLE ...... AISLE SEVEN
+keys: X MENU
+type: 22:54. Watcher in place.
+```` | Generative | Dispatch desk: the terminal's one program on a fixed screen, worked line by line, silent with the voice waiting: > a command typed on the command line (it opens the panel written next, else its key's); panel: id = NAME \| LEFT \| RIGHT a panel kept by its id and opened again as it last stood; keys:, type: (typed and said behind the keys; type (Name): in that voice), key: (typed, never said), show:, set: (a row changed in place), wait:, alert:, print, strike, clear, any desk mark; any other line a body line, {2} holding it part-drawn. The note's terminal: block gives its title, width and keys. |
+| Fade | `<!-- fade: from-black, 01:14 -->` | Generative | Dispatch desk: to-black takes the picture down over two seconds (or the seconds given), the voice waiting; in the black the desk is still heard, and what is marked there happens unseen and at once. from-black brings it back up, on a time on the desk's flip clock, its cards turning over to it and held a beat, then the camera eases to the desk; the clock runs on a minute a minute. A note may open on one. |
+| Tablet | `<!-- tablet -->` | Generative | Dispatch desk: the tablet on the desk is picked up and held before the eye, its screen waking, until /tablet puts it back down dark. Its pages are page fences between the two. |
+| Put down | `<!-- /tablet -->` | Generative | Dispatch desk: the tablet is put back down on the desk, its screen dark. |
+| Page | ````page
+url: notalone.board
+
+# Not Alone
+
+A forum for people who are being followed.
+```` | Generative | Dispatch desk: a web page on the tablet while it is up, in the tablet's own markdown, its first line url: (or search:). Reached by tapping a link to it on the page up, else typed into the bar. Shown and never said: it scrolls to what the room says that is on it, else eases down the page. |
+| Player | `<!-- player -->` | Generative | Dispatch desk: on a tablet's page, a video player at that point, dark until live: tablet plays the desk into it. |
+| Replay | `<!-- replay: tablet \| The night begins. -->` | Generative | Dispatch desk: the room's own earlier words said again through the tablet's small speaker, the voice's take of them as the video's soundtrack, while the room waits. |
+| Redacted | `<!-- redact: DOE, JANE -->` | Generative | Dispatch desk: on a line of a terminal block, these words are on the glass as written but hidden over the picture, as an editor hides a name in a video: a box that follows them, cracked into large flat shards, each the average color of what lies under it. Typed in a command, the box goes up whole at the first key. Not on a type: line, which is said aloud. |
 
 ## Notes
 

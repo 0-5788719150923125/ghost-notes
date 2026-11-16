@@ -125,7 +125,7 @@ _One desk late at night in a hollow under the ground, seen from the chair: an ol
 
 DispatchMedium - one desk, late at night, in a hollow under the ground, seen from the chair (next/dispatch.md). The man who works it is never seen: the viewer sits where he sits, and everything on the desk moves on its own.
 
-It draws from the reading's document: its `source`, the note with its marks (`DispatchScript`); its `dispatch`, what the Dispatch desk's rows on the Medium card hand (`DispatchFormat.document`): the desk's `seed` and each picture's file (`pictures`). The desk (`DispatchSet`) is built from the note's `desk:` block (the phones' labels) and the seed; the roots (`DispatchRoots`) from the seed.
+It draws from the reading's document: its `source`, the note with its marks (`DispatchScript`); its `dispatch`, what the Dispatch desk's rows on the Medium card hand (`DispatchFormat.document`): the desk's `seed` and each picture's file (`pictures`). The desk (`DispatchSet`) is built from the note's `desk:` block (the phones' labels) and the seed; the roots (`DispatchRoots`) from the seed. A seed changed while the note plays draws the desk again at once and keeps the reading's place (`reseed`).
 
 The desk acts in the rests the voice leaves for it (`_place`): each action of the script before its spoken word, placed back from that word by what the script wrote after it in the same silence (or on from the word before when the next is not heard yet) and, once begun, kept where it began (`_held`; a live reading's words arrive a sentence at a time). Everything on the desk is then a pure function of show time (`_pose`), so a render draws what the live reading drew and a scrub lands where the reading is.
 

@@ -8,7 +8,8 @@ extends Node
 ##
 ## `--picture` stands in for every picture the note shows. `--every S` photographs every S seconds to the end. `--live 1`
 ## hands the words a sentence at a time, a few seconds ahead, as a live reading does. `--sound <wav>` writes what the desk
-## sounds like over the whole run to a file. It prints where each action falls, and asserts only that a frame is not uniform.
+## sounds like over the whole run to a file. `--opening title` opens on the channel's name over the blur, and `--lead S`
+## gives the voice's first word S seconds in, as the intro's hold does. It prints where each action falls, and asserts only that a frame is not uniform.
 
 const W := 1280
 const H := 720
@@ -24,6 +25,8 @@ var _word := 0.32
 var _live := false
 var _sound := ""
 var _flat := 0
+var _opening := Openings.DEFAULT
+var _lead := 1.0
 
 
 func _ready() -> void:
@@ -44,6 +47,8 @@ func _run() -> void:
 			"--words": _word = float(args[i + 1])
 			"--live": _live = args[i + 1] == "1"
 			"--sound": _sound = args[i + 1]
+			"--opening": _opening = args[i + 1]
+			"--lead": _lead = float(args[i + 1])
 			"--times":
 				_times = []
 				for s in String(args[i + 1]).split(","):
@@ -61,7 +66,7 @@ func _run() -> void:
 		for a in parsed["actions"]:
 			if String((a as Dictionary)["kind"]) == "picture":
 				pictures[String(a["key"])] = _picture
-	var words := DispatchScript.rehearsal(parsed, _word)
+	var words := DispatchScript.rehearsal(parsed, _word, 0.35, _lead)
 	var stage := SubViewport.new()
 	stage.size = Vector2i(W, H)
 	stage.own_world_3d = true
@@ -73,6 +78,7 @@ func _run() -> void:
 	medium.mount(stage)
 	Director.attach(stage, medium)
 	Director.hold(true)
+	medium.feed.opening = _opening
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	subs.words = [] if _live else words
 	subs.document = {"source": source, "dispatch": {"seed": _seed, "pictures": pictures}, "title": "Targeted Individuality",

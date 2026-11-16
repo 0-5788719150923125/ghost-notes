@@ -1023,8 +1023,19 @@ func _placed(spec: Dictionary) -> Dictionary:
 		if float(l["energy"]) < full * 0.9 and by_light.has(i):
 			held.append(by_light[i])
 	var deck: Vector3 = m._plan.deck_base
+	# ...and each free part or loose thing built into what is round it, laid out of it or left through it ([method TablePhysics.lay_loose])
+	var laid: Array = []
+	var w = m._work
+	if w != null and w.physics != null:
+		for l in w.physics.laid:
+			var wi := int((l as Dictionary).get("wi", -1))
+			if wi < 0 or wi >= (w.works as Array).size():
+				continue
+			var ti := int((w.works[wi] as Dictionary)["thing"])
+			laid.append({"what": "%s's %s" % [String((w.things[ti] as Dictionary)["name"]), w._part_label(wi)], "in": String((l as Dictionary)["in"]),
+				"deep": float((l as Dictionary)["deep"]) * 1000.0, "laid": bool((l as Dictionary)["laid"])})
 	# (no deck at all in a show that draws no cards)
-	return {"stood": stood, "left_off": left_off, "left_why": left_why, "key": key, "held_down": held,
+	return {"stood": stood, "left_off": left_off, "left_why": left_why, "key": key, "held_down": held, "laid": laid,
 		"cards": (m._cards as Array).size(), "deck": "" if String(m._plan.cards_from) == "none" else ("front right" if deck.x > 0.0 else "front left")}
 
 

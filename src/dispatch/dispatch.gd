@@ -7,7 +7,8 @@ class_name DispatchMedium
 ## It draws from the reading's document: its `source`, the note with its marks ([DispatchScript]); its `dispatch`, what
 ## the Dispatch desk's rows on the Medium card hand ([method DispatchFormat.document]): the desk's `seed` and each
 ## picture's file (`pictures`). The desk ([DispatchSet]) is built from the note's `desk:` block (the phones' labels) and
-## the seed; the roots ([DispatchRoots]) from the seed.
+## the seed; the roots ([DispatchRoots]) from the seed. A seed changed while the note plays draws the desk again at once and
+## keeps the reading's place ([method reseed]).
 ##
 ## The desk acts in the rests the voice leaves for it ([method _place]): each action of the script before its spoken
 ## word, placed back from that word by what the script wrote after it in the same silence (or on from the word before
@@ -56,6 +57,8 @@ const SPOTS := {
 	"feed": {"label": "The security monitor", "blurb": "The little black-and-white monitor."},
 	"satellite": {"label": "The satellite's monitor", "blurb": "The flat monitor that looks down from orbit."},
 	"tv": {"label": "The television", "blurb": "The small old television with its rabbit ears."},
+	"clock": {"label": "The clock", "blurb": "Close on the little flip clock's cards."},
+	"tablet": {"label": "The tablet", "blurb": "The tablet held up before the eye."},
 }
 ## The camera's springs (seconds): how long it takes to settle on what it turns to (critically damped); and how long after
 ## the last thing it looked at it waits before easing back to the whole desk.
@@ -119,7 +122,7 @@ const AWAY_LEAST := 7.0
 ## A look cut by the next sooner than this (seconds) is not taken: the camera would only swerve toward it.
 const GLANCE_LEAST := 2.5
 ## What the camera turns to to read (the terminal's words, a phone's message, a picture): always looked at.
-const TO_READ := ["session", "type", "screen", "strike", "text", "reply", "picture", "live"]
+const TO_READ := ["session", "type", "strike", "text", "reply", "picture", "live", "tablet", "fade"]
 const PAINT_JITTER := 0.006
 ## A phone at the ear, in the camera's frame (m): where it floats, and how it is turned (degrees: tipped, turned, rolled).
 const EAR := Vector3(0.165, -0.105, -0.36)
@@ -136,9 +139,31 @@ const RATTLE_TURN := 3.0
 ## the desk on its way.
 const MUG_MOUTH := Vector3(0.03, -0.17, -0.01)
 const MUG_CLEAR := 0.06
-## The terminal's cursor blinks this often (seconds), and stays after typing this long.
+## The terminal's cursor blinks this often (seconds).
 const BLINK := 0.53
-const CURSOR_AFTER := 4.0
+## The camera on the terminal after a block or a said line: the glass read at GLASS_WORD a word on it, held GLASS_LEAST to
+## GLASS_MOST, on to the end of the sentence the voice is in if that ends within GLASS_SENTENCE; then it stays rather than
+## pull back to the whole desk for nothing, unless nothing else comes for GLASS_LINGER and AWAY_LEAST more.
+const GLASS_WORD := 0.3
+const GLASS_LEAST := 6.0
+const GLASS_MOST := 16.0
+const GLASS_SENTENCE := 6.0
+const GLASS_LINGER := 8.0
+## A note that opens in the black goes down to it as its title goes: from this long before the opening to this long after,
+## as [method ShowOpening.title_alpha] fades the name out.
+const BLACK_LEAD := 0.6
+const BLACK_TAIL := 0.3
+## The tablet held up before the eye, in the camera's own frame (m), leaning back a little; its page eased to what is
+## said over EASE seconds, what is said kept this far down the view; with nothing said on it, eased down the page, or
+## DRIFT pixels a second while how long it is up is not known; a word must be this long to be followed.
+const TABLET_HELD := Vector3(0.0, -0.012, -0.235)
+const TABLET_LEAN := 80.0
+const PAGE_EASE := 0.9
+const PAGE_KEEP := 0.32
+const PAGE_DRIFT := 18.0
+const FOLLOW_LETTERS := 5
+## What stands in a page for its video player ([method _tablet_source]), and the player's picture before anything plays.
+const PLAYER := "\uE0F7 the video player"
 ## The live picture: its camera behind the chair, and its viewport's size.
 const LIVE_EYE := Vector3(0.32, 1.48, 1.95)
 const LIVE_AIM := Vector3(-0.05, 0.86, -0.15)
@@ -165,7 +190,8 @@ const FOG := Color(0.11, 0.12, 0.135)
 const AMBIENT := Color(0.18, 0.2, 0.24)
 
 var _subs = null
-var _doc_key := ""
+var _doc_key := ""                      # the document as last loaded, but for its seed ([member _doc_seed])
+var _doc_seed := 0
 var _seed := 1
 var _parsed := {}
 ## Which spoken words end a sentence ([method DispatchScript.sentence_ends]).
@@ -186,6 +212,18 @@ var _attn: Array = []                   # {t0, t1, spot: Dictionary, sticky}
 var _legs: Array = []                   # the target's track: {i, place, from, to, t0 (he leaves), t1 (he arrives)}
 var _clutter: Array = []                # where the radar's clutter stands round him, nearest first ([method clutter_of])
 var _leg_known := {}                    # a bare ping's action -> the show time a plan first placed it
+var _term := {}                         # the note's terminal: its title, width and keys ([method DispatchTerminal.config_of])
+var _rings := 4.0                       # the radar's range rings: a ping's range in them, the scope's edge the last
+var _term_key := Vector2(NAN, NAN)      # the moment [method terminal_at] last drew, and whether whole...
+var _term_at := {}                      # ...and what it drew
+var _wants := {}                        # the things the script uses that only some desks have: clock, tablet
+var _dark0 := false                     # the note opens in the black, until its first fade up
+var _tablet_doc := {}                   # the tablet's pages as the tablet medium reads them ([TabletScript])
+var _tablet_pages := {}                 # ...a page's index -> its [TabletPage], set when first shown
+var _clips := {}                        # a clip's key -> its frames ([method Illustrations.clip_of])
+var _clip_tex := {}                     # ...and the frame it shows: {i, tex}
+var _black: ImageTexture                # a player with nothing playing
+var _follow := {}                       # a page's action -> where it scrolls to as words on it are said ([method _page_follow])
 var _sound_plan: Array = []
 var _sound_rev := 0
 var _open: Array = []                   # where the receiver is open ([method _build_receiver])
@@ -326,7 +364,7 @@ func _build_world() -> void:
 ## they land ([method _land_set]). A render and a gate build where they stand: their frames wait for nothing ([method
 ## TablePhysics.render_waits]).
 func _build_set(labels: PackedStringArray, seed: int) -> void:
-	var key := "%s|%d" % [",".join(labels), seed]
+	var key := "%s|%d|%s" % [",".join(labels), seed, ",".join(PackedStringArray(_wants.keys()))]
 	if key == _built_for:
 		return
 	_built_for = key
@@ -338,16 +376,16 @@ func _build_set(labels: PackedStringArray, seed: int) -> void:
 	if is_inside_tree() and (away_in_tests or not TablePhysics.render_waits()):
 		_waiting = true
 		feed.wait_for(WAIT_FOR, true)
-		_build_task = WorkerThreadPool.add_task(_make_set.bind(labels, seed, tex), false, "the dispatch desk")
+		_build_task = WorkerThreadPool.add_task(_make_set.bind(labels, seed, tex, _wants.duplicate()), false, "the dispatch desk")
 		return
-	_make_set(labels, seed, tex)
+	_make_set(labels, seed, tex, _wants.duplicate())
 	_land_set()
 
 
 ## The set and its roots, made out of the tree (a worker's, or the caller's).
-func _make_set(labels: PackedStringArray, seed: int, tex: Dictionary) -> void:
+func _make_set(labels: PackedStringArray, seed: int, tex: Dictionary, wants: Dictionary) -> void:
 	var s := DispatchSet.new()
-	var node := s.build(labels, seed, tex)
+	var node := s.build(labels, seed, tex, wants)
 	var r := DispatchRoots.new()
 	var rn := r.build(seed, s.footprints, s.held_rect())
 	_made = {"set": s, "node": node, "roots": r, "roots_node": rn}
@@ -387,6 +425,12 @@ func _land_set() -> void:
 			"satellite": {"curve": 0.0, "lines": 0.0, "bloom": 0.25},
 			"tv": {"curve": 0.14, "lines": 0.3, "line_count": 240.0, "bloom": 0.5}}[k]
 		(sc["mesh"] as MeshInstance3D).material_override = _screen_mat(k, null, Color(1, 1, 1), opts)
+	if _set.clock_face != null:
+		_set.clock_face.material_override = _screen_mat("clock", _screens.clock.get_texture(), Color(1, 1, 1),
+			{"curve": 0.0, "lines": 0.0, "bloom": 0.1, "brightness": 0.55})
+	if _set.tablet_screen != null:
+		_set.tablet_screen.material_override = _screen_mat("tablet", _screens.tablet.get_texture(), Color(1, 1, 1),
+			{"curve": 0.0, "lines": 0.0, "bloom": 0.2, "brightness": 1.0})
 	for i in _set.phones.size():
 		var ph: Dictionary = _set.phones[i]
 		(ph["inner"] as MeshInstance3D).material_override = _screen_mat("inner %d" % i, null, Color(1, 1, 1),
@@ -518,7 +562,11 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_last_now = _now
 	if _subs != null and is_instance_valid(_subs) and not _parsed.is_empty():
 		take_words(_subs.words)
-	_env.adjustment_brightness = clampf(clampf(t / 1.2, 0.0, 1.0) * _end_fade() * feed.live_fade, 0.0, 1.0)
+	var black := fade_at(_now)
+	_env.adjustment_brightness = clampf(clampf(t / 1.2, 0.0, 1.0) * _end_fade() * feed.live_fade * (1.0 - black), 0.0, 1.0)
+	_plate.modulate = Color(1.0 - black, 1.0 - black, 1.0 - black)
+	if black >= 0.999:
+		_snap = true
 	var opening := _opening()
 	ShowOpening.lens(ShowOpening.pull(feed.opening, _now, opening, _built_n > 0), _blur, _attrs)
 	_title.alpha = ShowOpening.title_alpha(feed.opening, _now, opening, _built_n > 0)
@@ -576,20 +624,44 @@ func _ensure_doc() -> void:
 	var dispatch: Dictionary = d.get("dispatch", {}) if d.get("dispatch") is Dictionary else {}
 	var start: PackedStringArray = d.get("start_words", PackedStringArray()) \
 		if d.get("start_words") is PackedStringArray else PackedStringArray()
-	var key := "%d|%d|%d|%s" % [src.hash(), int(dispatch.get("seed", 0)), hash(dispatch.get("pictures", {})), " ".join(start)]
+	var seed := int(dispatch.get("seed", 0))
+	var key := "%d|%d|%d|%d|%s" % [src.hash(), String(dispatch.get("head", "")).hash(),
+		hash(dispatch.get("pictures", {})), hash(dispatch.get("clips", {})), " ".join(start)]
 	if key == _doc_key:
+		if seed != _doc_seed:
+			_doc_seed = seed
+			reseed(_seed_of(seed, src))
 		return
 	_doc_key = key
+	_doc_seed = seed
 	load_note(src, dispatch, start, int(d.get("start_index", -1)))
 
 
-## Load a note: [param source] (its text, its marks in it) and [param dispatch] (`{seed, pictures}`, either missing); for a
-## reading started mid-way its first words [param start] (normalized), [param near] the index they are about. Public for a
-## gate, which hands it one by hand.
-func load_note(source: String, dispatch: Dictionary, start := PackedStringArray(), near := -1) -> void:
-	var seed := int(dispatch.get("seed", 0))
-	if seed <= 0:
-		seed = 1 + absi(source.hash()) % 99999
+## The desk's number a document's [param seed] names, or the words' own where it names none.
+static func _seed_of(seed: int, text: String) -> int:
+	return seed if seed > 0 else 1 + absi(text.hash()) % 99999
+
+
+## The desk drawn again as desk number [param seed] while the note plays: the set and its roots, the radar's clutter, how each
+## picture drifts and the receiver's storms - never when anything happens, so the reading keeps its place. Public for a gate.
+func reseed(seed: int) -> void:
+	_seed = seed
+	_clutter = clutter_of(seed)
+	_moves = LetterMedium.moves_of(_spans, _seed)
+	for i in _spans.size():
+		(_spans[i] as Dictionary).erase("move")
+		if not (_moves[i] as Dictionary).is_empty():
+			(_spans[i] as Dictionary)["move"] = _moves[i]
+	_build_receiver()
+	_build_set(_labels, _seed)
+
+
+## Load a note: [param source] (its text, its marks in it) and [param dispatch] (`{seed, pictures, clips, head}`, any missing:
+## `head` the note's frontmatter, put on words that come without it); for a reading started mid-way its first words
+## [param start] (normalized), [param near] the index they are about. Public for a gate, which hands it one by hand.
+func load_note(text: String, dispatch: Dictionary, start := PackedStringArray(), near := -1) -> void:
+	var source := whole(text, String(dispatch.get("head", "")))
+	var seed := _seed_of(int(dispatch.get("seed", 0)), text)
 	_seed = seed
 	_clutter = clutter_of(seed)
 	_parsed = DispatchScript.parse(source)
@@ -609,6 +681,34 @@ func load_note(source: String, dispatch: Dictionary, start := PackedStringArray(
 			for si in range(int(a["from"]), int(a["to"])):
 				if si < _spoken_n:
 					_typed_words[si] = 1
+	_term = _parsed.get("terminal", DispatchTerminal.config_of(""))
+	_dark0 = bool(_parsed.get("dark", false))
+	_wants = {}
+	var desk := DispatchScript.desk_of(source)
+	for k in ["clock", "tablet"]:
+		if desk.has(k):
+			_wants[k] = true
+	for a in _actions:
+		match String((a as Dictionary)["kind"]):
+			"fade":
+				if int(a.get("clock", -1)) >= 0:
+					_wants["clock"] = true
+			"tablet", "page":
+				_wants["tablet"] = true
+	_tablet_doc = TabletScript.parse(_tablet_source(_parsed.get("pages", [])))
+	_tablet_pages = {}
+	_clips = dispatch.get("clips", {}) if dispatch.get("clips") is Dictionary else {}
+	_clip_tex = {}
+	_rings = float(_parsed.get("rings", DispatchScript.SCOPE_RINGS))
+	_term_key = Vector2(NAN, NAN)
+	for a in _actions:
+		var act: Dictionary = a
+		match String(act["kind"]):
+			"session":
+				act["words"] = DispatchTerminal.words_on(DispatchTerminal.up(DispatchTerminal.at(act["glass"], act["ops"], INF)), _term)
+			"type":
+				var after := DispatchTerminal.typed(act["glass"], String(act["text"]), String(act["text"]).length())
+				act["words"] = DispatchTerminal.words_on(DispatchTerminal.up(after), _term)
 	_labels = _parsed["phones"]
 	_build_set(_labels, _seed)
 	_load_pictures(dispatch.get("pictures", {}) if dispatch.get("pictures") is Dictionary else {})
@@ -705,6 +805,8 @@ func _build_plan() -> void:
 		if got.x <= _now and got.x < INF:
 			_held[i] = [got.x, got.y]
 	_chars = {}
+	_term_key = Vector2(NAN, NAN)
+	_follow = {}
 	for i in _actions.size():
 		if String((_actions[i] as Dictionary)["kind"]) in ["type", "reply"]:
 			_chars[i] = _char_times(i)
@@ -772,7 +874,7 @@ func _char_times(i: int) -> PackedFloat32Array:
 			var said := _word_t0(from + k)
 			if k < n:
 				s = last
-				e = s + keys * DispatchScript.KEY_EACH
+				e = s + keys * DispatchTerminal.KEY_EACH
 				if first < INF:
 					e = minf(e, first - 0.05)
 			else:
@@ -925,13 +1027,14 @@ func _next_text(label: String, i: int) -> int:
 	return -1
 
 
-## The camera's attention: what it turns to and from when to when ([method _attention]).
+## The camera's attention: what it turns to and from when to when ([method _attention]); what happens in the black is
+## unseen and turns it to nothing.
 func _build_attention() -> void:
 	_attn = []
 	for i in _actions.size():
 		var a: Dictionary = _actions[i]
 		var t := _t0[i]
-		if t == INF:
+		if t == INF or bool(a.get("dark", false)):
 			continue
 		var e := _end_of(i)
 		var n0 := _attn.size()
@@ -965,7 +1068,8 @@ func _build_attention() -> void:
 			"sound":
 				_attn.append({"t0": t, "t1": e + 1.5, "spot": _spot("radar")})
 			"session":
-				_attn.append({"t0": t, "t1": e + 1.5, "spot": _spot("terminal")})
+				_attn.append({"t0": t, "t1": e + 1.5, "hold": _glass_hold(i, t + float(a["rest"]) / _sp[i]), "linger": GLASS_LINGER,
+					"spot": _spot("terminal")})
 			"static":
 				_attn.append({"t0": t, "t1": e + 0.8, "spot": _spot("receiver")})
 			"print":
@@ -973,13 +1077,16 @@ func _build_attention() -> void:
 			"type":
 				var last := int(a["to"]) - 1
 				var done := _word_t1(last) if last >= int(a["from"]) else t + 2.0
-				_attn.append({"t0": t, "t1": (done if done < INF else t + 30.0) + 2.5, "spot": _spot("terminal")})
-			"screen":
-				var lines := String(a["text"]).count("\n") + 1
-				_attn.append({"t0": t, "t1": t + 3.0 + 0.5 * float(lines), "spot": _spot("terminal")})
+				done = done if done < INF else t + 30.0
+				_attn.append({"t0": t, "t1": done + 2.5, "hold": _glass_hold(i, done), "linger": GLASS_LINGER, "spot": _spot("terminal")})
+			"receiver":
+				var heard := _word_t1(int(a["to"]) - 1)
+				_attn.append({"t0": t, "t1": (heard if heard < INF else t + 3.0) + 1.0, "spot": _spot("receiver")})
 			"strike", "sleep":
 				_attn.append({"t0": t, "t1": e + 1.0, "spot": _spot("terminal")})
 			"off", "picture", "live":
+				if String(a["screen"]) == "tablet":
+					continue
 				_attn.append({"t0": t, "t1": e + (1.0 if String(a["kind"]) == "off" else 3.5), "spot": _spot(String(a["screen"]))})
 			"look":
 				var at := String(a["at"])
@@ -996,6 +1103,25 @@ func _build_attention() -> void:
 				_attn.append({"t0": t, "t1": _bell_at(i) + 1.5, "spot": _spot("terminal")})
 			"lamp":
 				_attn.append({"t0": t, "t1": e + 2.5, "spot": _spot("home")})
+			"fade":
+				# up from the black on the clock: the camera is there in the dark, holds while its cards turn and a beat,
+				# then eases to the desk
+				if bool(a["to"]) or int(a.get("clock", -1)) < 0 or not _set.spots.has("clock"):
+					continue
+				var from := _black_from(i)
+				var held := t + float(a["rest"]) / _sp[i]
+				_attn.append({"t0": from, "t1": held, "spot": _spot("clock"), "linger": 0.0, "kind": "fade"})
+				_attn.append({"t0": held, "t1": held + 2.0, "spot": _spot("home")})
+			"tablet":
+				if not bool(a["up"]) or not _set.spots.has("tablet"):
+					continue
+				var down := INF
+				for k in range(i + 1, _actions.size()):
+					var b: Dictionary = _actions[k]
+					if String(b["kind"]) == "tablet" and not bool(b["up"]):
+						down = _end_of(k) if _t0[k] < INF else INF
+						break
+				_attn.append({"t0": t, "t1": down, "spot": _spot("tablet"), "kind": "tablet"})
 		if _attn.size() > n0:
 			(_attn.back() as Dictionary)["kind"] = String(a["kind"])
 	_attn = _settled(_attn)
@@ -1068,6 +1194,22 @@ func _ping_hold(i: int) -> float:
 	return least
 
 
+## Until when the camera stays on the terminal for action [param i], its steps or its typing done at [param done]: the
+## glass read ([constant GLASS_WORD] a word on the panel it leaves up, [constant GLASS_LEAST] to [constant GLASS_MOST]),
+## then on to the end of the sentence being said if that ends within [constant GLASS_SENTENCE].
+func _glass_hold(i: int, done: float) -> float:
+	if done == INF:
+		return INF
+	var read := done + clampf(GLASS_WORD * float((_actions[i] as Dictionary).get("words", 0)), GLASS_LEAST, GLASS_MOST)
+	for si in range(int((_actions[i] as Dictionary)["after"]), _ends.size()):
+		var e := _word_t1(si)
+		if e == INF or e > read + GLASS_SENTENCE:
+			break
+		if e >= read and _ends[si] == 1:
+			return e + 0.3
+	return read
+
+
 func _spot(key: String) -> Dictionary:
 	return _set.spots.get(key, _set.spots["home"])
 
@@ -1107,7 +1249,7 @@ func _build_sound() -> void:
 					out.append({"t": dialed + DispatchScript.SPEED_PRESS / k, "what": "dtmf", "digit": 1, "secs": DispatchScript.SPEED_HOLD / k, "at": at})
 					out.append({"t": dialed + DispatchScript.SEND_AT / k, "what": "pad", "at": at})
 					var ring_from := dialed + DispatchScript.DIAL / k
-					out.append({"t": ring_from, "t1": ring_from + DispatchScript.RING_CYCLE * float(DispatchScript.RINGS - 1) + DispatchScript.RING_ON, "kind": "ringback"})
+					out.append({"t": ring_from, "t1": ring_from + DispatchScript.RING_CYCLE * float(DispatchScript.SCOPE_RINGS - 1) + DispatchScript.RING_ON, "kind": "ringback"})
 			["ear", "desk"]:
 				out.append({"t": t + dur * 0.9, "what": "lay", "at": at})
 			["desk", "ear"]:
@@ -1162,18 +1304,30 @@ func _build_sound() -> void:
 				out.append({"t": t + 0.16, "what": "alarm_hi", "at": radar_at})
 				out.append({"t": t + 0.34, "what": "alarm_hi", "at": radar_at})
 			"session":
-				var plan: Dictionary = a["plan"]
-				var steps: Array = a["steps"]
-				if bool(terminal_at(t - 0.01).get("asleep", true)):
-					out.append({"t": t, "what": "crt", "at": term_at})
-				for k in steps.size():
-					var sp: Dictionary = (plan["steps"] as Array)[k]
-					var typed := String((steps[k] as Dictionary)["typed"])
-					var keys: PackedFloat32Array = sp["keys"]
-					for c in keys.size():
-						out.append({"t": t + keys[c] / _sp[i], "what": "space" if typed[c] == " " else "key", "at": term_at})
-					if float(sp["enter"]) >= 0.0:
-						out.append({"t": t + float(sp["enter"]) / _sp[i], "what": "enter", "at": term_at})
+				for o in a["ops"]:
+					var op: Dictionary = o
+					var at := t + float(op["t"]) / _sp[i]
+					match String(op["op"]):
+						"wake":
+							out.append({"t": at, "what": "crt", "at": term_at})
+						"command":
+							var typed := String(op["text"])
+							var keys: PackedFloat32Array = op["keys"]
+							for c in keys.size():
+								out.append({"t": t + keys[c] / _sp[i], "what": "space" if typed[c] == " " else "key", "at": term_at})
+							out.append({"t": t + float(op["enter"]) / _sp[i], "what": "enter", "at": term_at})
+						"key":
+							var text := String(op["text"])
+							var times: PackedFloat32Array = op["times"]
+							for c in times.size():
+								out.append({"t": t + times[c] / _sp[i], "what": "key" if text[c] != " " else "space", "at": term_at})
+						"set":
+							for k in op["back"]:
+								out.append({"t": t + float(k) / _sp[i], "what": "key", "at": term_at})
+							for k in op["keys"]:
+								out.append({"t": t + float(k) / _sp[i], "what": "key", "at": term_at})
+						"alert":
+							out.append({"t": at, "t1": at + DispatchSounds.BELL_LEN, "kind": "bell", "ears": DispatchSounds.ears_of(term_at)})
 			"sound":
 				if String(a["sound"]) == "jet":
 					out.append({"t": t, "t1": e, "kind": "jet"})
@@ -1197,6 +1351,24 @@ func _build_sound() -> void:
 				out.append({"t": rung, "t1": rung + DispatchSounds.BELL_LEN, "kind": "bell", "ears": DispatchSounds.ears_of(term_at)})
 			"lamp":
 				out.append({"t": t + DispatchScript.LAMP_AT / _sp[i], "what": "lamp", "at": _set.desk_at("lamp")})
+			"fade":
+				var turn := t + float(a["secs"]) / _sp[i]
+				var c := clock_at(turn + DispatchScript.CLOCK_TURN + 0.01)
+				if not bool(a["to"]) and not c.is_empty():
+					var was := String(clock_at(turn - 0.01).get("to", ""))
+					var now := String(c.get("to", ""))
+					for k in mini(was.length(), now.length()):
+						if was[k] != now[k]:
+							out.append({"t": turn + 0.05 * float(k) + DispatchScript.CLOCK_TURN * 0.5, "what": "detent", "at": _set.desk_at("clock")})
+			"tablet":
+				out.append({"t": t + 0.15, "what": "lift" if bool(a["up"]) else "thud", "at": _set.desk_at("tablet")})
+			"page":
+				var near := _cam.global_position + Vector3(0.0, -0.05, -0.24)
+				var st := _page_times(i)
+				for k in st["keys"]:
+					out.append({"t": float(k), "what": "pad", "at": near})
+				if float(st["tap"]) < INF:
+					out.append({"t": float(st["tap"]), "what": "pad", "at": near})
 			"type":
 				var times: PackedFloat32Array = _chars.get(i, PackedFloat32Array())
 				var text := String(a["text"])
@@ -1212,7 +1384,7 @@ func _build_sound() -> void:
 				var back := e - (t + decide)
 				for c in mini(n, 160):
 					out.append({"t": t + decide + back * float(c) / float(maxi(n, 1)), "what": "key", "at": term_at})
-			"sleep", "screen":
+			"sleep":
 				out.append({"t": t + 0.1, "what": "crt", "at": term_at})
 	# the receiver, open: its storms and the voices said over them
 	out.append_array(_open)
@@ -1247,6 +1419,8 @@ func _pose(t: float) -> void:
 	_set.terminal_glow.light_energy = 0.03 if bool(terminal_at(t).get("asleep", true)) else 0.16
 	_pose_printer(t)
 	_pose_screens(t)
+	_pose_clock(t)
+	_pose_tablet(t)
 	_pose_switch(t)
 	_pose_mug(t)
 	if _set.gain_knob != null:
@@ -1408,102 +1582,57 @@ static func _jerkless(u: float) -> float:
 	return x * x * x * (10.0 - 15.0 * x + 6.0 * x * x)
 
 
-## The terminal at [param t]: `{lines, asleep, cursor, t}` - asleep (dark) until a block wakes it; a shown block replaces
-## what it showed, drawn a line at a time; a typed one is added under it a key at a time (a fresh screen after sleep), as is
-## a session ([method session_text]); a strike backspaces it, sleep darkens it again. Its lines wrapped to its columns, the last [constant DispatchScript.ROWS].
+## The terminal at [param t]: `{lines, asleep, cursor, cursor_at, bar, alert}` - dark until a block wakes it; then the glass
+## the last action at it began from, played to this moment ([DispatchTerminal]): a run of steps, a said line as far as it
+## is typed, a strike backspacing it, sleep darkening the glass. The cursor blinks while it is awake.
 ##
-## [param whole]: a redacted run being typed is there whole from its first key ([method session_text]).
+## [param whole]: a redacted run being typed is there whole from its first key ([method _censor_at]).
 func terminal_at(t: float, whole := false) -> Dictionary:
-	var screen := ""
+	var key := Vector2(t, 1.0 if whole else 0.0)
+	if key == _term_key:
+		return _term_at
+	var g := {}
 	var asleep := true
-	var cursor_until := -INF
-	for i in _actions.size():
+	for i in range(_actions.size() - 1, -1, -1):
 		var a: Dictionary = _actions[i]
 		var t0 := _t0[i]
 		if t0 > t or t0 == INF:
 			continue
 		match String(a["kind"]):
-			"screen":
-				var all := String(a["text"]).split("\n")
-				var n := clampi(int(floor((t - t0) * _sp[i] / DispatchScript.SCREEN_LINE)) + 1, 1, all.size())
-				screen = "\n".join(all.slice(0, n))
-				asleep = false
 			"session":
-				var r := (t - t0) * _sp[i]
-				if asleep and r < DispatchScript.WAKE * 0.5:
-					continue
-				if asleep:
-					screen = ""
-				asleep = false
-				var said := session_text(a, r, whole)
-				if not said.is_empty():
-					var bare := DispatchScript.PROMPT.strip_edges()
-					var last_nl := screen.rfind("\n")
-					if screen.substr(last_nl + 1).strip_edges() == bare:
-						screen = screen.substr(0, maxi(last_nl, 0))
-					screen += ("\n" if not screen.is_empty() else "") + said
-				cursor_until = maxf(cursor_until, _end_of(i) + CURSOR_AFTER)
+				g = DispatchTerminal.at(a["glass"], a["ops"], (t - t0) * _sp[i], whole)
 			"type":
-				if asleep:
-					screen = ""
-				asleep = false
 				var times: PackedFloat32Array = _chars.get(i, PackedFloat32Array())
 				var text := String(a["text"])
 				var n := 0
 				while n < times.size() and times[n] <= t:
 					n += 1
-				var shown := text.substr(0, n)
-				for k in _actions.size():
-					var sa: Dictionary = _actions[k]
-					if String(sa["kind"]) == "strike" and int(sa["block"]) == i and _t0[k] <= t:
-						var from := _t0[k] + float(sa["decide"]) / _sp[k]
-						var back := maxf(_end_of(k) - from, 0.01)
-						var gone := int(clampf((t - from) / back, 0.0, 1.0) * float(text.length()))
-						shown = shown.substr(0, maxi(shown.length() - gone, 0))
-						cursor_until = maxf(cursor_until, _end_of(k) + CURSOR_AFTER)
-				screen += ("\n" if not screen.is_empty() else "") + shown
-				var end_t := times[times.size() - 1] if not times.is_empty() and times[times.size() - 1] < INF else t
-				cursor_until = maxf(cursor_until, maxf(end_t, t0) + CURSOR_AFTER)
+				while whole and n > 0 and n < text.length() and DispatchScript.is_redacted(text.unicode_at(n - 1)) \
+						and DispatchScript.is_redacted(text.unicode_at(n)):
+					n += 1
+				g = DispatchTerminal.typed(a["glass"], text, n)
+				g["awake"] = true
+			"strike":
+				var from := t0 + float(a["decide"]) / _sp[i]
+				g = DispatchTerminal.struck(a["glass"], clampf((t - from) / maxf(_end_of(i) - from, 0.01), 0.0, 1.0))
 			"sleep":
+				g = a["glass"]
 				if t >= t0 + 0.6:
-					asleep = true
-	var lines := DispatchScript.wrapped(screen, DispatchScript.COLUMNS)
-	if lines.size() > DispatchScript.ROWS:
-		lines = lines.slice(lines.size() - DispatchScript.ROWS)
-	var cursor := t < cursor_until and fposmod(t, BLINK * 2.0) < BLINK
-	return {"lines": lines, "asleep": asleep, "cursor": cursor and not asleep}
+					g = g.duplicate()
+					g["awake"] = false
+			_:
+				continue
+		asleep = not bool(g.get("awake", false))
+		break
+	var out := {"lines": PackedStringArray(), "asleep": asleep, "cursor": false}
+	if not asleep:
+		var rows := DispatchTerminal.rows_of(g, _term)
+		out = {"lines": rows["lines"], "asleep": false, "cursor": fposmod(t, BLINK * 2.0) < BLINK, "cursor_at": rows["cursor"],
+			"bar": rows["bar"], "alert": rows["alert"]}
+	_term_key = key
+	_term_at = out
+	return out
 
-
-## A session's transcript [param r] seconds into it (at its own pace): each command's prompt as it comes up, what of it is
-## typed, each line of the answer as it is printed, and the bare prompt after the last. [param whole]: a redacted run being
-## typed is there to its end from its first key - where the censor's box goes up ([method _censor_at]).
-func session_text(a: Dictionary, r: float, whole := false) -> String:
-	var plan: Dictionary = a["plan"]
-	var steps: Array = a["steps"]
-	var out := PackedStringArray()
-	for k in steps.size():
-		var st: Dictionary = steps[k]
-		var sp: Dictionary = (plan["steps"] as Array)[k]
-		if bool(st.get("command", true)):
-			if r < float(sp["prompt"]):
-				return "\n".join(out)
-			var keys: PackedFloat32Array = sp["keys"]
-			var typed := String(st["typed"])
-			var n := 0
-			while n < keys.size() and keys[n] <= r:
-				n += 1
-			while whole and n > 0 and n < typed.length() and DispatchScript.is_redacted(typed.unicode_at(n - 1)) and DispatchScript.is_redacted(typed.unicode_at(n)):
-				n += 1
-			out.append(DispatchScript.PROMPT + typed.substr(0, n))
-		var lines: PackedFloat32Array = sp["lines"]
-		var said: PackedStringArray = st["out"]
-		for li in lines.size():
-			if lines[li] > r:
-				return "\n".join(out)
-			out.append(said[li])
-	if r >= float(plan["prompt"]):
-		out.append(DispatchScript.PROMPT)
-	return "\n".join(out)
 
 ## The target's track on the radar: each ping's place a spot laid out from the script alone ([method track_of]), and a
 ## leg to it under the voice - from the `moving` mark since the last ping, else over the moments before it ([constant
@@ -1522,18 +1651,19 @@ func _build_track() -> void:
 					set_off = i
 			"ping":
 				var words := int(a["after"]) - int((_actions[set_off] as Dictionary)["after"]) if set_off >= 0 else 0
-				stops.append({"place": String(a["place"]), "words": words})
+				stops.append({"place": String(a["place"]), "words": words, "bearing": float(a.get("bearing", INF)),
+					"range": float(a.get("range", INF))})
 				idx.append(i)
 				offs.append(set_off)
 				set_off = -1
-	var spots := track_of(stops)
+	var spots := track_of(stops, _rings)
 	_legs = []
 	var arrived := -INF
 	for k in idx.size():
 		var i: int = idx[k]
 		var t0 := _t0[i]
 		var leave := t0
-		if t0 < INF and k > 0:
+		if t0 < INF and k > 0 and not bool((_actions[i] as Dictionary).get("jump", false)):
 			var off: int = offs[k]
 			if off >= 0 and _t0[off] < t0:
 				leave = maxf(_t0[off] + DispatchScript.MOVING * 0.5 / _sp[off], arrived)
@@ -1638,6 +1768,7 @@ func radar_at(t: float) -> Dictionary:
 		var u := jet / jet_len
 		planes.append({"at": Vector2(lerpf(-1.0, 1.0, u), 0.06), "heading": 0.0})
 	st["planes"] = planes
+	st["rings"] = roundi(_rings)
 	var clutter := clutter_at(t)
 	if not clutter.is_empty():
 		st["clutter"] = clutter
@@ -1758,8 +1889,8 @@ func clutter_at(t: float) -> Array:
 	return out
 
 
-## When bell [param i] sounds: as the block after it goes up, when one follows in the same silence - a shown block as its
-## first line is drawn, a session as it first prompts or prints, a typed one at its first key; else in its own half beat.
+## When bell [param i] sounds: as the block after it goes up, when one follows in the same silence - a block at its first
+## step, a said line at its first key; else in its own half beat.
 func _bell_at(i: int) -> float:
 	var own := _t0[i] + DispatchScript.BELL * 0.5 / _sp[i]
 	var k := i + 1
@@ -1767,13 +1898,11 @@ func _bell_at(i: int) -> float:
 		return own
 	var b: Dictionary = _actions[k]
 	match String(b["kind"]):
-		"screen":
-			return _t0[k]
 		"session":
-			var first: Dictionary = (b["plan"]["steps"] as Array)[0]
-			var lines: PackedFloat32Array = first["lines"]
-			var at := float(first["prompt"]) if float(first["prompt"]) >= 0.0 else (lines[0] if not lines.is_empty() else 0.0)
-			return _t0[k] + at / _sp[k]
+			for o in b["ops"]:
+				if String((o as Dictionary)["op"]) != "wake":
+					return _t0[k] + float(o["t"]) / _sp[k]
+			return _t0[k]
 		"type":
 			var keys: PackedFloat32Array = _chars.get(k, PackedFloat32Array())
 			return keys[0] if not keys.is_empty() and keys[0] < INF else _t0[k]
@@ -1796,29 +1925,55 @@ func lamp_at(t: float) -> float:
 	return lit
 
 
+## The note as written: [param body], with frontmatter [param head] on it where it has none of its own (a synced note's
+## words are read without it, and the desk reads its `desk:` and `terminal:` blocks from it).
+static func whole(body: String, head: String) -> String:
+	if head.strip_edges().is_empty() or FrontMatter.split(body).has:
+		return body
+	return "---\n%s\n---\n%s" % [head, body]
+
+
 ## What this medium shows as pictures ([method Medium.pictures_of], the note's Pictures card): every picture the script
-## puts on a screen or over the frame, each painted as a whole screen's - a `live:` screen is this desk, never painted.
+## puts on a screen, over the frame or on a tablet's page, each painted as a whole screen's - a `live:` screen is this desk,
+## never painted - and each clip a screen plays (`clip`, its file's name: imported, never painted).
 static func pictures_in(body: String) -> Array:
-	return Manuscript.images(DispatchScript.pictures_only(body))
+	var out := Manuscript.images(DispatchScript.pictures_only(body))
+	var seen := {}
+	for m in DispatchScript._rx("(?m)" + DispatchScript.VIDEO.trim_prefix("^").trim_suffix("$")).search_all(Manuscript.strip_frontmatter(body)):
+		var prompt := m.get_string(3).strip_edges()
+		var key := Manuscript.image_key(prompt)
+		if not seen.has(key):
+			seen[key] = true
+			out.append({"kind": "image", "key": key, "prompt": prompt, "placement": "screen", "clip": m.get_string(2).strip_edges()})
+	return out
 
 
 ## Where each ping's place is on the scope (its middle the desk, its edge 1), from the script alone - [param stops]
-## `[{place, words}]` in order: the first its own spot ([method place_on_scope]); each after it a step on from the last,
-## as long as the walk the script gives it ([constant TRACK_PACE] a second, [constant WALK_WORD] seconds a word said
-## between its `moving` and its ping; [constant STEP_BARE] for a ping with none), turning at most [constant TURN_MOST]
-## from the way he was going (a compass word sets the way: north is up); then the whole track centered on the scope, made
-## smaller only if it would run off it. A place named before is that same spot, and one whose head (before a comma) was
-## named is a little off it. Nothing is to scale.
-static func track_of(stops: Array) -> Array:
+## `[{place, words, bearing?, range?}]` in order. A place given a bearing and a range is where a radar reports it: the
+## bearing clockwise from the scope's top, the range in [param rings] range rings out from the desk ([method scope_at]); named
+## again bare, it is that same spot, and one whose head (before a comma) was placed is a little off it. A place given no
+## numbers is laid out from the words: the first its own spot ([method place_on_scope]); each after it a step on from the
+## last, as long as the walk the script gives it ([constant TRACK_PACE] a second, [constant WALK_WORD] seconds a word said
+## between its `moving` and its ping; [constant STEP_BARE] for a ping with none), turning at most [constant TURN_MOST] from
+## the way he was going (a compass word sets the way: north is up). A track with no numbers at all is then centered on the
+## scope, made smaller only if it would run off it. Nothing is to scale.
+static func track_of(stops: Array, rings := float(DispatchScript.SCOPE_RINGS)) -> Array:
 	var out: Array = []
 	var seen := {}
 	var way := 0.0
+	var fixed := false
 	for k in stops.size():
-		var place := String((stops[k] as Dictionary)["place"]).strip_edges()
+		var stop: Dictionary = stops[k]
+		var place := String(stop["place"]).strip_edges()
 		var key := place.to_lower()
 		var head := key.get_slice(",", 0).strip_edges()
+		var rng := float(stop.get("range", INF))
 		var at: Vector2
-		if seen.has(key):
+		if rng < INF:
+			at = scope_at(float(stop.get("bearing", 0.0)), rng, rings)
+			fixed = true
+			seen[key] = at
+		elif seen.has(key):
 			at = seen[key]
 		elif key != head and seen.has(head):
 			at = (seen[head] as Vector2) + Vector2.from_angle(DispatchSounds.hash01(key.hash(), 3) * TAU) * STEP_OFF
@@ -1827,7 +1982,7 @@ static func track_of(stops: Array) -> Array:
 			way = DispatchSounds.hash01(key.hash(), 4) * TAU
 		else:
 			var prev: Vector2 = out.back()
-			var words := int((stops[k] as Dictionary).get("words", 0))
+			var words := int(stop.get("words", 0))
 			var step := clampf(float(words) * WALK_WORD * TRACK_PACE, STEP_LEAST, STEP_MOST) if words > 0 else STEP_BARE
 			var compass := compass_of(key)
 			way = compass if not is_nan(compass) else way + (DispatchSounds.hash01(key.hash(), 5) - 0.5) * 2.0 * TURN_MOST
@@ -1839,9 +1994,9 @@ static func track_of(stops: Array) -> Array:
 		if not seen.has(head):
 			seen[head] = at
 		out.append(at)
-	# the whole track on the scope: its middle at the scope's, made smaller only where it would run off, keeping its shape
-	# and its compass
-	if out.is_empty():
+	# a track laid out from words alone: its middle at the scope's, made smaller only where it would run off, keeping its
+	# shape and its compass
+	if out.is_empty() or fixed:
 		return out
 	var box := Rect2(out[0], Vector2.ZERO)
 	for p in out:
@@ -1854,6 +2009,12 @@ static func track_of(stops: Array) -> Array:
 	for k in out.size():
 		out[k] = ((out[k] as Vector2) - mid) * fit
 	return out
+
+
+## Where a contact at [param bearing] (degrees clockwise from the scope's top) and [param range] (range rings out from the
+## desk, of [param rings]) is on the scope: its middle the desk, its edge 1.
+static func scope_at(bearing: float, range: float, rings: float) -> Vector2:
+	return Vector2.from_angle(deg_to_rad(bearing) - PI * 0.5) * clampf(range / maxf(rings, 1.0), 0.0, 1.0)
 
 
 ## The way a compass word in [param words] points on the scope (radians, north up), NAN for none.
@@ -1898,7 +2059,7 @@ func _build_receiver() -> void:
 			continue
 		if String(a["kind"]) == "static":
 			parts.append({"t": _t0[i], "t1": _end_of(i), "storm": String(a["storm"]), "seed": hash([_seed, i]), "words": []})
-		elif String(a["kind"]) == "type" and String(a.get("heard", "")) == DispatchScript.RECEIVER:
+		elif String(a["kind"]) in ["type", "receiver"] and String(a.get("heard", "")) == DispatchScript.RECEIVER:
 			var words: Array = []
 			for n in range(int(a["from"]), int(a["to"])):
 				var w0 := _word_t0(n) if n < _spoken_n else INF
@@ -1984,7 +2145,7 @@ func _pose_screens(t: float) -> void:
 				continue
 			match String(a["kind"]):
 				"picture":
-					shown = String(a["key"])
+					shown = ("clip:" if a.has("clip") else "") + String(a["key"])
 					since = t - _t0[i]
 				"live":
 					shown = "live"
@@ -1996,15 +2157,30 @@ func _pose_screens(t: float) -> void:
 		var glow: OmniLight3D = (_set.screens[k] as Dictionary)["glow"]
 		var power := 1.0
 		var tex: Texture2D = null
+		var snowing := false
 		if shown == "live":
 			tex = _live_vp.get_texture()
 			live = true
+		elif shown.begins_with("clip:"):
+			tex = _clip_frame(shown.substr(5), since)
+			snowing = tex == null
 		elif not shown.is_empty():
 			tex = _pictures.get(shown)
 		if since < 0.0:
 			power = clampf(1.0 + since / 0.5, 0.0, 1.0)
 		elif since < INF:
 			power = clampf(since / 0.35, 0.0, 1.0)
+		if snowing:
+			# a clip not imported yet: the screen's static, never a still where a moving picture belongs
+			m.set_shader_parameter("snow", 0.85)
+			m.set_shader_parameter("has_face", false)
+			m.set_shader_parameter("power", power)
+			m.set_shader_parameter("frame", floor(t * 24.0))
+			glow.light_energy = (0.3 + 0.05 * sin(t * 17.0) * sin(t * 5.3)) * power
+			continue
+		if key != "feed":
+			m.set_shader_parameter("snow", 0.06 if tex != null and shown.begins_with("clip:") else 0.0)
+			m.set_shader_parameter("frame", floor(t * 24.0))
 		if key == "feed" and tex == null:
 			m.set_shader_parameter("snow", 0.85)
 			m.set_shader_parameter("has_face", false)
@@ -2085,6 +2261,377 @@ func _censor_at(t: float) -> void:
 				runs = _screens.redactions(whole)
 	_censor.cover(runs, _set.terminal_screen, float(TERMINAL_GLASS["curve"]), _cam, t)
 	_after_censor.visible = _censor.visible and _blur.visible
+
+
+# --- the black, the clock, the tablet, the clips ---------------------------------------------------------------------
+
+## How black the picture is at [param t] (0 up, 1 black): down over a fade's seconds, up over another's. A note that opens
+## in the black is black until its first fade up - from the start where it opens with no title, else from the title's
+## going ([method _opened_black]), the title standing over the blurred desk as any show's does.
+func fade_at(t: float) -> float:
+	var black := _opened_black(t) if _dark0 else 0.0
+	for i in _actions.size():
+		var a: Dictionary = _actions[i]
+		if String(a["kind"]) != "fade" or _t0[i] > t or _t0[i] == INF:
+			continue
+		var u := clampf((t - _t0[i]) * _sp[i] / maxf(float(a["secs"]), 0.01), 0.0, 1.0)
+		black = u if bool(a["to"]) else 1.0 - u
+	return black
+
+
+## How black a note that opens in the black is at [param t], before its first fade up: with a title or a blur to open on,
+## up under them and down to black as the title goes ([method ShowOpening.title_alpha]: from 0.6 s before the opening to
+## 0.3 s after it), and up while the opening is not known; with neither, black from the start.
+func _opened_black(t: float) -> float:
+	if not Openings.titled(feed.opening) and not Openings.blurred(feed.opening):
+		return 1.0
+	var opening := _opening()
+	if opening == INF:
+		return 0.0
+	return _ease((t - (opening - BLACK_LEAD)) / (BLACK_LEAD + BLACK_TAIL))
+
+
+## When the black before fade up [param i] is whole: the fade down's end; where the note opens in the black, when the
+## title has gone ([method _opened_black]) - the show's start with no title.
+func _black_from(i: int) -> float:
+	for k in range(i - 1, -1, -1):
+		var b: Dictionary = _actions[k]
+		if String(b["kind"]) == "fade" and bool(b["to"]):
+			return _end_of(k) if _t0[k] < INF else _t0[i]
+	if not _dark0:
+		return _t0[i]
+	if not Openings.titled(feed.opening) and not Openings.blurred(feed.opening):
+		return 0.0
+	var opening := _opening()
+	return minf(opening + BLACK_TAIL, _t0[i]) if opening < INF else _t0[i]
+
+
+## The clock at [param t]: `{from, to, u}` - what its cards show and, while they turn, what they turn from - {} with no
+## time given yet. A fade up with a time turns them to it as the picture comes up; from there it runs a minute a minute,
+## each minute turning over.
+func clock_at(t: float) -> Dictionary:
+	var set_t := -INF
+	var set_to := -1
+	var was := -1
+	for i in _actions.size():
+		var a: Dictionary = _actions[i]
+		if String(a["kind"]) != "fade" or int(a.get("clock", -1)) < 0 or _t0[i] == INF:
+			continue
+		var turn := _t0[i] + float(a["secs"]) / _sp[i]
+		if _t0[i] > t:
+			break
+		was = set_to + int(floor((turn - set_t) / 60.0)) if set_to >= 0 else int(a["clock"]) - 1
+		set_t = turn
+		set_to = int(a["clock"])
+	if set_to < 0:
+		return {}
+	if t < set_t + DispatchScript.CLOCK_TURN:
+		var u := clampf((t - set_t) / DispatchScript.CLOCK_TURN, 0.0, 1.0)
+		return {"from": DispatchScript.clock_text(was), "to": DispatchScript.clock_text(set_to if t >= set_t else was),
+			"u": u if t >= set_t else 1.0}
+	var gone := int(floor((t - set_t) / 60.0))
+	var into := t - set_t - float(gone) * 60.0
+	if gone > 0 and into < DispatchScript.CLOCK_TURN:
+		return {"from": DispatchScript.clock_text(set_to + gone - 1), "to": DispatchScript.clock_text(set_to + gone),
+			"u": into / DispatchScript.CLOCK_TURN}
+	return {"from": DispatchScript.clock_text(set_to + gone), "to": DispatchScript.clock_text(set_to + gone), "u": 1.0}
+
+
+func _pose_clock(t: float) -> void:
+	if _set.clock_face == null:
+		return
+	var c := clock_at(t)
+	_screens.show_clock(c if not c.is_empty() else {"from": "--:--", "to": "--:--", "u": 1.0})
+
+
+## The tablet's pages as the tablet medium reads them: each page fence after its `url:` (or `search:`) mark, its player a
+## picture that is the live desk ([constant PLAYER]).
+static func _tablet_source(pages: Array) -> String:
+	var out := PackedStringArray()
+	for p in pages:
+		var pg: Dictionary = p
+		var text := DispatchScript._rx("<!--\\s*player\\s*-->").sub(String(pg["text"]), "<!-- image: %s -->" % PLAYER, true)
+		out.append("<!-- search: %s -->" % pg["search"] if not String(pg["search"]).is_empty() else "<!-- url: %s -->" % pg["url"])
+		out.append("")
+		out.append(text)
+		out.append("")
+	return "\n".join(out)
+
+
+## Page [param pi] set for the tablet's screen, and its words in reading order with how far down each is: `{page, words:
+## [[norm, y]], links: {url key: Rect2}}` ({} for no such page).
+func _tablet_page(pi: int) -> Dictionary:
+	if _tablet_pages.has(pi):
+		return _tablet_pages[pi]
+	var out := {}
+	if pi >= 0 and pi < (_tablet_doc.get("pages", []) as Array).size():
+		var tp := TabletPage.new()
+		tp.build(_tablet_doc, pi, float(DispatchScreens.TABLET_SIZE.x), float(DispatchScreens.TABLET_SIZE.y) - DispatchScreens.BAR_H)
+		var words: Array = []
+		var links := {}
+		var all: Array = _tablet_doc["words"]
+		var keys := tp.word_rect.keys()
+		keys.sort()
+		for wi in keys:
+			var w: Dictionary = all[int(wi)]
+			var r: Rect2 = tp.word_rect[wi]
+			words.append([String(w["norm"]), r.position.y])
+			var link := String(w.get("link", ""))
+			if not link.is_empty() and not links.has(TabletScript.url_key(link)):
+				links[TabletScript.url_key(link)] = r
+		out = {"page": tp, "words": words, "links": links}
+	_tablet_pages[pi] = out
+	return out
+
+
+## When page action [param i] does each thing, in show time: `{keys (each key of its address or search typed), tap (the
+## link tapped, INF for none), load (the page loading from), go (how long it loads), shown (up from)}`.
+func _page_times(i: int) -> Dictionary:
+	var a: Dictionary = _actions[i]
+	var t := _t0[i]
+	var sp := _sp[i]
+	var keys := PackedFloat32Array()
+	var tap := INF
+	var load := t
+	match String(a["how"]):
+		"tap":
+			tap = t + (DispatchScript.TABLET_TAP - 0.25) / sp
+			load = t + DispatchScript.TABLET_TAP / sp
+		"again":
+			load = t
+		_:
+			var typed := _page_typed(i)
+			for k in typed.length():
+				keys.append(t + (0.3 + DispatchScript.TABLET_KEY * float(k)) / sp)
+			load = t + (0.4 + DispatchScript.TABLET_KEY * float(typed.length())) / sp
+	var go := (DispatchScript.TABLET_AGAIN * 0.7 if String(a["how"]) == "again" else DispatchScript.TABLET_GO) / sp
+	return {"keys": keys, "tap": tap, "load": load, "go": go, "shown": load + go}
+
+
+## What page action [param i] types into the browser's bar: its search, else its address.
+func _page_typed(i: int) -> String:
+	var a: Dictionary = _actions[i]
+	var typed := String((_parsed["pages"] as Array)[int(a["page"])]["search"])
+	return typed if not typed.is_empty() else String(a["url"])
+
+
+## The page of page action [param i] scrolled at [param t] (px down it): still while it is first looked at; then to each word
+## said on it as it is said ([method _page_follow]); with none said, eased down the page over the time it is up.
+func _page_scroll(i: int, t: float) -> float:
+	var pg := _tablet_page(int((_actions[i] as Dictionary)["page"]))
+	if pg.is_empty():
+		return 0.0
+	var view := float(DispatchScreens.TABLET_SIZE.y) - DispatchScreens.BAR_H
+	var most := maxf((pg["page"] as TabletPage).height - view, 0.0)
+	var start := float(_page_times(i)["shown"]) + DispatchScript.TABLET_LOOK / _sp[i]
+	if t <= start:
+		return 0.0
+	var marks := _page_follow(i, view, most)
+	if not marks.is_empty():
+		var from := 0.0
+		var goal := 0.0
+		var since := start
+		for m in marks:
+			var at := maxf(float((m as Array)[0]), start)
+			if at > t:
+				break
+			from = lerpf(from, goal, _ease((at - since) / PAGE_EASE))
+			since = at
+			goal = float((m as Array)[1])
+		return lerpf(from, goal, _ease((t - since) / PAGE_EASE))
+	var end := _page_end(i)
+	if end < INF and end > start:
+		return most * _ease((t - start) / (end - start))
+	return minf((t - start) * PAGE_DRIFT, most)
+
+
+static func _ease(u: float) -> float:
+	var x := clampf(u, 0.0, 1.0)
+	return x * x * (3.0 - 2.0 * x)
+
+
+## When page action [param i] is no longer up: the next page, or the tablet put down (INF until placed).
+func _page_end(i: int) -> float:
+	for k in range(i + 1, _actions.size()):
+		var b: Dictionary = _actions[k]
+		if String(b["kind"]) == "page" or (String(b["kind"]) == "tablet" and not bool(b["up"])):
+			return _t0[k]
+	return INF
+
+
+## Where page action [param i] scrolls as words on it are said: `[[when, to]]` - each word said while it is up (of
+## [constant FOLLOW_LETTERS] letters or more) found on the page after the last one found, kept [constant PAGE_KEEP] down
+## the view ([param view] high, [param most] the furthest down).
+func _page_follow(i: int, view: float, most: float) -> Array:
+	if _follow.has(i):
+		return _follow[i]
+	var a: Dictionary = _actions[i]
+	var pg := _tablet_page(int(a["page"]))
+	var out: Array = []
+	var words: Array = pg.get("words", [])
+	var spoken: PackedStringArray = _parsed["spoken"]
+	var end := _spoken_n
+	for k in range(i + 1, _actions.size()):
+		var b: Dictionary = _actions[k]
+		if String(b["kind"]) == "page" or (String(b["kind"]) == "tablet" and not bool(b["up"])):
+			end = int(b["after"])
+			break
+	var cursor := 0
+	var complete := true
+	for si in range(int(a["after"]), mini(end, spoken.size())):
+		var w := String(spoken[si])
+		if w.length() < FOLLOW_LETTERS:
+			continue
+		var t := _word_t0(si)
+		if t == INF:
+			complete = false
+			break
+		for j in range(cursor, words.size()):
+			if String((words[j] as Array)[0]) == w:
+				out.append([t, clampf(float((words[j] as Array)[1]) - view * PAGE_KEEP, 0.0, most)])
+				cursor = j + 1
+				break
+	if complete:
+		_follow[i] = out
+	return out
+
+
+## The tablet at [param t]: `{lift (0 on the desk, 1 held up), face}` - the face as [method DispatchScreens.show_tablet]
+## takes it: dark until it is woken; the page up, or the one before it while an address is typed or a link looked at and
+## tapped; the page loading; scrolled.
+func tablet_at(t: float) -> Dictionary:
+	var lift := 0.0
+	var power := 0.0
+	for i in _actions.size():
+		var a: Dictionary = _actions[i]
+		if String(a["kind"]) != "tablet" or _t0[i] > t or _t0[i] == INF:
+			continue
+		var r := (t - _t0[i]) * _sp[i]
+		if bool(a["up"]):
+			lift = clampf(r / DispatchScript.TABLET_UP, 0.0, 1.0)
+			power = clampf((r - 0.5) / 0.4, 0.0, 1.0)
+		else:
+			lift = 1.0 - clampf(r / DispatchScript.TABLET_DOWN, 0.0, 1.0)
+			power = 1.0 - clampf(r / 0.3, 0.0, 1.0)
+	if power <= 0.0:
+		return {"lift": lift, "face": {"power": 0.0}}
+	var face := {"power": snappedf(power, 0.02), "textures": _page_tex, "url": ""}
+	var cur := -1
+	var before := -1
+	for i in _actions.size():
+		if String((_actions[i] as Dictionary)["kind"]) == "page" and _t0[i] <= t and _t0[i] < INF:
+			before = cur
+			cur = i
+	if cur < 0:
+		return {"lift": lift, "face": face}
+	var a: Dictionary = _actions[cur]
+	var pt := _page_times(cur)
+	if t >= float(pt["shown"]):
+		face["page"] = _tablet_page(int(a["page"])).get("page")
+		face["url"] = String(a["url"])
+		face["scroll"] = snappedf(_page_scroll(cur, t), 0.5)
+		return {"lift": lift, "face": face}
+	# the page before it, while the address is typed or the link to it found and tapped
+	if before >= 0:
+		var b: Dictionary = _actions[before]
+		var bp := _tablet_page(int(b["page"]))
+		face["page"] = bp.get("page")
+		face["url"] = String(b["url"])
+		face["scroll"] = snappedf(_page_scroll(before, _t0[cur]), 0.5)
+		if String(a["how"]) == "tap" and not bp.is_empty():
+			var r: Rect2 = (bp["links"] as Dictionary).get(TabletScript.url_key(String(a["url"])), Rect2())
+			if r.size != Vector2.ZERO:
+				var view := float(DispatchScreens.TABLET_SIZE.y) - DispatchScreens.BAR_H
+				var most := maxf((bp["page"] as TabletPage).height - view, 0.0)
+				var want := clampf(r.position.y - view * 0.4, 0.0, most)
+				var u := _ease((t - _t0[cur]) / maxf(float(pt["tap"]) - _t0[cur] - 0.2, 0.1))
+				face["scroll"] = snappedf(lerpf(float(face["scroll"]), want, u), 0.5)
+				face["tap"] = r.get_center() + Vector2(0.0, DispatchScreens.BAR_H - float(face["scroll"]))
+				face["tap_u"] = snappedf((t - float(pt["tap"])) / 0.5, 0.02) if t >= float(pt["tap"]) else -1.0
+	var keys: PackedFloat32Array = pt["keys"]
+	if not keys.is_empty():
+		var n := 0
+		while n < keys.size() and keys[n] <= t:
+			n += 1
+		face["url"] = _page_typed(cur).substr(0, n)
+		face["typing"] = t < float(pt["load"])
+	elif String(a["how"]) != "tap" or t >= float(pt["load"]):
+		face["url"] = String(a["url"])
+	if t >= float(pt["load"]):
+		face["load"] = snappedf(clampf((t - float(pt["load"])) / maxf(float(pt["go"]), 0.01), 0.0, 1.0), 0.02)
+	return {"lift": lift, "face": face}
+
+
+## A picture on a tablet's page by its key: the player the live desk once `live: tablet` has begun (dark before), else
+## the painted picture.
+func _page_tex(key: String) -> Texture2D:
+	if key == Manuscript.image_key(PLAYER):
+		if _live_tablet(_now) and _live_vp != null:
+			return _live_vp.get_texture()
+		if _black == null:
+			var img := Image.create(16, 9, false, Image.FORMAT_RGB8)
+			img.fill(Color(0.01, 0.01, 0.012))
+			_black = ImageTexture.create_from_image(img)
+		return _black
+	return _pictures.get(key)
+
+
+## Is the desk playing live into the tablet's player at [param t]: a `live: tablet` begun, and the tablet not put down since?
+func _live_tablet(t: float) -> bool:
+	var live := false
+	for i in _actions.size():
+		var a: Dictionary = _actions[i]
+		if _t0[i] > t or _t0[i] == INF:
+			continue
+		if String(a["kind"]) == "live" and String(a["screen"]) == "tablet":
+			live = true
+		elif String(a["kind"]) == "tablet" and not bool(a["up"]):
+			live = false
+	return live
+
+
+## The tablet at [param t]: lifted off the desk to before the eye (in the camera's frame) and back, its screen as
+## [method tablet_at] has it.
+func _pose_tablet(t: float) -> void:
+	if _set.tablet == null:
+		return
+	var st := tablet_at(t)
+	var lift := float(st["lift"])
+	var xf := _set.tablet_home
+	if lift > 0.0:
+		var held := _cam.global_transform * Transform3D(Basis(Vector3.RIGHT, deg_to_rad(TABLET_LEAN)), TABLET_HELD)
+		xf = _arc(_set.tablet_home, held, _jerkless(lift), 0.07)
+	_set.tablet.global_transform = xf
+	var face: Dictionary = st["face"]
+	_screens.show_tablet(face)
+	var m: ShaderMaterial = _mats.get("tablet")
+	if m != null:
+		m.set_shader_parameter("power", float(face.get("power", 0.0)))
+	if float(face.get("power", 0.0)) > 0.0 and _live_tablet(t) and _live_vp != null:
+		_live_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		if _live_cam != null:
+			_live_cam.look_at_from_position(LIVE_EYE, LIVE_AIM, Vector3.UP)
+
+
+## Clip [param key]'s frame [param secs] into it, looping ([method Illustrations.clip_frame]); null until it is imported.
+func _clip_frame(key: String, secs: float) -> Texture2D:
+	var clip: Dictionary = _clips.get(key, {})
+	if clip.is_empty() or int(clip.get("frames", 0)) <= 0:
+		return null
+	var i := posmod(int(floor(maxf(secs, 0.0) * float(clip.get("fps", 12)))), int(clip["frames"]))
+	var cur: Dictionary = _clip_tex.get(key, {})
+	if int(cur.get("i", -1)) == i:
+		return cur["tex"]
+	var img := Image.load_from_file(Illustrations.clip_frame(clip, i))
+	if img == null or img.is_empty():
+		return cur.get("tex")
+	var tex: ImageTexture = cur.get("tex")
+	if tex != null and Vector2i(tex.get_size()) == img.get_size():
+		tex.update(img)
+	else:
+		tex = ImageTexture.create_from_image(img)
+	_clip_tex[key] = {"i": i, "tex": tex}
+	return tex
 
 
 # --- the camera --------------------------------------------------------------------------------------------------------

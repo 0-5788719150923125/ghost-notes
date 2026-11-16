@@ -156,14 +156,25 @@ static func uses(key: String, feature: String) -> bool:
 ## pictures as [param key]'s medium shows them ([Manuscript.images] rows, a captured page's with its
 ## `url`) - asked of its script's static `pictures_in(body)` where it has one (a letter's sketches are
 ## drawn by its pen, a tablet's pages are captured, a dispatch desk shows each on a screen), else every
-## image mark. [] for a medium that shows none (no "illustrations" in its `uses`).
+## image mark; each picture once, at its first mark. [] for a medium that shows none (no "illustrations" in its `uses`).
 static func pictures_of(key: String, body: String) -> Array:
 	if not uses(key, "illustrations"):
 		return []
 	var own := _pictures_script(key)
-	if own != null:
-		return own.call("pictures_in", body) as Array
-	return Manuscript.images(body)
+	return _once((own.call("pictures_in", body) as Array) if own != null else Manuscript.images(body))
+
+
+## [param pictures], each picture once, where it is first shown: a picture shown twice is one picture to make.
+static func _once(pictures: Array) -> Array:
+	var seen := {}
+	var out: Array = []
+	for im in pictures:
+		var k := String((im as Dictionary).get("key", ""))
+		if seen.has(k):
+			continue
+		seen[k] = true
+		out.append(im)
+	return out
 
 
 ## Each medium's script, where it says for itself what it shows as pictures (null where it does not), found once.

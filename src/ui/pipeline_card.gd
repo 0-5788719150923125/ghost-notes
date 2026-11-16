@@ -517,6 +517,7 @@ func _show(shown: Array, of: Dictionary) -> void:
 	_generate.disabled = walking_now or (any_busy and not any_widens) or not any_missing
 	_stop.disabled = not any_busy
 	var line := "\n".join(lines)
+	StatusLog.say("pipeline", line)
 	if _line.text != line:
 		_line.text = line
 	_line.visible = not line.is_empty()
@@ -527,6 +528,11 @@ func _show_row(section: PipelineSection, it: PipelineRow, walking_now: bool) -> 
 	if r.is_empty():
 		return
 	r["row"] = it
+	# to the log as well, where it can be copied: where it stands and what it says, once each time that changes (a row
+	# at work only as it starts, not each word of its progress)
+	var at := String(Registry.field(PipelineRow.STATES, it.state, "label", it.state))
+	var busy := it.state == "running" or it.state == "queued"
+	StatusLog.say("pipeline: %s / %s" % [section.title, it.label], at if busy or it.said.is_empty() else "%s - %s" % [at, it.said])
 	(r["glyph"] as Label).text = PipelineRow.glyph(it.state)
 	(r["glyph"] as Label).tooltip_text = String(Registry.field(PipelineRow.STATES, it.state, "label", ""))
 	var text: Label = r["text"]

@@ -143,6 +143,7 @@ func _build_header(_box: VBoxContainer) -> void:
 
 
 func _note(msg: String) -> void:
+	StatusLog.say("status", msg)
 	if _status != null:
 		_status.text = msg
 
