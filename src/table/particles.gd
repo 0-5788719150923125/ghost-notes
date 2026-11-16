@@ -22,6 +22,8 @@ class_name Particles
 ##     ([member _nr]). Tubes meet its drawn triangles through [SheetBend] vertex weights, including the gaps between points.
 ##   - A liquid is never quite still ([method current], [method swell]): a slow current and a swell carry what floats, as hard as it boils
 ##     and stirs. Buoyant matter stays awake, whether a body or separate grains.
+##   - A loose thing is in a vessel, and rides it and sleeps on it, only with more than half its spheres in its inside; one lying beside
+##     a vessel with a sphere through its wall meets that vessel not at all until it is clear of it (a body's `through`).
 
 ## The most particles at once, the substeps a frame, gravity, the fastest a particle may go (meters a second). A loose thing is made a
 ## body only as something comes to it ([method TablePhysics._wake_loose]), so these count what is laid in things and what the work touched.
@@ -53,6 +55,9 @@ const LIQUID_DENSITY := 1.0
 const POWDER := 0.0011
 const GONE := 0.0003
 const DAMAGE := 0.05
+## A loose thing dissolving is drawn whole, shrunk to what is left of it ([member bodies]' `share`), until less than this share of its
+## volume is left or a piece of it is gone - then as its pieces.
+const DISSOLVE_LUMPS := 0.3
 ## Pushed apart no faster than this (meters a second): two overlapping spheres part a little each substep, never all at once (a heap's
 ## grains would shoot one another out through a jar's wall). A move is looked along in steps no longer than half of THIN (meters), so a
 ## glass wall a couple of millimeters thick is never stepped over.
@@ -153,7 +158,8 @@ var _still_only := false               # a body's way asked of the still solids 
 ## [{density, strength, dissolves, friction (Vector2)}]: what each kind of matter is ([constant Props.MATERIALS]).
 var matter: Array = []
 ## The loose things: [{ids, rest (offsets from `c0`), c0 (the middle as made), q (its turn now), c (its middle now), intact, held (a
-## Transform3D the work holds it at this substep, or null), hrel (its pose in its host's space while it sleeps), roll}]
+## Transform3D the work holds it at this substep, or null), hrel (its pose in its host's space while it sleeps), roll, share (the share
+## of its volume left, once it dissolves: [method _melted])}]
 var bodies: Array = []
 ## What happened this frame, for the bake to keep: [{kind ("enter", "break" - with where and how big a piece, "gone", "cut"), ...}]
 var events: Array = []
@@ -317,7 +323,7 @@ func add_body(at: PackedVector3Array, radius: float, m: int, made_by: int, on: i
 		body[i] = bi
 	bodies.append({"ids": ids, "rest": rest, "c0": c, "c": c, "q": Quaternion.IDENTITY, "intact": true, "held": null,
 		"hrel": (on_xf.affine_inverse() * Transform3D(Basis.IDENTITY, c)) if on >= 0 else Transform3D(Basis.IDENTITY, c),
-		"made_by": made_by})
+		"made_by": made_by, "through": PackedInt32Array()})
 	return bi
 
 
@@ -428,20 +434,30 @@ func step(dt: float, world: Dictionary) -> void:
 		var vs: Vessel = (vd as Dictionary)["vessel"]
 		var near: AABB = ((sd["xf0"] as Transform3D) * (sd["box"] as AABB)).grow(SPHERE.y)
 		# every one in it, asleep or not: a sleeper woken part way through the frame rides from the moment it wakes
+		var inside := PackedInt32Array()
+		var in_of := {}
 		for i in n:
 			if alive[i] == 1 and _ride[i] < 0 and near.has_point(x[i]) and vs.contains(inv0 * x[i]):
 				# ...never a sheet's point: what is in a jar goes with the jar, but a sheet in a ladle's bowl is met by the bowl, carried as far
 				# as it lies on it, and slides off
 				if body[i] >= 0 and (bodies[body[i]] as Dictionary).has("links"):
 					continue
-				_ride[i] = si
-				# ...its speed its own in it: one woken as its inside moved is at rest there, not thrown at its wall
-				if still[i] < 0.0:
-					v[i] = Vector3.ZERO
-				# ...and a sleeper in it sleeps on it: one asleep on what it lay on in there goes with it, never left in the air where the jar
-				# stood
-				if asleep[i] == 1 and host[i] != si and _inside_at(x[i], true) == si:
-					_rehost(i, si)
+				inside.append(i)
+				if body[i] >= 0:
+					in_of[body[i]] = int(in_of.get(body[i], 0)) + 1
+		for i in inside:
+			# ...and a loose thing rides it whole or not at all: IN IT, more than half its spheres in its inside - one lying beside it with
+			# spheres through its wall, or round its neck, only sits by it, and is met by its wall as it goes
+			if body[i] >= 0 and int(in_of[body[i]]) * 2 <= _alive_in(body[i]):
+				continue
+			_ride[i] = si
+			# ...its speed its own in it: one woken as its inside moved is at rest there, not thrown at its wall
+			if still[i] < 0.0:
+				v[i] = Vector3.ZERO
+			# ...and a sleeper in it sleeps on it: one asleep on what it lay on in there goes with it, never left in the air where the jar
+			# stood
+			if asleep[i] == 1 and host[i] != si and _inside_at(x[i], true) == si:
+				_rehost(i, si)
 	# As many substeps as the fastest needs: what falls fast takes all of them, what settles two - and so does a solid moving through what
 	# does not ride it
 	var fastest := 0.0
@@ -473,8 +489,9 @@ func step(dt: float, world: Dictionary) -> void:
 	for i in act:
 		var by := PackedInt32Array()
 		var far := SPHERE.y + NEAR_SLACK + (fastest + v[i].length()) * dt * 1.5
+		var past: PackedInt32Array = (bodies[body[i]] as Dictionary).get("through", PackedInt32Array()) if body[i] >= 0 else PackedInt32Array()
 		for c in boxes.size():
-			if (boxes[c] as AABB).grow(far).has_point(x[i]):
+			if (boxes[c] as AABB).grow(far).has_point(x[i]) and not past.has(_near[c]):
 				by.append(c)
 		_near_of[i] = by
 	var h := dt / float(steps)
@@ -503,8 +520,33 @@ func step(dt: float, world: Dictionary) -> void:
 			bd["off"] = bent(bi)
 	_settle(dt, act)
 	_break()
+	_clear_through()
 	if _any_moving:
 		follow(true)
+
+
+## What a body lies through it meets again once it is clear of it: none of its spheres in that solid, nor in its inside
+## ([member bodies]' `through`, [method TablePhysics._wake_loose]).
+func _clear_through() -> void:
+	for bd in bodies:
+		var past: PackedInt32Array = (bd as Dictionary).get("through", PackedInt32Array())
+		if past.is_empty():
+			continue
+		var kept := PackedInt32Array()
+		for si in past:
+			if si < 0 or si >= _solids.size():
+				continue
+			var sd: Dictionary = _solids[si]
+			var vs: Vessel = null
+			for vd in _vessels:
+				if int((vd as Dictionary)["solid"]) == si:
+					vs = (vd as Dictionary)["vessel"]
+			var inv: Transform3D = sd["inv"]
+			for i in (bd as Dictionary)["ids"]:
+				if alive[i] == 1 and ((sd["field"] as ShapeField).sample(inv * x[i]).x < r[i] or (vs != null and vs.contains(inv * x[i]))):
+					kept.append(si)
+					break
+		(bd as Dictionary)["through"] = kept
 
 
 ## The sleepers go where their hosts go: each one's place, and each sleeping body's pose, from its host as it was as the
@@ -736,6 +778,7 @@ func _substep(h: float, a: float, act: PackedInt32Array, _world: Dictionary) -> 
 		var x1c: Transform3D = _nx[c]
 		x[i] = x1c * (x0c.affine_inverse() * x[i])
 	# GRAVITY, and in a liquid what it displaces, its drag and its swirl
+	var melting := {}
 	for i in act:
 		_pressed[i] = 0.0
 		_held_by[i] = 0
@@ -758,14 +801,15 @@ func _substep(h: float, a: float, act: PackedInt32Array, _world: Dictionary) -> 
 			var k := DRAG * f / maxf(rho[i] * r[i], 1e-5)
 			vi = vl + (vi - vl) * exp(-k * h)
 			if dis[i] > 0.0 and f > 0.0:
-				# Eroding matter is drawn as its remaining particles, never the intact mesh.
 				if body[i] >= 0:
-					(bodies[body[i]] as Dictionary)["intact"] = false
+					melting[body[i]] = true
 				r[i] = maxf(r[i] - r0[i] * h * f / dis[i], 0.0)
 				if r[i] < GONE:
 					_kill(i)
 					continue
 		_p[i] = x[i] + vi * h
+	for bi in melting:
+		_melted(bi)
 	# A held thing is taken where the work holds it, and pushes what is in its way - but no hand pushes it through a solid: it goes whole
 	# toward the hand as far as nothing it meets stops it, and slides along what does ([method _held_way]); a scale lowered onto a vial
 	# narrower than it rests on the mouth.
@@ -791,21 +835,22 @@ func _substep(h: float, a: float, act: PackedInt32Array, _world: Dictionary) -> 
 	for bd in bodies:
 		if bd.has("surface"):
 			bd["sweep_q"] = bd["q"]
-	# ...a sheet's links, then the solids, so what it comes to stands in nothing: its points are kept out one by one, and go where its links take them
+	# ...a sheet's links, its drawn face off the tubes, then the solids point by point: the table and a still wall have the last word, so
+	# a tool pressing a sheet onto them never presses it into them
 	var pass_now := int(round(a * float(_steps))) % SOFT_EVERY == 0
 	if pass_now:
 		for bi in bodies.size():
 			var bd: Dictionary = bodies[bi]
 			if bd.has("links") and bd["held"] == null and not body_asleep(bi):
 				_soft_pass(bi)
-	for i in act:
-		if alive[i] == 0 or _hold[i] == 1:
-			continue
-		_solid_pass(i)
 	for bi in bodies.size():
 		var bd: Dictionary = bodies[bi]
 		if bd.has("surface") and bd["held"] == null and not body_asleep(bi):
 			_surface_contacts(bd)
+	for i in act:
+		if alive[i] == 0 or _hold[i] == 1:
+			continue
+		_solid_pass(i)
 	# The loose things hold their shapes - those awake - and go whole as far as nothing they meet stops them: matched to their shape only
 	# after each sphere is kept out of the solids, else a scale across a vial's narrow mouth is pulled down by its inner spheres and falls
 	# through ([method _way])
@@ -1003,7 +1048,17 @@ func _clear(bd: Dictionary, x: Transform3D, deep: PackedFloat32Array, soft: bool
 ## Which of the near solids (their places in [member _nid]) sphere [param i] may meet this frame: all, for one woken part way through it.
 func _near_for(i: int) -> PackedInt32Array:
 	var by: Variant = _near_of[i] if i < _near_of.size() else null
-	return by if by != null else _near_all
+	if by != null:
+		return by
+	# ...one woken part way through the frame: every near solid, but what its body lies through
+	var past: PackedInt32Array = (bodies[body[i]] as Dictionary).get("through", PackedInt32Array()) if body[i] >= 0 else PackedInt32Array()
+	if past.is_empty():
+		return _near_all
+	var out := PackedInt32Array()
+	for c in _near_all:
+		if not past.has(_near[c]):
+			out.append(c)
+	return out
 
 
 ## Which of the near solids a body made of [param ids] may meet this frame: any its spheres may.
@@ -1048,13 +1103,15 @@ func _solid_pass(i: int) -> void:
 	_way_near = near
 	var from := x[i]
 	var p := _p[i]
-	# A fast one is taken in pieces: the first piece that meets a solid is where it stops
+	# A fast one is taken in pieces: the first piece that meets a solid is where it stops - a tube aside, to a sheet whose drawn face
+	# meets it ([method _surface_contacts]): taken round the tube by its face, a point is never stopped against it
 	var way := p - from
 	var pieces := mini(int(ceil(way.length() / minf(rad, THIN * 0.5))), 12)
+	var round_tubes := bends and (bodies[body[i]] as Dictionary).has("surface")
 	if pieces > 1:
 		for k in range(1, pieces):
 			var q := from + way * (float(k) / float(pieces))
-			if _deepest(q, bool((matter[mat[i]] as Dictionary).get("cuts", false))) < 0.0:
+			if _deepest(q, bool((matter[mat[i]] as Dictionary).get("cuts", false)), round_tubes) < 0.0:
 				p = from + way * (float(k - 1) / float(pieces))
 				break
 	var ms := mus[i]
@@ -1105,6 +1162,20 @@ func _solid_pass(i: int) -> void:
 			continue
 		if lt > 1e-9:
 			p -= t if lt < cs * pen else t * minf(ck * pen / lt, 1.0)
+	# ...the table's top, then: a still wall standing on it is crossed back last, so a point pushed out of a wall's foot, down, is never put
+	# back into that wall by the table under it
+	if p.y < _top + rad:
+		var pen := _top + rad - p.y
+		p.y = _top + rad
+		_held_by[i] = 1
+		if up_most < 1.0:
+			touch[i] = TABLE
+		var t := Vector3(p.x - from.x, 0.0, p.z - from.z)
+		var lt := t.length()
+		var cs := sqrt(ms * TABLE_FRICTION.x)
+		var ck := sqrt(mk * TABLE_FRICTION.y)
+		if lt > 1e-9:
+			p -= t if lt < cs * pen else t * minf(ck * pen / lt, 1.0)
 	# A wall at rest is never crossed: a center outside a still solid as the substep began is never left inside it - pushed out of a moving
 	# one into a thin wall, past the wall's middle, the wall's own way out is through its far side. It goes back to where its way first
 	# came into the wall, and out of it on the side it came from.
@@ -1126,26 +1197,14 @@ func _solid_pass(i: int) -> void:
 		var q := from.lerp(p, lo)
 		var fq := field.sample(inv * q)
 		p = q + ((_nx[c] as Transform3D).basis * Vector3(fq.y, fq.z, fq.w)).normalized() * maxf(rad - fq.x, 0.0)
-	if p.y < _top + rad:
-		var pen := _top + rad - p.y
-		p.y = _top + rad
-		_held_by[i] = 1
-		if up_most < 1.0:
-			touch[i] = TABLE
-		var t := Vector3(p.x - from.x, 0.0, p.z - from.z)
-		var lt := t.length()
-		var cs := sqrt(ms * TABLE_FRICTION.x)
-		var ck := sqrt(mk * TABLE_FRICTION.y)
-		if lt > 1e-9:
-			p -= t if lt < cs * pen else t * minf(ck * pen / lt, 1.0)
 	_p[i] = p
 
 
-## How far [param q] is inside the nearest solid: less than 0 where it is in one.
-func _deepest(q: Vector3, soft := false) -> float:
+## How far [param q] is inside the nearest solid (the thin tubes aside, [param no_tubes]): less than 0 where it is in one.
+func _deepest(q: Vector3, soft := false, no_tubes := false) -> float:
 	var best := INF
 	for c in _way_near:
-		if not (_nb[c] as AABB).has_point(q) or (soft and _ne[c] == 1):
+		if not (_nb[c] as AABB).has_point(q) or (soft and _ne[c] == 1) or (no_tubes and _nr[c] == 1 and (_nf[c] as ShapeField).kind == "capsules"):
 			continue
 		best = minf(best, (_nf[c] as ShapeField).sample((_ni[c] as Transform3D) * q).x)
 	return best
@@ -1229,6 +1288,27 @@ func _find_pairs(act: PackedInt32Array, margin: float) -> void:
 				if (x[j] - pi).length_squared() < rr * rr:
 					_pi.append(i)
 					_pj.append(j)
+
+
+## Body [param bi], some of it dissolved this substep: the share of its volume left (`share`), drawn whole and shrunk to it - or, a
+## piece of it gone or little of it left ([constant DISSOLVE_LUMPS]), no longer whole.
+func _melted(bi: int) -> void:
+	var b: Dictionary = bodies[bi]
+	if not bool(b["intact"]):
+		return
+	var left := 0.0
+	var made := 0.0
+	for i in (b["ids"] as PackedInt32Array):
+		made += r0[i] * r0[i] * r0[i]
+		if alive[i] == 0:
+			b["intact"] = false
+			return
+		left += r[i] * r[i] * r[i]
+	var share := left / maxf(made, 1e-18)
+	if share < DISSOLVE_LUMPS:
+		b["intact"] = false
+	else:
+		b["share"] = share
 
 
 ## Kept out of one another: each pair that may meet ([method _find_pairs]) and overlaps, pushed apart by their masses (a
@@ -1466,26 +1546,26 @@ func _surface_contacts(bd: Dictionary) -> void:
 					verts = _surface_push(skin, ids, Vector3i(ia, ib, ic), bary, normal * (radius - dist), verts)
 			if deepest < SURFACE_GAP * 0.25:
 				break
-		# A finite constraint pass can leave a fold across a shaft. Advance from the previous clear
-		# surface in the tool's frame, retaining the last clear deformation rather than crossing it.
+		# A finite constraint pass can leave a fold across a shaft: the points near the tool are taken from where they last stood clear,
+		# carried with the tool no faster than a particle may go, as far toward where they go as nothing crosses it - the rest of the sheet
+		# where it is. The solids then keep them out of the table and the still walls.
 		var caps: Array = []
 		for cap in field.caps_a.size():
 			caps.append([xf * (field.pivot + (field.caps_a[cap] - field.pivot) * field.scale),
 				xf * (field.pivot + (field.caps_b[cap] - field.pivot) * field.scale), field.caps_r[cap] * most_scale + SURFACE_GAP * 0.25])
 		if not _surface_clear(verts, tris, caps) and bd.has("sweep_q"):
 			var carry := xf * (_n0[c] as Transform3D).affine_inverse()
-			var from_q := (carry.basis.get_rotation_quaternion() * (bd["sweep_q"] as Quaternion)).normalized()
-			var to_q: Quaternion = bd["q"]
+			var near := _surface_near(skin, verts, tris, caps, SPHERE.y * 2.0)
 			var from := PackedVector3Array()
 			var to := PackedVector3Array()
 			var local_ids := PackedInt32Array()
 			for k in ids.size():
-				from.append(carry * x[ids[k]])
 				to.append(_p[ids[k]])
+				from.append(x[ids[k]] + (carry * x[ids[k]] - x[ids[k]]).limit_length(V_MOST * _h) if near.has(k) else _p[ids[k]])
 				local_ids.append(k)
 			var start := PackedVector3Array()
 			for vi in verts.size():
-				start.append(_surface_point(skin, local_ids, vi, Basis(from_q), from))
+				start.append(_surface_point(skin, local_ids, vi, rot, from))
 			if not _surface_clear(start, tris, caps):
 				continue
 			var low := 0.0
@@ -1496,23 +1576,46 @@ func _surface_contacts(bd: Dictionary) -> void:
 				var points := PackedVector3Array()
 				for k in ids.size():
 					points.append(from[k].lerp(to[k], share))
-				var rotation := Basis(from_q.slerp(to_q, share))
 				var trial := PackedVector3Array()
 				for vi in verts.size():
-					trial.append(_surface_point(skin, local_ids, vi, rotation, points))
+					trial.append(_surface_point(skin, local_ids, vi, rot, points))
 				if _surface_clear(trial, tris, caps):
 					low = share
 					chosen = trial
 				else:
 					high = share
-			bd["q"] = from_q.slerp(to_q, low)
-			rot = Basis(bd["q"] as Quaternion)
 			var center := Vector3.ZERO
 			for k in ids.size():
-				_p[ids[k]] = from[k].lerp(to[k], low)
+				if near.has(k) and alive[ids[k]] == 1:
+					_p[ids[k]] = from[k].lerp(to[k], low)
 				center += _p[ids[k]]
 			bd["c"] = center / float(ids.size())
 			verts = chosen
+
+
+## The points (each its place in a sheet's `ids`) the drawn vertices within [param margin] of tubes [param caps] follow: what a
+## tool through the sheet carries.
+static func _surface_near(skin: Dictionary, verts: PackedVector3Array, tris: PackedInt32Array, caps: Array, margin: float) -> Dictionary:
+	var near: PackedInt32Array = skin["near"]
+	var out := {}
+	for cap in caps:
+		var a: Vector3 = cap[0]
+		var b: Vector3 = cap[1]
+		var reach := float(cap[2]) + margin
+		var box := AABB(a, Vector3.ZERO).expand(b).grow(reach)
+		for k in range(0, tris.size() - 2, 3):
+			var ta := verts[tris[k]]
+			var tb := verts[tris[k + 1]]
+			var tc := verts[tris[k + 2]]
+			if not AABB(ta, Vector3.ZERO).expand(tb).expand(tc).intersects(box):
+				continue
+			var pair := _capsule_triangle(a, b, ta, tb, tc)
+			if pair[0].distance_squared_to(pair[1]) >= reach * reach:
+				continue
+			for corner in 3:
+				for f in 4:
+					out[near[tris[k + corner] * 4 + f]] = true
+	return out
 
 
 static func _surface_clear(verts: PackedVector3Array, tris: PackedInt32Array, caps: Array) -> bool:
@@ -1792,12 +1895,12 @@ func _settle(dt: float, act: PackedInt32Array) -> void:
 	for i in act:
 		if alive[i] == 0 or _is_held(i):
 			continue
-		var heap := body[i] < 0 and resting.has(owner[i]) and (_held_by[i] == 1 or _afloat(i))
+		var heap := body[i] < 0 and resting.has(owner[i]) and _held_by[i] == 1
 		# Floating matter stays awake as its liquid moves, whether a whole body or a separate grain.
 		if wet[i] >= 0 and rho[i] < LIQUID_DENSITY:
 			still[i] = 0.0
 			continue
-		if ((v[i].length() < SLEEP_SPEED or bool(in_place.get(body[i], false))) and (_held_by[i] == 1 or borne.has(body[i]) or _afloat(i))) or heap:
+		if ((v[i].length() < SLEEP_SPEED or bool(in_place.get(body[i], false))) and (_held_by[i] == 1 or borne.has(body[i]))) or heap:
 			still[i] = maxf(still[i], 0.0) + dt
 		else:
 			still[i] = 0.0
@@ -1806,8 +1909,8 @@ func _settle(dt: float, act: PackedInt32Array) -> void:
 		elif still[i] >= SLEEP_AFTER:
 			calm.append(i)
 	for i in act:
-		if alive[i] == 1 and body[i] < 0 and ripe.has(owner[i]) and not _is_held(i) \
-				and (_held_by[i] == 1 or _afloat(i)) and not (wet[i] >= 0 and rho[i] < LIQUID_DENSITY):
+		if alive[i] == 1 and body[i] < 0 and ripe.has(owner[i]) and not _is_held(i) and _held_by[i] == 1 \
+				and not (wet[i] >= 0 and rho[i] < LIQUID_DENSITY):
 			var c: Vector2i = ripe[owner[i]]
 			if c.x * 2 >= c.y:
 				calm.append(i)
@@ -1846,9 +1949,10 @@ func _settle(dt: float, act: PackedInt32Array) -> void:
 		if b["held"] != null or not fell.has(bi) or not body_asleep(bi):
 			continue
 		var ids: PackedInt32Array = b["ids"]
-		# its spheres share one host: the inside its middle is in, else what holds up its lowest sphere - never one over the rest of it
-		# (an upper sphere of a cut carrot would take the knife beside it)
-		var hs := _inside_at(b["c"])
+		# its spheres share one host: the inside most of them are in, else what holds up its lowest sphere - never one over the rest of it
+		# (an upper sphere of a cut carrot would take the knife beside it), nor the vessel a curl lying beside it, or round its neck, has
+		# its middle in
+		var hs := _inside_of_body(bi)
 		if hs < 0:
 			var low := -1
 			for i in ids:
@@ -1928,6 +2032,33 @@ func _inside_at(p: Vector3, start := false) -> int:
 			least = vs.volume
 			best = si
 	return best
+
+
+## The solid whose inside holds most of body [param bi]'s spheres (more than half of those alive), or -1 - where
+## each solid is as the frame ends, or as it began ([param start]).
+func _inside_of_body(bi: int, start := false) -> int:
+	var count := {}
+	var live := 0
+	for i in (bodies[bi] as Dictionary)["ids"]:
+		if alive[i] == 0:
+			continue
+		live += 1
+		var si := _inside_at(x[i], start)
+		if si >= 0:
+			count[si] = int(count.get(si, 0)) + 1
+	var best := -1
+	for si in count:
+		if int(count[si]) * 2 > live and (best < 0 or int(count[si]) > int(count[best])):
+			best = int(si)
+	return best
+
+
+## How many of body [param bi]'s spheres are alive.
+func _alive_in(bi: int) -> int:
+	var live := 0
+	for i in (bodies[bi] as Dictionary)["ids"]:
+		live += alive[i]
+	return live
 
 
 ## Sleeper [param i] - and the body it is a sphere of - asleep on solid [param si] from now, where that solid was as the

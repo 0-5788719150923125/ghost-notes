@@ -300,6 +300,19 @@ Gates: physics_check `_pours_loose`, `_world_from_table`, and the hold tests (`_
 `_held_up`, `_aloft`. Probes: `act_calls_probe`, `episode_bake_probe --profile-bake` (a bake's cost by section, and
 why each frame was stepped) and `--profile` (a live frame's).
 
+### Seen on 398525 (`--audit`, 21 kinds of finding, 13 after)
+
+- **A rod over a sheet** leaves it on the table, never in it: tubes run before the per-point solids, the table's push before
+  the still walls' crossing check, and a sheet's fallback carries only the points near the tube (`_sheet_pinned`,
+  `_sheet_swept`, `_sheet_bends_round`).
+- **A grain bed** is packed close at its written size, lowest layer first, each grain resting in a hollow of three
+  (`_grain_starts`); one hidden at the start is packed at build and laid as its `grow`/`fill` rises (`_reveal_step`).
+- **Room in the grain budget** is kept for loose things an act touches, plus the four largest (`_room_for_the_named`).
+- **A dissolving thing** stays drawn whole, shrinking, until little of it is left.
+- **A thing set down on the bare table** is laid as it would rest (`TableWork._lay`; table_work_check `_laid_at_rest`).
+- **The audit** moves a part with no body of its own (a stopper) with what it rides on and skips what is hidden, and says
+  an overlap present at 0 s as built.
+
 ## What a framework for any desk needs
 
 LEGO, baking, a jigsaw and alchemy differ in their things, never in what holds them together. Five rules:
@@ -333,6 +346,10 @@ swings by weight (a balance, a hinge); particles with shape matching (grains, cr
   nothing moves faster than a hand; what was poured for a target lands in it (done: `_pour_said`); a thing set down is
   where it was set. `episode_bake_probe --audit` says them by hand for one episode; telling the puppeteer, in `act`, is
   what is left.
+- **398525's copper curl** falls from the ladle beside a vial, then moves with the vial when it is lifted and ends 6.8 mm
+  through its wall: what a resting loose thing is carried by. `--trace` prints a stale pose for loose things.
+- **`press` and `around` naming a part** (`"kettle/iron pot"`) never resolve, so such a press is ignored. Resolving `press`
+  alone drives a ladle into a coal bed; the two have to be resolved together and every act using them checked.
 - **One model of where a thing is.** The work plans the hand; the physics should be the only answer to where a thing
   is, and `check`'s PASSES THROUGH (the plan's poses) folded into the physics' HELD BACK, so one event is said once.
 - **A plan's guesses.** A live plan places the moves after an act that runs "under" the words on a guessed end, and

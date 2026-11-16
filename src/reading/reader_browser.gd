@@ -262,6 +262,10 @@ func open() -> void:
 	_take_selection()
 	_who.text = "%s  ·  %s" % [cast.tab_name(), cast.voice_name(vid)]
 	_who.tooltip_text = "Every change here is to %s's voice, and reaches the reading as it is made." % cast.tab_name()
+	if not cast.kept_shown().is_empty():
+		_who.text = "%s  ·  %s (kept)" % [cast.tab_name(), cast.kept_shown()]
+		_who.tooltip_text = ("Every change here is to the kept voice %s, and is heard in every note that reads it. Its room - "
+			+ "Echo, Room, Resonance, Presence, Ambience, Lean, Near, Seat - stays this note's.") % cast.kept_shown()
 	_readers.visible = not _all.is_empty()
 	_shape_box.visible = _blends
 	_method.select(VoiceBlend.METHODS.keys().find(_method_key))

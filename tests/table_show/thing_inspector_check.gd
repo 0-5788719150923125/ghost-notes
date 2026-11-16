@@ -1,7 +1,7 @@
 extends Node
 
 ## thing_inspector_check - one thing picked, one inspector, on an episode (next/editing.md steps 5 to 8: [EpisodeCard.open_dock],
-## [TableRows], [TablePlanView], [ThingLibrary]).
+## [TableRows], [TablePlanView]).
 ##
 ##   tests/run_boot_probe.sh tests/table_show/thing_inspector_check.gd 90
 ##
@@ -16,8 +16,6 @@ extends Node
 ##     table's data says so;
 ##   - the table from above: a thing's foot picked by a click, and a drag hands back where it would stand, in centimeters from
 ##     the middle of the reading. The control: a click on bare table picks nothing;
-##   - the library keeps a thing with the materials its parts use (the control: not one it does not), and puts it on a table
-##     named its own there, only the materials that table lacks added;
 ##   - an agent asked about what is picked needs a note, and a read-only session asks none (no agent is ever started here);
 ##   - an Undo with nothing changed says so.
 
@@ -34,7 +32,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	TableEpisode.root = ROOT
-	ThingLibrary.root = ROOT.path_join("library")
+	Library.root = ROOT.path_join("library")
 	_ed = load("res://src/reading/reading_panel.gd").new()
 	_ed.workspace = "table"
 	_ed._build_panel()
@@ -173,25 +171,11 @@ func _run() -> void:
 		"a thing's foot picked by a click, and a drag hands back where it would stand (%s, want %s)" % [str(moved), want])
 	plan.free()
 
-	# The library
-	var table: Dictionary = ep.read_json("table")
-	_ok(ThingLibrary.keep(table["things"][0], table).is_empty() and ThingLibrary.names() == ["mask"], "a thing is kept in the library")
-	var entry := ThingLibrary.read("mask")
-	var mats: Dictionary = entry.get("materials", {})
-	_ok(mats.has("walnut") and mats.has("face form") and not mats.has("tin"), "with the materials its parts use - the control: not one it does not")
-	var on := ThingLibrary.put_on(table, entry, Vector2(-12.0, 4.0))
-	var added: Dictionary = (on["things"] as Array).back()
-	_ok((on["things"] as Array).size() == (table["things"] as Array).size() + 1 and String(added["name"]) == "mask 2" and added["at"] == [-12.0, 4.0]
-		and (on["materials"] as Dictionary).size() == 3, "put on a table it is named its own there, nothing added the table has")
-	var bare_table := ThingLibrary.put_on({}, entry)
-	_ok((bare_table["materials"] as Dictionary).has("walnut") and String((bare_table["things"][0] as Dictionary)["name"]) == "mask",
-		"on a table without its materials, they come with it")
-
 	dock.queue_free()
 	_ed.free()
 	_rmrf(ProjectSettings.globalize_path(ROOT))
 	TableEpisode.root = TableEpisode.ROOT
-	ThingLibrary.root = ThingLibrary.DIR
+	Library.root = Library.ROOT
 	print("thing_inspector_check: %s" % ("ALL OK" if _fails == 0 else "%d FAILED" % _fails))
 	get_tree().quit(0 if _fails == 0 else 1)
 

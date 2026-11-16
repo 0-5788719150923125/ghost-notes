@@ -39,8 +39,9 @@ const BOX := [12, 30]
 ## Passage sizes for plans without a runtime, and the minimum room for a work's own passage at the voice's pace.
 const WORDS := {"intro": [130, 190], "card": [110, 170], "close": [90, 140]}
 const WORK_WORDS := Vector2(1.0, 1.8)
-## An episode's runtime in minutes unless the brief specifies another range. New plans keep it as `minutes`.
-const MINUTES := Vector2(10.0, 15.0)
+## An episode's runtime in minutes unless the brief specifies another range: room, which the producer fills only as far as the
+## episode's substance holds. New plans keep it as `minutes`.
+const MINUTES := Vector2(6.0, 12.0)
 
 ## How many earlier episodes the producer reads in full, and how many more in a line each.
 const PAST_FULL := 10
@@ -337,7 +338,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		"title": title.strip_edges(), "byline": byline.strip_edges(),
 		"seen": ", ".join(PackedStringArray(seen)), "airs": ", ".join(PackedStringArray(airs)),
 		"assembly": plan.get("assembly") == true, "assembly_stock": Assembly.describe_stock(), "model_words": String(plan.get("model_words", "")),
-		"painted": String(plan.get("painted", "")), "fixed": String(plan.get("fixed_things", "")),
+		"painted": String(plan.get("painted", "")), "fixed": String(plan.get("fixed_things", "")), "to_place": String(plan.get("fixed_to_place", "")),
 		"game": CardTable.game_of(plan), "game_top_x": roundi(GameBoard.TOP_LEAST.x), "game_top_z": roundi(GameBoard.TOP_LEAST.y),
 		"game_keep_x": roundi(GameBoard.MAP_MOST.x * 100.0), "game_keep_z": roundi(GameBoard.MAP_MOST.y * 100.0), "game_mid_z": roundi((GameBoard.MIDDLE.y - Tables.ORIGIN.y) * 100.0),
 	}

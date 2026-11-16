@@ -56,6 +56,11 @@ extends SceneTree
 ##   table meets the frame's edge; the plan fits every card and thing in the drawing.
 ## - How full a table is (TablePrompts.FILLS): drawn per episode from a few things to a crowded table, some seeds asking for more than
 ##   the usual most (6) and some for under it.
+## - Out of the shot ([method ShotReach.gives], [method SetDresserTools.idle]): a thing beside the frame between a candle
+##   and it throws its shadow in (control: the candle's reach short of it, none); one below the frame's foot that steams sends it up
+##   into view (control: the same thing without `emits`, nothing); a thing carrying a flame gives light. Out of the shot and giving
+##   nothing, a thing is a fault and idle unless built to be worked (named points, a joint, a start, loose, grains; controls: a plain
+##   box is not, nor a strand's `loose` number), and one that gives something is neither.
 const ROOT := "user://set_dresser_check"
 
 const FixtureDeck := preload("res://tests/fixture_deck.gd")
@@ -108,7 +113,7 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	AgentJobs.allow_for_tool()
-	for check in [_fresh_start, _tools_listed, _put_reports, _remove_look_set, _submit, _title, _producer, _prompts, _claude_argv, _air, _table_itself, _light, _ride, _one_at_a_time, _verdict, _blueprint, _drawing, _fills]:
+	for check in [_fresh_start, _tools_listed, _put_reports, _remove_look_set, _submit, _title, _producer, _prompts, _claude_argv, _air, _table_itself, _light, _ride, _one_at_a_time, _verdict, _blueprint, _drawing, _fills, _out_of_shot]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("set_dresser_tools_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -165,10 +170,10 @@ func _tools_listed() -> bool:
 		names.append(String((d as Dictionary)["name"]))
 		shaped = shaped and String(((d as Dictionary)["inputSchema"] as Dictionary).get("type", "")) == "object" \
 			and not String((d as Dictionary).get("description", "")).is_empty()
-	_ok(names == ["put", "remove", "blueprint", "look", "set", "overhead", "watch", "title", "submit"], "the set dresser's tools are %s" % str(names))
+	_ok(names == ["put", "remove", "blueprint", "library", "look", "set", "overhead", "watch", "title", "submit"], "the set dresser's tools are %s" % str(names))
 	_ok(shaped, "a tool has no description or no object schema")
 	var r: Dictionary = await t.call_tool("paint", {})
-	_ok(bool(r.get("error", false)) and String(r["text"]).contains("put, remove, blueprint, look, overhead, set, watch, title and submit"),
+	_ok(bool(r.get("error", false)) and String(r["text"]).contains("put, remove, blueprint, library, look, overhead, set, watch, title and submit"),
 		"an unknown tool did not name the real ones: %s" % r)
 	t.release()
 	return true
@@ -204,7 +209,7 @@ func _put_reports() -> bool:
 		"size": [6, roundi(room) + 10, 6], "material": "beeswax"}]}, {"name": "a tall jug", "parts": [{"shape": "box",
 		"size": [6, roundi(room) + 10, 6], "material": "beeswax"}]}]})
 	text = String(r["text"])
-	_ok(text.contains("a tall jar (at [0, -30])") and text.contains("where it stands the frame shows only %s cm" % TablePreview._cm(room * 0.01)),
+	_ok(text.contains("a tall jar (at [0, -30])") and text.contains("where it stands the frame shows only %s cm" % PropStudio.cm(room * 0.01)),
 		"a thing taller than its spot shows was not reported:\n%s" % text)
 	_ok(text.contains("a tall jug (not yet placed)") and text.count("the frame shows only") == 1,
 		"control: a thing not yet placed was judged by a spot it has none of:\n%s" % text)
@@ -740,7 +745,20 @@ func _verdict_written() -> bool:
 	gone["shown"] = 0.0
 	st = SetDresserTools.stood_lines({"stood": [gone], "left_off": []})
 	text = "\n".join(st["lines"] as PackedStringArray)
-	_ok(int(st["faults"]) == 1 and text.contains("NOT IN THE SHOT"), "a thing out of the shot altogether is not a fault: %s" % text)
+	_ok(int(st["faults"]) == 1 and text.contains("NOT IN THE SHOT") and SetDresserTools.idle({"stood": [gone]}) == ["a bell"],
+		"a thing out of the shot giving the picture nothing is not a fault, or not idle: %s" % text)
+	var lit := gone.duplicate()
+	lit["gives"] = ["light", "a shadow"]
+	st = SetDresserTools.stood_lines({"stood": [lit], "left_off": []})
+	text = "\n".join(st["lines"] as PackedStringArray)
+	_ok(int(st["faults"]) == 0 and text.contains("giving the picture light and a shadow") and SetDresserTools.idle({"stood": [lit]}).is_empty(),
+		"a thing out of the shot giving the picture light is a fault, or idle: %s" % text)
+	var worked := gone.duplicate()
+	worked["worked"] = true
+	st = SetDresserTools.stood_lines({"stood": [worked], "left_off": []})
+	text = "\n".join(st["lines"] as PackedStringArray)
+	_ok(int(st["faults"]) == 0 and text.contains("waiting there for the work") and SetDresserTools.idle({"stood": [worked]}).is_empty(),
+		"a thing out of the shot for the work to fetch is a fault, or idle: %s" % text)
 	st = SetDresserTools.stood_lines({"stood": [], "left_off": ["a jar"], "left_why": {"a jar": "it stood where the cards go"}}, {"a jar": 2})
 	text = "\n".join(st["lines"] as PackedStringArray)
 	_ok(int(st["faults"]) == 1 and text.contains("2. a jar: LEFT OFF - nowhere within %d cm of where it was written" % roundi(CardTable.NUDGE_MOST * 100.0))
@@ -883,4 +901,46 @@ func _fills() -> bool:
 		_ok(size.x >= 3 and size.y > size.x and size.y + CardTable.MAX_CANDLES <= CardTable.MAX_THINGS, "#%d asks for %s things" % [seed, str(size)])
 	_ok(least == 3 and most >= 20 and over > n * 0.5 and over < n * 0.95,
 		"the tables run from %d to %d things, %d of %d past the old most (6)" % [least, most, over, n])
+	return true
+
+
+## Out of the shot: what a thing beside or below the frame still gives the picture, and what is built to be worked.
+func _out_of_shot() -> bool:
+	var cam := Transform3D(Basis.looking_at(Vector3(0.0, -0.5, -0.6)), Vector3(0.0, 0.5, 0.6))
+	var fov := 25.0
+	var box := AABB(Vector3(-0.05, 0.0, -0.05), Vector3(0.1, 0.2, 0.1))
+	var beside := Transform3D(Basis.IDENTITY, Vector3(0.6, 0.0, 0.0))
+	var unseen := true
+	for i in 8:
+		unseen = unseen and not ShotReach.seen_at(cam, fov, beside * box.get_endpoint(i))
+	_ok(unseen, "the fixture: the thing beside the frame is out of it")
+	var root := Node3D.new()
+	var candle := OmniLight3D.new()
+	candle.shadow_enabled = true
+	candle.omni_range = 1.4
+	candle.position = Vector3(0.9, 0.3, 0.0)
+	root.add_child(candle)
+	var thing := {"name": "a jar", "parts": [{"shape": "box", "size": [10, 20, 10]}]}
+	var gives := ShotReach.gives(thing, beside, box, false, root, cam, fov)
+	_ok(gives == ["a shadow"], "a thing between a candle and the frame throws its shadow in (%s)" % str(gives))
+	candle.omni_range = 0.2
+	gives = ShotReach.gives(thing, beside, box, false, root, cam, fov)
+	_ok(gives.is_empty(), "the control: a candle that does not reach it throws none (%s)" % str(gives))
+	_ok(ShotReach.gives(thing, beside, box, true, root, cam, fov).has("light"), "a thing carrying a flame gives light")
+	var low := AABB(Vector3(-0.05, 0.0, -0.05), Vector3(0.1, 0.05, 0.1))
+	var near := Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, 0.4))
+	var cup := {"name": "a cup", "parts": [{"shape": "lathe", "profile": [[0, 0], [4, 0], [4, 5], [0, 5]],
+		"emits": {"kind": "steam", "at": "rim"}}]}
+	_ok(not ShotReach.seen_at(cam, fov, near * low.get_center()), "the fixture: the cup below the frame's foot is out of it")
+	gives = ShotReach.gives(cup, near, low, false, null, cam, fov)
+	_ok(gives == ["rising steam"], "steam from below the frame rises into it (%s)" % str(gives))
+	var dry := {"name": "a cup", "parts": [{"shape": "lathe", "profile": [[0, 0], [4, 0], [4, 5], [0, 5]]}]}
+	_ok(ShotReach.gives(dry, near, low, false, null, cam, fov).is_empty(), "the control: the same cup without emits gives nothing")
+	root.free()
+	_ok(SetDresserTools.built_to_work({"parts": [{"shape": "box", "size": [3, 3, 3], "points": {"tip": [0, 3, 0]}}]}), "named points are worked")
+	_ok(SetDresserTools.built_to_work({"parts": [{"name": "lid", "parts": [{"shape": "box", "size": [3, 1, 3], "joint": {"kind": "hinge"}}]}]}),
+		"a joint in a group is worked")
+	_ok(SetDresserTools.built_to_work({"parts": [{"shape": "grains", "size": [3, 3, 3]}]}), "grains are worked")
+	_ok(not SetDresserTools.built_to_work({"parts": [{"shape": "box", "size": [3, 3, 3]}]}), "the control: a plain box is not")
+	_ok(not SetDresserTools.built_to_work({"parts": [{"shape": "strand", "loose": 0.4}]}), "the control: a strand's loose number is not")
 	return true

@@ -10,7 +10,8 @@ class_name TablePhysics
 ##     rings where anything enters it ([member ripples]);
 ##   - every grains part is laid into the inside it is drawn in, and every loose part is a body of
 ##     spheres ([Particles]), asleep on what holds it until something tips, jolts, strikes or presses it;
-##   - every other part of every thing is a solid ([ShapeField]) that moves as its thing or part moves.
+##   - every other part of every thing is a solid ([ShapeField]) that moves as its thing or part moves;
+##   - every free part and loose thing starts out of what is round it, laid as a hand lays it ([method lay_loose]).
 ##
 ## Baked, and played as a function of time: the world is stepped once over show time at [constant FPS]
 ## and kept frame by frame ([member frames]); a picture looks its moment up. A new plan ([method replan])
@@ -80,6 +81,8 @@ const SEAT_RIDE := Vector2(0.03, 0.5)
 const WAIT_AHEAD := 3.0
 ## Two holds of a thing less than this apart (seconds) are one: a hand never lets go between one move and the next.
 const HOLD_GAP := 0.25
+## What holds up a loose thing woken where it lies ([method _host_under]): a surface facing up this near its spheres, past their radius (meters).
+const HOST_NEAR := 0.003
 ## How far down from a place a report looks for what it lies on (meters): a thing's middle stands a few
 ## centimeters over it - and how far over a vessel what lies on it or in it may stand (meters, [method
 ## _mover_box]).
@@ -127,8 +130,8 @@ const BENDS := ["plant", "paper", "fabric"]
 const SLICE_LEAST := 0.03
 ## The most grains one grains part is laid as: excess fill is omitted, never represented by larger grains.
 const GRAINS_MOST := 240
-## The share of a cubic grid occupied by touching spheres, used to space a capped bed.
-const PACKED := 0.52
+## How many loose things the plan never names keep room for a body all the same ([method _wakes_of]).
+const LOOSE_SPARE := 4
 ## The liquids: the most vessels a table's are reckoned in; the first sloshing mode's root (an upright
 ## cylinder's, w0^2 = g xi / R tanh(xi h / R)), how much of a slosh a period loses, how long a swirl
 ## lasts (seconds), how hard a tool turns it; how long a stream's parcel may fall (seconds).
@@ -196,6 +199,17 @@ const SWING_STEPS := 4
 const SWING_STILL := Vector2(0.004, 0.02)
 const SWING_REST := 0.5
 const MASS_CELLS := 24
+## A free part or a loose thing built deeper than LAY_DEEP in what is round it (meters) is laid out of it ([method lay_loose]): deeper
+## than any fit a set dresser makes (a cork in its neck). It is lifted LAY_STEP at a time until it is in nothing deeper than
+## LAY_TOUCH, then lowered back to that within LAY_FINE - sunk into what it stands on, it comes out within LAY_MOST; one that does
+## not is through something (a vial through a rack's bar drawn with no holes), the set dresser's, and is left as built. Met by at
+## most LAY_POINTS of its surface and of each solid round it.
+const LAY_DEEP := 0.002
+const LAY_STEP := 0.002
+const LAY_TOUCH := 0.0003
+const LAY_FINE := 0.0001
+const LAY_MOST := 0.02
+const LAY_POINTS := 240
 ## What stands in a liquid raises it ([method _level_of]): a body's matter met by at most this many
 ## points, and a moving vessel's inside by every this many of its own.
 const MATTER_POINTS := 300
@@ -257,6 +271,8 @@ var _owner_pose := {}         # "t3"/"w7" -> [last t, its pose]
 var _intervals := {}          # "t3"/"w7" -> [[s0, s1], ...] when it may move
 var _spans: Variant = null    # every stretch anything on the table may move in, in order (Vector2s), once a plan
 var _sprinkles: Array = []    # [{act, track, grains, owner, key, done}] - the bake's: every key made with it, only written after
+var _reveals: Array = []      # [{grains, wi, spots (its host's space as built), host, mi, done}] - grains a work brings later ([method _reveal_step])
+var _reveal_chs := {}         # ...the `grow` channels that bring them, which the bake reads ([method replan])
 var _sync := true
 var _thread: Thread = null
 var _lock := Mutex.new()
@@ -309,6 +325,9 @@ var _warm_ticks := 0
 var _turn_of: Array = []      # each particle's own turn, drawn ([method _draw_particles])
 ## Where the last plan taken up began to be baked again (seconds of show): what a new plan cost.
 var resumed_at := 0.0
+## What [method lay_loose] found built in something: `[{wi, deep (meters), in (what, in words), laid (false: through it, left as built),
+## moved (meters)}]` - the set dresser's to hear.
+var laid: Array = []
 ## How far ahead of the picture a live bake runs (seconds): [constant HORIZON] while the show plays and,
 ## while it is paused, as far as its medium asks ([member TableMedium.BUFFER]).
 var reach := HORIZON
@@ -343,6 +362,211 @@ func take(ti: int, t: Dictionary, b: Dictionary, node: Node3D, first: int) -> vo
 		grains.append({"part": gd["part"], "owner": own["owner"], "oi": own["oi"], "local": (own["local"] as Transform3D) * (gd["xform"] as Transform3D),
 			"thing": ti, "wi": gwi, "name": String(((gd["part"] as Dictionary).get("work", {}) as Dictionary).get("name", "grains")),
 			"holder": gd["holder"]})
+
+
+## EVERY FREE PART AND LOOSE THING STARTS OUT OF WHAT IS ROUND IT, whatever the set dresser wrote (a pestle's head built through its
+## mortar's floor): called as the work is built ([method TableWork.build]), before anything is measured from where the parts stand. One
+## built deeper than [constant LAY_DEEP] in a solid or the table's top is laid as a hand lays it: lowered from above where it was written
+## to where it first meets what is under it, then - a part the work picks up - let go there ([method RigidParts.trial]), so it rests in the
+## bowl, leaning where it leans, never in its wall; one that would tumble from there stays as it was lowered. Its node is moved, and all
+## it holds with it. The same table is laid the same; what is laid, or left through something, is said in the log.
+func lay_loose() -> void:
+	# ...each solid's field, and where it stands as built (from the nodes: nothing has been measured from them yet)
+	var at: Array = []
+	for sd in solids:
+		var d: Dictionary = sd
+		if bool(d.get("liquid_part", false)):
+			at.append(null)
+			continue
+		if not d.has("field"):
+			d["field"] = ShapeField.of(d["part"], d["box"])
+		var owner: Node3D = (work.things[int(d["thing"])] as Dictionary)["node"] if String(d["owner"]) == "t" \
+			else (work.works[int(d["oi"])] as Dictionary)["node"]
+		at.append(work._world_of(owner) * (d["local"] as Transform3D))
+	# ...a thing's parts in the order they hang: one laid carries what is in it before that is looked at
+	for wi in work.works.size():
+		var wk: Dictionary = work.works[wi]
+		if String(wk["kind"]) != "free":
+			continue
+		var wn: Node3D = wk["node"]
+		# ...what moves with it (all that hangs in it), what of that is its own (not a free part in it, which is looked at itself), and what
+		# is round it: every other solid near it as built - never a liquid, a loose thing (which gives) or one not yet shown
+		var inner: Array = []
+		for o in work.works.size():
+			if o != wi and String((work.works[o] as Dictionary)["kind"]) == "free" and wn.is_ancestor_of((work.works[o] as Dictionary)["node"]):
+				inner.append((work.works[o] as Dictionary)["node"])
+		var moved := PackedInt32Array()
+		var own := PackedInt32Array()
+		var mine := AABB()
+		for si in solids.size():
+			if at[si] == null:
+				continue
+			var holder: Node = (solids[si] as Dictionary)["holder"]
+			if holder == wn or wn.is_ancestor_of(holder):
+				moved.append(si)
+				if not inner.any(func(n: Node3D) -> bool: return n == holder or n.is_ancestor_of(holder)):
+					var b: AABB = (at[si] as Transform3D) * ((solids[si] as Dictionary)["box"] as AABB)
+					mine = b if own.is_empty() else mine.merge(b)
+					own.append(si)
+		if own.is_empty():
+			continue
+		# ...as far up as it may be lifted
+		var reach := mine.grow(0.004)
+		reach.size.y += LAY_MOST
+		var round := PackedInt32Array()
+		for si in solids.size():
+			var d: Dictionary = solids[si]
+			if at[si] == null or moved.has(si) or int(d["loose"]) >= 0 or not _shown_as_built(d):
+				continue
+			if ((at[si] as Transform3D) * (d["box"] as AABB)).intersects(reach):
+				round.append(si)
+		var deep := _lay_depth(own, round, at, Transform3D.IDENTITY)
+		if float(deep["deep"]) <= LAY_DEEP:
+			continue
+		# Lowered from above: lifted a step at a time until it is clear, then back down to where it meets what is under it
+		var lo := 0.0
+		var hi := LAY_STEP
+		while hi <= LAY_MOST and float(_lay_depth(own, round, at, Transform3D(Basis.IDENTITY, Vector3.UP * hi))["deep"]) > LAY_TOUCH:
+			lo = hi
+			hi += LAY_STEP
+		if hi > LAY_MOST:
+			print("ghost: %s is built %.1f mm into %s and is not clear of it within %.0f cm over it (through it, or in its wall): left as built" % [work._part_label(wi),
+				float(deep["deep"]) * 1000.0, _lay_label(int(deep["in"])), LAY_MOST * 100.0])
+			laid.append({"wi": wi, "deep": float(deep["deep"]), "in": _lay_label(int(deep["in"])), "laid": false, "moved": 0.0})
+			continue
+		while hi - lo > LAY_FINE:
+			var mid := (lo + hi) * 0.5
+			if float(_lay_depth(own, round, at, Transform3D(Basis.IDENTITY, Vector3.UP * mid))["deep"]) > LAY_TOUCH:
+				lo = mid
+			else:
+				hi = mid
+		var lay := Transform3D(Basis.IDENTITY, Vector3.UP * hi)
+		# ...and let go there, a part the work picks up: it comes to rest as it would (a loose thing's spheres settle it once woken)
+		if not bool((wk["w"] as Dictionary).get("loose", false)):
+			var rest: Variant = _lay_trial(wi, own, round, at, lay)
+			if rest != null:
+				lay = (rest as Transform3D) * lay
+		print("ghost: %s is built %.1f mm into %s: laid as a hand lays it, %.1f mm from where it was written" % [work._part_label(wi),
+			float(deep["deep"]) * 1000.0, _lay_label(int(deep["in"])), _lay_span(own, at, lay) * 1000.0])
+		laid.append({"wi": wi, "deep": float(deep["deep"]), "in": _lay_label(int(deep["in"])), "laid": true, "moved": _lay_span(own, at, lay)})
+		var parent := work._parent_world(wn)
+		wn.transform = parent.affine_inverse() * (lay * work._world_of(wn))
+		for si in moved:
+			at[si] = lay * (at[si] as Transform3D)
+
+
+## Whether solid [param d] is there as built: what is not yet shown (a part hidden until an act brings it) meets nothing.
+func _shown_as_built(d: Dictionary) -> bool:
+	var wi := int(d.get("wi", -1))
+	if wi < 0:
+		return true
+	return float((((work.works[wi] as Dictionary)["w"] as Dictionary).get("start", {}) as Dictionary).get("shown", 1.0)) > 0.5
+
+
+## How deep solids [param own], moved [param m] from where [param at] has them, stand in solids [param round] or the table's top -
+## and how deep each of those stands in them, so a thin rim between their points is met: `{deep (meters), in (the solid it is
+## deepest in; -1 the table)}`. [constant LAY_POINTS] points of each at most.
+func _lay_depth(own: PackedInt32Array, round: PackedInt32Array, at: Array, m: Transform3D) -> Dictionary:
+	var deep := 0.0
+	var deep_in := -1
+	var mine := AABB()
+	var own_x: Array = []
+	var own_inv: Array = []
+	for k in own.size():
+		var xf: Transform3D = m * (at[own[k]] as Transform3D)
+		own_x.append(xf)
+		own_inv.append(xf.affine_inverse())
+		var b := xf * ((solids[own[k]] as Dictionary)["box"] as AABB)
+		mine = b if k == 0 else mine.merge(b)
+	var round_inv: Array = []
+	var round_box: Array = []
+	for si in round:
+		round_inv.append((at[si] as Transform3D).affine_inverse())
+		round_box.append(((at[si] as Transform3D) * ((solids[si] as Dictionary)["box"] as AABB)).grow(0.002))
+	for k in own.size():
+		var spts := ((solids[own[k]] as Dictionary)["field"] as ShapeField).surface_points()
+		var every := maxi(1, spts.size() / LAY_POINTS)
+		for j in range(0, spts.size(), every):
+			var p: Vector3 = (own_x[k] as Transform3D) * spts[j]
+			if -p.y > deep:
+				deep = -p.y
+				deep_in = -1
+			for r in round.size():
+				if not (round_box[r] as AABB).has_point(p):
+					continue
+				var dd := -float(((solids[round[r]] as Dictionary)["field"] as ShapeField).sample((round_inv[r] as Transform3D) * p).x)
+				if dd > deep:
+					deep = dd
+					deep_in = round[r]
+	for r in round.size():
+		var si := round[r]
+		var sd: Dictionary = solids[si]
+		var xf: Transform3D = at[si]
+		if not (round_box[r] as AABB).intersects(mine.grow(0.002)):
+			continue
+		var spts := (sd["field"] as ShapeField).surface_points()
+		var every := maxi(1, spts.size() / LAY_POINTS)
+		for j in range(0, spts.size(), every):
+			var p: Vector3 = xf * spts[j]
+			if not mine.grow(0.002).has_point(p):
+				continue
+			for k in own.size():
+				var lp: Vector3 = (own_inv[k] as Transform3D) * p
+				if not ((solids[own[k]] as Dictionary)["box"] as AABB).grow(0.002).has_point(lp):
+					continue
+				var dd := -float(((solids[own[k]] as Dictionary)["field"] as ShapeField).sample(lp).x)
+				if dd > deep:
+					deep = dd
+					deep_in = si
+	return {"deep": deep, "in": deep_in}
+
+
+## Free part [param wi] (its solids [param own] where [param at] has them, moved [param lay]) let go among solids [param round] as they
+## stand, for [constant LAND_TRIAL] seconds ([method RigidParts.trial] on a body of its own, nothing else moving): the motion it comes to
+## rest by, from there - or null where it would end in something.
+func _lay_trial(wi: int, own: PackedInt32Array, round: PackedInt32Array, at: Array, lay: Transform3D) -> Variant:
+	var world: Array = []
+	for si in solids.size():
+		var sd: Dictionary = solids[si]
+		var xf: Transform3D = Transform3D.IDENTITY if at[si] == null else ((lay * (at[si] as Transform3D)) if own.has(si) else (at[si] as Transform3D))
+		world.append({"field": sd.get("field"), "box": sd["box"], "xf": xf, "xf0": xf, "xf00": xf, "inv": xf.affine_inverse(),
+			"wbox": (xf * (sd["box"] as AABB)).grow(0.001), "moving": false, "jolt": 0.0, "dt": 1.0 / float(FPS), "wpts": null, "wpts_xf": Transform3D(),
+			"on": own.has(si) or round.has(si), "mu": _surface_friction(String((sd["part"] as Dictionary).get("material", "")))})
+	var xfs: Array = []
+	var masses: Array = []
+	for si in own:
+		xfs.append((world[si] as Dictionary)["xf"])
+		masses.append(_mass_at(solids[si], (world[si] as Dictionary)["xf"]))
+	var made := _made_body(own, xfs, masses)
+	if made.is_empty():
+		return null
+	var scratch := RigidParts.new()
+	scratch._solids = world
+	scratch._top = 0.0
+	var bi := scratch.add(wi, own, xfs, float(made["m"]), made["i"], made["c"], made["pts"], (world[own[0]] as Dictionary)["mu"], -1, Transform3D.IDENTITY)
+	var tr := scratch.trial(bi, LAND_TRIAL, 1.0 / float(FPS))
+	var end: Transform3D = tr["pose"]
+	# ...where it comes to rest there: never tumbling away, as a hand lets go of nothing that would ([method _lands_ill]), nor into anything
+	if bool(tr["falling"]) or float(tr["turned"]) > LAND_TILT or float(_lay_depth(own, round, at, end * lay)["deep"]) > LAY_DEEP:
+		return null
+	return end
+
+
+## How far any point of solids [param own] (where [param at] has them) goes moved [param m] (meters).
+func _lay_span(own: PackedInt32Array, at: Array, m: Transform3D) -> float:
+	var most := 0.0
+	for si in own:
+		var xf: Transform3D = at[si]
+		var b: AABB = (solids[si] as Dictionary)["box"]
+		for k in 8:
+			var p := xf * b.get_endpoint(k)
+			most = maxf(most, (m * p).distance_to(p))
+	return most
+
+
+## What a part is laid out of, in words: a solid's label, or the table's top.
+func _lay_label(si: int) -> String:
+	return _solid_label(si) if si >= 0 else "the table's top"
 
 
 ## Whether [param part] is of the liquid material.
@@ -397,7 +621,9 @@ func build() -> void:
 				loose_parts[int(sd["loose"])] = []
 			(loose_parts[int(sd["loose"])] as Array).append(sd)
 			continue
-		sd["field"] = ShapeField.of(sd["part"], sd["box"])
+		# (made already where a loose part was laid out of what it was built in, [method lay_loose])
+		if not sd.has("field"):
+			sd["field"] = ShapeField.of(sd["part"], sd["box"])
 		# ...its surface's points made now, before any bake runs beside the picture: both ask them
 		# ([RigidParts] as a body meets it, the work as a plan sets a thing down by it), so they are not
 		# first made on two threads at once ([method ShapeField.surface_points])
@@ -735,11 +961,14 @@ func _inside_mesh(vs: Vessel, mesh: MeshInstance3D, sd: Dictionary) -> ArrayMesh
 	return g.mesh()
 
 
-## The grains: each part's grains laid into the inside of the hollow part of its thing it is drawn in, up
-## to its `fill` - or, in none, heaped where it is drawn. An absent start creates no matter.
-## Grains keep their written size across vessels; their shared budget leaves room for the loose bodies.
+## The grains: each part's grains laid into the inside of the hollow part of its thing it is drawn in, from
+## its floor up to its `fill` - or, in none, heaped where it is drawn - as close as spheres pack, each resting on
+## what is under it ([method _laid]). Grains keep their written size: a capped bed is shallower, never sparser.
+## Their shared budget leaves room for the loose things the plan can wake ([method _loose_room]). One not there at
+## the start (`grow`, `fill` or `shown` none) is laid as the work brings it, a layer at a time ([method _reveal_step]).
 func _make_grains() -> void:
 	var mats: Dictionary = work.materials
+	_wakes_of()
 	var reserved := _loose_room()
 	for gi in grains.size():
 		var g: Dictionary = grains[gi]
@@ -757,155 +986,244 @@ func _make_grains() -> void:
 			if cand.contains(p) and (vs == null or cand.volume < vs.volume):
 				vs = cand
 				host = int((liquids[li] as Dictionary)["solid"])
-		var want := float(part.get("grain", 0.3)) * 0.005
+		var rad := clampf(float(part.get("grain", 0.3)) * 0.005, Particles.POWDER, Particles.SPHERE.y)
+		g["radius"] = rad
+		var budget := mini(GRAINS_MOST, maxi(0, (sim.room() - reserved) / (grains.size() - gi)))
 		var spots := PackedVector3Array()
 		if vs != null:
-			var sd: Dictionary = solids[host]
-			var xf: Transform3D = sd["rest"]
+			var xf: Transform3D = (solids[host] as Dictionary)["rest"]
 			var up := (xf.basis.inverse() * Vector3.UP).normalized()
-			var fill := float(part.get("fill", 0.4))
-			var rad := clampf(want, Particles.POWDER, Particles.SPHERE.y)
-			var s := vs.level(up, fill)
-			var scale := xf.basis.get_scale()
-			var local_rad := rad / minf(scale.x, minf(scale.y, scale.z))
-			var pitch_rad := maxf(local_rad, pow(vs.volume * fill * PACKED / (float(GRAINS_MOST) * 4.18879), 1.0 / 3.0))
-			spots = _pack(vs, local_rad, s, up, xf, gi, pitch_rad)
-			g["radius"] = rad
+			spots = _pack(vs, rad, vs.level(up, float(part.get("fill", 0.4))), up, xf, gi, budget)
 		else:
-			var n := clampi(int(part.get("amount", 0)) if int(part.get("amount", 0)) > 0 else 60, 1, GRAINS_MOST)
-			var rad := clampf(want, Particles.POWDER, Particles.SPHERE.y)
-			spots = _heap(at_w.origin, rad, n, gi)
-			g["radius"] = rad
+			var n := clampi(int(part.get("amount", 0)) if int(part.get("amount", 0)) > 0 else 60, 1, budget)
+			spots = _heap(at_w.origin, rad, n, gi) if budget > 0 else PackedVector3Array()
+		var host_xf: Transform3D = (solids[host] as Dictionary)["rest"] if host >= 0 else Transform3D.IDENTITY
+		var m: Variant = mats.get(String(part.get("material", "")))
+		g["solid"] = host
+		g["ids"] = PackedInt32Array()
+		g["mm"] = _lumps(spots.size(), m if m is Dictionary else {}, gi)
 		var start: Dictionary = (part.get("work", {}) as Dictionary).get("start", {})
 		if float(start.get("grow", 1.0)) <= 0.001 or float(start.get("fill", 1.0)) <= 0.001 or float(start.get("shown", 1.0)) <= 0.5:
-			spots.clear()
-		var budget := maxi(0, (sim.room() - reserved) / (grains.size() - gi))
-		spots.resize(mini(spots.size(), budget))
-		if vs != null:
-			spots = _supported_grains(spots, float(g["radius"]), vs, (solids[host] as Dictionary)["rest"])
+			# ...brought later, by its work: laid then where it would lie now, in what holds it as that stands then
+			var local := PackedVector3Array()
+			for p in spots:
+				local.append(host_xf.affine_inverse() * p)
+			_reveals.append({"grains": gi, "wi": int(g["wi"]), "spots": local, "host": host, "mi": mi, "done": 0})
+			if int(g["wi"]) >= 0:
+				_reveal_chs["w%d:grow" % int(g["wi"])] = true
+			reserved += spots.size()
+			continue
 		var ids := PackedInt32Array()
-		var host_xf: Transform3D = (solids[host] as Dictionary)["rest"] if host >= 0 else Transform3D.IDENTITY
 		for p in spots:
-			var i := sim.add(p, float(g["radius"]), mi, gi, host, host_xf)
+			var i := sim.add(p, rad, mi, gi, host, host_xf)
 			if i >= 0:
 				ids.append(i)
 		g["ids"] = ids
-		g["solid"] = host
-		var m: Variant = mats.get(String(part.get("material", "")))
-		g["mm"] = _lumps(ids.size(), m if m is Dictionary else {}, gi)
 
 
-## Particle slots kept for loose things not yet awake: grain beds and sprinkles cannot use their room.
+## Particle slots kept for the loose things not yet awake that the plan can wake ([member loose]' `wakes`): grain beds and sprinkles
+## never take their room.
 func _loose_room() -> int:
 	var count := 0
 	for L in loose:
-		if int((L as Dictionary)["body"]) < 0:
+		if int((L as Dictionary)["body"]) < 0 and bool((L as Dictionary).get("wakes", true)):
 			count += ((L as Dictionary)["spheres"] as PackedVector3Array).size()
 	return count
 
 
-## Spheres of [param rad] packed into vessel [param vs]'s inside up to [param s] along [param up] (its
-## part space), each clear of its walls and a layer offset from the one under it - in the table's space
-## ([param xf]). The pitch spreads a capped bed across its vessel; its grains retain their own radius.
-func _pack(vs: Vessel, rad: float, s: float, up: Vector3, xf: Transform3D, salt: int, pitch_rad: float) -> PackedVector3Array:
-	var out := PackedVector3Array()
-	var step := pitch_rad * 2.0
-	var lo := Vector3(INF, INF, INF)
-	var hi := Vector3(-INF, -INF, -INF)
-	for p in vs.points:
-		lo = Vector3(minf(lo.x, p.x), minf(lo.y, p.y), minf(lo.z, p.z))
-		hi = Vector3(maxf(hi.x, p.x), maxf(hi.y, p.y), maxf(hi.z, p.z))
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([salt, "grains"])
-	var layer := 0
-	var y := vs.field.pivot.y + (vs.floor_y - vs.field.pivot.y) * vs.field.scale.y + rad * 1.01
-	while y < hi.y and out.size() < GRAINS_MOST:
-		var off := (pitch_rad if layer % 2 == 1 else 0.0)
-		var x := lo.x + off
-		while x <= hi.x:
-			var z := lo.z + off
-			while z <= hi.z:
-				var p := Vector3(x, y, z) + Vector3(rng.randf_range(-0.15, 0.15), 0.0, rng.randf_range(-0.15, 0.15)) * rad
-				if p.dot(up) <= s - rad * 0.3 and _clear_in(vs, p, rad):
-					out.append(xf * p)
-					if out.size() >= GRAINS_MOST:
-						return out
-				z += step
-			x += step
-		y += step * 0.86
-		layer += 1
-	return out
+## Which loose things the plan can wake (each one's `wakes`): one an act takes up, or whose thing - or what it lies on or in - an act
+## moves, aims at or names as a place; and the [constant LOOSE_SPARE] largest of the rest, for what a passing tool or a spill stirs.
+## A table built before any act is planned keeps room for all of them.
+func _wakes_of() -> void:
+	var named := {}
+	var moved := {}
+	for a in work.acts:
+		for tr in (a as Dictionary)["tracks"]:
+			var d: Dictionary = tr
+			if d.has("_wi"):
+				moved[int(d["_wi"])] = true
+				named[int((work.works[int(d["_wi"])] as Dictionary)["thing"])] = true
+			if d.has("_ti"):
+				named[int(d["_ti"])] = true
+			_names_in(d, named, 0)
+	var rest: Array = []
+	for li in loose.size():
+		var L: Dictionary = loose[li]
+		var on := _host_at((L["box"] as AABB).get_center(), int(L["thing"]))
+		var wakes: bool = work.acts.is_empty() or moved.has(int(L["wi"])) or named.has(int(L["thing"])) \
+			or (on >= 0 and named.has(int((solids[on] as Dictionary)["thing"])))
+		L["wakes"] = wakes
+		if not wakes:
+			rest.append(li)
+	rest.sort_custom(func(a: int, b: int) -> bool:
+		return ((loose[a] as Dictionary)["spheres"] as PackedVector3Array).size() > ((loose[b] as Dictionary)["spheres"] as PackedVector3Array).size())
+	for k in mini(LOOSE_SPARE, rest.size()):
+		(loose[int(rest[k])] as Dictionary)["wakes"] = true
 
 
-## Whether a sphere of [param rad] at [param p] lies in [param vs]'s inside, clear of its walls.
-func _clear_in(vs: Vessel, p: Vector3, rad: float) -> bool:
-	if not vs.contains(p):
-		return false
-	var d := vs.field.sample(p).x
-	return d > rad * 1.0001
+## Every thing a track names in its words ([param v], `thing`, `to`, `into`, `press`, a key's `at`...): "name" or "name/part" or
+## "name.point" - into [param named], by its number.
+func _names_in(v: Variant, named: Dictionary, depth: int) -> void:
+	if depth > 4:
+		return
+	if v is String:
+		var head := String(v).get_slice("/", 0).get_slice(".", 0)
+		var ti := work._thing_named(head)
+		if ti < 0:
+			ti = work._thing_named(String(v))
+		if ti >= 0:
+			named[ti] = true
+	elif v is Dictionary:
+		for k in v:
+			if not String(k).begins_with("_"):
+				_names_in((v as Dictionary)[k], named, depth + 1)
+	elif v is Array:
+		for e in v:
+			_names_in(e, named, depth + 1)
 
 
-## Packed grains lowered onto the vessel's floor and the grains below them, before sleeping on it.
-## The field is searched down each column; spherical contacts place each next layer on what is already laid.
-func _supported_grains(spots: PackedVector3Array, rad: float, vs: Vessel, xf: Transform3D) -> PackedVector3Array:
-	var ordered: Array = Array(spots)
-	ordered.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.y < b.y)
+## A BED of grains of [param rad] (meters) in vessel [param vs]'s inside (its part posed [param xf], the table's space), from its
+## floor up to [param s] along [param up] (its part space): at most [param most], laid where they rest ([method _laid]).
+func _pack(vs: Vessel, rad: float, s: float, up: Vector3, xf: Transform3D, salt: int, most: int) -> PackedVector3Array:
 	var inv := xf.affine_inverse()
 	var scale := xf.basis.get_scale()
 	var least := minf(scale.x, minf(scale.y, scale.z))
-	var floor_y := (xf * vs.field.box).position.y
-	var laid := PackedVector3Array()
-	for spot in ordered:
-		var p: Vector3 = spot
-		var above := p.y
-		var hit := false
-		for _k in 512:
-			var gap := vs.field.sample(inv * p).x * least - rad
-			if gap <= 0.0:
-				var below := p.y
-				for _j in 12:
-					p.y = (below + above) * 0.5
-					if vs.field.sample(inv * p).x * least < rad:
-						below = p.y
-					else:
-						above = p.y
-				p.y = above
-				hit = true
-				break
-			above = p.y
-			p.y -= maxf(gap, rad * 0.5)
-			if p.y < floor_y - rad * 2.0:
-				break
-		if not hit:
-			continue
-		for q in laid:
-			var across2 := Vector2(p.x - q.x, p.z - q.z).length_squared()
-			if across2 < 4.0 * rad * rad:
-				p.y = maxf(p.y, q.y + sqrt(4.0 * rad * rad - across2))
-		if vs.contains(inv * p) and vs.field.sample(inv * p).x * least >= rad * 0.999:
-			laid.append(p)
-	return laid
+	var lo := Vector3(INF, INF, INF)
+	var hi := Vector3(-INF, -INF, -INF)
+	var mid := Vector3.ZERO
+	for p in vs.points:
+		var q := xf * p
+		lo = Vector3(minf(lo.x, q.x), minf(lo.y, q.y), minf(lo.z, q.z))
+		hi = Vector3(maxf(hi.x, q.x), maxf(hi.y, q.y), maxf(hi.z, q.z))
+		mid += p
+	if vs.points.is_empty():
+		return PackedVector3Array()
+	mid /= float(vs.points.size())
+	# ...no layer laid above the level: its height where the inside's middle meets it
+	hi.y = minf(hi.y, (xf * (mid + up * (s - mid.dot(up)))).y + rad)
+	# ...how far a grain is clear of the floor and walls, and whether it is in the inside, under the level
+	var gap := func(p: Vector3) -> float:
+		return vs.field.sample(inv * p).x * least - rad
+	var room := func(p: Vector3) -> bool:
+		var local := inv * p
+		return vs.contains(local) and local.dot(up) <= s - rad * 0.3
+	return _laid(lo, hi, (lo + hi) * 0.5, INF, rad, most, salt, gap, room)
 
 
-## A HEAP of [param n] spheres of [param rad] about [param at] (the table's space): a cone a layer at a time, the
-## widest at the bottom, as a poured heap lies.
-func _heap(at: Vector3, rad: float, n: int, salt: int) -> PackedVector3Array:
+## How much wider than touching a bed's grains are laid, as a share of a grain's radius - each set off its place by as much again, so no
+## two are ever in one another ([method _laid]).
+const BED_SLACK := 0.04
+## ...what counts as touching, as a share of a grain's radius: a grain within it of three below rests in their hollow.
+const BED_TOUCH := 0.15
+## ...and the slope of a heap's side (its rise over its run): what a poured heap stands at.
+const HEAP_SLOPE := 0.6
+## ...and how far under the lowest place a grain may be laid at it is looked down for a floor (meters).
+const BED_DOWN := 0.05
+
+
+## GRAINS LAID WHERE THEY REST: spheres of [param rad] in layers as close as they pack, each in the hollows of the one under it, within
+## the box [param lo]-[param hi] (the table's space) and a cone of [param slope] about [param mid] (INF: none) - the lowest layer first,
+## the nearest [param mid] first, at most [param most]. Each is lowered until it meets the floor or a wall ([param gap]: how far a sphere
+## there is clear of them, meters) or the grains laid before it, and kept only where [param room] says it may be and it rests: on a floor,
+## or in the hollow of three grains, or of two and a wall.
+func _laid(lo: Vector3, hi: Vector3, mid: Vector3, slope: float, rad: float, most: int, salt: int, gap: Callable, room: Callable) -> PackedVector3Array:
 	var out := PackedVector3Array()
+	if most <= 0:
+		return out
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([salt, "heap"])
-	var base := maxi(int(ceil(pow(float(n) * 1.6, 1.0 / 3.0) * 1.4)), 1)
+	rng.seed = hash([salt, "grains"])
+	var pitch := rad * 2.0 * (1.0 + BED_SLACK)
+	var row := pitch * sqrt(3.0) * 0.5
+	var rise := pitch * sqrt(2.0 / 3.0)
+	var touch := rad * (2.0 + BED_TOUCH)
 	var layer := 0
-	while out.size() < n and layer < 40:
-		var ring := maxi(base - layer, 1)
-		var y := at.y + rad + float(layer) * rad * 1.7
-		for i in range(-ring, ring + 1):
-			for k in range(-ring, ring + 1):
-				if Vector2(i, k).length() > float(ring) + 0.01 or out.size() >= n:
-					continue
-				var j := Vector3(rng.randf_range(-0.2, 0.2), 0.0, rng.randf_range(-0.2, 0.2)) * rad
-				out.append(Vector3(at.x + float(i) * rad * 2.0, y, at.z + float(k) * rad * 2.0) + j)
+	while out.size() < most:
+		var y := lo.y + rad + float(layer) * rise
+		if y > hi.y:
+			break
+		# ...this layer's places, in the hollows of the last: the nearest the middle first
+		var shift := Vector2(pitch * 0.5, row / 3.0) if layer % 2 == 1 else Vector2.ZERO
+		var reach := INF if is_inf(slope) else (hi.y - lo.y) / slope - (y - lo.y) / slope
+		var places: Array = []
+		var nz := int(ceil((hi.z - lo.z) / row)) + 1
+		var nx := int(ceil((hi.x - lo.x) / pitch)) + 1
+		for iz in nz:
+			for ix in nx:
+				var p := Vector3(lo.x + float(ix) * pitch + (pitch * 0.5 if iz % 2 == 1 else 0.0) + shift.x, y + rad, lo.z + float(iz) * row + shift.y)
+				var d := Vector2(p.x - mid.x, p.z - mid.z).length()
+				if d <= reach:
+					places.append([d, p])
+		if places.is_empty():
+			layer += 1
+			continue
+		places.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+		for pl in places:
+			if out.size() >= most:
+				break
+			var p: Vector3 = (pl as Array)[1]
+			var jit := rng.randf() * TAU
+			p += Vector3(cos(jit), 0.0, sin(jit)) * (rad * BED_SLACK * rng.randf())
+			if float(gap.call(p)) < 0.0:
+				continue
+			# ...down until it meets the floor or a wall
+			var clear := p.y
+			var met := false
+			for _k in 256:
+				var g := float(gap.call(p))
+				if g <= 0.0:
+					var below := p.y
+					for _j in 12:
+						p.y = (below + clear) * 0.5
+						if float(gap.call(p)) < 0.0:
+							below = p.y
+						else:
+							clear = p.y
+					p.y = clear
+					met = true
+					break
+				clear = p.y
+				p.y -= maxf(g, rad * 0.25)
+				# (an inside's lowest sample stands half a cell over its floor: looked for well below it)
+				if p.y < lo.y - BED_DOWN:
+					break
+			if not met:
+				continue
+			# ...and onto the grains laid before it
+			for q in out:
+				var across2 := Vector2(p.x - q.x, p.z - q.z).length_squared()
+				if across2 < 4.0 * rad * rad:
+					p.y = maxf(p.y, q.y + sqrt(4.0 * rad * rad - across2))
+			if float(gap.call(p)) < -rad * 0.01 or not bool(room.call(p)):
+				continue
+			if not _rests(p, out, rad, touch, gap):
+				continue
+			out.append(p)
 		layer += 1
 	return out
+
+
+## Whether a grain of [param rad] at [param p] rests: on a floor ([param gap] meets something straight under it), or within [param touch]
+## of three of [param laid] below its middle, or of two and a wall.
+static func _rests(p: Vector3, laid: PackedVector3Array, rad: float, touch: float, gap: Callable) -> bool:
+	if float(gap.call(p + Vector3(0.0, -rad * BED_TOUCH, 0.0))) < -rad * 0.05 and float(gap.call(p)) < rad * BED_TOUCH:
+		return true
+	var under := 0
+	for q in laid:
+		if q.y < p.y and q.distance_squared_to(p) < touch * touch:
+			under += 1
+	return under >= 3 or (under >= 2 and float(gap.call(p)) < rad * BED_TOUCH)
+
+
+## A HEAP of [param n] spheres of [param rad] about [param at] (the table's space): a cone as a poured heap lies, laid where they rest
+## ([method _laid]) on what is under [param at].
+func _heap(at: Vector3, rad: float, n: int, salt: int) -> PackedVector3Array:
+	# ...as wide as n packed grains stand at its slope: a cone's volume, pi r^3 slope / 3, over a grain's, packed
+	var across := pow(float(n) * 4.0 * rad * rad * rad / (0.6 * HEAP_SLOPE), 1.0 / 3.0) + rad * 2.0
+	var lo := Vector3(at.x - across, at.y, at.z - across)
+	var hi := Vector3(at.x + across, at.y + across * HEAP_SLOPE + rad * 2.0, at.z + across)
+	var gap := func(p: Vector3) -> float: return p.y - rad - at.y
+	var room := func(_p: Vector3) -> bool: return true
+	return _laid(lo, hi, at, HEAP_SLOPE, rad, n, salt, gap, room)
 
 
 ## The loose things: each loose work's parts the spheres that will fill them - a body of them once
@@ -1040,12 +1358,13 @@ func _wake_loose(li: int, t: float) -> bool:
 		at.append(moved * p)
 		mid += moved * p
 	mid /= float(spheres.size())
-	var host := _host_at(mid, int(L["thing"]))
+	var host := _host_under(at, float(L["rad"]))
 	var host_xf: Transform3D = (solids[host] as Dictionary)["xf"] if host >= 0 else Transform3D.IDENTITY
 	var bi := sim.add_body(at, float(L["rad"]), int(L["mi"]), 1000 + li, host, host_xf, float(L.get("contact", 0.0)))
 	if bi < 0:
 		L["full"] = true
 		return false
+	(sim.bodies[bi] as Dictionary)["through"] = _lies_through(at, host)
 	L["body"] = bi
 	L["n0"] = now
 	L["rest"] = null
@@ -1120,7 +1439,7 @@ func _wake_near_loose(t: float) -> void:
 
 
 ## A loose thing at rest lies again: a body asleep [constant RELEASE_AFTER] seconds, whole, held by
-## nothing and in no liquid, gives its spheres back (the solver holds a limited number), its place kept
+## nothing, in no liquid and none of it dissolved (made again it would be whole), gives its spheres back (the solver holds a limited number), its place kept
 ## where it came to rest as what it rests on holds it - and anything coming to it makes it a body again
 ## there ([method _wake_loose]).
 func _rest_loose(dt: float) -> void:
@@ -1133,7 +1452,7 @@ func _rest_loose(dt: float) -> void:
 		var b: Dictionary = sim.bodies[bi]
 		var ids: PackedInt32Array = b["ids"]
 		if not bool(b["intact"]) or b["held"] != null or _piece_at.has(bi) or ids.is_empty() or not sim.body_asleep(bi) \
-				or sim.wet[ids[0]] >= 0:
+				or sim.wet[ids[0]] >= 0 or b.has("share"):
 			L["calm"] = 0.0
 			continue
 		L["calm"] = float(L.get("calm", 0.0)) + dt
@@ -1206,6 +1525,62 @@ func _host_at(p: Vector3, ti: int) -> int:
 			bd = d
 			best = si
 	return best
+
+
+## What a loose thing whose spheres are at [param at] (the table's space, [param rad] across) lies in or on, where the solids are now - what
+## its spheres sleep on, and go with: the inside more than half of them are in; else what holds them up - a solid whose surface under them faces up,
+## within a few millimeters, the one under the most of them - unless one rests on the table's top, which no hand moves; else -1 (the
+## table). Never the jar it lies beside, nor the vial whose neck a curl lies round.
+func _host_under(at: PackedVector3Array, rad: float) -> int:
+	if at.is_empty():
+		return -1
+	var count := {}
+	for p in at:
+		for li in liquids.size():
+			var si := int((liquids[li] as Dictionary)["solid"])
+			if ((liquids[li] as Dictionary)["vessel"] as Vessel).contains(((solids[si] as Dictionary)["xf"] as Transform3D).affine_inverse() * p):
+				count[si] = int(count.get(si, 0)) + 1
+				break
+	var best := -1
+	for si in count:
+		if int(count[si]) * 2 > at.size() and (best < 0 or int(count[si]) > int(count[best])):
+			best = int(si)
+	if best >= 0:
+		return best
+	var reach := rad + HOST_NEAR
+	var under := {}
+	for p in at:
+		if p.y < reach:
+			return -1
+		for si in solids.size():
+			var sd: Dictionary = solids[si]
+			if not (sd["wbox"] as AABB).grow(reach).has_point(p):
+				continue
+			var f: Vector4 = (sd["field"] as ShapeField).sample((sd["inv"] as Transform3D) * p)
+			if f.x < reach and ((sd["xf"] as Transform3D).basis * Vector3(f.y, f.z, f.w)).normalized().y > Particles.CARRIED:
+				under[si] = int(under.get(si, 0)) + 1
+	for si in under:
+		if best < 0 or int(under[si]) > int(under[best]):
+			best = int(si)
+	return best
+
+
+## The vessels a loose thing whose spheres are at [param at] lies through, as it is woken - a sphere in an inside it is not in (not
+## [param host], what it lies in): a curl fallen against a vial with an arc through its wall. It meets them not at all until it is clear
+## of them ([method Particles._clear_through]), so lifted, the vial goes out of it, never off with it.
+func _lies_through(at: PackedVector3Array, host: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for li in liquids.size():
+		var si := int((liquids[li] as Dictionary)["solid"])
+		if si == host or out.has(si):
+			continue
+		var vs: Vessel = (liquids[li] as Dictionary)["vessel"]
+		var inv := ((solids[si] as Dictionary)["xf"] as Transform3D).affine_inverse()
+		for p in at:
+			if vs.contains(inv * p):
+				out.append(si)
+				break
+	return out
 
 
 ## How a solid of table material [param name] holds what rests on it: its surface's own friction, static and kinetic
@@ -1356,10 +1731,10 @@ func replan() -> void:
 	var old: Dictionary = _chan_seen
 	var now_chan: Dictionary = work._chan
 	for ch in now_chan:
-		if _bakes(String(ch)):
+		if _bakes(String(ch)) or _reveal_chs.has(ch):
 			from = minf(from, _hold_changed(String(ch), old.get(ch, []), now_chan[ch], _changed_from(old.get(ch, []), now_chan[ch])))
 	for ch in old:
-		if not now_chan.has(ch) and _bakes(String(ch)):
+		if not now_chan.has(ch) and (_bakes(String(ch)) or _reveal_chs.has(ch)):
 			from = minf(from, _changed_from(old[ch], []))
 	# ...and when each sprinkle falls, against when it fell in the plan before (the app's own list of
 	# them, [member _sprinkles_seen]: a sprinkle's Dictionary is the bake's, which writes into it as it falls)
@@ -1526,6 +1901,8 @@ func _checkpoint() -> void:
 	_ck.append({"k": _k, "sim": sim.snapshot(), "liq": liq, "np": parcels.size(), "nr": ripples.size(), "ns": splashes.size(), "npc": pieces.size(),
 		"sprinkled": _sprinkles.map(func(s: Dictionary) -> int: return int(s.get("done", 0))),
 		"sprinkled_ids": _sprinkles.map(func(s: Dictionary) -> PackedInt32Array: return (grains[int(s["grains"])] as Dictionary)["ids"]),
+		"revealed": _reveals.map(func(r: Dictionary) -> int: return int(r["done"])),
+		"revealed_ids": _reveals.map(func(r: Dictionary) -> PackedInt32Array: return (grains[int(r["grains"])] as Dictionary)["ids"]),
 		"held": _held.duplicate(true), "loose": loose.map(func(L: Dictionary) -> Array: return [L["body"], L["n0"], L["full"], L.get("rest"),
 			L.get("rest_host", -1), L.get("rest_hrel"), L["box"], L.get("calm", 0.0), L.get("rest_hxf"), L.get("rest_up"), L.get("mass", 0.0), L.get("rest_off")]),
 		"swing": _swing.map(func(s: Dictionary) -> Array: return [s["a"], s["w"], s["rest"], s["still"], s["sig"], s.get("b1"), s.get("b2")]),
@@ -1601,6 +1978,11 @@ func _restore(ck: Dictionary) -> void:
 		# ...and the grains each had let fall by then, which the solver's own were restored to
 		if i < done_ids.size():
 			(grains[int((_sprinkles[i] as Dictionary)["grains"])] as Dictionary)["ids"] = done_ids[i]
+	var shown: Array = ck.get("revealed", [])
+	var shown_ids: Array = ck.get("revealed_ids", [])
+	for i in _reveals.size():
+		(_reveals[i] as Dictionary)["done"] = int(shown[i]) if i < shown.size() else 0
+		(grains[int((_reveals[i] as Dictionary)["grains"])] as Dictionary)["ids"] = shown_ids[i] if i < shown_ids.size() else PackedInt32Array()
 	# Where the work held each loose thing from, as it was: begun again, a carry under way would be held
 	# from where the thing was at the checkpoint
 	_held = (ck.get("held", {}) as Dictionary).duplicate(true)
@@ -1855,7 +2237,7 @@ func _frame(k: int) -> Dictionary:
 		# ...and its surface still moving
 		if bool(((s as Dictionary)["w"] as Dictionary)["on"]):
 			busy = true
-	busy = busy or _sprinkling(t) or _liquid_fills(t) or _swinging() or rigid.busy() or _rings_boiling(t)
+	busy = busy or _sprinkling(t) or _revealing(t) or _liquid_fills(t) or _swinging() or rigid.busy() or _rings_boiling(t)
 	if profiling:
 		_why(t)
 	# Nothing moves and nothing is moving: the frame before, with nothing reckoned
@@ -1891,6 +2273,7 @@ func _frame(k: int) -> Dictionary:
 	_wake_near_loose(t)
 	_held_step(t, dt)
 	_sprinkle_step(t, dt)
+	_reveal_step(t)
 	c = _spent("held", c)
 	sim.step(dt, world)
 	c = _spent("particles", c)
@@ -2958,22 +3341,16 @@ func _goes(_wi: int) -> bool:
 	return true
 
 
-## A rigid body of solids [param own], keyed [param key] (a part's work, or a whole thing's, [method
-## _ch_of]): their mass, middle and inertia, their surfaces, asleep as built on what holds them - its
-## number, or -1 when there is nothing to it.
-func _add_body(key: int, own: PackedInt32Array) -> int:
-	if own.is_empty():
-		return -1
+## What a body of solids [param own] is, each posed [param xfs] (the table's space) and of mass [param masses] ([method _mass_of]):
+## `{m, c (its middle), i (its inertia about it, a Basis), pts (its surface)}` - empty where there is nothing to it.
+func _made_body(own: PackedInt32Array, xfs: Array, masses: Array) -> Dictionary:
 	var m := 0.0
 	var c := Vector3.ZERO
-	var masses: Array = []
-	for si in own:
-		var ms := _mass_of(si)
-		masses.append(ms)
-		m += float(ms["m"])
-		c += (ms["c"] as Vector3) * float(ms["m"])
+	for ms in masses:
+		m += float((ms as Dictionary)["m"])
+		c += ((ms as Dictionary)["c"] as Vector3) * float((ms as Dictionary)["m"])
 	if m <= 0.0:
-		return -1
+		return {}
 	c /= m
 	# its inertia about its own middle: each solid's about its own, moved there
 	var ix := Vector3.ZERO
@@ -2988,15 +3365,31 @@ func _add_body(key: int, own: PackedInt32Array) -> int:
 		iy += ib.y + Vector3(-r.y * r.x, r2 - r.y * r.y, -r.y * r.z) * mk
 		iz += ib.z + Vector3(-r.z * r.x, -r.z * r.y, r2 - r.z * r.z) * mk
 	var pts := PackedVector3Array()
+	for k in own.size():
+		for q in ((solids[own[k]] as Dictionary)["field"] as ShapeField).surface_points():
+			pts.append((xfs[k] as Transform3D) * q)
+	return {"m": m, "c": c, "i": Basis(ix, iy, iz), "pts": pts}
+
+
+## A rigid body of solids [param own], keyed [param key] (a part's work, or a whole thing's, [method
+## _ch_of]): their mass, middle and inertia, their surfaces, asleep as built on what holds them - its
+## number, or -1 when there is nothing to it.
+func _add_body(key: int, own: PackedInt32Array) -> int:
+	if own.is_empty():
+		return -1
 	var rests: Array = []
+	var masses: Array = []
 	for si in own:
-		var sd: Dictionary = solids[si]
-		rests.append(sd["rest"])
-		for q in (sd["field"] as ShapeField).surface_points():
-			pts.append((sd["rest"] as Transform3D) * q)
+		rests.append((solids[si] as Dictionary)["rest"])
+		masses.append(_mass_of(si))
+	var made := _made_body(own, rests, masses)
+	if made.is_empty():
+		return -1
+	var c: Vector3 = made["c"]
+	var pts: PackedVector3Array = made["pts"]
 	var host := _rigid_host(own, c, pts)
 	var mu := _surface_friction(String(((solids[own[0]] as Dictionary)["part"] as Dictionary).get("material", "")))
-	var bi := rigid.add(key, own, rests, m, Basis(ix, iy, iz), c, pts, mu, host,
+	var bi := rigid.add(key, own, rests, float(made["m"]), made["i"], c, pts, mu, host,
 		(solids[host] as Dictionary)["rest"] if host >= 0 else Transform3D.IDENTITY)
 	_rigid_of[key] = bi
 	for si in own:
@@ -3024,6 +3417,22 @@ func _add_body(key: int, own: PackedInt32Array) -> int:
 					seat.append(si)
 					break
 	(rigid.bodies[bi] as Dictionary)["seat"] = seat
+	# ...and what of its own thing it stands through as built, deeper than any fit and never laid out of it ([method lay_loose]: a vial
+	# through a rack's bar drawn with no holes in it): the set dresser's hole, never met ([method _rigid_step])
+	var through := PackedInt32Array()
+	if key >= 0:
+		var ti := int((solids[own[0]] as Dictionary)["thing"])
+		for si in solids.size():
+			var sd: Dictionary = solids[si]
+			if int(sd["thing"]) != ti or own.has(si) or work._within(int(sd["wi"]), key) != 0:
+				continue
+			var inv := (sd["rest"] as Transform3D).affine_inverse()
+			var near := ((sd["rest"] as Transform3D) * (sd["box"] as AABB)).grow(0.001)
+			for q in pts:
+				if near.has_point(q) and float((sd["field"] as ShapeField).sample(inv * q).x) < -LAY_DEEP:
+					through.append(si)
+					break
+	(rigid.bodies[bi] as Dictionary)["through"] = through
 	return bi
 
 
@@ -3069,14 +3478,16 @@ func _rigid_step(t: float, dt: float) -> void:
 		var wi := int(b["wi"])
 		# ...a dormant one ([RigidParts]), untouched as built and taken up by no act now: nothing of it to
 		# reckon - the solver says whether something comes to it
+		# (what it was built through it never meets, held or not - [method _add_body])
+		var through: PackedInt32Array = b.get("through", PackedInt32Array())
 		if bool(b.get("dormant", false)) and not _held_at(wi, t):
-			b["seat_skip"] = PackedInt32Array()
+			b["seat_skip"] = through
 			continue
 		var n0 := _rest_of(wi)
 		var now := rigid.motion(bi) * n0
 		var moving := _held_at(wi, t)
 		var held: Variant = _held_pose(wi, t, now) if moving else _held_aloft(bi, wi, t)
-		b["seat_skip"] = PackedInt32Array()
+		b["seat_skip"] = through
 		# A part in its seat goes with its seat, unless its own move takes it out ([method _with_seat]): a
 		# cork carried with its jar, however its keys were written, or let go seated in its neck - welded
 		# there, eased onto it, and woken by nothing but a hand taking it out
@@ -3103,7 +3514,7 @@ func _rigid_step(t: float, dt: float) -> void:
 			continue
 		# ...eased into its seat or out of it by a hand, it never meets its seat: the hand knows a fit the set dresser made to
 		# the millimeter, which the solver's points are coarser than ([method _seat])
-		var skip := PackedInt32Array()
+		var skip := through.duplicate()
 		for si in b.get("seat", PackedInt32Array()):
 			if not _off_seat(si, wi, now, SEAT_REACH, SEAT_TURN):
 				skip.append(si)
@@ -3589,9 +4000,15 @@ func _mass_of(si: int) -> Dictionary:
 	var sd: Dictionary = solids[si]
 	if sd.get("mass") != null:
 		return sd["mass"]
+	var out := _mass_at(sd, sd["rest"])
+	sd["mass"] = out
+	return out
+
+
+## Solid [param sd]'s mass ([method _mass_of]) posed [param xf] (the table's space), reckoned afresh.
+func _mass_at(sd: Dictionary, xf: Transform3D) -> Dictionary:
 	var f: ShapeField = sd["field"]
 	var box: AABB = sd["box"]
-	var xf: Transform3D = sd["rest"]
 	var mat: Variant = work.materials.get(String((sd["part"] as Dictionary).get("material", "")))
 	var md: Dictionary = mat if mat is Dictionary else {}
 	var rho := float(md.get("density", (Props.MATERIALS.get(String(md.get("kind", "painted")), Props.MATERIALS["painted"]) as Dictionary)["density"])) * 1000.0
@@ -3629,7 +4046,6 @@ func _mass_of(si: int) -> Dictionary:
 			iy += Vector3(-r.y * r.x, r2 - r.y * r.y, -r.y * r.z) * mi
 			iz += Vector3(-r.z * r.x, -r.z * r.y, r2 - r.z * r.z) * mi
 		out = {"m": mi * float(pts.size()), "c": c, "i": Basis(ix, iy, iz)}
-	sd["mass"] = out
 	return out
 
 
@@ -3872,6 +4288,51 @@ func _sprinkle_step(t: float, _dt: float) -> void:
 		sd["done"] = due
 
 
+## Grains a work brings ([member _reveals]): as its `grow` and `fill` rise - and once it is `shown` - its bed laid from the floor up
+## ([method _laid]'s order), in what holds it as that stands now, never more than there is room for beside the loose things.
+func _reveal_step(t: float) -> void:
+	for rv in _reveals:
+		var d: Dictionary = rv
+		var spots: PackedVector3Array = d["spots"]
+		var due := _reveal_due(d, t)
+		var done := int(d["done"])
+		if due <= done:
+			continue
+		var host := int(d["host"])
+		var hxf: Transform3D = (solids[host] as Dictionary)["xf"] if host >= 0 else Transform3D.IDENTITY
+		var g: Dictionary = grains[int(d["grains"])]
+		var ids: PackedInt32Array = g["ids"]
+		var room := maxi(0, sim.room() - _loose_room())
+		var k := done
+		while k < due and k - done < room:
+			var i := sim.add(hxf * spots[k], float(g["radius"]), int(d["mi"]), int(d["grains"]), -2)
+			if i >= 0:
+				ids.append(i)
+			k += 1
+		# a packed array is a value: grown, and put back
+		g["ids"] = ids
+		d["done"] = k
+
+
+## How many of reveal [param d]'s grains its work has brought by [param t]: its share of them as its `grow` and `fill` say, once `shown`.
+func _reveal_due(d: Dictionary, t: float) -> int:
+	var wi := int(d["wi"])
+	var level := 1.0
+	if wi >= 0:
+		level = minf(clampf(float(twin.value("w%d:grow" % wi, t)), 0.0, 1.0), clampf(float(twin.value("w%d:fill" % wi, t)), 0.0, 1.0))
+		if float(twin.value("w%d:shown" % wi, t)) <= 0.5:
+			level = 0.0
+	return mini((d["spots"] as PackedVector3Array).size(), int(floor(level * float((d["spots"] as PackedVector3Array).size()) + 1e-4)))
+
+
+## Whether a work brings grains at [param t] ([method _reveal_step]): a frame stepped for them though nothing else moves.
+func _revealing(t: float) -> bool:
+	for rv in _reveals:
+		if _reveal_due(rv, t) > int((rv as Dictionary)["done"]):
+			return true
+	return false
+
+
 ## What the step said: things entering a liquid ring it, all of a frame's together - and a heavy thing
 ## entering fast splashes it, one thing at a time: by its own mass and speed, never what the frame's
 ## grains add up to (a little at a time they would sum to dozens of splashes). A grain weighs what it is
@@ -3990,6 +4451,11 @@ func _record(_t: float) -> Dictionary:
 		if rested != null and rh >= 0 and rh < solids.size():
 			rested = ((solids[rh] as Dictionary)["xf"] as Transform3D) * ((L as Dictionary)["rest_hrel"] as Transform3D)
 		var pose: Transform3D = sim.body_pose(lb) * ((L as Dictionary)["n0"] as Transform3D) if lb >= 0 else (rested if rested != null else (L as Dictionary)["built"])
+		# ...one dissolving, whole, drawn shrunk about its middle to what is left of it ([method Particles._melted])
+		if lb >= 0 and (sim.bodies[lb] as Dictionary).has("share") and bool((sim.bodies[lb] as Dictionary)["intact"]):
+			var mid: Vector3 = (sim.bodies[lb] as Dictionary)["c"]
+			var k := pow(float((sim.bodies[lb] as Dictionary)["share"]), 1.0 / 3.0)
+			pose = Transform3D(Basis.from_scale(Vector3(k, k, k)), mid - mid * k) * pose
 		bp.append_array([pose.basis.x, pose.basis.y, pose.basis.z, pose.origin])
 		bi.append((RESTED if rested != null else LYING) if lb < 0 else (1 if bool((sim.bodies[lb] as Dictionary)["intact"]) else 0))
 		# ...and a sheet's bend

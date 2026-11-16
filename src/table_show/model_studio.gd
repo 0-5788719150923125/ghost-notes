@@ -39,8 +39,8 @@ static func views(m: Dictionary, upto := -1) -> Dictionary:
 	for i in 4:
 		var dir := (Basis(Vector3.UP, TAU * float(i) / 4.0 + deg_to_rad(25.0)) * Vector3(0.0, 0.55, 0.83)).normalized()
 		cam.transform = Transform3D(Basis.looking_at(-dir, Vector3.UP), aim + dir * far)
-		# rendered through TablePreview._render like every agent picture: a minimized window draws nothing by itself
-		var img: Image = await TablePreview._render(vp, FRAMES)
+		# rendered through PropStudio.render like every agent picture: a minimized window draws nothing by itself
+		var img: Image = await PropStudio.render(vp, FRAMES)
 		if img == null or img.is_empty():
 			vp.queue_free()
 			return {"error": "no picture could be taken"}

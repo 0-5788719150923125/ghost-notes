@@ -29,7 +29,8 @@ func _ok(cond: bool, what: String) -> void:
 func _run() -> void:
 	await process_frame
 	for check in [_formula, _clock, _clock_law, _grind, _at_the_spot, _seated, _set_down, _carry, _through_keys, _copies, _cued,
-			_live_words, _cue_order, _after_quiet, _until_its_word, _spare_to_work, _safe, _write, _held_up, _loose_size, _put_back, _aloft]:
+			_live_words, _cue_order, _after_quiet, _until_its_word, _spare_to_work, _safe, _write, _held_up, _loose_size, _put_back, _aloft,
+			_press_part]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("table_work_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -147,6 +148,80 @@ static func _mortar_spec() -> Dictionary:
 			{"name": "pestle", "shape": "lathe", "profile": [[0, 0], [1.1, 0, 0.5], [0.8, 4], [0.9, 12], [0, 12.4]], "smooth": true,
 				"material": "stone", "joint": {"kind": "free"}, "points": {"tip": [0, 0, 0], "grip": [0, 12, 0]}}]}],
 		"materials": {"stone": {"kind": "stone", "color": "#8a8580"}, "leaf": {"kind": "plant", "color": "#4a6a2a"}}}
+
+
+## A kettle whose pot has a bar across its mouth and a coal bed beside it, each part with a `floor` of its own (the coal bed's first),
+## and a spoon.
+static func _kettle_spec() -> Dictionary:
+	return {"things": [
+		{"name": "kettle", "parts": [
+			{"name": "coal bed", "shape": "box", "size": [6, 1, 6], "at": [12, 0, 0], "material": "stone", "points": {"floor": [12, 1, 0]}},
+			{"name": "pot", "shape": "lathe", "profile": [[0, 0], [5, 0], [6, 5], [6.5, 5.3], [5.4, 5], [4.3, 1.2], [0, 1.2]],
+				"material": "stone", "points": {"floor": [0, 1.2, 0]}},
+			{"name": "bar", "shape": "box", "size": [14, 0.5, 1], "at": [0, 4.0, 0], "material": "stone"}]},
+		{"name": "spoon", "parts": [
+			{"name": "spoon", "shape": "lathe", "profile": [[0, 0], [0.6, 0, 0.3], [0.4, 3], [0.4, 14], [0, 14.3]], "smooth": true,
+				"material": "stone", "joint": {"kind": "free"}, "points": {"tip": [0, 0, 0], "grip": [0, 14, 0]}}]}],
+		"materials": {"stone": {"kind": "stone", "color": "#8a8580"}}}
+
+
+## A PART NAMED "thing/part" IS FOUND WHERE A LAW NAMES IT, AND TOGETHER: an aim's `around` the pot's own floor and its `press` onto the
+## pot's surface alone, so the spoon's tip goes round on the pot's floor - never the bar over it nor the coal bed beside it. A name that
+## is not on the table refuses its track and `act` says why: never left out silently, and never a `press` kept while the `around` it
+## goes round falls back to where the spoon stood. Controls: the whole kettle pressed meets the bar first, and the kettle's own `floor`
+## is the coal bed's; a part that is not there, a point it does not have, and an `around` naming nothing beside a `press` that is found
+## are each refused.
+func _press_part() -> bool:
+	var m := _medium()
+	var at := Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y)
+	_stand(m, _kettle_spec(), "kettle", at)
+	_stand(m, _kettle_spec(), "spoon", at + Vector3(0.0, 0.0, 0.15))
+	var stir := func(around: String, press: String) -> Dictionary:
+		return {"thing": "spoon", "part": "spoon", "law": "aim",
+			"tip": {"point": "tip", "around": around, "radius": 1.5, "period": 2.0, "press": press, "gap": 0.3},
+			"grip": {"point": "grip", "around": "kettle/pot.floor", "lift": 12, "radius": 3.0, "period": 2.0}}
+	m._work.build({"acts": [
+		{"name": "stir", "beat": 1, "length": 6, "tracks": [stir.call("kettle/pot.floor", "kettle/pot")]},
+		{"name": "no-lid", "beat": 1, "length": 3, "tracks": [stir.call("kettle/pot.floor", "kettle/lid")]},
+		{"name": "no-rim", "beat": 1, "length": 3, "tracks": [stir.call("kettle/pot.rim", "kettle/pot")]},
+		{"name": "half", "beat": 1, "length": 3, "tracks": [stir.call("kettle/nothing.floor", "kettle/pot")]}]}, 1)
+	var kept: Array = (m._work.acts as Array).map(func(a: Dictionary) -> String: return String(a["name"]))
+	var said := "; ".join(m._work.notes)
+	_ok(kept == ["stir"], "only the act whose every name is found is kept, not %s (%s)" % [str(kept), said])
+	_ok(said.contains("no-lid") and said.contains("has no part called \"lid\""), "a press onto a part that is not there is not said: %s" % said)
+	_ok(said.contains("no-rim") and said.contains("no point called \"rim\""), "an around a part's point it does not have is not said: %s" % said)
+	_ok(said.contains("half") and said.contains("`around`") and said.contains("\"nothing\""),
+		"a press found beside an around naming nothing is not refused whole: %s" % said)
+	# ...what each names: the pot's floor and surface, not the kettle's
+	var w := m._work
+	var pw: int = w._work_of(w._thing_named("kettle"), "pot")
+	var pot_floor: Vector3 = (w._rest["w%d:pose" % pw] as Transform3D) * Vector3(0.0, 0.012, 0.0)
+	var floor_at: Vector3 = w.place_of("kettle/pot.floor", Vector3.INF)
+	_ok(floor_at.distance_to(pot_floor) < 0.001, "\"kettle/pot.floor\" is %s, not the pot's floor %s" % [str(floor_at), str(pot_floor)])
+	_ok(w.place_of("kettle.floor", Vector3.INF).distance_to(floor_at) > 0.05, "the control: the kettle's own floor is the pot's, not the coal bed's")
+	var over := floor_at + Vector3(0.01, 0.02, 0.0)
+	var on_pot := w._surface_under("kettle/pot", over)
+	var on_kettle := w._surface_under("kettle", over)
+	_ok(absf(on_pot - 0.012) < 0.0005, "the pot's surface under its middle is %.1f cm up, not its floor's 1.2" % (on_pot * 100.0))
+	_ok(on_kettle > 0.04, "the control: the whole kettle pressed meets %.1f cm up, under the bar (4.5)" % (on_kettle * 100.0))
+	if kept != ["stir"]:
+		m._root3.free()
+		return true
+	# ...and the spoon's tip goes round on the pot's floor, its gap over it, once the hand has brought it there
+	var times: Dictionary = w.rehearse(10.0)
+	var g: Array = times["stir"]
+	var sw: int = w._work_of(w._thing_named("spoon"), "spoon")
+	var worst := 0.0
+	w._planned = true
+	for i in 10:
+		var t := float(g[0]) + TableWork.BLEND_IN + 0.2 + float(i) * 0.45
+		w.tick(t)
+		var tip: Vector3 = w._world_of((w.works[sw] as Dictionary)["node"]) * Vector3.ZERO
+		worst = maxf(worst, absf(tip.y - 0.015))
+	w._planned = false
+	_ok(worst < 0.001, "the spoon's tip pressed onto the pot is %.1f mm off its floor and gap while it stirs" % (worst * 1000.0))
+	m._root3.free()
+	return true
 
 
 func _grind() -> bool:
@@ -1104,7 +1179,7 @@ const BACK_SPEC := {"things": [
 
 
 func _put_back() -> bool:
-	# The lid: laid aside on its side (2-4 s), carried home (6-8 s) - or, the controls, carried to its home point and left
+	# The lid: laid aside upside down (2-4 s), carried home (6-8 s) - or, the controls, carried to its home point and left
 	# held there over its crock
 	for how in ["home", "to", "held"]:
 		var m := _medium()
@@ -1117,7 +1192,7 @@ func _put_back() -> bool:
 		if how != "held":
 			back["down"] = true
 		m._work.build({"acts": [
-			{"name": "off", "beat": 1, "length": 2, "tracks": [{"thing": "crock", "part": "lid", "law": "carry", "to": [12, 0, -10], "turn": [0, 0, 90], "lift": 4, "down": true}]},
+			{"name": "off", "beat": 1, "length": 2, "tracks": [{"thing": "crock", "part": "lid", "law": "carry", "to": [12, 0, -10], "turn": [0, 0, 180], "lift": 4, "down": true}]},
 			{"name": "on", "beat": 1, "length": 2, "tracks": [back]}]}, 1)
 		m._work.runs = [{"i": 0, "t0": 2.0, "t1": 4.0}, {"i": 1, "t0": 6.0, "t1": 8.0}]
 		m._work._timelines()
@@ -1137,7 +1212,7 @@ func _put_back() -> bool:
 			"home":
 				_ok(up.y > 0.99 and most < 1e-6, "the lid carried home stands with its up %s, and moves %.3f mm a tick on its crock" % [str(up.snapped(Vector3.ONE * 0.01)), most * 1000.0])
 			"to":
-				_ok(up.y < 0.2, "the control: the lid carried to a place with no turn stands upright: %s" % str(up.snapped(Vector3.ONE * 0.01)))
+				_ok(up.y < 0.2, "the control: the lid carried to a place with no turn stands upright, not as it was laid: %s" % str(up.snapped(Vector3.ONE * 0.01)))
 			"held":
 				_ok(most > 1e-5, "the control: the lid held over its crock never sways")
 		m._root3.free()

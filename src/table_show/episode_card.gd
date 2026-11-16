@@ -162,6 +162,7 @@ func serve(panel: ReadingPanel) -> void:
 	reading.bed = Bed.new(self)
 	reading.publish = Publish.new(self)
 	reading.tune_sections.append(Pacing.new(self))
+	reading.prop_sections.append(EpisodeProps.new(self))
 	_doc.opened.connect(_on_show_opened)
 	_doc.mode_changed.connect(_on_doc_mode)
 	reading.source_edited.connect(func() -> void: _brief_changed = true)
@@ -1177,8 +1178,10 @@ func pipeline() -> PipelineSection:
 	return _section
 
 
+## Whether work is under way: a run going, or a job or host out. A request waiting on a failed step is not ([member
+## TableProducer.again]: said on its row), so the next press takes the brief and knobs as they are then ([method _run]).
 func _making() -> bool:
-	return _producer != null and (_producer.running or _producer.busy() or not _producer.again.is_empty())
+	return _producer != null and (_producer.running or _producer.busy())
 
 
 ## What the rows read, once per change of the episode's files: a step made or thrown away changes the listing, and the
@@ -1655,7 +1658,7 @@ func set_act_field(i: int, key: String, value: Variant) -> String:
 
 ## A thing on the table, shown to be changed (next/editing.md step 7: "one thing picked, one inspector"): the table from above to move
 ## it on ([TablePlanView], where the episode stands on the table now), its rows ([constant TableRows.THING]), each of its parts a press
-## and the part picked as its rows ([method TableRows.part_fields]); kept in the library, put on from it, taken off the table.
+## and the part picked as its rows ([method TableRows.part_fields]), or taken off the table. Kept in the library on the Props card.
 func _inspect_thing(name: String, what: Dictionary, box: VBoxContainer) -> void:
 	var med := Director.shown_medium() as TableMedium
 	var bp: Dictionary = med.blueprint() if med != null and med.standing_dir() == _episode.dir else {}
@@ -1682,7 +1685,7 @@ func _inspect_thing(name: String, what: Dictionary, box: VBoxContainer) -> void:
 	if ti < 0:
 		if not name.is_empty():
 			_line_to(box, "%s is not written in the table's data: it comes with the brief or the work." % name)
-		_library_row(box, td)
+		_new_thing_row(box, td)
 		return
 	var thing: Dictionary = (td["things"] as Array)[ti]
 	var shown := thing.duplicate()
@@ -1746,16 +1749,13 @@ func _inspect_thing(name: String, what: Dictionary, box: VBoxContainer) -> void:
 		_edit_step("table")
 		if _source_window != null and is_instance_valid(_source_window):
 			_source_window.find_text("\"%s\"" % name))
-	_button_to(row, "Keep in the library", func() -> void:
-		var err := ThingLibrary.keep(thing, td) if not Settings.is_read_only() else "this session is read-only"
-		_set_status(("Not kept: " + err) if not err.is_empty() else "%s is kept in the library, to put on another table." % name))
 	_button_to(row, "Take off the table", func() -> void:
 		var err := _hand_write("table", func() -> String: return take_thing_off(name))
 		_after_hand("table", err)
 		if err.is_empty():
 			_dock.inspect({}))
 	_ask_row(box, "table", "the %s" % name)
-	_library_row(box, td)
+	_new_thing_row(box, td)
 
 
 ## An agent asked about what is picked (next/editing.md step 9: "'Ask…' opens the step's role ... on the document as it stands,
@@ -1802,9 +1802,10 @@ func ask_about(step: String, about: String, note: String) -> String:
 	return ""
 
 
-## "+ New thing", "+ From the library" and the free look: a thing put on this table at the middle of the reading, to be dragged where
-## it goes - a box of its own, or one kept in the library - and the eye let go of to look the set over ([method TableMedium.free_look]).
-func _library_row(box: Container, table: Dictionary) -> void:
+## "+ New thing" and the free look: a box of its own put on this table at the middle of the reading, to be dragged where it goes,
+## and the eye let go of to look the set over ([method TableMedium.free_look]). Props from the library are added on the Props card
+## ([EpisodeProps]).
+func _new_thing_row(box: Container, table: Dictionary) -> void:
 	var row := HFlowContainer.new()
 	box.add_child(row)
 	_button_to(row, "+ New thing", func() -> void:
@@ -1836,24 +1837,6 @@ func _library_row(box: Container, table: Dictionary) -> void:
 		look.tooltip_text = "Look the set over: drag with the right button on the show to turn about the table, the wheel to draw in or out. Off, the show's own eye is back."
 		look.toggled.connect(func(on: bool) -> void: med.free_look(on))
 		row.add_child(look)
-	var names := ThingLibrary.names()
-	if names.is_empty():
-		return
-	var add := MenuButton.new()
-	add.text = "+ From the library ▾"
-	add.flat = false
-	add.tooltip_text = "Put a thing kept in the library on this table: it stands near the middle, to be moved where it goes."
-	for n in names:
-		add.get_popup().add_item(String(n))
-	add.get_popup().index_pressed.connect(func(i: int) -> void:
-		var entry := ThingLibrary.read(add.get_popup().get_item_text(i))
-		var err := _hand_write("table", func() -> String:
-			var t: Variant = _episode.read_json("table")
-			return _episode.write_json("table", ThingLibrary.put_on(t if t is Dictionary else {}, entry)) if not entry.is_empty() else "it is not in the library")
-		_after_hand("table", err)
-		if err.is_empty():
-			_set_status("%s is on the table: it stands the next time the table is set." % add.get_popup().get_item_text(i)))
-	box.add_child(add)
 
 
 ## Thing [param thing]'s parts, depth first, each `{label, path}` - named by its name, else its shape.

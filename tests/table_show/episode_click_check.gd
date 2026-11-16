@@ -25,9 +25,9 @@ func _ready() -> void:
 
 func _run() -> void:
 	var was_root := TableEpisode.root
-	var was_library := ThingLibrary.root
+	var was_library := Library.root
 	TableEpisode.root = ROOT
-	ThingLibrary.root = ROOT.path_join("library")
+	Library.root = ROOT.path_join("library")
 	_clean(ProjectSettings.globalize_path(ROOT))
 	var ed := ReadingPanel.new()
 	ed.workspace = "table"
@@ -100,7 +100,7 @@ func _run() -> void:
 	ed._panel.free()
 	ed.free()
 	TableEpisode.root = was_root
-	ThingLibrary.root = was_library
+	Library.root = was_library
 	_clean(ProjectSettings.globalize_path(ROOT))
 	print("episode_click_check: %s" % ("ALL OK" if _fails == 0 else "%d FAILED" % _fails))
 	get_tree().quit(0 if _fails == 0 else 1)

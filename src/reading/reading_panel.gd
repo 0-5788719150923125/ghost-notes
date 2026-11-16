@@ -171,6 +171,10 @@ var publish: ReadingPublish = ReadingPublish.new()
 ## Pacing card shows the rows they offer, and none when none do ([PacingCard]).
 var tune_sections: Array = []
 
+## What the note's presentation sets down ([PropSection]): each component that stands props hands one; the Props card shows
+## their rows, and none when none has any ([PropsCard]).
+var prop_sections: Array = []
+
 ## The author changed the script by hand (never a document arriving): for a component that keeps count of what
 ## an edit changes (a table show's brief changes the next episode, not this one).
 signal source_edited
@@ -221,9 +225,14 @@ func _process(delta: float) -> void:
 		# have finished
 	_audition.tick()
 	_stream.tick(delta)
+		# the kept voices: the library followed, a kept voice's dial written to it, a sample made
+	if _cast.keep != null:
+		_cast.keep.tick()
 
 
 func _exit_tree() -> void:
+	if _cast.keep != null:
+		_cast.keep.release()
 	Spectrum.release_conductor(self)
 	var ch := Shell.of(self)
 	if ch != null:
@@ -331,6 +340,8 @@ func _build_panel() -> void:
 		_add_youtube()
 		# ...what the show may be paced by ([PacingCard]): a card only while some component offers a row
 	_panel.add_card("pacing", "Pacing", &"producer", "", PacingCard.BLURB).add_child(PacingCard.new(func() -> Array: return tune_sections))
+		# ...what it sets down ([PropsCard]): a card only while some component stands props
+	_panel.add_card("props", "Props", &"medium", "", PropsCard.BLURB).add_child(PropsCard.new(func() -> Array: return prop_sections))
 		# ...the timeline open, as a list ([TimelineList]): a card shown only while a timeline editor is open
 	_panel.add_card("timeline", "Timeline", &"picture", "", TimelineList.BLURB).add_child(TimelineList.new())
 	# ...and what is made for all of it, last of them: found in one place on every note (next/pipeline.md)
@@ -1082,6 +1093,8 @@ func _on_failed(stage: String, message: String) -> void:
 	_set_status("%s failed: %s" % [stage, message])
 	if stage != "synthesize":
 		return
+	if _cast.keep != null:
+		_cast.keep.failed()
 	_can_play = true
 	_stream.failed()
 
@@ -1104,6 +1117,9 @@ func _on_synthesized(id: int, result: Dictionary) -> void:
 		return
 	if result.has("voices"):
 		_cast.fill_voices(result["voices"])
+		return
+	if _cast.keep != null and _cast.keep.owns(id):
+		_cast.keep.take(id, result)
 		return
 	if _audition.owns(id):
 		_audition.take(id, result)
@@ -1192,7 +1208,9 @@ func _kept_copy(kept: String, body: String) -> String:
 ## What a take of [param body] (the words to read, by default) is said from, as a digest: the words, every voice's
 ## settings and the record of the voice each is said in, the bookend and the place under it - everything
 ## [method _render_take] reads. Written in every take's sidecar (`sig`): a take kept whose `sig` is this one is the
-## reading as it would be said now.
+## reading as it would be said now. A voice read by name counts as what it says (the kept voice's fields, [method
+## ReadingCast.follow_library]), never by its name: a kept voice changed changes it, one renamed or made a note's own
+## does not.
 func take_sig(body := "") -> String:
 		# ...the words as they stand, never pulled: a pull reads the file and lays its blocks over every card, and a row
 		# asks this at every refresh (panel_fit_check)
@@ -1201,6 +1219,7 @@ func take_sig(body := "") -> String:
 	var records := {}
 	var voices: Dictionary = cast.get("voices", {}) if cast.get("voices") is Dictionary else {}
 	for name in voices:
+		(voices[name] as Dictionary).erase("kept")
 		var id := _cast.voice_id_of(voices[name])
 		for v in _cast.voice_meta:
 			if String((v as Dictionary).get("id", "")) == id:

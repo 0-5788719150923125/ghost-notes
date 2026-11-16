@@ -137,6 +137,22 @@ static func unspoken(text: String) -> String:
 	return _rx(COMMENT).sub(text, "", true)
 
 
+## [param body] with every speaker cue that names [param old] naming [param new] instead, each cue keeping its own form
+## (`<!-- speaker: -->` or `[speaker: ]`) and spacing. Nothing else is touched: prose that mentions a name is prose.
+static func rename_speaker(body: String, old: String, new: String) -> String:
+	var lines := body.split("\n")
+	var rx := _rx(SPEAKER)
+	for i in lines.size():
+		var m := rx.search(lines[i])
+		if m == null:
+			continue
+		var g := 1 if not m.get_string(1).is_empty() else 2
+		if m.get_string(g).strip_edges() != old:
+			continue
+		lines[i] = lines[i].substr(0, m.get_start(g)) + new + lines[i].substr(m.get_end(g))
+	return "\n".join(lines)
+
+
 ## The speaker a line hands over to, or "" when the line is not a cue.
 static func speaker_of_line(line: String) -> String:
 	var m := _rx(SPEAKER).search(line)

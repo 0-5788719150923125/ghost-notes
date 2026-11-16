@@ -32,7 +32,8 @@ func _run() -> void:
 			_seat_rides, _leans_in, _held_unless_resting, _level_counts, _floats_in, _clears_way, _pours_into, _runs_down, _dips_full,
 			_jars_apart, _tool_entry, _rests_let_go, _sheet_lies, _past_baked, _rests_on_rim, _pours_loose, _world_from_table,
 			_kept_across_plans, _warmed_first, _frame_names_bodies, _part_stays_when_thing_goes, _not_dropped_on_a_rim, _sheet_tip_in_pot, _brew_kept, _stands_held_for_a_moment, _sheet_bends_round, _floater_lives, _sheet_stays_whole, _grain_starts, _paper_dissolves,
-			_grains_leave_room, _liquid_drawn_pose, _vessel_on_table, _thing_drawn_on_host, _writing_bends, _sheet_surface_contact, _shades_turn, _grains_need_support, _curved_tool, _floating_grains, _sheet_wakes_turned, _capsule_geometry]:
+			_grains_leave_room, _room_for_the_named, _laid_at_rest, _liquid_drawn_pose, _vessel_on_table, _thing_drawn_on_host, _writing_bends, _sheet_surface_contact, _sheet_pinned, _sheet_swept, _shades_turn, _grains_need_support, _curved_tool, _floating_grains, _sheet_wakes_turned, _capsule_geometry,
+			_laid_out_of, _beside_not_carried]:
 		# ...or only those named after `--only=` (by hand: `-- --only=_jars_apart,_sheet_lies`)
 		var only := ""
 		for a in OS.get_cmdline_user_args():
@@ -1085,7 +1086,7 @@ const ROLL_SPEC := {"things": [
 	{"name": "mortar", "parts": [
 		{"name": "bowl", "material": "bronze", "points": {"floor": [0, 1.9, 0], "mouth": [0, 8.4, 0]}, "smooth": true, "shape": "lathe",
 			"profile": [[0, 0], [5.2, 0, 0], [5.4, 0.6, 0], [4.8, 1.2], [5, 6.4], [6.3, 7.6], [6.6, 8.4, 0], [5.8, 8.4, 0], [4.6, 7.3], [4, 4], [2.6, 2], [0, 1.8]]},
-		{"name": "pestle", "material": "bronze", "smooth": true, "shape": "lathe", "at": [-1.4, 2.6, 0], "turn": [0, 0, -50], "joint": {"kind": "free"},
+		{"name": "pestle", "material": "bronze", "smooth": true, "shape": "lathe", "at": [-1.4, 3.0, 0], "turn": [0, 0, -50], "joint": {"kind": "free"},
 			"profile": [[0, 0], [1.3, 0], [1.55, 0.8], [1.2, 2.4], [0.7, 3.8], [0.75, 10.8], [1.05, 11.6], [0.8, 12.3], [0, 12.5]]}]},
 	{"name": "board", "parts": [{"shape": "box", "size": [14, 1, 7], "material": "oak", "at": [0, 3, 0], "turn": [0, 0, 12]}]},
 	{"name": "jar", "parts": [
@@ -1693,15 +1694,15 @@ const THIN_POT_SPEC := {"things": [
 		"brass": {"kind": "metal", "color": "#b8924c"}, "powder": {"kind": "powder", "color": "#e8e0c8"}}}
 
 
-## A thin wall at rest is never crossed: a brass ladle stirred round a pot whose floor is 3 mm thick, its bowl half a centimeter over the
-## floor through the powder on it (2 s to 10 s), presses none of the powder through the floor; and let go in the pot, it lies on the floor,
+## A thin wall at rest is never crossed: a brass ladle stirred round the middle of a pot whose floor is 3 mm thick, its bowl a millimeter
+## over the floor through the powder on it (2 s to 10 s), presses none of the powder through the floor; and let go in the pot, it lies on the floor,
 ## leaning on the rim, and never sinks through it. The control: stirred, the powder moves.
 func _thin_walls() -> bool:
 	var m := _medium()
 	_stand(m, THIN_POT_SPEC, "pot", _at(Vector3(0, 0, -8)))
 	m._work.build({"acts": [{"name": "stir", "beat": 1, "length": 8, "tracks": [{"thing": "pot", "part": "ladle", "law": "aim",
-		"tip": {"point": "bowl", "around": "pot.floor", "radius": 4.0, "period": 2.0, "lift": 0.5},
-		"grip": {"point": "grip", "around": "pot.floor", "radius": 1.0, "period": 2.0, "lift": 17.0}}]}]}, 1)
+		"tip": {"point": "bowl", "around": "pot.floor", "radius": 1.5, "period": 2.0, "lift": 0.1},
+		"grip": {"point": "grip", "around": "pot.floor", "radius": 0.5, "period": 2.0, "lift": 17.0}}]}]}, 1)
 	m._work.runs = [{"i": 0, "t0": 2.0, "t1": 10.0}]
 	m._work._timelines()
 	var ph: TablePhysics = m._work.physics
@@ -3378,7 +3379,9 @@ func _world_from_table() -> bool:
 	return true
 
 
-## Empty grain beds create no matter; visible ones keep their written size and sleep only on the floor or other grains.
+## Grains a work brings later are none at the start and laid as it brings them; a bed is packed as close as grains go, each resting on
+## the floor or in the hollow of grains under it, at its written size. Controls: the bed spread out, and a grain set on a single grain,
+## fail the same measures; with no act to bring it, an absent bed stays empty.
 func _grain_starts() -> bool:
 	for absent in [true, false]:
 		var spec := SNOW_SPEC.duplicate(true)
@@ -3395,14 +3398,56 @@ func _grain_starts() -> bool:
 			for i in ids:
 				_ok(is_equal_approx(ph.sim.r[i], 0.0015), "a vessel enlarged its written grains")
 			var sd: Dictionary = ph.solids[int(ph.grains[0]["solid"])]
-			var inv: Transform3D = (sd["rest"] as Transform3D).affine_inverse()
+			var places := PackedVector3Array()
 			for i in ids:
-				var p := ph.sim.x[i]
-				var supported := (sd["field"] as ShapeField).sample(inv * (p + Vector3.DOWN * 0.0001)).x < ph.sim.r[i]
-				for j in ids:
-					if ph.sim.x[j].y < p.y and absf(p.distance_to(ph.sim.x[j]) - ph.sim.r[i] - ph.sim.r[j]) < 0.00001:
-						supported = true
-				_ok(supported, "a grain sleeps above both the floor and the grains below it")
+				places.append(ph.sim.x[i])
+			var flaws := _bed_flaws(places, 0.0015, sd)
+			print("  a bed of %d grains: nearest %.2f radii apart on the whole, %d resting on fewer than three" % [ids.size(), flaws.x, int(flaws.y)])
+			_ok(flaws.x < 2.3, "the bed's grains stand %.2f radii apart on the whole, not packed" % flaws.x)
+			_ok(int(flaws.y) == 0, "%d of the bed's grains rest on fewer than three grains or a floor" % int(flaws.y))
+			# ...the controls: the same bed spread out, and one grain stood on a single grain
+			var mid := Vector3.ZERO
+			for q in places:
+				mid += q
+			mid /= float(places.size())
+			var spread := PackedVector3Array()
+			for q in places:
+				spread.append(Vector3(mid.x + (q.x - mid.x) * 1.6, q.y, mid.z + (q.z - mid.z) * 1.6))
+			_ok(_bed_flaws(spread, 0.0015, sd).x >= 2.3, "the control: a bed spread out reads as packed")
+			var topmost := 0
+			for k in places.size():
+				if places[k].y > places[topmost].y:
+					topmost = k
+			var stood := places.duplicate()
+			stood.append(places[topmost] + Vector3(0.0, 0.003, 0.0))
+			_ok(int(_bed_flaws(stood, 0.0015, sd).y) > 0, "the control: a grain stood on a single grain reads as resting")
+		m._root3.free()
+	# ...brought later: none until its act grows it, then the bed from its floor up - and with no act, never
+	for brought in [true, false]:
+		var spec := SNOW_SPEC.duplicate(true)
+		var grain: Dictionary = spec["things"][0]["parts"][1]
+		grain["start"] = {"grow": 0.0}
+		spec["materials"]["snow"]["dissolves"] = 0.0
+		var m := _medium()
+		_stand(m, spec, "jar", _at(Vector3.ZERO))
+		m._work.build({"acts": [{"name": "make", "beat": 1, "length": 2.0, "tracks": [
+			{"thing": "jar", "part": "snow", "law": "to", "state": "grow", "value": 1.0}]}] if brought else []}, 1)
+		m._work.runs = [{"i": 0, "t0": 1.0, "t1": 3.0}] if brought else []
+		m._work._timelines()
+		var ph: TablePhysics = m._work.physics
+		var counts: Array = []
+		for t in [0.5, 2.0, 5.0]:
+			m._work.tick(float(t))
+			var f: Dictionary = ph.frame_at(float(t))
+			var n := 0
+			for i in (f["owner"] as PackedInt32Array).size():
+				n += 1 if f["owner"][i] == 0 and f["alive"][i] == 1 else 0
+			counts.append(n)
+		print("  a bed brought %s: %s grains at 0.5, 2 and 5 s" % ["by its act" if brought else "by nothing", str(counts)])
+		if brought:
+			_ok(int(counts[0]) == 0 and int(counts[1]) > 0 and int(counts[2]) > int(counts[1]), "a bed its act grows is not laid as it grows: %s" % str(counts))
+		else:
+			_ok(int(counts[2]) == 0, "the control: a bed nothing brings is there: %s" % str(counts))
 		m._root3.free()
 	var basin := _part({"shape": "lathe", "material": "clay", "profile": [[0,0],[9,0],[9.3,0.8],[8.8,1.5],
 		[8.4,4],[8.1,4.4],[7.6,4.4],[7.6,1.2],[0,1.2]]})
@@ -3410,15 +3455,40 @@ func _grain_starts() -> bool:
 	var vs := Vessel.of(field)
 	var ph := TablePhysics.new()
 	var xf := Transform3D(Basis.from_scale(Vector3.ONE * 0.75), Vector3.ZERO)
-	var rad := 0.005
-	var packed := ph._pack(vs, rad / 0.75, vs.level(Vector3.UP,0.4), Vector3.UP, xf, 0, rad / 0.75)
-	_ok(not ph._supported_grains(packed,rad,vs,xf).is_empty(), "a shallow scaled vessel lost all its grains")
-	var empty := ph._pack(vs, rad / 0.75, vs.level(Vector3.UP,0.0), Vector3.UP, xf, 0, rad / 0.75)
-	_ok(empty.is_empty(), "the control: an empty shallow vessel has grains")
+	_ok(not ph._pack(vs, 0.005, vs.level(Vector3.UP, 0.4), Vector3.UP, xf, 0, 240).is_empty(), "a shallow scaled vessel lost all its grains")
+	_ok(ph._pack(vs, 0.005, vs.level(Vector3.UP, 0.0), Vector3.UP, xf, 0, 240).is_empty(), "the control: an empty shallow vessel has grains")
 	return true
 
 
-## Wet paper disappears as particles and as geometry; insoluble paper stays, and seeking restores the earlier picture.
+## How a bed of grains of [param r] at [param places] lies in solid [param sd] (as built): (the mean distance to each one's nearest, in
+## radii; how many rest neither on a floor nor in the hollow of three grains, or of two and a wall).
+func _bed_flaws(places: PackedVector3Array, r: float, sd: Dictionary) -> Vector2:
+	var inv: Transform3D = (sd["rest"] as Transform3D).affine_inverse()
+	var scale: Vector3 = (sd["rest"] as Transform3D).basis.get_scale()
+	var least := minf(scale.x, minf(scale.y, scale.z))
+	var gap := func(p: Vector3) -> float: return (sd["field"] as ShapeField).sample(inv * p).x * least - r
+	var nearest := 0.0
+	var loose := 0
+	for k in places.size():
+		var p := places[k]
+		var best := INF
+		var under := 0
+		for j in places.size():
+			if j == k:
+				continue
+			var d := p.distance_to(places[j])
+			best = minf(best, d)
+			if places[j].y < p.y and d < r * 2.15:
+				under += 1
+		nearest += best
+		var on_floor := float(gap.call(p + Vector3(0.0, -r * 0.15, 0.0))) < -r * 0.05 and float(gap.call(p)) < r * 0.15
+		if not (on_floor or under >= 3 or (under >= 2 and float(gap.call(p)) < r * 0.15)):
+			loose += 1
+	return Vector2(nearest / maxf(places.size(), 1) / r, loose)
+
+
+## Wet paper disappears as particles and as geometry - drawn whole and shrinking with what is left of it, its pieces only late; insoluble
+## paper stays whole at its size, and seeking restores the earlier picture.
 func _paper_dissolves() -> bool:
 	for dissolves in [2.0, 0.0]:
 		var spec := FLOAT_SPEC.duplicate(true)
@@ -3437,6 +3507,25 @@ func _paper_dissolves() -> bool:
 		m._work.tick(0.5)
 		_ok(node.visible and ph.whole(wi, 0.5), "paper is absent before it gets wet")
 		m._work.tick(25.0)
+		# ...whole while it dissolves, shrinking, never back up - and only a little of it left as it goes to pieces
+		var shrunk := 1.0
+		var grew := false
+		var left_whole := 1.0
+		var t := 3.0
+		while t < 25.0:
+			var pv: Variant = ph.pose_of(wi, t)
+			if pv != null and ph.whole(wi, t):
+				var k := (pv as Transform3D).basis.get_scale().x
+				grew = grew or k > shrunk + 1e-4
+				shrunk = minf(shrunk, k)
+				left_whole = k * k * k
+			t += 0.1
+		print("  paper with dissolves=%s: drawn whole down to %.0f%% of its volume" % [dissolves, left_whole * 100.0])
+		_ok(not grew, "dissolving paper grew back while it was drawn whole")
+		if dissolves > 0.0:
+			_ok(left_whole < 0.6, "dissolving paper went to pieces with %.0f%% of it left" % (left_whole * 100.0))
+		else:
+			_ok(is_equal_approx(shrunk, 1.0), "the control: insoluble paper shrank to %.2f" % shrunk)
 		var f: Dictionary = ph.frame_at(25.0)
 		var left := 0
 		for i in (f["owner"] as PackedInt32Array).size():
@@ -3485,6 +3574,257 @@ func _grains_leave_room() -> bool:
 		for i in (ph.sim.bodies[bi] as Dictionary)["ids"]:
 			wet += 1 if ph.sim.wet[i] >= 0 else 0
 		_ok(wet > 0 and not ph.sim.body_asleep(bi), "the sheet does not float after its carry")
+	m._root3.free()
+	return true
+
+
+## Loose things no act takes up, moves, aims at or names keep no room from the grain beds, but for a few spare; named, they keep all of
+## theirs. The control is the named table: its beds get less, and its loose things still find their room.
+func _room_for_the_named() -> bool:
+	var laid := {}
+	for named in [false, true]:
+		var mats := {"plume": {"kind": "paper", "density": 0.3}, "sand": {"kind": "powder", "dissolves": 0.0}, "clay": {"kind": "ceramic"}}
+		var leaves: Array = []
+		for k in 12:
+			leaves.append({"name": "leaf %d" % k, "shape": "sheet", "outline": "feather", "size": [3, 12], "at": [k * 5, 0.2, 0], "loose": true, "material": "plume"})
+		var beds: Array = []
+		for k in 8:
+			beds.append({"name": "bed %d" % k, "shape": "grains", "amount": TablePhysics.GRAINS_MOST, "grain": 0.3, "material": "sand", "at": [k * 15, 0, 0]})
+		var spec := {"materials": mats, "things": [{"name": "litter", "parts": leaves}, {"name": "beds", "parts": beds},
+			{"name": "cup", "parts": [{"shape": "lathe", "material": "clay", "profile": [[0, 0], [3, 0], [3, 5], [2.6, 5], [2.6, 0.4], [0, 0.4]]}]}]}
+		var m := _medium()
+		_stand(m, spec, "litter", _at(Vector3(-40, 0, 20)))
+		_stand(m, spec, "beds", _at(Vector3(-40, 0, -20)))
+		_stand(m, spec, "cup", _at(Vector3(40, 0, 0)))
+		m._work.build({"acts": [{"name": "move", "beat": 1, "length": 2.0, "tracks": [{"thing": "litter" if named else "cup", "law": "carry",
+			"by": [0, 0, 5], "lift": 2.0}]}]}, 1)
+		var ph: TablePhysics = m._work.physics
+		var grains := 0
+		for g in ph.grains:
+			grains += ((g as Dictionary)["ids"] as PackedInt32Array).size()
+		var all := 0
+		for L in ph.loose:
+			all += ((L as Dictionary)["spheres"] as PackedVector3Array).size()
+		laid[named] = grains
+		print("  %d loose things of %d spheres %s: the beds laid %d grains, %d kept for the loose things" % [ph.loose.size(), all,
+			"named by an act" if named else "no act names", grains, ph._loose_room()])
+		if named:
+			_ok(ph.sim.room() >= all, "the loose things an act names lost their room to the beds")
+		m._root3.free()
+	_ok(int(laid[false]) > int(laid[true]) + 200, "loose things no act names kept the beds' room (%d grains against %d)" % [int(laid[false]), int(laid[true])])
+	return true
+
+
+## A club laid down on its side (`down`, turned to lie) is laid as it rests: let go, it neither tips nor rolls on - and a jar set down
+## upright stays as written. The control: the club as the act wrote it, its lowest point on the table, stands with its middle of mass
+## past what holds it up.
+## A vial with a bead in it, and a copper curl lying on the table against it, one arc of it through the vial's wall into its inside.
+const BESIDE_SPEC := {"materials": {"glass": {"kind": "glass"}, "copper": {"kind": "metal"}}, "things": [
+	{"name": "vial", "parts": [
+		{"name": "glass", "shape": "lathe", "material": "glass",
+			"profile": [[0, 0], [2.2, 0], [2.4, 0.5], [2.4, 8], [1.2, 9.4], [1.2, 12], [0.85, 12], [0.85, 9.6], [2.1, 8], [2.1, 0.45], [0, 0.45]]},
+		{"name": "bead", "shape": "ball", "size": [0.8, 0.8, 0.8], "material": "copper", "at": [0, 0.5, 0], "loose": true}]},
+	{"name": "curl", "parts": [
+		{"name": "curl", "shape": "coil", "radius": 1.5, "radius2": 1.2, "height": 0.9, "thickness": 0.2, "turns": 0.8, "material": "copper",
+			"loose": true}]}]}
+
+
+## A LOOSE THING RESTING BESIDE A VESSEL NEVER RIDES IT ([method Particles.step]'s riders, [method Particles._inside_of_body],
+## [method TablePhysics._host_under]): a curl lying on the table against a vial, an arc of it through the vial's wall, stays where it lies
+## when the vial is carried off - what is in a vessel goes with it whole or not at all (most of its spheres in its inside), and what wakes
+## lying sleeps on what holds it up, never on what it lies beside. Control: the bead in the vial goes with the vial.
+func _beside_not_carried() -> bool:
+	var m := _medium()
+	_stand(m, BESIDE_SPEC, "vial", _at(Vector3(0, 0, 0)))
+	_stand(m, BESIDE_SPEC, "curl", _at(Vector3(2.85, 0, 0)))
+	m._work.build({"acts": [{"name": "off", "beat": 1, "length": 3.0, "tracks": [
+		{"thing": "vial", "law": "carry", "to": [25, 0, 0], "lift": 6.0}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 1.0, "t1": 4.0}]
+	m._work._timelines()
+	var ph: TablePhysics = m._work.physics
+	var curl := _work_of_name(m, "curl")
+	var bead := _work_of_name(m, "bead")
+	var mid_of := func(wi: int, t: float) -> Vector3:
+		var L: Dictionary = ph.loose[int(ph._loose_of[wi])]
+		var c := Vector3.ZERO
+		for q in (L["spheres"] as PackedVector3Array):
+			c += q
+		c /= float((L["spheres"] as PackedVector3Array).size())
+		var pv: Variant = ph.pose_of(wi, t)
+		return ((pv as Transform3D) * (L["built"] as Transform3D).affine_inverse()) * c if pv != null else c
+	m._work.tick(7.0)
+	var curl_went := (mid_of.call(curl, 7.0) as Vector3).distance_to(mid_of.call(curl, 0.5))
+	var curl_rose := 0.0
+	for k in 12:
+		var t := 1.0 + float(k) * 0.25
+		curl_rose = maxf(curl_rose, (mid_of.call(curl, t) as Vector3).y - (mid_of.call(curl, 0.5) as Vector3).y)
+	var bead_went := (mid_of.call(bead, 7.0) as Vector3).distance_to(mid_of.call(bead, 0.5))
+	print("  a curl beside a vial carried off: went %.1f mm, rose %.1f mm; the bead in it went %.1f cm" % [curl_went * 1000.0, curl_rose * 1000.0, bead_went * 100.0])
+	_ok(curl_went < 0.006 and curl_rose < 0.004, "the curl lying beside the vial went %.1f mm and rose %.1f mm as the vial was carried off" % [curl_went * 1000.0, curl_rose * 1000.0])
+	_ok(bead_went > 0.2, "the control: the bead in the vial went %.1f cm with it, not 25" % (bead_went * 100.0))
+	m._root3.free()
+	return true
+
+
+## A mortar whose pestle is written with its head through the bowl's floor, and a slab with a chamfered jar set on it.
+const LAID_SPEC := {"materials": {"stone": {"kind": "stone"}, "glass": {"kind": "glass"}}, "things": [
+	{"name": "mortar", "parts": [
+		{"name": "bowl", "shape": "lathe", "material": "stone",
+			"profile": [[0, 0], [4.5, 0], [5.2, 1], [6.8, 5], [7, 6], [6.1, 6.2], [5.5, 4.5], [3.4, 1.4], [0, 1.4]]},
+		{"name": "pestle", "shape": "lathe", "material": "stone", "joint": {"kind": "free"}, "at": [1.5, 1.4, 0], "turn": [0, 0, -22],
+			"profile": [[0, 0], [1.8, 0], [2, 1.6], [1.2, 4], [0.9, 10], [1.2, 11], [0, 11.5]], "points": {"tip": [1.5, 1.6, 0]}}]},
+	{"name": "carrier", "parts": [
+		{"name": "slab", "shape": "box", "size": [13.5, 0.8, 13.5], "material": "stone"},
+		{"name": "jar", "joint": {"kind": "free"}, "at": [0, 0.8, 0], "parts": [
+			{"shape": "lathe", "material": "glass",
+				"profile": [[0, 0], [2.65, 0], [2.9, 0.5], [2.9, 6], [2.55, 6], [2.55, 0.6], [0, 0.6]]}]}]}]}
+
+
+## How deep solids [param own] stand in solids [param others] of [param m]'s physics, each where [param at] has it (meters): [param worst]
+## the deepest, or the nearest they come where none is in another.
+static func _laid_depth(m: TableMedium, own: Array, others: Array, at: Callable, worst := true) -> float:
+	var ph: TablePhysics = m._work.physics
+	var out := -INF if worst else INF
+	for oi in own:
+		var od: Dictionary = ph.solids[int(oi)]
+		var f: ShapeField = od["field"] if od.has("field") else ShapeField.of(od["part"], od["box"])
+		var ox: Transform3D = at.call(int(oi))
+		for q in f.surface_points():
+			var p := ox * q
+			for si in others:
+				var sd: Dictionary = ph.solids[int(si)]
+				var g: ShapeField = sd["field"] if sd.has("field") else ShapeField.of(sd["part"], sd["box"])
+				var d := float(g.sample((at.call(int(si)) as Transform3D).affine_inverse() * p).x)
+				out = maxf(out, -d) if worst else minf(out, d)
+	return out
+
+
+## A FREE PART BUILT IN WHAT IT RESTS ON STARTS OUT OF IT ([method TablePhysics.lay_loose]): a pestle written with its head through its
+## mortar's floor is laid in the bowl as a hand lays it - in nothing deeper than a fit, touching the bowl (never floating), and laid the
+## same on every table built from it; and a jar set on a slab stands on it, never sunk into it ([method Props._rest_free]). Controls:
+## the pestle as written is through the floor; a ray begun on the face the jar's corner rests on misses that face.
+func _laid_out_of() -> bool:
+	var poses: Array = []
+	for n in 2:
+		var m := _medium()
+		_stand(m, LAID_SPEC, "mortar", _at(Vector3(0, 0, 0)))
+		_stand(m, LAID_SPEC, "carrier", _at(Vector3(30, 0, 0)))
+		var w := m._work
+		var ph: TablePhysics = w.physics
+		var pestle := _work_of_name(m, "pestle")
+		var jar := _work_of_name(m, "jar")
+		var own: Array = []
+		var bowl: Array = []
+		var jar_own: Array = []
+		var slab: Array = []
+		for si in ph.solids.size():
+			var sd: Dictionary = ph.solids[si]
+			match int(sd["wi"]):
+				pestle:
+					own.append(si)
+				jar:
+					jar_own.append(si)
+				_:
+					(bowl if int(sd["thing"]) == 0 else slab).append(si)
+		var as_built := func(si: int) -> Transform3D:
+			var sd: Dictionary = ph.solids[si]
+			var owner: Node3D = (w.things[int(sd["thing"])] as Dictionary)["node"] if String(sd["owner"]) == "t" else (w.works[int(sd["oi"])] as Dictionary)["node"]
+			return w._world_of(owner) * (sd["local"] as Transform3D)
+		if n == 0:
+			var written := _laid_depth(m, own, bowl, as_built)
+			_ok(written > TablePhysics.LAY_DEEP, "the control: the pestle as written is %.1f mm in its bowl, not through its floor" % (written * 1000.0))
+			# ...and the jar as its thing was built, before the physics lays anything: lowered onto the slab, never into it
+			var jar_in := _laid_depth(m, jar_own, slab, as_built)
+			var jar_over := _laid_depth(m, jar_own, slab, as_built, false)
+			_ok(jar_in < 0.0005 and jar_over < 0.0005, "the jar its thing lowers onto the slab is %.1f mm in it, %.1f mm over it" % [
+				maxf(jar_in, 0.0) * 1000.0, maxf(jar_over, 0.0) * 1000.0])
+		w.build({}, 1)
+		var at := func(si: int) -> Transform3D:
+			return (ph.solids[si] as Dictionary)["rest"]
+		# (the solids are numbered again as the physics is built: found again by what they are)
+		own = []
+		bowl = []
+		jar_own = []
+		slab = []
+		for si in ph.solids.size():
+			var sd: Dictionary = ph.solids[si]
+			match int(sd["wi"]):
+				pestle:
+					own.append(si)
+				jar:
+					jar_own.append(si)
+				_:
+					(bowl if int(sd["thing"]) == 0 else slab).append(si)
+		var deep := _laid_depth(m, own, bowl, at)
+		var near := _laid_depth(m, own, bowl, at, false)
+		_ok(deep < 0.0008, "the pestle laid in its bowl is still %.1f mm in it" % (deep * 1000.0))
+		_ok(near < 0.0015, "the pestle laid in its bowl floats %.1f mm over it" % (near * 1000.0))
+		var sunk := _laid_depth(m, jar_own, slab, at)
+		var gap := _laid_depth(m, jar_own, slab, at, false)
+		_ok(sunk < 0.0005 and gap < 0.0005, "the jar set on its slab is %.1f mm in it, %.1f mm over it" % [maxf(sunk, 0.0) * 1000.0, maxf(gap, 0.0) * 1000.0])
+		poses.append(w._rest["w%d:pose" % pestle])
+		if n == 0:
+			print("  the pestle laid %.1f mm from where it was written, %.2f mm in its bowl at the deepest" % [
+				((w._rest["w%d:pose" % pestle] as Transform3D).origin - _at(Vector3(1.5, 1.4, 0))).length() * 1000.0, maxf(deep, 0.0) * 1000.0])
+		m._root3.free()
+	_ok((poses[0] as Transform3D).is_equal_approx(poses[1]), "two tables built alike lay the pestle in two places")
+	# The control: a ray begun on the slab's top, where a jar's corner rests, misses the face it starts on
+	var top := TableWork._ray_mesh(PackedVector3Array([Vector3(-1, 0, -1), Vector3(1, 0, -1), Vector3(1, 0, 1), Vector3(-1, 0, -1), Vector3(1, 0, 1), Vector3(-1, 0, 1)]))
+	_ok(TableWork._ray(top, Vector3(0.2, 0.0, 0.3), Vector3.DOWN).is_empty(), "the control: a ray begun on a face meets it (then a corner on it was never missed)")
+	return true
+
+
+func _laid_at_rest() -> bool:
+	var spec := {"materials": {"stone": {"kind": "stone"}}, "things": [{"name": "bowl and club", "parts": [
+		{"shape": "box", "size": [12, 1, 12], "material": "stone"},
+		{"name": "club", "joint": {"kind": "free"}, "at": [0, 1, 0], "parts": [
+			{"shape": "ball", "size": [4, 4, 4], "at": [0, 2, 0], "material": "stone"},
+			{"shape": "tube", "radius": 0.6, "path": [[0, 3, 0], [0, 16, 0]], "material": "stone"}]},
+		{"name": "jar", "joint": {"kind": "free"}, "at": [4, 1, 4], "parts": [
+			{"shape": "lathe", "profile": [[0, 0], [1.5, 0], [1.5, 4], [1.2, 4], [1.2, 0.3], [0, 0.3]], "material": "stone"}]}]}]}
+	var m := _medium()
+	_stand(m, spec, "bowl and club", _at(Vector3(0, 0, 0)))
+	m._work.build({"acts": [{"name": "lay", "beat": 1, "length": 3.0, "tracks": [
+		{"thing": "bowl and club", "part": "club", "law": "carry", "to": [30, 0, 0], "turn": [0, 0, 90], "down": true, "lift": 4.0, "between": [0.0, 0.45]},
+		{"thing": "bowl and club", "part": "jar", "law": "carry", "to": [-30, 0, 0], "down": true, "lift": 4.0, "between": [0.5, 1.0]}]}]}, 1)
+	m._work.runs = [{"i": 0, "t0": 1.0, "t1": 4.0}]
+	m._work._timelines()
+	var club := _work_of_name(m, "club")
+	var jar := _work_of_name(m, "jar")
+	m._work.tick(8.0)
+	var left := _baked(m, club, 2.36)
+	var later := _baked(m, club, 6.0)
+	var moved := left.origin.distance_to(later.origin)
+	# ...tipped: its long way's slope changed (a roll about its own length is no tip, a round thing's rest either way)
+	var tipped := rad_to_deg(left.basis.orthonormalized().y.angle_to(later.basis.orthonormalized().y))
+	# ...and a jar set down upright is left as written: no turn laid on it
+	var jar_lay := Transform3D.IDENTITY
+	for e in m._work._chan.get("w%d:pose" % jar, []):
+		if (e as Dictionary).has("_lay"):
+			jar_lay = e["_lay"]
+	print("  a club laid down: %.1f mm on and tipped %.1f degrees by itself; the jar set down turned %.1f degrees as it was laid" % [
+		moved * 1000.0, tipped, rad_to_deg(Quaternion(jar_lay.basis.orthonormalized()).get_angle())])
+	_ok(moved < 0.003 and tipped < 2.0, "a club laid down went on %.1f mm and tipped %.1f degrees by itself" % [moved * 1000.0, tipped])
+	_ok(jar_lay.basis.is_equal_approx(Basis.IDENTITY), "a jar set down upright was turned as it was laid")
+	# ...the control: as written, turned 90 degrees with its lowest point on the table, it would tip
+	var tr: Dictionary = {}
+	for t in (m._work.acts[0] as Dictionary)["tracks"]:
+		if int((t as Dictionary).get("_wi", -1)) == club:
+			tr = t
+	var x0: Transform3D = m._work._rest["w%d:pose" % club]
+	var written := Transform3D(Basis.from_euler(Vector3(0, 0, PI * 0.5)), x0.origin)
+	var pts := m._work._own_points(tr, written)
+	var low := INF
+	for p in pts:
+		low = minf(low, p.y)
+	written.origin.y -= low
+	pts = m._work._own_points(tr, written)
+	var touching := PackedVector3Array()
+	for p in pts:
+		if p.y < TableWork.LAY_TOUCH:
+			touching.append(p)
+	var mid: Vector3 = written * x0.affine_inverse() * (m._work._middle_built(tr) as Vector3)
+	_ok(not TableWork._tip_axis(touching, mid).is_empty(), "the control: the club turned to lie as written already rests")
 	m._root3.free()
 	return true
 
@@ -3679,6 +4019,102 @@ func _sheet_surface_contact() -> bool:
 		print("  surface=%s: %d penetrations, least clearance %.3f mm" % [surface, through, least*1000.0])
 	_ok(int(hits[0]) > 0, "the control: the rod misses the gap between the sheet's particles")
 	_ok(int(hits[1]) == 0, "the rod penetrates the sheet's surface at %d frames" % int(hits[1]))
+	return true
+
+
+## A sheet of [param n] x [param n] points [param pitch] apart lying flat at [param y], its drawn face their triangles: `{sim, bi, points}`.
+func _flat_sheet(n: int, pitch: float, y: float, contact: float) -> Dictionary:
+	var sim := Particles.new()
+	var matter := sim.add_matter(0.7, 0.0, 0.0)
+	var points := PackedVector3Array()
+	for j in n:
+		for i in n:
+			points.append(Vector3((float(i) - float(n - 1) * 0.5) * pitch, y, (float(j) - float(n - 1) * 0.5) * pitch))
+	var tris := PackedInt32Array()
+	for j in n - 1:
+		for i in n - 1:
+			var a := j * n + i
+			tris.append_array([a, a + 1, a + n + 1, a, a + n + 1, a + n])
+	var bi := sim.add_body(points, 0.0012, matter, 0, -2, Transform3D.IDENTITY, contact)
+	sim.make_soft(bi)
+	var skin := SheetBend.binding(points, points)
+	skin["triangles"] = tris
+	sim.bodies[bi]["surface"] = skin
+	return {"sim": sim, "bi": bi, "points": points}
+
+
+## A thin rod's solid, its foot at [param at] (a tube 5 mm across and 10 cm long, upright).
+func _rod_solid(at: Vector3) -> Dictionary:
+	var part := _part({"shape": "tube", "path": [[0, 0, 0], [0, 10, 0]], "radius": 0.25, "material": "clay"})
+	var box := AABB(Vector3(-0.0025, 0, -0.0025), Vector3(0.005, 0.1, 0.005))
+	return {"field": ShapeField.of(part, box), "box": box, "xf": Transform3D(Basis.IDENTITY, at), "xf0": Transform3D(Basis.IDENTITY, at),
+		"moving": true, "stirs": true, "thin": true, "mu": Vector2(0.5, 0.4), "on": true, "jolt": 0.0, "dt": 1.0 / 60.0}
+
+
+## The rod [param sd] moved to [param at] for the next frame.
+static func _rod_to(sd: Dictionary, at: Vector3) -> void:
+	sd["xf0"] = sd["xf"]
+	sd["xf"] = Transform3D(Basis.IDENTITY, at)
+	sd["inv"] = (sd["xf"] as Transform3D).affine_inverse()
+	sd["wbox"] = ((sd["xf"] as Transform3D) * (sd["box"] as AABB)).merge((sd["xf0"] as Transform3D) * (sd["box"] as AABB))
+
+
+## A thin rod pressed down onto a sheet lying on the table never presses any of it - its points or its drawn face - into the table.
+## Controls: the rod comes down past where the sheet lies, and with no table under it the sheet goes down.
+func _sheet_pinned() -> bool:
+	for table in [true, false]:
+		var made := _flat_sheet(5, 0.006, 0.0002, 0.0002)
+		var sim: Particles = made["sim"]
+		var bi := int(made["bi"])
+		var off := Vector3(0.003, 0, 0.003)
+		var sd := _rod_solid(off + Vector3(0, 0.03, 0))
+		var lowest := INF
+		var lowest_face := INF
+		for step in 160:
+			_rod_to(sd, off + Vector3(0, lerpf(0.03, 0.0025, minf(float(step + 1) / 100.0, 1.0)), 0))
+			sim.step(1.0 / 60.0, {"solids": [sd], "top": 0.0 if table else -1.0})
+			var ids: PackedInt32Array = sim.bodies[bi]["ids"]
+			for i in ids:
+				lowest = minf(lowest, sim.x[i].y)
+			var skin: Dictionary = sim.bodies[bi]["surface"]
+			for vi in (made["points"] as PackedVector3Array).size():
+				lowest_face = minf(lowest_face, Particles._surface_point(skin, ids, vi, Basis(sim.bodies[bi]["q"] as Quaternion), sim.x).y)
+		print("  rod pressed on a sheet %s: its lowest point %.3f mm, its face %.3f mm" % ["on the table" if table else "with no table", lowest * 1000.0, lowest_face * 1000.0])
+		if table:
+			_ok(lowest > -0.00001 and lowest_face > -0.00005, "a rod pressed a sheet into the table: its point %.3f mm, its face %.3f mm" % [lowest * 1000.0, lowest_face * 1000.0])
+			# ...the control: the rod comes down past where the sheet lies, so the table, not the rod, is what holds the sheet
+			_ok((sd["xf"] as Transform3D).origin.y - 0.0025 < 0.0002, "the control: the rod never came down onto the sheet")
+		else:
+			_ok(lowest < -0.0005, "the control: with no table under it the sheet stays up")
+	return true
+
+
+## A rod sweeping a sheet lying on the table up against a still wall never leaves any of it in the wall: what a tool carries is kept out of
+## the solids after. Controls: the sheet is pushed to the wall, and the wall's field says in and out as the check reads it.
+func _sheet_swept() -> bool:
+	var made := _flat_sheet(7, 0.008, 0.0002, 0.0002)
+	var sim: Particles = made["sim"]
+	var bi := int(made["bi"])
+	var rod := _rod_solid(Vector3(-0.04, -0.0025, -0.016))
+	var part := _part({"shape": "box", "size": [2, 3, 10], "material": "clay"})
+	var box := AABB(Vector3(-0.01, 0, -0.05), Vector3(0.02, 0.03, 0.1))
+	var at := Transform3D(Basis.IDENTITY, Vector3(0.04, 0, 0))
+	var wall := {"field": ShapeField.of(part, box), "box": box, "xf": at, "xf0": at, "inv": at.affine_inverse(), "wbox": at * box,
+		"moving": false, "on": true, "mu": Vector2(0.5, 0.4), "thin": false}
+	var f: ShapeField = wall["field"]
+	_ok(f.sample(Vector3(0, 0.015, 0)).x < 0.0 and f.sample(Vector3(-0.012, 0.015, 0)).x > 0.0, "the control: the wall's field does not read in and out")
+	var deepest := 0.0
+	var nearest := INF
+	for step in 40:
+		_rod_to(rod, Vector3(lerpf(-0.04, 0.026, minf(float(step + 1) / 20.0, 1.0)), -0.0025, -0.016))
+		sim.step(1.0 / 60.0, {"solids": [rod, wall], "top": 0.0})
+		for i in (sim.bodies[bi]["ids"] as PackedInt32Array):
+			var d := f.sample(at.affine_inverse() * sim.x[i]).x
+			deepest = maxf(deepest, -d)
+			nearest = minf(nearest, d)
+	print("  a sheet swept against a wall: its points %.3f mm into the wall at most, the nearest %.3f mm off it" % [deepest * 1000.0, nearest * 1000.0])
+	_ok(nearest < 0.001, "the control: the rod never pushed the sheet to the wall")
+	_ok(deepest < 0.00001, "a rod left a sheet %.3f mm in a still wall" % (deepest * 1000.0))
 	return true
 
 

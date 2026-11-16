@@ -65,6 +65,9 @@ static func for_note(ctx: Dictionary) -> LetterFormat:
 	else:
 		card._sketches = LetterSketches.new()
 	card._build()
+	# what is on its desk, on the Props card ([DeskProps])
+	if card._panel != null:
+		card._panel.prop_sections.append(card._desk.props())
 	return card
 
 

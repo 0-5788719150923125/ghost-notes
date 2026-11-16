@@ -459,11 +459,17 @@ static func _chosen(seed: int, mood: String, kinds: Array, card := "", hand := "
 	return out
 
 
+## What one of the desk's things is written as before it is built ([method made]): `{things, materials}`, a [constant THINGS] row
+## of [param kind] drawn from [param seed] - what the Props card pictures it as ([DeskProps]).
+static func spec_of(kind: String, seed: int) -> Dictionary:
+	return _thing(kind, _rng(seed, "made " + kind), seed)
+
+
 ## One of the desk's things, built: a [constant THINGS] row of [param kind], drawn from [param seed] and made by [method
 ## Props.build] (`{node, size, ...}`, meters, its base on y = 0, its front toward +z); another desk that sets out the same
 ## things (the dispatch desk's mug and pencil cup) uses it too.
 static func made(kind: String, seed: int) -> Dictionary:
-	var safe := Props.sanitize(_thing(kind, _rng(seed, "made " + kind), seed), ["#888888"])
+	var safe := Props.sanitize(spec_of(kind, seed), ["#888888"])
 	if (safe["things"] as Array).is_empty():
 		return {}
 	return Props.build((safe["things"] as Array)[0], safe["materials"], hash([seed, "made", kind]))

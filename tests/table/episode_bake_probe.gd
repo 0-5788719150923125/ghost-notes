@@ -28,7 +28,9 @@ extends Node
 ## - `--script`: the episode's `script.md` as it stands now, its words timed from the plan's estimate (`--pace=1`); a take carries the
 ##   script it was exported from.
 ## - `--trace=T0,T1,step`: baked to each moment on this thread, each watched body's state there (held, asleep, host, last touched,
-##   what held it back).
+##   what held it back) - a loose thing's middle where the frame draws it and where the solver has it, and what holds it: the solids
+##   its spheres sleep on, rest on and are carried in, the inside its middle is in, or what it lies on again ([method _loose_state]);
+##   with `--spheres`, each of its spheres too.
 ## - `--seek=T,wK:after,...` (with `--live`): played to `--to`, then scrubbed as the reading scrubs - started again from the sentence
 ##   holding T, or from spoken word K, timed from 0 - and played `after` seconds (`--after`): whether the table and its bake stood,
 ##   how long the show waited, and how far each watched part is drawn from where the first pass drew it.
@@ -39,7 +41,8 @@ extends Node
 ## - `--profile=T`: bake through T+2, then measure 60 frames of playback there: the work's CPU cost, the medium's CPU cost and wall
 ##   time per frame (GHOST_PROBE_GPU=1 for rendering).
 ## - `--audit`: baked whole and every frame looked at against what must always hold: liquid neither made nor lost; a body in nothing
-##   solid, nor through the table; no jump between frames; a hand's thing not held far off its hand; nothing let go hanging in the
+##   solid, nor through the table (a part riding a body, a stopper, posed with it; what the table was built with said apart, "as built");
+##   no jump between frames; a hand's thing not held far off its hand; nothing let go hanging in the
 ##   air; a loose thing inside its vessel's walls; a surface moving smoothly; a painting tool's own surface in nothing but what gives,
 ##   to a millimeter (a pot's wall is three). Each said once, with when and how much.
 ## - `--contacts`: after baking, each frame from `--from` through `--to` checks the drawn sheets against thin tools' full capsules,
@@ -424,13 +427,26 @@ func _run() -> void:
 				var pd: Dictionary = p
 				var key := int(pd["wi"]) if int(pd["wi"]) >= 0 else -1 - int(pd["ti"])
 				if ph._loose_of.has(key):
-					var lp: Variant = ph.pose_of(key, ts)
-					if lp != null:
-						var lo := (lp as Transform3D).origin
-						print("%7.2f [%s] %-34s at (%.1f, %.1f, %.1f) cm, a loose thing, %s" % [ts, ",".join(acting), String(pd["label"]).left(34), lo.x * 100.0, lo.y * 100.0, lo.z * 100.0,
-							"held" if ph._held_at(key, ts) else "let go"])
-					else:
-						print("%7.2f [%s] %-34s lying as built" % [ts, ",".join(acting), String(pd["label"]).left(34)])
+					print("%7.2f [%s] %-34s %s" % [ts, ",".join(acting), String(pd["label"]).left(34), _loose_state(w, ph, key, ts)])
+					# ...and with `--spheres`, each of its spheres: where, how far into the solid nearest it, what it rests on and rides in
+					if args.has("--spheres") and int((ph.loose[int(ph._loose_of[key])] as Dictionary)["body"]) >= 0:
+						for i in ((ph.sim.bodies[int((ph.loose[int(ph._loose_of[key])] as Dictionary)["body"])] as Dictionary)["ids"] as PackedInt32Array):
+							if ph.sim.alive[i] != 1:
+								continue
+							var near := -1
+							var nd := INF
+							for si in ph.solids.size():
+								var sd: Dictionary = ph.solids[si]
+								if not (sd["wbox"] as AABB).grow(0.02).has_point(ph.sim.x[i]):
+									continue
+								var dd := float((sd["field"] as ShapeField).sample((sd["inv"] as Transform3D) * ph.sim.x[i]).x)
+								if dd < nd:
+									nd = dd
+									near = si
+							print("          sphere %d at (%.2f, %.2f, %.2f) cm, r %.1f mm, %s from %s, touch %s, ride %s, host %s, v %.3f m/s" % [i,
+								ph.sim.x[i].x * 100.0, ph.sim.x[i].y * 100.0, ph.sim.x[i].z * 100.0, ph.sim.r[i] * 1000.0,
+								("%.1f mm" % (nd * 1000.0)) if near >= 0 else "far", ph._solid_label(near) if near >= 0 else "-",
+								str(ph.sim.touch[i]), str(ph.sim._ride[i]) if i < ph.sim._ride.size() else "-", str(ph.sim.host[i]), ph.sim.v[i].length()])
 					continue
 				if not ph._rigid_of.has(key):
 					continue
@@ -440,7 +456,9 @@ func _run() -> void:
 				var tilt := rad_to_deg((pose as Transform3D).basis.y.normalized().angle_to(Vector3.UP)) if pose != null else 0.0
 				var hs := int(b["host"])
 				var tc := int(b["touch"])
-				print("%7.2f [%s] %-34s at (%.1f, %.1f, %.1f) cm, tilt %3.0f, %s%s, host %s, touch %s%s" % [ts, ",".join(acting), String(pd["label"]).left(34), at.x * 100.0, at.y * 100.0, at.z * 100.0, tilt,
+				var bm: Vector3 = b["c"]
+				print("%7.2f [%s] %-34s at (%.1f, %.1f, %.1f) cm, its middle (%.1f, %.1f, %.1f), tilt %3.0f, %s%s, host %s, touch %s%s" % [ts, ",".join(acting), String(pd["label"]).left(34), at.x * 100.0, at.y * 100.0, at.z * 100.0,
+					bm.x * 100.0, bm.y * 100.0, bm.z * 100.0, tilt,
 					"DORMANT " if bool(b.get("dormant", false)) else "", "held" if b["held"] != null else ("asleep" if bool(b["asleep"]) else "awake"),
 					ph._solid_label(hs) if hs >= 0 else str(hs), ph._solid_label(tc) if tc >= 0 else str(tc),
 					(", held back by " + ph._solid_label(int(b.get("by", -1)))) if int(b.get("by", -1)) != -1 else ""])
@@ -1219,6 +1237,48 @@ func _audit(w: TableWork, ph: TablePhysics, t_to: float) -> void:
 		return ((pv as Transform3D) * ph._rest_of(key).affine_inverse()) if pv != null else Transform3D.IDENTITY
 	var drawn := _audit_loose_points(w, ph)
 	var rests := {}
+	# ...a solid with no body of its own (a stopper, a lid) goes where the body it hangs from goes, and is there only while shown
+	var rides := {}
+	for si in ph.solids.size():
+		if not (ph.solids[si] as Dictionary).has("body"):
+			var by := _ridden_body(w, ph, si)
+			if by >= 0:
+				rides[si] = by
+	# ...each body's surface in the solids other than its own, posed [param m], the solids where [param worlds] has them
+	var meets := func(key: int, m: Transform3D, worlds: Dictionary, hidden: Dictionary, at: float, what: String) -> void:
+		var b: Dictionary = ph.rigid.bodies[int(ph._rigid_of[key])]
+		var own: PackedInt32Array = b["solids"]
+		var pts: PackedVector3Array = b["pts"]
+		# ...never what stands to it as it was built (carried together, or put back where it was): said once, as built
+		var as_built := {}
+		if what.is_empty():
+			for si in worlds:
+				var with: Transform3D = (worlds[si] as Transform3D) * ((ph.solids[int(si)] as Dictionary)["rest"] as Transform3D).affine_inverse()
+				if with.origin.distance_to(m.origin) < 0.001 and Quaternion(with.basis.orthonormalized()).angle_to(Quaternion(m.basis.orthonormalized())) < 0.02:
+					as_built[int(si)] = true
+		for k in range(0, pts.size(), maxi(pts.size() / 120, 1)):
+			var p: Vector3 = m * pts[k]
+			if p.y < -AUDIT_DEEP:
+				note.call("%s through the table%s (mm)" % [label.call(key), what], at, -p.y * 1000.0)
+			for si in ph.solids.size():
+				if own.has(si) or hidden.has(si) or as_built.has(si):
+					continue
+				var sd: Dictionary = ph.solids[si]
+				var xf: Transform3D = worlds[si]
+				if not (xf * (sd["box"] as AABB)).grow(0.002).has_point(p):
+					continue
+				var depth := -float((sd["field"] as ShapeField).sample(xf.affine_inverse() * p).x)
+				if depth > AUDIT_DEEP:
+					note.call("%s in %s%s (mm)" % [label.call(key), ph._solid_label(si), what], at, depth * 1000.0)
+	# ...as built, before anything moves: what the table was made with, said apart from what the acts do
+	var built := {}
+	var hidden := {}
+	for si in ph.solids.size():
+		built[si] = (ph.solids[si] as Dictionary)["rest"]
+		if not ph._shown(ph.solids[si], 0.0):
+			hidden[si] = true
+	for key in keys:
+		meets.call(int(key), Transform3D.IDENTITY, built, hidden, 0.0, " as built")
 	t = 0.0
 	while t < t_to:
 		var f: Dictionary = ph.frame_at(t)
@@ -1227,41 +1287,27 @@ func _audit(w: TableWork, ph: TablePhysics, t_to: float) -> void:
 			if ph._frame_rank(f, int(ph._rigid_of[key])) >= 0:
 				motion[int(ph._rigid_of[key])] = pose_at.call(int(key), t)
 		var worlds := {}
+		hidden = {}
 		for si in ph.solids.size():
 			var sd: Dictionary = ph.solids[si]
+			if not ph._shown(sd, t):
+				hidden[si] = true
 			var xf: Transform3D = sd["rest"]
 			if sd.has("body") and motion.has(int(sd["body"])):
 				xf = (motion[int(sd["body"])] as Transform3D) * xf
+			elif rides.has(si) and motion.has(int(rides[si])):
+				xf = (motion[int(rides[si])] as Transform3D) * xf
 			worlds[si] = xf
 		for key in keys:
 			var bi := int(ph._rigid_of[key])
 			if not motion.has(bi):
 				continue
-			var b: Dictionary = ph.rigid.bodies[bi]
 			var m: Transform3D = motion[bi]
-			var own: PackedInt32Array = b["solids"]
 			var stilled: bool = rests.has(bi) and (rests[bi] as Transform3D).is_equal_approx(m)
 			rests[bi] = m
 			if stilled:
 				continue
-			var low := Vector3.INF
-			var pts: PackedVector3Array = b["pts"]
-			for k in range(0, pts.size(), maxi(pts.size() / 120, 1)):
-				var p: Vector3 = m * pts[k]
-				if p.y < low.y:
-					low = p
-				if p.y < -AUDIT_DEEP:
-					note.call("%s through the table (mm)" % label.call(key), t, -p.y * 1000.0)
-				for si in ph.solids.size():
-					if own.has(si):
-						continue
-					var sd: Dictionary = ph.solids[si]
-					var xf: Transform3D = worlds[si]
-					if not (xf * (sd["box"] as AABB)).grow(0.002).has_point(p):
-						continue
-					var depth := -float((sd["field"] as ShapeField).sample(xf.affine_inverse() * p).x)
-					if depth > AUDIT_DEEP:
-						note.call("%s in %s (mm)" % [label.call(key), ph._solid_label(si)], t, depth * 1000.0)
+			meets.call(int(key), m, worlds, hidden, t, "")
 		# ...a loose thing's surface, past the walls of the inside its middle is in
 		for li in drawn:
 			var L: Dictionary = ph.loose[int(li)]
@@ -1486,6 +1532,64 @@ static func _audit_mesh_points(node: Node3D, w: TableWork, most: int) -> PackedV
 	for k in most:
 		out.append(all[k * all.size() / most])
 	return out
+
+
+## Loose work [param wi] at [param t], as `--trace` says it: its middle where the frame draws it (cm) and where the solver has it
+## now, and what holds it - a body (how many of its spheres sleep, the solids they sleep on and rest on), lying again where it came
+## to rest (on what, which carries it), or lying as built.
+func _loose_state(w: TableWork, ph: TablePhysics, wi: int, t: float) -> String:
+	var L: Dictionary = ph.loose[int(ph._loose_of[wi])]
+	var spheres: PackedVector3Array = L["spheres"]
+	var mid0 := Vector3.ZERO
+	for p in spheres:
+		mid0 += p
+	mid0 /= float(maxi(spheres.size(), 1))
+	var pv: Variant = ph.pose_of(wi, t)
+	var drawn: Vector3 = ((pv as Transform3D) * (L["built"] as Transform3D).affine_inverse()) * mid0 if pv != null else mid0
+	var out := "drawn at (%.1f, %.1f, %.1f) cm, %s" % [drawn.x * 100.0, drawn.y * 100.0, drawn.z * 100.0, "held" if ph._held_at(wi, t) else "let go"]
+	var name_of := func(si: int) -> String:
+		return "the table" if si == -1 or si == Particles.TABLE else (ph._solid_label(si) if si >= 0 else str(si))
+	var lb := int(L["body"])
+	if lb >= 0:
+		var b: Dictionary = ph.sim.bodies[lb]
+		var n := 0
+		var asleep := 0
+		var on := {}
+		var touching := {}
+		var riding := {}
+		for i in (b["ids"] as PackedInt32Array):
+			if ph.sim.alive[i] != 1:
+				continue
+			n += 1
+			if ph.sim.asleep[i] == 1:
+				asleep += 1
+				on[name_of.call(ph.sim.host[i])] = true
+			if ph.sim.touch[i] != -1:
+				touching[name_of.call(ph.sim.touch[i])] = true
+			if i < ph.sim._ride.size() and ph.sim._ride[i] >= 0:
+				riding[name_of.call(ph.sim._ride[i])] = true
+		var c: Vector3 = b["c"]
+		var in_at := ph.sim._inside_at(c)
+		return "%s; a body, its middle at (%.1f, %.1f, %.1f) cm%s, %d of %d spheres asleep%s%s%s" % [out, c.x * 100.0, c.y * 100.0, c.z * 100.0,
+			(" in the inside of " + name_of.call(in_at)) if in_at >= 0 else "", asleep, n,
+			(" on " + ", ".join(PackedStringArray(on.keys()))) if not on.is_empty() else "",
+			(", resting on " + ", ".join(PackedStringArray(touching.keys()))) if not touching.is_empty() else "",
+			(", carried in " + ", ".join(PackedStringArray(riding.keys()))) if not riding.is_empty() else ""]
+	if L.get("rest") != null:
+		return "%s; lying again where it came to rest, carried by %s" % [out, name_of.call(int(L["rest_host"]))]
+	return "%s; lying as built" % out
+
+
+## The rigid body solid [param si] goes with, having none of its own: the nearest work up its tree that is one, or its thing's; -1 none.
+func _ridden_body(w: TableWork, ph: TablePhysics, si: int) -> int:
+	var sd: Dictionary = ph.solids[si]
+	var c := int(sd["wi"])
+	while c >= 0:
+		if ph._rigid_of.has(c):
+			return int(ph._rigid_of[c])
+		c = int(w._parent_work.get(c, -1))
+	var key := -1 - int(sd["thing"])
+	return int(ph._rigid_of[key]) if ph._rigid_of.has(key) else -1
 
 
 ## Each loose thing's drawn surface as it lies as built, in the table's space, a couple of hundred points at most: {loose index: points}.

@@ -193,6 +193,8 @@ func start(steps: Array = [], remake := false, note := "", layer := -1) -> void:
 				again.append(step)
 			if not note.strip_edges().is_empty():
 				asked[String(step)] = note.strip_edges()
+		if layer >= 0:
+			skin_layer = layer
 		running = true
 		_live[episode.dir] = self
 		tick()
@@ -785,11 +787,19 @@ func _plan() -> Dictionary:
 	var fixed: Dictionary = spec.get("fixed", {}) if spec.get("fixed") is Dictionary else {}
 	if not (fixed.get("things", []) as Array).is_empty():
 		var said := PackedStringArray()
+		var to_place := PackedStringArray()
 		for t in fixed["things"]:
-			if t is Dictionary:
-				var at: Variant = (t as Dictionary).get("at", [0, 0])
-				said.append("\"%s\" at %s" % [String((t as Dictionary).get("name", "")), JSON.stringify(at)])
-		(p as Dictionary)["fixed_things"] = ", ".join(said)
+			if not (t is Dictionary):
+				continue
+			if (t as Dictionary).has("at"):
+				said.append("\"%s\" at %s" % [String((t as Dictionary).get("name", "")), JSON.stringify((t as Dictionary)["at"])])
+			else:
+				# ...and those written with no place, which the set dresser places
+				to_place.append("\"%s\"" % String((t as Dictionary).get("name", "")))
+		if not said.is_empty():
+			(p as Dictionary)["fixed_things"] = ", ".join(said)
+		if not to_place.is_empty():
+			(p as Dictionary)["fixed_to_place"] = ", ".join(to_place)
 	# ...AND what is painted, element by element, for whoever lays it on ([Skins])
 	var doc: Variant = episode.read_json("skin") if episode.has("skin") else null
 	if doc is Dictionary:
@@ -1586,8 +1596,12 @@ func _make_table() -> void:
 	var airs: Array = []
 	var tables: Array = []
 	var lights: Array = []
+	# ...never the things the show keeps on every table, which stand on this one too ([FixedTable])
+	var mine := FixedTable.names(spec.get("fixed", {}) if spec.get("fixed") is Dictionary else {})
 	for e in TableEpisode.archive(episode.show, episode.seed):
-		seen.append_array((e as Dictionary)["things"])
+		for n in (e as Dictionary)["things"]:
+			if not mine.has(String(n).strip_edges().to_lower()):
+				seen.append(n)
 		airs.append_array((e as Dictionary).get("air", []))
 		if not String((e as Dictionary).get("furniture", "")).is_empty():
 			tables.append((e as Dictionary)["furniture"])

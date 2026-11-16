@@ -1,6 +1,6 @@
 extends SceneTree
 
-## Episode budgets and content history, without a writer or renderer. New plans default to 10-15 minutes; a brief's
+## Episode budgets and content history, without a writer or renderer. New plans default to [constant TablePrompts.MINUTES]; a brief's
 ## explicit range survives. The word budget covers the whole show at the selected voice's pace, including a card's separate
 ## work passage. Controls: legacy passage sizes remain unchanged; short replies and voice marks do not satisfy a budget.
 ## Written cards with no art reach the producer's history with their contents, and never leak into an opening reader's prompt.
@@ -103,11 +103,12 @@ func _landed() -> bool:
 	var plan := _plan(1)
 	plan.erase("minutes")
 	_ok(producer._land_plan(JSON.stringify(plan)).is_empty(), "a plan without a duration lands")
-	_ok(ep.read_json("plan").get("minutes") == [10.0, 15.0], "new plans default to 10-15 minutes")
+	var dflt := [TablePrompts.MINUTES.x, TablePrompts.MINUTES.y]
+	_ok(ep.read_json("plan").get("minutes") == dflt, "new plans default to the default range (%s)" % str(ep.read_json("plan").get("minutes")))
 	plan["minutes"] = [2, 3]
 	_ok(producer._land_plan(JSON.stringify(plan)).is_empty() and ep.read_json("plan").get("minutes") == [2.0, 3.0], "a requested range survives landing")
 	var beats := {"beats": [{"name": "First", "asks": "what happens"}], "look": {}}
-	_ok(producer._land_plan(JSON.stringify(beats)).is_empty() and ep.read_json("plan").get("minutes") == [10.0, 15.0], "a plan of beats gets the same default")
+	_ok(producer._land_plan(JSON.stringify(beats)).is_empty() and ep.read_json("plan").get("minutes") == dflt, "a plan of beats gets the same default")
 	var requested: Vector2i = producer.say_prompt("1")["words"]
 	_ok(not TableProducer.short_passage("A tiny story.", requested).is_empty(), "a tiny story fails its requested budget")
 	_ok(not TableProducer.short_passage("<!-- delivery: " + "many words ".repeat(1000) + "--> Tiny.", requested).is_empty(), "voice marks do not count as spoken words")

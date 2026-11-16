@@ -95,7 +95,8 @@ prompt:
       candelabra, a dish of tea lights: each burns as one light, however many flames it has (a flame
       is a wax part's `wick` or `wicks`) - and {{lo}} to {{hi}} other things. That is how full this
       reader keeps a table; a place crowded by nature - a shop counter, an altar, a cluttered study, a
-      market stall - can hold more, up to {{most}}.
+      market stall - can hold more, up to {{most}}.{{#work}} What the work uses - what it is done in and
+      with, and what goes into it - stands beside these and is not counted among them.{{/work}}
   - >-
       Candles take every form a reader of this world would light: a taper in a tall stick, a squat
       pillar with two or three wicks, tea lights in their tins, a votive in glass, a church candle
@@ -107,13 +108,10 @@ prompt:
       bare: the deck is shuffled there, and the cards drawn and laid.{{/cardless}}{{#cardless}}The middle
       of the cloth is the work's: what is worked stands there, in the camera's full view.{{/cardless}} A full table is full the way a
       real one is: things pushed out to the sides and the back, standing close, a short thing in front
-      of a taller one, some cut by the frame's sides - never one hidden whole behind another.
-  - >-
-      Compose the whole table around its main work area. When that area moves, adjust the surrounding
-      groups to fit it: close unintended gaps and balance the heights and density while preserving room
-      for the work. Judge the whole camera view after placing the objects, not just each object alone.
-      Anything handled during the show stays within a seated person's easy reach, including storage
-      beside the workspace; being outside the picture need not mean being farther away.
+      of a taller one, {{^work}}some cut by the frame's sides{{/work}}{{#work}}what only dresses the table cut by the frame's sides
+      where it must, what the work uses whole in the picture{{/work}} - never one hidden whole behind another.
+      Nothing stands wholly out of the shot unless the work fetches it or it gives the picture something: a
+      flame's light, a shadow thrown across the table, steam or smoke rising into view.
   - >-
       Every thing is a real object, set out in earnest. Nothing on the table carries words, letters,
       numbers or labels.
@@ -261,25 +259,20 @@ prompt:
           it is the heart of the picture. Stand the rest of what is worked in
           the camera's sight, within an easy reach of
           the middle{{^cardless}} but never where the cards go{{/cardless}}, each tool where it is picked up
-          from - in or beside what it works. A THING NEEDED ONLY FOR A WHILE MAY WAIT OUT OF THE SHOT, on
-          the table past the frame's sides where the blueprint shows it going on, to be brought in when it
-          is used and taken back out after - a table short of room keeps a big tool there (a board, a tray,
-          a basket) rather than crowd the shot. A tool left in what it works rests there as it would when let
+          from - in or beside what it works. What the work uses stands in the picture from the start where
+          there is room; what it needs only for a while may wait just past a side of the frame, to be brought
+          in when it is used and taken back after. A tool left in what it works rests there as it would when let
           go: leaning on the rim, the end that works down in what the vessel holds and the handle tipped up
           out of it - never lying level on the top of a liquid, as if it floated. The puppeteer moves them
           once the table is set: build each so a viewer would know what it is for.
-  - when: work
-    say: >-
-          A receiving vessel starts empty when the work will fill it: the grains arrive from their
-          source, so it needs no second grains bed to represent them. For loose ingredients meant to
-          disappear in liquid, set their material's `dissolves` to seconds of wet contact; 0 persists.
   # A BOX WHOSE CARDS THE WORK IS MADE OF (a recipe box): the table is set before a card comes up, so it is set for
   # any of them - each listed, none drawn
   - when: [work, box_cards]
     say: >-
           THE CARDS THIS EPISODE'S BOX HOLDS - one will come up, and its work is made of what it calls for.
           None has come up yet: stand what they call for, the things most of them share first, as far as
-          the table holds.
+          the picture holds - small stores of one kind together in one holder the camera sees, never parked
+          out of the shot.
   - each: box_cards
     say: '  - {{name}}: {{meaning}}'
   - when: work
@@ -383,6 +376,17 @@ prompt:
           THE SHOW'S OWN THINGS stand on this table already, exactly as its brief writes them: {{fixed}}. They are on your
           blueprint and in every picture from the start. Build round them: they are never moved, made again or taken away, and
           nothing stands where they stand.
+  # A SHOW'S FIXED THINGS WITH NO PLACE (FixedTable.placed_by_dresser): built as the brief writes them; the set dresser places them
+  - when: to_place
+    say: >-
+          THE SHOW'S OWN THINGS WITH NO PLACE are in your draft already, built as its brief writes them: {{to_place}}. Place each
+          with blueprint where it serves this table, and build the rest round them. They are not made again, resized or taken away.
+  # THE LIBRARY (ThingLibrary): props kept from earlier tables, found by what is needed, never listed whole
+  - when: tools
+    say: >-
+          THE LIBRARY holds props kept from earlier tables, each built and proven. When this table needs a thing, ask `library` for
+          it in a few words first; put a kept one with {"kept": its name} only where it is what this table needs, and make the
+          thing yourself where nothing kept fits.
   # A SURFACE PAINTED (next/painted_surface.md): the paints are things on the table, each taken up from where it stands
   - when: painted
     say: >-
@@ -613,7 +617,7 @@ box:
   - when: shoebox
     say: "This episode calls for a substantial cardboard shoebox with a removable lid. It starts to one side, then stays in the center with its long side across the table."
   - when: "!shoebox"
-    say: "The open box stands to one side with its long side front to back. Give it `at` to place its center in centimeters like the other things; without it the table uses the deck's place. Keep it within easy reach beside the workspace. It may extend past a side of the frame with only a small part visible; use the camera view to judge its prominence. Keep the vessel or surface worked throughout near the center where its contents are visible, with the surrounding groups composed around it."
+    say: "The open box stands to one side with its long side front to back, within an easy reach and in the picture, where a card coming up out of it is seen whole. Place it with `at` like the other things; left unplaced, it stands beside the cards."
   - when: filed
     say: "Leave enough depth and height for the cards to stand on edge."
   - when: piled

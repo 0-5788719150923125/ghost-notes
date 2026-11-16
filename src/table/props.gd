@@ -289,7 +289,7 @@ static func describe() -> String:
 	lines.append("")
 	lines.append("WARP: any part, whatever its shape, can be reshaped whole by its `warp` - {\"scale\" [x, y, z] (stretched or squashed: an oval dish is a turned bowl with scale [1, 1, 0.7]), \"taper\" -1 to 0.95 (narrower toward its top; below 0, wider), \"twist\" (degrees it turns about its upright middle from bottom to top), \"lean\" [x, z] (its top moved that many centimeters, its base kept), \"bend\" (degrees: it bows along its height until its top has turned that far, toward \"bend_to\" - 0 its right, 90 its front, 180 its left, 270 its back), \"wobble\" 0-1 (the unevenness of a thing made by hand - a hand-thrown pot, a gnarled root, a misshapen fruit; 0.1-0.3 is plenty)}, applied in that order. A bend is a banana's curve, a candle slumped in the heat, a horn's sweep; a whole bent rod with kinks in it is a tube's path.")
 	lines.append("")
-	lines.append("WHERE PARTS MEET: a spout, a handle, an arm, a stem or a branch grows OUT of what it joins - start it a little inside that part, so no gap or seam of light shows. A thing is a few parts that join well, not many small ones floating side by side. A vessel's profile carries its character - foot, belly, shoulder, neck, lip - and most stand on a flat base. A spout leaves the body wide and low and narrows as it rises to a lip about level with the rim; a handle is a rod bent round, both ends sunk into the body; a lid is its own part, sitting in or on the rim, with a knob.")
+	lines.append("WHERE PARTS MEET: a spout, a handle, an arm, a stem or a branch grows OUT of what it joins - start it a little inside that part, so no gap or seam of light shows. A thing has as many parts as its form needs to read as itself up close - a rim, a foot, a handle, a lid and its knob each their own - every one joined well, never small ones floating side by side. A vessel's profile carries its character - foot, belly, shoulder, neck, lip - and most stand on a flat base. A spout leaves the body wide and low and narrows as it rises to a lip about level with the rim; a handle is a rod bent round, both ends sunk into the body; a lid is its own part, sitting in or on the rim, with a knob.")
 	lines.append("")
 	lines.append("DRAPED: a strand laid `drape` is laid across the TABLE ITSELF, not in a thing's own space: its `path` is in the table's centimeters, from the middle of the reading (as a layer's `at`), x to the reader's right and z toward the reader. Where the path runs past the top's edge the strand rolls over the edge and hangs straight down as far as it ran past - a path ending 30 cm past the right edge hangs 30 cm down the side, to the floor at most. It is its thing's only part, its thing's `place` is not used, and it keeps clear of the middle of the cloth, where the deck and the cards go: along the back, round a corner, across one side and over an edge. The camera sees the far edge and a little of the sides; what hangs over the near edge is under the lens.")
 	lines.append("")
@@ -1220,47 +1220,90 @@ static func _assemble(parts: Array, seed: int, path: Array, gives := {}) -> Arra
 
 
 ## A free part rests on what is under it: each part with a free joint, drawn with air between it and the rest of its thing, is lowered
-## until it first touches it - or the table's top, [param ground] - never raised, never into anything: points of its own surface (at most
-## [constant REST_LOOKS] of a mesh's) looked at straight down, the least gap taken. Only what it is drawn over is asked, in
-## [param inner]'s space, before the thing is scaled; the physics takes the part where it then lies.
+## until it first touches it - or the table's top, [param ground] - never raised, never into anything: every point of its own surface
+## ([method _rest_looks]) looked at straight down onto what of the rest of its thing is under it, the least gap taken (a part's free
+## parts are looked at themselves, after it, and go down with it). Only what it is drawn over is asked, in [param inner]'s space, before
+## the thing is scaled; the physics takes the part where it then lies, and lays one drawn in something out of it
+## ([method TablePhysics.lay_loose]).
 static func _rest_free(inner: Node3D, meshes: Array, works: Array, ground: float) -> void:
 	var free: Array = works.filter(func(wd: Dictionary) -> bool:
 		return String(((wd["work"] as Dictionary).get("joint", {}) as Dictionary).get("kind", "")) == "free")
 	if free.is_empty():
 		return
-	# (each mesh of the thing once: its rays' mesh and where it stands in [param inner]'s space)
+	# (each mesh of the thing once: its rays' mesh, where it stands in [param inner]'s space and the box it fills there)
 	var all: Array = []
 	for m in meshes:
 		var mi := m as MeshInstance3D
 		if mi != null and mi.mesh != null:
 			var x := _in_space(mi, inner)
-			all.append({"mi": mi, "x": x, "back": x.affine_inverse(), "tm": TableWork._ray_mesh(mi.mesh.get_faces())})
+			all.append({"mi": mi, "x": x, "back": x.affine_inverse(), "tm": TableWork._ray_mesh(mi.mesh.get_faces()), "box": x * mi.mesh.get_aabb()})
 	for wd in free:
 		var wn: Node3D = (wd as Dictionary)["node"]
+		var inner_free: Array = []
+		for od in free:
+			if od != wd and wn.is_ancestor_of((od as Dictionary)["node"]):
+				inner_free.append((od as Dictionary)["node"])
 		var drop := INF
 		for o in all:
-			if not wn.is_ancestor_of(o["mi"]):
+			var mi: MeshInstance3D = o["mi"]
+			if not wn.is_ancestor_of(mi) or inner_free.any(func(n: Node3D) -> bool: return n.is_ancestor_of(mi)):
 				continue
-			var faces: PackedVector3Array = (o["mi"] as MeshInstance3D).mesh.get_faces()
-			for i in range(0, faces.size(), maxi(faces.size() / REST_LOOKS, 1)):
-				var p: Vector3 = (o["x"] as Transform3D) * faces[i]
+			if not o.has("looks"):
+				o["looks"] = _rest_looks(mi.mesh)
+			for q in (o["looks"] as PackedVector3Array):
+				var p: Vector3 = (o["x"] as Transform3D) * q
 				var gap := p.y - ground
 				for u in all:
-					if wn.is_ancestor_of(u["mi"]):
+					var ub: AABB = u["box"]
+					if p.x < ub.position.x or p.x > ub.end.x or p.z < ub.position.z or p.z > ub.end.z or ub.position.y > p.y \
+							or wn.is_ancestor_of(u["mi"]):
 						continue
+					# ...from a little over it: a ray begun on the face it rests on misses that face
 					var back: Transform3D = u["back"]
-					var hit := TableWork._ray(u["tm"], back * p, (back.basis * Vector3.DOWN).normalized())
+					var hit := TableWork._ray(u["tm"], back * (p + Vector3.UP * REST_ABOVE), (back.basis * Vector3.DOWN).normalized())
 					if not hit.is_empty():
 						gap = minf(gap, p.y - ((u["x"] as Transform3D) * (hit["position"] as Vector3)).y)
 				drop = minf(drop, gap)
 		if drop > REST_LEAST and drop < INF:
 			var parent := wn.get_parent() as Node3D
 			wn.position += (_in_space(parent, inner).basis.inverse() if parent != inner else Basis()) * (Vector3.DOWN * drop)
+			# ...and what it carries down with it is where it now is, for the parts in it looked at after it
+			var down := Transform3D(Basis.IDENTITY, Vector3.DOWN * drop)
+			for o in all:
+				if wn.is_ancestor_of(o["mi"]):
+					o["x"] = down * (o["x"] as Transform3D)
+					o["back"] = (o["x"] as Transform3D).affine_inverse()
+					o["box"] = down * (o["box"] as AABB)
 
 
-## How many points of a free part's mesh [method _rest_free] looks down from, and the least gap worth closing (meters).
-const REST_LOOKS := 300
+## The points of mesh [param mesh] a part is lowered by ([method _rest_free]): each of its corners once - the lowest
+## [constant REST_LOOKS] where it has more, and as many again spread over the rest.
+static func _rest_looks(mesh: Mesh) -> PackedVector3Array:
+	var seen := {}
+	var pts := PackedVector3Array()
+	for q in mesh.get_faces():
+		var key := Vector3i((q * 100000.0).round())
+		if not seen.has(key):
+			seen[key] = true
+			pts.append(q)
+	if pts.size() <= REST_LOOKS * 2:
+		return pts
+	var by_y := Array(pts)
+	by_y.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.y < b.y)
+	var out := PackedVector3Array()
+	for k in REST_LOOKS:
+		out.append(by_y[k])
+	var every := maxi((by_y.size() - REST_LOOKS) / REST_LOOKS, 1)
+	for k in range(REST_LOOKS, by_y.size(), every):
+		out.append(by_y[k])
+	return out
+
+
+## How many of a mesh's lowest corners [method _rest_free] looks down from at most (as many again spread over the rest), the least
+## gap worth closing, and how far over each corner its ray begins (meters).
+const REST_LOOKS := 600
 const REST_LEAST := 0.0005
+const REST_ABOVE := 0.002
 
 
 ## Node [param n]'s transform in [param top]'s space (one of its ancestors), composed by hand - a thing is built away from the tree.

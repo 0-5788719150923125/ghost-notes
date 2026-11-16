@@ -9,6 +9,8 @@ class_name SheetBend
 ## How many of the sheet's points a vertex follows, and how far a bent sheet may stand from its box as the mesh was measured (meters).
 const FOLLOWS := 4
 const CULL_MARGIN := 0.12
+## How near a drawn vertex is to the solver's own for the two to be one, sharing its followers (meters).
+const MATCH_NEAR := 0.0003
 
 var _mi: MeshInstance3D
 var _arrays: Array = []
@@ -80,17 +82,28 @@ func _measure(verts: PackedVector3Array, normals: PackedVector3Array, built: Tra
 	_near = bound["near"]
 	_weight = bound["weight"]
 	# Geometry and its ink share the solver's exact followers, including ties between equally near points.
+	# ...each vertex's twin found among the solver's within MATCH_NEAR, through cells that wide (never every one against every one)
 	if surface.has("vertices"):
 		var source: PackedVector3Array = surface["vertices"]
+		var cells := {}
+		for si in source.size():
+			var key := Vector3i((source[si] / MATCH_NEAR).floor())
+			if not cells.has(key):
+				cells[key] = PackedInt32Array()
+			(cells[key] as PackedInt32Array).append(si)
 		for vi in world_places.size():
 			var closest := -1
 			var least := INF
-			for si in source.size():
-				var d := world_places[vi].distance_squared_to(source[si])
-				if d < least:
-					least = d
-					closest = si
-			if closest < 0 or least > 0.0003 * 0.0003:
+			var at := Vector3i((world_places[vi] / MATCH_NEAR).floor())
+			for dx in range(-1, 2):
+				for dy in range(-1, 2):
+					for dz in range(-1, 2):
+						for si in cells.get(at + Vector3i(dx, dy, dz), PackedInt32Array()):
+							var d := world_places[vi].distance_squared_to(source[si])
+							if d < least or (d == least and si < closest):
+								least = d
+								closest = si
+			if closest < 0 or least > MATCH_NEAR * MATCH_NEAR:
 				continue
 			for k in FOLLOWS:
 				_near[vi * FOLLOWS + k] = (surface["near"] as PackedInt32Array)[closest * FOLLOWS + k]

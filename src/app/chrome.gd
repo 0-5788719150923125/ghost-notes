@@ -14,6 +14,8 @@ class_name Chrome
 ##                     what it is installing. Open until the user first closes it (`[deps] open`).
 ## - **graphics**    - the Graphics panel ([GraphicsPanel]) behind the row's picture: how finely the stage
 ##                     is drawn, live and in an export ([Graphics]).
+## - **dex**         - the Dex ([DexWindow]) behind the row's books: what the library keeps, props and voices
+##                     ([LibraryProps], [LibraryVoices]), browsed from anywhere.
 ## - **exporter**    - the ⤓ render-to-video button and background pipeline (persistent: an in-flight
 ##                     export survives session churn).
 ## - **assistant**   - the feedback browser / dispatch backend and its picker (persistent: queued work
@@ -35,6 +37,7 @@ var transport: Node
 var provision: Node
 var environment: DepsPanel
 var graphics: GraphicsPanel
+var dex: DexWindow
 
 var _env_layer: CanvasLayer
 var _env_button: Button
@@ -52,6 +55,7 @@ func _ready() -> void:
 	super._ready()
 	_build_environment()
 	_build_graphics()
+	_build_dex()
 	exporter = preload("res://src/export/exporter.gd").new()
 	add_child(exporter)
 	assistant = preload("res://src/app/assistant.gd").new()
@@ -194,6 +198,32 @@ func _place_graphics() -> void:
 	if graphics != null:
 		graphics.offset_top = -ROW_TOP - 8.0 - bottom_inset
 		graphics.offset_bottom = -ROW_TOP - 8.0 - bottom_inset
+
+
+# --- the dex ------------------------------------------------------------------------------------
+
+## The Dex behind the row's books: opened on every shelf the library has, built when first opened.
+func _build_dex() -> void:
+	var b := Button.new()
+	b.icon = Icons.texture("dex", 20)
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(40, 40)
+	b.tooltip_text = "Dex: what your library keeps - props and voices - to look at, hear, rename, hand on or take in."
+	b.pressed.connect(func() -> void: open_dex(not (dex != null and dex.visible)))
+	row_button(&"dex", b)
+
+
+## The Dex opened on every shelf the library has ([param on]), or closed.
+func open_dex(on: bool) -> void:
+	if not on:
+		if dex != null:
+			dex.hide()
+		return
+	if dex == null:
+		dex = DexWindow.new()
+		add_child(dex)
+	dex.open([LibraryProps.new(), LibraryVoices.new()])
 
 
 # --- the feedback console -----------------------------------------------------------------------

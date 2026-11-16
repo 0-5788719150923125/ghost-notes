@@ -11,6 +11,12 @@ var _fails: Array = []
 var _ed: ReadingPanel
 
 
+## A walk whose words are not the note's (as an episode's are): its speakers are named where it reads them.
+class Elsewhere extends TextWalk:
+	func reads_source() -> bool:
+		return false
+
+
 func _ready() -> void:
 	# Built by hand rather than added to the tree: _ready would start the voice
 	# host, and nothing here needs a python process.
@@ -46,6 +52,7 @@ func _ready() -> void:
 	_check_handover_is_sample_accurate()
 	_check_tabs()
 	_check_reader_is_first()
+	_check_rename()
 	_check_saved_shape()
 	_check_hesitations()
 	_check_hesitation_splice()
@@ -506,6 +513,43 @@ func _check_reader_is_first() -> void:
 	_ed._text.text = "Only the reader now."
 	_ed._cast.refresh(_ed._cast_text())
 	_ok(_ed._cast._names == PackedStringArray(["Ryan"]), "control: words with no cue are not the reader's alone: %s" % [_ed._cast._names])
+	_ed._text.text = ""
+
+
+## A voice renamed on the card ([method ReadingCast.rename_voice]): every cue naming it, in either form, names the new name and
+## nothing else in the words changes (prose that says the name stays); the voice keeps its settings and its place, and the cast
+## written out carries the new name alone. The reader, with no cue, is renamed by its place. Refused: a name already a voice
+## (a hidden one too), an empty one, one with a cue's marks, Narrator for anyone but the reader, and any rename where the words
+## read are an episode's script (the control: the same rename on the note's own words is done).
+func _check_rename() -> void:
+	_ed._text.text = "Opening.\n\n<!-- speaker: Emily -->\n\nEmily speaks.\n\n[speaker: Judge]\n\nOrder.\n\n  [ speaker : Emily ]  \n\nAgain."
+	_ed._cast.apply({"voices": {"Ryan": {"pace": 0.7}, "Emily": {"pace": 1.3}, "Judge": {"pace": 0.9}, "Gone": {"pace": 1.1}}})
+	_ed._cast.refresh(_ed._cast_text())
+	_ok(_ed._cast._names == PackedStringArray(["Ryan", "Emily", "Judge"]), "the fixture's tabs: %s" % [_ed._cast._names])
+	_ok(_ed._cast.rename_voice("Emily", "Emma").is_empty(), "a rename was refused")
+	var t := _ed._text.text
+	_ok(t.contains("<!-- speaker: Emma -->") and t.contains("  [ speaker : Emma ]  ") and not t.contains("speaker: Emily")
+			and t.contains("Emily speaks.") and t.contains("[speaker: Judge]"),
+		"the cues were not renamed in their own forms, or prose changed: %s" % t)
+	_ed._cast.refresh(_ed._cast_text())
+	var cast := _ed._cast.cast_dict()
+	_ok(_ed._cast._names == PackedStringArray(["Ryan", "Emma", "Judge"]) and absf(float(_ed._cast.cfg_of("Emma")["pace"]) - 1.3) < 0.001
+			and not cast.has("Emily") and cast.keys().find("Emma") == 1,
+		"the voice lost its settings or its place, or the old name stayed: %s %s" % [_ed._cast._names, cast.keys()])
+	_ok(_ed._cast.rename_voice("Ryan", "Ada").is_empty() and _ed._cast.reader() == "Ada" and _ed._text.text == t
+			and absf(float(_ed._cast.cfg_of(Manuscript.NARRATOR)["pace"]) - 0.7) < 0.001,
+		"the reader was not renamed by its place, or the words changed for it")
+	_ok(not _ed._cast.rename_refused("Emma", "Judge").is_empty(), "a name already a voice was taken")
+	_ok(not _ed._cast.rename_refused("Emma", "Gone").is_empty(), "a hidden voice's name was taken")
+	_ok(not _ed._cast.rename_refused("Emma", "  ").is_empty(), "an empty name was taken")
+	_ok(not _ed._cast.rename_refused("Emma", "a] b").is_empty() and not _ed._cast.rename_refused("Emma", "x --> y").is_empty(),
+		"a name with a cue's marks was taken")
+	_ok(not _ed._cast.rename_refused("Emma", Manuscript.NARRATOR).is_empty(), "Narrator was taken by a voice that is not the reader")
+	var walk := _ed.walk
+	_ed.walk = Elsewhere.new()
+	_ok(not _ed._cast.rename_refused("Emma", "Em").is_empty(), "a rename of an episode's speaker was taken")
+	_ed.walk = walk
+	_ok(_ed._cast.rename_refused("Emma", "Em").is_empty(), "control: the same rename on the note's own words was refused")
 	_ed._text.text = ""
 
 

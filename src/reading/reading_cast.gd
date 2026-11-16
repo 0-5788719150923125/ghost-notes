@@ -8,6 +8,12 @@ class_name ReadingCast
 ## and its ink; everything else of its sound is in its Lab ([ReaderBrowser]), whose rows this builds and reads.
 ## Its block is the document's `voice:` ([method capture], [method apply]): the Voice card's (next/notes.md).
 ##
+## A voice may be one kept for every note ([VoiceLibrary], [VoiceKeep]): its row names it (`kept:`) and holds a copy of
+## what it last read. Read in ([method apply], [method load_stored]) and whenever the library changes ([method
+## follow_library]), the row takes the kept voice's fields over its own, its room left as it is; with no such voice in the
+## library it reads its copy. The voice picker lists the kept voices under the models. A control that edits a kept field
+## calls [method voice_edited], so a change to a voice read by name reaches the library.
+##
 ## A part of its panel (next/structure.md, step 23): it asks the panel for the text the cast is read from, the
 ## reading on the stream (a voice changed, a pace changed, a dial moved) and the status line, and is asked a
 ## voice's settings by name ([method cfg_of]) by everything that reads one - the stream, the audition and the
@@ -29,6 +35,11 @@ var panel: ReadingPanel
 #
 # A name that leaves the script keeps its voice ([member _stash]): it is hidden, not forgotten, and comes back
 # exactly as it was.
+#
+# A voice is renamed on the card ([method rename_voice]: Rename…, or a double click on its row): every cue naming it in
+# the note's words is rewritten to the new name (one undo), and its settings go with it. The reader, who has the words
+# before the first cue, is renamed without a cue: it is whichever voice the block lists first. An episode's speakers are
+# named by its script, never the note's words, and are not renamed here.
 #
 # The cue must own its line (see [constant Manuscript.SPEAKER]): a mis-parsed cue silently reads the rest of the
 # chapter in the wrong voice.
@@ -77,6 +88,7 @@ var _hesitate: HSlider
 var _hesitate_on: CheckBox
 var _tabs: VBoxContainer      # one row per speaker the script names
 var _cast_head: Label
+var _rename: Button
 var _tab_group: ButtonGroup
 var _names := PackedStringArray()  # the tabs, in order of first appearance in the script
 var _slots: Array = []         # [SLOT_DEFAULTS-shaped Dictionary], one per tab, beside _names
@@ -91,6 +103,13 @@ var _repace_timer: Timer       # one re-plan per slider gesture, not one per pix
 ## Not a sound, so changing it restarts nothing; it reaches the page at the next Play.
 var _ink_pick: OptionButton
 var _ink_raw := ""               # the slot's ink as stored, kept when it is a hex the list lacks
+
+## The kept voice the tab on screen reads by name (its row's `kept:`), "" for a voice of its own.
+var _kept_name := ""
+## The kept voices the picker lists, in order, under the models and a heading.
+var _pick_kept: Array = []
+## Keep… and "Make it this note's own", and the samples ([VoiceKeep]): built with the Voice row.
+var keep: VoiceKeep
 
 
 func _init(owner: ReadingPanel) -> void:
@@ -192,7 +211,17 @@ func build_cast(box: VBoxContainer) -> void:
 		+ "list follows the script as it changes. Pick a person to edit their voice below; "
 		+ "Test hears it on its own. A name that drops out of the script keeps its settings "
 		+ "for when it comes back. Play still reads the whole script.")
-	box.add_child(_cast_head)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 6)
+	_cast_head.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(_cast_head)
+	_rename = Button.new()
+	_rename.text = "Rename…"
+	_rename.focus_mode = Control.FOCUS_NONE
+	_rename.add_theme_font_size_override("font_size", 12)
+	_rename.pressed.connect(func() -> void: ask_rename(slot))
+	head.add_child(_rename)
+	box.add_child(head)
 	_tabs = VBoxContainer.new()
 	_tabs.add_theme_constant_override("separation", 2)
 	_tabs.tooltip_text = _cast_head.tooltip_text
@@ -223,9 +252,14 @@ func build_voice(box: VBoxContainer) -> void:
 		# panel out (see SidePanel._check_width)
 	voice_pick.fit_to_longest_item = false
 	voice_pick.clip_text = true
-	voice_pick.tooltip_text = "Which voice model reads: a Piper model, kokoro, or formant - Ghost Notes' own synthesizer, no model at all, its voice bred in Lab…'s fishing game. A model that holds more than one reader (libritts, kokoro) picks who reads in Lab…. Each model has its own license - it appears under the panel when you pick one. Changing this regenerates whatever has not been played yet."
-	voice_pick.item_selected.connect(func(_i: int) -> void:
-		if not _syncing:
+	voice_pick.tooltip_text = "Which voice model reads: a Piper model, kokoro, or formant - Ghost Notes' own synthesizer, no model at all, its voice bred in Lab…'s fishing game. A model that holds more than one reader (libritts, kokoro) picks who reads in Lab…. Under Kept, the voices kept for every note (Keep…): one picked is read by name, so a change to it is heard in every note that reads it. Each model has its own license - it appears under the panel when you pick one. Changing this regenerates whatever has not been played yet."
+	voice_pick.item_selected.connect(func(i: int) -> void:
+		if _syncing:
+			return
+		var j := i - voice_meta.size() - 1
+		if j >= 0 and j < _pick_kept.size():
+			_kept_picked(String(_pick_kept[j]))
+		else:
 			_voice_picked())
 	vrow.add_child(voice_pick)
 	# Play and stop are the transport's, along the bottom of the stage (Space plays and pauses).
@@ -261,6 +295,8 @@ func build_voice(box: VBoxContainer) -> void:
 	_speaker_about.mouse_filter = Control.MOUSE_FILTER_STOP
 	_speaker_about.tooltip_text = "Who reads, on a voice of more than one reader: perceived gender and a description - for libritts how the voice sounds (LibriTTS-P, LINE Corporation, CC BY 4.0), for kokoro its accent and Kokoro's own grade of its training data - or the blend made in Lab…; on formant, the seed the tab reads in and the traits it leans on."
 	box.add_child(_speaker_about)
+	keep = VoiceKeep.new(self)
+	keep.build(box)
 
 		# The rest of the voice is the Lab's: built once, hung on the Voice row, so its rows are in the tree with the card.
 	_lab = ReaderBrowser.new(self)
@@ -290,6 +326,7 @@ func _build_sound(box: VBoxContainer) -> void:
 		if _syncing:
 			return
 		capture_slot()
+		voice_edited()
 				# a tone changes the model's own parameters, so un-played chunks are regenerated, as a pace change does
 		if panel._stream.has_reading():
 			panel._stream.repace()
@@ -317,6 +354,7 @@ func _build_sound(box: VBoxContainer) -> void:
 	_rate.value_changed.connect(func(_v: float) -> void:
 		if _syncing:
 			return
+		voice_edited()
 		_repace_timer.start())
 	_rate_row.add_child(_rate)
 	Card.readout(_rate_row, _rate, "x")
@@ -345,6 +383,7 @@ func _build_sound(box: VBoxContainer) -> void:
 	_pause.value_changed.connect(func(_v: float) -> void:
 		if _syncing:
 			return
+		voice_edited()
 		_repace_timer.start())
 	prow.add_child(_pause)
 	Card.readout(prow, _pause, "x")
@@ -369,20 +408,20 @@ func _build_sound(box: VBoxContainer) -> void:
 		+ "little quicker. 0 reads every sentence at the same rate. At the top a closing sentence "
 		+ "runs about a third longer than an opening one, which is deliberately more than any "
 		+ "reader would do - if a chapter seems to be getting slower and slower as it goes, this "
-		+ "is the dial, not Arc.")
+		+ "is the dial, not Arc.", true)
 	_effort = _fx_slider(box, "Effort", 0.35,
 		"Vocal effort across a paragraph - which is not the same as volume. A louder voice has a "
 		+ "brighter source spectrum, not just a higher level, so this moves the two together: "
 		+ "opening a paragraph with a little more push and easing off toward the end. Level "
 		+ "alone reads as the reader standing further away; the brightness is what makes it read "
-		+ "as them easing off instead. 0 is off, 1 is about 6dB and a firm tilt top to bottom.")
+		+ "as them easing off instead. 0 is off, 1 is about 6dB and a firm tilt top to bottom.", true)
 	_arc = _fx_slider(box, "Arc", 0.4,
 		"Pitch shape ACROSS a paragraph, in semitones. A speaker opens a new paragraph in a higher "
 		+ "register and settles as it goes, then resets on the next - it is what makes a paragraph "
 		+ "land rather than just stop. 0 is off, 0.15 is half a semitone top to bottom, 0.4 is "
 		+ "one and a half, and 1 is four. The whole travel is usable now: the shift holds the "
 		+ "reader's own formants, so the register moves without the speaker changing SIZE, and "
-		+ "the ceiling is set by what a speaker would actually do rather than by the DSP.")
+		+ "the ceiling is set by what a speaker would actually do rather than by the DSP.", true)
 	box.add_child(ReaderBrowser._heading("Space"))
 	_fx_echo = _fx_slider(box, "Echo", 0.0,
 		"The room the voice is in. Low settings are a small close room - the repeat is short enough "
@@ -457,14 +496,16 @@ func _build_ink_row(box: VBoxContainer) -> void:
 		if _syncing:
 			return
 		_ink_raw = "" if i == 0 else String(NotebookLayout.INKS.keys()[i])
-		capture_slot())
+		capture_slot()
+		voice_edited())
 	row.add_child(_ink_pick)
 		# Only where the medium inks a voice's words (the Notebook's `ink`); a Letter is written in its pens' inks.
 	(panel._medium_rows.get_or_add("ink", []) as Array).append(row)
 
 
-## A voice/delivery slider. Every slider in this panel carries a `tip`.
-func _fx_slider(box: VBoxContainer, name: String, initial: float, tip := "") -> HSlider:
+## A voice/delivery slider. Every slider in this panel carries a `tip`. [param voice]: a dial of who speaks and how (a
+## kept voice's, [method voice_edited]), never of the room.
+func _fx_slider(box: VBoxContainer, name: String, initial: float, tip := "", voice := false) -> HSlider:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	row.tooltip_text = tip          # the gap between the label and the slider
@@ -488,6 +529,8 @@ func _fx_slider(box: VBoxContainer, name: String, initial: float, tip := "") -> 
 		if _syncing:
 			return
 		capture_slot()
+		if voice:
+			voice_edited()
 		panel._stream.live_fx()
 		panel.touch())
 	row.add_child(sl)
@@ -541,11 +584,15 @@ func capture() -> Dictionary:
 ## a voice, and blanking the panel's cast for it would be wrong. A list of voices is the numbered tabs this
 ## replaced, read the way the settings are.
 func apply(cfg: Dictionary) -> void:
+	if keep != null:
+		keep.settle()
 	var rows: Variant = cfg.get("voices", {})
 	var cast: Dictionary = _merge_cast(rows as Dictionary) if rows is Dictionary \
 		else _cast_from_rows(rows if rows is Array else [], panel._cast_text())
 	if cast.is_empty():
 		return
+	for k in cast:
+		cast[k] = _resolved(cast[k] as Dictionary)
 		# The reader is the first voice listed, whatever its name. A voice named for the reader's cue
 		# ([constant Manuscript.NARRATOR]) listed after it can never be spoken, so it goes.
 	var first := String(cast.keys()[0])
@@ -614,6 +661,8 @@ func load_stored() -> void:
 				"pace": float(Settings.read(panel.section(), "pace", 1.0)),
 				"pause": float(Settings.read(panel.section(), "pause", 1.0)),
 			})
+	for k in _stash:
+		_stash[k] = _resolved(_stash[k] as Dictionary)
 	_order = PackedStringArray(_stash.keys())
 	var tab: Variant = Settings.read(panel.section(), "tab_name", "")
 	_names = PackedStringArray()
@@ -693,6 +742,8 @@ func refresh(body: String, want := "") -> void:
 	panel._script_text_changed(body)
 	if _rate != null:
 		capture_slot()
+		if keep != null:
+			keep.settle()
 	var names := PackedStringArray()
 	for n in Manuscript.speakers(body):
 		if not names.has(_who(n)):
@@ -721,6 +772,9 @@ func refresh(body: String, want := "") -> void:
 		seed_row = slot_cfg(0)
 	elif not _stash.is_empty():
 		seed_row = _merge(_stash[_stash.keys()[0]] as Dictionary)
+		# a new speaker starts as a copy of the first voice, never reading a kept one by name: a dial moved for them would
+		# move every note's
+	seed_row.erase("kept")
 	var slots: Array = []
 	for n in names:
 		if _stash.has(n):
@@ -741,6 +795,98 @@ func refresh(body: String, want := "") -> void:
 
 func tab_name() -> String:
 	return _names[slot] if slot >= 0 and slot < _names.size() else ""
+
+
+## Why voice [param old] cannot be called [param new], "" where it can (or already is).
+func rename_refused(old: String, new: String) -> String:
+	var name := new.strip_edges()
+	if not _names.has(old):
+		return "there is no voice called %s" % old
+	if name.is_empty():
+		return "a voice needs a name"
+	if name == old:
+		return ""
+	if name.contains("\n") or name.contains("[") or name.contains("]") or name.contains("<!--") or name.contains("-->"):
+		return "a name cannot hold brackets or a comment's marks"
+	if name == Manuscript.NARRATOR and old != reader():
+		return "%s is the reader's: the words before the first cue are theirs" % Manuscript.NARRATOR
+	if _names.has(name) or _order.has(name) or _stash.has(name):
+		return "%s is a voice in this note already" % name
+	if panel.walk != null and not panel.walk.reads_source():
+		return "these speakers are named by the episode's script, not the note's words"
+	return ""
+
+
+## Voice [param old] called [param new]: every cue naming it in the note's words rewritten (one undo), its settings kept under
+## the new name. "" done, else why not.
+func rename_voice(old: String, new: String) -> String:
+	var name := new.strip_edges()
+	var why := rename_refused(old, name)
+	if not why.is_empty() or name == old:
+		return why
+	capture_slot()
+	if keep != null:
+		keep.settle()
+	_names[_names.find(old)] = name
+	var oi := _order.find(old)
+	if oi >= 0:
+		_order[oi] = name
+	else:
+		_order.append(name)
+	var body := panel._text.text
+	var renamed := Manuscript.rename_speaker(body, old, name)
+	if renamed != body:
+		var was := body.split("\n")
+		var now := renamed.split("\n")
+		panel._text.begin_complex_operation()
+		for i in mini(was.size(), now.size()):
+			if was[i] != now[i]:
+				panel._text.set_line(i, now[i])
+		panel._text.end_complex_operation()
+	_rebuild_tabs()
+	panel.touch()
+	return ""
+
+
+## The rename asked for of voice [param i]: a name, checked as it is typed, in a dialog beside the panel.
+func ask_rename(i: int) -> void:
+	if i < 0 or i >= _names.size():
+		return
+	var old := _names[i]
+	var dlg := ConfirmationDialog.new()
+	dlg.title = "Rename %s" % old
+	dlg.ok_button_text = "Rename"
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	var edit := LineEdit.new()
+	edit.text = old
+	edit.max_length = 80
+	edit.tooltip_text = "Every cue in the words that hands a line to %s will name this instead; the voice keeps its settings." % old
+	col.add_child(edit)
+	var why := Label.new()
+	why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	why.add_theme_font_size_override("font_size", 11)
+	why.modulate = Color(1, 0.8, 0.6, 0.9)
+	col.add_child(why)
+	dlg.add_child(col)
+	dlg.register_text_enter(edit)
+	var checked := func(t: String) -> void:
+		var err := rename_refused(old, t)
+		why.text = err
+		why.visible = not err.is_empty()
+		dlg.get_ok_button().disabled = not err.is_empty() or t.strip_edges() == old
+	edit.text_changed.connect(checked)
+	checked.call(edit.text)
+	dlg.confirmed.connect(func() -> void:
+		var err := rename_voice(old, edit.text)
+		panel.status(("Renamed %s to %s, in every cue." % [old, edit.text.strip_edges()]) if err.is_empty() else "Not renamed: " + err)
+		dlg.queue_free())
+	dlg.canceled.connect(dlg.queue_free)
+	panel.add_child(dlg)
+	dlg.popup_centered(Vector2i(380, 0))
+	Shell.center_beside(dlg, panel)
+	edit.grab_focus()
+	edit.select_all()
 
 
 ## A stored slot merged onto [constant SLOT_DEFAULTS]: every key present, every value the right type, and an
@@ -793,7 +939,63 @@ func _merge(row: Dictionary) -> Dictionary:
 			TYPE_FLOAT: out[k] = float(row[k])
 			TYPE_DICTIONARY: out[k] = (row[k] as Dictionary).duplicate(true) if row[k] is Dictionary else {}
 			_: out[k] = str(row[k])
+		# the kept voice it reads by name: on a row only when it has one, so a row of its own is written as it always was
+	if row.get("kept") is String and not String(row["kept"]).strip_edges().is_empty():
+		out["kept"] = String(row["kept"]).strip_edges()
 	return out
+
+
+## [param row] reading the kept voice it names: that voice's fields over its own, its room as it is, and the name the voice
+## answers to now (one renamed is followed). With no such voice in the library, the row as it is: its copy.
+func _resolved(row: Dictionary) -> Dictionary:
+	var name := String(row.get("kept", "")).strip_edges()
+	if name.is_empty():
+		return row
+	var e := VoiceLibrary.read(name)
+	if e.is_empty():
+		return row
+	var out := row.duplicate(true)
+	var v: Dictionary = e["voice"]
+	for k in v:
+		out[k] = (v[k] as Dictionary).duplicate(true) if v[k] is Dictionary else v[k]
+	out["kept"] = String(e["name"])
+	return out
+
+
+## The library changed: every row that reads a kept voice takes it again ([method _resolved]), the tab on screen shown
+## as it is now, and a reading made in what changed made again. The picker lists the kept voices as they are.
+func follow_library() -> void:
+	var shown := false
+	var any := false
+	var voice_was := String(slot_cfg(slot)["voice"]) if not _slots.is_empty() else ""
+	for i in _slots.size():
+		var r := _resolved(_slots[i] as Dictionary)
+		if not DocSource.same_value(r, _slots[i]):
+			_slots[i] = r
+			any = true
+			shown = shown or i == slot
+	for k in _stash:
+		var r := _resolved(_stash[k] as Dictionary)
+		if not DocSource.same_value(r, _stash[k]):
+			_stash[k] = r
+			any = true
+	if voice_pick != null:
+		_fill_picker()
+		_select_pick()
+	if not any:
+		return
+	if shown and _rate != null:
+		_apply_slot(slot)
+		Delivery.apply_fx(panel._stream.fx, slot_cfg(slot))
+	if panel._stream.has_reading():
+		if shown and String(slot_cfg(slot)["voice"]) != voice_was:
+			panel._stream.restart()
+		else:
+			panel._stream.repace()
+	else:
+		panel._stream.mark_stale()
+	_refresh_tab_labels()
+	panel.touch()
 
 
 ## The controls -> the selected slot.
@@ -809,6 +1011,8 @@ func capture_slot() -> void:
 		"near": _fx_near.value, "seat": _fx_seat.value,
 		"ink": _ink_value(),
 	}
+	if not _kept_name.is_empty():
+		_slots[slot]["kept"] = _kept_name
 	_refresh_tab_labels()
 
 
@@ -818,12 +1022,10 @@ func _apply_slot(i: int) -> void:
 	var s := slot_cfg(i)
 	_syncing = true
 	_want_voice = String(s["voice"])
+	_kept_name = String(s.get("kept", ""))
 	_blend = String(s["blend"])
 	_formant = (s["formant"] as Dictionary).duplicate(true)
-	for k in voice_meta.size():
-		if String((voice_meta[k] as Dictionary).get("id", "")) == _want_voice:
-			voice_pick.select(k)
-			break
+	_select_pick()
 	_tone.select(clampi(int(s["tone"]), 0, Delivery.TONE_PRESETS.size() - 1))
 	_rate.value = float(s["pace"])
 	_pause.value = float(s["pause"])
@@ -843,6 +1045,8 @@ func _apply_slot(i: int) -> void:
 	_show_voice_license()
 	_speaker = clampi(int(s["speaker"]), 0, _speaker_top)
 	_describe_speaker()
+	if keep != null:
+		keep.show_state()
 	_syncing = false
 
 
@@ -879,6 +1083,9 @@ func _rebuild_tabs() -> void:
 		b.set_pressed_no_signal(i == slot)
 		var at := i
 		b.pressed.connect(func() -> void: _on_tab_selected(at))
+		b.gui_input.connect(func(e: InputEvent) -> void:
+			if e is InputEventMouseButton and (e as InputEventMouseButton).double_click and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+				ask_rename(at))
 		_tabs.add_child(b)
 	_refresh_tab_labels()
 
@@ -890,6 +1097,12 @@ func _refresh_tab_labels() -> void:
 		return
 	if _cast_head != null:
 		_cast_head.text = "Voices (%d)  -  from the script's speaker cues" % _names.size()
+	if _rename != null:
+		var own := panel.walk == null or panel.walk.reads_source()
+		_rename.disabled = not own or _names.is_empty()
+		_rename.tooltip_text = ("Rename the voice on screen: every cue in the words that hands a line to it names the new name, "
+			+ "and the voice keeps its settings. A double click on a voice does the same.") if own else \
+			"These speakers are named by the episode's script, not the note's words: they are renamed there."
 	var tones := Delivery.TONE_PRESETS.keys()
 	for i in mini(_tabs.get_child_count(), _names.size()):
 		var s := slot_cfg(i)
@@ -905,6 +1118,8 @@ func _refresh_tab_labels() -> void:
 		var desc := model + ((" #%d" % int(s["speaker"])) if multi else "")
 		if not blend_of(s).is_empty():
 			desc = model + " " + VoiceBlend.line(blend_of(s), true)
+		if not String(s.get("kept", "")).is_empty():
+			desc = "%s (kept)" % String(s["kept"])
 		desc += "  ·  " + String(tones[clampi(int(s["tone"]), 0, tones.size() - 1)])
 		var b := _tabs.get_child(i) as Button
 		b.text = "%s    %s" % [_names[i], desc]
@@ -921,6 +1136,8 @@ func _on_tab_selected(i: int) -> void:
 	if _syncing or i == slot:
 		return
 	capture_slot()
+	if keep != null:
+		keep.settle()
 	slot = clampi(i, 0, _slots.size() - 1)
 	_apply_slot(slot)
 
@@ -951,24 +1168,23 @@ func _show_ink(v: String) -> void:
 
 
 func fill_voices(voices: Array) -> void:
-	var keep := _selected_voice_id()  # asked again ([method voice_made]): what is picked stays picked
+	var picked := _selected_voice_id()  # asked again ([method voice_made]): what is picked stays picked
 	voice_meta = voices
 	# a voice whose speakers the host describes itself (kokoro's voicepacks): the Lab reads them
 	for v in voices:
 		if (v as Dictionary).has("readers"):
 			VoiceReaders.offer(String(v.get("id", "")), v["readers"], String(v.get("readers_about", "")))
-	voice_pick.clear()
-	for v in voices:
-		var mark := "" if bool(v.get("installed", false)) else "  (downloads)"
-		voice_pick.add_item("%s%s" % [String(v.get("name", v.get("id", "?"))), mark])
+	_fill_picker()
 	if voices.is_empty():
 		panel._set_status("No voices available - see the >_ log.")
 		return
-	var want := keep if not keep.is_empty() else ReadingPanel.DEFAULT_VOICE
+	var want := picked if not picked.is_empty() else ReadingPanel.DEFAULT_VOICE
 	for i in voices.size():
 		if String((voices[i] as Dictionary).get("id", "")) == want:
 			voice_pick.select(i)
 			break
+	if _pick_kept.has(_kept_name):
+		_select_pick()
 	_test.disabled = false
 	_refresh_tab_labels()           # model names are known now, not just ids
 	panel._can_play = true            # from here on Play is always live
@@ -997,9 +1213,15 @@ func _read_in(id: String) -> void:
 		return
 
 
-## The voice picked: the slot keeps it, and what was read in the old one is read again.
+## The voice picked: the slot keeps it, and what was read in the old one is read again. A model picked on a tab reading a
+## kept voice is that tab's own from here, its other dials as they were.
 func _voice_picked() -> void:
+	if keep != null:
+		keep.settle(false)           # a dial moved on the kept voice before this, as it was taken: never the model picked
 	_blend = ""                      # a blend is of one voice's readers
+	_kept_name = ""
+	if keep != null:
+		keep.show_state()
 	_show_voice_license()
 	panel.warm_voice(_selected_voice_id())
 	capture_slot()
@@ -1009,6 +1231,141 @@ func _voice_picked() -> void:
 	if panel._stream.has_reading():
 		panel._stream.restart()
 	panel.touch()
+
+
+# --- kept voices: the library's, read by name -----------------------------------------------------
+
+
+## The picker's items: the models the host lists, then under a heading the voices kept for every note ([VoiceLibrary]).
+## Selects nothing.
+func _fill_picker() -> void:
+	voice_pick.clear()
+	for v in voice_meta:
+		var mark := "" if bool((v as Dictionary).get("installed", false)) else "  (downloads)"
+		voice_pick.add_item("%s%s" % [String((v as Dictionary).get("name", (v as Dictionary).get("id", "?"))), mark])
+	_pick_kept = VoiceLibrary.names()
+	if voice_meta.is_empty() or _pick_kept.is_empty():
+		_pick_kept = []
+		return
+	voice_pick.add_separator("Kept")
+	for n in _pick_kept:
+		voice_pick.add_item(String(n))
+
+
+## The picker shows the tab on screen: its kept voice where it reads one the picker lists, else its model.
+func _select_pick() -> void:
+	if voice_pick == null:
+		return
+	var j := _pick_kept.find(_kept_name) if not _kept_name.is_empty() else -1
+	if j >= 0:
+		voice_pick.select(voice_meta.size() + 1 + j)
+		return
+	for k in voice_meta.size():
+		if String((voice_meta[k] as Dictionary).get("id", "")) == _want_voice:
+			voice_pick.select(k)
+			return
+
+
+## A kept voice picked: the tab on screen reads it by name - its fields over the tab's own, its room as it was - and what
+## was read in the old voice is read again.
+func _kept_picked(name: String) -> void:
+	var e := VoiceLibrary.read(name)
+	if e.is_empty():
+		_select_pick()
+		return
+	if keep != null:
+		keep.settle(false)
+	capture_slot()
+	var s := slot_cfg(slot)
+	s["kept"] = String(e["name"])
+	_slots[slot] = _resolved(s)
+	_apply_slot(slot)
+	panel.warm_voice(_selected_voice_id())
+	_refresh_tab_labels()
+	if panel._stream.has_reading():
+		panel._stream.restart()
+	panel.touch()
+
+
+## The kept voice the tab on screen reads by name, "" for a voice of its own.
+func kept_shown() -> String:
+	return _kept_name
+
+
+## The tab on screen's voice kept as [param name], said by [param line] ([method VoiceLibrary.keep]): from here the tab
+## reads it by name. "" kept, else why not.
+func keep_shown(name: String, line := "") -> String:
+	if _slots.is_empty():
+		return "there is no voice to keep"
+	capture_slot()
+	var err := VoiceLibrary.keep(slot_cfg(slot), name, line)
+	if not err.is_empty():
+		return err
+	var e := VoiceLibrary.read(name)
+	_kept_name = String(e.get("name", name.strip_edges()))
+	capture_slot()
+	if voice_pick != null:
+		_fill_picker()
+		_select_pick()
+	if keep != null:
+		keep.show_state()
+	panel.touch()
+	return ""
+
+
+## The tab on screen stops reading its kept voice by name: what it sounds like now is its own.
+func make_own() -> void:
+	if _kept_name.is_empty():
+		return
+	_kept_name = ""
+	capture_slot()
+	_select_pick()
+	if keep != null:
+		keep.show_state()
+	panel.touch()
+
+
+## A name to keep the tab on screen's voice as: the kept voice it reads, or the speaker's own name; for the reader, the
+## book's narrator, or who reads. One no kept voice has.
+func keep_name() -> String:
+	var base := _kept_name if not _kept_name.is_empty() else tab_name()
+	if base == Manuscript.NARRATOR or base.is_empty():
+		var book := panel._doc_field("", "book").strip_edges() if panel._doc != null else ""
+		var s := slot_cfg(slot)
+		var id := String(s["voice"])
+		if not book.is_empty():
+			base = "%s narrator" % book
+		elif id == FormantVoice.ID and not FormantVoice.voice_of(s["formant"]).is_empty():
+			base = FormantVoice.name_of(FormantVoice.voice_of(s["formant"])["lineage"] as Array)
+		elif readers_of(id) > 1 and not String(VoiceReaders.describe(id, speaker_of(s)).get("reader", "")).is_empty():
+			base = "%s %s" % [voice_name(id), String(VoiceReaders.describe(id, speaker_of(s))["reader"])]
+		else:
+			base = voice_name(id)
+	var name := base
+	var n := 2
+	while not VoiceLibrary.read(name).is_empty() and n < 1000:
+		name = "%s %d" % [base, n]
+		n += 1
+	return name
+
+
+## A dial of who speaks and how was moved on the tab on screen: where it reads a kept voice, the library is told once the
+## hand rests ([method VoiceKeep.edited]).
+func voice_edited() -> void:
+	if keep != null and not _kept_name.is_empty():
+		keep.edited()
+
+
+## Whether the host lists voice [param id].
+func listed(id: String) -> bool:
+	return not _meta_of(id).is_empty()
+
+
+func _meta_of(id: String) -> Dictionary:
+	for v in voice_meta:
+		if String((v as Dictionary).get("id", "")) == id:
+			return v
+	return {}
 
 
 ## Under the Voice row: who reads, or the blend. Hidden on a single-speaker voice, or when nothing is known about
@@ -1049,6 +1406,7 @@ func pick_formant(voice: Dictionary) -> void:
 		return
 	_formant = voice.duplicate(true)
 	capture_slot()
+	voice_edited()
 	_describe_speaker()
 	if panel._stream.has_reading():
 		panel._stream.repace()
@@ -1099,6 +1457,7 @@ func pick(speaker: int, blend: String) -> void:
 	_blend = blend
 	_speaker = clampi(speaker, 0, _speaker_top)
 	capture_slot()
+	voice_edited()
 	_describe_speaker()
 	if panel._stream.has_reading():
 		panel._stream.repace()
@@ -1107,10 +1466,9 @@ func pick(speaker: int, blend: String) -> void:
 
 ## Always shown: these checkpoints are licensed individually and the terms are inherited through fine-tuning.
 func _show_voice_license() -> void:
-	var i := voice_pick.selected
-	if i < 0 or i >= voice_meta.size():
+	var v := _meta_of(_selected_voice_id())
+	if v.is_empty():
 		return
-	var v: Dictionary = voice_meta[i]
 	var n := int(v.get("speakers", 1))
 		# the formant voice keeps its own prosody: the host's paragraph dials are not its
 	for dial in [_dynamics, _effort, _arc]:
@@ -1131,13 +1489,12 @@ func _show_voice_license() -> void:
 ## machines, a model deleted): it reads in whatever is selected rather than falling silent.
 func voice_id_of(s: Dictionary) -> String:
 	var want := String(s["voice"])
-	for v in voice_meta:
-		if String((v as Dictionary).get("id", "")) == want:
-			return want
-	var i := voice_pick.selected
-	if i >= 0 and i < voice_meta.size():
-		return String((voice_meta[i] as Dictionary).get("id", ""))
-	return ""
+	if listed(want):
+		return want
+	if voice_pick.selected < 0 or voice_meta.is_empty():
+		return ""
+	var picked := _selected_voice_id()
+	return picked if listed(picked) else String((voice_meta[0] as Dictionary).get("id", ""))
 
 
 ## A slot's reader id, clamped to what its own model holds (slots are copied when a tab is added, so a speaker

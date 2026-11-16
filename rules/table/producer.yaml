@@ -43,8 +43,9 @@ prompt:
   - >-
       EPISODE LENGTH. Unless the brief specifies a different duration, plan for {{minutes_lo}} to
       {{minutes_hi}} minutes in all, and keep that range as two numbers in `minutes`. Where the brief
-      specifies a duration, use its range instead (repeat the number for a single duration).
-      Allow enough substance for that time: stories, explanations and work worth watching. A small
+      specifies a duration, use its range instead (repeat the number for a single duration). Choose
+      within it what this episode's substance holds - stories, explanations and work worth watching -
+      and no more: a short episode that is all substance beats a long one that repeats itself. A small
       number of cards still makes a full episode. Animation time is a floor, not the whole story's length.
   - ""
   - >-

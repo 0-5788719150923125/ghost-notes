@@ -9,6 +9,9 @@ class_name FixedTable
 ## dresser writes a table's. The set dresser starts with them standing ([SetDresserTools]), builds round them and can neither move
 ## nor take them away; the table it hands in is given them, whatever it wrote ([method merge]); no agent reads the JSON itself -
 ## the brief they are told says in a line what stands there ([method strip]).
+##
+## A fixed thing written with no `at` is placed by the set dresser ([method placed_by_dresser]): it starts built as written, and the
+## table it hands in keeps where it put it.
 
 ## The heading the block is under (a Markdown heading of any level).
 const HEADING := "^(#{1,6})\\s+(?i:the fixed table|fixed things)\\s*$"
@@ -74,17 +77,37 @@ static func names(fixed: Dictionary) -> Array:
 	return out
 
 
+## The fixed things [param fixed] stands that whoever sets the table places (no `at` written), lower-cased.
+static func placed_by_dresser(fixed: Dictionary) -> Array:
+	var out: Array = []
+	for t in fixed.get("things", []):
+		if t is Dictionary and not (t as Dictionary).has("at"):
+			out.append(String((t as Dictionary).get("name", "")).strip_edges().to_lower())
+	return out
+
+
 ## [param table] (a set dresser's, as written) with the fixed things [param fixed] standing in it: each in place of one of its name,
-## or added; their materials over any of the same name; the light and sound the brief fixes, if it does.
+## or added - one written with no `at` where the set dresser put it and turned it, at its written size ([method
+## placed_by_dresser]); their materials over any of the same name; the light and sound the brief fixes, if it does.
 static func merge(table: Dictionary, fixed: Dictionary) -> Dictionary:
 	if fixed.is_empty():
 		return table
 	var out := table.duplicate(true)
 	var mine := names(fixed)
+	var written := {}
+	for t in (out.get("things", []) if out.get("things") is Array else []):
+		if t is Dictionary:
+			written[String((t as Dictionary).get("name", "")).strip_edges().to_lower()] = t
 	var things: Array = []
 	for t in fixed.get("things", []):
 		if t is Dictionary:
-			things.append((t as Dictionary).duplicate(true))
+			var ft := (t as Dictionary).duplicate(true)
+			var was: Variant = written.get(String(ft.get("name", "")).strip_edges().to_lower())
+			if not ft.has("at") and was is Dictionary:
+				for k in ["at", "turn"]:
+					if (was as Dictionary).has(k):
+						ft[k] = (was as Dictionary)[k]
+			things.append(ft)
 	for t in (out.get("things", []) if out.get("things") is Array else []):
 		if t is Dictionary and not mine.has(String((t as Dictionary).get("name", "")).strip_edges().to_lower()):
 			things.append(t)

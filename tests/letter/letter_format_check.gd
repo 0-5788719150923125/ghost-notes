@@ -14,8 +14,8 @@ extends SceneTree
 ##   tablet or a letter on a song alone: controls); their block round trips without a hand (the hand is the Medium card's
 ##   Handwriting; Random is drawn from the note's number; an unknown one is Kalam: control); the Medium's one block holds the format,
 ##   the hand and the rows' keys; the walk reads the letter as [method LetterScript.speakable] does, with no title announced.
-## - the desk and its light are chosen on the card: with nothing chosen the desk is what its number drew, ticked on a bank of every
-##   thing; another number keeps them and the light (control: that number's own desk is another) and is the desk's alone, the letter
+## - the desk and its light are chosen: with nothing chosen the desk is what its number drew, ticked on the Props card's row for every
+##   thing ([DeskProps]); another number keeps them and the light (control: that number's own desk is another) and is the desk's alone, the letter
 ##   said the same at either (control: the hand seeded by the number otherwise); ticks and light are kept in the block, carried by
 ##   the document and round trip through the frontmatter (an empty desk too; unknown things or lights are dropped). The index cards'
 ##   text box shows with the cards ticked and hides without them (control), is kept in the block and carried to the desk.
@@ -195,13 +195,14 @@ func _desk() -> void:
 	card.apply({"seed": 42})
 	var drawn := DeskLook.kinds(DeskLook.of(42))
 	var mood := String(DeskLook.of(42)["mood"])
-	var bank: Dictionary = _rows(card).get("_bank")
+	var props: PropSection = _rows(card).call("props")
+	var listed: Array = props.rows()
 	var ticked := true
-	for k in bank:
-		ticked = ticked and (bank[k] as CheckBox).button_pressed == (k in drawn)
+	for r in listed:
+		ticked = ticked and bool((r as Dictionary)["on"]) == (String((r as Dictionary)["key"]) in drawn)
 	_check(_rows(card).call("desk_things") == drawn and _rows(card).call("desk_mood") == mood and not card.capture().has("things")
-		and bank.size() == DeskLook.THINGS.size() and ticked,
-		"with nothing chosen the desk is what its number drew, ticked so on the bank of every thing (%s, %s)" % [", ".join(drawn), mood])
+		and listed.size() == DeskLook.THINGS.size() and ticked,
+		"with nothing chosen the desk is what its number drew, ticked so on the Props card's row for every thing (%s, %s)" % [", ".join(drawn), mood])
 	# another number, whose own desk is not this one's
 	var other := 43
 	while DeskLook.kinds(DeskLook.of(other)) == drawn and String(DeskLook.of(other)["mood"]) == mood:
@@ -221,7 +222,7 @@ func _desk() -> void:
 	_check(int(doc_now["desk"]) == 777 and int(doc_now["seed"]) == int(card.call("hand_seed"))
 		and String(walk.spoken(long, "")["body"]) == at_other and LetterScript.speakable(long, 777) != LetterScript.speakable(long, other),
 		"the number is the desk's alone: the document's hand is the note's own, and the letter is said the same at either desk - the control, the hand seeded by the number, is said otherwise")
-	(bank["dog_tag"] as CheckBox).button_pressed = true
+	props.set_on("dog_tag", true)
 	var light: OptionButton = _rows(card).get("_light_pick")
 	var dusk := DeskLook.MOODS.keys().find("dusk")
 	light.select(dusk)
@@ -244,9 +245,9 @@ func _desk() -> void:
 		"the block round trips through the note's frontmatter, an empty desk too; a thing or a light it does not know is dropped")
 	# what is written on the index cards
 	var cards_box: TextField = _rows(card).get("_card_box")
-	(bank["cards"] as CheckBox).button_pressed = false
+	props.set_on("cards", false)
 	var hidden := not cards_box.visible
-	(bank["cards"] as CheckBox).button_pressed = true
+	props.set_on("cards", true)
 	var shown := cards_box.visible
 	var address := "Send letters to:\nRyan Brooks\n1500 Southwest Chandler Avenue\nBend, OR 97702"
 	cards_box.text = address

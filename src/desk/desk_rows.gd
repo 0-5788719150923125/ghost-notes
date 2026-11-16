@@ -2,12 +2,13 @@ extends VBoxContainer
 class_name DeskRows
 
 ## DeskRows - a desk's rows on the Medium card, the Letter's ([LetterFormat]) and the Desk's ([DeskFormat]): which desk by
-## number, its light, what is on it and what is written on its index cards ([DeskLook]).
+## number, its light and what is written on its index cards ([DeskLook]); what is on it is ticked on the Props card ([method
+## props], [DeskProps]).
 ##
-## What is on the desk and how it is lit are chosen here: a tick per [constant DeskLook.THINGS] row (the block's `things`) and the
-## Light (`mood`, [constant DeskLook.MOODS]); the number only places them and draws how they look (paper, ink, top), never how a
-## word is written. Until either is chosen they are what the number drew, and the first change of anything on the desk, the number
-## included, keeps them ([method _hold]). A number of 0 is the owner's own desk ([member own_seed]).
+## What is on the desk and how it is lit are chosen: a tick per [constant DeskLook.THINGS] row (the block's `things`, [method
+## set_thing]) and the Light (`mood`, [constant DeskLook.MOODS]); the number only places them and draws how they look (paper, ink,
+## top), never how a word is written. Until either is chosen they are what the number drew, and the first change of anything on
+## the desk, the number included, keeps them ([method _hold]). A number of 0 is the owner's own desk ([member own_seed]).
 ##
 ## Its owner keeps what it holds in the Medium's block ([method capture], [method apply]), hands it to what draws the desk
 ## ([method picks]), touches the note on [signal changed] and dresses a playing desk again on [signal redress].
@@ -29,7 +30,7 @@ var _knobs := KNOBS.duplicate(true)
 var _syncing := false
 var _seed_box: SpinBox
 var _light_pick: OptionButton    # the desk's light ([constant DeskLook.MOODS])
-var _bank := {}                  # a [constant DeskLook.THINGS] key -> its CheckBox
+var _props: DeskProps = null     # what is on it, as the Props card shows it ([method props])
 var _card_box: TextField         # what is written on the index cards, shown while they are on the desk
 var _card_due := 0.0             # seconds till a playing desk takes the cards' words, 0 for nothing waiting
 
@@ -160,26 +161,6 @@ func _build(own_said: String) -> void:
 		redress.emit())
 	lrow.add_child(_light_pick)
 
-	# What is on the desk, a tick each
-	var dl := Label.new()
-	dl.text = "On the desk"
-	dl.add_theme_font_size_override("font_size", 12)
-	add_child(dl)
-	var bank := HFlowContainer.new()
-	bank.add_theme_constant_override("h_separation", 4)
-	add_child(bank)
-	for k in DeskLook.THINGS:
-		var row: Dictionary = DeskLook.THINGS[k]
-		var box := CheckBox.new()
-		box.text = _thing_name(String(row["label"]))
-		box.tooltip_text = String(row["blurb"]) + (" It burns." if bool(row.get("lit", false)) else "")
-		box.focus_mode = Control.FOCUS_NONE
-		box.add_theme_font_size_override("font_size", 11)
-		var kind := String(k)
-		box.toggled.connect(func(on: bool) -> void: _tick_thing(kind, on))
-		bank.add_child(box)
-		_bank[kind] = box
-
 	# What is written on the index cards (shown while they are on the desk), the right way up from the writer's seat ([method DeskLook._write])
 	_card_box = TextField.new("On the index cards", "Nothing - the cards are blank",
 		"Written on the top index card or sticky note in the writer's hand and the desk's ink, line "
@@ -215,17 +196,22 @@ func show_desk() -> void:
 	_seed_box.value = int(_knobs["seed"])
 	_light_pick.select(maxi(0, DeskLook.MOODS.keys().find(desk_mood())))
 	var on := desk_things()
-	for k in _bank:
-		(_bank[k] as CheckBox).set_pressed_no_signal(k in on)
 	if _card_box.text != card_text():
 		_card_box.text = card_text()
 	_card_box.visible = "cards" in on
 	_syncing = was
 
 
-## A thing ticked on or off the desk.
-func _tick_thing(kind: String, on: bool) -> void:
-	if _syncing:
+## What is on the desk as the Props card shows it: the section its owner hands the panel ([member ReadingPanel.prop_sections]).
+func props() -> DeskProps:
+	if _props == null:
+		_props = DeskProps.new(self)
+	return _props
+
+
+## Thing [param kind] ([constant DeskLook.THINGS]) put on the desk or taken off it.
+func set_thing(kind: String, on: bool) -> void:
+	if not DeskLook.THINGS.has(kind):
 		return
 	_hold()
 	var had: Array = _knobs["things"]
@@ -239,8 +225,8 @@ func _tick_thing(kind: String, on: bool) -> void:
 	redress.emit()
 
 
-## A thing's name on its tick: its label without its article, capitalized ("a cup of pencils": "Cup of pencils").
-static func _thing_name(label: String) -> String:
+## A thing's name on the Props card: its label without its article, capitalized ("a cup of pencils": "Cup of pencils").
+static func thing_name(label: String) -> String:
 	for a in ["a ", "an "]:
 		if label.begins_with(a):
 			label = label.substr(a.length())

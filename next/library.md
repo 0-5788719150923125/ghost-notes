@@ -6,9 +6,51 @@ person finds them, and everything else the app has.
 
 ## Status
 
-Proposed, not built beyond "What is there". The user judges: the names (Props, Dex), whether the set dresser may reach
-the library, whether a note reads a kept voice by name or takes a copy, whether a voice's room goes with it, and the
-order.
+Built: step 1, kept voices (step 2), the Dex with its Props and Voices shelves (step 3, not Keys), the desk's ticks (step 4,
+half), the set dresser's `library` tool (step 5), and Export and Import of props and voices (step 6).
+The user judges: the names (Props, Dex, Used), the 3D view, the Dex, kept voices by ear, and where the setting goes (Proposed,
+"The setting").
+
+- **The library's root** is `Library` (`platform/`): `user://library/`, a folder per shelf, moved aside by a gate, removed
+  entries to the trash. `ThingLibrary` is in `table/`, beside `Props`.
+- **A kept prop is the thing alone** (`ThingLibrary.OWN`: name, parts, scale) with the materials its parts use, a line, and a
+  hash of what it is (`hash_of`: the same prop on any table hashes the same). Put on a table, a material the table holds
+  otherwise is renamed, so it looks the same everywhere. A file from anywhere comes in bounded (`sanitized`).
+- **Its picture** is taken by `PropStudio` (`table/`): built on a worker, one at a time, kept on the `pictures` shelf by its
+  hash, with its size, lit by `StudioLook` (`render/`).
+- **The Props card** (`PropsCard`, `PropSection` in `ui/`) stands on the panel while a section has rows; a table episode hands
+  `EpisodeProps`. Each row has a Used tick (unticked moves a thing to the table's `aside` list, which nothing stands and no
+  agent reads, and the table becomes a hand's version), Keep, and Select (picks it on the stage); groups Used and Set aside. A
+  note pins no props: a prop goes on a table when the set dresser finds it in the library, or by hand from the Dex.
+- **A prop in 3D** (`PropViewer`, `ui/`): a click on any prop's picture, on the card or the Dex, builds it whole on a worker
+  (`PropStudio.model`, a section's `model_of`) and opens it beside the panel, lit as its picture is. A drag turns it about any
+  axis, Shift rolls it, the wheel brings it closer, a right drag moves it, a double click or Set straight puts it back.
+- **The Dex** (`DexWindow`, `ui/`): what the library keeps, a tab a shelf, a tile an entry, a filter by words. Each kind of thing
+  hands a `ShelfSection` (`ui/`): `LibraryProps` (`table_show/`: Kept props, renamed in place, Remove; Seen props, every thing any
+  episode stands, read on a worker, once each by its hash, Keep) and `LibraryVoices` (`voice/`: Kept voices, Hear, Say it,
+  Remove). Opened on its own from the bottom-right row's books (`Chrome.open_dex`) it adds nothing; opened from the Props card's
+  "+ Add a prop" it shows that section's shelves and each tile's Use puts the prop on the episode's table. Export… and Import…
+  hand an entry on as `.prop.json` or `.voice.json`.
+- **The set dresser's `library` tool** answers words with the closest kept props (`ThingLibrary.search`: name, line, shapes,
+  materials; never the whole list), and `put` takes `{kept: name}`. A kept prop is never in its "earlier tables held these"
+  list. A fixed thing a brief writes with no `at` is placed by the set dresser (`FixedTable.placed_by_dresser`).
+- **Kept voices** (step 2; `VoiceLibrary` in `voice/`, `VoiceKeep` on the Voice card): who speaks and how (`OWN`: the model and
+  reader, a blend or formant voice, tone, pace, pause, the delivery dials, the ink), never the room (`ROOM`, each note's own). The
+  Voice card's Keep… names it (Replace where the name is taken); its picker lists kept voices under Kept. A note reads one by name
+  (`kept:` on its row) and keeps a copy, read when the library is moved aside or the voice removed; a dial of who speaks moved on
+  such a tab writes the kept voice once the hand rests, and every note reading it follows, its kept takes going stale
+  (`take_sig` counts what is said, never the name). "Make it this note's own" turns the row back into a copy; a rename keeps the
+  old names answering. Its sample, the Test passage's opening said dry, is made when it is kept, on a worker, never over a reading.
+- **The desk** (step 4, half): its ticks are rows of the Props card (`DeskProps`, handed by the Letter's and the Desk's formats),
+  each pictured as the desk's number draws it (`DeskLook.spec_of`); `DeskRows` keeps the number, the light and the cards' words.
+  Pictures on both come through one queue (`PropPictures`).
+- Gates: `tests/table/thing_library_check.gd`, `tests/table_show/episode_props_check.gd` (the card, the 3D view, the Dex),
+  `tests/voice/voice_library_check.gd` and `tests/reading/kept_voice_check.gd` (kept voices), `letter_format_check` (the desk's
+  rows), `tests/table/shot_reach_check.gd` (what a table played hides out of the shot); a look: `props_card_probe.gd`. A voice's
+  sample is so far made only against a stand-in host in a gate: the first Keep on the real voice host is its test.
+
+Not built: the `Keys` registry and its shelf (step 3), a Built in shelf of the desk's recipes, kept props on a desk
+(`DeskLook._pack` from a built size).
 
 ## What is there
 
@@ -16,16 +58,11 @@ order.
   parts, each a shape with real sizes and a material, built by `Props.build`. The desk's 14 (`DeskLook.THINGS`) are
   recipes, code that writes a spec varied by the desk's number. A set dresser's are specs as written, about 500 bytes
   of JSON each, in an episode's `table.json`.
-- **A library of things exists and is empty.** `ThingLibrary` (`src/table_show/`) keeps one thing per file in
-  `user://library/things/`, with the materials it uses. Its "Keep in the library" and "+ From the library" sit in the
-  Timeline dock's inspector, reached by opening ☰ and clicking a thing on the stage. It is for tables only, has no
-  pictures, no list to browse and no delete, and the set dresser cannot see it. It keeps a thing whole, its episode's
-  `why` and `group` included.
-- **Agents' props are thrown away.** The author's 42 episodes hold 296 things a set dresser made, each built,
-  photographed and fixed within a budget of 60 pictures. None is kept. Candles were made from scratch 31 times, mugs and
+- **The library of things** is step 1, above (Status).
+- **Agents' props are kept only by a person.** The author's 42 episodes hold 296 things a set dresser made, each built,
+  photographed and fixed within a budget of 60 pictures; the Seen shelf shows them all, and Keep takes one. Candles were made from scratch 31 times, mugs and
   cups 20.
-- **The desk's props are a wall of ticks** on the Medium card (`DeskRows`, a CheckBox per `DeskLook.THINGS` row): fine
-  at 14, not at 140.
+- **The desk's props are fixed recipes** (`DeskLook.THINGS`), ticked on the Props card: 14 kinds, no kept prop among them yet.
 - **A voice lives in one note.** It is a row of the note's `voice:` block (`ReadingCast.capture_slot`): the model, the
   reader, a Kokoro `blend:` line or a formant voice's `formant:` (lineage, traits, genome), the tone, pace, pause and
   delivery dials, the room's eight dials and the ink. Another note gets it by copying the block: 16 of the author's
@@ -80,14 +117,25 @@ order.
 - **The desk**: `DeskRows`' ticks move here. Until a prop is added or taken off, the desk's number draws them, as now;
   the first change keeps them (`DeskRows._hold`). A kept prop is placed as a recipe's is: `DeskLook._pack` already
   works from a built size and `TALL_H`.
-- **A table episode**: "Made for this episode" lists the set dresser's things, each with Keep. "Always on this table"
-  is the note's own picks, which the set dresser starts with and cannot move: `FixedTable` does this today from a JSON
-  block in the brief, and the card writes the same without JSON. The dock keeps its inspector; its Keep and "+ From the
-  library" move to the card.
+- **A table episode**: its rows are the set dresser's things, each with a Used tick, Keep and Select. A note pins no props of
+  its own: the set dresser finds kept ones with `library`, and a person adds one from the Dex. The dock keeps its inspector;
+  its Keep and "+ From the library" move to the card.
 - **The set dresser** gets one tool, `library`: what it needs, in words, answered with the closest kept props (name,
   line, size; a picture when asked); `put` takes a kept one by name. The risk: handed a list, agents put the same
   favorites on every table, as a prompt's example gets copied. So it searches and is never handed the list, and its
   rule says a kept prop goes on a table only when it is what that table needs.
+
+### The setting (for the user to choose)
+
+What a scene stands on and how it is lit: the desk (by its number) and its Light on the Medium card's desk rows today, and a
+table's top, cloths and lights, which its set dresser writes. Two homes fit:
+
+- **The Props card**, a Setting group above Used: the surface as a row (pictured, its number or top picked there) and the light
+  as a row. It is this note's choice, beside what stands on it, and the Medium card keeps only the format and how it is shown.
+- **The Dex**, shelves of desks and lights kept under a name, as props are, each Used on a note.
+
+Recommended: both, split by kind - the choice for this note on the Props card, the ones worth keeping on the Dex - built once the
+user has seen the Props card and the Dex as they stand.
 
 ### Voices (`voice/`, `reading/`)
 

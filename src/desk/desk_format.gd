@@ -2,7 +2,8 @@ extends VBoxContainer
 class_name DeskFormat
 
 ## DeskFormat - the Desk's own rows on the Medium card: a table show's episodes at the desk ([EpisodeDesk]; next/desk.md). They
-## are the Letter's desk rows ([DeskRows]): which desk by number, its light, what is on it and the index cards' words, kept in the
+## are the Letter's desk rows ([DeskRows]): which desk by number, its light, what is on it (ticked on the Props card, [DeskProps])
+## and the index cards' words, kept in the
 ## note's `medium:` block, which the reading's document carries to the desk ([method EpisodeCard.book]). Every episode shown at
 ## the desk is dressed so; a number of 0 is each episode's own, the desk up now placed from the episode's number ([method
 ## EpisodeFeed.seed]). Changed while an episode plays, the desk is dressed again at once.
@@ -23,6 +24,9 @@ static func for_note(ctx: Dictionary) -> DeskFormat:
 	card._desk.changed.connect(card._touch)
 	card._desk.redress.connect(card._redress_live)
 	card.add_child(card._desk)
+	# what is on the desk, on the Props card ([DeskProps])
+	if card._panel != null:
+		card._panel.prop_sections.append(card._desk.props())
 	return card
 
 

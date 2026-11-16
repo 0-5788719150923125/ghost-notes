@@ -138,10 +138,10 @@ prompt:
   - when: runtime
     say: >-
           The whole episode is planned for {{minutes_lo}} to {{minutes_hi}} minutes. The word range
-          below is this passage's share, calculated at your voice's pace. Give it that much substance:
-          tell the stories and explanations fully, with their people, details and consequences. The
-          work may wait for its next cue while you talk. Do not compress the passage to its animation
-          time, repeat yourself to fill time, or move another passage's story here.
+          below is this passage's share at your voice's pace: room, not a quota. Tell each story with
+          its people, details and consequences, say each thing once, and stop when it is told - short
+          of the range rather than padded. The work may wait for its next cue while you talk. Never
+          restate what was just said, sum a passage up at its end, or move another passage's story here.
   - "Write {{lo}} to {{hi}} words."
   - ""
   - include: spoken
@@ -496,6 +496,10 @@ spoken: >-
   percent", "okay").
 
   - Plain paragraphs. Short sentences land; vary the rhythm.
+
+  - Where the show tells a story alongside true things, say once what is made up, where it first
+  comes up, and then tell each true thing plainly, as true, without setting it against the story
+  again.
 
   - The viewer sees the table, not you. Never describe your own hands or face.
 

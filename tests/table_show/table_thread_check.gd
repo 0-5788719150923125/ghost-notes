@@ -16,7 +16,7 @@ extends Node
 ##     app drawing all the while (several frames, none as long as the build), its table stood, its bake on a thread of its own, its
 ##     camera filming the stage.
 ##   - a hidden window draws nothing: with the render loop off, as a minimized window leaves it, a picture still comes, the same pixel
-##     for pixel as one taken while the app draws ([method TablePreview._render]) - the control, in that state not one frame is
+##     for pixel as one taken while the app draws ([method PropStudio.render]) - the control, in that state not one frame is
 ##     drawn of itself.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table_show/table_thread_check.gd 300
@@ -114,6 +114,8 @@ func _run() -> void:
 		vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		get_tree().root.add_child(vp)
 		var m = TablePreview._load(TablePreview.MEDIUM)
+		# a preview's table, as the worker's is: nothing out of the shot hidden ([method TableMedium.hide_idle])
+		m.hides_idle = false
 		m.mount(vp)
 		m.bind_captions(prev._doc)
 		m._key = ""
@@ -224,7 +226,7 @@ func _picture(prev: TablePreview, raw: Dictionary) -> Dictionary:
 	prev._pose_spread()
 	prev._medium._tick_air(TablePreview.AIR_AT)
 	var out := prev._placed(CardTable.sanitize_table(raw, CardTable.sanitize_look(prev.plan.get("look", {}))))
-	out["image"] = await prev._render(prev._table, TablePreview.TABLE_FRAMES)
+	out["image"] = await PropStudio.render(prev._table, TablePreview.TABLE_FRAMES)
 	return out
 
 

@@ -4,9 +4,8 @@ class_name TablePreview
 ## TablePreview - a table described but not yet set, seen: each thing alone in a studio, and the whole table standing on the
 ## episode's own cloth, photographed from the camera's own place. It is what the set dresser looks through ([SetDresserTools]).
 ##
-## The studio shows a thing as it is built - every part, at its real size - on a ground ruled in centimeters (a brighter line
-## every five), lit from above and one side so its form reads, its flames lit. One thing from four sides (front, its right,
-## above, and as the episode's camera looks down at the table), or several side by side, one tile each, each captioned.
+## The studio ([PropStudio]) shows a thing as it is built: one thing from four sides (front, its right, above, and as the
+## episode's camera looks down at the table), or several side by side, one tile each, each captioned.
 ##
 ## The table is the show's own: a [TableMedium] built on the episode's seed and pictures - its camera, its lamp, where the deck
 ## sits, the spread the cards are laid in (face down: the set dresser knows no card) - with the description being tried standing
@@ -27,18 +26,12 @@ class_name TablePreview
 ## So is what is in things ([method _bake]): the work's physics is baked on a worker too, and a table stood again with other acts
 ## takes up what the last one baked, as far as their plans agree ([method TablePhysics.carry]).
 
-## The size of every picture handed back, and how wide the studio's lens is (degrees, vertical).
+## The size of every picture handed back.
 const SHEET := Vector2i(1280, 720)
 ## How far off what is built the four views of it stand (meters): near enough to see each piece.
 const MODEL_NEAR := 0.5
-const STUDIO_FOV := 28.0
-## Frames drawn before a picture is read back: the studio's shadows, and the table's reflections,
-## settle in a few.
-const STUDIO_FRAMES := 3
+## Frames drawn before a picture of the table is read back: its reflections settle in a few.
 const TABLE_FRAMES := 6
-## How many of the app's frames may run with nothing drawn before a picture draws its own: a window that
-## cannot be seen draws none ([method _render]); one that can draws every frame.
-const UNDRAWN := 4
 ## The moment of a reading the air is shown at: some way in, its fog rolled and its motes about.
 const AIR_AT := 40.0
 ## The moment the opening is shown at: the show's name up, the deck not yet shuffled.
@@ -60,50 +53,6 @@ const PICTURES := ["surface.png", "height.png", "height.json", "backdrop.png", "
 const SIDES := [["front", Vector3(0.0, 0.14, 1.0)], ["its right side", Vector3(1.0, 0.14, 0.0)],
 	["from above (its front at the bottom)", Vector3(0.0, 1.0, 0.0)], ["as the camera sees it", Vector3.ZERO]]
 
-const GROUND_SHADER := """
-shader_type spatial;
-render_mode diffuse_burley, specular_disabled;
-uniform vec3 ground : source_color = vec3(0.13, 0.135, 0.15);
-uniform vec3 line : source_color = vec3(0.3, 0.31, 0.34);
-uniform vec3 line5 : source_color = vec3(0.5, 0.51, 0.55);
-varying vec3 world;
-void vertex() {
-	world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-}
-float grid(vec2 p) {
-	vec2 w = max(fwidth(p), vec2(1e-5));
-	vec2 g = abs(fract(p - 0.5) - 0.5) / w;
-	// a line finer than a pixel fades out instead of filling the ground
-	return (1.0 - min(min(g.x, g.y), 1.0)) * clamp(1.5 - max(w.x, w.y) * 3.0, 0.0, 1.0);
-}
-void fragment() {
-	vec2 cm = world.xz * 100.0;
-	vec3 c = mix(ground, line, grid(cm) * 0.8);
-	ALBEDO = mix(c, line5, grid(cm / 5.0));
-	ROUGHNESS = 0.92;
-}
-"""
-
-## A candle's flame, as the table draws one ([constant TableMedium.FLAME_SHADER]), turned to face
-## whichever side the studio shoots from.
-const FLAME_SHADER := """
-shader_type spatial;
-render_mode unshaded, cull_disabled, blend_add, depth_draw_never;
-uniform vec3 color = vec3(1.0, 0.65, 0.3);
-uniform float energy = 4.0;
-void vertex() {
-	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
-}
-void fragment() {
-	vec2 p = UV - vec2(0.5, 0.62);
-	p.x *= 2.2;
-	float body = 1.0 - smoothstep(0.0, 0.42, length(vec2(p.x, p.y * (p.y < 0.0 ? 0.55 : 1.0))));
-	float core = 1.0 - smoothstep(0.0, 0.16, length(vec2(p.x * 1.4, p.y + 0.12)));
-	ALBEDO = mix(color, vec3(1.0, 0.97, 0.88), core) * energy * body;
-	ALPHA = body;
-}
-"""
-
 
 ## What the table medium reads its episode from - the captions it is bound to, in a reading.
 class Doc:
@@ -119,11 +68,7 @@ var byline := ""
 var _dir := ""                   # the description being tried, beside copies of the episode's pictures
 var _pitch := 38.0                # the episode's camera, looking down (degrees)
 
-var _studio: SubViewport = null
-var _studio_cam: Camera3D
-var _studio_label: Label
-var _held: Node3D
-var _flame_mat: ShaderMaterial
+var _studio: PropStudio = null   # each thing alone ([method things], [method thing])
 
 var _table: SubViewport = null
 var _medium = null               # a TableMedium, loaded by class name
@@ -162,8 +107,8 @@ func release() -> void:
 	if _reworking >= 0:
 		WorkerThreadPool.wait_for_task_completion(_reworking)
 		_reworking = -1
-	if _studio != null and is_instance_valid(_studio):
-		_studio.queue_free()
+	if _studio != null:
+		_studio.release()
 	if _table != null and is_instance_valid(_table):
 		_table.queue_free()
 	_studio = null
@@ -194,7 +139,7 @@ func things(spec: Dictionary, names: Array = [], numbers: Dictionary = {}) -> Im
 			list.append(t)
 	if list.is_empty():
 		return null
-	_ensure_studio()
+	_studio_up()
 	var cols := clampi(ceili(sqrt(float(list.size()) * 1.6)), 1, list.size())
 	var rows := ceili(float(list.size()) / float(cols))
 	var tile := Vector2i(SHEET.x / cols, SHEET.y / rows)
@@ -202,12 +147,12 @@ func things(spec: Dictionary, names: Array = [], numbers: Dictionary = {}) -> Im
 	sheet.fill(Color(0.06, 0.06, 0.07))
 	for i in list.size():
 		var t: Dictionary = list[i]
-		var box := _hold(t, spec.get("materials", {}), i)
-		var cap := "%d. %s\n%s" % [int(numbers.get(String(t.get("name", "")), i + 1)), String(t.get("name", "")), TablePreview.size_text(box)]
-		var img := await _shot(box, _camera_side(), tile - Vector2i(2, 2), cap)
+		var box := _studio.hold(t, spec.get("materials", {}), hash([episode.seed, i, "preview"]))
+		var cap := "%d. %s\n%s" % [int(numbers.get(String(t.get("name", "")), i + 1)), String(t.get("name", "")), PropStudio.size_text(box)]
+		var img := await _studio.shot(box, _camera_side(), tile - Vector2i(2, 2), cap)
 		if img != null:
 			sheet.blit_rect(img, Rect2i(Vector2i.ZERO, img.get_size()), Vector2i((i % cols) * tile.x + 1, (i / cols) * tile.y + 1))
-	_clear_held()
+	_studio.clear()
 	return sheet
 
 
@@ -222,8 +167,8 @@ func thing(spec: Dictionary, name: String) -> Image:
 			break
 	if t.is_empty():
 		return null
-	_ensure_studio()
-	var box := _hold(t, spec.get("materials", {}), 0)
+	_studio_up()
+	var box := _studio.hold(t, spec.get("materials", {}), hash([episode.seed, 0, "preview"]))
 	var tile := Vector2i(SHEET.x / 2, SHEET.y / 2)
 	var sheet := Image.create(SHEET.x, SHEET.y, false, Image.FORMAT_RGB8)
 	sheet.fill(Color(0.06, 0.06, 0.07))
@@ -231,22 +176,12 @@ func thing(spec: Dictionary, name: String) -> Image:
 		var side: Vector3 = SIDES[i][1]
 		if side == Vector3.ZERO:
 			side = _camera_side()
-		var cap := "%s\n%s - %s" % [String(t.get("name", "")), TablePreview.size_text(box), String(SIDES[i][0])] if i == 0 else String(SIDES[i][0])
-		var img := await _shot(box, side, tile - Vector2i(2, 2), cap)
+		var cap := "%s\n%s - %s" % [String(t.get("name", "")), PropStudio.size_text(box), String(SIDES[i][0])] if i == 0 else String(SIDES[i][0])
+		var img := await _studio.shot(box, side, tile - Vector2i(2, 2), cap)
 		if img != null:
 			sheet.blit_rect(img, Rect2i(Vector2i.ZERO, img.get_size()), Vector2i((i % 2) * tile.x + 1, (i / 2) * tile.y + 1))
-	_clear_held()
+	_studio.clear()
 	return sheet
-
-
-## A thing's size as the captions and reports give it: width x height x depth, centimeters.
-static func size_text(box: AABB) -> String:
-	return "%s x %s x %s cm" % [_cm(box.size.x), _cm(box.size.y), _cm(box.size.z)]
-
-
-static func _cm(m: float) -> String:
-	var cm := snappedf(m * 100.0, 0.1) if m < 0.1 else float(roundi(m * 100.0))
-	return str(roundi(cm)) if is_equal_approx(cm, roundf(cm)) else str(cm)
 
 
 ## From the episode's camera: looking down across the table at its pitch.
@@ -255,138 +190,10 @@ func _camera_side() -> Vector3:
 	return Vector3(0.0, sin(p), cos(p))
 
 
-func _ensure_studio() -> void:
-	if _studio != null and is_instance_valid(_studio):
-		return
-	_studio = SubViewport.new()
-	_studio.own_world_3d = true
-	_studio.msaa_3d = Viewport.MSAA_4X
-	_studio.size = SHEET
-	_studio.render_target_update_mode = SubViewport.UPDATE_DISABLED
-	_tree().root.add_child(_studio)
-	var root := Node3D.new()
-	_studio.add_child(root)
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.035, 0.035, 0.04)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.55, 0.55, 0.58)
-	env.ambient_light_energy = 0.35
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 0.95
-		# something for metal to reflect: a dim room-toned sky, seen in reflections only (against a flat background a polished thing reflects black)
-	var sky := Sky.new()
-	var sm := ProceduralSkyMaterial.new()
-	sm.sky_top_color = Color(0.42, 0.42, 0.45)
-	sm.sky_horizon_color = Color(0.62, 0.58, 0.52)
-	sm.ground_bottom_color = Color(0.1, 0.1, 0.11)
-	sm.ground_horizon_color = Color(0.3, 0.28, 0.26)
-	sky.sky_material = sm
-	env.sky = sky
-	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	env.glow_enabled = true
-	env.glow_hdr_threshold = 1.25
-	_studio_cam = Camera3D.new()
-	_studio_cam.fov = STUDIO_FOV
-	_studio_cam.near = 0.002
-	_studio_cam.far = 20.0
-	_studio_cam.environment = env
-	root.add_child(_studio_cam)
-	var ground := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(4.0, 4.0)
-	ground.mesh = pm
-	var gm := ShaderMaterial.new()
-	gm.shader = Shader.new()
-	gm.shader.code = GROUND_SHADER
-	ground.material_override = gm
-	root.add_child(ground)
-	# a key from above, to the left and in front, its shadows short and sharp; a cool fill opposite;
-	# a rim from behind, so a dark thing keeps its outline against the dark
-	for l in [[Vector3(-52.0, -35.0, 0.0), 1.5, Color(1.0, 0.95, 0.86), true],
-			[Vector3(-28.0, 140.0, 0.0), 0.45, Color(0.8, 0.86, 1.0), false],
-			[Vector3(-15.0, 175.0, 0.0), 0.35, Color(1.0, 1.0, 1.0), false]]:
-		var d := DirectionalLight3D.new()
-		d.rotation_degrees = l[0]
-		d.light_energy = float(l[1])
-		d.light_color = l[2]
-		d.shadow_enabled = bool(l[3])
-		d.directional_shadow_max_distance = 3.0
-		d.shadow_bias = 0.02
-		d.shadow_normal_bias = 0.6
-		root.add_child(d)
-	_held = Node3D.new()
-	root.add_child(_held)
-	_studio_label = Label.new()
-	_studio_label.position = Vector2(10, 6)
-	_studio_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_studio_label.add_theme_font_size_override("font_size", 18)
-	_studio_label.add_theme_color_override("font_color", Color(1.0, 0.98, 0.92))
-	_studio_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.9))
-	_studio_label.add_theme_constant_override("outline_size", 6)
-	_studio.add_child(_studio_label)
-	_flame_mat = ShaderMaterial.new()
-	_flame_mat.shader = Shader.new()
-	_flame_mat.shader.code = FLAME_SHADER
-
-
-## Thing [param t] built and standing in the studio alone, its flames lit: its bounds.
-func _hold(t: Dictionary, materials: Dictionary, salt: int) -> AABB:
-	_clear_held()
-	var b := Props.build(t, materials, hash([episode.seed, salt, "preview"]))
-	var node: Node3D = b["node"]
-	_held.add_child(node)
-	var flames: Array = b["wicks"]
-	for g in b.get("glows", []):
-		if g is ShaderMaterial:
-			(g as ShaderMaterial).set_shader_parameter("flame", 1.0)
-	var mid := Vector3.ZERO
-	for w in flames:
-		var q := MeshInstance3D.new()
-		var qm := QuadMesh.new()
-		qm.size = Vector2(0.012, 0.03)
-		q.mesh = qm
-		q.material_override = _flame_mat
-		q.position = (w as Vector3) + Vector3(0.0, 0.016, 0.0)
-		_held.add_child(q)
-		mid += w as Vector3
-	if not flames.is_empty():
-		var light := OmniLight3D.new()
-		light.light_color = Color(1.0, 0.7, 0.4)
-		light.omni_range = 0.5
-		light.light_energy = 0.25 * float(flames.size())
-		light.position = mid / float(flames.size()) + Vector3(0.0, 0.02, 0.0)
-		_held.add_child(light)
-	var box: AABB = b["size"]
-	return box if box.size != Vector3.ZERO else AABB(Vector3(-0.02, 0.0, -0.02), Vector3(0.04, 0.04, 0.04))
-
-
-func _clear_held() -> void:
-	if _held == null or not is_instance_valid(_held):
-		return
-	for c in _held.get_children():
-		c.queue_free()
-
-
-## One picture of what the studio holds: framed to [param box], seen from [param side] (a direction
-## from its middle toward the camera), at [param size], captioned.
-func _shot(box: AABB, side: Vector3, size: Vector2i, caption: String) -> Image:
-	if _studio == null or not is_instance_valid(_studio):
-		return null
-	_studio.size = size
-	var c := box.get_center()
-	var r := maxf(box.size.length() * 0.5, 0.01)
-	var half := deg_to_rad(STUDIO_FOV) * 0.5
-	var across := atan(tan(half) * float(size.x) / float(maxi(size.y, 1)))
-	var dist := r / sin(minf(half, across)) * 1.06
-	var dir := side.normalized()
-	var up := Vector3.UP if absf(dir.y) < 0.99 else Vector3(0.0, 0.0, -1.0)
-	_studio_cam.transform = Transform3D(Basis.looking_at(-dir, up), c + dir * dist)
-	_studio_cam.far = dist + r * 6.0 + 1.0
-	_studio_label.text = caption
-	# a caption wraps within its tile: a long name would hide the size after it
-	_studio_label.size = Vector2(size.x - 20, 0)
-	return await _render(_studio, STUDIO_FRAMES)
+func _studio_up() -> void:
+	if _studio == null:
+		_studio = PropStudio.new()
+	_studio.ensure()
 
 
 # --- the table --------------------------------------------------------------------------------------
@@ -420,7 +227,7 @@ func table(raw: Dictionary, numbers: Dictionary = {}) -> Dictionary:
 			if top != null and n != null:
 				tags.marks.append({"at": (top as Vector2) * Vector2(SHEET) - Vector2(0.0, 14.0), "text": str(n)})
 		_table.add_child(tags)
-	out["image"] = await _render(_table, TABLE_FRAMES)
+	out["image"] = await PropStudio.render(_table, TABLE_FRAMES)
 	if tags != null and is_instance_valid(tags):
 		tags.queue_free()
 	return out
@@ -475,7 +282,7 @@ func watch(raw: Dictionary, name: String) -> Dictionary:
 		var t := AIR_AT + float(steps[i])
 		_pose_moment(on, moment, t)
 		air.tick(t)
-		var img: Image = await _render(_table, TABLE_FRAMES)
+		var img: Image = await PropStudio.render(_table, TABLE_FRAMES)
 		if img == null:
 			return {"error": "no picture could be taken"}
 		img.resize(SHEET.x / 2 - 2, SHEET.y / 2 - 2, Image.INTERPOLATE_LANCZOS)
@@ -507,7 +314,7 @@ func watch_light(raw: Dictionary, name: String) -> Dictionary:
 		m._tick_ride(t)
 		m._light_part.tick_props(t)
 		m._tick_air(t)
-		var img: Image = await _render(_table, TABLE_FRAMES)
+		var img: Image = await PropStudio.render(_table, TABLE_FRAMES)
 		if img == null:
 			return {"error": "no picture could be taken"}
 		img.resize(SHEET.x / 2 - 2, SHEET.y / 2 - 2, Image.INTERPOLATE_LANCZOS)
@@ -680,7 +487,7 @@ func overhead(raw: Dictionary) -> Dictionary:
 	seen.position.y = 0.002
 	(m._root3 as Node3D).add_child(seen)
 	cam.make_current()
-	var img: Image = await _render(_table, TABLE_FRAMES)
+	var img: Image = await PropStudio.render(_table, TABLE_FRAMES)
 	(m._cam as Camera3D).make_current()
 	cam.queue_free()
 	seen.queue_free()
@@ -717,7 +524,7 @@ func blueprint(raw: Dictionary, numbers: Dictionary) -> Dictionary:
 	paper.data = data
 	vp.add_child(paper)
 	_tree().root.add_child(vp)
-	var img: Image = await _render(vp, 2)
+	var img: Image = await PropStudio.render(vp, 2)
 	if is_instance_valid(vp):
 		vp.queue_free()
 	if img == null:
@@ -764,12 +571,12 @@ func opening(raw: Dictionary) -> Dictionary:
 	var title = m._title
 	title.alpha = 0.0
 	title.queue_redraw()
-	var bare: Image = await _render(_table, TABLE_FRAMES)
+	var bare: Image = await PropStudio.render(_table, TABLE_FRAMES)
 	if bare == null or not is_instance_valid(title):
 		return {"error": "no picture could be taken"}
 	title.alpha = 1.0
 	title.queue_redraw()
-	var img: Image = await _render(_table, TABLE_FRAMES)
+	var img: Image = await PropStudio.render(_table, TABLE_FRAMES)
 	if not is_instance_valid(title):
 		return {"error": "no picture could be taken"}
 	title.alpha = 0.0
@@ -887,6 +694,8 @@ func _stand(raw: Dictionary, acts: Variant = null) -> String:
 		m._textures = (_medium._textures as Dictionary).duplicate()
 		m._mtimes = (_medium._mtimes as Dictionary).duplicate()
 	m.aside = true
+	# its acts are still being written: nothing out of the shot is hidden ([method TableMedium.hide_idle])
+	m.hides_idle = false
 	# What the last table baked goes on to this one ([method TablePhysics.carry]): stood over the same table, it bakes
 	# only from where the two plans part - with acts only (a table only set has no plan to carry)
 	var carried: Variant = null
@@ -1049,7 +858,7 @@ func work_watch(raw: Dictionary, acts: Variant, name: String, n := 6) -> Diction
 		m._work.tick(t)
 		m._light_part.tick_props(t)
 		m._tick_air(t)
-		var img: Image = await _render(_table, TABLE_FRAMES)
+		var img: Image = await PropStudio.render(_table, TABLE_FRAMES)
 		if img == null:
 			return {"error": "no picture could be taken"}
 		img.resize(tw, th, Image.INTERPOLATE_LANCZOS)
@@ -1086,7 +895,7 @@ func model_views(raw: Dictionary, acts: Variant, name: String) -> Dictionary:
 	for i in 4:
 		var dir := Basis(Vector3.UP, TAU * float(i) / 4.0) * Vector3(0.0, 0.62, 0.78)
 		cam.transform = Transform3D(Basis.looking_at(-dir.normalized(), Vector3.UP), c + dir.normalized() * MODEL_NEAR)
-		var img: Image = await _render(_table, TABLE_FRAMES)
+		var img: Image = await PropStudio.render(_table, TABLE_FRAMES)
 		if img == null:
 			cam.transform = was
 			return {"error": "no picture could be taken"}
@@ -1197,6 +1006,9 @@ func _placed(spec: Dictionary) -> Dictionary:
 			entry["height"] = (th["box"] as AABB).end.y * 100.0
 			entry["room"] = CardTable.headroom_at(cam, fov, Vector2(node.position.x, node.position.z)) * 100.0
 			entry["shown"] = rect.intersection(Rect2(0.0, 0.0, 1.0, 1.0)).get_area() / maxf(rect.get_area(), 1e-9)
+			# ...and, out of the shot, what it still gives the picture
+			if float(entry["shown"]) < ShotReach.OUT:
+				entry["gives"] = ShotReach.gives(t as Dictionary, Transform3D.IDENTITY, th["box"], not (th.get("lights", []) as Array).is_empty(), m._root3, cam, fov)
 			var half := float(consts.get("WORKSPACE_HALF", 0.25))
 			var mid: Vector3 = m._plan.mid
 			entry["hands"] = bb.intersects(Rect2(mid.x - half, mid.z + float(consts.get("WORKSPACE_FROM", 0.14)), half * 2.0, 1.0))
@@ -1217,52 +1029,6 @@ func _placed(spec: Dictionary) -> Dictionary:
 
 
 # --- the shutter ------------------------------------------------------------------------------------
-
-## [param vp] drawn for [param frames] frames, read back, then stopped again.
-## null when the stage is given back while it waits ([method release]).
-##
-## A hidden window draws nothing: while Ghost Notes is minimized or on another desktop, Godot runs its frames and draws none, and a
-## picture that waited for frames to be drawn waited until the window came back (measured in a virtual KWin, on X11 and on Wayland:
-## 435 frames run in 3 s, none drawn). So once [constant UNDRAWN] frames pass with nothing drawn, the picture draws its own
-## ([method _draw_unseen]).
-static func _render(vp: SubViewport, frames: int) -> Image:
-	if vp == null or not is_instance_valid(vp):
-		return null
-	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	var drawn := [0]
-	var count := func() -> void: drawn[0] += 1
-	RenderingServer.frame_post_draw.connect(count)
-	var seen := 0
-	var idle := 0
-	while int(drawn[0]) < frames and is_instance_valid(vp):
-		await _tree().process_frame
-		idle = idle + 1 if int(drawn[0]) == seen else 0
-		seen = int(drawn[0])
-		if idle >= UNDRAWN and is_instance_valid(vp):
-			TablePreview._draw_unseen(frames - seen)
-	RenderingServer.frame_post_draw.disconnect(count)
-	if not is_instance_valid(vp):
-		return null
-	var img := vp.get_texture().get_image()
-	vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
-	if img == null or img.is_empty():
-		return null
-	img.convert(Image.FORMAT_RGB8)
-	return img
-
-
-## [param n] frames drawn now, for a window that draws none ([method _render]): every viewport but the
-## window's own, which is set aside for them - its picture would go to a screen that takes none, and on
-## Wayland a hidden window's screen can keep the draw waiting. Set inactive instead, it takes the viewports
-## under it out of the draw too (measured: the picture came back stale).
-static func _draw_unseen(n: int) -> void:
-	var root := _tree().root.get_viewport_rid()
-	var was := RenderingServer.viewport_get_update_mode(root)
-	RenderingServer.viewport_set_update_mode(root, RenderingServer.VIEWPORT_UPDATE_DISABLED)
-	for i in n:
-		RenderingServer.force_draw(false, 1.0 / 60.0)
-	RenderingServer.viewport_set_update_mode(root, was)
-
 
 static func _tree() -> SceneTree:
 	return Engine.get_main_loop() as SceneTree

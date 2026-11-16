@@ -191,7 +191,7 @@ static func continuation(toolset: Object, entries: Array, calls: int) -> String:
 	var draft: Variant = toolset.call("draft") if toolset.has_method("draft") else state_of(toolset)
 	var lines := PackedStringArray([
 		"RESUME THE INTERRUPTED WORK. Your tools already hold the saved draft below. Continue from it; do not start over or repeat completed calls just to reconstruct it. The original task still applies. The look budget and tool-call budget have NOT reset (%d calls already used). Only the call interrupted by the stop may need repeating. Use the saved observations to decide what remains, then submit through your tools." % calls,
-		"SAVED DRAFT:\n" + JSON.stringify(draft, "\t"),
+		"SAVED DRAFT:\n" + JSON.stringify(draft),
 		"RECENT COMPLETED CALLS (earlier changes are already in the saved draft):"])
 	if toolset.has_method("looks_used"):
 		var most := int(toolset.get_script().get_script_constant_map().get("LOOKS", 0))

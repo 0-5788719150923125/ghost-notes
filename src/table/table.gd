@@ -318,6 +318,12 @@ var _spin_key := ""                 # ...the schedule it was chosen on
 var _spin_k := -1                   # ...and the card
 ## Built aside, on a worker thread ([method TablePreview._stand]): its long loops then [method _breathe]
 var aside := false
+## Whether what stands out of the shot for nobody is hidden ([method hide_idle]): on a table played, never on a preview, whose acts
+## are still being written ([TablePreview]).
+var hides_idle := true
+var _acts_raw: Variant = null       # the acts the work was last bound to, as written
+var _idle: Array = []               # the things hidden out of the shot for nobody ([method hide_idle])
+var _idle_spec := {}                # the table they were judged on
 var _breaths := 0
 ## A table played is built on a worker too, the show waiting for it as it waits for its bake: taken out of the tree and
 ## built aside ([method _build_away]) - the build in hand, -1 when none - and put back where it was. Its leaving then is
@@ -1636,6 +1642,48 @@ func _build_work(spec: Dictionary) -> void:
 		print("ghost: card table - work: %s" % n)
 	if not _sched.is_empty():
 		_work.schedule(_sched, _plan.parse, _follow.said0, _follow.said1, _est, _now)
+	_acts_raw = raw
+	hide_idle(spec)
+
+
+## What stands out of the shot for nobody hidden ([ShotReach]): a thing wholly out of the frame that no act names, with no flame of
+## its own, whose shadow falls nowhere in the frame and that sends nothing up into it. Hidden, it costs no draw and no shadow, and it
+## is still there - the physics holds it as it stands. Never on a preview ([member hides_idle]) nor where a game moves the camera;
+## the free look shows it ([method free_look]).
+func hide_idle(spec: Dictionary) -> void:
+	for n in _idle:
+		if is_instance_valid(n):
+			(n as Node3D).visible = true
+	_idle = []
+	_idle_spec = spec
+	if not hides_idle or _work == null or _work.game != null:
+		return
+	var by_name := {}
+	for t in (spec.get("things", []) if spec.get("things") is Array else []):
+		if t is Dictionary:
+			by_name[String((t as Dictionary).get("name", ""))] = t
+	for th in _things_part.on_table:
+		var d: Dictionary = th
+		var node := d.get("node") as Node3D
+		if node == null or not (d.get("rect") is Rect2) or not (d.get("box") is AABB) or ShotReach.shown(d["rect"]) >= ShotReach.OUT:
+			continue
+		var name := String(d.get("name", ""))
+		if ShotReach.named_in(_acts_raw, name):
+			continue
+		var lit := not (d.get("lights", []) as Array).is_empty()
+		if not ShotReach.gives(by_name.get(name, {}), Transform3D.IDENTITY, d["box"], lit, _root3, _plan.cam_base, _cam.fov).is_empty():
+			continue
+		node.visible = _free
+		_idle.append(node)
+
+
+## The things hidden out of the shot for nobody ([method hide_idle]), by name.
+func idle_names() -> Array:
+	var out: Array = []
+	for th in _things_part.on_table:
+		if _idle.has((th as Dictionary).get("node")):
+			out.append(String((th as Dictionary).get("name", "")))
+	return out
 
 
 ## The same table, other acts ([param raw], as `acts.json` holds them): the work bound to them again and planned again
@@ -1654,6 +1702,8 @@ func rework(raw: Variant) -> void:
 	_work.rebind(raw, beats)
 	if not _sched.is_empty():
 		_work.schedule(_sched, _plan.parse, _follow.said0, _follow.said1, _est, _now)
+	_acts_raw = raw
+	hide_idle(_idle_spec)
 
 
 ## The designs painted on this table ([TablePaint]): the episode's `skin.json` as parsed, read from the file as the acts
@@ -1776,6 +1826,10 @@ func _tick_camera(t: float) -> void:
 ## [param on] is false. Never in a render: what is exported is the show's own eye.
 func free_look(on: bool) -> void:
 	_free = on and not OS.get_cmdline_user_args().has("--export")
+	# ...and the set seen whole: what is hidden out of the shot for nobody stands again while the eye is free
+	for n in _idle:
+		if is_instance_valid(n):
+			(n as Node3D).visible = _free
 	_free_yaw = 0.0
 	_free_pitch = 0.0
 	_free_reach = 1.0

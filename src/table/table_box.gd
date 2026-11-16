@@ -39,8 +39,8 @@ var looking: MeshInstance3D         # the one being looked at at the moment pose
 ## The box the cards are kept in, for a show whose cards come from one ([member _cards_from] `box`): the set dresser's
 ## thing that `holds_cards` - taken out of [param things] and [param built] - or, when it made none, a plain box of the
 ## deck's own stock. An open box stands by the deck; a shoebox settles across the center. Both are scaled to their
-## allotted space, with their contents built inside ([method _build_file]). A written `at` places
-## the box at that center; otherwise it uses its default place. A box on a table whose cards come from a
+## allotted space, with their contents built inside ([method _build_file]). An open box's written `at` places it at that center;
+## otherwise it uses its default place. A shoebox always settles in the middle. A box on a table whose cards come from a
 ## deck is a thing like any other.
 func build(things: Array, built: Array) -> void:
 	for f in files:
@@ -89,7 +89,7 @@ func build(things: Array, built: Array) -> void:
 	if not shoebox and own.has_volume():
 		k = maxf(k, minf(1.0, card_wh.x * 1.03 / (own.size.z if turn != 0.0 else own.size.x)))
 	var basis := Basis(Vector3.UP, turn).scaled(Vector3(k, k, k))
-	var written := t.has("at")
+	var written := t.has("at") and not shoebox
 	var want := medium._plan.box_center() if shoebox or written else TablePositions.box_at(medium._plan.deck_base)
 	# its own place in the room kept for it, the open box's toward the spread
 	var place := RandomNumberGenerator.new()

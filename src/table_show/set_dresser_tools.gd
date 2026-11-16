@@ -16,6 +16,8 @@ class_name SetDresserTools
 ##           by name - answered with where the sun falls (how much of the table, and of where the cards
 ##           lie) and how the weather runs; and the ride ([Rides]): what the table is aboard, if it moves -
 ##           answered with how it shakes and what on the table moves with it
+##           A thing written `{kept: name}` is a prop from the library put as it was kept ([ThingLibrary.put_on]), costing no
+##           look of its own: proven already.
 ##   remove  things off it, by name
 ##   blueprint  where each thing stands, written up front: each thing's `at`
 ##           ([x, z] centimeters from the middle of the reading), `turn` and `scale` set by name, and the
@@ -23,6 +25,8 @@ class_name SetDresserTools
 ##           stands, its foot and height against what its spot shows, and what moved it or kept it off
 ##           ([method TableThings.stand_at]). A thing put with no `at` waits off the table in every picture
 ##           until it is placed ([method _on_table]); handed in so, the table finds it a spot itself.
+##   library  the props kept in the library that fit what is needed, in words ([method ThingLibrary.search]): never the whole
+##           list, so a favorite is not put on every table
 ##   look    one thing close up from four sides ([method TablePreview.thing])
 ##   overhead  the table from straight above - top, edge, layers, things, the cards' spread - with the
 ##           stretch the camera sees outlined ([method TablePreview.overhead]): a plan
@@ -41,7 +45,8 @@ class_name SetDresserTools
 ##
 ## Every picture counts against [constant LOOKS]; words cost nothing. A picture comes with the
 ## question to ask of it ([constant JUDGE_THING], [constant JUDGE_TABLE], [constant JUDGE_SET]). Before it is handed in the
-## table is set at least once since its last change, wherever a table can be stood.
+## table is set at least once since its last change, wherever a table can be stood, and asked once about a thing out of the shot
+## that gives the picture nothing ([method ShotReach.gives]) and is not built to be worked ([method built_to_work]).
 ##
 ## It knows no card: the table it sets is photographed with the cards face down, and nothing here reads the draw.
 
@@ -52,19 +57,20 @@ const JUDGE_THING := "Before you go on, say what each picture actually shows - i
 const JUDGE_TABLE := "Before you submit, say what the frame actually shows: can each thing be told for what it is at this size, is any hidden, crowded or left off, and does the light come from where you meant? Fix what does not - move things with blueprint - and set the table again."
 ## ...and when every thing stood in the shot: the table is set, and it is told so. The table makes a thing smaller only as far as it
 ## still reads (see TableThings.stand), and leaves off what will not fit even so.
-const JUDGE_SET := "Every thing stands where you wrote it, none left off, cut at its top or out of the shot. Say what the frame actually shows: can each thing be told for what it is, and does the light come from where you meant? If so, the table is set - %s. Set it again only to fix what is plainly wrong."
+const JUDGE_SET := "Every thing stands where you wrote it, none left off or cut at its top, and none out of the shot but what the work fetches or what gives the picture light, a shadow or something rising into it. Say what the frame actually shows: can each thing be told for what it is, and does the light come from where you meant? If so, the table is set - %s. Set it again only to fix what is plainly wrong."
 const JUDGE_AIR := "Say what the pictures show of it: is it where you meant, as thick or as bright as you meant, in colors that belong to this table - and can every card still be seen through it? Put it again to change it."
 const JUDGE_OVERHEAD := "Say what the plan shows: the top's shape and edge, each layer where you meant it and turned as you meant, what hangs over the edge, and whether the cloths, the things and the cards sit together as one table. Put again what does not."
 const JUDGE_BLUEPRINT := "Say what the drawing shows: does it read as a reader's table set on purpose - a few groups and a few things alone, heights stepping up toward the back of a group, the cards' room bare, things out toward the sides and the back, some cut by the frame's sides - or as things scattered evenly? Is any thing moved or kept off from where you wrote it, standing in the reader's hands, or taller than its spot shows (a red number)? Place again what is wrong; when the plan is right, set the table and look at it as the camera will."
 const JUDGE_TITLE := "Say what the picture shows: can the name be read at a glance - and would it still be, shrunk to a thumbnail the size of a stamp? Does its color stand clear of every part of the table behind it, and belong to this table's world? Choose again if not."
 const JUDGE_LIGHT := "Say what the pictures show of the light: where it comes from, what it falls through and where its shade lies, whether it moves as you meant - and whether it is the light of this episode's world and hour, with every card still readable in it. Put it again to change it."
-## Less of a thing in the shot than this, and it is out of it ([method written_notes]).
-const OUT_OF_SHOT := 0.05
+## Less of a thing in the shot than this, and it is out of it ([method written_notes]): there for the work to fetch, or for what it
+## gives the picture ([method ShotReach.gives]), or else for nobody.
+const OUT_OF_SHOT := ShotReach.OUT
 ## How many pictures one set dresser may take. Its run has no time limit (see AgentJobs); a table of dozens of things takes more looks than one of five.
 const LOOKS := 60
 const RESUME_FIELDS := ["_things", "_effects", "_materials", "_top", "_layers", "_top_put", "_layers_put",
 	"_idea", "_title", "_light", "_light_put", "_sound", "_sound_put", "_ride", "_ride_put", "_assembly",
-	"_looks", "_set_since_change", "_warned", "_warned_title", "_warned_unplaced", "_warned_cut", "submitted"]
+	"_looks", "_set_since_change", "_warned", "_warned_title", "_warned_unplaced", "_warned_cut", "_idle", "_warned_unseen", "submitted"]
 
 var episode: TableEpisode
 var plan: Dictionary
@@ -96,10 +102,14 @@ var _warned := false
 var _warned_title := false
 var _warned_unplaced := false
 var _warned_cut := false
+var _idle: Array = []            # the things out of the shot, giving it nothing and not worked, when the table was last set ([method idle])
+var _warned_unseen := false
 var _preview: TablePreview
-## The show's fixed things ([FixedTable]): standing from the start, as the brief writes them - never moved, made again or taken away.
+## The show's fixed things ([FixedTable]): standing from the start, as the brief writes them - never moved, made again or taken away -
+## and those written with no `at`, which the set dresser places ([member _placed_here]).
 var _fixed := {}
 var _fixed_names: Array = []
+var _placed_here: Array = []
 
 
 ## [param name] and [param byline]: the show's, set over the table at the opening. [param fixed]: what the brief stands on every
@@ -110,6 +120,7 @@ func _init(ep: TableEpisode, episode_plan: Dictionary, job_dir: String, name := 
 	dir = job_dir
 	_fixed = fixed
 	_fixed_names = FixedTable.names(fixed)
+	_placed_here = FixedTable.placed_by_dresser(fixed)
 	for t in fixed.get("things", []):
 		if t is Dictionary:
 			_things.append((t as Dictionary).duplicate(true))
@@ -147,7 +158,7 @@ func list_tools() -> Array:
 	return [
 		{"name": "put", "description": "Make things for the table you are setting: each new thing is added, and a thing with the same name as one already there is replaced - keeping where it stands on the blueprint unless `at` is given again. Give the materials they use (added to the table's, or replacing one of the same name), the table's air (`effects`, each replacing one of the same name), its light (`light`, part by part) and, if you like, the table's idea. Things, materials, effects and the light are written exactly as in the format you were shown. Answers with what was built - each thing's size, anything the builder had to leave out or guess, whether it is taller than its place can show, where the sun falls - and a picture of the things you put, each on its own tile on a centimeter grid.",
 			"inputSchema": {"type": "object", "properties": {
-				"things": {"type": "array", "items": {"type": "object"}, "description": "things, each {name, why, group, parts} - and, if you know it yet, `at` [x, z] and `turn`"},
+				"things": {"type": "array", "items": {"type": "object"}, "description": "things, each {name, why, group, parts} - and, if you know it yet, `at` [x, z] and `turn`; or {kept, at, turn} to put a prop from the library by its name, as it was kept"},
 				"materials": {"type": "object", "description": "materials by name, each {kind, color, ...}"},
 				"effects": {"type": "array", "items": {"type": "object"}, "description": "the air: fog, motes, bursts and drifts, each {name, kind, ...}"},
 				"idea": {"type": "string", "description": "two or three sentences: this table, and the reader who set it"},
@@ -165,6 +176,8 @@ func list_tools() -> Array:
 				"at": {"type": "array", "items": {"type": "number"}, "description": "[x, z]: centimeters from the middle of the reading - x to the reader's right, z toward the reader"},
 				"turn": {"type": "number", "description": "degrees about its middle; 0 faces its front to the reader"},
 				"scale": {"type": "number", "description": "larger or smaller than built, 0.25 to 2 (1 as built)"}}, "required": ["name"]}}}}},
+		{"name": "library", "description": "Search the library of props kept from earlier tables: each one proven, built and pictured already. Say what you need in a few words; answers with the closest kept props - name, what it is, its size and what it is made of - or none. Put one with put's {kept: name}. A kept prop goes on a table only when it is what this table needs.",
+			"inputSchema": {"type": "object", "properties": {"need": {"type": "string", "description": "what you need, in a few words"}}, "required": ["need"]}},
 		{"name": "look", "description": "Look at one thing close up, from four sides - its front, its right side, from above, and as the camera at the reader's chair sees it - on a centimeter grid (a brighter line every 5 cm).",
 			"inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
 		{"name": "set", "description": "Stand everything on this episode's own table as the show will - its cloth, its room, its lights, the deck at its side and the cards laid face down where the reading lays them - and photograph it from the camera's place: what the viewer will see. Answers with the picture, where each thing stood, what was moved, made smaller or left off, and which light leads. `numbers: true` tags each thing with its blueprint number in the picture (the viewer never sees them).",
@@ -208,6 +221,8 @@ func _call(name: String, args: Dictionary) -> Dictionary:
 			return await _blueprint(args)
 		"look":
 			return await _look_at(args)
+		"library":
+			return _library(args)
 		"set":
 			return await _set_table(args)
 		"overhead":
@@ -218,7 +233,7 @@ func _call(name: String, args: Dictionary) -> Dictionary:
 			return await _choose_title(args)
 		"submit":
 			return _submit()
-	return {"text": "There is no tool called \"%s\": put, remove, blueprint, look, overhead, set, watch, title and submit are the tools." % name, "error": true}
+	return {"text": "There is no tool called \"%s\": put, remove, blueprint, library, look, overhead, set, watch, title and submit are the tools." % name, "error": true}
 
 
 ## The draft as the set dresser has written it - the shape a one-reply table had.
@@ -317,10 +332,20 @@ func _put(args: Dictionary) -> Dictionary:
 	if args.get("idea") is String:
 		_idea = String(args["idea"]).strip_edges()
 	var put: Array = []
+	var kept_put: Array = []         # put from the library: proven, so pictured only on a look of its own
 	var junk := 0
 	for t in raw:
 		if not (t is Dictionary):
 			junk += 1
+			continue
+		# a prop from the library, as it was kept
+		if (t as Dictionary).has("kept"):
+			var got := _put_kept(t as Dictionary)
+			if got.begins_with("!"):
+				notes.append(got.substr(1))
+			elif not put.has(got):
+				put.append(got)
+				kept_put.append(got)
 			continue
 		var thing := (t as Dictionary).duplicate(true)
 		var nm := String(thing.get("name", "")).strip_edges()
@@ -328,6 +353,9 @@ func _put(args: Dictionary) -> Dictionary:
 			nm = "thing %d" % (_things.size() + 1)
 		thing["name"] = nm
 		# never one of the show's own, which stand as its brief writes them
+		if _placed_here.has(nm.to_lower()):
+			notes.append("\"%s\" is one of the show's fixed things: it stands as the brief writes it, and is not put again - place it with blueprint" % nm)
+			continue
 		if _fixed_names.has(nm.to_lower()):
 			notes.append("\"%s\" is one of the show's fixed things: it stands as the brief writes it, and is not put again" % nm)
 			continue
@@ -395,16 +423,83 @@ func _put(args: Dictionary) -> Dictionary:
 			lines.append("  - " + n)
 	lines.append(_tally())
 	var images: Array = []
-	if not put.is_empty():
+	var pictured := put.filter(func(n: String) -> bool: return not kept_put.has(n))
+	if not pictured.is_empty():
 		var numbers := {}
 		for i in _things.size():
 			numbers[String((_things[i] as Dictionary).get("name", ""))] = i + 1
-		var img: Image = await _picture(func() -> Image: return await _preview.things(_safe(), put, numbers))
+		var img: Image = await _picture(func() -> Image: return await _preview.things(_safe(), pictured, numbers))
 		if img != null:
 			images.append(img)
 			lines.append(JUDGE_THING)
 	lines.append(_looks_line(not images.is_empty()))
 	return {"text": "\n".join(lines), "images": images}
+
+
+## A prop from the library put on the draft as it was kept ([method ThingLibrary.put_on]): `{kept, name, at, turn}`, `name` what it
+## is called here (the kept name when left out) - one already of that name made again, keeping its place unless one is given - and
+## its materials under names of their own. The name it stands as, or "!" and why not.
+func _put_kept(t: Dictionary) -> String:
+	var want := String(t.get("kept", "")).strip_edges()
+	var e := ThingLibrary.read(want)
+	if e.is_empty():
+		return "!nothing called \"%s\" is kept in the library - search it with library" % want
+	e = e.duplicate(true)
+	var nm := String(t.get("name", "")).strip_edges()
+	if not nm.is_empty():
+		e["name"] = nm
+	nm = String(e["name"])
+	if _fixed_names.has(nm.to_lower()):
+		return "!\"%s\" is one of the show's fixed things, which stand already" % nm
+	var at: Variant = null
+	if t.get("at") is Array and (t["at"] as Array).size() == 2 and CardTable._is_num(t["at"][0]) and CardTable._is_num(t["at"][1]):
+		at = Vector2(float(t["at"][0]), float(t["at"][1]))
+	var turn: Variant = float(t["turn"]) if CardTable._is_num(t.get("turn")) else null
+	var was := _index_of(nm)
+	if was >= 0:
+		var old: Dictionary = _things[was]
+		if at == null and old.get("at") is Array:
+			at = Vector2(float(old["at"][0]), float(old["at"][1]))
+		if turn == null and CardTable._is_num(old.get("turn")):
+			turn = float(old["turn"])
+		_things.remove_at(was)
+	var out := ThingLibrary.put_on({"things": _things, "materials": _materials}, e, at)
+	_things = out["things"]
+	_materials = out["materials"]
+	var thing: Dictionary = _things.back()
+	if turn != null:
+		thing["turn"] = turn
+	return String(thing["name"])
+
+
+## The props kept in the library that fit [param args]' `need`, closest first ([method ThingLibrary.search]): each its name, what it
+## is, its size and what it is made of. Never the whole list.
+func _library(args: Dictionary) -> Dictionary:
+	var need := String(args.get("need", "")).strip_edges()
+	if need.is_empty():
+		return {"text": "Say what you need, in a few words.", "error": true}
+	var found := ThingLibrary.search(need)
+	if found.is_empty():
+		return {"text": "Nothing kept in the library fits \"%s\": make it yourself." % need}
+	var lines := PackedStringArray(["Kept in the library, closest first - put one with {\"kept\": its name}, and only where this table needs it:"])
+	for e in found:
+		var ed: Dictionary = e
+		var size := String(PropStudio.cached(String(ed["hash"])).get("size", ""))
+		if size.is_empty():
+			var safe := Props.sanitize({"things": [ed["thing"]], "materials": ed["materials"]}, [])
+			if not (safe["things"] as Array).is_empty():
+				var b := Props.build((safe["things"] as Array)[0], safe["materials"], 0)
+				var k := float((ed["thing"] as Dictionary).get("scale", 1.0))
+				var box: AABB = b["size"]
+				size = PropStudio.size_text(AABB(box.position * k, box.size * k))
+				(b["node"] as Node3D).free()
+		var kinds := PackedStringArray()
+		for m in (ed["materials"] as Dictionary):
+			var md: Variant = (ed["materials"] as Dictionary)[m]
+			kinds.append("%s (%s)" % [String(m), String((md as Dictionary).get("kind", ""))] if md is Dictionary else String(m))
+		lines.append("- \"%s\"%s: %s; %s" % [String(ed["name"]), (" - " + String(ed["line"])) if not String(ed["line"]).is_empty() else "",
+			size, ", ".join(kinds) if not kinds.is_empty() else "no materials of its own"])
+	return {"text": "\n".join(lines)}
 
 
 func _remove(args: Dictionary) -> Dictionary:
@@ -486,8 +581,12 @@ func _set_table(args: Dictionary = {}) -> Dictionary:
 	_set_since_change = true
 	var lines := PackedStringArray(["The table, from the camera's place - the deck at the %s, %d cards face down in their spread:" %
 		[String(got["deck"]), int(got["cards"])] if not String(got["deck"]).is_empty() else "The table, from the camera's place:"])
+	for st in got.get("stood", []):
+		var i := _index_of(String((st as Dictionary)["name"]))
+		(st as Dictionary)["worked"] = i >= 0 and built_to_work(_things[i])
 	var stood := stood_lines(got, _numbers())
 	lines.append_array(stood["lines"])
+	_idle = idle(got)
 	if not waiting.is_empty():
 		lines.append("Not yet placed, so not on the table: %s - place them with blueprint." % ", ".join(waiting))
 	lines.append("The light is led by %s." % String(got["key"]) + (" Held down by pale cloth near it: %s." % ", ".join(PackedStringArray(got["held_down"])) if not (got["held_down"] as Array).is_empty() else ""))
@@ -539,8 +638,8 @@ static func stood_lines(got: Dictionary, numbers: Dictionary = {}) -> Dictionary
 
 ## What is wrong with a thing written where it stands, as [method TablePreview] found it standing ([param d]):
 ## `lines`, and how many of them are `faults` - moved from where it was written, taller than its spot
-## shows, or out of the shot altogether (built for nobody). Part of it cut off by the frame's side is said,
-## and is no fault: a full table runs off the sides.
+## shows, or out of the shot giving the picture nothing and not built to be worked (built for nobody). Out of the shot for the work
+## or for what it gives, or partly cut off by the frame's side, is said and is no fault: a full table runs off the sides.
 static func written_notes(d: Dictionary) -> Dictionary:
 	var out := PackedStringArray()
 	var faults := 0
@@ -549,14 +648,58 @@ static func written_notes(d: Dictionary) -> Dictionary:
 		faults += 1
 	if d.has("room") and float(d.get("height", 0.0)) > float(d["room"]) + 0.5:
 		out.append("%s cm tall where the frame shows %s cm: its top is cut off - stand it nearer the reader, or make it shorter" % [
-			TablePreview._cm(float(d["height"]) * 0.01), TablePreview._cm(float(d["room"]) * 0.01)])
+			PropStudio.cm(float(d["height"]) * 0.01), PropStudio.cm(float(d["room"]) * 0.01)])
 		faults += 1
 	if d.has("shown") and float(d["shown"]) < OUT_OF_SHOT:
-		out.append("NOT IN THE SHOT: the viewer never sees it - move it in, or take it off")
-		faults += 1
+		var gives: Array = d.get("gives", [])
+		if not gives.is_empty():
+			out.append("out of the shot, giving the picture %s" % _and(gives))
+		elif bool(d.get("worked", false)):
+			out.append("out of the shot, waiting there for the work to bring it in")
+		else:
+			out.append("NOT IN THE SHOT and giving the picture nothing - no light, no shadow, nothing rising into it: move it in, or take it off")
+			faults += 1
 	elif d.has("shown") and float(d["shown"]) < 0.999:
 		out.append("only %d%% of it is in the shot" % roundi(float(d["shown"]) * 100.0))
 	return {"lines": out, "faults": faults}
+
+
+## The names of the things [param got] ([method TablePreview.table]) stood out of the shot ([constant OUT_OF_SHOT]) that give the
+## picture nothing (`gives`) and are not built to be worked (`worked`, [method built_to_work]): there for nobody.
+static func idle(got: Dictionary) -> Array:
+	var out: Array = []
+	for s in got.get("stood", []):
+		var d: Dictionary = s
+		if d.has("shown") and float(d["shown"]) < OUT_OF_SHOT and (d.get("gives", []) as Array).is_empty() and not bool(d.get("worked", false)):
+			out.append(String(d["name"]))
+	return out
+
+
+## Whether thing [param t] (as written) is built to be worked: a part of it held or reached by named `points`, jointed, given a
+## `start` or `runs`, `loose`, or `grains` - what the work moves, fills, opens or takes from ([method Motions.sanitize_work]).
+static func built_to_work(t: Dictionary) -> bool:
+	return _worked_parts(t.get("parts", []))
+
+
+static func _worked_parts(parts: Variant) -> bool:
+	if not (parts is Array):
+		return false
+	for p in parts:
+		if not (p is Dictionary):
+			continue
+		var d: Dictionary = p
+		if d.get("points") is Dictionary or d.get("joint") is Dictionary or d.has("start") or d.has("runs") or (d.get("loose") is bool and bool(d["loose"])) \
+				or String(d.get("shape", "")) == "grains" or _worked_parts(d.get("parts")):
+			return true
+	return false
+
+
+## [param words] said as a list: "a", "a and b", "a, b and c".
+static func _and(words: Array) -> String:
+	var w := PackedStringArray(words)
+	if w.size() <= 1:
+		return "".join(w)
+	return ", ".join(w.slice(0, w.size() - 1)) + " and " + w[w.size() - 1]
 
 
 ## "[x, z]" in whole centimeters.
@@ -602,9 +745,13 @@ func _blueprint(args: Dictionary) -> Dictionary:
 		if i < 0:
 			notes.append("nothing called \"%s\" has been put - make it with put first" % nm)
 			continue
-		if _fixed_names.has(nm.to_lower()):
+		if _fixed_names.has(nm.to_lower()) and not _placed_here.has(nm.to_lower()):
 			notes.append("\"%s\" is one of the show's fixed things: it stands where the brief puts it - build round it" % nm)
 			continue
+		if _placed_here.has(nm.to_lower()) and d.has("scale"):
+			notes.append("\"%s\" stands at the size the brief writes - its scale is not changed" % nm)
+			d = d.duplicate()
+			d.erase("scale")
 		var thing: Dictionary = _things[i]
 		if not _needs_place(thing):
 			notes.append("\"%s\" %s - not placed" % [nm, "stands where the table keeps the cards' box" if thing.get("holds_cards") == true else "lies where its path is written"])
@@ -687,9 +834,11 @@ func _plan_lines(got: Dictionary) -> PackedStringArray:
 		var line := "%s: at %s%s%s" % [head, _cm2(Vector2(built["at"][0], built["at"][1])), (", turned %d" % turn) if turn != 0 else "",
 			(", at %d%% of its size" % roundi(k * 100.0)) if absf(k - 1.0) > 0.005 else ""]
 		var d: Dictionary = by_name.get(nm, {})
+		if not d.is_empty():
+			d["worked"] = built_to_work(raw)
 		if d.has("foot"):
-			line += "; foot %s x %s cm, %s cm tall - its spot shows %s cm" % [TablePreview._cm(float((d["foot"] as Vector2).x) * 0.01),
-				TablePreview._cm(float((d["foot"] as Vector2).y) * 0.01), TablePreview._cm(float(d["height"]) * 0.01), _shows(float(d["room"]) * 0.01)]
+			line += "; foot %s x %s cm, %s cm tall - its spot shows %s cm" % [PropStudio.cm(float((d["foot"] as Vector2).x) * 0.01),
+				PropStudio.cm(float((d["foot"] as Vector2).y) * 0.01), PropStudio.cm(float(d["height"]) * 0.01), _shows(float(d["room"]) * 0.01)]
 			var notes := written_notes(d)
 			for n in notes["lines"]:
 				line += "; " + String(n)
@@ -703,7 +852,7 @@ func _plan_lines(got: Dictionary) -> PackedStringArray:
 
 ## A height its spot shows, in words (INF where the frame's top never comes down over it).
 static func _shows(m: float) -> String:
-	return "any height" if is_inf(m) else TablePreview._cm(m)
+	return "any height" if is_inf(m) else PropStudio.cm(m)
 
 
 ## Where thing [param t] (made safe) is written to stand, in words.
@@ -736,8 +885,11 @@ func _room_at(t: Dictionary) -> float:
 	return CardTable.headroom_at(lay["camera"], float(lay["fov"]), Tables.ORIGIN + Vector2(float(t["at"][0]), float(t["at"][1])) * 0.01)
 
 
-## Whether thing [param t] can be placed on the blueprint: a strand's path already says where it lies.
-static func _needs_place(t: Dictionary) -> bool:
+## Whether thing [param t] can be placed on the blueprint: a strand's path already says where it lies, and a shoebox the cards are
+## kept in settles in the middle of the table by itself ([method TableBox.build]).
+func _needs_place(t: Dictionary) -> bool:
+	if t.get("holds_cards") == true and String(CardTable.staging_of(plan).get("box_style", "open")) == "shoebox":
+		return false
 	return not Props.draped(t)
 
 
@@ -891,6 +1043,11 @@ func _submit() -> Dictionary:
 	if cut > 0.0 and not _warned_cut:
 		_warned_cut = true
 		return {"text": "The model's top is cut off by the frame by %.0f cm where its plate stands. Bring the plate toward the reader (`assembly` `base` `at`: the larger its z, the nearer). (Submit again to hand the table in as it is.)" % ceilf(cut * 100.0), "error": true}
+	# and nothing out of the shot for nobody, once asked: a thing nobody sees, that the work never fetches and that gives the picture
+	# nothing, is built for nobody
+	if not _idle.is_empty() and not _warned_unseen:
+		_warned_unseen = true
+		return {"text": "Out of the shot, giving the picture nothing and not built to be worked: %s. The viewer never sees them and the work cannot use them. Bring them into the picture - stores of one kind together in one holder the camera sees - or take them off, and set the table again. A thing may stand out of the shot when the work fetches it, or when it gives the picture light, a shadow, or steam or smoke rising into it. (Submit again to hand it in as it is.)" % ", ".join(PackedStringArray(_idle)), "error": true}
 	# and its name given a color, once asked
 	if _title.is_empty() and not _warned_title:
 		_warned_title = true
@@ -1289,7 +1446,7 @@ func _describe(names: Array) -> PackedStringArray:
 		node.free()
 		var group := String(built.get("group", ""))
 		out.append("%d. %s (%s%s): %s, %d part%s%s" % [at + 1, String(nm), _where_written(built), (", group " + group) if not group.is_empty() else "",
-			TablePreview.size_text(box), _count_parts(built.get("parts", [])), "" if _count_parts(built.get("parts", [])) == 1 else "s",
+			PropStudio.size_text(box), _count_parts(built.get("parts", [])), "" if _count_parts(built.get("parts", [])) == 1 else "s",
 			(", %d flame%s" % [flames, "" if flames == 1 else "s"]) if flames > 0 else ""])
 		if not moves.is_empty():
 			out.append("   moves: " + moves)
@@ -1304,7 +1461,7 @@ func _describe(names: Array) -> PackedStringArray:
 		var k := float(built.get("scale", 1.0))
 		var room := _room_at(built)
 		if box.size.y * k > room + 0.005:
-			troubles.append("%s cm tall, and where it stands the frame shows only %s cm: its top will be cut off" % [TablePreview._cm(box.size.y * k), TablePreview._cm(room)])
+			troubles.append("%s cm tall, and where it stands the frame shows only %s cm: its top will be cut off" % [PropStudio.cm(box.size.y * k), PropStudio.cm(room)])
 		for tr in troubles:
 			out.append("   - " + tr)
 	return out

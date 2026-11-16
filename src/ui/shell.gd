@@ -24,7 +24,7 @@ const ROW_GAP := 4.0
 ## hands its button to the row, which keeps this order, closes up around a hidden one, and is lifted
 ## as one by [method claim_bottom]. Masking's own export takes the export slot while it suppresses the
 ## shared one.
-const ROW_ORDER := [&"home", &"environment", &"graphics", &"console", &"mask_export", &"export", &"assistant"]
+const ROW_ORDER := [&"home", &"dex", &"environment", &"graphics", &"console", &"mask_export", &"export", &"assistant"]
 ## The layer the row draws on: above the home screen (200) and every panel that opens above it.
 const ROW_LAYER := 253
 
@@ -260,6 +260,31 @@ static func of(n: Node) -> Shell:
 	if n == null or not n.is_inside_tree():
 		return null
 	return n.get_tree().get_first_node_in_group(GROUP) as Shell
+
+
+## The room a window opened from [param host] may stand in: the app's window, right of the side panel where one is shown and
+## leaves at least [param least] pixels, [param clear] pixels from its edge. A popup opens here, never under the panel.
+static func room_beside(host: Node, least := 200.0, clear := 16.0) -> Rect2:
+	if host == null or not host.is_inside_tree():
+		return Rect2(Vector2.ZERO, Vector2(1280, 720))
+	var room := host.get_tree().root.get_visible_rect()
+	for p in host.get_tree().get_nodes_in_group(PANELS):
+		if p is Control and (p as Control).is_visible_in_tree():
+			var end := (p as Control).get_global_rect().end.x + clear
+			if end < room.end.x - least:
+				room = Rect2(Vector2(end, room.position.y), Vector2(room.end.x - end, room.size.y))
+			break
+	return room
+
+
+## Window [param w] centered in the room beside the panel ([method room_beside] of [param host]), as large as it is now.
+static func center_beside(w: Window, host: Node) -> void:
+	if not w.visible:
+		return
+	var room := room_beside(host)
+	var x := clampf(room.position.x + (room.size.x - w.size.x) * 0.5, 0.0, maxf(0.0, room.end.x - w.size.x))
+	var y := maxf(room.position.y, room.position.y + (room.size.y - w.size.y) * 0.5)
+	w.position = Vector2i(roundi(x), roundi(y))
 
 
 # --- the way home ------------------------------------------------------------------------------
