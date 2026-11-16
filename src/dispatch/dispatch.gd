@@ -161,15 +161,19 @@ const GLASS_LINGER := 8.0
 ## as [method ShowOpening.title_alpha] fades the name out.
 const BLACK_LEAD := 0.6
 const BLACK_TAIL := 0.3
-## The tablet held up before the eye, in the camera's own frame (m), leaning back a little; its page eased to what is
-## said over EASE seconds, what is said kept this far down the view; with nothing said on it, eased down the page, or
-## DRIFT pixels a second while how long it is up is not known; a word must be this long to be followed.
-const TABLET_HELD := Vector3(0.0, -0.012, -0.235)
-const TABLET_LEAN := 80.0
+## The tablet's page: eased to what is said over EASE seconds, what is said kept this far down the view; with nothing said
+## on it, eased down the page, or DRIFT pixels a second while how long it is up is not known. A word said is followed where
+## it is this long, or where it reads on from the last word followed; a run of READ_RUN words read on lights them as the
+## tablet medium lights what its voice reads; a word is looked for this many words on from the last.
 const PAGE_EASE := 0.9
+## How bright the tablet's screen glows lit (the tablet medium's own is 1.15, in a lighter room): a page read in the dark of
+## the desk keeps its words' color.
+const TABLET_GLOW := 1.0
 const PAGE_KEEP := 0.32
 const PAGE_DRIFT := 18.0
 const FOLLOW_LETTERS := 5
+const READ_RUN := 3
+const FOLLOW_WINDOW := 120
 ## What stands in a page for its video player ([method _tablet_source]), and the player's picture before anything plays.
 const PLAYER := "\uE0F7 the video player"
 ## The live picture: its camera behind the chair, and its viewport's size.
@@ -210,6 +214,8 @@ var _moves: Array = []
 var _spoken_n := 0
 var _typed_words := PackedByteArray()   # a spoken word -> 1 when it is typed on the terminal as it is said
 var _follower := ReadingFollower.new()
+var _since := 0.0                       # a mid-way start: how far into the reading it starts (s, the scrub bar's scale)
+var _est_from := 0.0                    # ...and where its first word falls on the steady voice's estimate (s)
 var _built_n := -1
 var _t0 := PackedFloat32Array()        # each action's start (INF until placed)
 var _sp := PackedFloat32Array()        # ...and its speed (1, or quicker where its silence was short)
@@ -233,6 +239,8 @@ var _clips := {}                        # a clip's key -> its frames ([method Il
 var _clip_tex := {}                     # ...and the frame it shows: {i, tex}
 var _black: ImageTexture                # a player with nothing playing
 var _follow := {}                       # a page's action -> where it scrolls to as words on it are said ([method _page_follow])
+var _tablet_char0 := PackedInt32Array() # a page word -> its first letter's place in the pages' text (for the hues it is lit in)
+var _tablet_hue0 := 0.0
 var _sound_plan: Array = []
 var _sound_rev := 0
 var _open: Array = []                   # where the receiver is open ([method _build_receiver])
@@ -443,8 +451,15 @@ func _land_set() -> void:
 		_set.clock_face.material_override = _screen_mat("clock", _screens.clock.get_texture(), Color(1, 1, 1),
 			{"curve": 0.0, "lines": 0.0, "bloom": 0.1, "brightness": 0.55})
 	if _set.tablet_screen != null:
-		_set.tablet_screen.material_override = _screen_mat("tablet", _screens.tablet.get_texture(), Color(1, 1, 1),
-			{"curve": 0.0, "lines": 0.0, "bloom": 0.2, "brightness": 1.0})
+		# the tablet medium's own glass: its rounded corners, its glow
+		var glass := ShaderMaterial.new()
+		glass.shader = _tablet_glass()
+		glass.set_shader_parameter("screen_tex", _screens.tablet.get_texture())
+		glass.set_shader_parameter("size", DispatchSet.TABLET_SCREEN)
+		glass.set_shader_parameter("radius", DispatchSet.TABLET_SCREEN_CORNER)
+		glass.set_shader_parameter("glow", 0.0)
+		_set.tablet_screen.material_override = glass
+		_mats["tablet"] = glass
 	for i in _set.phones.size():
 		var ph: Dictionary = _set.phones[i]
 		(ph["inner"] as MeshInstance3D).material_override = _screen_mat("inner %d" % i, null, Color(1, 1, 1),
@@ -469,6 +484,16 @@ func _land_set() -> void:
 	if _waiting:
 		_waiting = false
 		feed.wait_for(WAIT_FOR, false)
+
+
+## The tablet medium's screen shader ([constant TabletMedium.SCREEN_SHADER]), made once.
+static var _glass_shader: Shader = null
+
+static func _tablet_glass() -> Shader:
+	if _glass_shader == null:
+		_glass_shader = Shader.new()
+		_glass_shader.code = TabletMedium.SCREEN_SHADER
+	return _glass_shader
 
 
 func _screen_mat(name: String, tex: Texture2D, tint: Color, opts: Dictionary) -> ShaderMaterial:
@@ -653,7 +678,7 @@ func _ensure_doc() -> void:
 		return
 	_doc_key = key
 	_doc_seed = seed
-	load_note(src, dispatch, start, int(d.get("start_index", -1)))
+	load_note(src, dispatch, start, int(d.get("start_index", -1)), float(d.get("start_time", 0.0)))
 
 
 ## What the desk builds only where the script uses it, for the script [param parsed] read from [param source]: `clock` (its
@@ -705,8 +730,9 @@ func reseed(seed: int) -> void:
 
 ## Load a note: [param source] (its text, its marks in it) and [param dispatch] (`{seed, pictures, clips, head}`, any missing:
 ## `head` the note's frontmatter, put on words that come without it); for a reading started mid-way its first words
-## [param start] (normalized), [param near] the index they are about. Public for a gate, which hands it one by hand.
-func load_note(text: String, dispatch: Dictionary, start := PackedStringArray(), near := -1) -> void:
+## [param start] (normalized), [param near] the index they are about, [param since] how far into the reading it starts
+## (seconds; 0 when not known). Public for a gate, which hands it one by hand.
+func load_note(text: String, dispatch: Dictionary, start := PackedStringArray(), near := -1, since := 0.0) -> void:
 	var source := whole(text, String(dispatch.get("head", "")))
 	var seed := _seed_of(int(dispatch.get("seed", 0)), text)
 	_seed = seed
@@ -734,6 +760,12 @@ func load_note(text: String, dispatch: Dictionary, start := PackedStringArray(),
 	_makes = makes_of(dispatch)
 	_tablet_doc = TabletScript.parse(_tablet_source(_parsed.get("pages", [])))
 	_tablet_pages = {}
+	_tablet_char0 = PackedInt32Array()
+	var letters := 0
+	for w in _tablet_doc.get("words", []):
+		_tablet_char0.append(letters)
+		letters += String((w as Dictionary)["text"]).length() + 1
+	_tablet_hue0 = float(hash([_seed, "hue"]) & 0xFFFF) / 65535.0
 	_clips = dispatch.get("clips", {}) if dispatch.get("clips") is Dictionary else {}
 	_clip_tex = {}
 	_rings = float(_parsed.get("rings", DispatchScript.SCOPE_RINGS))
@@ -755,6 +787,8 @@ func load_note(text: String, dispatch: Dictionary, start := PackedStringArray(),
 		for w in DispatchScript.rehearsal(_parsed):
 			est.append(float((w as Dictionary)["t0"]))
 	_follower.reset(spoken, from, est)
+	_since = maxf(since, 0.0) if from > 0 else 0.0
+	_est_from = est[from] if from > 0 and from < est.size() else 0.0
 	_built_n = -1
 	_held = {}
 	_leg_known = {}
@@ -2427,7 +2461,8 @@ func _black_from(i: int) -> float:
 
 ## The clock at [param t]: `{from, to, u}` - what its cards show and, while they turn, what they turn from - {} with no
 ## time given yet. A fade up with a time turns them to it as the picture comes up; from there it runs a minute a minute,
-## each minute turning over.
+## each minute turning over. A mid-way start's fades before it count from where they fall on the reading ([method
+## _on_reading]), never from the far past its earlier actions are placed in.
 func clock_at(t: float) -> Dictionary:
 	var set_t := -INF
 	var set_to := -1
@@ -2436,7 +2471,7 @@ func clock_at(t: float) -> Dictionary:
 		var a: Dictionary = _actions[i]
 		if String(a["kind"]) != "fade" or int(a.get("clock", -1)) < 0 or _t0[i] == INF:
 			continue
-		var turn := _t0[i] + float(a["secs"]) / _sp[i]
+		var turn := _on_reading(i, _t0[i] + float(a["secs"]) / _sp[i])
 		if _t0[i] > t:
 			break
 		was = set_to + int(floor((turn - set_t) / 60.0)) if set_to >= 0 else int(a["clock"]) - 1
@@ -2454,6 +2489,18 @@ func clock_at(t: float) -> Dictionary:
 		return {"from": DispatchScript.clock_text(set_to + gone - 1), "to": DispatchScript.clock_text(set_to + gone),
 			"u": into / DispatchScript.CLOCK_TURN}
 	return {"from": DispatchScript.clock_text(set_to + gone), "to": DispatchScript.clock_text(set_to + gone), "u": 1.0}
+
+
+## Moment [param x] of action [param i] on the show's clock as the reading runs: a mid-way start places its earlier actions
+## far in the past ([constant ReadingFollower.START_PAST], spaced by the steady voice's estimate), so one of those is put
+## back before the start by its distance on the estimate, stretched to the reading's own time to the start ([member _since]).
+func _on_reading(i: int, x: float) -> float:
+	if _follower.start_si <= 0 or int((_actions[i] as Dictionary)["after"]) >= _follower.start_si:
+		return x
+	var on_est := x - ReadingFollower.START_PAST
+	if _since > 0.0 and _est_from > 0.0:
+		return (on_est - _est_from) * _since / _est_from
+	return on_est - _est_from
 
 
 func _pose_clock(t: float) -> void:
@@ -2485,7 +2532,7 @@ func _tablet_page(pi: int) -> Dictionary:
 	var out := {}
 	if pi >= 0 and pi < (_tablet_doc.get("pages", []) as Array).size():
 		var tp := TabletPage.new()
-		tp.build(_tablet_doc, pi, float(DispatchScreens.TABLET_SIZE.x), float(DispatchScreens.TABLET_SIZE.y) - DispatchScreens.BAR_H)
+		tp.build(_tablet_doc, pi, float(DispatchScreens.TABLET_SIZE.x), (float(DispatchScreens.TABLET_SIZE.y) - TabletChrome.TOP) * 2.4)
 		var words: Array = []
 		var links := {}
 		var all: Array = _tablet_doc["words"]
@@ -2494,7 +2541,7 @@ func _tablet_page(pi: int) -> Dictionary:
 		for wi in keys:
 			var w: Dictionary = all[int(wi)]
 			var r: Rect2 = tp.word_rect[wi]
-			words.append([String(w["norm"]), r.position.y])
+			words.append([String(w["norm"]), r.position.y, int(wi)])
 			var link := String(w.get("link", ""))
 			if not link.is_empty() and not links.has(TabletScript.url_key(link)):
 				links[TabletScript.url_key(link)] = r
@@ -2540,12 +2587,12 @@ func _page_scroll(i: int, t: float) -> float:
 	var pg := _tablet_page(int((_actions[i] as Dictionary)["page"]))
 	if pg.is_empty():
 		return 0.0
-	var view := float(DispatchScreens.TABLET_SIZE.y) - DispatchScreens.BAR_H
+	var view := float(DispatchScreens.TABLET_SIZE.y) - TabletChrome.TOP
 	var most := maxf((pg["page"] as TabletPage).height - view, 0.0)
 	var start := float(_page_times(i)["shown"]) + DispatchScript.TABLET_LOOK / _sp[i]
 	if t <= start:
 		return 0.0
-	var marks := _page_follow(i, view, most)
+	var marks: Array = _page_follow(i, view, most)["marks"]
 	if not marks.is_empty():
 		var from := 0.0
 		var goal := 0.0
@@ -2578,15 +2625,18 @@ func _page_end(i: int) -> float:
 	return INF
 
 
-## Where page action [param i] scrolls as words on it are said: `[[when, to]]` - each word said while it is up (of
-## [constant FOLLOW_LETTERS] letters or more) found on the page after the last one found, kept [constant PAGE_KEEP] down
-## the view ([param view] high, [param most] the furthest down).
-func _page_follow(i: int, view: float, most: float) -> Array:
+## How page action [param i] follows what is said while it is up: `{marks: [[when, to]], lit: [[page word, spoken word]]}`.
+## A word said is found on the page reading on from the last one found (the next word there), or - one of
+## [constant FOLLOW_LETTERS] letters or more - further on within [constant FOLLOW_WINDOW] words; each found is a mark the
+## page scrolls to, kept [constant PAGE_KEEP] down the view ([param view] high, [param most] the furthest down), and a run of
+## [constant READ_RUN] or more read on in a row is read off the page, its words lit as they are said.
+func _page_follow(i: int, view: float, most: float) -> Dictionary:
 	if _follow.has(i):
 		return _follow[i]
 	var a: Dictionary = _actions[i]
 	var pg := _tablet_page(int(a["page"]))
-	var out: Array = []
+	var marks: Array = []
+	var lit: Array = []
 	var words: Array = pg.get("words", [])
 	var spoken: PackedStringArray = _parsed["spoken"]
 	var end := _spoken_n
@@ -2596,23 +2646,63 @@ func _page_follow(i: int, view: float, most: float) -> Array:
 			end = int(b["after"])
 			break
 	var cursor := 0
+	var run: Array = []                   # [page word, spoken word] read on in a row
 	var complete := true
 	for si in range(int(a["after"]), mini(end, spoken.size())):
 		var w := String(spoken[si])
-		if w.length() < FOLLOW_LETTERS:
-			continue
 		var t := _word_t0(si)
 		if t == INF:
 			complete = false
 			break
-		for j in range(cursor, words.size()):
-			if String((words[j] as Array)[0]) == w:
-				out.append([t, clampf(float((words[j] as Array)[1]) - view * PAGE_KEEP, 0.0, most)])
-				cursor = j + 1
-				break
+		var j := -1
+		if cursor < words.size() and String((words[cursor] as Array)[0]) == w and not run.is_empty():
+			j = cursor
+		elif w.length() >= FOLLOW_LETTERS:
+			for k in range(cursor, mini(cursor + FOLLOW_WINDOW, words.size())):
+				if String((words[k] as Array)[0]) == w:
+					j = k
+					break
+		if j < 0:
+			if run.size() >= READ_RUN:
+				lit.append_array(run)
+			run = []
+			continue
+		if not run.is_empty() and j != cursor:
+			if run.size() >= READ_RUN:
+				lit.append_array(run)
+			run = []
+		run.append([int((words[j] as Array)[2]), si])
+		marks.append([t, clampf(float((words[j] as Array)[1]) - view * PAGE_KEEP, 0.0, most)])
+		cursor = j + 1
+	if run.size() >= READ_RUN:
+		lit.append_array(run)
+	var out := {"marks": marks, "lit": lit}
 	if complete:
 		_follow[i] = out
 	return out
+
+
+## The words of page action [param i] read off it by [param t], lit as the tablet medium lights what its voice reads
+## ([method TabletPage.draw]): `{times: {page word: Vector2(said from, to)}, cur, frac, now, char0, hue0}`.
+func _page_lit(i: int, t: float) -> Dictionary:
+	var view := float(DispatchScreens.TABLET_SIZE.y) - TabletChrome.TOP
+	var times := {}
+	var cur := -1
+	var frac := 0.0
+	for pair in _page_follow(i, view, 1.0e9)["lit"]:
+		var wi := int((pair as Array)[0])
+		var si := int((pair as Array)[1])
+		var t0 := _word_t0(si)
+		var t1 := _word_t1(si)
+		if t0 == INF or t0 > t or t - t1 > BookMedium.TRAIL_TAU * 4.0:
+			continue
+		times[wi] = Vector2(t0, t1)
+		if t < t1:
+			cur = wi
+			frac = clampf((t - t0) / maxf(t1 - t0, 0.01), 0.0, 1.0)
+	if times.is_empty():
+		return {}
+	return {"times": times, "cur": cur, "frac": frac, "now": t, "char0": _tablet_char0, "hue0": _tablet_hue0}
 
 
 ## The tablet at [param t]: `{lift (0 on the desk, 1 held up), face}` - the face as [method DispatchScreens.show_tablet]
@@ -2634,7 +2724,8 @@ func tablet_at(t: float) -> Dictionary:
 			power = 1.0 - clampf(r / 0.3, 0.0, 1.0)
 	if power <= 0.0:
 		return {"lift": lift, "face": {"power": 0.0}}
-	var face := {"power": snappedf(power, 0.02), "textures": _page_tex, "url": ""}
+	var face := {"power": snappedf(power, 0.02), "textures": _page_tex, "url": "", "title": "", "minutes": _minutes_at(t),
+		"battery": 64.0 - t / 600.0, "now": snappedf(t, 0.05)}
 	var cur := -1
 	var before := -1
 	for i in _actions.size():
@@ -2646,39 +2737,52 @@ func tablet_at(t: float) -> Dictionary:
 	var a: Dictionary = _actions[cur]
 	var pt := _page_times(cur)
 	if t >= float(pt["shown"]):
-		face["page"] = _tablet_page(int(a["page"])).get("page")
-		face["url"] = String(a["url"])
+		var tp: TabletPage = _tablet_page(int(a["page"])).get("page")
+		face["page"] = tp
+		face["url"] = TabletScript.host_of(String(a["url"]))
+		face["title"] = tp.title if tp != null else ""
+		face["can_back"] = before >= 0
 		face["scroll"] = snappedf(_page_scroll(cur, t), 0.5)
+		face["lit"] = _page_lit(cur, t)
 		return {"lift": lift, "face": face}
 	# the page before it, while the address is typed or the link to it found and tapped
 	if before >= 0:
 		var b: Dictionary = _actions[before]
 		var bp := _tablet_page(int(b["page"]))
 		face["page"] = bp.get("page")
-		face["url"] = String(b["url"])
+		face["url"] = TabletScript.host_of(String(b["url"]))
+		face["title"] = (bp["page"] as TabletPage).title if not bp.is_empty() else ""
 		face["scroll"] = snappedf(_page_scroll(before, _t0[cur]), 0.5)
 		if String(a["how"]) == "tap" and not bp.is_empty():
 			var r: Rect2 = (bp["links"] as Dictionary).get(TabletScript.url_key(String(a["url"])), Rect2())
 			if r.size != Vector2.ZERO:
-				var view := float(DispatchScreens.TABLET_SIZE.y) - DispatchScreens.BAR_H
+				var view := float(DispatchScreens.TABLET_SIZE.y) - TabletChrome.TOP
 				var most := maxf((bp["page"] as TabletPage).height - view, 0.0)
 				var want := clampf(r.position.y - view * 0.4, 0.0, most)
 				var u := _ease((t - _t0[cur]) / maxf(float(pt["tap"]) - _t0[cur] - 0.2, 0.1))
 				face["scroll"] = snappedf(lerpf(float(face["scroll"]), want, u), 0.5)
-				face["tap"] = r.get_center() + Vector2(0.0, DispatchScreens.BAR_H - float(face["scroll"]))
+				face["tap"] = r.get_center() + Vector2(0.0, TabletChrome.TOP - float(face["scroll"]))
 				face["tap_u"] = snappedf((t - float(pt["tap"])) / 0.5, 0.02) if t >= float(pt["tap"]) else -1.0
 	var keys: PackedFloat32Array = pt["keys"]
 	if not keys.is_empty():
 		var n := 0
 		while n < keys.size() and keys[n] <= t:
 			n += 1
-		face["url"] = _page_typed(cur).substr(0, n)
+		face["typed"] = _page_typed(cur).substr(0, n)
 		face["typing"] = t < float(pt["load"])
 	elif String(a["how"]) != "tap" or t >= float(pt["load"]):
-		face["url"] = String(a["url"])
+		face["url"] = TabletScript.host_of(String(a["url"]))
 	if t >= float(pt["load"]):
 		face["load"] = snappedf(clampf((t - float(pt["load"])) / maxf(float(pt["go"]), 0.01), 0.0, 1.0), 0.02)
 	return {"lift": lift, "face": face}
+
+
+## The desk's time at [param t] in minutes into the day (the clock's, [method clock_at]; late evening before it is set):
+## what the tablet's status bar says.
+func _minutes_at(t: float) -> int:
+	var c := clock_at(t)
+	var hm := String(c.get("to", "")).split(":")
+	return int(hm[0]) * 60 + int(hm[1]) if hm.size() == 2 else 22 * 60
 
 
 ## A picture on a tablet's page by its key: the player the live desk once `live: tablet` has begun (dark before), else
@@ -2709,8 +2813,8 @@ func _live_tablet(t: float) -> bool:
 	return live
 
 
-## The tablet at [param t]: lifted off the desk to before the eye (in the camera's frame) and back, its screen as
-## [method tablet_at] has it.
+## The tablet at [param t]: lifted off the desk and held low over its near edge to be read, the camera looking down into it,
+## and back, its screen as [method tablet_at] has it.
 func _pose_tablet(t: float) -> void:
 	if _set.tablet == null:
 		return
@@ -2718,14 +2822,13 @@ func _pose_tablet(t: float) -> void:
 	var lift := float(st["lift"])
 	var xf := _set.tablet_home
 	if lift > 0.0:
-		var held := _cam.global_transform * Transform3D(Basis(Vector3.RIGHT, deg_to_rad(TABLET_LEAN)), TABLET_HELD)
-		xf = _arc(_set.tablet_home, held, _jerkless(lift), 0.07)
+		xf = _arc(_set.tablet_home, _set.tablet_held_xf(), _jerkless(lift), 0.07)
 	_set.tablet.global_transform = xf
 	var face: Dictionary = st["face"]
 	_screens.show_tablet(face)
 	var m: ShaderMaterial = _mats.get("tablet")
 	if m != null:
-		m.set_shader_parameter("power", float(face.get("power", 0.0)))
+		m.set_shader_parameter("glow", TABLET_GLOW * float(face.get("power", 0.0)))
 	if float(face.get("power", 0.0)) > 0.0 and _live_tablet(t) and _live_vp != null:
 		_live_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 		if _live_cam != null:

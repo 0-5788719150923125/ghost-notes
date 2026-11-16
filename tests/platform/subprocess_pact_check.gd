@@ -18,9 +18,18 @@ extends SceneTree
 ## The echo half holds that what a `start()` child prints reaches the app's loggers (the file the console tails).
 ## Its control is a child started with inherited stdio (`start_detached`): its line reaches the terminal and
 ## must not reach the loggers.
+##
+## The mark half holds that a child's tree goes with it, down to an orphan whose parent has already exited (an
+## agent's gate after its shell returned), which neither the registry nor the pact can reach: `stop` takes one
+## child's (control: another child's orphan still runs), `reap_all` the rest, and the pact half's SIGKILL takes
+## a bound child's orphan through the guardian. The control in both is a detached child's orphan, unmarked,
+## which survives.
 
 const PID_FILE := "user://subprocess_pact_probe.txt"
 const SLEEP_S := "120"
+## A shell that leaves a sleeper orphaned (the subshell that started it has exited) and becomes a sleeper itself.
+## The orphan's pid goes to the file $1.
+const ORPHAN := "(sleep \"$2\" </dev/null >/dev/null 2>&1 & echo $! > \"$1\"); exec sleep \"$2\""
 
 var _fails: Array = []
 
@@ -32,6 +41,7 @@ func _init() -> void:
 	_registry_half()
 	_logged_half()
 	_echo_half()
+	_mark_half()
 	_pact_half()
 	if _fails.is_empty():
 		print("subprocess_pact_check: ALL OK")
@@ -49,14 +59,18 @@ func _check(ok: bool, msg: String) -> void:
 		_fails.append(msg)
 
 
-# The child: start one bound sleeper and one detached one, publish both pids, then sit until the parent kills us.
-# Nothing here may quit on its own; this process must die by SIGKILL.
+# The child: start one bound sleeper and one detached one, and one orphan-leaving shell of each kind, publish the
+# pids, then sit until the parent kills us. Nothing here may quit on its own; this process must die by SIGKILL.
 func _child_role() -> void:
 	var bound := Subprocess.start("sleep", [SLEEP_S], "pact probe")
 	var loose := Subprocess.start_detached("sleep", [SLEEP_S])
+	var files := _orphan_files(["child_bound", "child_loose"])
+	Subprocess.start("sh", ["-c", ORPHAN, "sh", files[0], SLEEP_S], "pact orphan")
+	var loose_shell := Subprocess.start_detached("sh", ["-c", ORPHAN, "sh", files[1], SLEEP_S])
 	var f := FileAccess.open(PID_FILE, FileAccess.WRITE)
 	if f != null:
-		f.store_line("%d %d %d" % [OS.get_process_id(), bound, loose])
+		f.store_line("%d %d %d %d %d %d" % [OS.get_process_id(), bound, loose,
+			_orphan_pid(files[0]), _orphan_pid(files[1]), loose_shell])
 		f.close()
 	# no quit(): the parent SIGKILLs this process
 
@@ -196,6 +210,36 @@ func _echo_half() -> void:
 		"every platform keeps a log file, Android too")
 
 
+# --- the mark: what a child starts goes with it -------------------------------------------
+func _mark_half() -> void:
+	print("THE MARK (a child's tree goes with it, even what a parent that already exited left running)")
+	if OS.get_name() != "Linux":
+		print("   SKIP - the mark is swept through /proc")
+		return
+	var files := _orphan_files(["a", "b", "loose"])
+	var a := Subprocess.start("sh", ["-c", ORPHAN, "sh", files[0], SLEEP_S], "orphan a")
+	var b := Subprocess.start("sh", ["-c", ORPHAN, "sh", files[1], SLEEP_S], "orphan b")
+	# Detached on purpose: unmarked, the orphan every sweep must leave alone.
+	var loose := Subprocess.start_detached("sh", ["-c", ORPHAN, "sh", files[2], SLEEP_S])
+	var oa := _orphan_pid(files[0])
+	var ob := _orphan_pid(files[1])
+	var ol := _orphan_pid(files[2])
+	_check(oa > 0 and ob > 0 and ol > 0, "three children each left an orphan (%d %d %d)" % [oa, ob, ol])
+	_check(_running(oa) and _ppid(oa) != a,
+		"a's orphan runs and a is not its parent: neither the registry nor the pact can reach it")
+	Subprocess.stop(a)
+	_check(_gone_within(oa), "stop(a) took a's orphan with it")
+	_check(_running(ob), "CONTROL: b's orphan, another child's tree, still runs")
+	Subprocess.reap_all()
+	_check(not _running(ob), "reap_all() took b's orphan, though only b was registered")
+	_check(_running(ol), "CONTROL: a detached child's orphan carries no mark and survives the reap")
+	for p in [ol, loose, oa, ob]:
+		if _running(p):
+			OS.kill(p)
+	for p in files:
+		DirAccess.remove_absolute(p)
+
+
 # --- the pact, across a hard kill -------------------------------------------------------
 func _pact_half() -> void:
 	print("DEATH PACT (the killed-outright half: the kernel kills the child with us)")
@@ -217,10 +261,10 @@ func _pact_half() -> void:
 		if f != null:
 			line = f.get_line().strip_edges()
 			f.close()
-			if line.split(" ").size() == 3:
+			if line.split(" ").size() == 6:
 				break
 	var parts := line.split(" ")
-	if parts.size() != 3:
+	if parts.size() != 6:
 		_check(false, "the child never published its pids (got %r)" % line)
 		if child > 0:
 			OS.kill(child)
@@ -228,25 +272,75 @@ func _pact_half() -> void:
 	var kid := int(parts[0])
 	var bound := int(parts[1])
 	var loose := int(parts[2])
-	print("   child ghost %d started bound=%d loose=%d" % [kid, bound, loose])
+	var bound_orphan := int(parts[3])
+	var loose_orphan := int(parts[4])
+	var loose_shell := int(parts[5])
+	print("   child ghost %d started bound=%d loose=%d orphans bound=%d loose=%d"
+		% [kid, bound, loose, bound_orphan, loose_orphan])
 	_check(_running(bound) and _running(loose), "both sleepers are running before the kill")
+	_check(_running(bound_orphan) and _ppid(bound_orphan) != kid and _running(loose_orphan),
+		"both orphans are running, out of the pact's reach")
 	OS.kill(kid)                         # Godot's OS.kill is SIGKILL: no shutdown code runs
-	var gone := false
-	for _i in 50:                        # the kernel signals PDEATHSIG promptly; allow ~5 s
-		OS.delay_msec(100)
-		if not _running(bound):
-			gone = true
-			break
-	_check(gone, "the BOUND child died with the parent (no shutdown code ran)")
+	_check(_gone_within(bound), "the BOUND child died with the parent (no shutdown code ran)")
 	_check(_running(loose), "the DETACHED child survived - so the pact is what killed the other")
+	_check(_gone_within(bound_orphan), "the bound child's ORPHAN died too: the guardian swept the mark")
+	_check(_running(loose_orphan), "the detached child's orphan survived - so the mark is what found the other")
 	# Leave nothing behind, whichever way the checks went.
-	for p in [loose, bound, kid]:
+	for p in [loose, bound, loose_orphan, bound_orphan, loose_shell, kid]:
 		if p > 0 and _running(p):
 			OS.kill(p)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(PID_FILE))
+	for p in _orphan_files(["child_bound", "child_loose"]):
+		DirAccess.remove_absolute(p)
 
 
 # Liveness without OS.is_process_running: these are grandchildren, and polling a pid this process did not spawn
-# is the ECHILD hazard mask_editor documents. /proc is the plain fact.
+# is the ECHILD hazard mask_editor documents. /proc is the plain fact; a zombie is not running.
 func _running(pid: int) -> bool:
-	return pid > 0 and DirAccess.dir_exists_absolute("/proc/%d" % pid)
+	var stat := _stat(pid)
+	return stat.size() > 1 and stat[0] != "Z"
+
+
+# The fields of /proc/<pid>/stat after the command, from the state on; empty once it is gone.
+func _stat(pid: int) -> PackedStringArray:
+	var f := FileAccess.open("/proc/%d/stat" % pid, FileAccess.READ) if pid > 0 else null
+	if f == null:
+		return PackedStringArray()
+	var line := f.get_line()
+	return line.substr(line.rfind(")") + 1).strip_edges().split(" ", false)
+
+
+func _ppid(pid: int) -> int:
+	var stat := _stat(pid)
+	return int(stat[1]) if stat.size() > 1 else -1
+
+
+# Waits, measured, up to ~5 s for `pid` to stop running.
+func _gone_within(pid: int) -> bool:
+	for _i in 100:
+		if not _running(pid):
+			return true
+		OS.delay_msec(50)
+	return not _running(pid)
+
+
+func _orphan_files(names: Array) -> PackedStringArray:
+	var out := PackedStringArray()
+	for n in names:
+		var p := OS.get_user_data_dir().path_join("subprocess_orphan_%s.txt" % n)
+		DirAccess.remove_absolute(p)
+		out.append(p)
+	return out
+
+
+# The orphan's pid once its shell has written it, -1 if it never does.
+func _orphan_pid(path: String) -> int:
+	for _i in 100:
+		var f := FileAccess.open(path, FileAccess.READ)
+		if f != null:
+			var line := f.get_line().strip_edges()
+			f.close()
+			if line.is_valid_int():
+				return int(line)
+		OS.delay_msec(20)
+	return -1

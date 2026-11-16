@@ -318,13 +318,17 @@ The revised night (rift's `MEDIUM.md`, its design and what differs from it) is t
   runs a minute a minute. The camera is on the clock in the black. A note may open on a fade up: its title stands over the blurred desk as any show's does, the picture goes down to black as the title goes, and the night comes up on the clock. The first
   ping after it has no track across the black. A typed line opening on a time far off the clock (by a steady voice) is
   warned of.
-- **The tablet** (built where the script uses one) is lifted before the eye and put back down dark. Its pages are the
-  tablet medium's own (`TabletScript` reads the fences as one source, `TabletPage` sets each page on the tablet's screen
-  under a browser bar): an address typed into the bar, or a link on the page up found and tapped, the page loading, then
-  held to be looked at; shown and never said, it scrolls to each word the room says that is on it (`_page_follow`), else
-  eases down. `<!-- player -->` is a picture slot that `live: tablet` fills with the desk seen from behind the chair; the
-  tablet in that picture shows the same picture. `replay: tablet | words` says the room's earlier words again through the
-  tablet's speaker (`heard: tablet`, a VoiceFX row).
+- **The tablet** (built where the script uses one) is the tablet medium's own at a real tablet's size - its rounded slab
+  and glass (`TabletMedium.rounded_slab`, `SCREEN_SHADER`), portrait, its screen 1200 by 1600 - lying on the desk; it is
+  lifted and held low over the desk's near edge, tipped toward the chair, the camera looking down into it
+  (`DispatchSet.tablet_held_xf`), and put back down dark. Its screen is the tablet medium's: the pages `TabletScript` reads
+  from the fences as one source, set by `TabletPage`, under the one browser every tablet draws (`TabletChrome`: the status
+  bar with the desk's time, the tab, back, the padlocked address bar, the load line). An address is typed into the bar, or
+  a link on the page up found and tapped, the page loading, then held to be looked at; shown and never said, it scrolls to
+  what the room says that is on it - and where the room reads on from the page, word after word, those words are lit as
+  the tablet medium lights what its voice reads (`_page_follow`, `_page_lit`) - else eases down. `<!-- player -->` is a
+  picture slot that `live: tablet` fills with the desk seen from behind the chair; the tablet in that picture shows the same
+  picture. `replay: tablet | words` says the room's earlier words again through the tablet's speaker (`heard: tablet`).
 - **Clips on a screen**: `video (tv): file | words` is a picture whose slot on the Pictures card takes a clip: Generate
   paints it as a short loop (one sheet of six cells in the note's look, cut into frames at 8 fps: `Illustrations._keep_loop`),
   Import… decodes a video into frames (`Illustrations.import_clip`, FFmpeg), and the screen plays them by show time,

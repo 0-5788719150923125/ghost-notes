@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 726 references inside a folder, 1247 down the stack, 0 up it.
+Between scripts today: 728 references inside a folder, 1252 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -23,7 +23,7 @@ Between scripts today: 726 references inside a folder, 1247 down the stack, 0 up
 | `export/` | Export | 6 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 9 | `show`, `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `show/` | The show | 11 | `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
-| `media/` | Media | 20 | `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
+| `media/` | Media | 21 | `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `voice/` | Synthesis (voice) | 18 | `ui`, `audio`, `platform`, `data` |
 | `ui/` | The panel kit | 35 | `notes`, `agents`, `render`, `platform`, `data` |
 | `notes/` | Notes | 13 | `agents`, `platform`, `data` |
@@ -120,7 +120,7 @@ Text to narrated audio in two paths: ghost's own formant synthesizer (no models,
 
 What the show is carried on: the `Medium` base and its registry, each medium ([media.md](media.md)), the layouts they set (comic pages, a novel, a notebook, a tablet's pages), the films and pictures they show, and where a reading is in its document.
 
-[`auto`](../src/media/auto.gd), [`book`](../src/media/book.gd), [`book_layout`](../src/media/book_layout.gd), [`comic`](../src/media/comic.gd), [`comic_camera`](../src/media/comic_camera.gd), [`comic_page`](../src/media/comic_page.gd), [`comic_spread`](../src/media/comic_spread.gd), [`film`](../src/media/film.gd), [`films`](../src/media/films.gd), [`full`](../src/media/full.gd), [`illustration_panel`](../src/media/illustration_panel.gd), [`illustrations`](../src/media/illustrations.gd), [`medium`](../src/media/medium.gd), [`notebook`](../src/media/notebook.gd), [`notebook_layout`](../src/media/notebook_layout.gd), [`page_capture`](../src/media/page_capture.gd), [`reading_follower`](../src/media/reading_follower.gd), [`tablet`](../src/media/tablet.gd), [`tablet_page`](../src/media/tablet_page.gd), [`tablet_script`](../src/media/tablet_script.gd)
+[`auto`](../src/media/auto.gd), [`book`](../src/media/book.gd), [`book_layout`](../src/media/book_layout.gd), [`comic`](../src/media/comic.gd), [`comic_camera`](../src/media/comic_camera.gd), [`comic_page`](../src/media/comic_page.gd), [`comic_spread`](../src/media/comic_spread.gd), [`film`](../src/media/film.gd), [`films`](../src/media/films.gd), [`full`](../src/media/full.gd), [`illustration_panel`](../src/media/illustration_panel.gd), [`illustrations`](../src/media/illustrations.gd), [`medium`](../src/media/medium.gd), [`notebook`](../src/media/notebook.gd), [`notebook_layout`](../src/media/notebook_layout.gd), [`page_capture`](../src/media/page_capture.gd), [`reading_follower`](../src/media/reading_follower.gd), [`tablet`](../src/media/tablet.gd), [`tablet_chrome`](../src/media/tablet_chrome.gd), [`tablet_page`](../src/media/tablet_page.gd), [`tablet_script`](../src/media/tablet_script.gd)
 
 ### `show/` - The show
 

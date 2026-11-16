@@ -18,7 +18,7 @@ The macOS build is not notarized, so macOS refuses it the first time: open it fr
 
 ## description
 
-Ghost Notes is an app made with [Godot](https://godotengine.org/) 4.7, in which a note becomes whatever is attached to it. With a song it is a spectral audio visualizer - procedural and deterministic, so the same song always draws the same show, with no generative model in the render path. With a script it is a reading, in a voice synthesized from first principles or a small local neural one; with a show's brief, a show at a table made by AI agents, whatever the brief says is done there - cards read (a tarot reading, a box of baseball cards, a card game's deck, flashcards, a tin of recipe cards), or things made and worked on the table, or both; with a clip, a chroma-key effects editor. Any show exports to video. On a phone, it is a notes app and nothing more.
+Ghost Notes is an app made with [Godot](https://godotengine.org/) 4.7, in which a note becomes whatever is attached to it. With a song it is a spectral audio visualizer - procedural and deterministic, so the same song always draws the same show, with no generative model in the render path. With a script it is a reading, in a voice synthesized from first principles or a small local neural one (taught a voice from recordings, or blended from several), shown on any medium - a comic, a novel, a notebook, a tablet, a letter written by hand at a desk, a dispatch desk late at night; with a show's brief, a show at a table made by AI agents, whatever the brief says is done there - cards read (a tarot reading, a box of baseball cards, a card game's deck, flashcards, a tin of recipe cards), or things made and worked on the table, or both; with a clip, a chroma-key effects editor. What is worth keeping - a prop a set dresser built, a voice tuned on any note - goes into a library every note can use, browsed in the Dex, where a prop turns in 3D, plays a part a scene gives it (the desk's mug), or is refined by an agent into new versions. Any show exports to video and uploads to YouTube. On a phone, it is a notes app and nothing more.
 
 <details>
 
@@ -35,6 +35,8 @@ Ghost Notes is built from registries. Each page below is generated from one, lis
 - [Layers](docs/layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](docs/forces.md) (8) - the physics primitives particles compose.
 - [Stage actors and verbs](docs/stage.md) (3 actors, 24 verbs) - what a storyboard's `stage` entries are made of.
+- [Table](docs/table.md) (16 laws) - a table show's data as rows: what a person may set of an act, a thing and a part, and every law a track may move its thing by.
+- [Props and the library](docs/props.md) (20 shapes, 17 materials, 2 roles) - the library of props and voices, the Dex, the Props card, roles any make can play, refining a prop into versions, and what every prop is made of.
 - [Masking effects](docs/masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
 - [Script marks](docs/script.md) (76) - every mark a script may carry - the script editor's palette.
 - [Agents](docs/agents.md) (4 writers, 3 painters, 3 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.

@@ -28,10 +28,10 @@ const SLAB_T := 0.028
 const CORNER := 0.075
 const SCREEN_CORNER := 0.03
 ## The browser's chrome, in logical pixels: status bar, tab strip, address bar row.
-const STATUS := 40.0
-const TABS := 62.0
-const BAR := 86.0
-const TOP := STATUS + TABS + BAR
+const STATUS := TabletChrome.STATUS
+const TABS := TabletChrome.TABS
+const BAR := TabletChrome.BAR
+const TOP := TabletChrome.TOP
 ## How a group of actions sits in the gap the voice left for it: a beat after the last word and a beat
 ## before the next.
 const LEAD := 0.35
@@ -268,7 +268,7 @@ func _build_world() -> void:
 	_root3.add_child(desk)
 
 	var slab := MeshInstance3D.new()
-	slab.mesh = _rounded_slab(SCREEN + Vector2(BEZEL, BEZEL) * 2.0, SLAB_T, CORNER)
+	slab.mesh = rounded_slab(SCREEN + Vector2(BEZEL, BEZEL) * 2.0, SLAB_T, CORNER)
 	var smat := StandardMaterial3D.new()
 	smat.albedo_color = Color(0.035, 0.035, 0.04)
 	smat.roughness = 0.22
@@ -302,7 +302,7 @@ func _build_world() -> void:
 
 
 ## A slab with rounded corners: [param size] across x and z, [param t] thick, centered on 0.
-static func _rounded_slab(size: Vector2, t: float, r: float) -> ArrayMesh:
+static func rounded_slab(size: Vector2, t: float, r: float) -> ArrayMesh:
 	var outline := PackedVector2Array()
 	var seg := 8
 	var hw := size.x * 0.5 - r
@@ -982,7 +982,7 @@ func _state_at(t: float) -> Dictionary:
 				var in_box := kind == "search" and not bool(a.get("bar", false))
 				var target := "search" if in_box else "bar"
 				if not was_editing:
-					var at := _bar_rect(o).get_center()
+					var at := TabletChrome.bar_rect(logical(o)).get_center()
 					if in_box:
 						var sp := int(a["from"])
 						at = layout(sp, o).search_rect.get_center() + Vector2(0.0, TOP - scroll_of(sp, t, o))
@@ -1010,7 +1010,7 @@ func _state_at(t: float) -> Dictionary:
 				_load(st, u, ph, int(a["page"]))
 				_hop(st, u, ph, a)
 			"back":
-				_touch(st, u, float(ph["tap"]), _back_at())
+				_touch(st, u, float(ph["tap"]), TabletChrome.back_at())
 				if u >= float(ph["show"]):
 					var tabs: Array = st["tabs"]
 					var hist: Array = (st["hist"] as Dictionary).get(int(st["tab"]), [])
@@ -1018,7 +1018,7 @@ func _state_at(t: float) -> Dictionary:
 						hist.pop_back()
 					tabs[int(st["tab"])] = int(a["page"])
 			"tab":
-				_touch(st, u, float(ph["tap"]), _plus_rect(o).get_center())
+				_touch(st, u, float(ph["tap"]), TabletChrome.plus_rect(logical(o)).get_center())
 				if u >= float(ph["add"]):
 					var tabs: Array = st["tabs"]
 					tabs.append(-1)
@@ -1091,21 +1091,6 @@ func _load(st: Dictionary, u: float, ph: Dictionary, page: int) -> void:
 
 
 # --- geometry of the screen, in logical pixels -----------------------------------------------
-
-## The back chevron, in logical pixels.
-static func _back_at() -> Vector2:
-	return Vector2(44.0, STATUS + TABS + BAR * 0.5)
-
-
-func _bar_rect(o: int) -> Rect2:
-	var L := logical(o)
-	return Rect2(150.0, STATUS + TABS + 10.0, L.x - 300.0, BAR - 20.0)
-
-
-func _plus_rect(o: int) -> Rect2:
-	var L := logical(o)
-	return Rect2(L.x - 74.0, STATUS + 9.0, 46.0, 46.0)
-
 
 ## Home screen icon [param i] (in the dock when [param dock]).
 func _icon_rect(o: int, i: int, dock: bool) -> Rect2:
@@ -1360,7 +1345,7 @@ func _draw_press(ci: CanvasItem, page: int, o: int) -> void:
 	while i < dw.size() and String((dw[i] as Dictionary)["link"]) == link \
 			and int((dw[i] as Dictionary)["page"]) == page and lp.word_rect.has(i):
 		var r: Rect2 = lp.word_rect[i]
-		ci.draw_style_box(_box(Color(lp.accent, 0.34 * k), 10), Rect2(r.position + Vector2(-4.0, dy), r.size + Vector2(8.0, 0.0)))
+		ci.draw_style_box(TabletChrome.box(Color(lp.accent, 0.34 * k), 10), Rect2(r.position + Vector2(-4.0, dy), r.size + Vector2(8.0, 0.0)))
 		i += 1
 
 
@@ -1405,7 +1390,7 @@ func _draw_home(ci: CanvasItem, o: int) -> void:
 	var d0 := _icon_rect(o, 0, true)
 	var d3 := _icon_rect(o, 3, true)
 	var dock := Rect2(d0.position - Vector2(26, 26), Vector2(d3.end.x - d0.position.x + 52, d0.size.y + 52))
-	ci.draw_style_box(_box(Color(1, 1, 1, 0.22), 46), dock)
+	ci.draw_style_box(TabletChrome.box(Color(1, 1, 1, 0.22), 46), dock)
 	for i in 4:
 		_draw_icon(ci, _icon_rect(o, i, true), i, "", f)
 
@@ -1432,8 +1417,8 @@ func _draw_icon(ci: CanvasItem, r: Rect2, i: int, label: String, f: Font) -> voi
 	var browser := i == 0
 	var hue := 0.58 if browser else _hash01("ih%d" % i)
 	var col := Color.from_hsv(hue, 0.65, 0.85)
-	ci.draw_style_box(_box(col, 30), r)
-	ci.draw_style_box(_box(Color(1, 1, 1, 0.14), 30), Rect2(r.position, Vector2(r.size.x, r.size.y * 0.5)))
+	ci.draw_style_box(TabletChrome.box(col, 30), r)
+	ci.draw_style_box(TabletChrome.box(Color(1, 1, 1, 0.14), 30), Rect2(r.position, Vector2(r.size.x, r.size.y * 0.5)))
 	var c := r.get_center()
 	var s := r.size.x * 0.28
 	var w := Color(1, 1, 1, 0.92)
@@ -1461,46 +1446,18 @@ func _draw_icon(ci: CanvasItem, r: Rect2, i: int, label: String, f: Font) -> voi
 			r.size.x + 40.0, 22, Color(1, 1, 1, 0.92))
 
 
-var _boxes := {}
-
-func _box(col: Color, radius: int) -> StyleBoxFlat:
-	var k := "%s|%d" % [col.to_html(), radius]
-	if not _boxes.has(k):
-		var b := StyleBoxFlat.new()
-		b.bg_color = col
-		b.set_corner_radius_all(radius)
-		b.anti_aliasing = true
-		_boxes[k] = b
-	return _boxes[k]
 
 
 func _draw_status(ci: CanvasItem, o: int, light: bool) -> void:
-	var L := logical(o)
-	var col := Color(0.1, 0.1, 0.12) if light else Color.WHITE
-	var f := TabletPage.face(false, 2)
 	var ct := _chapter_t()
 	var mins := 21 * 60 + int(_stable01("clock") * 300.0) + int(ct / 60.0)
-	ci.draw_string(f, Vector2(34.0, 30.0), "%d:%02d" % [(mins / 60) % 24, mins % 60],
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 24, col)
 	var level := clampf(lerpf(34.0, 88.0, _stable01("batt")) - ct / BATTERY_PCT_S, 5.0, 100.0)
-	var pct := int(ceil(level))
-	var bx := Rect2(L.x - 74.0, 12.0, 44.0, 20.0)
-	ci.draw_rect(bx, Color(col, 0.9), false, 2.0)
-	ci.draw_rect(Rect2(bx.end.x + 1.0, 18.0, 3.0, 8.0), col)
-	# the fill drains smoothly; the number steps a percent at a time, as a phone's does
-	ci.draw_rect(Rect2(bx.position + Vector2(3, 3), Vector2((bx.size.x - 6.0) * level / 100.0, bx.size.y - 6.0)), col)
-	ci.draw_string(f, Vector2(L.x - 210.0, 30.0), "%d%%" % pct, HORIZONTAL_ALIGNMENT_RIGHT, 120, 22, col)
-	# wifi
-	var wc := Vector2(L.x - 290.0, 30.0)
-	for k in 3:
-		ci.draw_arc(wc, 6.0 + k * 7.0, -PI * 0.75, -PI * 0.25, 10, col, 3.0, true)
+	TabletChrome.draw_status(ci, logical(o), light, mins, level)
 
 
 func _draw_browser(ci: CanvasItem, o: int) -> void:
 	var L := logical(o)
 	var page := _current_page()
-	var chrome := Color(0.95, 0.95, 0.96)
-	var ink := Color(0.12, 0.12, 0.14)
 	ci.draw_rect(Rect2(Vector2.ZERO, L), Color.WHITE)
 	# the page - or, mid-redirect, the hop being passed through
 	var hop := String(_st.get("hop", ""))
@@ -1514,59 +1471,15 @@ func _draw_browser(ci: CanvasItem, o: int) -> void:
 	elif page == -1:
 		_draw_start(ci, o)
 	# the chrome over it
-	ci.draw_rect(Rect2(0.0, 0.0, L.x, TOP), chrome)
-	ci.draw_line(Vector2(0.0, TOP), Vector2(L.x, TOP), Color(0, 0, 0, 0.12), 2.0)
 	var tabs: Array = _st["tabs"]
-	var n := maxi(1, tabs.size())
-	var tw := minf(330.0, (L.x - 140.0) / n)
-	var f := TabletPage.face(false, 0)
+	var titles: Array = []
 	for i in tabs.size():
-		var r := Rect2(24.0 + i * (tw + 8.0), STATUS + 8.0, tw, TABS - 10.0)
-		var active := i == int(_st["tab"])
-		ci.draw_style_box(_box(Color.WHITE if active else Color(0.88, 0.88, 0.9), 14), r)
-		var title := TabletScript.host_of(hop) if active and not hop.is_empty() else _tab_title(int(tabs[i]))
-		ci.draw_string(f, r.position + Vector2(20.0, 33.0), _fit(f, title, 20, r.size.x - 40.0),
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(ink, 0.9 if active else 0.55))
-	var pr := _plus_rect(o)
-	ci.draw_line(pr.get_center() - Vector2(13, 0), pr.get_center() + Vector2(13, 0), ink, 3.0, true)
-	ci.draw_line(pr.get_center() - Vector2(0, 13), pr.get_center() + Vector2(0, 13), ink, 3.0, true)
-	# back / forward: back is live when there is somewhere to go back to
-	var by := STATUS + TABS + BAR * 0.5
-	var can_back := not ((_st["hist"] as Dictionary).get(int(_st["tab"]), []) as Array).is_empty()
-	for k in 2:
-		var x := 44.0 + k * 52.0
-		var d := -1.0 if k == 0 else 1.0
-		var live := k == 0 and can_back
-		ci.draw_polyline(PackedVector2Array([Vector2(x - 8.0 * d, by - 14.0), Vector2(x + 8.0 * d, by),
-			Vector2(x - 8.0 * d, by + 14.0)]), Color(ink, 0.8 if live else 0.25), 4.0, true)
-	var br := _bar_rect(o)
-	var editing := String(_st["editing"]) == "bar"
-	ci.draw_style_box(_box(Color(0.87, 0.87, 0.89) if not editing else Color.WHITE, 18), br)
-	if editing:
-		ci.draw_rect(br, Color(0.25, 0.5, 1.0, 0.7), false, 3.0)
-		var typed := String(_st["typed"])
-		var tx := br.position + Vector2(26.0, 44.0)
-		ci.draw_string(f, tx, typed, HORIZONTAL_ALIGNMENT_LEFT, -1, 28, ink)
-		if fmod(_now, 1.0) < 0.6:
-			var cx := tx.x + f.get_string_size(typed, HORIZONTAL_ALIGNMENT_LEFT, -1, 28).x + 3.0
-			ci.draw_line(Vector2(cx, br.position.y + 16.0), Vector2(cx, br.end.y - 16.0), Color(0.25, 0.5, 1.0), 3.0)
-	elif not hop.is_empty():
-		# the whole address, and no padlock: these are not places anyone chose to go
-		var hu := _fit(f, hop, 26, br.size.x - 60.0)
-		ci.draw_string(f, Vector2(br.position.x, by + 10.0), hu, HORIZONTAL_ALIGNMENT_CENTER, br.size.x, 26,
-			Color(ink, 0.75))
-	else:
-		var url := _shown_url(page)
-		if not url.is_empty():
-			var w := f.get_string_size(url, HORIZONTAL_ALIGNMENT_LEFT, -1, 26).x
-			var x := br.get_center().x - w * 0.5
-			# a padlock
-			ci.draw_rect(Rect2(x - 34.0, by - 4.0, 18.0, 15.0), Color(ink, 0.6))
-			ci.draw_arc(Vector2(x - 25.0, by - 4.0), 6.0, PI, TAU, 12, Color(ink, 0.6), 2.5, true)
-			ci.draw_string(f, Vector2(x, by + 10.0), url, HORIZONTAL_ALIGNMENT_LEFT, -1, 26, ink)
-	var ld := float(_st["load"])
-	if ld >= 0.0:
-		ci.draw_rect(Rect2(0.0, TOP - 4.0, L.x * (1.0 - pow(1.0 - ld, 2.0)), 4.0), Color(0.2, 0.48, 1.0))
+		titles.append(TabletScript.host_of(hop) if i == int(_st["tab"]) and not hop.is_empty() else _tab_title(int(tabs[i])))
+	TabletChrome.draw_browser(ci, L, {"tabs": titles, "tab": int(_st["tab"]),
+		"can_back": not ((_st["hist"] as Dictionary).get(int(_st["tab"]), []) as Array).is_empty(), "url": _shown_url(page),
+		"editing": String(_st["editing"]) == "bar", "typed": String(_st["typed"]), "hop": hop, "load": float(_st["load"]), "now": _now})
+	var f := TabletPage.face(false, 0)
+	var ink := Color(0.12, 0.12, 0.14)
 	# a search being typed shows in the page's box
 	if String(_st["editing"]) == "search" and page >= 0:
 		var lp := layout(page, o)
@@ -1590,14 +1503,6 @@ func _ring() -> StyleBoxFlat:
 		_ring_box.set_corner_radius_all(38)
 		_ring_box.anti_aliasing = true
 	return _ring_box
-
-
-static func _fit(f: Font, s: String, fs: int, w: float) -> String:
-	if f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= w:
-		return s
-	while s.length() > 1 and f.get_string_size(s + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > w:
-		s = s.substr(0, s.length() - 1)
-	return s + "…"
 
 
 func _tab_title(p: int) -> String:
@@ -1638,7 +1543,7 @@ func _draw_note(ci: CanvasItem, o: int, n: Dictionary, u: float) -> void:
 	ci.draw_style_box(sb, r)
 	# the mail app's icon: a blue tile and an envelope
 	var ic := Rect2(r.position + Vector2(26.0, 26.0), Vector2(70.0, 70.0))
-	ci.draw_style_box(_box(Color(0.16, 0.48, 1.0), 16), ic)
+	ci.draw_style_box(TabletChrome.box(Color(0.16, 0.48, 1.0), 16), ic)
 	var env := ic.grow(-16.0)
 	env.position.y += 6.0
 	env.size.y -= 12.0
@@ -1653,11 +1558,11 @@ func _draw_note(ci: CanvasItem, o: int, n: Dictionary, u: float) -> void:
 	var tw := r.end.x - 30.0 - x
 	ci.draw_string(f, Vector2(x, r.position.y + 42.0), "MAIL", HORIZONTAL_ALIGNMENT_LEFT, -1, 19, gray)
 	ci.draw_string(f, Vector2(x, r.position.y + 42.0), "now", HORIZONTAL_ALIGNMENT_RIGHT, tw, 19, gray)
-	ci.draw_string(fb, Vector2(x, r.position.y + 78.0), _fit(fb, String(n["sender"]), 26, tw),
+	ci.draw_string(fb, Vector2(x, r.position.y + 78.0), TabletChrome.fit(fb, String(n["sender"]), 26, tw),
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 26, ink)
-	ci.draw_string(fb, Vector2(x, r.position.y + 112.0), _fit(fb, String(n["title"]), 24, tw),
+	ci.draw_string(fb, Vector2(x, r.position.y + 112.0), TabletChrome.fit(fb, String(n["title"]), 24, tw),
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 24, ink)
-	ci.draw_string(f, Vector2(x, r.position.y + 144.0), _fit(f, String(n["body"]), 22, tw),
+	ci.draw_string(f, Vector2(x, r.position.y + 144.0), TabletChrome.fit(f, String(n["body"]), 22, tw),
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 22, gray)
 
 
@@ -1674,7 +1579,7 @@ func _draw_hop(ci: CanvasItem, o: int, url: String, shows: bool) -> void:
 	var f := TabletPage.face(false, 0)
 	ci.draw_string(f, Vector2(0.0, c.y + 96.0), "Redirecting…", HORIZONTAL_ALIGNMENT_CENTER, L.x, 30,
 		Color(0.3, 0.31, 0.35))
-	ci.draw_string(f, Vector2(0.0, c.y + 140.0), _fit(f, url, 22, L.x - 160.0), HORIZONTAL_ALIGNMENT_CENTER,
+	ci.draw_string(f, Vector2(0.0, c.y + 140.0), TabletChrome.fit(f, url, 22, L.x - 160.0), HORIZONTAL_ALIGNMENT_CENTER,
 		L.x, 22, Color(0.55, 0.56, 0.6))
 
 
@@ -1689,7 +1594,7 @@ func _draw_start(ci: CanvasItem, o: int) -> void:
 	var gap := (L.x - 140.0 - cols * s) / float(cols - 1)
 	for i in cols * 2:
 		var r := Rect2(70.0 + (i % cols) * (s + gap), TOP + 140.0 + (i / cols) * (s + 80.0), s, s)
-		ci.draw_style_box(_box(Color.from_hsv(_hash01("fav%d" % i), 0.35, 0.92), 22), r)
+		ci.draw_style_box(TabletChrome.box(Color.from_hsv(_hash01("fav%d" % i), 0.35, 0.92), 22), r)
 		TabletPage.squiggle(ci, Vector2(r.position.x + 14.0, r.end.y + 30.0), s - 28.0, 6.0,
 			Color(0.5, 0.5, 0.55), hash([_seed, "fv", i]))
 
@@ -1741,30 +1646,30 @@ func _draw_keyboard(ci: CanvasItem, o: int) -> void:
 		for col in keys.length():
 			var r := _key_rect(o, top, row, col, keys.length())
 			var down := press == keys[col] and pk > 0.0
-			ci.draw_style_box(_box(Color(0.62, 0.64, 0.68) if down else Color.WHITE, 10), r)
+			ci.draw_style_box(TabletChrome.box(Color(0.62, 0.64, 0.68) if down else Color.WHITE, 10), r)
 			ci.draw_string(f, r.position + Vector2(0.0, r.size.y * 0.66), keys[col], HORIZONTAL_ALIGNMENT_CENTER,
 				r.size.x, 30, Color(0.1, 0.1, 0.12))
 			if down:
 				# the pop-up a key shows under the finger
 				var pop := Rect2(r.position - Vector2(10.0, r.size.y * 1.3), r.size + Vector2(20.0, r.size.y * 0.3))
-				ci.draw_style_box(_box(Color.WHITE, 14), pop)
+				ci.draw_style_box(TabletChrome.box(Color.WHITE, 14), pop)
 				ci.draw_string(f, pop.position + Vector2(0.0, pop.size.y * 0.7), keys[col],
 					HORIZONTAL_ALIGNMENT_CENTER, pop.size.x, 44, Color(0.1, 0.1, 0.12))
 	var space := _key_rect(o, top, 3, 2, 10)
 	space.size.x = space.size.x * 5.0 + 40.0
-	ci.draw_style_box(_box(Color(0.62, 0.64, 0.68) if press == " " and pk > 0.0 else Color.WHITE, 10), space)
+	ci.draw_style_box(TabletChrome.box(Color(0.62, 0.64, 0.68) if press == " " and pk > 0.0 else Color.WHITE, 10), space)
 	var go := _key_rect(o, top, 3, 8, 10)
 	go.size.x = go.size.x * 2.0 + 10.0
-	ci.draw_style_box(_box(Color(0.15, 0.4, 0.95) if press == "\n" and pk > 0.0 else Color(0.25, 0.5, 1.0), 10), go)
+	ci.draw_style_box(TabletChrome.box(Color(0.15, 0.4, 0.95) if press == "\n" and pk > 0.0 else Color(0.25, 0.5, 1.0), 10), go)
 	ci.draw_string(f, go.position + Vector2(0.0, go.size.y * 0.66), "go", HORIZONTAL_ALIGNMENT_CENTER,
 		go.size.x, 28, Color.WHITE)
 	var dot := _key_rect(o, top, 3, 7, 10)
-	ci.draw_style_box(_box(Color(0.62, 0.64, 0.68) if press == "." and pk > 0.0 else Color.WHITE, 10), dot)
+	ci.draw_style_box(TabletChrome.box(Color(0.62, 0.64, 0.68) if press == "." and pk > 0.0 else Color.WHITE, 10), dot)
 	ci.draw_string(f, dot.position + Vector2(0.0, dot.size.y * 0.66), ".", HORIZONTAL_ALIGNMENT_CENTER,
 		dot.size.x, 30, Color(0.1, 0.1, 0.12))
 	for c in 2:
 		var mr := _key_rect(o, top, 3, c, 10)
-		ci.draw_style_box(_box(Color(0.68, 0.7, 0.74), 10), mr)
+		ci.draw_style_box(TabletChrome.box(Color(0.68, 0.7, 0.74), 10), mr)
 
 
 ## Debug line for probes.

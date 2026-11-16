@@ -108,7 +108,7 @@ const JITTER_TURN := 5.0
 const PACK := {
 	"handbook": {"side": "radio", "x": Vector2(0.72, 1.0), "z": Vector2(-0.02, 0.22), "face": Vector2(-1.0, 0.0), "give": 8.0},
 	"clock": {"side": "phones", "x": Vector2(0.20, 0.52), "z": Vector2(-0.14, 0.12), "face": Vector2(0.0, 1.0), "give": 6.0, "want": true, "anywhere": true},
-	"tablet": {"side": "either", "x": Vector2(0.20, 0.85), "z": Vector2(0.04, 0.32), "turn": Vector2(-7.2, 7.2), "want": true, "anywhere": true, "low": true},
+	"tablet": {"side": "radio", "x": Vector2(0.20, 0.85), "z": Vector2(0.04, 0.32), "turn": Vector2(-7.2, 7.2), "want": true, "anywhere": true, "low": true},
 	"mug": {"side": "either", "x": Vector2(0.20, 0.62), "z": Vector2(-0.02, 0.15), "turn": Vector2(-156.0, -84.0)},
 	"switch": {"side": "either", "x": Vector2(0.18, 0.50), "z": Vector2(-0.02, 0.30), "turn": Vector2(-12.0, 12.0), "anywhere": true},
 	"chart": {"side": "either", "x": Vector2(0.0, 0.45), "z": Vector2(0.28, 0.32), "turn": Vector2(-3.0, 3.0), "flat": true, "anywhere": true},
@@ -137,8 +137,17 @@ const THIN := &"thin"
 ## The flip clock's case and the window its cards show through (m); the tablet's case and screen (landscape when held).
 const CLOCK_CASE := Vector3(0.13, 0.072, 0.065)
 const CLOCK_FACE := Vector2(0.112, 0.05)
-const TABLET_CASE := Vector3(0.25, 0.009, 0.18)
-const TABLET_SCREEN := Vector2(0.226, 0.158)
+## The tablet: the tablet medium's own ([TabletMedium]: its rounded slab, bezel, corners and screen, portrait 3:4) at a
+## real tablet's size; held to be read low over the desk's near edge (x, height above the desk, z), tipped toward the
+## chair this far from flat.
+const TABLET_SCALE := 0.2
+const TABLET_SCREEN := TabletMedium.SCREEN * TABLET_SCALE
+const TABLET_BEZEL := TabletMedium.BEZEL * TABLET_SCALE
+const TABLET_T := 0.007
+const TABLET_CORNER := TabletMedium.CORNER * TABLET_SCALE
+const TABLET_SCREEN_CORNER := TabletMedium.SCREEN_CORNER * TABLET_SCALE
+const TABLET_HELD := Vector3(0.0, 0.11, 0.36)
+const TABLET_TILT := 50.0
 
 const HEAP_H := 0.44
 const SHEET := Vector2(0.38, 0.28)
@@ -1924,11 +1933,30 @@ func _clock_box() -> Node3D:
 func _tablet_slab() -> Node3D:
 	tablet = Node3D.new()
 	tablet.name = "Tablet"
-	put(tablet, rbox(TABLET_CASE, 0.007), _std(Color(0.045, 0.045, 0.05), 0.65), Vector3(0, TABLET_CASE.y * 0.5, 0))
-	put(tablet, rbox(Vector3(TABLET_CASE.x - 0.012, 0.002, TABLET_CASE.z - 0.012), 0.004), _mats["black"], Vector3(0, TABLET_CASE.y + 0.0006, 0))
-	tablet_screen = put(tablet, quad(TABLET_SCREEN), null, Vector3(0, TABLET_CASE.y + 0.0019, 0), Vector3(-90, 0, 0))
+	var slab := MeshInstance3D.new()
+	slab.mesh = TabletMedium.rounded_slab(TABLET_SCREEN + Vector2(TABLET_BEZEL, TABLET_BEZEL) * 2.0, TABLET_T, TABLET_CORNER)
+	var smat := StandardMaterial3D.new()
+	smat.albedo_color = Color(0.035, 0.035, 0.04)
+	smat.roughness = 0.22
+	smat.metallic = 0.35
+	smat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	slab.material_override = smat
+	slab.position = Vector3(0, TABLET_T * 0.5, 0)
+	tablet.add_child(slab)
+	var pm := PlaneMesh.new()
+	pm.size = TABLET_SCREEN
+	tablet_screen = MeshInstance3D.new()
+	tablet_screen.mesh = pm
+	tablet_screen.position = Vector3(0, TABLET_T + 0.0008, 0)
 	tablet_screen.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	tablet.add_child(tablet_screen)
 	return tablet
+
+
+## The tablet held to be read: low over the desk's near edge ([constant TABLET_HELD]), its screen tipped toward the chair
+## ([constant TABLET_TILT]).
+func tablet_held_xf() -> Transform3D:
+	return Transform3D(Basis(Vector3.RIGHT, deg_to_rad(TABLET_TILT)), Vector3(TABLET_HELD.x, DESK_Y + TABLET_HELD.y, TABLET_HELD.z))
 
 
 # --- where the camera looks -------------------------------------------------------------------------------------------
@@ -1976,8 +2004,9 @@ func spot_of(k: String) -> Dictionary:
 		"tablet":
 			if tablet == null:
 				return {}
-			# the tablet held up before the eye: the whole desk's view, the eye a little lower to it
-			return {"aim": Vector3(0.0, y + 0.14, -0.16), "eye": EYE + Vector3(0, -0.015, 0), "fov": 54.0}
+			# down into the tablet held low over the desk, its screen filling most of the picture
+			var c := tablet_held_xf().origin
+			return {"aim": c + Vector3(0, 0.01, 0), "eye": EYE + Vector3(0, -0.05, -0.08), "fov": 32.0}
 		"feed", "satellite", "tv":
 			if not screens.has(k):
 				return {}

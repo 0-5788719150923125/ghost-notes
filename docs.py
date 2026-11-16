@@ -16,6 +16,7 @@ All of it is parsed statically (no Godot boot) and written to:
   docs/forces.md       - the Primitives registry (physics forces).
   docs/stage.md        - the storyboard stage: Cast actors + Actions verbs.
   docs/table.md        - a table show's data as rows: acts, things, parts, the laws.
+  docs/props.md        - props and the library: the Dex, roles, refining, what a prop is made of.
   docs/masking.md      - the Masking: effects, controls, CLI.
   docs/script.md       - every mark a script may carry.
   docs/architecture.md - how the show is made, from the audio to a video file.
@@ -1137,6 +1138,73 @@ def table_page(rows: Script, motions: Script) -> str:
                         fields and table(["Field", "What it is"], ([f"`{f[0]}`", md(str(f[1]))] for f in fields)),
                         level=3)
     return page("Table: a show's data as rows", blocks)
+
+
+def props_page(classes: Dict[str, Script]) -> str:
+    """docs/props.md: what a prop is made of (`Props`' registries), the library that keeps props and voices,
+    the Dex and every section's shelves (each `ShelfSection` with a `SHELVES`, found by what it extends), the
+    Props card and the 3D view, roles (`PropMakes.ROLES`) and refining a prop into versions."""
+
+    def doc_of(name: str) -> Optional[str]:
+        sc = classes.get(name)
+        if sc is None:
+            warn(f"props.md reads {name}, which no script names")
+            return None
+        return f"{full_doc(sc.doc)}\n\nSource: {link(sc.rel)}"
+
+    def derives(sc: Script, base: str) -> bool:
+        seen = set()
+        while sc is not None and sc.extends and sc.extends not in seen:
+            if sc.extends == base:
+                return True
+            seen.add(sc.extends)
+            sc = classes.get(sc.extends)
+        return False
+
+    props, makes = classes["Props"], classes["PropMakes"]
+    shapes, materials = props.const("SHAPES", {}), props.const("MATERIALS", {})
+    ornaments, plays, roles = props.const("ORNAMENTS", {}), props.const("PLAYS", {}), makes.const("ROLES", {})
+    for name, reg in (("Props.SHAPES", shapes), ("Props.MATERIALS", materials), ("Props.ORNAMENTS", ornaments),
+                      ("Props.PLAYS", plays), ("PropMakes.ROLES", roles)):
+        if not reg:
+            warn(f"could not parse {name}")
+    shelves = []
+    for name, sc in sorted(classes.items(), key=lambda kv: kv[1].rel):
+        if derives(sc, "ShelfSection"):
+            for row in sc.const("SHELVES", []) or []:
+                shelves.append([f"[{name}](../{sc.rel})", text(row, "label"), md(text(row, "tip"))])
+    if not shelves:
+        warn("props.md found no ShelfSection with SHELVES")
+    blocks: List[Block] = [
+        "What a presentation sets down, and what a person keeps to use on any note: the library that keeps props and "
+        "voices, the Dex that shows it, the Props card, the parts a scene gives any make to play, a prop refined into "
+        "versions, and what every prop is made of. The plan and its status are "
+        "[next/library.md](../next/library.md).",
+        "## The library", doc_of("Library"), "### Props kept", doc_of("ThingLibrary"),
+        "### Voices kept", doc_of("VoiceLibrary"),
+        "## The Dex", doc_of("DexWindow"), doc_of("ShelfSection"),
+        "### Its shelves", "Every shelf a section puts on the Dex: the section, the shelf, and what it holds.",
+        table(["Section", "Shelf", "What it holds"], shelves),
+        "## The Props card", doc_of("PropsCard"), "### The 3D view", doc_of("PropViewer"),
+        "## Roles", doc_of("PropMakes"),
+        f"`PropMakes.ROLES` in {link(makes.rel)}: each role, what the scene does with it, and the height a make is "
+        "fitted to.",
+        table(["Role", "What it does", "Recipe", "Height (cm)"],
+              ([f"`{k}` {text(r, 'label')}", md(text(r, "blurb")), f"`{text(r, 'recipe', k)}`",
+                " - ".join(f"{float(v):g}" for v in items(r, "tall"))] for k, r in roles.items())),
+        "## Refining a prop", doc_of("LibraryVersions"),
+        "What the agent is told: [rules/table/prop_refiner.yaml](../rules/table/prop_refiner.yaml).",
+        "## What a prop is made of", doc_of("Props"),
+        f"### Shapes ({len(shapes)})", "A part is one of these (`Props.SHAPES`), as the set dresser reads them.",
+        [f"- **`{k}`** - {md(str(v))}" for k, v in shapes.items()],
+        f"### Materials ({len(materials)})", "Each part's surface is one material (`Props.MATERIALS`), procedural.",
+        table(["Material", "What it is"], ([f"`{k}`", md(text(r, "about"))] for k, r in materials.items())),
+        f"### Ornaments ({len(ornaments)})", "Worked into a part's surface (`Props.ORNAMENTS`).",
+        table(["Ornament", "What it is"], ([f"`{k}`", md(text(r, "about"))] for k, r in ornaments.items())),
+        f"### Plays of light ({len(plays)})", "What moves in a material as it turns (`Props.PLAYS`).",
+        table(["Play", "What it is"], ([f"`{k}`", md(text(r, "about"))] for k, r in plays.items())),
+    ]
+    return page("Props and the library", [b for b in blocks if b])
 
 
 def masking_page(session: Script, editor: Script) -> str:
@@ -2275,6 +2343,14 @@ def main() -> int:
         ("forces", "Forces", str(count("primitives")), "the physics primitives particles compose."),
         ("stage", "Stage actors and verbs", f"{count('cast')} actors, {count('actions')} verbs",
          "what a storyboard's `stage` entries are made of."),
+        ("table", "Table", f"{count('motions', 'LAWS')} laws",
+         "a table show's data as rows: what a person may set of an act, a thing and a part, and every law a track "
+         "may move its thing by."),
+        ("props", "Props and the library",
+         f"{count('props', 'SHAPES')} shapes, {count('props', 'MATERIALS')} materials, "
+         f"{count('prop_makes', 'ROLES')} roles",
+         "the library of props and voices, the Dex, the Props card, roles any make can play, refining a prop into "
+         "versions, and what every prop is made of."),
         ("masking", "Masking effects", str(count("mask_session", "MASK_EFFECTS")),
          "the video effects editor: its model, its effects and its headless tools."),
         ("script", "Script marks", str(count("script_marks")),
@@ -2296,6 +2372,7 @@ def main() -> int:
             "Reusable force modules a scene composes into a `ParticleSystem` by key.", s("primitives")),
         "stage": lambda: stage_page(s("cast"), s("actions"), s("track"), s("storyboard")),
         "table": lambda: table_page(s("table_rows"), s("motions")),
+        "props": lambda: props_page(class_index()),
         "masking": lambda: masking_page(s("mask_session"), s("mask_editor")),
         "media": lambda: media_page(s("medium")),
         "filters": lambda: filters_page(s("filters")),

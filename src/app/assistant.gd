@@ -52,9 +52,8 @@ var _entries: Array = [] # Array[Dictionary], newest first - see enqueue()
 var _running_count := 0 # how many entries are actively running right now
 var _timer_tick := 0.0 # throttles the running-entry elapsed-timer repaint to ~1/sec
 ## Set the instant the app starts closing (see _notification). Once true, _process stops polling
-## dispatched child PIDs: Godot reaps its children on shutdown, and a same-frame OS.is_process_running()
-## races that reap on the same pid (ECHILD during teardown). Dispatched runs are meant to outlive the
-## editor, so not observing them past close is correct.
+## dispatched runs and nothing is finished: the app's close kills every run with everything it started
+## ([Subprocess]), and an entry still saved as running loads as interrupted (_load_existing).
 var _closing := false
 
 var _panel: Control
@@ -253,18 +252,18 @@ func _dispatch(entry: Dictionary, prompt: String) -> void:
 	var run := _run_for(entry, prompt_path)
 	#The run's stdout is a stream of JSON events, one per line: _poll_progress tails it each frame for a
 	#live "what's it doing" line; _finish reads the whole thing once the process exits. The prompt reaches
-	#the CLI on stdin from a file, never argv or shell source (see AssistantBackends). Detached: the run
-	#edits the working tree and may finish after the editor closes.
+	#the CLI on stdin from a file, never argv or shell source (see AssistantBackends). Bound like every
+	#child: the run and whatever it starts end with the app.
 	var pf := FileAccess.open(prompt_path, FileAccess.WRITE)
 	if pf != null:
 		pf.store_string(prompt)
 		pf.close()
 	var cli := Backends.argv(backend, _bin_for(backend), String(entry.session_id), _repo_root, run)
 	entry.pid = Subprocess.start_redirected(cli[0], cli.slice(1), {"cwd": _repo_root,
-		"stdin": prompt_path, "out": entry.out_path, "err": entry.err_path}, "", true) \
+		"stdin": prompt_path, "out": entry.out_path, "err": entry.err_path}, "assistant") \
 		if pf != null else -1
 	if int(entry.pid) < 0:
-		#create_process failed outright. _process only calls _finish() on an actual pid, so without this the
+		#The launch failed outright. _process only calls _finish() on an actual pid, so without this the
 		#entry would sit at "running" and block the queue.
 		entry.status = "error"
 		entry.error_text = "failed to start the %s subprocess (launch returned %d)" \
@@ -330,7 +329,7 @@ func _process(_dt: float) -> void:
 		if e.status == "running" and int(e.pid) >= 0:
 			any_running = true
 			_poll_progress(e)
-			if not OS.is_process_running(int(e.pid)):
+			if not Subprocess.alive(int(e.pid)):
 				_finish(e)
 	#The elapsed timer and progress line repaint about once a second: rebuilding the list is real UI work.
 	if any_running:
@@ -577,7 +576,7 @@ func _reap_deleting(all := false) -> void:
 
 func _delete_entry(entry: Dictionary) -> void:
 	if entry.status == "running" and int(entry.pid) >= 0:
-		Subprocess.terminate(int(entry.pid))
+		Subprocess.stop(int(entry.pid))
 	_entries.erase(entry)
 	_remove_away(_files_of(entry))
 	if entry.status == "running":
@@ -974,12 +973,12 @@ func _build_followup_row(entry: Dictionary) -> Control:
 
 
 ## Halts a live run without discarding it (unlike _delete_entry, which also wipes the feedback record).
-## Kills the subprocess; _finish then turns a run with a known session_id into "interrupted", the state
+## Kills the run and what it started; _finish then turns a run with a known session_id into "interrupted", the state
 ## _build_resume_row continues via --resume. The id is captured by _poll_progress at the first event.
 func _interrupt_entry(entry: Dictionary) -> void:
 	if entry.status != "running" or int(entry.pid) < 0:
 		return
-	Subprocess.terminate(int(entry.pid))
+	Subprocess.stop(int(entry.pid))
 
 
 func _build_interrupt_row(entry: Dictionary) -> Control:

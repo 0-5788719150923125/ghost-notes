@@ -223,7 +223,7 @@ url: forum.board
 ### Coughing behind me in line
 ```
 
-They have a word for headlights. Brighting.
+Headlights, three nights running. They have a word for that. Brighting.
 
 ```page
 url: forum.board/t/headlights

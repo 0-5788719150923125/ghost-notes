@@ -12,13 +12,15 @@ extends SceneTree
 ##   line is said behind its keys under the panel up; a strike removes it; after a block the camera stays on the glass while
 ##   the voice talks of it and through to what comes soon, going home only when nothing comes for long;
 ## - the black and the clock: fades down and up; in the black the camera is on the clock, its cards turned over to the time
-##   given and running on a minute a minute; what is marked in the black is unseen; no track is drawn across it; a note
-##   opening in the black shows its title over the blurred desk first, going black as the title goes, its blur never lifting
-##   on the desk (controls: no title, black from the start; the usual pull lifting by then);
+##   given and running on a minute a minute, and a reading started past the fade turns it where a whole reading does
+##   (control: the fade counted from the far past a mid-way start places it in); what is marked in the black is unseen; no
+##   track is drawn across it; a note opening in the black shows its title over the blurred desk first, going black as the
+##   title goes, its blur never lifting on the desk (controls: no title, black from the start; the usual pull lifting by then);
 ## - two looks at the same thing are one, the camera held between them; in a live reading the camera holds on for a next
 ##   look that comes soon, before its words are heard (controls: a look at something else between; a next look far off);
-## - the tablet: picked up before the eye and put down dark; an address typed into its bar, a link on the page tapped; a
-##   page following the words said on it, else easing down; its player dark until the desk is played live into it;
+## - the tablet: picked up and held low over the desk, the camera on it, and put down dark; an address typed into its bar, a
+##   link on the page tapped; a page following the words said on it, else easing down, the words read off it lit as said
+##   (control: a page nothing is read off); its player dark until the desk is played live into it;
 ## - a clip: the screen's static until it is imported, then its frames looping;
 ## - the camera turns to what is active (terminal typing, receiver in a storm, ringing phone) and a look holds while nothing else
 ##   is; it goes to the radar only at its sounds; the radar target moves in small steps under the voice, never a jump, with its
@@ -354,6 +356,7 @@ func _run() -> void:
 	var bell_block := _first(actions, "bell") + 1
 	_gain_bell_lamp(md, actions, t0, plan_r, bell_block)
 	_black_tablet_clip(md, actions, t0, plan_r, st)
+	_clock_mid_way(md, body, parsed, words, st)
 	_receiver(st, md.feed)
 	_glass_hold(st, md.feed)
 	_opens_black(st)
@@ -621,6 +624,39 @@ func _glass_hold(st: SubViewport, feed: ShowFeed) -> void:
 
 
 ## The black and the clock, the tablet and a clip, on the fixture's night.
+## A reading started mid-way, a few words past the fade up, its words on its own clock (the first at 0) and how far in it
+## starts handed: its clock turns to the next minute where the whole reading's does. Control: the fade counted from the far
+## past the start places it in reads hours off.
+func _clock_mid_way(md: DispatchMedium, body: String, parsed: Dictionary, words: Array, st: SubViewport) -> void:
+	var up := -1
+	for i in md._actions.size():
+		if String(md._actions[i]["kind"]) == "fade" and not bool(md._actions[i]["to"]):
+			up = i
+	var k := int(md._actions[up]["after"]) + 6
+	var since := float((words[k] as Dictionary)["t0"])
+	var later: Array = []
+	for w in words.slice(k):
+		var d: Dictionary = (w as Dictionary).duplicate()
+		d["t0"] = float(d["t0"]) - since
+		d["t1"] = float(d["t1"]) - since
+		later.append(d)
+	var spoken: PackedStringArray = parsed["spoken"]
+	var mid := DispatchMedium.new()
+	mid.feed = md.feed
+	mid.mount(st)
+	mid.load_note(body, {"seed": 3}, spoken.slice(k, k + 8), k, since)
+	mid._now = 0.0
+	mid.take_words(later)
+	var turn := md._t0[up] + DispatchScript.FADE / md._sp[up]
+	var whole := [md.clock_at(turn + 59.0).get("to", ""), md.clock_at(turn + 61.0).get("to", "")]
+	var part := [mid.clock_at(turn + 59.0 - since).get("to", ""), mid.clock_at(turn + 61.0 - since).get("to", "")]
+	var far := mid._t0[up] + DispatchScript.FADE / mid._sp[up]
+	var counted := DispatchScript.clock_text(int(md._actions[up]["clock"]) + int(floor((turn + 61.0 - since - far) / 60.0)))
+	_ok(mid._follower.start_si == k and far < -1000.0 and whole == ["23:40", "23:41"] and part == whole and counted != "23:41",
+		"a reading started past the fade turns its clock where a whole one does (%s, %s; counted from the far past %s)" % [part, whole, counted])
+	mid.queue_free()
+
+
 func _black_tablet_clip(md: DispatchMedium, actions: Array, t0: PackedFloat32Array, heard: Array, st: SubViewport) -> void:
 	var down := -1
 	var up := -1
@@ -663,12 +699,12 @@ func _black_tablet_clip(md: DispatchMedium, actions: Array, t0: PackedFloat32Arr
 			tab_down = i
 	var held := t0[tab_up] + DispatchScript.TABLET_UP / md._sp[tab_up] + 0.1
 	md._pose(held)
-	var in_hand := md._set.tablet.global_transform.origin.distance_to(md._cam.global_position) < 0.4
+	var in_hand := md._set.tablet.global_transform.origin.distance_to(md._set.tablet_held_xf().origin) < 0.001
 	md._pose(md._end_of(tab_down) + 0.2)
 	var home := md._set.tablet.global_transform.origin.distance_to(md._set.tablet_home.origin) < 0.001
 	var off := float(md.tablet_at(md._end_of(tab_down) + 0.2)["face"]["power"]) == 0.0
 	_ok(in_hand and home and off and float(md.tablet_at(t0[tab_up] - 0.1)["face"]["power"]) == 0.0 and md.looking_at(held + 2.0) == "tablet",
-		"the tablet is picked up before the eye, its screen woken, and put back down dark")
+		"the tablet is picked up and held low over the desk, the camera on it, its screen woken, and put back down dark")
 	var pages: Array = []
 	for i in actions.size():
 		if String(actions[i]["kind"]) == "page":
@@ -678,18 +714,29 @@ func _black_tablet_clip(md: DispatchMedium, actions: Array, t0: PackedFloat32Arr
 	var pt1 := md._page_times(p1)
 	var typing: Dictionary = md.tablet_at((pt1["keys"] as PackedFloat32Array)[4] + 0.01)["face"]
 	var first_up: Dictionary = md.tablet_at(float(pt1["shown"]) + 0.1)["face"]
-	_ok(String(typing["url"]) == "forum" and bool(typing.get("typing", false)) and first_up.get("page") != null and String(first_up["url"]) == "forum.board",
-		"a page's address is typed into the bar a key at a time, then the page comes up (%s)" % String(typing["url"]))
+	_ok(String(typing["typed"]) == "forum" and bool(typing.get("typing", false)) and first_up.get("page") != null and String(first_up["url"]) == "forum.board",
+		"a page's address is typed into the bar a key at a time, then the page comes up (%s)" % String(typing.get("typed", "")))
 	var pt2 := md._page_times(p2)
 	var tapping: Dictionary = md.tablet_at(float(pt2["tap"]) + 0.1)["face"]
 	var second_up: Dictionary = md.tablet_at(float(pt2["shown"]) + 0.1)["face"]
 	_ok(String(md._actions[p2]["how"]) == "tap" and tapping.has("tap") and float(tapping["tap_u"]) >= 0.0 and tapping.get("page") == first_up.get("page")
-		and second_up.get("page") != first_up.get("page") and String(second_up["url"]) == "forum.board/t/headlights",
+		and second_up.get("page") != first_up.get("page") and String(second_up["url"]) == "forum.board" and bool(second_up.get("can_back", false)),
 		"the next page is found on the one up and tapped, then it comes up")
-	var follow := md._page_follow(p1, float(DispatchScreens.TABLET_SIZE.y) - DispatchScreens.BAR_H, 99999.0)
+	var follow: Array = md._page_follow(p1, float(DispatchScreens.TABLET_SIZE.y) - TabletChrome.TOP, 99999.0)["marks"]
 	var drift0 := md._page_scroll(p2, float(pt2["shown"]) + DispatchScript.TABLET_LOOK + 0.5)
 	var drift1 := md._page_scroll(p2, md._page_end(p2) - 0.5)
 	_ok(not follow.is_empty() and drift1 > drift0, "a page follows the words said that are on it, and with none, eases down (%d words followed, %.0f to %.0f px)" % [follow.size(), drift0, drift1])
+	# words read off a page, a run of them read on, are lit as they are said (the control: the next page, nothing read off it)
+	var read_si := -1
+	var sp: PackedStringArray = md._parsed["spoken"]
+	for k in range(int(md._actions[p1]["after"]), sp.size() - 1):
+		if sp[k] == "three" and sp[k + 1] == "nights":
+			read_si = k + 1
+			break
+	var reading := md._page_lit(p1, md._word_t0(read_si) + 0.05) if read_si >= 0 else {}
+	var after_page := md._page_lit(p2, md._page_end(p2) - 0.5)
+	_ok(not reading.is_empty() and (reading["times"] as Dictionary).size() >= 3 and int(reading["cur"]) >= 0 and after_page.is_empty(),
+		"words read off a page are lit as they are said (the control: a page nothing is read off lights nothing - %s)" % str((reading.get("times", {}) as Dictionary).size()))
 	var live_i := -1
 	for i in actions.size():
 		if String(actions[i]["kind"]) == "live" and String(actions[i]["screen"]) == "tablet":

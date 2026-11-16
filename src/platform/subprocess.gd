@@ -1,11 +1,12 @@
 extends RefCounted
 class_name Subprocess
 
-## Subprocess - every external program ghost starts, in one place, with one promise: a child never outlives
-## the app that started it. `OS.create_process` on Unix is fully detached, so closing or killing ghost would
-## leave an `ffmpeg` transcoding to disk. Going through [method start] covers every call site by default.
+## Subprocess - every external program ghost starts, in one place, with one promise: nothing ghost starts
+## outlives it, nor anything that program starts in turn. `OS.create_process` on Unix is fully detached, so
+## closing or killing ghost would leave an `ffmpeg` transcoding to disk, or an agent's run starting Godot after
+## Godot is gone. Going through [method start] covers every call site by default.
 ##
-## Two independent mechanisms:
+## Three independent mechanisms:
 ##
 ## 1. The registry (everywhere). Every pid started here is remembered until it exits or is stopped, and
 ##    [method reap_all] kills whatever is left. `Boot` calls it when the app closes. Portable.
@@ -14,13 +15,17 @@ class_name Subprocess
 ##    teardown crash), so no `_exit_tree` runs. `setpriv --pdeathsig KILL` sets the child's PR_SET_PDEATHSIG
 ##    before exec'ing the real program, so the kernel kills it when the parent dies; the pid returned is the
 ##    real program's.
+## 3. The mark (Linux). A pact does not pass to a child's own children, and an agent's gate or probe is a
+##    grandchild whose parent may already have exited. Every child carries `GHOST_RUN` in its environment (a
+##    word of its own after the words ghost inherited), everything it starts inherits it however deep, and a
+##    sweep kills every process carrying a word (`grep -z` over /proc/*/environ). [method stop] sweeps the
+##    child's word; [method reap_all] and the guardian sweep all of this ghost's. The guardian is a shell
+##    started with the first child and bound by `setpriv --pdeathsig TERM`: it sweeps when ghost dies, however
+##    it dies (the editor's Stop is a SIGKILL). On Windows [method terminate] takes the tree (`taskkill /T`).
 ##
 ## The pact is per-thread: PR_SET_PDEATHSIG fires when the parent thread exits, so a child must be started from
 ## a thread that lives as long as the app (the main thread). Do not call `start()` from a WorkerThreadPool task;
-## use [method start_detached] there.
-##
-## The one deliberate exception uses [method start_detached] and says why at the call site: `assistant.gd`
-## dispatches `claude -p` runs that write to the working tree and are meant to finish after the editor closes.
+## use [method start_detached] there. The guardian starts only on the main thread.
 ##
 ## No shell is assumed (`/bin/bash` does not exist on Windows). Two portable forms:
 ##   [method start_logged] - stdout+stderr into one log file, pumped by this process. Pure Godot.
@@ -37,6 +42,16 @@ static var _tracked := {}
 static var _closing := false
 ## Resolved once: "" not looked up yet, "-" no pact available, otherwise the setpriv path.
 static var _pact := ""
+## This ghost's mark, `<pid>-<unix ms>`; a child's word is `<mark>.<n>`. "" until the first child on Linux.
+static var _token := ""
+## The number in the last child's word.
+static var _seq := 0
+## pid -> its word, for the children still registered.
+static var _marks := {}
+## The guardian's pid: 0 not started, -1 none to be had.
+static var _guardian := 0
+## Sweeps started and not yet seen to exit, collected so none is left a zombie.
+static var _sweepers: Array[int] = []
 ## Programs already reported missing, so a per-frame caller complains once, not 60x/s.
 static var _warned := {}
 ## pid -> {threads, exited_ms}: the reader threads behind a [method start_logged] child. [method alive] stays
@@ -114,6 +129,37 @@ const _SH_LAUNCHER := "cd \"$1\" || exit 1; in=\"$2\"; out=\"$3\"; err=\"$4\"; n
 	+ "while [ \"$n\" -gt 0 ]; do export \"$1\"; shift; n=$((n - 1)); done; " \
 	+ "exec \"$@\" < \"$in\" > \"$out\" 2> \"$err\""
 
+## The shell of every Unix launcher, the guardian and the sweeps: the one POSIX path ghost starts.
+const _SH := "/bin/sh"
+## The variable that carries the mark (see the class doc); the scripts below name it too.
+const MARK := "GHOST_RUN"
+## Set `GHOST_RUN` to the words in $1 and exec the rest, so the pid stays the program's.
+const _MARK_LAUNCHER := r'GHOST_RUN="$1"; export GHOST_RUN; shift; exec "$@"'
+## `sweep PATTERN` SIGKILLs every process whose `GHOST_RUN` holds a word matching PATTERN (an extended regex),
+## pass after pass until one finds nothing, so what forks while a pass runs is taken by the next. A zombie's
+## environ reads empty, so the dead are never matched again. The sweeping shell carries ghost's own words,
+## never one of its children's, so it is never its own target.
+const _SWEEP := r'''sweep() {
+	n=0
+	while [ "$n" -lt 10 ]; do
+		hit=
+		for f in $(grep -lszE "^GHOST_RUN=(.* )?$1( |\$)" /proc/[0-9]*/environ); do
+			k="${f#/proc/}"
+			kill -KILL "${k%/environ}" 2>/dev/null && hit=1
+		done
+		[ -n "$hit" ] || return 0
+		n=$((n + 1))
+	done
+}
+exec </dev/null >/dev/null 2>&1
+'''
+## One sweep, now.
+const _SWEEP_NOW := r'sweep "$1"'
+## The guardian: wait for the TERM its pact sends when ghost dies (a trapped signal ends `wait`), then sweep.
+const _GUARD := r'''trap 'sweep "$1"; kill "$s" 2>/dev/null; exit 0' TERM HUP INT
+while :; do sleep 3600 & s=$!; wait "$s"; done
+'''
+
 
 ## Start `path` with `args`, bound to this process, and return its pid (<= 0 on failure).
 ## `tag` is a human label for the shutdown log and the echo; it defaults to the program's name.
@@ -144,18 +190,78 @@ static func start_with_pipe(path: String, args: PackedStringArray, tag := "") ->
 	var prog := _program(path)
 	if prog.is_empty():
 		return {}
+	var word := _next_word()
+	var argv := PackedStringArray([prog])
+	if not word.is_empty():
+		var words := (OS.get_environment(MARK) + " " + word).strip_edges()
+		argv = PackedStringArray([_SH, "-c", _MARK_LAUNCHER, "sh", words, prog])
+	argv.append_array(args)
 	var bin := _pact_bin()
 	var info := {}
 	if bin == "-":
-		info = OS.execute_with_pipe(prog, args)
+		info = OS.execute_with_pipe(argv[0], argv.slice(1))
 	else:
-		var full := PackedStringArray(["--pdeathsig", "KILL", "--", prog])
-		full.append_array(args)
+		var full := PackedStringArray(["--pdeathsig", "KILL", "--"])
+		full.append_array(argv)
 		info = OS.execute_with_pipe(bin, full)
 	var pid := int(info.get("pid", -1))
 	if pid > 0:
 		_tracked[pid] = tag if tag != "" else path.get_file()
+		if not word.is_empty():
+			_marks[pid] = word
 	return info
+
+
+# The word the next child carries, "" where there is no /proc to sweep (anything but Linux). The first one
+# names this ghost's mark and starts the guardian.
+static func _next_word() -> String:
+	if OS.get_name() != "Linux":
+		return ""
+	if _token.is_empty():
+		_token = "%d-%d" % [OS.get_process_id(), int(Time.get_unix_time_from_system() * 1000.0)]
+	_guard()
+	_seq += 1
+	return "%s.%d" % [_token, _seq]
+
+
+# Start the guardian (see the class doc) once, from the main thread: its pact is with the thread that starts it,
+# and one bound to a worker would sweep every child the moment that worker ended.
+static func _guard() -> void:
+	if _guardian != 0 or OS.get_thread_caller_id() != OS.get_main_thread_id():
+		return
+	_guardian = -1
+	var bin := _pact_bin()
+	if bin != "-":
+		_guardian = OS.create_process(bin, PackedStringArray(["--pdeathsig", "TERM", "--", _SH, "-c",
+			_SWEEP + _GUARD, "sh", _every_word()]))
+
+
+# The pattern for every word of this ghost.
+static func _every_word() -> String:
+	return _token + "\\.[0-9]+"
+
+
+# Kill every process carrying a word that matches `pattern`, from a shell of its own. With `wait`, return once
+# it has finished (a child started after that is never its target), judged from /proc: `waitpid` here would race
+# the engine's own reaping at shutdown (see [method reap_all]).
+static func _sweep(pattern: String, wait := false) -> void:
+	var pid := OS.create_process(_SH, PackedStringArray(["-c", _SWEEP + _SWEEP_NOW, "sh", pattern]))
+	if pid <= 0:
+		return
+	_sweepers.append(pid)
+	var waited := 0
+	while wait and waited < 3000 and not _exited(pid):
+		OS.delay_msec(10)
+		waited += 10
+
+
+# Has `pid` exited (gone, or a zombie not yet collected)?
+static func _exited(pid: int) -> bool:
+	var f := FileAccess.open("/proc/%d/stat" % pid, FileAccess.READ)
+	if f == null:
+		return true
+	var stat := f.get_line()
+	return stat.substr(stat.rfind(")") + 1).strip_edges().begins_with("Z")
 
 
 ## The words that bind a program a wrapper starts (xvfb-run, say) to that wrapper: run `pact_prefix() +
@@ -166,8 +272,8 @@ static func pact_prefix() -> PackedStringArray:
 	return PackedStringArray() if bin == "-" else PackedStringArray([bin, "--pdeathsig", "KILL", "--"])
 
 
-## Start a program that is supposed to outlive the app. Not tracked, not bound; the call site must say why in a
-## comment.
+## Start a program that is supposed to outlive the app. Not tracked, not bound, not marked; the call site must
+## say why in a comment. The app has none; the gates' controls do.
 static func start_detached(path: String, args: PackedStringArray) -> int:
 	var prog := _program(path)
 	return OS.create_process(prog, args) if not prog.is_empty() else -1
@@ -211,14 +317,12 @@ static func _attach_pumps(info: Dictionary, sink: FileAccess, echo: String) -> i
 ##   stdin - a file whose bytes are the child's whole stdin ("" = empty, closed at once)
 ##   out, err - where stdout and stderr go; must be two different files
 ##   env   - `{NAME: value}` set for this child alone, over what it inherits from this process
-## Registered and bound like [method start]; with `detached` true it is neither, exactly as
-## [method start_detached]. Returns the pid, <= 0 on failure.
+## Registered, bound and marked like [method start]. Returns the pid, <= 0 on failure.
 ##
 ## On Linux and macOS the pid is the program's own (`sh` execs it). On Windows it is the
 ## PowerShell launcher's, which lives exactly as long as the program and is stopped with
 ## its whole tree by [method terminate].
-static func start_redirected(path: String, args: PackedStringArray, io: Dictionary,
-		tag := "", detached := false) -> int:
+static func start_redirected(path: String, args: PackedStringArray, io: Dictionary, tag := "") -> int:
 	var prog := _program(path)
 	if prog.is_empty():
 		return -1
@@ -240,7 +344,7 @@ static func start_redirected(path: String, args: PackedStringArray, io: Dictiona
 		full = PackedStringArray(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
 			"-File", _ps_launcher_path(), spec])
 	else:
-		shell = "/bin/sh"
+		shell = _SH
 		var cwd := String(io.get("cwd", ""))
 		var stdin := String(io.get("stdin", ""))
 		full = PackedStringArray(["-c", _SH_LAUNCHER, "sh",
@@ -250,17 +354,24 @@ static func start_redirected(path: String, args: PackedStringArray, io: Dictiona
 			full.append("%s=%s" % [String(k), String(env[k])])
 		full.append(prog)
 		full.append_array(args)
-	if detached:
-		return start_detached(shell, full)
 	return start(shell, full, tag if tag != "" else path.get_file())
 
 
-## Kill `pid`, and on Windows its whole process tree (a [method start_redirected] child sits under a PowerShell
-## launcher). Not registry-checked: [method stop] is the guarded form, this is for pids the caller owns outright
-## (a detached assistant run).
+## Kill `pid` and everything it started: on Linux every process carrying its word (see the class doc), on Windows
+## its process tree (a [method start_redirected] child sits under a PowerShell launcher). Not registry-checked:
+## [method stop] is the guarded form, and the one to use.
 static func terminate(pid: int) -> void:
 	if pid <= 0:
 		return
+	_kill(pid)
+	var word := String(_marks.get(pid, ""))
+	_marks.erase(pid)
+	if not word.is_empty():
+		_sweep(word.replace(".", "\\."))
+
+
+# Kill `pid` alone, or on Windows its tree.
+static func _kill(pid: int) -> void:
 	if _is_windows():
 		var tk := OS.get_environment("SystemRoot").path_join("System32/taskkill.exe")
 		if FileAccess.file_exists(tk) and OS.execute(tk, ["/PID", str(pid), "/T", "/F"]) == 0:
@@ -311,6 +422,7 @@ static func alive(pid: int) -> bool:
 	if OS.is_process_running(pid) or _draining(pid):
 		return true
 	_tracked.erase(pid)
+	_marks.erase(pid)
 	return false
 
 
@@ -335,9 +447,11 @@ static func stop(pid: int) -> bool:
 ## Forget a pid without killing it, for a child deliberately handed off. Rare.
 static func forget(pid: int) -> void:
 	_tracked.erase(pid)
+	_marks.erase(pid)
 
 
-## Kill every child still registered. Called from `Boot` when the app closes; safe to call more than once.
+## Kill every child still registered, then sweep everything carrying this ghost's mark (see the class doc).
+## Called from `Boot` when the app closes; safe to call more than once.
 ## It does not call `OS.is_process_running` first: at shutdown Godot reaps its own children on another path, and
 ## a same-frame call races that reap into ECHILD (the crash-on-close `assistant.gd` documents). `kill()` on an
 ## already-dead child is harmless. It returns once the killed children's log readers have finished
@@ -347,12 +461,16 @@ static func reap_all() -> int:
 	var n := 0
 	for pid in _tracked.keys():
 		if int(pid) > 0:
-			terminate(int(pid))
+			_kill(int(pid))
 			n += 1
 	if n > 0:
 		print("ghost: stopped %d background process(es) on exit: %s"
 			% [n, ", ".join(PackedStringArray(_tracked.values()))])
 	_tracked.clear()
+	_marks.clear()
+	# What they started, and what children that already ended left running.
+	if not _token.is_empty():
+		_sweep(_every_word(), true)
 	for pid in _pumps.keys():
 		_release_pumps(int(pid))
 	_await_pumps()
@@ -439,6 +557,9 @@ static func _draining(pid: int) -> bool:
 # Let go of the readers of children nobody asks after any more (a caller may start one and never
 # call [method alive] again); a finished reader has drained its pipe, so nothing is lost.
 static func _sweep_pumps() -> void:
+	for pid in _sweepers.duplicate():
+		if not OS.is_process_running(pid):
+			_sweepers.erase(pid)
 	for pid in _pumps.keys():
 		var done := true
 		for t in _pumps[pid].threads:

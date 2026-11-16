@@ -27,8 +27,7 @@ const TAPE_COLS := 4
 ## the tablet's screen, landscape, and its browser bar's height (px).
 const CLOCK_SIZE := Vector2i(448, 200)
 const DIGIT_CELL := Vector2i(96, 160)
-const TABLET_SIZE := Vector2i(1280, 896)
-const BAR_H := 92.0
+const TABLET_SIZE := Vector2i(1200, 1600)
 ## How many phone screens can be lit at once (the one in hand, the ones on the desk, one ringing or texting).
 const PHONE_FACES := 5
 ## The terminal's type: its face, its size (px), its line (px), where its first line and first column are.
@@ -212,8 +211,9 @@ func show_clock(st: Dictionary) -> void:
 	_show(clock, _clock, st)
 
 
-## The tablet: `{power (0-1), url (as far as it is typed), page: TabletPage, scroll, load (0-1), tap: Vector2 and tap_u,
-## textures: Callable}`; dark with no page.
+## The tablet: `{power (0-1), page: TabletPage, scroll, lit (its words read, [method TabletPage.draw]), title, url (the
+## host), typing and typed, load (0-1), can_back, tap: Vector2 and tap_u, minutes (the time), battery, now, textures:
+## Callable}`; dark with no power.
 func show_tablet(st: Dictionary) -> void:
 	_show(tablet, _tablet, st)
 
@@ -758,36 +758,29 @@ func _card_half(c: CanvasItem, tex: Texture2D, dest: Rect2, digit: String, upper
 	c.draw_texture_rect_region(tex, dest, src)
 
 
-## The tablet: dark when off; awake, a browser - its bar with the address (typed as it is typed, a cursor after it while
-## it is, a line loading under it) - and the page below, set by the tablet medium ([TabletPage]) and scrolled; a finger's
-## tap a ring where it lands.
+## The tablet ([TabletChrome]): dark when off; awake, the page set by the tablet medium ([TabletPage]), scrolled, the
+## words read off it lit as the tablet medium lights them, under the browser - its tab, back, the address bar (typed into
+## while an address is typed, a line loading under it) - and the status bar with the desk's time; a finger's tap a ring.
 func _draw_tablet(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(TABLET_SIZE)
 	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.0, 0.0, 0.0))
 	var power := float(st.get("power", 0.0))
 	if power <= 0.0:
 		return
+	c.draw_rect(Rect2(Vector2.ZERO, size), Color.WHITE)
 	var page: TabletPage = st.get("page", null)
+	var top := TabletChrome.TOP
 	if page != null:
-		page.draw(c, BAR_H, float(st.get("scroll", 0.0)), BAR_H, size.y, {}, 0.0, st.get("textures", func(_k: String) -> Texture2D: return null))
-	else:
-		c.draw_rect(Rect2(0.0, BAR_H, size.x, size.y - BAR_H), Color(0.96, 0.96, 0.97))
-	c.draw_rect(Rect2(0.0, 0.0, size.x, BAR_H), Color(0.16, 0.16, 0.18))
-	var field := Rect2(28.0, 18.0, size.x - 56.0, BAR_H - 36.0)
-	c.draw_rect(field, Color(0.26, 0.26, 0.29))
-	var font := TabletPage.face(false, 0)
-	var url := String(st.get("url", ""))
-	c.draw_string(font, Vector2(field.position.x + 22.0, field.position.y + field.size.y * 0.72), url, HORIZONTAL_ALIGNMENT_LEFT,
-		field.size.x - 44.0, 30, Color(0.92, 0.92, 0.94))
-	if bool(st.get("typing", false)):
-		var w := font.get_string_size(url, HORIZONTAL_ALIGNMENT_LEFT, -1, 30).x
-		c.draw_rect(Rect2(field.position.x + 24.0 + w, field.position.y + 12.0, 3.0, field.size.y - 24.0), Color(0.6, 0.75, 1.0))
-	var load := float(st.get("load", 1.0))
-	if load < 1.0:
-		c.draw_rect(Rect2(0.0, BAR_H - 5.0, size.x * load, 5.0), Color(0.35, 0.55, 1.0))
+		page.draw(c, top, float(st.get("scroll", 0.0)), top, size.y, st.get("lit", {}), float(st.get("now", 0.0)),
+			st.get("textures", func(_k: String) -> Texture2D: return null))
+	var typing := bool(st.get("typing", false))
+	TabletChrome.draw_browser(c, size, {"tabs": [String(st.get("title", ""))], "tab": 0, "can_back": bool(st.get("can_back", false)),
+		"url": String(st.get("url", "")), "editing": typing, "typed": String(st.get("typed", "")), "load": float(st.get("load", -1.0)),
+		"now": float(st.get("now", 0.0))})
+	TabletChrome.draw_status(c, size, true, int(st.get("minutes", 0)), float(st.get("battery", 70.0)))
 	var tap_u := float(st.get("tap_u", -1.0))
 	if tap_u >= 0.0 and tap_u < 1.0:
 		var at: Vector2 = st.get("tap", size * 0.5)
-		c.draw_circle(at, 26.0 + 30.0 * tap_u, Color(0.4, 0.4, 0.45, 0.35 * (1.0 - tap_u)))
+		c.draw_circle(at, lerpf(26.0, 56.0, tap_u), Color(0.16, 0.42, 1.0, 0.35 * (1.0 - tap_u)))
 	if power < 1.0:
 		c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.0, 0.0, 0.0, 1.0 - power))

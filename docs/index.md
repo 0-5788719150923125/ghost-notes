@@ -43,6 +43,8 @@ core. The commitments:
 - [Layers](layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](forces.md) (8) - the physics primitives particles compose.
 - [Stage actors and verbs](stage.md) (3 actors, 24 verbs) - what a storyboard's `stage` entries are made of.
+- [Table](table.md) (16 laws) - a table show's data as rows: what a person may set of an act, a thing and a part, and every law a track may move its thing by.
+- [Props and the library](props.md) (20 shapes, 17 materials, 2 roles) - the library of props and voices, the Dex, the Props card, roles any make can play, refining a prop into versions, and what every prop is made of.
 - [Masking effects](masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
 - [Script marks](script.md) (76) - every mark a script may carry - the script editor's palette.
 - [Agents](agents.md) (4 writers, 3 painters, 3 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
@@ -106,7 +108,7 @@ The machine under Ghost Notes: the one owner of its settings file, the earliest 
 - [`provision.gd`](../src/platform/provision.gd) **Provision** - what ghost installs for itself, and the one door every feature asks through. ghost needs FFmpeg, uv, a Python for uv's environments, and per-feature packages (neural voice, face tracking, URL import, page capture); none is the user's to install. Each piece is downloaded from its upstream release, ...
 - [`provisioner.gd`](../src/platform/provisioner.gd) **provisioner** - Provisioner (autoload) - installs, updates and reports on everything ghost fetches for itself.
 - [`settings.gd`](../src/platform/settings.gd) **settings** - Settings - the one owner of `user://ghost.cfg` (autoload).
-- [`subprocess.gd`](../src/platform/subprocess.gd) **Subprocess** - every external program ghost starts, in one place, with one promise: a child never outlives the app that started it. `OS.create_process` on Unix is fully detached, so closing or killing ghost would leave an `ffmpeg` transcoding to disk. Going through `start` covers every call site by default.
+- [`subprocess.gd`](../src/platform/subprocess.gd) **Subprocess** - every external program ghost starts, in one place, with one promise: nothing ghost starts outlives it, nor anything that program starts in turn. `OS.create_process` on Unix is fully detached, so closing or killing ghost would leave an `ffmpeg` transcoding to disk, or an agent's run starting Godot ...
 
 ### `audio/` - Audio & analysis
 
@@ -316,6 +318,7 @@ What the show is carried on: the `Medium` base and its registry, each medium ([m
 - [`page_capture.gd`](../src/media/page_capture.gd) **PageCapture** - a real web page captured as one tall picture, for the tablet medium.
 - [`reading_follower.gd`](../src/media/reading_follower.gd) **ReadingFollower** - where the voice is in a document, and when each of its words was said.
 - [`tablet.gd`](../src/media/tablet.gd) **TabletMedium** - the reading as somebody browsing on a tablet lying on a desk.
+- [`tablet_chrome.gd`](../src/media/tablet_chrome.gd) **TabletChrome** - a tablet's screen furniture, drawn one way for every tablet that shows the web: the tablet medium's (`TabletMedium`) and the dispatch desk's (`DispatchScreens`). The status bar (the time, the battery, the wifi) and, over a page, the browser: its tab strip, back and forward, the address bar (the ...
 - [`tablet_page.gd`](../src/media/tablet_page.gd) **TabletPage** - one web page of a `TabletScript`, set into a column of a given width.
 - [`tablet_script.gd`](../src/media/tablet_script.gd) **TabletScript** - a chapter written as somebody browsing on a tablet.
 

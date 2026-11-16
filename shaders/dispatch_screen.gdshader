@@ -23,8 +23,12 @@ uniform float round_mask : hint_range(0.0, 1.0) = 0.0;
 uniform float frame = 0.0;
 uniform float flicker : hint_range(0.0, 0.2) = 0.02;
 
+// Snow's noise: no sin() (a GPU's loses all precision once its argument is large, which a long show's frame count makes it),
+// and the frame wrapped so the cell offset stays small.
 float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
 }
 
 void fragment() {
@@ -50,7 +54,8 @@ void fragment() {
 	float g = dot(col, vec3(0.299, 0.587, 0.114));
 	col = mix(col, vec3(g), mono);
 	if (snow > 0.0) {
-		float n = hash(floor(uv * vec2(320.0, 240.0)) + vec2(frame * 13.1, frame * 7.7));
+		float f = mod(frame, 1024.0);
+		float n = hash(floor(uv * vec2(320.0, 240.0)) + vec2(f * 13.1, f * 7.7));
 		col = mix(col, vec3(n), snow);
 	}
 	// scanlines, and a slow roll of brightness down the tube

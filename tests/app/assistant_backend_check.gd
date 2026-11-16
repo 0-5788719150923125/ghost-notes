@@ -7,8 +7,8 @@ extends SceneTree
 ##
 ## - The command: the argv for a fresh run and for a resume, per backend, with the prompt in none of them;
 ##   and Subprocess.start_redirected really delivers a hostile prompt on stdin byte for byte (`cat` stands
-##   in for the CLI, launched detached as the dispatch does). An `env` given to the launcher reaches that
-##   child alone (control: the same run without it).
+##   in for the CLI, launched as the dispatch does). An `env` given to the launcher reaches that child
+##   alone (control: the same run without it).
 ## - The model and level the picker holds reach each CLI in its own flags, and a CLI's "Default" is what its
 ##   writer's picker says (Claude: Opus); control: the same run with them set. Grok, which reads no stdin,
 ##   is handed its prompt file and the id a fresh run takes.
@@ -136,17 +136,17 @@ func _launcher() -> void:
 		DirAccess.remove_absolute(p)
 
 
-## Launch detached, exactly as the dispatch does, and wait for it. Returns 0 once the child is gone and -1
-## if it never started or overran (the exit code is not observable); the checks read its output.
+## Launch exactly as the dispatch does, and wait for it. Returns 0 once the child is gone and -1 if it never
+## started or overran (the exit code is not observable); the checks read its output.
 func _run(prog: String, args: Array, io: Dictionary) -> int:
-	var pid := Subprocess.start_redirected(prog, PackedStringArray(args), io, "", true)
+	var pid := Subprocess.start_redirected(prog, PackedStringArray(args), io, "assistant")
 	if pid < 0:
 		return -1
 	for i in 200:
-		if not OS.is_process_running(pid):
+		if not Subprocess.alive(pid):
 			return 0
 		OS.delay_msec(25)
-	Subprocess.terminate(pid)
+	Subprocess.stop(pid)
 	return -1
 
 
