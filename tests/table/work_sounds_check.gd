@@ -15,8 +15,8 @@ extends SceneTree
 ## - What breaks is heard as it breaks: a piece the physics breaks off crunches at that moment, and forty broken off in 0.4 s stay
 ##   under the levels below. The control: the moment before it, nothing.
 ## - A boil bubbles, steam does not: a pot brought to the boil bubbles from then; before, it is silent.
-## - A paused show holds its sound: the show's time standing still, the player is held where it is; going on, it plays. The control:
-##   one tick at the same time (a frame the clock did not tick over) does not hold it.
+## - A paused show holds its sound: the show's time standing still a quarter second ([StillClock]), the player is held where it is;
+##   going on, it plays. The control: a few frames at one time (the voice player's position between mixes) do not hold it.
 ## - A simmer is a quiet fizz, a rolling boil bubbles: at `boil` 0.2 its bubbles ([Boil]) come ten or more a second, every one
 ##   ringing above 2 kHz (a millimeter's), and none louder than a third of a rolling boil's biggest; at a rolling boil, over 150 a
 ##   second, some under 800 Hz. The control: the rolling boil's do ring under 2 kHz, so the simmer's test can fail. The bubbles
@@ -217,13 +217,19 @@ func _bench() -> bool:
 	var host := Node.new()
 	root.add_child(host)
 	var live := WorkSounds.new(m._work)
+	var ms := [0]
+	live.still.clock = func() -> int: return int(ms[0])
 	live.tick(30.0, host)
-	live.tick(30.0, host)
-	var once := live._player.stream_paused
+	for i in 3:
+		ms[0] += 16
+		live.tick(30.0, host)
+	var frames := live._player.stream_paused
+	ms[0] += 300
 	live.tick(30.0, host)
 	var held := live._player.stream_paused
+	ms[0] += 16
 	live.tick(30.02, host)
-	_ok(not once and held and not live._player.stream_paused, "paused: one tick still holds the sound %s, two %s, the show going on %s" % [once, held, live._player.stream_paused])
+	_ok(not frames and held and not live._player.stream_paused, "paused: three frames at one time hold the sound %s, a third of a second %s, the show going on %s" % [frames, held, live._player.stream_paused])
 	live.stop()
 	host.free()
 	m._root3.free()

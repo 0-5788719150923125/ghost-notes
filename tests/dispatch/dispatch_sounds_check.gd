@@ -13,6 +13,9 @@ extends SceneTree
 ##   switch, the earpiece ring and the terminal's bell are none louder than the desk's most;
 ## - the bell is one short beep, heard over the hiss while it sounds and gone when it ends;
 ## - a pure function of the schedule: the same plan made twice is the same sound, sample for sample;
+## - Io-B's clusters ease into each other, never switched (the control: switched a quarter second at a time, they jump), so the
+##   hiss they open never pulses;
+## - the receiver as loud as the Environment says: at 0 its hiss and storms are silent (the control: as made, heard);
 ## - control: with nothing planned there is only the hiss, and it is faint.
 ##
 ## Run: godot --headless --path . --script tests/dispatch/dispatch_sounds_check.gd
@@ -77,6 +80,32 @@ func _init() -> void:
 		"under a voice the storm is quieter, and still heard over the hiss (%.4f against %.4f)" % [_rms(over_voice, 3.5, 5.5), _rms(no_voice, 3.5, 5.5)])
 	_ok(DispatchSounds.voice_level(under, 3.55) > 0.5 and DispatchSounds.voice_level(under, 4.0) == 0.0 and DispatchSounds.voice_level(bare, 3.55) == 0.0,
 		"the needle swells within a word, is still between two, and never without a voice")
+	# Io-B's clusters ease into each other: over a minute, never more than a small step in 10 ms, busy and quiet both - the control,
+	# the same clusters switched a quarter second at a time (as a gate on the hiss), jumps
+	var most_step := 0.0
+	var switched := 0.0
+	var busiest := 0.0
+	var quietest := 1.0
+	var was := DispatchSounds.storm_level("popcorn", 0.5, 11, 1e9)
+	var was_switched := DispatchSounds._cluster(11, 2)
+	for i in range(51, 6000):
+		var u := float(i) * 0.01
+		var lv := DispatchSounds.storm_level("popcorn", u, 11, 1e9)
+		most_step = maxf(most_step, absf(lv - was))
+		busiest = maxf(busiest, lv)
+		quietest = minf(quietest, lv)
+		was = lv
+		var sw := DispatchSounds._cluster(11, int(floor(u / 0.25)))
+		switched = maxf(switched, absf(sw - was_switched))
+		was_switched = sw
+	_ok(most_step < 0.03 and busiest > 0.75 and quietest < 0.3 and switched > 0.25,
+		"Io-B's clusters ease into each other: at most %.3f in 10 ms, from %.2f to %.2f (the control: switched, they jump %.2f)"
+		% [most_step, quietest, busiest, switched])
+	# the receiver as loud as the Environment says: turned to 0, neither its hiss nor its storm is heard; the control, as made, both are
+	var muted := _render([{"t": 0.0, "t1": 5.0, "kind": "static", "storm": "popcorn", "seed": 11}], 5.0, 0.0)
+	_ok(_peak(muted) < 1e-6 and _rms(pop, 0.5, 4.5) > _rms(quiet, 0.5, 4.5) * 2.0,
+		"the receiver turned to 0 is silent, its hiss and storm (peak %.6f); as made, its storm is heard (%.4f over %.4f)"
+		% [_peak(muted), _rms(pop, 0.5, 4.5), _rms(quiet, 0.5, 4.5)])
 	# one-shots and the phone
 	var desk: Array = []
 	var k := 0.2
@@ -115,10 +144,11 @@ func _init() -> void:
 		quit(1)
 
 
-func _render(plan: Array, secs: float) -> PackedVector2Array:
+func _render(plan: Array, secs: float, receiver := 1.0) -> PackedVector2Array:
 	var p := Plan.new()
 	p.plan = plan
 	var s := DispatchSounds.new(p)
+	s.receiver_share = receiver
 	s._restart(0.0)
 	var out := PackedVector2Array()
 	var n := int(secs * RATE)

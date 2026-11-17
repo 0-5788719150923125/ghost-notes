@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 733 references inside a folder, 1270 down the stack, 0 up it.
+Between scripts today: 733 references inside a folder, 1272 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -14,7 +14,7 @@ Between scripts today: 733 references inside a folder, 1270 down the stack, 0 up
 | `app/` | The shell | 14 | `masking`, `dispatch`, `letter`, `desk`, `table_show`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `render`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 14 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `likeness/` | Likeness | 15 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
-| `dispatch/` | Dispatch desk | 11 | `desk`, `table_show`, `table`, `reading`, `media`, `voice`, `ui`, `scene_kit`, `render`, `data` |
+| `dispatch/` | Dispatch desk | 11 | `desk`, `table_show`, `table`, `reading`, `media`, `voice`, `ui`, `scene_kit`, `render`, `audio`, `data` |
 | `letter/` | Letter | 3 | `desk`, `table`, `reading`, `show`, `media`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 15 | `table_show`, `table`, `reading`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `render`, `data` |
 | `table_show/` | The table's show | 25 | `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `geometry`, `audio`, `platform`, `data` |
@@ -34,7 +34,7 @@ Between scripts today: 733 references inside a folder, 1270 down the stack, 0 up
 | `geometry/` | Generative form | 12 | `motion`, `render` |
 | `motion/` | Motion & simulation | 13 | `render`, `audio` |
 | `render/` | Drawing | 13 | `data` |
-| `audio/` | Audio & analysis | 7 | `platform` |
+| `audio/` | Audio & analysis | 8 | `platform` |
 | `platform/` | The machine | 12 | `data` |
 | `data/` | Plain data | 8 | nothing |
 
@@ -56,7 +56,7 @@ The machine under Ghost Notes: the one owner of its settings file, the earliest 
 
 From a song file to the typed per-frame `AudioFeatures` every scene consumes - live analyzer, offline bake, and the content descriptors that make sessions deterministic per song.
 
-[`audio_features`](../src/audio/audio_features.gd), [`bake`](../src/audio/bake.gd), [`bake_runner`](../src/audio/bake_runner.gd), [`echo`](../src/audio/echo.gd), [`harmonic_signature`](../src/audio/harmonic_signature.gd), [`sound_bed`](../src/audio/sound_bed.gd), [`spectrum`](../src/audio/spectrum.gd)
+[`audio_features`](../src/audio/audio_features.gd), [`bake`](../src/audio/bake.gd), [`bake_runner`](../src/audio/bake_runner.gd), [`echo`](../src/audio/echo.gd), [`harmonic_signature`](../src/audio/harmonic_signature.gd), [`sound_bed`](../src/audio/sound_bed.gd), [`spectrum`](../src/audio/spectrum.gd), [`still_clock`](../src/audio/still_clock.gd)
 
 ### `render/` - Drawing
 

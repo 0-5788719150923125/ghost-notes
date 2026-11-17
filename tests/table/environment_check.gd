@@ -17,7 +17,8 @@ extends SceneTree
 ## - The card: applied a block, it keeps it made safe and shows it; a tick changes the block, the live document a playing scene reads,
 ##   and touches the note; it hands the panel its part of the document and, where nothing else hands one, its sound as the bed -
 ##   none while nothing is heard, a Soundscape once something is (the control: a panel whose bed is another's keeps it). A dial
-##   stands for each lit thing the panel's Props sections name, and moving it keeps that thing's share.
+##   stands for each lit thing and each thing heard the panel's Props sections name, and moving one keeps that thing's share
+##   alone.
 
 var _fails := 0
 
@@ -27,10 +28,13 @@ class Words extends Node:
 	var document := {}
 
 
-## A Props section with a lamp on it.
+## A Props section with a lamp on it, and a receiver that hisses.
 class Lit extends PropSection:
 	func lit() -> Array:
 		return [{"key": "lamp", "name": "The lamp"}]
+
+	func heard() -> Array:
+		return [{"key": "receiver", "name": "Receiver"}]
 
 
 ## The panel and the card, by path: each names autoloads, which resolve only once the tree is up.
@@ -62,7 +66,7 @@ func _run() -> void:
 
 func _block() -> void:
 	var odd := Surroundings.sanitize({"light": "noon", "brightness": 9.0, "rays": 40, "air": ["snow", "smoke", "dust"],
-		"sound": ["sea", 3, "rain"], "lights": {"lamp": 7.0, "terminal": 0.5}, "sound_level": -1})
+		"sound": ["sea", 3, "rain"], "lights": {"lamp": 7.0, "terminal": 0.5}, "sound_level": -1, "heard": {"receiver": 0.25, "radio": 9}})
 	_ok(String(odd["light"]).is_empty(), "a light it does not know is the scene's own")
 	_ok(is_equal_approx(float(odd["brightness"]), Surroundings.BRIGHTNESS.y) and int(odd["rays"]) == Surroundings.RAYS_MOST
 		and is_zero_approx(float(odd["sound_level"])), "numbers held to their ranges")
@@ -71,6 +75,8 @@ func _block() -> void:
 	_ok(is_equal_approx(float((odd["lights"] as Dictionary)["lamp"]), Surroundings.LIGHT_SHARE.y)
 		and is_equal_approx(Surroundings.share_of(odd, "terminal"), 0.5) and is_equal_approx(Surroundings.share_of(odd, "radar"), 1.0),
 		"a lit thing's share kept by its name, held to its range; one it does not name throws as it is made")
+	_ok(is_equal_approx(Surroundings.heard_of(odd, "receiver"), 0.25) and is_equal_approx(Surroundings.heard_of(odd, "radio"), Surroundings.HEARD_SHARE.y)
+		and is_equal_approx(Surroundings.heard_of(odd, "radar"), 1.0), "a thing heard is kept by its name, held to its range; one it does not name is as loud as made")
 	_ok(String(Surroundings.sanitize({"light": "Moonlight"})["light"]) == "moonlight", "the control: a light it knows is kept")
 	_ok(Surroundings.sanitize(null) == Surroundings.KNOBS, "no block is every key's default")
 
@@ -190,17 +196,27 @@ func _card() -> void:
 	# a dial for each lit thing
 	panel.prop_sections = [Lit.new()]
 	card.call("_show_lit")
-	var box: VBoxContainer = card.get("_lit_box")
-	var dial: HSlider = null
-	for row in box.get_children():
-		for c in row.get_children():
-			if c is HSlider:
-				dial = c
+	var dial := _dial_in(card.get("_lit_box"))
 	_ok(dial != null, "a dial stands for the lamp the Props section names")
 	if dial != null:
 		dial.value = 0.4
 		_ok(is_equal_approx(Surroundings.share_of(card.capture(), "lamp"), 0.4), "moving it keeps the lamp's share")
+	var hiss := _dial_in(card.get("_heard_box"))
+	_ok(hiss != null, "a dial stands for the receiver it hears")
+	if hiss != null:
+		hiss.value = 0.0
+		_ok(is_zero_approx(Surroundings.heard_of(card.capture(), "receiver")) and is_equal_approx(Surroundings.share_of(card.capture(), "lamp"), 0.4),
+			"turned down, the receiver is silent and the lamp as it was")
 	card.queue_free()
 	await process_frame
 	subs.free()
 	panel.free()
+
+
+## The first dial among [param box]'s rows, or null.
+func _dial_in(box: Node) -> HSlider:
+	for row in box.get_children():
+		for c in row.get_children():
+			if c is HSlider:
+				return c
+	return null

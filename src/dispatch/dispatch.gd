@@ -579,8 +579,11 @@ func _dress_environment() -> void:
 	_shine_things()
 
 
-## Each lit thing on the desk at its share of its light ([method Surroundings.share_of], by its role).
+## Each lit thing on the desk at its share of its light ([method Surroundings.share_of], by its role), and the receiver as loud as
+## the Environment says ([method Surroundings.heard_of]).
 func _shine_things() -> void:
+	if _sounds != null:
+		_sounds.receiver_share = Surroundings.heard_of(_surround, "receiver")
 	if _set == null:
 		return
 	for k in _set.rigs:

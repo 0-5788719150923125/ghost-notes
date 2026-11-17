@@ -126,8 +126,6 @@ const HIT_MODES := [[1.0, 1.0, 0.0, 1.0], [1.83, 0.55, 0.12, 0.75], [2.71, 0.5, 
 const HIT_THING_SHARE := 0.55
 const HIT_HAND := 0.22
 const HIT_THING_SIZE := 0.25
-## Ticks with the show's time unmoved before the sound is held where it is.
-const STILL_TICKS := 2
 ## The most sines and noise bursts sounding at once.
 const VOICES := 40
 const BURSTS := 12
@@ -136,8 +134,7 @@ var work: TableWork
 var _player: AudioStreamPlayer
 var _pb: AudioStreamGeneratorPlayback
 var _at := NAN                    # show time of the next sample made
-var _last_t := NAN                # the show's time at the last tick, and how many ticks since it moved
-var _still := 0
+var still := StillClock.new()     # whether the show stands still, by the machine's clock
 var _rng := 0x2545f491
 # the sines: phase step and its glide a sample, amplitude and its decay a sample, phase, the two ears
 var _vw := PackedFloat32Array()
@@ -214,13 +211,12 @@ func tick(t: float, host: Node) -> void:
 		_player.name = "WorkSounds"
 		_player.stream = gen
 		host.add_child(_player)
-	# A show standing still: two ticks at one time (a single one can be a frame the clock did not tick over)
-	_still = _still + 1 if t == _last_t else 0
-	_last_t = t
-	if _still >= STILL_TICKS and not _pb_paused():
+	# A show standing still ([StillClock]: a frame or two at one time is the voice player's position between mixes)
+	var stands := still.still(t)
+	if stands and not _pb_paused():
 		_player.stream_paused = true
 		return
-	if _still >= STILL_TICKS:
+	if stands:
 		return
 	if _pb_paused():
 		_player.stream_paused = false

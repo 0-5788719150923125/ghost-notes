@@ -64,6 +64,12 @@ func lit() -> Array:
 	return []
 
 
+## The things it sets down that make a sound of their own, each turned up or down on the Environment card: `[{key, name}]` - `key`
+## the name the scene reads its share by ([method Surroundings.heard_of]). None by default.
+func heard() -> Array:
+	return []
+
+
 ## What may take row [param key]'s place, offered on the Dex (a choice of mugs for the mug), whose Use puts the one picked there;
 ## null where nothing can.
 func choices(_key: String) -> PropSection:

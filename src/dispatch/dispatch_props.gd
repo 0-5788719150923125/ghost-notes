@@ -122,6 +122,11 @@ func lit() -> Array:
 	return out
 
 
+## The desk's things that make a sound of their own: the receiver, its hiss and storms ([DispatchSounds]).
+func heard() -> Array:
+	return [{"key": "receiver", "name": String((PropMakes.ROLES["receiver"] as Dictionary)["label"])}] if _format != null else []
+
+
 func versions_of() -> PropVersions:
 	return library.versions_of()
 

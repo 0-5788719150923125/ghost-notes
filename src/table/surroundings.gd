@@ -3,8 +3,8 @@ class_name Surroundings
 
 ## Surroundings - what is round a scene, as a person chooses it on the Environment card (next/environment.md; [EnvironmentCard]):
 ## the light it is in (a preset, [constant LIGHTS], and how bright), shafts of light through its haze ([method rays]), what drifts in
-## its air ([constant AIR], any together), what is heard round it ([constant SOUNDS], any together) and how strongly each thing in it
-## that throws light throws it. The note's `environment:` block, made safe here ([method sanitize]) and turned into what a scene's
+## its air ([constant AIR], any together), what is heard round it ([constant SOUNDS], any together), how strongly each thing in it
+## that throws light throws it and how loud each that makes a sound of its own is. The note's `environment:` block, made safe here ([method sanitize]) and turned into what a scene's
 ## builders take: [Effects]' air ([method effects_of]), [Soundscape]'s sound ([method sound_of]), the rays. A scene that hosts it reads
 ## the block from its document (`environment`); with none it keeps its own light and adds nothing.
 ##
@@ -67,14 +67,16 @@ const SOUNDS := {
 }
 ## The block's keys and what each is when it says nothing: the light preset ("" the scene's own), how bright (a share of it), how
 ## many shafts of light fall through the haze (-1 the scene's own) and how strong, what drifts and how much of it, what is heard and
-## how loud, and how strongly each thing in the scene that throws light throws it (by the name its scene gives it, a share).
+## how loud, how strongly each thing in the scene that throws light throws it, and how loud each that makes a sound of its own is
+## (each by the name its scene gives it, a share).
 const KNOBS := {"light": "", "brightness": 1.0, "rays": -1, "ray_strength": 0.6, "air": [], "air_amount": 1.0, "sound": [],
-	"sound_level": 0.5, "lights": {}}
+	"sound_level": 0.5, "lights": {}, "heard": {}}
 ## The dials' ranges.
 const BRIGHTNESS := Vector2(0.25, 2.5)
 const RAYS_MOST := 8
 const AIR_AMOUNT := Vector2(0.25, 2.5)
 const LIGHT_SHARE := Vector2(0.0, 3.0)
+const HEARD_SHARE := Vector2(0.0, 2.0)
 ## A shaft ([method rays]): its cone (degrees from its axis), its width where it comes through (a share of its length), how bright it
 ## is through its middle at strength 1 (seen against the dark), and the light it throws where it lands at strength 1 - a narrow spot
 ## that does not fade along its length, as light through a hole does not.
@@ -99,13 +101,19 @@ static func sanitize(raw: Variant) -> Dictionary:
 	out["air_amount"] = Props._num(d.get("air_amount"), 1.0, AIR_AMOUNT.x, AIR_AMOUNT.y)
 	out["sound"] = _ticks(d.get("sound"), SOUNDS)
 	out["sound_level"] = Props._num(d.get("sound_level"), 0.5, 0.0, 1.0)
-	var lights := {}
-	if d.get("lights") is Dictionary:
-		for k in (d["lights"] as Dictionary):
+	out["lights"] = _shares(d.get("lights"), LIGHT_SHARE)
+	out["heard"] = _shares(d.get("heard"), HEARD_SHARE)
+	return out
+
+
+## A thing's name -> its share, made safe from [param v]: names kept short, shares held to [param range], at most 32.
+static func _shares(v: Variant, range: Vector2) -> Dictionary:
+	var out := {}
+	if v is Dictionary:
+		for k in (v as Dictionary):
 			var key := Props._text(k, 60)
-			if not key.is_empty() and lights.size() < 32:
-				lights[key] = Props._num((d["lights"] as Dictionary)[k], 1.0, LIGHT_SHARE.x, LIGHT_SHARE.y)
-	out["lights"] = lights
+			if not key.is_empty() and out.size() < 32:
+				out[key] = Props._num((v as Dictionary)[k], 1.0, range.x, range.y)
 	return out
 
 
@@ -128,6 +136,12 @@ static func light_of(spec: Dictionary, own := "lamplight") -> Dictionary:
 ## How strongly the thing a scene calls [param name] throws its light ([member KNOBS] `lights`): 1 where the block says nothing.
 static func share_of(spec: Dictionary, name: String) -> float:
 	return float((spec.get("lights", {}) as Dictionary).get(name, 1.0))
+
+
+## How loud the thing a scene calls [param name] is in what it makes of its own ([member KNOBS] `heard`): 1 where the block says
+## nothing.
+static func heard_of(spec: Dictionary, name: String) -> float:
+	return float((spec.get("heard", {}) as Dictionary).get(name, 1.0))
 
 
 ## What drifts in the air ([constant AIR] ticked in [param spec]) as [Effects] effects over a host's regions `far`, `near` and `room`,

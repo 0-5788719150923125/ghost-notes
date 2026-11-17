@@ -3,9 +3,9 @@ class_name EnvironmentCard
 
 ## EnvironmentCard - the Environment: what is round the scene a note is shown in (next/environment.md; [Surroundings]). Its
 ## light (a preset - lamplight, candlelight, daylight, dusk, moonlight, no light - and how bright), shafts of light through the
-## haze (how many, how strong), what drifts in the air and what is heard round it (each ticked together, with how much), and a
-## dial for each thing in the scene that throws light - the lamp, a screen, a candle - from the Props card's sections ([method
-## PropSection.lit]).
+## haze (how many, how strong), what drifts in the air and what is heard round it (each ticked together, with how much), a dial
+## for each thing in the scene that throws light - the lamp, a screen, a candle - and one for each that makes a sound of its own -
+## a receiver's hiss - from the Props card's sections ([method PropSection.lit], [method PropSection.heard]).
 ##
 ## Its block in a document is `environment:` ([constant Surroundings.KNOBS]). It hands the reading its part of the document a
 ## medium is drawn from ([member ReadingPanel.document_parts]: `environment`), and the sound it chose as the bed under the voice
@@ -16,7 +16,7 @@ class_name EnvironmentCard
 const KEY := "environment"
 ## Light shafts, when first turned on: how many.
 const RAYS_FIRST := 3
-## How often the lit things the scene has are looked for again (seconds), while the card stands.
+## How often the lit and sounding things the scene has are looked for again (seconds), while the card stands.
 const LIT_EVERY := 1.0
 
 var _panel: ReadingPanel = null
@@ -32,6 +32,7 @@ var _air_amount: HSlider
 var _sound := {}                 # a sound key -> its tick
 var _sound_level: HSlider
 var _lit_box: VBoxContainer
+var _heard_box: VBoxContainer
 var _lit_seen := ""
 var _lit_t := 0.0
 
@@ -134,6 +135,9 @@ func _build() -> void:
 	add_child(_ticks(Surroundings.SOUNDS, _sound, "sound"))
 	_sound_level = Card.slider_row(self, "Level", 0.0, 1.0, 0.05, 0.5, "How loud what is heard round the scene is, under the voice.",
 		func(v: float) -> void: _put("sound_level", v))
+	_heard_box = VBoxContainer.new()
+	_heard_box.add_theme_constant_override("separation", 6)
+	add_child(_heard_box)
 	_lit_box = VBoxContainer.new()
 	_lit_box.add_theme_constant_override("separation", 6)
 	add_child(_lit_box)
@@ -196,30 +200,37 @@ func _show() -> void:
 	_show_lit()
 
 
-## A dial for each thing in the scene that throws light ([method PropSection.lit] of every section on the panel), built again only
-## when the things change.
+## A dial for each thing in the scene that throws light and each that makes a sound of its own ([method PropSection.lit], [method
+## PropSection.heard] of every section on the panel), built again only when the things change.
 func _show_lit() -> void:
 	if _lit_box == null:
 		return
-	var lit := _lit_things()
-	var key := JSON.stringify(lit)
+	var lit := _things("lit")
+	var heard := _things("heard")
+	var key := JSON.stringify([lit, heard])
 	if key == _lit_seen:
 		return
 	_lit_seen = key
-	for c in _lit_box.get_children():
-		c.queue_free()
-	if lit.is_empty():
-		return
-	_lit_box.add_child(_label("Lights"))
+	for box in [_lit_box, _heard_box]:
+		for c in (box as Node).get_children():
+			c.queue_free()
+	if not lit.is_empty():
+		_lit_box.add_child(_label("Lights"))
 	for t in lit:
 		var name := String((t as Dictionary)["key"])
 		Card.slider_row(_lit_box, String((t as Dictionary)["name"]), Surroundings.LIGHT_SHARE.x, Surroundings.LIGHT_SHARE.y, 0.05,
 			Surroundings.share_of(_spec, name), "How strongly %s throws its light: 1 as it is made, 0 dark." % String((t as Dictionary)["name"]).to_lower(),
-			func(v: float) -> void: _set_light(name, v))
+			func(v: float) -> void: _set_share("lights", name, v))
+	for t in heard:
+		var name := String((t as Dictionary)["key"])
+		Card.slider_row(_heard_box, String((t as Dictionary)["name"]), Surroundings.HEARD_SHARE.x, Surroundings.HEARD_SHARE.y, 0.05,
+			Surroundings.heard_of(_spec, name), "How loud %s is in what it makes of its own: 1 as it is made, 0 silent." % String((t as Dictionary)["name"]).to_lower(),
+			func(v: float) -> void: _set_share("heard", name, v))
 
 
-## Every thing that throws light on the panel's Props card's sections: `[{key, name}]`, each once.
-func _lit_things() -> Array:
+## Every thing on the panel's Props card's sections that throws light ([param kind] "lit") or makes a sound of its own ("heard"):
+## `[{key, name}]`, each once.
+func _things(kind: String) -> Array:
 	var out: Array = []
 	var seen := {}
 	if _panel == null:
@@ -227,7 +238,7 @@ func _lit_things() -> Array:
 	for sec in _panel.prop_sections:
 		if not (sec is PropSection):
 			continue
-		for t in (sec as PropSection).lit():
+		for t in ((sec as PropSection).lit() if kind == "lit" else (sec as PropSection).heard()):
 			var k := String((t as Dictionary).get("key", ""))
 			if not k.is_empty() and not seen.has(k):
 				seen[k] = true
@@ -245,10 +256,10 @@ func _put(field: String, v: Variant) -> void:
 		_show()
 
 
-func _set_light(name: String, v: float) -> void:
+func _set_share(field: String, name: String, v: float) -> void:
 	if _syncing:
 		return
-	(_spec["lights"] as Dictionary)[name] = v
+	(_spec[field] as Dictionary)[name] = v
 	_changed()
 
 

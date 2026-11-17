@@ -40,18 +40,20 @@ const LEAD := 0.15
 const RESET := 0.35
 const BUFFER := 0.5
 const STEP := 256
-const STILL_TICKS := 2
 ## The levels (full scale): the most anything under the voice peaks at, and what the voice waits for.
 const PEAK_MOST := 0.06
 const LOUD_MOST := 0.085
 ## The receiver's own hiss, always there (the note's "The receiver hisses, low"), and opened up under a storm.
 const HISS := 0.0016
 const HISS_OPEN := 0.02
-## A storm's pops: a control slot (seconds), the most pops a second inside a cluster, and a pop's loudness and length.
+## A storm's pops: a control slot (seconds), the most pops a second inside a cluster, and a pop's loudness and length; a
+## cluster's length (seconds), each eased into the next, and how busy a quiet one is.
 const POP_SLOT := 0.004
 const POP_RATE := 70.0
 const POP := 0.05
 const POP_LEN := 0.004
+const CLUSTER := 0.9
+const CLUSTER_QUIET := 0.2
 ## A storm's surf: how long a swell takes (seconds, least and most) and its loudness at its crest.
 const SWELL := Vector2(1.4, 3.6)
 const SURF := 0.05
@@ -107,8 +109,10 @@ var medium: Object = null        # a [DispatchMedium]: what sounds when ([method
 var _player: AudioStreamPlayer = null
 var _pb: AudioStreamGeneratorPlayback = null
 var _at := NAN                   # the show time of the next sample made
-var _last_t := NAN
-var _still := 0
+var still := StillClock.new()    # whether the show stands still, by the machine's clock
+## How loud the receiver is - its hiss and its storms - over what it is made to be (the Environment card's, [method
+## Surroundings.heard_of]): 0 silent.
+var receiver_share := 1.0
 var _rng := 1
 var _plan: Array = []            # the medium's sound plan, as of [member _plan_rev]
 var _plan_rev := -1
@@ -170,9 +174,7 @@ func tick(t: float, host: Node) -> void:
 		_player.name = "DispatchSounds"
 		_player.stream = gen
 		host.add_child(_player)
-	_still = _still + 1 if t == _last_t else 0
-	_last_t = t
-	if _still >= STILL_TICKS:
+	if still.still(t):
 		_player.stream_paused = true
 		return
 	_player.stream_paused = false
@@ -306,7 +308,7 @@ func _run(out: PackedVector2Array, i: int, m: int, t0: float) -> void:
 				_drop_burst(b, _nb)
 				continue
 			b += 1
-		var hx := _noise() * hiss
+		var hx := _noise() * hiss * receiver_share
 		_hs[0] += f_hs * _hs[1]
 		_hs[1] += f_hs * (hx - _hs[0] - 1.1 * _hs[1])
 		var rx := Vector2(0.62, 0.78)
@@ -317,7 +319,7 @@ func _run(out: PackedVector2Array, i: int, m: int, t0: float) -> void:
 			var u := float(g[1]) + float(k) * dt
 			match String(d["kind"]):
 				"static":
-					var s := _storm(d, u, f_ss, float(g[2]))
+					var s := _storm(d, u, f_ss, float(g[2])) * receiver_share
 					l += s * rx.x
 					r += s * rx.y
 				"ringback":
@@ -445,7 +447,7 @@ func _storm(d: Dictionary, u: float, f_ss: float, level: float) -> float:
 		_pop_slot = slot
 		var p := POP_RATE * POP_SLOT * level
 		if hash01(seed, slot) < p:
-			var a := POP * lerpf(0.3, 1.0, hash01(seed + 7, slot))
+			var a := POP * lerpf(0.3, 1.0, hash01(seed + 7, slot)) * receiver_share
 			_burst(lerpf(900.0, 3200.0, hash01(seed + 11, slot)), 0.6, POP_LEN, a, Vector2(0.62, 0.78))
 	return 0.0
 
@@ -476,7 +478,8 @@ static func voice_level(d: Dictionary, u: float) -> float:
 
 
 ## How hard a storm is at [param u] seconds of [param span] (0-1), a pure function of them and [param seed]; its sound and
-## the receiver's needle both follow. Io-B's in clusters of pops, on and off; Io-A's in long swells. Both open and close
+## the receiver's needle both follow. Io-B's in clusters of pops, busy and quiet, each easing into the next; Io-A's in long
+## swells. Both open and close
 ## over their first and last half second.
 static func storm_level(kind: String, u: float, seed: int, span := 1e9) -> float:
 	var edge := clampf(u / 0.5, 0.0, 1.0) * clampf((span - u) / 0.5, 0.0, 1.0)
@@ -494,10 +497,16 @@ static func storm_level(kind: String, u: float, seed: int, span := 1e9) -> float
 			t += len
 			k += 1
 		return clampf(0.18 + 0.82 * s, 0.0, 1.0) * edge
-	var c := int(floor(u / 0.25))
-	var on := hash01(seed + 13, c) < 0.62
-	var inside := lerpf(0.5, 1.0, hash01(seed + 17, c))
-	return (inside if on else 0.08) * edge
+	# clusters: each a stretch of [constant CLUSTER] seconds, busy or quiet, eased into the next - never switched, which
+	# would gate the hiss with it several times a second
+	var x := u / CLUSTER
+	var c := int(floor(x))
+	return lerpf(_cluster(seed, c), _cluster(seed, c + 1), smoothstep(0.0, 1.0, x - float(c))) * edge
+
+
+## How busy a storm's cluster [param c] is: most are (0.5 to 1), the rest quiet ([constant CLUSTER_QUIET]).
+static func _cluster(seed: int, c: int) -> float:
+	return lerpf(0.5, 1.0, hash01(seed + 17, c)) if hash01(seed + 13, c) < 0.62 else CLUSTER_QUIET
 
 
 ## The ring the far end sends back, [param u] seconds after dialing ended: a pair of short rings a cycle, quiet in the earpiece.
