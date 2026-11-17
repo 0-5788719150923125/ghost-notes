@@ -385,7 +385,7 @@ run_gate() {  # run_gate <name> <log>; returns the raw exit code
 				local -a pa=()
 				read -ra pa <<<"$(args_of "$g")"
 				if is_gpu "$g"; then
-					GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 "${tr[@]}" tests/run_boot_probe.sh "${path_of[$g]}" "$t" "${pa[@]}" >"$log" 2>&1
+					GHOST_PROBE_GPU=1 "${tr[@]}" tests/run_boot_probe.sh "${path_of[$g]}" "$t" "${pa[@]}" >"$log" 2>&1
 				else
 					"${tr[@]}" tests/run_boot_probe.sh "${path_of[$g]}" "$t" "${pa[@]}" >"$log" 2>&1
 				fi

@@ -56,6 +56,10 @@ else
 	echo "           install it with: sudo pacman -S xorg-server-xvfb"
 fi
 RUNNER+=(--log-file "$PROBE_LOG")
+# silent, as a probe is (run_boot_probe.sh): the mixer runs, the sound goes nowhere; GHOST_PROBE_SOUND=1 lets one run be heard
+if [[ "${GHOST_PROBE_SOUND:-0}" == "0" ]]; then
+	RUNNER+=(--audio-driver Dummy)
+fi
 
 # Every gate that needs a real renderer. Keep in step with CLAUDE.md's gate list.
 ALL=(clown_drip_check clown_anchor_check clown_controls_check clown_scale_check

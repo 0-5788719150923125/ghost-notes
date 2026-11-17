@@ -84,6 +84,9 @@ By family - the color a component's card, chip and marks are drawn in.
 
 - **Medium** (`medium`) - What the note is shown in - Auto (the seeded show), full frame, a comic, a novel, a notebook, a tablet, a letter or a dispatch desk; a table show at its table or a desk - and that format's settings.
   - needs picture; gives places; brings Scenes; takes the presentation; asks for `forward_plus`; kept in `medium:`
+
+### Environment
+
 - **Environment** (`environment`) - What is round the scene: its light (lamplight, candlelight, daylight, dusk, moonlight, none) and how bright, shafts of light through the haze, what drifts in the air, what is heard, and how strongly each lamp, screen or candle shines.
   - needs places; asks for `forward_plus`; kept in `environment:`
 

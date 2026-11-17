@@ -10,7 +10,8 @@ extends SceneTree
 ## - Every preset is a row a desk can read: a lamp's share, candles, an ambient and a key, a fog color; the ones only ever chosen
 ##   (moonlight, no light) weigh nothing, so no desk's number draws them.
 ## - What drifts: each tick an effect [Effects] keeps, over a region every host names, as many as the amount says (the control: an
-##   unknown tick adds none, and at twice the amount, twice the motes); haze is fog in the light's color.
+##   unknown tick adds none, and at twice the amount, twice the motes); haze is fog in the light's color; a mote never goes away
+##   on a visit (the control: a table's motes do).
 ## - What is heard: each tick a part of the [Soundscape]'s sound; none ticked, silence.
 ## - Shafts: as many as asked, each a drawn cone and a narrow spot that does not fade, landing apart inside the box they fall over,
 ##   falling from the way of their light; the dust in them goes by show time.
@@ -111,6 +112,11 @@ func _air() -> void:
 	_ok(int((twice[0] as Dictionary)["count"]) == 2 * int((fx[1] as Dictionary)["count"]),
 		"the control: at twice the amount, twice the motes (%d, %d)" % [int((twice[0] as Dictionary)["count"]), int((fx[1] as Dictionary)["count"])])
 	_ok(Surroundings.effects_of(Surroundings.sanitize({}), fog).is_empty(), "nothing ticked, nothing drifts")
+	var stays := true
+	for e in Surroundings.effects_of(Surroundings.sanitize({"air": ["dust", "pixies", "fireflies", "wisps", "embers", "snow"]}), fog):
+		stays = stays and is_zero_approx(float((e as Dictionary).get("away", -1.0)))
+	var visits := float((Effects.sanitize([{"kind": "motes", "look": "dust", "where": "near"}], [], ["near"], [])[0] as Dictionary)["away"])
+	_ok(stays and visits > 0.0, "a mote never goes away on a visit, whose exit a moving camera can see (the control: a table's motes do, %.2f of their round)" % visits)
 	var all := Surroundings.effects_of(Surroundings.sanitize({"air": Surroundings.AIR.keys()}), fog)
 	_ok(all.size() == Surroundings.AIR.size(), "every tick at once is kept (%d of %d)" % [all.size(), Surroundings.AIR.size()])
 

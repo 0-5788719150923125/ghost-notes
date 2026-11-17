@@ -684,7 +684,25 @@ func _black_tablet_clip(md: DispatchMedium, actions: Array, t0: PackedFloat32Arr
 	_ok(String(before["to"]) == "23:39" and String(turning["from"]) == "23:39" and String(turning["to"]) == "23:40" and float(turning["u"]) > 0.0
 		and float(turning["u"]) < 1.0 and String(turned["to"]) == "23:40" and float(turned["u"]) == 1.0 and String(minute["to"]) == "23:41",
 		"coming up, the clock's cards turn over to the time given, and it runs on a minute a minute (%s, %s, %s)" % [before, turned, minute])
-	var flips := heard.filter(func(x: Dictionary) -> bool: return String(x.get("what", "")) == "detent" and float(x["t"]) > turn and float(x["t"]) < turn + 1.0).size()
+	var clock_at_desk := md._set.desk_at("clock")
+	var clicks := func(plan: Array, a: float, b: float) -> int:
+		return plan.filter(func(x: Dictionary) -> bool: return String(x.get("what", "")) == "detent" and x.get("at") == clock_at_desk \
+			and float(x["t"]) > a and float(x["t"]) < b).size()
+	var flips: int = clicks.call(heard, turn, turn + 1.0)
+	# the clock runs on through a long outro: a click as each minute turns over, silence between - and none once the show is over
+	# (the control: with the outro as it was, the show ends before the next minute)
+	var past_end: int = clicks.call(heard, turn + 2.0, turn + 600.0)
+	var outro_was := md.feed.outro_hold
+	md.feed.outro_hold = 150.0
+	md._build_sound()
+	var long_plan := md.sound_plan()
+	var minute_on: int = clicks.call(long_plan, turn + 60.0, turn + 61.0) + clicks.call(long_plan, turn + 120.0, turn + 121.0)
+	var between: int = clicks.call(long_plan, turn + 20.0, turn + 40.0)
+	md.feed.outro_hold = outro_was
+	md._build_sound()
+	_ok(minute_on >= 2 and between == 0 and past_end == 0,
+		"the clock clicks as its cards turn over each minute it runs (%d over two minutes) and is silent between (%d) - and past the show's end none (the control, %d)"
+		% [minute_on, between, past_end])
 	var held_t := t0[up] + float(actions[up]["rest"]) / md._sp[up]
 	_ok(md.looking_at(black0 + 0.5) == "clock" and md.looking_at(turn + 0.3) == "clock" and md.looking_at(held_t + 1.5) != "clock" and flips == 2,
 		"in the black the camera is on the clock, held while two cards turn and a beat, then eases away (%s, %s, %d flips)" % [md.looking_at(turn + 0.3), md.looking_at(held_t + 1.5), flips])
@@ -1123,7 +1141,8 @@ func _ok(cond: bool, what: String) -> void:
 
 ## No root lies where a phone is laid open, on eight desks: the held phones' whole footprint, lids included (control: the strip
 ## round the bases leaves the lids out). No root goes through the printer's paper or its heap (control: the same roots grown
-## knowing nothing of them go through).
+## knowing nothing of them go through), nor lies across the chart taped to the desk (control: grown with it left out, they do).
+## The chart lies a hair over the desk's top, never in its plane (control: its make seats its sheet on its own foot).
 func _roots_clear() -> void:
 	var img := Image.create(8, 8, false, Image.FORMAT_RGBA8)
 	var t := ImageTexture.create_from_image(img)
@@ -1135,6 +1154,10 @@ func _roots_clear() -> void:
 	var paper_blind := 0
 	var facing_least := 1.0
 	var was_most := -1.0
+	var chart_through := []
+	var chart_blind := 0
+	var chart_lift := INF
+	var chart_seat := 0.0
 	for sd in range(1, 9):
 		var ds := DispatchSet.new()
 		var node := ds.build(labels, sd, tex)
@@ -1148,6 +1171,21 @@ func _roots_clear() -> void:
 		if _in_paper(blind, ds.clear):
 			paper_blind += 1
 		bn.free()
+		# the chart taped flat on the desk: no root lying on the desk crosses it (the control: grown with it left out of what
+		# they go round, they cross it)
+		var chart := _foot(ds, "chart")
+		if chart.has_area():
+			var cf: MeshInstance3D = (ds.rigs["chart"] as PropRig).face("chart")
+			var face_y := (_xf_in(cf, node) * cf.get_aabb()).position.y
+			chart_lift = minf(chart_lift, face_y - DispatchSet.DESK_Y)
+			chart_seat = maxf(chart_seat, absf((_xf_in(cf, ds.rigs["chart"].node) * cf.get_aabb()).position.y))
+			if _lies_in(rr, chart):
+				chart_through.append(sd)
+			var feet := ds.footprints.filter(func(f: Rect2) -> bool: return f != chart)
+			var unaware := DispatchRoots.new()
+			var un := unaware.build(sd, feet, held, ds.clear)
+			chart_blind += int(_lies_in(unaware, chart))
+			un.free()
 		for path in rr.lying:
 			var pts: PackedVector3Array = path["points"]
 			var rad: PackedFloat32Array = path["radii"]
@@ -1177,6 +1215,45 @@ func _roots_clear() -> void:
 		"an open phone laid on the desk faces the chair (the least %.3f; the control, the turn it once had, at most %.3f)" % [facing_least, was_most])
 	_ok(paper_through.is_empty() and paper_blind > 0,
 		"no root goes through the printer's paper or its heap (the control: grown knowing nothing of them, through on %d of 8; with them, on %s)" % [paper_blind, str(paper_through)])
+	_ok(chart_lift >= DispatchSet.FLAT_LIFT * 0.9 and chart_seat < 0.0002,
+		"the chart lies %.2f mm over the desk's top, never in its plane (the control: its make seats its sheet on its own foot, %.2f mm up)"
+		% [chart_lift * 1000.0, chart_seat * 1000.0])
+	_ok(chart_through.is_empty() and chart_blind > 0,
+		"no root lying on the desk crosses the chart taped there (the control: grown with it left out, across it on %d of 8; with it, on %s)" % [chart_blind, str(chart_through)])
+
+
+## [param n]'s transform in [param top]'s space, walked up its parents: a set built out of any tree.
+static func _xf_in(n: Node3D, top: Node3D) -> Transform3D:
+	var xf := Transform3D()
+	var at: Node = n
+	while at != null and at != top:
+		if at is Node3D:
+			xf = (at as Node3D).transform * xf
+		at = at.get_parent()
+	return xf
+
+
+## Thing [param k]'s footprint on the desk of [param ds] (x, z): its parts' boxes, merged; empty where the desk has none.
+static func _foot(ds: DispatchSet, k: String) -> Rect2:
+	var foot := Rect2()
+	if not ds.at.has(k):
+		return foot
+	for part in ds._parts.get(k, []):
+		var b: AABB = (part as Dictionary)["box"]
+		var r := Rect2(b.position.x, b.position.z, b.size.x, b.size.z)
+		foot = r if not foot.has_area() else foot.merge(r)
+	return foot
+
+
+## Whether a root of [param rr] lying on the desk passes over [param rect] (x, z) - into a sheet lying there.
+static func _lies_in(rr: DispatchRoots, rect: Rect2) -> bool:
+	for path in rr.lying:
+		var pts: PackedVector3Array = path["points"]
+		var rad: PackedFloat32Array = path["radii"]
+		for k in range(int(path["from"]), pts.size()):
+			if rect.grow(rad[k] * 0.5).has_point(Vector2(pts[k].x, pts[k].z)):
+				return true
+	return false
 
 
 ## Whether any root of [param rr] (off the desk's top or on it) has a point inside one of [param boxes].

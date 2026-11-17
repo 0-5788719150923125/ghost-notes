@@ -4,7 +4,7 @@ extends Node
 ## notes list, a new note with its "+" open, and a note walking a storyboard with the editor
 ## docked under its show, a stage entry and one of its spans picked.
 ##
-##   GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh tests/timeline/storyboard_look_probe.gd 120 --out /some/dir
+##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/timeline/storyboard_look_probe.gd 120 --out /some/dir
 ##
 ## It needs the real renderer (a readback under `--headless` is null), runs on a virtual display,
 ## and writes `list.png`, `plus.png`, `editor.png` and `source.png` into `--out`. Its notes and their

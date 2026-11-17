@@ -897,7 +897,7 @@ record). The export menu has no YouTube items.
   - the table over an episode with a synthetic voice. `--times 3.6 --name "Show" --byline "with X" --ink
   "#1d2f5c"` photographs the title screen with a set dresser's color.
 - `tests/run_quiet.sh intro_blur_check` - the intro's blur, in pixels (see "The title screen").
-- `GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh tests/table_show/cards_voice_probe.gd 900 --spec <md> --seed N --export 1`
+- `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table_show/cards_voice_probe.gd 900 --spec <md> --seed N --export 1`
   - the panel, the real voice and the table, end to end, and the export take.
 - `GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table_show/set_dresser_look_probe.gd 300 --show S --seed N`
   - what the set dresser's tools show, with no agent: an episode's table put, looked at and set, and the

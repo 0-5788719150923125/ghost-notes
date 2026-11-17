@@ -1,8 +1,8 @@
 # The Environment
 
 What is round the scene a note is shown in, as one card: its light, shafts of light through its haze, what drifts in its air,
-what is heard round it, and how strongly each thing in it that throws light throws it. A component (`environment`, Medium's
-family, needing `places`), its block `environment:` ([docs/surroundings.md](../docs/surroundings.md) lists every row).
+what is heard round it, and how strongly each thing in it that throws light throws it. A component (`environment`, a family and
+hue of its own, needing `places`), its block `environment:` ([docs/surroundings.md](../docs/surroundings.md) lists every row).
 
 ## Status
 

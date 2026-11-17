@@ -28,7 +28,7 @@ class_name Components
 ## The families: a label and a hue in degrees, the color a component's card, chip and marks are drawn in ([Card]);
 ## "paper", the note's own text, has none. Color is per family because hues run out near eight. The order is the
 ## order cards stand in on a panel, read top to bottom: the text, what produces a reading, the voice, sound, pictures,
-## the presentation, the Look, and where the finished video goes.
+## the presentation, what is round it, the Look, and where the finished video goes.
 const FAMILIES := {
 	&"paper": {"label": "Text", "hue": -1.0},
 	&"producer": {"label": "Producer", "hue": 275.0},
@@ -36,6 +36,7 @@ const FAMILIES := {
 	&"sound": {"label": "Sound", "hue": 212.0},
 	&"picture": {"label": "Picture", "hue": 32.0},
 	&"medium": {"label": "Medium", "hue": 128.0},
+	&"environment": {"label": "Environment", "hue": 245.0},
 	&"look": {"label": "Look", "hue": 322.0},
 	&"publish": {"label": "Publish", "hue": 2.0},
 }
@@ -119,7 +120,7 @@ const REGISTRY := {
 		"script": "res://src/show/pictures_card.gd"},
 	# What is round the scene the note is shown in (next/environment.md): its light, shafts through its haze, what drifts in its air,
 	# what is heard round it and how strongly each lit thing in it shines - read by the scene its Medium's format shows
-	"environment": {"label": "Environment", "family": &"medium",
+	"environment": {"label": "Environment", "family": &"environment",
 		"blurb": "What is round the scene: its light (lamplight, candlelight, daylight, dusk, moonlight, none) and how bright, shafts of light through the haze, what drifts in the air, what is heard, and how strongly each lamp, screen or candle shines.",
 		"needs": ["places"], "provides": [], "requires": [], "slots": [], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": [], "block": "environment", "card": "environment",

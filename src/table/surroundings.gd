@@ -145,7 +145,9 @@ static func heard_of(spec: Dictionary, name: String) -> float:
 
 
 ## What drifts in the air ([constant AIR] ticked in [param spec]) as [Effects] effects over a host's regions `far`, `near` and `room`,
-## each as many as the amount dial says, its fog the color of [param fog]: made safe by [method Effects.sanitize].
+## each as many as the amount dial says, its fog the color of [param fog]: made safe by [method Effects.sanitize]. A mote never
+## goes away on a visit: its exit is out of the picture the air was built for, and a host's camera moves on to another, where
+## the motes leaving and waiting there would stand in a line.
 static func effects_of(spec: Dictionary, fog: Color) -> Array:
 	var raw: Array = []
 	var amount := float(spec.get("air_amount", 1.0))
@@ -154,6 +156,8 @@ static func effects_of(spec: Dictionary, fog: Color) -> Array:
 		fx["name"] = String(k)
 		if fx.has("count"):
 			fx["count"] = maxi(1, roundi(float(fx["count"]) * amount))
+		if String(fx["kind"]) == "motes":
+			fx["away"] = 0.0
 		if String(fx["kind"]) == "fog":
 			fx["density"] = clampf(float(fx["density"]) * amount, 0.0, 1.0)
 			fx["color"] = "#" + fog.to_html(false)

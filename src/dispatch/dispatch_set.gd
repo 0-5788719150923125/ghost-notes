@@ -85,11 +85,14 @@ const HEAP_AT := Vector2(-1.42, -0.30)
 ## thing turn off its own (degrees), desk by desk.
 const JITTER := 0.025
 const JITTER_TURN := 5.0
+## How far over the desk's top a flat thing lies (m): a make is seated on its lowest point, so a sheet would be in the top's
+## own plane, and the two would fight for every pixel as the camera moves.
+const FLAT_LIFT := 0.0015
 ## The small things, packed in this order ([method _pack]), each by the box its own meshes fill turned as it stands
 ## ([method bounds]): where it may go - `side` the radio's things', the phones', or either; `x` how far across from the
 ## middle, `z` how far back (+z the chair's edge) - and how it turns about up: `turn` drawn between (degrees), or `face`
-## its local direction turned to the chair, give or take `give`. `flat`: nothing stands on it, a root may cross it, and it lies
-## wholly off the blotter ([constant BLOTTER]); `low`: it
+## its local direction turned to the chair, give or take `give`. `flat`: a sheet, laid [constant FLAT_LIFT] over the desk,
+## nothing stands on it, roots go round it, and it lies wholly off the blotter ([constant BLOTTER]); `low`: it
 ## may lie in the chair's reach before the keyboard and over the desk's near edge a little ([constant LOW_OVER]);
 ## `want`: built only where the script uses it; `anywhere`: tried anywhere on the desk once half its tries found no room in
 ## its region; `spare`: left off a desk with no room for it. What the camera reads is packed first. The mug stays at arm's reach beside the keyboard, 25 to 40 cm in from the edge.
@@ -164,7 +167,7 @@ var clock_face: MeshInstance3D    # the flip clock's cards (null without a clock
 var tablet: Node3D                # the tablet, posed by the medium (null without one)
 var tablet_screen: MeshInstance3D
 var tablet_home := Transform3D()
-var footprints: Array = []        # Rect2s of what stands on the desk (x, z), for the roots to go round - nothing flat
+var footprints: Array = []        # Rect2s of what is on the desk (x, z), for the roots to go round - the chart too, which a root lying on the desk would pass through
 var clear: Array = []             # AABBs of what fills the air by the desk, which no root goes through: the paper, its heap
 var bodies := {}                  # a thing -> the box its meshes fill, in the set's space ([method bounds])
 var things := {}                  # a thing -> its node, as built
@@ -224,9 +227,7 @@ func build(labels: PackedStringArray, seed: int, tex: Dictionary, wants := {}) -
 		if not s.is_empty():
 			spots[k] = s
 	for k in bodies:
-		if bool((PACK.get(k, {}) as Dictionary).get("flat", false)):
-			continue
-		# what stands on the desk, never what is held over it (the satellite's panel on its arm)
+		# what is on the desk, never what is held over it (the satellite's panel on its arm)
 		var foot := Rect2()
 		for part in _parts[k]:
 			var b: AABB = (part as Dictionary)["box"]
@@ -328,6 +329,8 @@ func _pack(made: Dictionary) -> void:
 			turn.erase(k)
 			node.free()
 			continue
+		if bool(row.get("flat", false)):
+			best_xf.origin.y += FLAT_LIFT
 		node.transform = best_xf
 		at[k] = Vector2(best_xf.origin.x, best_xf.origin.z)
 		turn[k] = rad_to_deg(best_xf.basis.get_euler().y)

@@ -645,23 +645,29 @@ func _draw_clock(c: CanvasItem, st: Dictionary) -> void:
 	var cell := Vector2(DIGIT_CELL)
 	var tex := digits.get_texture()
 	var card := Color(0.09, 0.09, 0.10)
+	# each digit flaps on its own, the rightmost that changes first ([method DispatchScript.flap_starts]), falling as a flap
+	# let go does and slapping down ([method DispatchScript.flap_angle])
+	var starts := DispatchScript.flap_starts(String(st.get("from", "")), String(st.get("to", "")))
+	var since := u * DispatchScript.CLOCK_TURN
 	for i in 4:
 		var x: float = xs[i]
 		var r := Rect2(x, top, cell.x, cell.y)
 		var a := old[i] if i < old.length() and old[i].is_valid_int() else ""
 		var b := now[i] if i < now.length() and now[i].is_valid_int() else ""
-		var turning := a != b and u < 1.0
+		var v := clampf((since - starts[i]) / DispatchScript.CLOCK_FLAP, 0.0, 1.0) if starts[i] >= 0.0 and u < 1.0 else 1.0
+		var turning := a != b and v < 1.0
+		var th := DispatchScript.flap_angle(v)
 		var half := cell.y * 0.5
 		var hinge := top + half
-		# the top half: the new digit behind; the old one's top falls forward over it in the first half of the turn
+		# the top half: the new digit behind; the old one's top falls forward over it until it passes level
 		_card_half(c, tex, Rect2(x, top, cell.x, half), b, true, card)
-		if turning and u < 0.5:
-			var k := cos(u * PI)
+		if turning and th < PI * 0.5:
+			var k := cos(th)
 			_card_half(c, tex, Rect2(x, hinge - half * k, cell.x, half * k), a, true, card.darkened(0.25 * (1.0 - k)))
-		# the bottom half: the old digit until the new one's bottom swings down over it
-		_card_half(c, tex, Rect2(x, hinge, cell.x, half), a if turning else b, false, card)
-		if turning and u >= 0.5:
-			var k := -cos(u * PI)
+		# the bottom half: the old digit until the new one's bottom swings down over it and bounces off its stop
+		_card_half(c, tex, Rect2(x, hinge, cell.x, half), a if turning and th < PI * 0.5 else b, false, card)
+		if turning and th >= PI * 0.5:
+			var k := -cos(th)
 			_card_half(c, tex, Rect2(x, hinge, cell.x, half * k), b, false, card.lightened(0.05 * (1.0 - k)))
 		c.draw_line(Vector2(x, hinge), Vector2(x + cell.x, hinge), Color(0.0, 0.0, 0.0), 3.0)
 		c.draw_rect(r, Color(0.0, 0.0, 0.0, 0.6), false, 2.0)

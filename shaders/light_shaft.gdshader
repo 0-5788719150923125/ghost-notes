@@ -16,7 +16,8 @@ uniform float soft = 0.2;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 
 varying float along;
-varying float round_it;
+// the way round the shaft as a direction across it (never an angle, which jumps where it wraps and squeezes the dust into one strip)
+varying vec2 round_dir;
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -31,7 +32,7 @@ float noise(vec2 p) {
 
 void vertex() {
 	along = clamp(0.5 - VERTEX.y / span, 0.0, 1.0);
-	round_it = atan(VERTEX.z, VERTEX.x);
+	round_dir = VERTEX.xz / max(length(VERTEX.xz), 1e-5);
 }
 
 void fragment() {
@@ -42,6 +43,7 @@ void fragment() {
 	vec4 behind = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth, 1.0);
 	behind.xyz /= behind.w;
 	float meets = clamp((VERTEX.z - behind.z) / soft, 0.0, 1.0);
-	float dust = 0.8 + 0.2 * noise(vec2(round_it * 2.5, along * 7.0 - t * 0.08));
+	float drift = along * 7.0 - t * 0.08;
+	float dust = 0.82 + 0.09 * (noise(vec2(round_dir.x * 2.5, drift)) + noise(vec2(round_dir.y * 2.5 + 17.0, drift + 5.0)));
 	ALBEDO = color * strength * core * ends * meets * dust;
 }

@@ -1610,15 +1610,7 @@ func _build_sound() -> void:
 				out.append({"t": rung, "t1": rung + DispatchSounds.BELL_LEN, "kind": "bell", "ears": DispatchSounds.ears_of(term_at)})
 			"lamp":
 				out.append({"t": t + DispatchScript.LAMP_AT / _sp[i], "what": "lamp", "at": _set.desk_at("lamp")})
-			"fade":
-				var turn := t + float(a["secs"]) / _sp[i]
-				var c := clock_at(turn + DispatchScript.CLOCK_TURN + 0.01)
-				if not bool(a["to"]) and not c.is_empty():
-					var was := String(clock_at(turn - 0.01).get("to", ""))
-					var now := String(c.get("to", ""))
-					for k in mini(was.length(), now.length()):
-						if was[k] != now[k]:
-							out.append({"t": turn + 0.05 * float(k) + DispatchScript.CLOCK_TURN * 0.5, "what": "detent", "at": _set.desk_at("clock")})
+
 			"tablet":
 				out.append({"t": t + 0.15, "what": "lift" if bool(a["up"]) else "thud", "at": _set.desk_at("tablet")})
 			"page":
@@ -1647,6 +1639,13 @@ func _build_sound() -> void:
 				out.append({"t": t + 0.1, "what": "crt", "at": term_at})
 	# the receiver, open: its storms and the voices said over them
 	out.append_array(_open)
+	# the flip clock: a click as each card slaps down, at every turn of it - the time a fade sets and each minute after
+	for turn in _clock_turns():
+		var starts := DispatchScript.flap_starts(String(turn[1]), String(turn[2]))
+		for k in 4:
+			if starts[k] >= 0.0:
+				out.append({"t": float(turn[0]) + starts[k] + DispatchScript.CLOCK_LAND * DispatchScript.CLOCK_FLAP, "what": "detent",
+					"at": _set.desk_at("clock")})
 	out.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return float(x["t"]) < float(y["t"]))
 	_sound_plan = out
 	_sound_rev += 1
@@ -2610,6 +2609,33 @@ func clock_at(t: float) -> Dictionary:
 		return {"from": DispatchScript.clock_text(set_to + gone - 1), "to": DispatchScript.clock_text(set_to + gone),
 			"u": into / DispatchScript.CLOCK_TURN}
 	return {"from": DispatchScript.clock_text(set_to + gone), "to": DispatchScript.clock_text(set_to + gone), "u": 1.0}
+
+
+## Every turn of the clock's cards: `[t, from, to]` - each time a fade up sets (as it comes up) and each minute after, to the next
+## time set or the voice's last word and what the desk does after it ([method _after_last]); none past what is heard yet.
+func _clock_turns() -> Array:
+	var out: Array = []
+	var last := _word_t1(_spoken_n - 1)
+	var until := last + _after_last() + feed.tail() if last < INF else INF
+	var sets: Array = []
+	for i in _actions.size():
+		var a: Dictionary = _actions[i]
+		if String(a["kind"]) == "fade" and int(a.get("clock", -1)) >= 0 and _t0[i] < INF:
+			sets.append(_on_reading(i, _t0[i] + float(a["secs"]) / _sp[i]))
+	for k in sets.size():
+		var t: float = sets[k]
+		var was := String(clock_at(t - 0.01).get("to", ""))
+		var c := clock_at(t + DispatchScript.CLOCK_TURN + 0.01)
+		if c.is_empty():
+			continue
+		if not was.is_empty() and was != String(c["to"]):
+			out.append([t, was, String(c["to"])])
+		var stop: float = sets[k + 1] if k + 1 < sets.size() else until
+		var m := t + 60.0
+		while m < stop and m < t + 60.0 * 600.0:
+			out.append([m, String(clock_at(m - 0.01).get("to", "")), String(clock_at(m + DispatchScript.CLOCK_TURN + 0.01).get("to", ""))])
+			m += 60.0
+	return out
 
 
 ## Moment [param x] of action [param i] on the show's clock as the reading runs: a mid-way start places its earlier actions

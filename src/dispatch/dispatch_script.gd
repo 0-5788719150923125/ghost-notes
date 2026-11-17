@@ -242,8 +242,15 @@ const GAIN_BEAT := 0.6
 ## clock is warned of, the clock's time estimated at a steady voice's pace (seconds a word).
 const FADE := 2.0
 const FADE_MOST := 20.0
-const CLOCK_TURN := 0.7
+const CLOCK_TURN := CLOCK_FLAP + 3.0 * CLOCK_STAGGER
 const CLOCK_BEAT := 1.4
+## A flip clock's card turning over, as a split-flap's does ([method flap_angle]): one flap's whole turn (seconds), the share
+## of it at which it slaps down - falling faster all the way, as a flap let go does - and the bounce it gives (radians); each
+## digit to the left trips this long after the one on its right, so four turn in [constant CLOCK_TURN].
+const CLOCK_FLAP := 0.16
+const CLOCK_LAND := 0.8
+const CLOCK_BOUNCE := 0.2
+const CLOCK_STAGGER := 0.06
 const CLOCK_OFF := 5
 const CLOCK_WORD := 0.42
 ## The terminal's bell: the half beat the voice waits for it.
@@ -1102,6 +1109,31 @@ static func links_to(text: String, url: String) -> bool:
 static func clock_text(minutes: int) -> String:
 	var m := posmod(minutes, 24 * 60)
 	return "%02d:%02d" % [m / 60, m % 60]
+
+
+## How far a flap has turned over (radians: 0 standing up, PI lying down) [param v] of the way through its turn (0-1): it
+## falls faster all the way to [constant CLOCK_LAND], slaps down, and bounces once off its stop.
+static func flap_angle(v: float) -> float:
+	if v <= 0.0:
+		return 0.0
+	if v < CLOCK_LAND:
+		return PI * pow(v / CLOCK_LAND, 2.0)
+	var w := clampf((v - CLOCK_LAND) / (1.0 - CLOCK_LAND), 0.0, 1.0)
+	return PI - CLOCK_BOUNCE * sin(w * PI) * (1.0 - w)
+
+
+## When each digit of a turn from [param was] to [param now] (HH:MM) begins to flap, in seconds after the turn begins: the
+## rightmost that changes first, each changed one to its left [constant CLOCK_STAGGER] after; -1 for a digit that stays.
+static func flap_starts(was: String, now: String) -> PackedFloat32Array:
+	var a := was.replace(":", "")
+	var b := now.replace(":", "")
+	var out := PackedFloat32Array([-1.0, -1.0, -1.0, -1.0])
+	var n := 0
+	for k in range(3, -1, -1):
+		if k < a.length() and k < b.length() and a[k] != b[k]:
+			out[k] = float(n) * CLOCK_STAGGER
+			n += 1
+	return out
 
 
 ## Does the note open in the black: its first block that shows or says anything a fade up from it?

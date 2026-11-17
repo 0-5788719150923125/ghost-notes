@@ -3,7 +3,7 @@ extends Node
 ## Not a gate. An actor played live in a real boot: the real main scene opens a note carrying an Actor, the real voice host
 ## reads it, and the stage is photographed as it plays (the path the app's ▶ takes).
 ##
-##   GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh tests/likeness/likeness_live_probe.gd 300 \
+##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/likeness/likeness_live_probe.gd 300 \
 ##       --actors user://actors_live_probe --actor <id> --out <dir> --play 20 [--stamp 1] [--bake 1] [--voice <id>]
 ##
 ## `--actors` is a library of the probe's own (a copy: opening an actor rescans its sources and saves it); the notes are made in

@@ -114,11 +114,11 @@ fi
 PROBE_LOG=$(mktemp)
 trap 'cleanup; rm -f "$PROBE_LOG"' EXIT
 RUNNER+=(--log-file "$PROBE_LOG")
-# SILENT, on the real renderer: `--headless` already implies the Dummy audio driver, but a GPU
-# probe that plays a reading would otherwise speak it out of the author's speakers.
-# GHOST_PROBE_MUTE=1 keeps the mixer running - playback positions still advance - and sends
-# the sound nowhere.
-if [[ "${GHOST_PROBE_MUTE:-0}" != "0" ]]; then
+# SILENT, always: `--headless` already implies the Dummy audio driver, and a GPU probe gets it
+# too - otherwise whatever its show plays (a reading, a desk's hiss) comes out of the author's
+# speakers. The Dummy driver keeps the mixer running, so playback positions still advance; the
+# sound goes nowhere. GHOST_PROBE_SOUND=1 lets one run be heard.
+if [[ "${GHOST_PROBE_SOUND:-0}" == "0" ]]; then
   RUNNER+=(--audio-driver Dummy)
 fi
 

@@ -4,7 +4,7 @@ extends Node
 ## voice reads an episode already made, and the table follows the voice's real word timings -
 ## then, optionally, the panel renders the export take and its sidecar is checked.
 ##
-##   GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh tests/table_show/cards_voice_probe.gd 600 \
+##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table_show/cards_voice_probe.gd 600 \
 ##       --spec ../rift/tarot/truthful-tarot.md --seed 1 --out /tmp/tv/f --play 80 --export 1
 ##
 ## Read-only like every probe: nothing is written to the show's document or the author's

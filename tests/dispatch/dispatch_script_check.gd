@@ -39,7 +39,9 @@ extends SceneTree
 ##   crackle before any), and the room's voice comes back after (the control: a bare `type:` is the room's);
 ## - a synced note's words, which come without their frontmatter, are read with the note's put back (control: alone, the
 ##   terminal's keys and the desk block are missing);
-## - controls: a call to a phone not on the desk, and a call left open, are each said.
+## - controls: a call to a phone not on the desk, and a call left open, are each said;
+## - the flip clock's cards fall as a flap let go, slap down within a fifth of a second and bounce (the control: an even turn
+##   is half way at half its time), the rightmost changed digit first; a digit that stays never flaps.
 ##
 ## Run: godot --headless --path . --script tests/dispatch/dispatch_script_check.gd
 
@@ -384,6 +386,21 @@ func _init() -> void:
 	var mute := DispatchScript.parse(desk + "<!-- speaker: Van -->\n\nHello.\n")
 	_ok(String(mute["warnings"][0]).contains("no phone open") and not String(mute["speakable"]).contains("heard"),
 		"the control: a voice whose phone is not open is said, and heard in the room")
+	# the flip clock's cards: a flap falls faster all the way and slaps down within a fifth of a second, then bounces once off
+	# its stop; the rightmost digit that changes flaps first, each changed one to its left after it
+	var half_way := DispatchScript.flap_angle(DispatchScript.CLOCK_LAND * 0.5)
+	var landed := DispatchScript.flap_angle(DispatchScript.CLOCK_LAND)
+	var bounce := DispatchScript.flap_angle((DispatchScript.CLOCK_LAND + 1.0) * 0.5)
+	_ok(DispatchScript.CLOCK_FLAP * DispatchScript.CLOCK_LAND <= 0.2 and absf(half_way - PI * 0.25) < 0.01 and is_equal_approx(landed, PI)
+		and bounce < PI - 0.05 and is_equal_approx(DispatchScript.flap_angle(1.0), PI),
+		"a clock's card falls as a flap let go, slapping down in %.2f s and bouncing off its stop (half its fall it has turned %.0f degrees; the control, an even turn, 90)"
+		% [DispatchScript.CLOCK_FLAP * DispatchScript.CLOCK_LAND, rad_to_deg(half_way)])
+	var all_four := DispatchScript.flap_starts("23:59", "00:00")
+	var two := DispatchScript.flap_starts("23:39", "23:40")
+	_ok(all_four[3] == 0.0 and all_four[0] > all_four[1] and all_four[1] > all_four[2] and all_four[2] > all_four[3]
+		and all_four[0] + DispatchScript.CLOCK_FLAP <= DispatchScript.CLOCK_TURN + 1e-4 and two[0] < 0.0 and two[1] < 0.0 and two[3] == 0.0 and two[2] > 0.0,
+		"the rightmost digit that changes flaps first and each to its left after it, all four within the turn (%s); a digit that stays never flaps (%s)"
+		% [str(all_four), str(two)])
 	if _fails.is_empty():
 		print("dispatch_script_check: ALL OK (%d words, %d actions)" % [spoken.size(), actions.size()])
 		quit(0)
