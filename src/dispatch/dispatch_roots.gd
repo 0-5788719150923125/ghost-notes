@@ -11,7 +11,9 @@ class_name DispatchRoots
 ## long way along it; at each end one clings under the desk's edge, runs down its front corner and out across the floor
 ## toward the chair. The ones on the desk come down behind it, over its far edge or its ends where there is a gap, and
 ## crawl across its top toward the chair between the things standing on it ([member DispatchSet.footprints]); how much of
-## each is grown is a pure function of show time ([method grow]), its tip a taper moving on along it.
+## each is grown is a pure function of show time ([method grow]), its tip a taper moving on along it. No root goes through
+## what fills the air beside the desk ([member DispatchSet.clear]: the printer's paper and its heap): it goes round ([method
+## _cleared]).
 
 ## How many: hanging systems, and roots on the desk; systems beside the desk on each side, and how far out from the middle
 ## they keep (m: never in front of what the chair sees at the desk's ends); roots along under each end.
@@ -39,11 +41,16 @@ const GROWN_BY := 1500.0
 ## Where no hanging root goes: over the desk and in front of it (the chair's), and the column before the terminal.
 const KEEP_OUT_DESK := Rect2(-1.32, -0.62, 2.64, 2.6)
 const KEEP_OUT_TERMINAL := Rect2(-0.55, -1.25, 1.1, 0.7)
+## How far a root keeps from what it goes round, past its own thickness (m).
+const CLEAR_GAP := 0.015
 
 var _seed := 1
 var _desk_mat: ShaderMaterial
 var _feet: Array = []
 var _held := Rect2()
+var _clear: Array = []           # what no root goes through (AABBs, the set's space)
+## Every root off the desk's top as made, `{points, radii}`: the hanging ones, those beside the desk and under its ends.
+var hanging: Array = []
 ## The roots on the desk as made: each `{from, to}` (x, z, m) - where it came onto the desk and where its tip is grown to.
 var on_desk: Array = []
 ## What lies on the desk's top, every root and tendril there: `{points, radii, from}` - its points from `from` on are on
@@ -52,11 +59,13 @@ var lying: Array = []
 
 
 ## Build them for [param seed], keeping clear of [param footprints] on the desk (Rect2s in x, z) and of [param held], where a
-## phone laid open lies ([method DispatchSet.held_rect]): its way, its tendrils and its wander all avoid them.
-func build(seed: int, footprints: Array, held := Rect2()) -> Node3D:
+## phone laid open lies ([method DispatchSet.held_rect]): its way, its tendrils and its wander all avoid them - and going round
+## [param clear] (AABBs: [member DispatchSet.clear]).
+func build(seed: int, footprints: Array, held := Rect2(), clear: Array = []) -> Node3D:
 	_seed = seed
 	_feet = footprints + ([held] if held.has_area() else [])
 	_held = held
+	_clear = _merged(clear)
 	var root := Node3D.new()
 	root.name = "Roots"
 	var hang_mat := _material(1.0)
@@ -90,6 +99,9 @@ func build(seed: int, footprints: Array, held := Rect2()) -> Node3D:
 			n += 1
 		for k in UNDER:
 			_under_root(r, side, paths)
+	for path in paths:
+		(path as Dictionary)["points"] = _cleared((path as Dictionary)["points"], (path as Dictionary)["radii"])
+	hanging = paths
 	var hang := MeshInstance3D.new()
 	hang.name = "Hanging"
 	hang.mesh = _mesh(paths)
@@ -176,6 +188,63 @@ func _walk(r: RandomNumberGenerator, at: Vector3, dir: Vector3, r0: float, budge
 			_walk(r, p, cd, rad[rad.size() - 1] * 0.62, (budget - gone) * r.randf_range(0.4, 0.85), depth + 1, out, crawl, outer)
 	if pts.size() >= 3:
 		out.append({"points": pts, "radii": rad})
+
+
+## [param boxes] with any two nearer than a root is thick made one, the box round both: a root pushed out of one never lands in
+## another, nor squeezes between them.
+static func _merged(boxes: Array) -> Array:
+	var out: Array = boxes.duplicate()
+	var joined := true
+	while joined:
+		joined = false
+		for i in out.size():
+			for j in range(i + 1, out.size()):
+				if (out[i] as AABB).grow(THICK.y + CLEAR_GAP).intersects(out[j] as AABB):
+					out[i] = (out[i] as AABB).merge(out[j] as AABB)
+					out.remove_at(j)
+					joined = true
+					break
+			if joined:
+				break
+	return out
+
+
+## [param pts] (each [param rad] thick) kept out of what no root goes through ([member _clear]) - the first [param upto] of them,
+## all for -1: a run of points inside one box pushed out together through the side nearest where it went in (x or z, never up
+## or down), so the root goes round it, [constant CLEAR_GAP] off.
+func _cleared(pts: PackedVector3Array, rad: PackedFloat32Array, upto := -1) -> PackedVector3Array:
+	if _clear.is_empty():
+		return pts
+	var out := pts.duplicate()
+	var n := pts.size() if upto < 0 else mini(upto, pts.size())
+	var face := -1
+	var was := -1
+	for i in n:
+		var p := out[i]
+		var inside := -1
+		for b in _clear.size():
+			if (_clear[b] as AABB).grow(rad[i] + CLEAR_GAP).has_point(p):
+				inside = b
+				break
+		if inside < 0:
+			face = -1
+			continue
+		var g: AABB = (_clear[inside] as AABB).grow(rad[i] + CLEAR_GAP)
+		if inside != was or face < 0:
+			was = inside
+			var by := [p.x - g.position.x, g.end.x - p.x, p.z - g.position.z, g.end.z - p.z]
+			face = by.find(by.min())
+		match face:
+			0:
+				p.x = g.position.x
+			1:
+				p.x = g.end.x
+			2:
+				p.z = g.position.z
+			_:
+				p.z = g.end.z
+		out[i] = p
+	return out
 
 
 static func _radius(r0: float, u: float) -> float:
@@ -283,6 +352,8 @@ func _desk_root(r: RandomNumberGenerator, k: int, grid: AStarGrid2D, out: Array,
 	for i in n:
 		var u := float(i) / float(n - 1)
 		rad.append(lerpf(r0 * 1.8, TIP, pow(u, 0.9)))
+	# its way down round what fills the air by the desk; its way across the top keeps clear of what stands there already
+	pts = _cleared(pts, rad, edge)
 	out.append({"points": pts, "radii": rad, "grow_at": edge})
 	lying.append({"points": pts, "radii": rad, "from": edge})
 	on_desk.append({"from": entry, "to": flat[flat.size() - 1]})

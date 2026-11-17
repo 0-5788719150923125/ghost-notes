@@ -16,12 +16,13 @@ block (the author's, never ghost's `ghost:` block).
 
 ## Decisions
 
-- **Every prop is built by code, not by agents.** Each has a job in the script - a phone opens and is held to the ear,
-  the terminal types, the printer prints, the radar pings, the receiver's needle swings with the static, the switch is
-  thrown - and a prop an agent designs cannot be worked by a mark, costs agent runs per note and lands unpredictable
-  geometry. Static parts are [Props] specs written in code (as [DeskLook] writes the letter's desk things); moving parts
-  are nodes of their own. The `desk:` block's words are kept for a later set dresser (phase two, as the letter's); today
-  only `phones` (the labels, in order) is read.
+- **Every thing on the desk is a make of a role, not an agent's per note** (next/working_props.md). Each has a job in the
+  script - a phone opens and is held to the ear, the terminal types, the printer prints, the radar pings, the receiver's
+  needle swings with the static, the switch is thrown - so each is a [PropMakes] role whose own make is a [Props] spec
+  shipped in `data/props/`, its working parts named: faces the desk shows its pictures on, lights, and parts that
+  follow what the desk feeds them. Any make with the role's faces can play it - one kept, one refined - and is worked the same
+  way. The `desk:` block's words are kept for a later set dresser (phase two, as the letter's); today only `phones` (the
+  labels, in order) is read.
 - **The camera sits in the chair and turns to what is active** (a phone ringing, the terminal typing, the radar on a
   ping, a picture landing on a screen, the receiver while it plays static), leaning a little toward it slowly and gently,
   as the night is: a lead that eases every move in, then critically damped springs (`LEAD_TAU`, `SPRING_TAU`; half a move

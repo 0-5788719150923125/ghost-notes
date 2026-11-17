@@ -177,7 +177,7 @@ Status: not started.
 
 ## Open questions for the user
 
-- Where the choice lives. A row on the Environment panel ("Render on: this PC / AWS") is the guess - where renders
+- Where the choice lives. A row on the Setup panel ("Render on: this PC / AWS") is the guess - where renders
   run is a fact about the machine, like the sandbox checkbox, not about a note.
 - The region: G7 launched in us-east-2 and us-west-2, and us-east-1 had it from July 10.
 - A monthly spend cap.

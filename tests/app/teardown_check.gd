@@ -14,7 +14,7 @@ extends Node
 ## background programs [Subprocess] tracks. A number that grows with every cycle is a leak. The first cycle of
 ## a mode may build what later ones reuse, so cycles 2..N must agree with each other.
 ##
-## Nothing is measured until the Environment panel's probe has landed: its rows are built when a thread comes
+## Nothing is measured until the Setup panel's probe has landed: its rows are built when a thread comes
 ## back, and rows landing mid-cycle read as a leak. It is waited on by the clock, and a probe that never lands
 ## fails here rather than as a count that grew.
 ##
@@ -62,7 +62,7 @@ const BOARDS := {
 const ROOT := "user://teardown_check_notes"
 ## The notes' folders, the gate's own.
 const READINGS := "user://teardown_check_readings"
-## How long the Environment panel's first probe may take: a backstop only, far over a cold probe on a
+## How long the Setup panel's first probe may take: a backstop only, far over a cold probe on a
 ## loaded runner.
 const PROBE_WAIT_MS := 120000
 
@@ -82,7 +82,7 @@ func _run() -> void:
 	_notes = {}
 	_main = preload("res://scenes/main.tscn").instantiate()
 	add_child(_main)
-	# the notes list and the Environment panel's first probe (a thread) settle first
+	# the notes list and the Setup panel's first probe (a thread) settle first
 	await _frames(30)
 	await _settle_probe()
 	var home := _measure()
@@ -288,14 +288,14 @@ func _quiet(home_procs: int) -> void:
 		await _frames(5)
 
 
-## The Environment panel's first probe runs on a thread and builds its rows when it returns: waited on by the
+## The Setup panel's first probe runs on a thread and builds its rows when it returns: waited on by the
 ## clock, since how many frames a cold probe takes is the machine's.
 func _settle_probe() -> void:
 	var env: DepsPanel = _main._chrome.environment
 	var t0 := Time.get_ticks_msec()
 	while not _probed(env) and Time.get_ticks_msec() - t0 < PROBE_WAIT_MS:
 		await get_tree().process_frame
-	_ok(_probed(env), "the Environment panel's probe has landed before anything is measured (%d rows, %.1f s)"
+	_ok(_probed(env), "the Setup panel's probe has landed before anything is measured (%d rows, %.1f s)"
 		% [env._rows.size(), (Time.get_ticks_msec() - t0) / 1000.0])
 	await _frames(10)
 

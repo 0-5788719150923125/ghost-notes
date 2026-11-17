@@ -6,13 +6,13 @@ extends Node
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/desk/letter_look_probe.gd 400 \
 ##       --out <dir>/l --letter <a letter .md> [--svgs <key -> svg .json>] [--ink <typeset answer .json>] \
-##       [--picture <png>] [--seed N] [--hand kalam] [--things mug,dog_tag] [--mood lamplight] [--card 'a\nb'] \
+##       [--picture <png>] [--seed N] [--hand kalam] [--things mug,dog_tag] [--light lamplight] [--rays N] [--air a,b] [--card 'a\nb'] \
 ##       --times 3,8,20 [--every S] [--page 1] [--words W]
 ##
 ## `--svgs` and `--ink` are what the Letter card would hand it (a sketch's drawing by its key, and hosts/math/typeset.py's
 ## answer for them); `--picture` stands in for every picture the letter shows. `--every S` photographs every S seconds to
 ## the end instead of `--times`; `--page 1` also writes the flat pad texture beside each frame. `--words W` reads at W
-## seconds a word (0.32 by default). `--things` and `--mood` are what the card chose for the desk ([method
+## seconds a word (0.32 by default). `--things` is what the Props card chose for the desk and `--light` the Environment card's light ([method
 ## DeskLook.picks_of]; none: the seed's), `--card` what is written on its index cards (`\n` a new line).
 ## It asserts only that a frame is not uniform.
 
@@ -34,7 +34,8 @@ var _page := false
 var _word := 0.32
 var _flat := 0
 var _things: Variant = null
-var _mood := ""
+var _light := ""
+var _environment := {}             # the rest of the Environment card's block ([Surroundings]): --rays, --air, --bright
 var _card := ""
 
 
@@ -59,7 +60,10 @@ func _run() -> void:
 			"--page": _page = args[i + 1] == "1"
 			"--words": _word = float(args[i + 1])
 			"--things": _things = Array(String(args[i + 1]).split(",", false))
-			"--mood": _mood = args[i + 1]
+			"--light": _light = args[i + 1]
+			"--rays": _environment["rays"] = int(args[i + 1])
+			"--air": _environment["air"] = Array(String(args[i + 1]).split(","))
+			"--bright": _environment["brightness"] = float(args[i + 1])
 			"--card": _card = String(args[i + 1]).c_unescape()
 			"--times":
 				_times = []
@@ -81,8 +85,6 @@ func _run() -> void:
 		"ink": ink if ink is Dictionary else {}, "pictures": pictures}
 	if _things is Array:
 		letter["things"] = _things
-	if not _mood.is_empty():
-		letter["mood"] = _mood
 	if not _card.is_empty():
 		letter["card_text"] = _card
 	var records := LetterScript.records_of(letter["ink"])
@@ -103,7 +105,7 @@ func _run() -> void:
 	Director.hold(true)
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	subs.words = words
-	subs.document = {"source": source, "letter": letter, "title": _field(source, "title"),
+	subs.document = {"source": source, "letter": letter, "environment": _environment.merged({"light": _light}), "title": _field(source, "title"),
 		"author": _field(source, "author")}
 	add_child(subs)
 	if medium.bind_captions(subs):

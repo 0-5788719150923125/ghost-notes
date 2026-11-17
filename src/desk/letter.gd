@@ -185,6 +185,7 @@ func _ensure_doc() -> void:
 	if _subs == null or not is_instance_valid(_subs):
 		return
 	var d: Dictionary = _subs.document
+	set_environment(Surroundings.sanitize(d.get("environment")))
 	_title.channel = String(d.get("title", ""))
 	_title.byline = String(d.get("byline", d.get("author", "")))
 	var src := String(d.get("source", ""))
@@ -197,7 +198,7 @@ func _ensure_doc() -> void:
 	if key == _doc_key:
 		# the desk, what is on it and its light, chosen while it plays ([LetterFormat]): the desk dressed again, the letter
 		# as it is; nothing it writes, and nothing the voice says, depends on them
-		var picks := DeskLook.picks_of(letter)
+		var picks := DeskLook.picks_of(letter, environment)
 		if picks != _picks or _desk_of(letter) != _seed:
 			_set_desk(picks, _desk_of(letter))
 		return
@@ -215,7 +216,7 @@ func load_letter(source: String, letter: Dictionary, start := PackedStringArray(
 	if pens != _inks:
 		_dressed = -1
 	_inks = pens
-	_set_desk(DeskLook.picks_of(letter), _desk_of(letter))
+	_set_desk(DeskLook.picks_of(letter, environment), _desk_of(letter))
 	_let_go = {}
 	var svgs: Dictionary = letter.get("svgs", {}) if letter.get("svgs") is Dictionary else {}
 	var ink: Dictionary = letter.get("ink", {}) if letter.get("ink") is Dictionary else {}

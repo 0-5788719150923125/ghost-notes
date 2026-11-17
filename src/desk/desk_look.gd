@@ -19,8 +19,8 @@ class_name DeskLook
 ## painting, and the reading cloth [method Tables.sanitize] lays when it is handed no layers) is never chosen, so a desk
 ## needs no painter and no agent (proof_check holds it).
 ##
-## The desk is lit as a table is: each desk has a mood ([constant MOODS]) - the lamp at night, candles, a window's
-## daylight, a low sun at dusk - and the light it writes is the card table's ([Lights]: the sky's fill, the sun or the moon
+## The desk is lit as a table is: each desk has a mood ([constant Surroundings.LIGHTS], the Environment card's light) - the lamp at
+## night, candles, a window's daylight, a low sun at dusk, the moon, none - and the light it writes is the card table's ([Lights]: the sky's fill, the sun or the moon
 ## through a window, lamps out of the shot), drawn here as the set dresser would write it and built by [DeskLight]; the
 ## candles it puts on the desk are things like any other ([Props], a wick on the wax), their flames the table's.
 ##
@@ -31,7 +31,7 @@ class_name DeskLook
 
 ## The things a desk may have. `tall`: kept back from the pad (it would stand in the pen's or the camera's way); `weight`:
 ## how often it is chosen among the things lying about - none for a candle, which its desk's mood sets down ([constant
-## MOODS]), and none for what is only ever chosen ([method of]'s `picks`); `lit`: it burns; `layer`: it lies under the
+## Surroundings.LIGHTS]), and none for what is only ever chosen ([method of]'s `picks`); `lit`: it burns; `layer`: it lies under the
 ## pad, not on the desk ([method _desk]); `face`: the material of what must be seen of it, kept in the frame before the
 ## rest ([method _pack]; a dog tag's bone, its chain may hang past the edge).
 const THINGS := {
@@ -49,19 +49,6 @@ const THINGS := {
 	"tealights": {"label": "tea lights", "blurb": "Two or three tea lights burning in their tins on a saucer.", "tall": false, "weight": 0.0, "lit": true},
 	"dog_tag": {"label": "a dog tag", "blurb": "A flat, polished steel tag cut in the shape of a dog's bone, a V of two straight struts at the middle of its edge cast with it and a long fine chain through it - dropped beside it in a heap, its clasp along it.", "tall": false, "weight": 0.0, "face": "tag"},
 	"mat": {"label": "a desk mat", "blurb": "A mat of felt, wool, linen or cotton under the pad, now and then with a border.", "tall": false, "weight": 0.0, "layer": true},
-}
-## The desk's mood: how it is lit, each a row - `weight` how often, `lamp` the share of the desk lamp's light that is on
-## (0 off), `candles` how many burn on the desk ([least, most]) and whether one of them is the key, lighting the page as
-## the lamp would (`leads`). The rest of the light is the room's ([method _light]).
-const MOODS := {
-	"lamplight": {"label": "Lamplight", "blurb": "Night: the desk lamp lights the page, the room dark round it - a screen's glow, a street lamp, a fire, the moon in a window.",
-		"weight": 4.0, "lamp": 1.0, "candles": [0, 1], "leads": false},
-	"candlelight": {"label": "Candlelight", "blurb": "Night with the lamp off: candles on the desk light the page, their shadows moving with their flames.",
-		"weight": 2.5, "lamp": 0.0, "candles": [1, 2], "leads": true},
-	"daylight": {"label": "Daylight", "blurb": "Day: the sun falls through a window across the desk, the bars' shadows over it, the sky filling the room.",
-		"weight": 2.0, "lamp": 0.0, "candles": [0, 0], "leads": false},
-	"dusk": {"label": "Dusk", "blurb": "Evening: a low gold sun through the window, long shadows, and the lamp on.",
-		"weight": 1.5, "lamp": 0.6, "candles": [0, 1], "leads": false},
 }
 ## Where the desk's light comes from ([constant Lights.FROM]'s degrees: 270 the writer's left): the left, as for a right
 ## hand, whose shadow then falls away from the line.
@@ -175,13 +162,14 @@ static var _card_fonts := {}     # a hand -> its font for a card ([method _card_
 
 ## The look of the desk with seed [param seed]: `paper`, `rule`, `margin`, `ink`, `binding`, `board` (colors); `pen`
 ## ({body, trim, rest - its nib and turn, [method pen_rest]}); `lamp` ({color, energy, at, share - of it on}); `fill` (a
-## color); `mood` ([constant MOODS]) and `light` (the room's, [method Lights.sanitize]d); `top` and `layers` ([Tables]'
+## color); `mood` ([constant Surroundings.LIGHTS]) and `light` (the room's, [method Lights.sanitize]d); `top` and `layers` ([Tables]'
 ## spec, `materials` its materials) and `things` ([{kind, thing, materials}], not yet placed - [method dress] places them;
 ## the candles first).
 ##
 ## [param picks] is what was chosen for it ([method picks_of]): `things` (the [constant THINGS] keys on it, the mat among
-## them - each once, any order), `mood`, and what is written on its index cards (`card_text`, in `hand`). What it leaves
-## out is drawn from the seed; given `things`, the look is `picked` ([method _chosen]).
+## them - each once, any order), `mood`, what is written on its index cards (`card_text`, in `hand`), and the props kept that
+## play its things (`makes`, [method _played]). What it leaves out is drawn from the seed; given `things`, the look is `picked`
+## ([method _chosen]).
 static func of(seed: int, picks := {}) -> Dictionary:
 	var out := {}
 	var r := _rng(seed, "paper")
@@ -237,13 +225,13 @@ static func of(seed: int, picks := {}) -> Dictionary:
 	out["fill"] = Color.from_hsv(r.randf_range(0.55, 0.65), r.randf_range(0.1, 0.25), r.randf_range(0.8, 0.95))
 	r = _rng(seed, "mood")
 	var weights: Array = []
-	for k in MOODS:
-		weights.append([k, float((MOODS[k] as Dictionary)["weight"])])
+	for k in Surroundings.LIGHTS:
+		weights.append([k, float((Surroundings.LIGHTS[k] as Dictionary)["weight"])])
 	var mood := String(picks.get("mood", ""))
-	if not MOODS.has(mood):
+	if not Surroundings.LIGHTS.has(mood):
 		mood = String(_pick(r, weights))
 	out["mood"] = mood
-	(out["lamp"] as Dictionary)["share"] = float((MOODS[mood] as Dictionary)["lamp"])
+	(out["lamp"] as Dictionary)["share"] = float((Surroundings.LIGHTS[mood] as Dictionary)["lamp"])
 	out["light"] = Lights.sanitize(_light(seed, mood))
 	var chosen: Variant = picks.get("things")
 	var desk := _desk(seed, ("mat" in (chosen as Array)) if chosen is Array else null)
@@ -255,21 +243,60 @@ static func of(seed: int, picks := {}) -> Dictionary:
 		out["picked"] = true
 	else:
 		out["things"] = _candles(seed, mood) + _things(seed)
+	out["things"] = _played(out["things"], picks.get("makes", {}) if picks.get("makes") is Dictionary else {})
 	return out
 
 
-## What a document's `letter` chose for its desk ([LetterFormat]): `things` and `mood` where it carries them, and what is
-## written on its index cards (`card_text`) with the hand it is written in - [method of]'s `picks`.
-static func picks_of(letter: Dictionary) -> Dictionary:
+## [param things] (a desk's, [method of]) each played by the prop [param makes] keeps for its kind (`{kind: {kept: name}}`, a desk
+## thing refined - [method DeskRows.set_make]): its parts and materials the kept one's, its kind, writing and engraving its own.
+## A name the library lacks is the desk's own.
+static func _played(things: Array, makes: Dictionary) -> Array:
+	if makes.is_empty():
+		return things
+	var out: Array = []
+	for t in things:
+		var entry: Dictionary = t
+		var m: Variant = makes.get(String(entry.get("kind", "")))
+		var e := ThingLibrary.read(String((m as Dictionary).get("kept", ""))) if m is Dictionary else {}
+		if not e.is_empty():
+			var safe := Props.sanitize({"things": [e["thing"]], "materials": e["materials"]}, ["#888888"])
+			if not (safe["things"] as Array).is_empty():
+				entry = entry.duplicate()
+				entry["thing"] = (safe["things"] as Array)[0]
+				entry["materials"] = safe["materials"]
+		out.append(entry)
+	return out
+
+
+## The props kept that play a document's desk things ([param cfg]'s `makes`), each a [constant THINGS] kind played by `{kept: name}`;
+## any other dropped.
+static func makes_of(cfg: Dictionary) -> Dictionary:
+	var out := {}
+	var m: Dictionary = cfg["makes"] if cfg.get("makes") is Dictionary else {}
+	for k in m:
+		var c: Variant = m[k]
+		if THINGS.has(String(k)) and c is Dictionary and (c as Dictionary).get("kept") is String and not String(c["kept"]).strip_edges().is_empty():
+			out[String(k)] = {"kept": String(c["kept"])}
+	return out
+
+
+## What a document's `letter` chose for its desk ([LetterFormat]): `things` and `makes` where it carries them, what is written on its
+## index cards (`card_text`) with the hand it is written in, and its light (`mood`) where the document's [param environment] chooses
+## one ([constant Surroundings.LIGHTS], the Environment card's) - [method of]'s `picks`.
+static func picks_of(letter: Dictionary, environment: Variant = {}) -> Dictionary:
 	var out := {}
 	if letter.get("things") is Array:
 		out["things"] = (letter["things"] as Array).duplicate()
-	if MOODS.has(String(letter.get("mood", ""))):
-		out["mood"] = String(letter["mood"])
+	var light := String((environment as Dictionary).get("light", "")) if environment is Dictionary else ""
+	if Surroundings.LIGHTS.has(light):
+		out["mood"] = light
 	var card := String(letter.get("card_text", "")).strip_edges()
 	if not card.is_empty():
 		out["card_text"] = card
 		out["hand"] = Handwriting.of(String(letter.get("hand", "")))
+	var makes := makes_of(letter)
+	if not makes.is_empty():
+		out["makes"] = makes
 	return out
 
 
@@ -320,6 +347,15 @@ static func _light(seed: int, mood: String) -> Dictionary:
 			out["sun"] = {"look": "sun", "from": from, "height": r.randf_range(8.0, 18.0), "strength": r.randf_range(0.5, 0.8),
 				"color": _hex(_kelvin(r.randf_range(2200.0, 3000.0))), "softness": r.randf_range(0.15, 0.35)}
 			out["through"] = [window]
+		"moonlight":
+			night_sky["strength"] = r.randf_range(0.1, 0.18)
+			out["sky"] = night_sky
+			out["sun"] = {"look": "moon", "from": from, "height": r.randf_range(30.0, 50.0), "strength": r.randf_range(0.5, 0.65),
+				"color": String((Surroundings.LIGHTS["moonlight"] as Dictionary)["key_color"]), "softness": r.randf_range(0.3, 0.5)}
+			out["through"] = [window]
+		"darkness":
+			night_sky["strength"] = r.randf_range(0.03, 0.06)
+			out["sky"] = night_sky
 		"candlelight":
 			night_sky["strength"] = r.randf_range(0.05, 0.14)
 			out["sky"] = night_sky
@@ -337,11 +373,11 @@ static func _light(seed: int, mood: String) -> Dictionary:
 	return out
 
 
-## The candles a desk of [param mood] burns ([constant MOODS]): as many as it says, each a [constant THINGS]
+## The candles a desk of [param mood] burns ([constant Surroundings.LIGHTS]): as many as it says, each a [constant THINGS]
 ## candle ([method _thing]) - `{kind, thing, materials}`, made safe, as [method _things] gives.
 static func _candles(seed: int, mood: String) -> Array:
 	var r := _rng(seed, "candles")
-	var span: Array = (MOODS[mood] as Dictionary)["candles"]
+	var span: Array = (Surroundings.LIGHTS[mood] as Dictionary)["candles"]
 	var out: Array = []
 	for i in r.randi_range(int(span[0]), int(span[1])):
 		var kind := String(_pick(r, [["taper", 3.0], ["pillar", 2.0], ["tealights", 1.0]]))
@@ -430,7 +466,7 @@ static func _things(seed: int) -> Array:
 
 ## The things chosen for the desk of [param seed] ([param kinds], [constant THINGS] keys; the mat is the top's, [method
 ## _desk]): each once, in [constant THINGS]' order, the candles first as [method dress] places them, each drawn from a
-## generator of its own kind. A desk lit by candles ([constant MOODS] `leads`) and given none has a taper set down, since
+## generator of its own kind. A desk lit by candles ([constant Surroundings.LIGHTS] `leads`) and given none has a taper set down, since
 ## its page would have no light of its own. The index cards carry [param card] written on them in [param hand] (`writing`,
 ## [method _write]).
 static func _chosen(seed: int, mood: String, kinds: Array, card := "", hand := "") -> Array:
@@ -441,7 +477,7 @@ static func _chosen(seed: int, mood: String, kinds: Array, card := "", hand := "
 		if not row.is_empty() and not bool(row.get("layer", false)):
 			want[String(k)] = true
 			lit = lit or bool(row.get("lit", false))
-	if bool((MOODS[mood] as Dictionary)["leads"]) and not lit:
+	if bool((Surroundings.LIGHTS[mood] as Dictionary)["leads"]) and not lit:
 		want["taper"] = true
 	var out: Array = []
 	for burning in [true, false]:

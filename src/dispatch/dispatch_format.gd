@@ -85,7 +85,7 @@ func apply(cfg: Dictionary) -> void:
 	if cfg.get("things") is Dictionary:
 		for role in (cfg["things"] as Dictionary):
 			var c: Variant = (cfg["things"] as Dictionary)[role]
-			if DispatchSet.MAKE_SALTS.has(String(role)) and PropMakes.valid(c) and not (c as Dictionary).is_empty():
+			if DispatchSet.MAKE_SALTS.has(String(role)) and PropMakes.valid_for(String(role), c) and not (c as Dictionary).is_empty():
 				_knobs["things"][String(role)] = (c as Dictionary).duplicate(true)
 	_show_knobs()
 
@@ -142,7 +142,7 @@ func things() -> Dictionary:
 func choose(role: String, choice: Dictionary) -> String:
 	if not DispatchSet.MAKE_SALTS.has(role):
 		return "the desk has no such part to choose"
-	if not PropMakes.valid(choice):
+	if not PropMakes.valid_for(role, choice):
 		return "that is not something the part can be played by"
 	if choice.is_empty():
 		(_knobs["things"] as Dictionary).erase(role)

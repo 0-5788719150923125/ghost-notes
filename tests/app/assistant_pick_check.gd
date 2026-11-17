@@ -7,7 +7,7 @@ extends Node
 ##
 ## Through the real main scene, in two states worked out from the registry: this machine as it is, and no
 ## assistant CLI at all (every CLI's program hidden in `Deps._resolved`, the cache a launch reads, and the
-## Environment panel's `probed` signal re-asked). In each: Off and every assistant listed, Off always
+## Setup panel's `probed` signal re-asked). In each: Off and every assistant listed, Off always
 ## choosable, a CLI choosable exactly when installed and "(not installed)" when not, the whole picker grayed
 ## with none, its tooltip paragraphs intact through Boot's re-flow; and for every possible choice the choice
 ## kept, the assistant that would actually run, and the reason it would not. With none installed the tooltip

@@ -58,6 +58,12 @@ func refined(_key: String, _name: String) -> String:
 	return ""
 
 
+## The things it sets down that throw light, each tuned on the Environment card: `[{key, name}]` - `key` the name the scene reads its
+## share by ([method Surroundings.share_of]). None by default.
+func lit() -> Array:
+	return []
+
+
 ## What may take row [param key]'s place, offered on the Dex (a choice of mugs for the mug), whose Use puts the one picked there;
 ## null where nothing can.
 func choices(_key: String) -> PropSection:

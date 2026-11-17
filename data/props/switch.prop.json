@@ -1,0 +1,203 @@
+{
+	"name": "the switch box",
+	"line": "A small gray metal box with one toggle: GOOD on a strip of tape above it, BAD below.",
+	"thing": {
+		"name": "the switch box",
+		"parts": [
+			{
+				"shape": "box",
+				"size": [
+					9.0,
+					5.5,
+					7.0
+				],
+				"round": 0.4,
+				"at": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"material": "gray",
+				"points": {
+					"wire": [
+						0.0,
+						2.0,
+						-3.5
+					]
+				}
+			},
+			{
+				"shape": "lathe",
+				"profile": [
+					[
+						0,
+						0
+					],
+					[
+						0.8,
+						0
+					],
+					[
+						0.7,
+						0.6
+					],
+					[
+						0,
+						0.6
+					]
+				],
+				"at": [
+					0.0,
+					5.5,
+					0.0
+				],
+				"material": "steel"
+			},
+			{
+				"parts": [
+					{
+						"shape": "lathe",
+						"profile": [
+							[
+								0,
+								0
+							],
+							[
+								0.3,
+								0
+							],
+							[
+								0.22,
+								3.0
+							],
+							[
+								0,
+								3.0
+							]
+						],
+						"at": [
+							0.0,
+							0.0,
+							0.0
+						],
+						"material": "steel"
+					},
+					{
+						"shape": "lathe",
+						"profile": [
+							[
+								0,
+								0
+							],
+							[
+								0.35,
+								0
+							],
+							[
+								0.35,
+								0.4
+							],
+							[
+								0,
+								0.4
+							]
+						],
+						"at": [
+							0.0,
+							2.9,
+							0.0
+						],
+						"material": "steel"
+					}
+				],
+				"at": [
+					0.0,
+					6.0,
+					0.0
+				],
+				"name": "lever",
+				"joint": {
+					"kind": "hinge",
+					"at": [
+						0.0,
+						6.0,
+						0.0
+					],
+					"axis": [
+						1,
+						0,
+						0
+					]
+				},
+				"runs": {
+					"law": "follow",
+					"feed": "side",
+					"value": "28 * v",
+					"rest": -1
+				}
+			},
+			{
+				"shape": "face",
+				"name": "good",
+				"size": [
+					5.0,
+					1.6
+				],
+				"at": [
+					0.0,
+					5.56,
+					-2.2
+				],
+				"material": "tape",
+				"turn": [
+					-90.0,
+					0.0,
+					0.0
+				],
+				"text": "GOOD",
+				"hand": "marker",
+				"ink": "#0d0d0f"
+			},
+			{
+				"shape": "face",
+				"name": "bad",
+				"size": [
+					5.0,
+					1.6
+				],
+				"at": [
+					0.0,
+					5.56,
+					2.2
+				],
+				"material": "tape",
+				"turn": [
+					-90.0,
+					0.0,
+					0.0
+				],
+				"text": "BAD",
+				"hand": "marker",
+				"ink": "#0d0d0f"
+			}
+		]
+	},
+	"materials": {
+		"gray": {
+			"kind": "painted",
+			"color": "#5c5e63",
+			"polish": 0.55
+		},
+		"steel": {
+			"kind": "metal",
+			"color": "#8c8f94",
+			"polish": 0.7,
+			"wear": 0.05
+		},
+		"tape": {
+			"kind": "paper",
+			"color": "#decf9e",
+			"wear": 0.15
+		}
+	}
+}

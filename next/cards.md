@@ -1040,7 +1040,7 @@ in the open. The configuration is available to the agents, whose attention is dr
   seam; `CardsEditor` reads the episode's `table.json`), live in the push loop and into the export take
   (made stereo), on a worker in both. Its clock is the show's (`Spectrum.stream_origin()` + pushed frames),
   and a table handed in mid-reading is picked up within two seconds.
-- One dial, Environment (the Cards card, knob `environment`, 0.5): level (-60 to -10 dB, a straight line,
+- One dial, Place (the Episode card, knob `environment`, 0.5): level (-60 to -10 dB, a straight line,
   2.5 dB a step), how hard gusts and crashes strike, and brightness (distance). It ducks up to 4.7 dB under
   speech and a slow limiter holds a place alone under -5 dBFS. At 0.5 every part sits near -54 dBFS RMS,
   some 30 dB under the voice. A stored dial left at a low value is close to silent until it is turned up.

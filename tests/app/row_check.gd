@@ -125,7 +125,7 @@ func _geometry(ch: Chrome) -> void:
 	ch.release_export(&"row_check")
 	await _frames(3)
 	await _clears_transport(ch, vp)
-	# the Environment panel stands above the row
+	# the Setup panel stands above the row
 	ch.set_environment_open(true, false)
 	await _frames(3)
 	var env: Rect2 = ch.environment.get_global_rect()
@@ -133,7 +133,7 @@ func _geometry(ch: Chrome) -> void:
 	for b in _shown(ch):
 		if (b as Control).get_global_rect().intersects(env):
 			over = true
-	_ok(not over and env.end.y <= vp.y - Shell.ROW_TOP, "the Environment panel stands above the row, over nothing")
+	_ok(not over and env.end.y <= vp.y - Shell.ROW_TOP, "the Setup panel stands above the row, over nothing")
 
 
 func _clears_transport(ch: Chrome, vp: Vector2) -> void:

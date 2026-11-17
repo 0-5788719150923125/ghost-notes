@@ -1,0 +1,371 @@
+{
+	"name": "the terminal",
+	"line": "A deep beige CRT on a flat desktop case with a floppy slot; pale green text on black.",
+	"thing": {
+		"name": "the terminal",
+		"parts": [
+			{
+				"shape": "box",
+				"size": [
+					44.0,
+					11.5,
+					40.0
+				],
+				"round": 1.2,
+				"at": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"material": "beige",
+				"points": {
+					"cable": [
+						16.0,
+						2.0,
+						20.0
+					],
+					"wire left": [
+						-18.0,
+						5.0,
+						-18.0
+					],
+					"wire right": [
+						18.0,
+						5.0,
+						-18.0
+					]
+				}
+			},
+			{
+				"shape": "box",
+				"size": [
+					16.0,
+					2.6,
+					0.6
+				],
+				"round": 0.3,
+				"at": [
+					-9.0,
+					4.68,
+					20.1
+				],
+				"material": "beige dark"
+			},
+			{
+				"shape": "box",
+				"size": [
+					13.0,
+					0.4,
+					0.4
+				],
+				"round": 0.0,
+				"at": [
+					-9.5,
+					6.01,
+					20.4
+				],
+				"material": "black"
+			},
+			{
+				"shape": "box",
+				"size": [
+					1.6,
+					0.8,
+					0.6
+				],
+				"round": 0.2,
+				"at": [
+					-2.5,
+					4.43,
+					20.3
+				],
+				"material": "beige dark"
+			},
+			{
+				"shape": "box",
+				"size": [
+					3.0,
+					3.0,
+					1.0
+				],
+				"round": 0.4,
+				"at": [
+					16.0,
+					4.25,
+					20.3
+				],
+				"material": "beige dark"
+			},
+			{
+				"shape": "box",
+				"size": [
+					0.6,
+					0.4,
+					0.3
+				],
+				"round": 0.0,
+				"at": [
+					12.0,
+					5.55,
+					20.2
+				],
+				"material": "green light",
+				"name": "case light",
+				"start": {
+					"glow": 1.0
+				}
+			},
+			{
+				"shape": "box",
+				"size": [
+					42.0,
+					0.3,
+					0.3
+				],
+				"round": 0.0,
+				"at": [
+					0.0,
+					1.92,
+					20.05
+				],
+				"material": "beige dark"
+			},
+			{
+				"parts": [
+					{
+						"shape": "lathe",
+						"profile": [
+							[
+								0,
+								0
+							],
+							[
+								12.0,
+								0
+							],
+							[
+								10.0,
+								1.8
+							],
+							[
+								0,
+								1.8
+							]
+						],
+						"at": [
+							0.0,
+							0.0,
+							0.0
+						],
+						"material": "beige"
+					},
+					{
+						"shape": "lathe",
+						"profile": [
+							[
+								0,
+								0
+							],
+							[
+								7.0,
+								0
+							],
+							[
+								6.0,
+								3.0
+							],
+							[
+								0,
+								3.0
+							]
+						],
+						"at": [
+							0.0,
+							1.5,
+							0.0
+						],
+						"material": "beige"
+					},
+					{
+						"shape": "box",
+						"size": [
+							38.0,
+							35.0,
+							7.0
+						],
+						"round": 2.0,
+						"at": [
+							0.0,
+							4.5,
+							15.5
+						],
+						"material": "beige"
+					},
+					{
+						"shape": "box",
+						"size": [
+							30.406,
+							30.0,
+							30.406
+						],
+						"round": 0.0,
+						"at": [
+							0.0,
+							22.0,
+							12.0
+						],
+						"material": "beige",
+						"turn": [
+							-90.0,
+							0.0,
+							0.0
+						],
+						"taper": 0.535
+					},
+					{
+						"shape": "box",
+						"size": [
+							32.0,
+							24.75,
+							1.0
+						],
+						"round": 0.5,
+						"at": [
+							0.0,
+							10.825,
+							18.9
+						],
+						"material": "dark"
+					},
+					{
+						"shape": "face",
+						"name": "screen",
+						"size": [
+							29.0,
+							21.75
+						],
+						"at": [
+							0.0,
+							23.2,
+							19.75
+						],
+						"material": "screen",
+						"lit": 1.0,
+						"glass": {
+							"curve": 0.12,
+							"lines": 0.32,
+							"line_count": 300.0,
+							"bloom": 0.7
+						},
+						"light": {
+							"kind": "point",
+							"color": "#c7ffdb",
+							"strength": 0.16,
+							"reach": 160.0,
+							"falloff": 1.6,
+							"at": [
+								0.0,
+								-1.2,
+								17.25
+							]
+						},
+						"runs": {
+							"law": "follow",
+							"feed": "lit",
+							"state": "light",
+							"value": "0.1875 + 0.8125 * v"
+						}
+					},
+					{
+						"shape": "lathe",
+						"profile": [
+							[
+								0,
+								0
+							],
+							[
+								0.4,
+								0
+							],
+							[
+								0.4,
+								0.4
+							],
+							[
+								0,
+								0.4
+							]
+						],
+						"at": [
+							15.5,
+							6.7,
+							18.9
+						],
+						"material": "green light",
+						"turn": [
+							90.0,
+							0.0,
+							0.0
+						],
+						"name": "power light",
+						"start": {
+							"glow": 1.0
+						}
+					},
+					{
+						"shape": "box",
+						"size": [
+							1.8,
+							1.2,
+							0.6
+						],
+						"round": 0.3,
+						"at": [
+							13.0,
+							6.1,
+							19.2
+						],
+						"material": "beige dark"
+					}
+				],
+				"at": [
+					0.0,
+					11.5,
+					-1.0
+				]
+			}
+		]
+	},
+	"materials": {
+		"beige": {
+			"kind": "plastic",
+			"color": "#c7ba9e",
+			"polish": 0.5
+		},
+		"beige dark": {
+			"kind": "plastic",
+			"color": "#9e947d",
+			"polish": 0.4
+		},
+		"black": {
+			"kind": "plastic",
+			"color": "#09090a",
+			"polish": 0.6
+		},
+		"dark": {
+			"kind": "plastic",
+			"color": "#1a1a1c",
+			"polish": 0.5
+		},
+		"green light": {
+			"kind": "painted",
+			"color": "#33ff59",
+			"polish": 0.6
+		},
+		"screen": {
+			"kind": "plastic",
+			"color": "#040505",
+			"polish": 0.85
+		}
+	}
+}

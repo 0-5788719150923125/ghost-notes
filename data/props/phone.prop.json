@@ -1,0 +1,210 @@
+{
+	"name": "a flip phone",
+	"line": "An old flip phone lying lid up, a strip of masking tape across its lid with its name on it.",
+	"thing": {
+		"name": "a flip phone",
+		"parts": [
+			{
+				"shape": "box",
+				"size": [
+					5.0,
+					1.1,
+					9.6
+				],
+				"round": 0.55,
+				"at": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"material": "body"
+			},
+			{
+				"shape": "face",
+				"name": "keypad",
+				"size": [
+					3.9,
+					5.952
+				],
+				"at": [
+					0.0,
+					1.14,
+					0.6
+				],
+				"material": "dark",
+				"turn": [
+					-90.0,
+					0.0,
+					0.0
+				],
+				"lit": 0.2
+			},
+			{
+				"parts": [
+					{
+						"shape": "box",
+						"size": [
+							5.0,
+							1.1,
+							9.6
+						],
+						"round": 0.55,
+						"at": [
+							0.0,
+							1.1,
+							0.0
+						],
+						"material": "body"
+					},
+					{
+						"shape": "face",
+						"name": "inner",
+						"size": [
+							3.9,
+							4.8
+						],
+						"at": [
+							0.0,
+							1.07,
+							0.48
+						],
+						"material": "screen",
+						"turn": [
+							90.0,
+							0.0,
+							0.0
+						],
+						"lit": 1.0,
+						"glass": {
+							"curve": 0.0,
+							"lines": 0.0,
+							"bloom": 0.15,
+							"brightness": 1.1
+						}
+					},
+					{
+						"shape": "face",
+						"name": "outer",
+						"size": [
+							2.5,
+							1.92
+						],
+						"at": [
+							0.0,
+							2.24,
+							2.688
+						],
+						"material": "screen",
+						"turn": [
+							-90.0,
+							0.0,
+							0.0
+						],
+						"lit": 1.0,
+						"glass": {
+							"curve": 0.0,
+							"lines": 0.0,
+							"bloom": 0.15,
+							"brightness": 1.1
+						}
+					},
+					{
+						"shape": "face",
+						"name": "tape",
+						"size": [
+							5.3,
+							2.88
+						],
+						"at": [
+							0.0,
+							2.27,
+							-0.768
+						],
+						"material": "tape",
+						"turn": [
+							-90.0,
+							0.0,
+							2.0
+						],
+						"text": "PHONE",
+						"hand": "marker",
+						"ink": "#0d0d0f"
+					},
+					{
+						"shape": "lathe",
+						"profile": [
+							[
+								0,
+								0
+							],
+							[
+								0.4,
+								0
+							],
+							[
+								0.35,
+								1.2
+							],
+							[
+								0,
+								1.2
+							]
+						],
+						"at": [
+							1.6,
+							2.0,
+							-4.4
+						],
+						"material": "body"
+					}
+				],
+				"at": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"name": "lid",
+				"joint": {
+					"kind": "hinge",
+					"at": [
+						0.0,
+						1.1,
+						-4.8
+					],
+					"axis": [
+						1,
+						0,
+						0
+					]
+				},
+				"runs": {
+					"law": "follow",
+					"feed": "open",
+					"value": "-158 * v"
+				}
+			}
+		]
+	},
+	"materials": {
+		"tape": {
+			"kind": "paper",
+			"color": "#decf9e",
+			"wear": 0.15
+		},
+		"dark": {
+			"kind": "plastic",
+			"color": "#1a1a1c",
+			"polish": 0.5
+		},
+		"screen": {
+			"kind": "plastic",
+			"color": "#040505",
+			"polish": 0.85
+		},
+		"body": {
+			"kind": "plastic",
+			"color": "#141417",
+			"polish": 0.55
+		}
+	}
+}

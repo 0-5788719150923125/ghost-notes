@@ -10,10 +10,18 @@ class_name DispatchSet
 ## handbook, the mug, the gooseneck lamp, the patch panel, the GPS tracker; and the empty chair. Where the script uses them,
 ## a small flip clock and a tablet lying dark beside the keyboard ([method build]'s `wants`).
 ##
-## Built by code ([DispatchMedium]'s note). In meters: the desk's top at [constant DESK_Y], its near edge (the chair's) at
-## +z, x across from the chair. What moves is a node of its own, handed back in the members below for the medium to pose;
-## what shows something is a quad the medium hands a texture.
+## Every thing on it is a prop played by a role ([PropMakes], next/working_props.md): its make - the role's own, shipped in
+## `data/props/`, or one chosen and kept in the note ([member makes]) - built off the tree and placed here, its working
+## parts played through its rig ([member rigs], [PropRig]: its faces, lights and named parts). What is the desk's own is built
+## here: the room, the desk, the chair, the satellite monitor's arm, and what runs between things (cables, wires, the printer's
+## paper and its heap, the ring of old coffee), each laid from a make's named points. In meters: the desk's top at
+## [constant DESK_Y], its near edge (the chair's) at +z, x across from the chair. What shows something is a make's face the medium
+## hands a picture.
 
+## The worn green blotter on the desk's top (x, z: m) and its turn (degrees): a flat thing taped down lies wholly off it, on
+## the desk's own top ([method _misfit]) - laid across its edge it would be taped to both and lie under it.
+const BLOTTER := Rect2(-0.33, -0.05, 0.66, 0.44)
+const BLOTTER_TURN := -1.5
 ## The desk: its top's height, its width and depth, where its near and far edges are.
 const DESK_Y := 0.76
 const DESK_W := 2.4
@@ -30,57 +38,36 @@ const PHONE_STEP := Vector2(0.105, 0.155)
 const ROW := 6
 const HELD_AT := Vector2(-0.94, 0.318)
 const HELD_STEP := 0.135
-## How many phones may lie open on the desk at once, side by side.
+## How many phones may lie open on the desk at once, side by side, and how far each is turned off the last (degrees).
 const HELD_SLOTS := 3
+const HELD_FAN := 6.0
 ## The lid opens this far (degrees) about its hinge.
 const LID_OPEN := 158.0
-## The terminal: the case (w, h, d) and where it stands; the monitor's body and its screen's size (the glass, 4:3).
+## The terminal: where its case stands and its keyboard, and the case's size, which the cable and the switch's wire are laid
+## by where a make names no point for them.
 const CASE := Vector3(0.44, 0.115, 0.40)
 const CASE_AT := Vector2(0.0, -0.24)
-const CRT := Vector3(0.38, 0.35, 0.38)
-const SCREEN := Vector2(0.29, 0.2175)
 const KEYBOARD_AT := Vector2(0.0, 0.14)
-## The keys ([method _keys]): a unit's pitch (m, a little under the standard 19.05 mm), the gap between two keys, how far
-## a top is in from its foot, how deep its dish; each row's keys as [units, letter | modifier | gap]; and each row's top
-## height at its back and front (m) - the number row tallest and leaning most toward the typist.
-const KEY_U := 0.0185
-const KEY_GAP := 0.0012
-const KEY_INSET := 0.0024
-const KEY_DISH := 0.0007
-const KEY_ROWS := [
-	[[1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"],
-		[1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [2.0, "modifier"]],
-	[[1.5, "modifier"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"],
-		[1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.5, "letter"]],
-	[[1.75, "modifier"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"],
-		[1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [2.25, "modifier"]],
-	[[2.25, "modifier"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"],
-		[1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [1.0, "letter"], [2.75, "modifier"]],
-	[[1.5, "modifier"], [1.0, "gap"], [1.5, "modifier"], [7.0, "letter"], [1.5, "modifier"], [1.0, "gap"], [1.5, "modifier"]],
-]
-const KEY_PROFILE := [Vector2(0.0118, 0.0098), Vector2(0.0104, 0.0092), Vector2(0.0094, 0.0090), Vector2(0.0090, 0.0094),
-	Vector2(0.0090, 0.0096)]
 ## Where each of the radar, receiver, printer, screens and lamp stands (x, z) on the desk: each clear of the others
 ## however the desk turns and shifts them ([constant JITTER]).
 const RADAR_AT := Vector2(0.50, 0.02)
-const RADAR_R := 0.115
-## The radar's gain knob: its radius at its base (m), the printed scale round it (a square this wide, [DispatchScreens]'s
-## `gain` face), and how far its pointer turns from one to ten (degrees, over the top).
+## How far under the radar's glass its close-up aims (m), so the knobs under the scope are in it too.
+const RADAR_LOOK_LOW := 0.03
+## The scale printed round the radar's gain knob ([DispatchScreens]'s `gain` face, on the make's `scale` face): the knob's radius
+## and the face's width it is drawn for (m), and how far its numbers run round from one to ten (degrees, over the top) - as the
+## radar's own make turns its knob ([method gain_angle]).
 const GAIN_KNOB_R := 0.012
 const GAIN_FACE := 0.044
 const GAIN_SWING := 270.0
-## The lamp lit.
-const LAMP_ENERGY := 2.6
 const RECEIVER_AT := Vector2(1.02, -0.33)
 const PRINTER_AT := Vector2(-0.96, -0.36)
 const FEED_AT := Vector2(-0.53, -0.42)
 const TV_AT := Vector2(0.66, -0.47)
 const LAMP_AT := Vector2(-0.32, -0.26)
-## The satellite's monitor on its arm ([method _satellite]): the panel and its glass, the most its two segments reach, the step
+## The satellite's monitor on its arm ([method _satellite]): the panel where its make gives none, the most its two segments reach, the step
 ## its clamp's place along the back edge is looked for at, and where it may hold the panel's middle - how far out from the
 ## desk's middle, how far back (+z the chair's edge) and how high over the desk's top (m), all on the phones' side.
 const SAT_PANEL := Vector3(0.36, 0.235, 0.025)
-const SAT_GLASS := Vector2(0.33, 0.206)
 const ARM_LEN := 0.30
 const ARM_CLAMP_STEP := 0.02
 ## How far below the arm's head its post stops (m), and what each meter of the arm's reach costs where it chooses (a short arm,
@@ -101,17 +88,18 @@ const JITTER_TURN := 5.0
 ## The small things, packed in this order ([method _pack]), each by the box its own meshes fill turned as it stands
 ## ([method bounds]): where it may go - `side` the radio's things', the phones', or either; `x` how far across from the
 ## middle, `z` how far back (+z the chair's edge) - and how it turns about up: `turn` drawn between (degrees), or `face`
-## its local direction turned to the chair, give or take `give`. `flat`: nothing stands on it, a root may cross it; `low`: it
+## its local direction turned to the chair, give or take `give`. `flat`: nothing stands on it, a root may cross it, and it lies
+## wholly off the blotter ([constant BLOTTER]); `low`: it
 ## may lie in the chair's reach before the keyboard and over the desk's near edge a little ([constant LOW_OVER]);
 ## `want`: built only where the script uses it; `anywhere`: tried anywhere on the desk once half its tries found no room in
 ## its region; `spare`: left off a desk with no room for it. What the camera reads is packed first. The mug stays at arm's reach beside the keyboard, 25 to 40 cm in from the edge.
 const PACK := {
 	"handbook": {"side": "radio", "x": Vector2(0.72, 1.0), "z": Vector2(-0.02, 0.22), "face": Vector2(-1.0, 0.0), "give": 8.0},
 	"clock": {"side": "phones", "x": Vector2(0.20, 0.52), "z": Vector2(-0.14, 0.12), "face": Vector2(0.0, 1.0), "give": 6.0, "want": true, "anywhere": true},
+	"chart": {"side": "either", "x": Vector2(0.43, 0.95), "z": Vector2(0.10, 0.32), "turn": Vector2(-3.0, 3.0), "flat": true, "anywhere": true},
 	"tablet": {"side": "radio", "x": Vector2(0.20, 0.85), "z": Vector2(0.04, 0.32), "turn": Vector2(-7.2, 7.2), "want": true, "anywhere": true, "low": true},
 	"mug": {"side": "either", "x": Vector2(0.20, 0.62), "z": Vector2(-0.02, 0.15), "turn": Vector2(-156.0, -84.0)},
 	"switch": {"side": "either", "x": Vector2(0.18, 0.50), "z": Vector2(-0.02, 0.30), "turn": Vector2(-12.0, 12.0), "anywhere": true},
-	"chart": {"side": "either", "x": Vector2(0.0, 0.45), "z": Vector2(0.28, 0.32), "turn": Vector2(-3.0, 3.0), "flat": true, "anywhere": true},
 	"tracker": {"side": "either", "x": Vector2(0.2, 0.95), "z": Vector2(-0.12, 0.33), "turn": Vector2(18.0, 42.0), "anywhere": true},
 	"cup": {"side": "either", "x": Vector2(0.24, 0.40), "z": Vector2(-0.30, -0.06), "turn": Vector2(-120.0, 120.0), "spare": true},
 	"stamp": {"side": "either", "x": Vector2(0.05, 1.0), "z": Vector2(0.22, 0.33), "turn": Vector2(-12.0, 12.0), "spare": true},
@@ -123,29 +111,30 @@ const PACK_MARGIN := 0.015
 const FLAT_MARGIN := 0.005
 ## How far a low thing may lie out over the desk's near edge (m).
 const LOW_OVER := 0.02
-## The salt each role's own make is drawn with from the desk's number ([method _made]): renaming one redraws every desk's.
-const MAKE_SALTS := {"mug": "mug", "pencil_cup": "cup"}
+## The desk's roles ([PropMakes]), each with the salt its own make is drawn with from the desk's number ([method _rig]):
+## renaming one redraws every desk's.
+const MAKE_SALTS := {"mug": "mug", "pencil_cup": "cup", "terminal": "terminal", "keyboard": "keyboard", "phone": "phone",
+	"radar": "radar", "receiver": "receiver", "printer": "printer", "feed": "feed", "satellite": "satellite", "tv": "tv",
+	"tv_stand": "tv_stand", "lamp": "lamp", "switch": "switch", "handbook": "handbook", "stamp": "stamp", "tracker": "tracker",
+	"chart": "chart", "clock": "clock", "tablet": "tablet"}
+## What of each thing the camera reads, by its make's faces ([member _faces]): what is packed is kept from hiding them.
+const READ := {"terminal": ["screen"], "radar": ["scope", "scale"], "receiver": ["dial", "meter", "scope"], "feed": ["screen"],
+	"satellite": ["screen"], "tv": ["screen"], "switch": ["good", "bad"], "handbook": ["spine"], "chart": ["chart"], "clock": ["cards"]}
+## The material each phone's make wears in a color of its own ([constant PHONE_COLORS], drawn phone by phone).
+const PHONE_TINT := "body"
+const PHONE_COLORS := [Color(0.08, 0.08, 0.09), Color(0.42, 0.43, 0.46), Color(0.07, 0.10, 0.18), Color(0.18, 0.18, 0.2), Color(0.30, 0.06, 0.06)]
 const PACK_TRIES := 300
 ## What the camera turns to keeps in sight ([method _sights]): of each face read (a label, a dial, a screen, the clock's
 ## cards), at most this share hidden by a nearer thing packed in front of it, seen from the chair and from its own spot...
 const HIDE_MOST := 0.04
 ## ...or of a thing only watched, never read, this much.
 const HIDE_MOST_OF := {"mug": 0.3}
-## A mesh that is a cable or a wire: no part of the box its thing fills ([method bounds]).
+## A mesh that is a cable or a wire - laid here, or a make's rod (a `tube`: an antenna, a lamp's neck) - no part of the box its
+## thing fills ([method bounds]).
 const THIN := &"thin"
 
-## The flip clock's case and the window its cards show through (m); the tablet's case and screen (landscape when held).
-const CLOCK_CASE := Vector3(0.13, 0.072, 0.065)
-const CLOCK_FACE := Vector2(0.112, 0.05)
-## The tablet: the tablet medium's own ([TabletMedium]: its rounded slab, bezel, corners and screen, portrait 3:4) at a
-## real tablet's size; held to be read low over the desk's near edge (x, height above the desk, z), tipped toward the
-## chair this far from flat.
-const TABLET_SCALE := 0.2
-const TABLET_SCREEN := TabletMedium.SCREEN * TABLET_SCALE
-const TABLET_BEZEL := TabletMedium.BEZEL * TABLET_SCALE
-const TABLET_T := 0.007
-const TABLET_CORNER := TabletMedium.CORNER * TABLET_SCALE
-const TABLET_SCREEN_CORNER := TabletMedium.SCREEN_CORNER * TABLET_SCALE
+## The tablet held to be read low over the desk's near edge (x, height above the desk, z), tipped toward the chair this far
+## from flat.
 const TABLET_HELD := Vector3(0.0, 0.11, 0.36)
 const TABLET_TILT := 50.0
 
@@ -157,31 +146,26 @@ const ROOM := Vector3(3.2, 0.0, 2.6)
 
 ## The root of everything, and its parts the medium poses.
 var root: Node3D
-var phones: Array = []            # each {label, node, lid, inner, outer, tape, home: Transform3D}
-var terminal_screen: MeshInstance3D
-var terminal_glow: OmniLight3D
+var rigs := {}                    # a thing -> its make's rig ([PropRig]): every thing but the phones, which are each their own
+var phones: Array = []            # each {label, node, rig, inner, outer, tape, home: Transform3D}
+var terminal_screen: MeshInstance3D   # the faces the medium hands pictures ([PropRig.face]; null where a make has none)
 var radar_screen: MeshInstance3D
-var radar_glow: OmniLight3D
-var gain_knob: Node3D             # the radar's gain knob, turned about its axis ([method gain_angle])
 var scope_screen: MeshInstance3D
-var needle: Node3D
 var dial: MeshInstance3D
-var printer_head: Node3D
 var paper: MeshInstance3D         # the sheet coming up out of the printer, printed
 var heap: Node3D                  # the printed paper's heap on the floor
 var heap_top: MeshInstance3D
-var screens := {}                 # feed / satellite / tv -> {mesh, glow, center}
-var lever: Node3D                 # the switch's toggle
+var screens := {}                 # feed / satellite / tv -> {mesh, rig, node}
 var mug: Node3D
 var mug_home := Transform3D()
-var lamp: SpotLight3D
-var tracker_led: MeshInstance3D
+var lamp: Light3D                 # the lamp's light (its make's `lamp`), lit by the medium's feed
 var chair: Node3D
-var clock_face: MeshInstance3D    # the flip clock's cards, a quad the medium hands a texture (null without a clock)
+var clock_face: MeshInstance3D    # the flip clock's cards (null without a clock)
 var tablet: Node3D                # the tablet, posed by the medium (null without one)
 var tablet_screen: MeshInstance3D
 var tablet_home := Transform3D()
 var footprints: Array = []        # Rect2s of what stands on the desk (x, z), for the roots to go round - nothing flat
+var clear: Array = []             # AABBs of what fills the air by the desk, which no root goes through: the paper, its heap
 var bodies := {}                  # a thing -> the box its meshes fill, in the set's space ([method bounds])
 var things := {}                  # a thing -> its node, as built
 var makes := {}                   # the makes chosen for the desk's parts in place of its own ({role: choice}, [DispatchProps])
@@ -207,22 +191,19 @@ var _blocks := {}                 # a thing -> each of its meshes' boxes as it s
 var _wants := {}                  # the things built only where the script uses them: clock, tablet
 var _tex := {}
 var _mats := {}
+var _sat_panel := SAT_PANEL       # the satellite's make: its panel's size and its glass's, which the arm is reckoned by
+var _sat_glass := Vector2(0.33, 0.206)
 
 
-## Build the desk for [param labels] (the phones', in order) and [param seed], out of the tree (on a worker, as the table's
-## is: nothing here may need the tree); [param tex] holds what [DispatchScreens] draws for it ([method
-## DispatchScreens.textures]): the phones' tape (an atlas, a cell a phone), the chart, the spine, the dial, the switch's words.
-## Build the desk for phones [param labels] and desk number [param seed]; [param wants] the things built only where the
+## Build the desk for phones [param labels] (their names, in order) and desk number [param seed], out of the tree (on a worker,
+## as the table's is: nothing here may need the tree); [param tex] holds what [DispatchScreens] draws for it ([method
+## DispatchScreens.textures]): the chart, the dial, the keypad, the gain scale. [param wants]: the things built only where the
 ## script uses them (`clock`, `tablet`).
 func build(labels: PackedStringArray, seed: int, tex: Dictionary, wants := {}) -> Node3D:
 	_labels = labels
 	_seed = seed
 	_wants = wants
 	_tex = tex
-	var tape: Texture2D = tex["tape"]
-	var chart: Texture2D = tex["chart"]
-	var spine: Texture2D = tex["spine"]
-	var dial_face: Texture2D = tex["dial"]
 	root = Node3D.new()
 	root.name = "DispatchSet"
 	_lay_out()
@@ -230,13 +211,13 @@ func build(labels: PackedStringArray, seed: int, tex: Dictionary, wants := {}) -
 	_room()
 	_desk()
 	_terminal()
-	_phones(tape)
+	_phones()
 	_radar()
-	_receiver(dial_face)
+	_receiver()
 	_printer()
 	_things_back()
 	_monitors()
-	_things(chart, spine)
+	_things()
 	_chair()
 	for k in DispatchMedium.SPOTS:
 		var s := spot_of(String(k))
@@ -255,6 +236,13 @@ func build(labels: PackedStringArray, seed: int, tex: Dictionary, wants := {}) -
 		if foot.has_area():
 			footprints.append(foot)
 	return root
+
+
+## Every thing's working parts at show time [param t] ([PropRig.pose]), each fed what [param feeds] holds for it by its key
+## ([member rigs]); a phone is posed with its own ([member phones]' `rig`).
+func pose(t: float, feeds: Dictionary) -> void:
+	for k in rigs:
+		(rigs[k] as PropRig).pose(t, feeds.get(k, {}))
 
 
 # --- the layout -------------------------------------------------------------------------------------------------------
@@ -380,6 +368,9 @@ func _misfit(k: String, node: Node3D, shape: Dictionary, xf: Transform3D, held: 
 		bad += 10000.0
 	if foot.grow(margin).intersects(held) or not (flat or low) and foot.intersects(reach):
 		bad += 10000.0
+	# a flat thing lies wholly off the blotter (its turn's few millimeters counted)
+	if flat and foot.intersects(BLOTTER.grow(BLOTTER.size.x * 0.5 * absf(sin(deg_to_rad(BLOTTER_TURN))) + FLAT_MARGIN)):
+		bad += 10000.0
 	var part := _part_at(shape, xf)
 	var room := box.grow(margin)
 	var grown := Geometry2D.offset_polygon(part["outline"], margin)
@@ -421,12 +412,12 @@ func _sights() -> Array:
 func _face_points(f: Node3D, box: Variant = null) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	var mi := f as MeshInstance3D
-	var q := mi.mesh as QuadMesh if mi != null else null
-	if q != null:
+	if mi != null and _flat(mi):
+		var size: Vector2 = mi.get_meta("size") if mi.has_meta("size") else (mi.mesh as QuadMesh).size
 		var xf := bounds_xf(f)
 		for i in 5:
 			for j in 3:
-				out.append(xf * Vector3((0.2 * i - 0.4) * q.size.x, (0.35 * j - 0.35) * q.size.y, 0.0))
+				out.append(xf * Vector3((0.2 * i - 0.4) * size.x, (0.35 * j - 0.35) * size.y, 0.0))
 		return out
 	var b: AABB = box if box is AABB else bounds(f)
 	for i in 5:
@@ -540,21 +531,36 @@ static func _shape(node: Node3D) -> Dictionary:
 
 
 ## Each mesh under [param n] placed by [param xf] as a block ([method _block]), a flat one's and a thin one's left out: the
-## smaller of its own box turned as it is and the box its vertices fill square to [param xf]'s frame (a shape turned on its
-## own axis, as the terminal's four-sided body is, fills its own box only half).
+## smaller of its own box turned as it is - square to its part where a make's mesh says where its part stands in it (its
+## `xform` meta, [method Props.build]) - and the box its vertices fill square to [param xf]'s frame (a shape turned on its own
+## axis, as the terminal's four-sided body is, fills its own box only half).
 static func _mesh_boxes(n: Node3D, xf: Transform3D, out: Array) -> void:
 	var mi := n as MeshInstance3D
-	if mi != null and mi.mesh != null and not mi.mesh.has_meta(THIN) and not mi.mesh is QuadMesh:
+	if mi != null and mi.mesh != null and not mi.mesh.has_meta(THIN) and not _flat(mi):
 		var own := mi.mesh.get_aabb()
+		var own_xf := xf
+		if mi.has_meta("xform"):
+			var px: Transform3D = mi.get_meta("xform")
+			var local := px.affine_inverse() * mi.mesh.get_faces()
+			if not local.is_empty():
+				own = AABB(local[0], Vector3.ZERO)
+				for q in local:
+					own = own.expand(q)
+				own_xf = xf * px
 		var pts := xf * mi.mesh.get_faces()
 		var square := AABB(pts[0], Vector3.ZERO) if not pts.is_empty() else AABB()
 		for p in pts:
 			square = square.expand(p)
-		out.append(_block(square, Transform3D.IDENTITY) if square.get_volume() < own.get_volume() else _block(own, xf))
+		out.append(_block(square, Transform3D.IDENTITY) if square.get_volume() < own.get_volume() else _block(own, own_xf))
 	for c in n.get_children():
 		var c3 := c as Node3D
 		if c3 != null:
 			_mesh_boxes(c3, xf * c3.transform, out)
+
+
+## Whether [param mi] is flat on something already: a make's face (its `size` meta, [method Props.build]) or a quad.
+static func _flat(mi: MeshInstance3D) -> bool:
+	return mi.has_meta("size") or mi.mesh is QuadMesh
 
 
 ## A mesh's own box [param box] placed by [param xf]: `{box, xf, inv}` and `world`, the box it fills square to the set.
@@ -619,7 +625,7 @@ func _parts_of(node: Node3D, whole: bool) -> Array:
 
 static func _mesh_parts(n: Node3D, xf: Transform3D, out: Array) -> void:
 	var mi := n as MeshInstance3D
-	if mi != null and mi.mesh != null and not mi.mesh.has_meta(THIN) and not mi.mesh is QuadMesh:
+	if mi != null and mi.mesh != null and not mi.mesh.has_meta(THIN) and not _flat(mi):
 		var pts := xf * mi.mesh.get_faces()
 		if not pts.is_empty():
 			out.append(_part_of(pts))
@@ -669,24 +675,17 @@ func held_rect() -> Rect2:
 
 # --- materials --------------------------------------------------------------------------------------------------------
 
+## What the desk's own is made of: the cables, the arm, the chair, the heap's paper, the pedestals and the hollow's earth.
 func _materials() -> void:
-	_mats["beige"] = _std(Color(0.78, 0.73, 0.62), 0.5)
 	_mats["beige_dark"] = _std(Color(0.62, 0.58, 0.49), 0.6)
-	_mats["key"] = _std(Color(0.80, 0.76, 0.67), 0.45)
-	_mats["key_gray"] = _std(Color(0.52, 0.51, 0.49), 0.5)
 	_mats["black"] = _std(Color(0.035, 0.035, 0.04), 0.4)
 	_mats["dark"] = _std(Color(0.10, 0.10, 0.11), 0.5)
-	_mats["gray"] = _std(Color(0.36, 0.37, 0.39), 0.45, 0.35)
 	_mats["metal"] = _std(Color(0.55, 0.56, 0.58), 0.3, 0.85)
-	_mats["olive"] = _std(Color(0.24, 0.26, 0.20), 0.55)
 	_mats["wood_dark"] = _std(Color(0.12, 0.07, 0.045), 0.55)
 	_mats["cable"] = _std(Color(0.08, 0.08, 0.085), 0.6)
 	_mats["cable_blue"] = _std(Color(0.10, 0.28, 0.72), 0.45)
 	_mats["cable_yellow"] = _std(Color(0.85, 0.70, 0.10), 0.45)
 	_mats["paper"] = _std(Color(0.88, 0.87, 0.82), 0.9)
-	_mats["tape"] = _std(Color(0.88, 0.82, 0.62), 0.85)
-	_mats["led_green"] = _emit(Color(0.2, 1.0, 0.35), 3.0)
-	_mats["led_red"] = _emit(Color(1.0, 0.18, 0.12), 2.0)
 	_mats["fabric"] = _std(Color(0.10, 0.10, 0.11), 0.95)
 	_mats["earth"] = _earth()
 
@@ -696,15 +695,6 @@ static func _std(c: Color, rough: float, metal := 0.0) -> StandardMaterial3D:
 	m.albedo_color = c
 	m.roughness = rough
 	m.metallic = metal
-	return m
-
-
-static func _emit(c: Color, energy: float) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = c
-	m.emission_enabled = true
-	m.emission = c
-	m.emission_energy_multiplier = energy
 	return m
 
 
@@ -909,9 +899,9 @@ func _desk() -> void:
 	var top := {"shape": "rect", "size": [DESK_W * 100.0, DESK_D * 100.0], "thickness": 4.5, "edge": "eased", "material": "the desk",
 		"boards": {"width": 19.0, "turn": 0.0}}
 	var mid := Vector2(0.0, (NEAR + FAR) * 0.5)
-	var blot := Vector2(0.0, 0.17)
-	var lay := {"name": "the blotter", "what": "a worn green blotter", "outline": "rect", "size": [66.0, 44.0],
-		"at": [(blot.x - mid.x - Tables.TOP_AT.x) * 100.0, (blot.y - mid.y - Tables.TOP_AT.y) * 100.0], "turn": -1.5,
+	var blot := BLOTTER.get_center()
+	var lay := {"name": "the blotter", "what": "a worn green blotter", "outline": "rect", "size": [BLOTTER.size.x * 100.0, BLOTTER.size.y * 100.0],
+		"at": [(blot.x - mid.x - Tables.TOP_AT.x) * 100.0, (blot.y - mid.y - Tables.TOP_AT.y) * 100.0], "turn": BLOTTER_TURN,
 		"fabric": "felt", "pattern": {"kind": "plain", "colors": ["#2c4a33"]},
 		"border": {"width": 2.6, "inset": 0.0, "color": "#3b2a1c"}}
 	var spec := Tables.sanitize(top, [lay], {"the desk": Props.sanitize_material(mat, "#2a1810")}, [])
@@ -930,76 +920,72 @@ func _desk() -> void:
 	put(root, box(Vector3(DESK_W - 1.0, DESK_Y - 0.25, 0.025)), wood, Vector3(0, DESK_Y * 0.5 + 0.1, FAR + 0.08))
 
 
+# --- the makes ----------------------------------------------------------------------------------------------------------
+
+## Role [param role]'s make on this desk, built and rigged ([method PropMakes.made], [PropRig]): the one [member makes] chooses,
+## else the role's own, drawn from the desk's number and the role's salt ([constant MAKE_SALTS]). Its node stands at the origin,
+## its foot on y = 0, its front toward +z; its rods are thin ([constant THIN]). Touches no tree.
+func _rig(role: String) -> PropRig:
+	var choice: Variant = makes.get(role, {})
+	var b := PropMakes.made(role, choice if PropMakes.valid(choice) else {}, hash([_seed, String(MAKE_SALTS.get(role, role))]))
+	if not (b.get("node") is Node3D):
+		b = {"node": Node3D.new(), "size": AABB()}
+	var rig := PropRig.new(b)
+	rig.node.name = role.to_pascal_case()
+	for mi in rig.node.find_children("*", "MeshInstance3D", true, false):
+		if String((mi as MeshInstance3D).get_meta("shape", "")) == "tube" and (mi as MeshInstance3D).mesh != null:
+			(mi as MeshInstance3D).mesh.set_meta(THIN, true)
+	return rig
+
+
+## Role [param role]'s make stood on the desk at [param at] (the set's space), turned [param yaw] degrees about up: in [member
+## rigs] and in the set.
+func _place(role: String, at: Vector3, yaw: float) -> PropRig:
+	var rig := _rig(role)
+	rig.node.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(yaw)), at)
+	root.add_child(rig.node)
+	rigs[role] = rig
+	return rig
+
+
+## Where thing [param k]'s make has point [param name] (the set's space), or [param fallback] where it names none.
+func _point(k: String, name: String, fallback: Vector3) -> Vector3:
+	var rig: PropRig = rigs.get(k)
+	var p: Variant = rig.point(name) if rig != null else null
+	return bounds_xf(rig.node) * (p as Vector3) if p is Vector3 else fallback
+
+
+## The faces of thing [param k]'s make the camera reads ([constant READ]) that it has.
+func _read(k: String) -> Array:
+	var out: Array = []
+	var rig: PropRig = rigs.get(k)
+	for f in READ.get(k, []):
+		if rig != null and rig.face(String(f)) != null:
+			out.append(rig.face(String(f)))
+	return out
+
+
+## The desk's own number for [param k]'s picture ([constant MAKE_SALTS]) - what [DispatchProps] pictures it as.
+static func own_seed(k: String, seed: int) -> int:
+	return hash([seed, String(MAKE_SALTS.get(k, k))])
+
+
 # --- the terminal -----------------------------------------------------------------------------------------------------
 
-## The terminal: a flat beige desktop case with a floppy slot and a power button, the deep CRT on it (bezel round the
-## glass, body tapering back, a power lamp in the bezel's corner) and the narrow keyboard on its coiled cable. The glass
-## ([member terminal_screen]) is the medium's to hand a texture.
+## The terminal and its keyboard, their makes ([PropMakes] `terminal`, `keyboard`) standing where the desk keeps them, and the
+## keyboard's coiled cable laid from the keyboard's `cable` point to the terminal's. The glass ([member terminal_screen]) is the
+## medium's to hand a picture.
 func _terminal() -> void:
-	var t := Node3D.new()
-	t.name = "Terminal"
-	t.position = _desk_pos(CASE_AT)
-	root.add_child(t)
-	var beige: Material = _mats["beige"]
-	put(t, rbox(CASE, 0.012), beige, Vector3(0, CASE.y * 0.5, 0))
-	var front := CASE.z * 0.5
-	put(t, rbox(Vector3(0.16, 0.026, 0.006), 0.003), _mats["beige_dark"], Vector3(-0.09, CASE.y * 0.52, front + 0.001))
-	put(t, box(Vector3(0.13, 0.004, 0.004)), _mats["black"], Vector3(-0.095, CASE.y * 0.54, front + 0.004))
-	put(t, rbox(Vector3(0.016, 0.008, 0.006), 0.002), _mats["beige_dark"], Vector3(-0.025, CASE.y * 0.42, front + 0.003))
-	put(t, rbox(Vector3(0.03, 0.03, 0.01), 0.004), _mats["beige_dark"], Vector3(0.16, CASE.y * 0.5, front + 0.003))
-	put(t, box(Vector3(0.006, 0.004, 0.003)), _mats["led_green"], Vector3(0.12, CASE.y * 0.5, front + 0.002))
-	# a seam round the case's front
-	put(t, box(Vector3(CASE.x - 0.02, 0.003, 0.003)), _mats["beige_dark"], Vector3(0, CASE.y * 0.18, front + 0.0005))
-	var mon := Node3D.new()
-	mon.position = Vector3(0, CASE.y, -0.01)
-	t.add_child(mon)
-	put(mon, cyl(0.10, 0.12, 0.018, 28), beige, Vector3(0, 0.009, 0))
-	put(mon, cyl(0.06, 0.07, 0.03, 20), beige, Vector3(0, 0.03, 0))
-	var mid_y := 0.045 + CRT.y * 0.5
-	put(mon, rbox(Vector3(CRT.x, CRT.y, 0.07), 0.02), beige, Vector3(0, mid_y, CRT.z * 0.5 - 0.035))
-	# a four-sided frustum on its side, narrow end back: turned a quarter about its own axis so its faces are square to
-	# the bezel, then tipped back
-	var body := put(mon, cyl(0.10, 0.215, 0.30, 4), beige, Vector3(0, mid_y, CRT.z * 0.5 - 0.07 - 0.15))
-	body.basis = Basis(Vector3.RIGHT, -PI * 0.5) * Basis(Vector3.UP, PI * 0.25)
-	put(mon, rbox(Vector3(SCREEN.x + 0.03, SCREEN.y + 0.03, 0.01), 0.008), _mats["dark"], Vector3(0, mid_y + 0.012, CRT.z * 0.5 - 0.001))
-	terminal_screen = put(mon, quad(SCREEN), null, Vector3(0, mid_y + 0.012, CRT.z * 0.5 + 0.0075))
-	terminal_screen.name = "Screen"
-	put(mon, cyl(0.004, 0.004, 0.004, 10), _mats["led_green"], Vector3(CRT.x * 0.5 - 0.035, mid_y - CRT.y * 0.5 + 0.022, CRT.z * 0.5 + 0.001), Vector3(90, 0, 0))
-	put(mon, rbox(Vector3(0.018, 0.012, 0.006), 0.003), _mats["beige_dark"], Vector3(CRT.x * 0.5 - 0.06, mid_y - CRT.y * 0.5 + 0.022, CRT.z * 0.5 + 0.002))
-	terminal_glow = OmniLight3D.new()
-	terminal_glow.light_color = Color(0.78, 1.0, 0.86)
-	terminal_glow.light_energy = 0.0
-	terminal_glow.omni_range = 1.6
-	terminal_glow.omni_attenuation = 1.6
-	terminal_glow.position = Vector3(0, mid_y, CRT.z * 0.5 + 0.18)
-	mon.add_child(terminal_glow)
-	_body("terminal", t)
-	_faces["terminal"] = [terminal_screen]
-	var kb := Node3D.new()
-	kb.name = "Keyboard"
-	kb.position = _desk_pos(KEYBOARD_AT)
-	kb.rotation_degrees = Vector3(0, 0.8, 0)
-	root.add_child(kb)
-	var kbs := Vector3(KEY_U * 15.0 + 0.026, 0.024, KEY_U * 5.0 + 0.042)
-	var tilt := Node3D.new()
-	tilt.rotation_degrees = Vector3(4.0, 0, 0)
-	kb.add_child(tilt)
-	put(tilt, rbox(kbs, 0.008), beige, Vector3(0, kbs.y * 0.5, 0))
-	put(tilt, box(Vector3(KEY_U * 15.0 + 0.004, 0.002, KEY_U * 5.0 + 0.004)), _mats["beige_dark"], Vector3(0, kbs.y - 0.0008, -0.004))
-	var kmi := MeshInstance3D.new()
-	kmi.name = "Keys"
-	kmi.mesh = _keys()
-	kmi.position = Vector3(0, kbs.y, -0.004)
-	var kmat := StandardMaterial3D.new()
-	kmat.vertex_color_use_as_albedo = true
-	kmat.roughness = 0.5
-	kmi.material_override = kmat
-	tilt.add_child(kmi)
-	_body("keyboard", kb)
+	var t := _place("terminal", _desk_pos(CASE_AT), 0.0)
+	terminal_screen = t.face("screen")
+	_body("terminal", t.node)
+	_faces["terminal"] = _read("terminal")
+	var kb := _place("keyboard", _desk_pos(KEYBOARD_AT), 0.8)
+	_body("keyboard", kb.node)
 	# the coiled cable: from the keyboard's back, a coil on the desk, up into the case's front
 	var path := PackedVector3Array()
-	var a := Vector3(0.0, DESK_Y + 0.012, KEYBOARD_AT.y - kbs.z * 0.5)
-	var b := Vector3(0.16, DESK_Y + 0.02, CASE_AT.y + CASE.z * 0.5)
+	var a := _point("keyboard", "cable", Vector3(0.0, DESK_Y + 0.012, KEYBOARD_AT.y - 0.067))
+	var b := _point("terminal", "cable", Vector3(0.16, DESK_Y + 0.02, CASE_AT.y + CASE.z * 0.5))
 	for i in 120:
 		var u := float(i) / 119.0
 		var p := a.lerp(b, u)
@@ -1011,130 +997,41 @@ func _terminal() -> void:
 	put(root, tube(path, 0.0022, 6), _mats["beige_dark"], Vector3.ZERO)
 
 
-## The keyboard's keys, one mesh (they never move): a standard compact layout of five rows of fifteen units on the
-## [constant KEY_U] pitch ([constant KEY_ROWS]: the number row and Backspace; Tab to the backslash; Caps Lock to Enter;
-## the Shifts; Ctrl, Alt, the bar, Alt, Ctrl), each key a sculpted cap - its skirt tapering from its foot to a smaller
-## dished top, the rows leaning toward the typist as a cylindrical profile does ([constant KEY_PROFILE]) - the letters
-## beige and the rest gray. In the keyboard's frame: x across, +z toward the typist, y up from the case's top.
-static func _keys() -> ArrayMesh:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var letter := Color(0.82, 0.78, 0.69)
-	var modifier := Color(0.56, 0.54, 0.51)
-	for j in KEY_ROWS.size():
-		var row: Array = KEY_ROWS[j]
-		var x := -KEY_U * 7.5
-		var z := (float(j) - 2.0) * KEY_U
-		var prof: Vector2 = KEY_PROFILE[j]
-		for key in row:
-			var k: Array = key
-			var w := float(k[0]) * KEY_U
-			if String(k[1]) != "gap":
-				_keycap(st, Vector3(x + w * 0.5, 0.0, z), w, prof, letter if String(k[1]) == "letter" else modifier)
-			x += w
-	st.generate_normals()
-	return st.commit()
-
-
-## One keycap into [param st]: a foot [param w] wide and [constant KEY_U] deep (less the gap between keys), its top
-## [constant KEY_INSET] in from it at each side and dished a little; [param prof] its top's height at the back and at the
-## front (m) - the row's lean.
-static func _keycap(st: SurfaceTool, at: Vector3, w: float, prof: Vector2, c: Color) -> void:
-	var foot := _key_outline(w - KEY_GAP, KEY_U - KEY_GAP, 0.0015)
-	var top := _key_outline(w - KEY_GAP - KEY_INSET * 2.0, KEY_U - KEY_GAP - KEY_INSET * 2.2, 0.002)
-	var n := foot.size()
-	var lo := PackedVector3Array()
-	var hi := PackedVector3Array()
-	for i in n:
-		lo.append(at + Vector3(foot[i].x, 0.0, foot[i].y))
-		# the top leans: higher at the back (-z) than the front, as the row's profile says
-		var u := clampf((top[i].y / (KEY_U * 0.5)) * 0.5 + 0.5, 0.0, 1.0)
-		hi.append(at + Vector3(top[i].x, lerpf(prof.x, prof.y, u), top[i].y - KEY_INSET * 0.15))
-	st.set_color(c)
-	for i in n:
-		var i2 := (i + 1) % n
-		var out := Vector3(lo[i].x + lo[i2].x - 2.0 * at.x, 0.0, lo[i].z + lo[i2].z - 2.0 * at.z)
-		_tri(st, lo[i], lo[i2], hi[i2], out)
-		_tri(st, lo[i], hi[i2], hi[i], out)
-	var mid := Vector3.ZERO
-	for p in hi:
-		mid += p
-	mid = mid / float(n) - Vector3(0, KEY_DISH, 0)
-	for i in n:
-		_tri(st, mid, hi[i], hi[(i + 1) % n], Vector3.UP)
-
-
-## A key's outline, a rectangle [param w] by [param d] with its corners cut [param cut]: eight points round it (x, z).
-static func _key_outline(w: float, d: float, cut: float) -> PackedVector2Array:
-	var hw := w * 0.5
-	var hd := d * 0.5
-	return PackedVector2Array([Vector2(-hw + cut, -hd), Vector2(hw - cut, -hd), Vector2(hw, -hd + cut), Vector2(hw, hd - cut),
-		Vector2(hw - cut, hd), Vector2(-hw + cut, hd), Vector2(-hw, hd - cut), Vector2(-hw, -hd + cut)])
-
-
-## A triangle into [param st] facing [param out] (Godot's front faces wind clockwise: the corners put in that order).
-static func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, out: Vector3) -> void:
-	if (b - a).cross(c - a).dot(out) > 0.0:
-		st.add_vertex(a)
-		st.add_vertex(c)
-		st.add_vertex(b)
-	else:
-		st.add_vertex(a)
-		st.add_vertex(b)
-		st.add_vertex(c)
-
-
 # --- the phones -------------------------------------------------------------------------------------------------------
 
-## The phones, two rows of six (or as many as there are labels): each a flip phone lying lid up, a strip of masking tape
-## across its lid with its name on it ([param tape], a cell a label), its lid a node of its own on its hinge with a screen
-## inside it and a small one outside. Each phone's body is a node the medium poses from its place in the row ([member
-## phones]' `home`).
-func _phones(tape: Texture2D) -> void:
-	var colors := [Color(0.08, 0.08, 0.09), Color(0.42, 0.43, 0.46), Color(0.07, 0.10, 0.18), Color(0.18, 0.18, 0.2), Color(0.30, 0.06, 0.06)]
+## The phones, two rows of six (or as many as there are labels): each the phone's make ([PropMakes] `phone`) lying lid up, its
+## name handed to its `tape` face, its `body` in a color of its own ([constant PHONE_TINT]); its lid opens as the medium feeds it
+## (`open`). Each phone's node is posed by the medium from its place in the row ([member phones]' `home`).
+func _phones() -> void:
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([_seed, "phones"])
-	var tape_mat := StandardMaterial3D.new()
-	tape_mat.albedo_texture = tape
-	tape_mat.roughness = 0.85
 	var n := _labels.size()
+	# one make built, each phone a copy of it with its own materials ([method PropRig.copy])
+	var made := _rig("phone") if n > 0 else null
 	for i in n:
 		var row := i / ROW
 		var col := i % ROW
 		var at := _phone_spot(col, row)
-		var body_mat := _std(colors[r.randi_range(0, colors.size() - 1)], r.randf_range(0.3, 0.55), 0.15)
-		var node := Node3D.new()
+		var tint: Color = PHONE_COLORS[r.randi_range(0, PHONE_COLORS.size() - 1)]
+		var polish := 1.0 - r.randf_range(0.3, 0.55)
+		var rig := made if i == n - 1 else made.copy()
+		var node := rig.node
 		node.name = "Phone %s" % _labels[i]
 		var home := Transform3D(Basis(Vector3.UP, deg_to_rad(r.randf_range(-6.0, 6.0))),
 			Vector3(at.x + r.randf_range(-0.006, 0.006), DESK_Y, at.y + r.randf_range(-0.006, 0.006)))
 		node.transform = home
 		root.add_child(node)
-		var h := PHONE.y * 0.5
-		var base := put(node, rbox(Vector3(PHONE.x, h, PHONE.z), 0.008, 4), body_mat, Vector3(0, h * 0.5, 0))
-		base.name = "Base"
-		var pad := put(node, quad(Vector2(PHONE.x * 0.78, PHONE.z * 0.62)), _keypad_mat(), Vector3(0, h + 0.0004, 0.006), Vector3(-90, 0, 0))
-		pad.name = "Keypad"
-		var hinge := Node3D.new()
-		hinge.name = "Hinge"
-		hinge.position = Vector3(0, h, -PHONE.z * 0.5)
-		node.add_child(hinge)
-		var lid := put(hinge, rbox(Vector3(PHONE.x, h, PHONE.z), 0.008, 4), body_mat, Vector3(0, h * 0.5, PHONE.z * 0.5))
-		lid.name = "Lid"
-		var inner := put(hinge, quad(Vector2(PHONE.x * 0.78, PHONE.z * 0.5)), null, Vector3(0, -0.0003, PHONE.z * 0.55), Vector3(90, 0, 0))
-		inner.name = "Inner"
-		var outer := put(hinge, quad(Vector2(PHONE.x * 0.5, PHONE.z * 0.2)), null, Vector3(0, h + 0.0004, PHONE.z * 0.78), Vector3(-90, 0, 0))
-		outer.name = "Outer"
-		var tq := quad(Vector2(PHONE.x * 1.06, PHONE.z * 0.3))
-		var tmi := put(hinge, tq, tape_mat, Vector3(0, h + 0.0007, PHONE.z * 0.42), Vector3(-90, 0, r.randf_range(-4.0, 4.0)))
-		tmi.name = "Tape"
-		var cell := DispatchScreens.tape_cell(i, n)
-		var tm := tape_mat.duplicate() as StandardMaterial3D
-		tm.uv1_scale = Vector3(cell.size.x, cell.size.y, 1.0)
-		tm.uv1_offset = Vector3(cell.position.x, cell.position.y, 0.0)
-		tmi.material_override = tm
-		put(hinge, cyl(0.0035, 0.004, 0.012, 8), body_mat, Vector3(PHONE.x * 0.32, h + 0.004, 0.004))
-		phones.append({"label": _labels[i], "node": node, "hinge": hinge, "lid": lid, "inner": inner, "outer": outer,
-			"tape": tmi, "home": home, "body": body_mat})
+		rig.say("tape", _labels[i])
+		for mi in node.find_children("*", "MeshInstance3D", true, false):
+			var mat := (mi as MeshInstance3D).material_override as ShaderMaterial
+			if mat != null and String((mi as MeshInstance3D).get_meta("material", "")) == PHONE_TINT:
+				mat.set_shader_parameter("color", tint)
+				mat.set_shader_parameter("polish", polish)
+		var pad := rig.face("keypad")
+		if pad != null and _tex.has("keypad"):
+			pad.material_override = _keypad_mat()
+		phones.append({"label": _labels[i], "node": node, "rig": rig, "inner": rig.face("inner"), "outer": rig.face("outer"),
+			"tape": rig.face("tape"), "home": home})
 	# the rows stand as one, so nothing is packed or grows between them; each phone is seen
 	var row_box := AABB()
 	_faces["phones"] = []
@@ -1142,7 +1039,8 @@ func _phones(tape: Texture2D) -> void:
 		var node: Node3D = (phones[i] as Dictionary)["node"]
 		var b := bounds(node)
 		row_box = b if i == 0 else row_box.merge(b)
-		(_faces["phones"] as Array).append((phones[i] as Dictionary)["tape"])
+		if (phones[i] as Dictionary)["tape"] != null:
+			(_faces["phones"] as Array).append((phones[i] as Dictionary)["tape"])
 	if not phones.is_empty():
 		bodies["phones"] = row_box
 		var pts := PackedVector3Array()
@@ -1183,58 +1081,24 @@ func _keypad_mat() -> Material:
 
 # --- the radar --------------------------------------------------------------------------------------------------------
 
-## The radar: a squat olive housing, its round scope tipped back toward the chair, a hood round the glass and two knobs
-## under it - the left the gain ([member gain_knob], the medium's to turn), its white pointer at three and the scale one to
-## ten printed round it. The glass ([member radar_screen]) is the medium's.
+## The radar's make ([PropMakes] `radar`) where the desk keeps it, turned to the chair: its glass ([member radar_screen]) the
+## medium's, its gain knob turned as the medium feeds it (`gain`), and the scale printed round the knob on its `scale` face.
 func _radar() -> void:
-	var t := Node3D.new()
-	t.name = "Radar"
-	t.position = desk_at("radar")
-	t.rotation_degrees = Vector3(0, turn["radar"], 0)
-	root.add_child(t)
-	var olive: Material = _mats["olive"]
-	var body := Vector3(0.30, 0.24, 0.30)
-	put(t, rbox(body, 0.015), olive, Vector3(0, body.y * 0.5, 0))
-	var face := Node3D.new()
-	face.position = Vector3(0, 0.14, body.z * 0.5 + 0.05)
-	face.rotation_degrees = Vector3(-18.0, 0, 0)
-	t.add_child(face)
-	put(face, rbox(Vector3(0.28, 0.27, 0.04), 0.012), olive, Vector3(0, 0, 0.0))
-	put(face, box(Vector3(0.24, 0.24, 0.1)), olive, Vector3(0, -0.02, -0.06))
-	var hood := TorusMesh.new()
-	hood.inner_radius = RADAR_R - 0.001
-	hood.outer_radius = RADAR_R + 0.011
-	hood.rings = 48
-	hood.ring_segments = 12
-	put(face, hood, _mats["black"], Vector3(0, 0.01, 0.026), Vector3(90, 0, 0))
-	radar_screen = put(face, quad(Vector2(RADAR_R * 2.0, RADAR_R * 2.0)), null, Vector3(0, 0.01, 0.0215))
-	radar_screen.name = "Scope"
-	put(face, cyl(GAIN_KNOB_R - 0.001, GAIN_KNOB_R, 0.02, 16), _mats["black"], Vector3(0.07, -0.118, 0.028), Vector3(90, 0, 0))
-	gain_knob = Node3D.new()
-	gain_knob.name = "Gain"
-	gain_knob.position = Vector3(-0.07, -0.118, 0.028)
-	gain_knob.rotation.z = gain_angle(DispatchScript.GAIN_REST)
-	face.add_child(gain_knob)
-	put(gain_knob, cyl(GAIN_KNOB_R - 0.001, GAIN_KNOB_R, 0.02, 16), _mats["black"], Vector3.ZERO, Vector3(90, 0, 0))
-	put(gain_knob, box(Vector3(0.0016, 0.0085, 0.001)), _mats["paper"], Vector3(0, 0.0058, 0.0103))
-	if _tex.has("gain"):
+	var t := _place("radar", desk_at("radar"), turn["radar"])
+	radar_screen = t.face("scope")
+	var sf := t.face("scale")
+	if sf != null and _tex.has("gain"):
 		var scale := StandardMaterial3D.new()
 		scale.albedo_texture = _tex["gain"]
 		scale.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		scale.roughness = 0.8
-		put(face, quad(Vector2(GAIN_FACE, GAIN_FACE)), scale, Vector3(-0.07, -0.118, 0.0206))
-	radar_glow = OmniLight3D.new()
-	radar_glow.light_color = Color(0.55, 1.0, 0.62)
-	radar_glow.light_energy = 0.06
-	radar_glow.omni_range = 0.7
-	radar_glow.position = Vector3(0, 0.14, 0.32)
-	t.add_child(radar_glow)
-	_body("radar", t)
-	_faces["radar"] = [radar_screen, gain_knob]
+		sf.material_override = scale
+	_body("radar", t.node)
+	_faces["radar"] = _read("radar")
 
 
-## How far the gain knob is turned at [param level] (radians about its axis, counter-clockwise as the chair sees it, its
-## pointer straight up at 0): one at the lower left, round over the top, ten at the lower right.
+## How far the radar's own gain knob is turned at [param level] (radians, counterclockwise as the chair sees it, its pointer
+## straight up at 0): one at the lower left, round over the top, ten at the lower right - where the scale round it is printed.
 static func gain_angle(level: float) -> float:
 	var u := (level - float(DispatchScript.GAIN_LEAST)) / float(DispatchScript.GAIN_MOST - DispatchScript.GAIN_LEAST)
 	return deg_to_rad(GAIN_SWING * (0.5 - u))
@@ -1242,97 +1106,49 @@ static func gain_angle(level: float) -> float:
 
 # --- the receiver -----------------------------------------------------------------------------------------------------
 
-## The receiver: a shortwave radio, gray and black - its tuning dial ([param dial_face], 20.1 under the cursor), a needle
-## meter ([member needle], the medium's), a speaker grille, knobs - a small oscilloscope on top (its trace, [member
-## scope_screen]), headphones hung on its corner, and two wires running up from its back into the dark.
-func _receiver(dial_face: Texture2D) -> void:
-	var t := Node3D.new()
-	t.name = "Receiver"
-	t.position = desk_at("receiver")
-	t.rotation_degrees = Vector3(0, turn["receiver"], 0)
-	root.add_child(t)
-	var body := Vector3(0.34, 0.15, 0.24)
-	put(t, rbox(body, 0.008), _mats["gray"], Vector3(0, body.y * 0.5, 0))
-	var fz := body.z * 0.5 + 0.002
-	put(t, box(Vector3(body.x - 0.012, body.y - 0.012, 0.004)), _mats["black"], Vector3(0, body.y * 0.5, fz))
-	var dmat := StandardMaterial3D.new()
-	dmat.albedo_texture = dial_face
-	dmat.emission_enabled = true
-	dmat.emission_texture = dial_face
-	dmat.emission = Color(1.0, 0.85, 0.55)
-	dmat.emission_energy_multiplier = 0.55
-	dial = put(t, quad(Vector2(0.16, 0.08)), dmat, Vector3(-0.07, body.y * 0.58, fz + 0.003))
-	put(t, cyl(0.026, 0.028, 0.025, 24), _mats["dark"], Vector3(-0.07, body.y * 0.2, fz + 0.012), Vector3(90, 0, 0))
-	var meter := put(t, quad(Vector2(0.07, 0.045)), _emit(Color(0.95, 0.88, 0.62), 0.5), Vector3(0.10, body.y * 0.68, fz + 0.003))
-	meter.name = "Meter"
-	needle = Node3D.new()
-	needle.position = Vector3(0.10, body.y * 0.68 - 0.018, fz + 0.005)
-	t.add_child(needle)
-	put(needle, box(Vector3(0.0012, 0.036, 0.0008)), _mats["black"], Vector3(0, 0.018, 0))
-	for k in 6:
-		put(t, box(Vector3(0.07, 0.003, 0.002)), _mats["dark"], Vector3(0.10, body.y * 0.42 - float(k) * 0.009, fz + 0.002))
-	for k in 3:
-		put(t, cyl(0.008, 0.009, 0.014, 14), _mats["metal"], Vector3(0.04 + float(k) * 0.035, body.y * 0.13, fz + 0.007), Vector3(90, 0, 0))
-	var sc := Vector3(0.20, 0.13, 0.22)
-	var scope := Node3D.new()
-	scope.position = Vector3(-0.04, body.y, -0.005)
-	t.add_child(scope)
-	put(scope, rbox(sc, 0.01), _mats["beige_dark"], Vector3(0, sc.y * 0.5, 0))
-	put(scope, box(Vector3(0.10, 0.08, 0.006)), _mats["black"], Vector3(-0.035, sc.y * 0.55, sc.z * 0.5 + 0.001))
-	scope_screen = put(scope, quad(Vector2(0.088, 0.068)), null, Vector3(-0.035, sc.y * 0.55, sc.z * 0.5 + 0.0045))
-	for k in 4:
-		put(scope, cyl(0.007, 0.008, 0.012, 12), _mats["dark"], Vector3(0.05 + float(k % 2) * 0.03, sc.y * (0.7 - float(k / 2) * 0.35), sc.z * 0.5 + 0.006), Vector3(90, 0, 0))
-	var hp := Node3D.new()
-	hp.position = Vector3(0.105, body.y + sc.y + 0.005, 0.03)
-	hp.rotation_degrees = Vector3(0, 90, -8)
-	t.add_child(hp)
-	var band := PackedVector3Array()
-	for i in 17:
-		var a := PI * float(i) / 16.0
-		band.append(Vector3(cos(a) * 0.075, sin(a) * 0.03 - 0.0, 0))
-	put(hp, tube(band, 0.006, 8), _mats["dark"], Vector3(0, 0.0, 0))
-	for side in [-1.0, 1.0]:
-		put(hp, cyl(0.035, 0.035, 0.03, 20), _mats["dark"], Vector3(side * 0.075, -0.035, 0), Vector3(0, 0, 90))
-	put(t, tube(sag_path(Vector3(0.18, body.y + sc.y - 0.06, 0.03), Vector3(0.16, body.y * 0.25, fz), 0.02, 0.0, 16), 0.002), _mats["cable"], Vector3.ZERO)
+## The receiver's make ([PropMakes] `receiver`): its `dial` face printed with the frequency ([DispatchScreens]' dial, lit from
+## behind), its needle swinging as the medium feeds it (`signal`), its oscilloscope's trace ([member scope_screen]) the medium's;
+## and two wires run up from its `antenna` points into the dark.
+func _receiver() -> void:
+	var t := _place("receiver", desk_at("receiver"), turn["receiver"])
+	dial = t.face("dial")
+	if dial != null and _tex.has("dial"):
+		var dmat := StandardMaterial3D.new()
+		dmat.albedo_texture = _tex["dial"]
+		dmat.emission_enabled = true
+		dmat.emission_texture = _tex["dial"]
+		dmat.emission = Color(1.0, 0.85, 0.55)
+		dmat.emission_energy_multiplier = 0.55
+		dial.material_override = dmat
+	scope_screen = t.face("scope")
 	for k in 2:
+		var named: Variant = t.point("antenna %d" % (k + 1))
+		var a0: Vector3 = named if named is Vector3 else Vector3(-0.1 + float(k) * 0.08, 0.105, -0.12)
 		var p := PackedVector3Array()
-		var a0 := Vector3(-0.1 + float(k) * 0.08, body.y * 0.7, -body.z * 0.5)
 		for i in 40:
 			var u := float(i) / 39.0
 			p.append(a0 + Vector3(0.05 * sin(u * 3.0 + float(k)), u * (CEILING - DESK_Y - 0.2), -u * 0.5 - 0.06 * sin(u * PI)))
-		put(t, tube(p, 0.0018, 5), _mats["cable"], Vector3.ZERO)
-	_body("receiver", t)
-	_faces["receiver"] = [dial, meter, scope_screen]
+		put(t.node, tube(p, 0.0018, 5), _mats["cable"], Vector3.ZERO)
+	_body("receiver", t.node)
+	_faces["receiver"] = _read("receiver")
 
 
 # --- the printer ------------------------------------------------------------------------------------------------------
 
-## The printer at the desk's left end, turned so its paper comes up out of it toward the end and falls off it: a beige
-## dot-matrix printer, its platen knob, its head on its rail ([member printer_head]), the continuous paper with its
-## sprocket holes ([member paper], the medium's texture) folding down over the desk's end into a knee-high heap of fanfold
-## on the floor ([member heap]).
+## The printer's make ([PropMakes] `printer`) at the desk's left end, turned so its paper comes up out of its `slot` toward the
+## end and falls off it; its head runs across as the medium feeds it (`head`). The continuous paper with its sprocket holes
+## ([member paper], the medium's texture) folds down over the desk's end into a knee-high heap of fanfold on the floor ([member
+## heap]).
 func _printer() -> void:
-	var t := Node3D.new()
-	t.name = "Printer"
-	t.position = desk_at("printer")
-	t.rotation_degrees = Vector3(0, turn["printer"], 0)
-	root.add_child(t)
-	var body := Vector3(0.42, 0.12, 0.30)
-	put(t, rbox(body, 0.014), _mats["beige"], Vector3(0, body.y * 0.5, 0.02))
-	put(t, rbox(Vector3(0.38, 0.03, 0.12), 0.01), _std(Color(0.12, 0.10, 0.08, 0.85), 0.2), Vector3(0, body.y + 0.01, -0.03))
-	put(t, cyl(0.016, 0.016, 0.02, 16), _mats["dark"], Vector3(body.x * 0.5 + 0.01, body.y * 0.6, -0.04), Vector3(0, 0, 90))
-	put(t, box(Vector3(0.012, 0.006, 0.003)), _mats["led_green"], Vector3(0.15, body.y * 0.55, 0.02 + body.z * 0.5 + 0.001))
-	printer_head = Node3D.new()
-	printer_head.position = Vector3(0, body.y + 0.005, -0.03)
-	t.add_child(printer_head)
-	put(printer_head, rbox(Vector3(0.04, 0.03, 0.04), 0.006), _mats["dark"], Vector3(0, 0, 0))
-	# The paper: up out of the slot, leaning back, then over and down the desk's end (in the printer's own frame its
-	# back is -z, which faces the desk's end)
+	var t := _place("printer", desk_at("printer"), turn["printer"])
+	# The paper: up out of the slot, leaning back, then over and down the desk's end (in the printer's own frame its back is
+	# -z, which faces the desk's end)
 	paper = MeshInstance3D.new()
 	paper.name = "Paper"
 	paper.mesh = _paper_strip()
-	paper.position = Vector3(0, body.y + 0.005, -0.06)
-	t.add_child(paper)
+	var slot: Variant = t.point("slot")
+	paper.position = slot if slot is Vector3 else Vector3(0, 0.125, -0.06)
+	t.node.add_child(paper)
 	heap = Node3D.new()
 	heap.name = "Heap"
 	heap.position = Vector3(at_of("heap").x, 0.0, at_of("heap").y)
@@ -1346,7 +1162,22 @@ func _printer() -> void:
 			Vector3(0, 90 + r.randf_range(-4.0, 4.0), 0))
 		m.name = "Layer %d" % k
 	heap_top = put(heap, box(Vector3(SHEET.x, 0.012, SHEET.y)), _mats["paper"], Vector3(0, HEAP_H + 0.006, 0), Vector3(0, 90, 0))
-	_body("printer", t)
+	_body("printer", t.node)
+	# what no root grows through ([DispatchRoots]): the paper over the desk, the paper falling past its end, and the heap
+	var over := PackedVector3Array()
+	var past := PackedVector3Array()
+	for q in _gather(paper, bounds_xf(paper)):
+		if absf(q.x) <= DESK_W * 0.5:
+			over.append(q)
+		else:
+			past.append(q)
+	for pts in [over, past]:
+		if not (pts as PackedVector3Array).is_empty():
+			var b := AABB((pts as PackedVector3Array)[0], Vector3.ZERO)
+			for q in (pts as PackedVector3Array):
+				b = b.expand(q)
+			clear.append(b)
+	clear.append(bounds(heap))
 
 
 ## The paper's strip, in the printer's frame from the slot: up and leaning back, then over the desk's end and down to the
@@ -1393,51 +1224,23 @@ func _paper_strip() -> ArrayMesh:
 
 # --- the small screens ------------------------------------------------------------------------------------------------
 
-## The three screens along the desk's back: the security monitor (a small black-and-white CRT in a dark metal box), the
-## satellite's flat monitor on its arm ([method _satellite]), and the little television with its rabbit ears. Each glass is a quad the medium
-## hands its picture, with a glow of its own.
+## The three screens along the desk's back, each a make ([PropMakes] `feed`, `tv` on its `tv_stand`, `satellite`) whose `screen`
+## the medium hands its picture, its glow on the desk fed (`glow`): the security monitor, the little television up on its stand so
+## the chair sees it over the radar, and the satellite's flat monitor on its arm ([method _satellite]).
 func _monitors() -> void:
-	var f := Node3D.new()
-	f.name = "Feed"
-	f.position = desk_at("feed")
-	f.rotation_degrees = Vector3(0, turn["feed"], 0)
-	root.add_child(f)
-	var fb := Vector3(0.25, 0.21, 0.25)
-	put(f, rbox(fb, 0.01), _mats["dark"], Vector3(0, fb.y * 0.5, 0))
-	var fm := put(f, quad(Vector2(0.18, 0.135)), null, Vector3(0, fb.y * 0.55, fb.z * 0.5 + 0.002))
-	put(f, box(Vector3(0.01, 0.006, 0.003)), _mats["led_red"], Vector3(0.09, 0.025, fb.z * 0.5 + 0.001))
-	var fg := _glow(f, Vector3(0, fb.y * 0.55, fb.z * 0.5 + 0.2), Color(0.72, 0.8, 0.9))
-	fg.omni_range = 1.5
-	screens["feed"] = {"mesh": fm, "glow": fg, "node": f}
-	_body("feed", f)
-	_faces["feed"] = [fm]
-	# the little television, up on a crate and two books so the chair sees it over the radar, its rabbit ears
-	var tv := Node3D.new()
-	tv.name = "TV"
-	tv.position = desk_at("tv")
-	tv.rotation_degrees = Vector3(0, turn["tv"], 0)
-	root.add_child(tv)
-	var crate := Vector3(0.31, 0.2, 0.26)
-	put(tv, box(crate), _std(Color(0.30, 0.22, 0.14), 0.85), Vector3(0, crate.y * 0.5, 0))
-	for k in 3:
-		put(tv, box(Vector3(crate.x + 0.004, 0.012, crate.z + 0.004)), _std(Color(0.22, 0.16, 0.1), 0.85), Vector3(0, 0.03 + float(k) * 0.07, 0))
-	put(tv, box(Vector3(0.30, 0.035, 0.24)), _std(Color(0.3, 0.12, 0.08), 0.7), Vector3(0, crate.y + 0.0175, 0))
-	put(tv, box(Vector3(0.28, 0.03, 0.22)), _std(Color(0.12, 0.2, 0.3), 0.7), Vector3(0.01, crate.y + 0.05, 0))
-	var tb := Vector3(0.27, 0.23, 0.25)
-	var tv_y := crate.y + 0.065
-	put(tv, rbox(tb, 0.02), _std(Color(0.22, 0.17, 0.12), 0.5), Vector3(0, tv_y + tb.y * 0.5, 0))
-	put(tv, rbox(Vector3(0.19, 0.15, 0.01), 0.02), _mats["black"], Vector3(-0.025, tv_y + tb.y * 0.52, tb.z * 0.5 + 0.001))
-	var tm := put(tv, quad(Vector2(0.17, 0.13)), null, Vector3(-0.025, tv_y + tb.y * 0.52, tb.z * 0.5 + 0.007))
-	for k in 2:
-		put(tv, cyl(0.009, 0.01, 0.012, 12), _mats["dark"], Vector3(0.1, tv_y + 0.13 - float(k) * 0.05, tb.z * 0.5 + 0.005), Vector3(90, 0, 0))
-	for side in [-1.0, 1.0]:
-		var ear := PackedVector3Array([Vector3(0, tv_y + tb.y, -0.02), Vector3(side * 0.13, tv_y + tb.y + 0.30, -0.08)])
-		put(tv, tube(ear, 0.0018, 5), _mats["metal"], Vector3.ZERO)
-		put(tv, cyl(0.004, 0.004, 0.006, 8), _mats["metal"], ear[1])
-	put(tv, cyl(0.02, 0.024, 0.012, 16), _mats["dark"], Vector3(0, tv_y + tb.y + 0.006, -0.02))
-	screens["tv"] = {"mesh": tm, "glow": _glow(tv, Vector3(-0.025, tv_y + tb.y * 0.5, 0.3), Color(0.6, 0.75, 1.0)), "node": tv}
-	_body("tv", tv)
-	_faces["tv"] = [tm]
+	var f := _place("feed", desk_at("feed"), turn["feed"])
+	screens["feed"] = {"mesh": f.face("screen"), "rig": f, "node": f.node}
+	_body("feed", f.node)
+	_faces["feed"] = _read("feed")
+	# the little television, up on its stand so the chair sees it over the radar: the set stands as one thing
+	var stand := _place("tv_stand", desk_at("tv"), turn["tv"])
+	var tv := _rig("tv")
+	tv.node.position = Vector3(0.0, (stand.built.get("size", AABB()) as AABB).end.y, 0.0)
+	stand.node.add_child(tv.node)
+	rigs["tv"] = tv
+	screens["tv"] = {"mesh": tv.face("screen"), "rig": tv, "node": tv.node}
+	_body("tv", stand.node)
+	_faces["tv"] = _read("tv")
 	_satellite()
 
 
@@ -1447,6 +1250,12 @@ func _monitors() -> void:
 ## [constant ARM_H]) it takes the one where most of its glass is seen - from the chair and from its own close-up - hiding
 ## none of the faces round it, clamp, arm and panel clear of everything standing and the arm short ([method _arm_misfit]).
 func _satellite() -> void:
+	var panel := _rig("satellite")
+	var pb: AABB = panel.built.get("size", AABB())
+	if pb.has_volume():
+		_sat_panel = pb.size
+	if panel.face("screen") != null:
+		_sat_glass = panel.face_size("screen")
 	var side := -flip
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([_seed, "satellite arm"])
@@ -1467,7 +1276,7 @@ func _satellite() -> void:
 				var c := Vector3(side * float(x), DESK_Y + float(h), float(z))
 				var b := Basis.looking_at(c - EYE, Vector3.UP).rotated(Vector3.UP, deg_to_rad(r.randf_range(-JITTER_TURN, JITTER_TURN)))
 				var xf := Transform3D(b, c)
-				var head := xf * Vector3(0, 0, -SAT_PANEL.z * 0.5 - 0.05)
+				var head := xf * Vector3(0, 0, -_sat_panel.z * 0.5 - 0.05)
 				var clamp := best_clamp
 				var near := INF
 				for f in free:
@@ -1484,17 +1293,14 @@ func _satellite() -> void:
 	var s := Node3D.new()
 	s.name = "Satellite"
 	root.add_child(s)
-	var panel := Node3D.new()
-	panel.name = "Panel"
-	panel.transform = best_xf
-	s.add_child(panel)
-	put(panel, rbox(SAT_PANEL, 0.006), _mats["black"], Vector3.ZERO)
-	put(panel, box(Vector3(0.10, 0.10, 0.01)), _mats["dark"], Vector3(0, 0, -SAT_PANEL.z * 0.5 - 0.005))
-	var sm := put(panel, quad(SAT_GLASS), null, Vector3(0, 0, SAT_PANEL.z * 0.5 + 0.001))
+	# the panel's make held by its middle where the arm holds it
+	panel.node.transform = best_xf * Transform3D(Basis.IDENTITY, -(panel.built.get("size", AABB()) as AABB).get_center())
+	s.add_child(panel.node)
+	rigs["satellite"] = panel
 	_arm(s, _arm_fold(best_xf, best_clamp), best_clamp, best_xf)
-	screens["satellite"] = {"mesh": sm, "glow": _glow(panel, Vector3(0, 0, 0.25), Color(0.7, 0.8, 1.0)), "node": panel}
+	screens["satellite"] = {"mesh": panel.face("screen"), "rig": panel, "node": panel.node}
 	_body("satellite", s)
-	_faces["satellite"] = [sm]
+	_faces["satellite"] = _read("satellite")
 
 
 ## The arm under [param parent], its [param joints] ([method _arm_joints]) from its clamp at [param clamp] to the panel standing
@@ -1521,7 +1327,7 @@ func _arm(parent: Node3D, joints: Array, clamp: Vector2, xf: Transform3D) -> voi
 	put(parent, cyl(0.022, 0.022, 0.045, 16), black, elbow)
 	_rod(parent, elbow, head, black, Vector2(0.028, 0.022))
 	put(parent, cyl(0.016, 0.016, 0.04, 12), black, head)
-	_rod(parent, head, xf * Vector3(0, 0, -SAT_PANEL.z * 0.5 - 0.01), metal, Vector2(0.018, 0.018))
+	_rod(parent, head, xf * Vector3(0, 0, -_sat_panel.z * 0.5 - 0.01), metal, Vector2(0.018, 0.018))
 
 
 ## Where the arm bends to hold a panel standing as [param xf] from its clamp at [param clamp]: the post's top (a little below
@@ -1529,7 +1335,7 @@ func _arm(parent: Node3D, joints: Array, clamp: Vector2, xf: Transform3D) -> voi
 ## elbow always bends: up over the line between them, as a monitor arm's does, leaning [param back] (away from the chair) or
 ## toward it.
 func _arm_joints(xf: Transform3D, clamp: Vector2, back := true) -> Array:
-	var head := xf * Vector3(0, 0, -SAT_PANEL.z * 0.5 - 0.05)
+	var head := xf * Vector3(0, 0, -_sat_panel.z * 0.5 - 0.05)
 	var top := Vector3(clamp.x, head.y - ARM_DROP, clamp.y)
 	var span := head - top
 	var d := span.length()
@@ -1596,7 +1402,7 @@ func _arm_misfit(xf: Transform3D, clamp: Vector2, sights: Array, beat := INF) ->
 	if joints.is_empty():
 		return 10000.0
 	var bad := 0.0
-	var panel := _block(AABB(-SAT_PANEL * 0.5, SAT_PANEL), xf)
+	var panel := _block(AABB(-_sat_panel * 0.5, _sat_panel), xf)
 	var corners := PackedVector3Array()
 	var flat := PackedVector2Array()
 	for i in 8:
@@ -1621,8 +1427,8 @@ func _arm_misfit(xf: Transform3D, clamp: Vector2, sights: Array, beat := INF) ->
 	var pts := PackedVector3Array()
 	for i in 5:
 		for j in 3:
-			pts.append(xf * Vector3((0.2 * i - 0.4) * SAT_GLASS.x, (0.35 * j - 0.35) * SAT_GLASS.y, SAT_PANEL.z * 0.5 + 0.001))
-	for eye in [EYE, _glass_eye(xf * Vector3(0, 0, SAT_PANEL.z * 0.5), xf.basis.z)]:
+			pts.append(xf * Vector3((0.2 * i - 0.4) * _sat_glass.x, (0.35 * j - 0.35) * _sat_glass.y, _sat_panel.z * 0.5 + 0.001))
+	for eye in [EYE, _glass_eye(xf * Vector3(0, 0, _sat_panel.z * 0.5), xf.basis.z)]:
 		var mine := _sight(pts, eye, "satellite")
 		for o in bodies:
 			bad += hidden(_blocks[o], mine)
@@ -1665,82 +1471,32 @@ static func _glass_eye(c: Vector3, nrm: Vector3) -> Vector3:
 	return EYE + (e - EYE).limit_length(0.42)
 
 
-func _glow(parent: Node3D, at: Vector3, c: Color) -> OmniLight3D:
-	var g := OmniLight3D.new()
-	g.light_color = c
-	g.light_energy = 0.0
-	g.omni_range = 1.0
-	g.omni_attenuation = 1.5
-	g.position = at
-	parent.add_child(g)
-	return g
-
-
 # --- the switch, and the things ---------------------------------------------------------------------------------------
 
-## The switch box, made at the origin: small, gray metal, one toggle ([member lever], tipped up for GOOD and down for BAD),
-## GOOD on a strip of tape above it and BAD below. Its wire is laid once it is packed ([method _things]).
-func _switch_box() -> Node3D:
-	var t := Node3D.new()
-	t.name = "Switch"
-	_faces["switch"] = []
-	var b := Vector3(0.09, 0.055, 0.07)
-	put(t, rbox(b, 0.004), _mats["gray"], Vector3(0, b.y * 0.5, 0))
-	put(t, cyl(0.007, 0.008, 0.006, 16), _mats["metal"], Vector3(0, b.y + 0.003, 0.0))
-	lever = Node3D.new()
-	lever.position = Vector3(0, b.y + 0.005, 0.0)
-	t.add_child(lever)
-	put(lever, cyl(0.0022, 0.003, 0.03, 10), _mats["metal"], Vector3(0, 0.015, 0))
-	put(lever, cyl(0.0035, 0.0035, 0.004, 10), _mats["metal"], Vector3(0, 0.031, 0))
-	var good: Texture2D = _tex["GOOD"]
-	var bad: Texture2D = _tex["BAD"]
-	for pair in [[good, -0.022], [bad, 0.022]]:
-		var m := StandardMaterial3D.new()
-		m.albedo_texture = pair[0]
-		m.roughness = 0.85
-		var label := put(t, quad(Vector2(0.05, 0.016)), m, Vector3(0, b.y + 0.0006, float(pair[1])), Vector3(-90, 0, 0))
-		(_faces["switch"] as Array).append(label)
-	return t
-
-
-## The things at the desk's back, standing before the small things are packed round them: the gooseneck lamp ([member
-## lamp]) on the phones' side, its neck bowing over toward the keyboard, and the patch panel with its blue and yellow
-## cables.
+## The things at the desk's back, standing before the small things are packed round them: the lamp's make ([PropMakes] `lamp`)
+## on the phones' side, its `base` where the desk keeps it and its neck bowing over toward the keyboard (mirrored on a desk drawn
+## the other way round, its light ([member lamp]) aimed as it was made), lit as the medium feeds it (`lit`); and the patch panel
+## with its blue and yellow cables.
 func _things_back() -> void:
 	var lp := at_of("lamp")
-	var lb := _desk_pos(lp)
-	var gooseneck := Node3D.new()
-	gooseneck.name = "Lamp"
-	root.add_child(gooseneck)
-	put(gooseneck, cyl(0.065, 0.075, 0.025, 28), _mats["dark"], lb + Vector3(0, 0.0125, 0))
-	var neck := PackedVector3Array()
-	var head := Vector3(lp.x + 0.04 * flip, DESK_Y + 0.42, lp.y + 0.32)
-	for i in 24:
-		var u := float(i) / 23.0
-		var p := lb.lerp(head, u)
-		p.y = lb.y + 0.02 + (head.y - lb.y) * sin(u * PI * 0.62) / sin(PI * 0.62)
-		neck.append(p)
-	put(gooseneck, tube(neck, 0.0065, 8), _mats["metal"], Vector3.ZERO)
-	var shade := put(gooseneck, cyl(0.022, 0.06, 0.09, 24), _mats["dark"], head, Vector3(-30, 0, -40 * flip))
-	shade.name = "Shade"
-	lamp = SpotLight3D.new()
-	lamp.light_color = Color(1.0, 0.82, 0.58)
-	lamp.light_energy = LAMP_ENERGY
-	lamp.spot_range = 2.8
-	lamp.spot_angle = 66.0
-	lamp.spot_angle_attenuation = 1.8
-	lamp.shadow_enabled = true
-	lamp.shadow_bias = 0.02
-	lamp.shadow_normal_bias = 1.0
-	# a gooseneck's shade is a hand wide, so what it casts is soft-edged, and the shadow keeps some of its own warm light
-	# (the room bounces it back in)
-	lamp.shadow_blur = ShadowFilter.blur(6.0)
-	lamp.shadow_opacity = 0.62
-	root.add_child(lamp)
-	var aim_from := head + Vector3(0, -0.02, 0)
-	# (looking at the keyboard - set by its basis: a node out of the tree has no global transform to look_at from)
-	lamp.transform = Transform3D(Basis.looking_at(Vector3(0.0, DESK_Y, 0.10) - aim_from, Vector3.UP), aim_from)
-	_body("lamp", gooseneck)
+	var lt := _rig("lamp")
+	var mirror := Basis.from_scale(Vector3(flip, 1.0, 1.0))
+	var basis := Basis(Vector3.UP, deg_to_rad(turn["lamp"])) * mirror
+	var base: Variant = lt.point("base")
+	lt.node.transform = Transform3D(basis, _desk_pos(lp) - basis * (base as Vector3 if base is Vector3 else Vector3.ZERO))
+	root.add_child(lt.node)
+	rigs["lamp"] = lt
+	lamp = lt.light("lamp")
+	# a light under a mirrored node is set square in the set, aimed where the mirrored make aims it
+	if flip < 0.0:
+		for l in lt.lights():
+			var ln := l as Light3D
+			var w := bounds_xf(ln)
+			var aim := (w.basis * Vector3.FORWARD).normalized()
+			ln.get_parent().remove_child(ln)
+			root.add_child(ln)
+			ln.transform = Transform3D(Basis.looking_at(aim, Vector3.UP if absf(aim.dot(Vector3.UP)) < 0.98 else Vector3.BACK), w.origin)
+	_body("lamp", lt.node)
 	var pa := at_of("patch")
 	var pp := _desk_pos(pa)
 	var panel := put(root, box(Vector3(0.44, 0.045, 0.05)), _mats["black"], pp + Vector3(0, 0.0225, 0))
@@ -1756,69 +1512,57 @@ func _things_back() -> void:
 	_body("patch", panel)
 
 
-## The small things, each made at the origin and then packed ([method _pack]): the handbook ([param spine] its spine's
-## label), the mug ([member mug], the medium's to lift), the switch ([method _switch_box]), a pencil cup, a rubber stamp
-## and its pad, the GPS tracker blinking green ([member tracker_led]), the chart taped down ([param chart]); the tablet and
-## the flip clock where the script uses them. Then what lies by them: a ring of dried coffee beside the mug's foot
-## ([method _coffee_ring]) and the switch's wire back into the terminal.
-func _things(chart: Texture2D, spine: Texture2D) -> void:
+## The small things, each a make ([PropMakes]) built at the origin and then packed ([method _pack]): the handbook, the mug
+## ([member mug], the medium's to lift), the switch (thrown as the medium feeds it, `side`), a pencil cup, a rubber stamp and its
+## pad, the GPS tracker blinking by itself, the chart taped down (its `chart` face printed with the council's hours); the tablet
+## and the flip clock where the script uses them. Then what lies by them: a ring of dried coffee beside the mug's foot ([method
+## _coffee_ring]) and the switch's wire back into the terminal.
+func _things() -> void:
 	var made := {}
-	# the handbook: a fat binder lying down, its spine (-x) toward the chair
-	var hb := Node3D.new()
-	hb.name = "Handbook"
-	var cover := _std(Color(0.10, 0.14, 0.26), 0.6)
-	put(hb, box(Vector3(0.24, 0.006, 0.30)), cover, Vector3(0, 0.003, 0))
-	put(hb, box(Vector3(0.24, 0.006, 0.30)), cover, Vector3(0, 0.069, 0))
-	put(hb, box(Vector3(0.225, 0.06, 0.285)), _mats["paper"], Vector3(0.005, 0.036, 0))
-	var sm := StandardMaterial3D.new()
-	sm.albedo_texture = spine
-	sm.roughness = 0.6
-	put(hb, box(Vector3(0.012, 0.072, 0.30)), cover, Vector3(-0.12, 0.036, 0))
-	var label := put(hb, quad(Vector2(0.22, 0.06)), sm, Vector3(-0.1265, 0.036, 0), Vector3(0, -90, 0))
-	made["handbook"] = hb
-	_faces["handbook"] = [label]
+	for k in ["handbook", "switch", "stamp", "tracker", "chart"]:
+		var rig := _rig(k)
+		rigs[k] = rig
+		made[k] = rig.node
+		_faces[k] = _read(k)
+	var cf: MeshInstance3D = (rigs["chart"] as PropRig).face("chart")
+	if cf != null and _tex.has("chart"):
+		var cm := StandardMaterial3D.new()
+		cm.albedo_texture = _tex["chart"]
+		cm.roughness = 0.9
+		cf.material_override = cm
 	mug = Node3D.new()
 	mug.name = "Mug"
-	var mug_made := _made("mug")
-	var mug_rad := 0.04
-	if not mug_made.is_empty():
-		mug.add_child(mug_made["node"])
-		mug_rad = (mug_made["size"] as AABB).size.z * 0.5
+	var mr := _rig("mug")
+	rigs["mug"] = mr
+	mug.add_child(mr.node)
+	var mug_rad := maxf((mr.built["size"] as AABB).size.z * 0.5, 0.01) if mr.built.get("size") is AABB else 0.04
 	made["mug"] = mug
 	_faces["mug"] = [mug]
-	made["switch"] = _switch_box()
-	var cup_made := _made("pencil_cup")
-	if not cup_made.is_empty():
-		var cup: Node3D = cup_made["node"]
-		cup.name = "PencilCup"
-		made["cup"] = cup
-	var st := Node3D.new()
-	st.name = "Stamp"
-	put(st, rbox(Vector3(0.09, 0.016, 0.06), 0.004), _std(Color(0.1, 0.1, 0.12), 0.4, 0.4), Vector3(-0.02, 0.008, 0))
-	put(st, box(Vector3(0.05, 0.012, 0.03)), _mats["dark"], Vector3(0.055, 0.006, 0.0))
-	put(st, cyl(0.009, 0.012, 0.055, 12), _mats["wood_dark"], Vector3(0.055, 0.04, 0.0))
-	made["stamp"] = st
-	var gp := Node3D.new()
-	gp.name = "Tracker"
-	put(gp, rbox(Vector3(0.05, 0.016, 0.035), 0.006), _mats["black"], Vector3(0, 0.008, 0))
-	tracker_led = put(gp, cyl(0.002, 0.002, 0.002, 8), _mats["led_green"], Vector3(0.012, 0.017, 0.004))
-	made["tracker"] = gp
-	var ch := Node3D.new()
-	ch.name = "Chart"
-	var cm := StandardMaterial3D.new()
-	cm.albedo_texture = chart
-	cm.roughness = 0.9
-	var sheet := put(ch, quad(Vector2(0.21, 0.15)), cm, Vector3(0, 0.0012, 0), Vector3(-90, 0, 0))
-	for c in [Vector2(-0.1, -0.072), Vector2(0.1, -0.072), Vector2(-0.1, 0.072), Vector2(0.1, 0.072)]:
-		put(ch, quad(Vector2(0.03, 0.012)), _mats["tape"], Vector3(c.x, 0.0016, c.y), Vector3(-90, 40.0 * signf(c.x * c.y), 0))
-	made["chart"] = ch
-	_faces["chart"] = [sheet]
+	var cup := _rig("pencil_cup")
+	rigs["pencil_cup"] = cup
+	cup.node.name = "PencilCup"
+	made["cup"] = cup.node
 	if _wants.has("tablet"):
-		made["tablet"] = _tablet_slab()
+		var tb := _rig("tablet")
+		rigs["tablet"] = tb
+		tablet = tb.node
+		tablet_screen = tb.face("screen")
+		made["tablet"] = tablet
 	if _wants.has("clock"):
-		made["clock"] = _clock_box()
-		_faces["clock"] = [clock_face]
+		var cl := _rig("clock")
+		rigs["clock"] = cl
+		clock_face = cl.face("cards")
+		if clock_face != null:
+			clock_face.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		made["clock"] = cl.node
+		_faces["clock"] = _read("clock")
 	_pack(made)
+	# a spare thing left off a desk with no room for it plays nothing
+	if not at.has("cup"):
+		rigs.erase("pencil_cup")
+	for k in ["handbook", "switch", "stamp", "tracker", "chart"]:
+		if not at.has(k):
+			rigs.erase(k)
 	mug_home = mug.transform
 	if tablet != null:
 		tablet_home = tablet.transform
@@ -1836,15 +1580,10 @@ func _things(chart: Texture2D, spine: Texture2D) -> void:
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(ring)
 	var sw := at_of("switch")
-	put(root, tube(sag_path(Vector3(sw.x - 0.02 * signf(sw.x), DESK_Y + 0.02, sw.y - 0.03),
-		Vector3(CASE_AT.x + 0.18 * signf(sw.x), DESK_Y + 0.05, CASE_AT.y - CASE.z * 0.5 + 0.02), 0.06, DESK_Y + 0.003, 30), 0.0025), _mats["cable"], Vector3.ZERO)
-
-
-## Role [param role]'s make on this desk, as [member makes] chooses it, built ([method PropMakes.made]); where none is chosen,
-## its own drawn from the desk's number and the role's salt ([constant MAKE_SALTS]). Touches no tree.
-func _made(role: String) -> Dictionary:
-	var choice: Variant = makes.get(role, {})
-	return PropMakes.made(role, choice if PropMakes.valid(choice) else {}, hash([_seed, String(MAKE_SALTS.get(role, role))]))
+	var side := "wire right" if sw.x > 0.0 else "wire left"
+	var from := _point("switch", "wire", Vector3(sw.x - 0.02 * signf(sw.x), DESK_Y + 0.02, sw.y - 0.03))
+	var into := _point("terminal", side, Vector3(CASE_AT.x + 0.18 * signf(sw.x), DESK_Y + 0.05, CASE_AT.y - CASE.z * 0.5 + 0.02))
+	put(root, tube(sag_path(from, into, 0.06, DESK_Y + 0.003, 30), 0.0025), _mats["cable"], Vector3.ZERO)
 
 
 ## The old coffee ring's shape, flat on the desk: a thin rim round where a mug stood - wider and narrower by turns, a gap
@@ -1913,45 +1652,7 @@ func _chair() -> void:
 		put(chair, box(Vector3(0.025, 0.18, 0.025)), _mats["dark"], Vector3(side * 0.26, 0.56, 0.06))
 
 
-# --- the clock and the tablet -----------------------------------------------------------------------------------------
-
-## The flip clock, made at the origin: a small black case, its cards behind a window on its face (+z, [member clock_face]);
-## packed turned to the chair.
-func _clock_box() -> Node3D:
-	var c := Node3D.new()
-	c.name = "Clock"
-	put(c, rbox(CLOCK_CASE, 0.009), _mats["black"], Vector3(0, CLOCK_CASE.y * 0.5, 0))
-	for side in [-1.0, 1.0]:
-		put(c, box(Vector3(0.012, 0.006, CLOCK_CASE.z * 0.8)), _mats["dark"], Vector3(side * CLOCK_CASE.x * 0.36, 0.003, 0))
-	clock_face = put(c, quad(CLOCK_FACE), null, Vector3(0, CLOCK_CASE.y * 0.52, CLOCK_CASE.z * 0.5 + 0.0012))
-	clock_face.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return c
-
-
-## The tablet, made at the origin: a thin slab in a worn black case lying face up, its screen dark ([member
-## tablet_screen]); the medium lifts it from where it is packed ([member tablet_home]).
-func _tablet_slab() -> Node3D:
-	tablet = Node3D.new()
-	tablet.name = "Tablet"
-	var slab := MeshInstance3D.new()
-	slab.mesh = TabletMedium.rounded_slab(TABLET_SCREEN + Vector2(TABLET_BEZEL, TABLET_BEZEL) * 2.0, TABLET_T, TABLET_CORNER)
-	var smat := StandardMaterial3D.new()
-	smat.albedo_color = Color(0.035, 0.035, 0.04)
-	smat.roughness = 0.22
-	smat.metallic = 0.35
-	smat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	slab.material_override = smat
-	slab.position = Vector3(0, TABLET_T * 0.5, 0)
-	tablet.add_child(slab)
-	var pm := PlaneMesh.new()
-	pm.size = TABLET_SCREEN
-	tablet_screen = MeshInstance3D.new()
-	tablet_screen.mesh = pm
-	tablet_screen.position = Vector3(0, TABLET_T + 0.0008, 0)
-	tablet_screen.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	tablet.add_child(tablet_screen)
-	return tablet
-
+# --- the tablet held --------------------------------------------------------------------------------------------------
 
 ## The tablet held to be read: low over the desk's near edge ([constant TABLET_HELD]), its screen tipped toward the chair
 ## ([constant TABLET_TILT]).
@@ -1966,20 +1667,23 @@ func tablet_held_xf() -> Transform3D:
 ## things stand now, so the packer asks it of a place it tries ([method _misfit]).
 func spot_of(k: String) -> Dictionary:
 	var y := DESK_Y
-	var mon_y := y + CASE.y + 0.045 + CRT.y * 0.5 + 0.012
 	match k:
 		"home":
 			return {"aim": Vector3(0.0, y + 0.17, -0.16), "eye": EYE, "fov": 54.0}
 		"terminal":
-			return {"aim": Vector3(0.0, mon_y, CASE_AT.y + CRT.z * 0.5 - 0.01), "eye": Vector3(0.0, mon_y + 0.07, 0.44), "fov": 33.0}
+			# square on its glass, wherever its make has it
+			var glass := bounds_xf(terminal_screen).origin if terminal_screen != null else Vector3(0.0, y + 0.35, CASE_AT.y + 0.18)
+			return {"aim": glass, "eye": Vector3(glass.x, glass.y + 0.07, 0.44), "fov": 33.0}
 		"keyboard":
 			return {"aim": Vector3(0.0, y + 0.03, KEYBOARD_AT.y), "eye": EYE + Vector3(0, -0.05, -0.15), "fov": 36.0}
 		"phones":
 			var ph := (_phone_spot(0, 0) + _phone_spot(ROW - 1, 1)) * 0.5
 			return {"aim": Vector3(ph.x + 0.0, y + 0.01, 0.0), "eye": EYE + Vector3(-0.30 * flip, -0.02, -0.12), "fov": 38.0}
 		"radar":
+			# a little under its glass, wherever its make has it: the scope and the knobs under it, the gain's scale whole
 			var ra := at_of("radar")
-			return {"aim": Vector3(ra.x - 0.02 * flip, y + 0.15, ra.y + 0.13), "eye": EYE + Vector3(0.18 * flip, -0.04, -0.12), "fov": 34.0}
+			var scope := bounds_xf(radar_screen).origin if radar_screen != null else Vector3(ra.x - 0.02 * flip, y + 0.18, ra.y + 0.13)
+			return {"aim": scope - Vector3(0.0, RADAR_LOOK_LOW, 0.0), "eye": EYE + Vector3(0.18 * flip, -0.04, -0.12), "fov": 34.0}
 		"receiver":
 			var rc := at_of("receiver")
 			return {"aim": Vector3(rc.x - 0.02 * flip, y + 0.14, rc.y), "eye": EYE + Vector3(0.42 * flip, 0.02, -0.10), "fov": 30.0}
@@ -2008,14 +1712,10 @@ func spot_of(k: String) -> Dictionary:
 			var c := tablet_held_xf().origin
 			return {"aim": c + Vector3(0, 0.01, 0), "eye": EYE + Vector3(0, -0.05, -0.08), "fov": 32.0}
 		"feed", "satellite", "tv":
-			if not screens.has(k):
+			if not screens.has(k) or (screens[k] as Dictionary)["mesh"] == null:
 				return {}
-			var sc: Dictionary = screens[k]
-			var mesh: MeshInstance3D = sc["mesh"]
-			var node: Node3D = sc["node"]
-			var xf := bounds_xf(node)
-			var c := xf * mesh.position
-			return {"aim": c, "eye": _glass_eye(c, xf.basis * Vector3.BACK), "fov": 26.0}
+			var xf := bounds_xf((screens[k] as Dictionary)["mesh"])
+			return {"aim": xf.origin, "eye": _glass_eye(xf.origin, (xf.basis * Vector3.BACK).normalized()), "fov": 26.0}
 	return {}
 
 
@@ -2024,8 +1724,11 @@ func phone_home(i: int) -> Transform3D:
 	return (phones[i] as Dictionary)["home"]
 
 
-## Where a phone laid open on the desk lies, the [param k]th laid down.
+## Where a phone laid open on the desk lies, the [param k]th laid down: on the phones' side, in toward the middle one after
+## another, its keypad toward the chair and its screen beyond - turned to face the chair, each a few degrees off the last
+## ([constant HELD_FAN]) so they lie as a hand drops them.
 func held_xf(k: int) -> Transform3D:
 	var h := at_of("held")
 	var spot := h + Vector2(flip * float(k) * HELD_STEP, 0.0)
-	return Transform3D(Basis(Vector3.UP, deg_to_rad((-22.0 + float(k) * 13.0) * flip)), Vector3(spot.x, DESK_Y, spot.y))
+	var toward := atan2(EYE.x - spot.x, EYE.z - spot.y)
+	return Transform3D(Basis(Vector3.UP, toward + deg_to_rad((float(k) - 1.0) * HELD_FAN * flip)), Vector3(spot.x, DESK_Y, spot.y))

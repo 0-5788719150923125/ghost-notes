@@ -1,6 +1,6 @@
 extends Node
 
-## A probe, not a gate: it writes PNGs of the home screen's Environment panel and asserts nothing. After the
+## A probe, not a gate: it writes PNGs of the home screen's Setup panel and asserts nothing. After the
 ## first shot it fakes the states a settled machine never shows: FFmpeg mid-download, the voice environment
 ## mid-install with no fraction, the download environment failed with its detail pane open, and the badge every
 ## mode shows at the top of the frame while anything installs.

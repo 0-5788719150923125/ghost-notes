@@ -52,6 +52,7 @@ var _held: Node3D
 static var _shared: PropStudio = null
 static var _busy := false
 static var _flame_mat: ShaderMaterial = null
+static var _build_task := -1     # the worker building a thing to picture, -1 for none ([method settle])
 
 
 ## Whether this process can take a picture at all.
@@ -283,15 +284,28 @@ static func _built(thing: Dictionary, materials: Dictionary, h: String) -> Dicti
 	var built := [{}]
 	var task := WorkerThreadPool.add_task(func() -> void:
 		built[0] = Props.build(t, safe["materials"], hash(h)))
+	_build_task = task
 	while not WorkerThreadPool.is_task_completed(task):
 		await tree().process_frame
-	WorkerThreadPool.wait_for_task_completion(task)
+	# (waited for already where [method settle] took it)
+	if _build_task == task:
+		WorkerThreadPool.wait_for_task_completion(task)
+		_build_task = -1
 	return {"built": built[0], "scale": float(t.get("scale", 1.0))}
+
+
+## The thing being built to be pictured waited for, if one is: before the process quits (a worker still running as it does
+## brings it down).
+static func settle() -> void:
+	if _build_task >= 0:
+		WorkerThreadPool.wait_for_task_completion(_build_task)
+		_build_task = -1
 
 
 ## Thing [param thing] built of [param materials] photographed from three sides for an agent to look at ([constant VIEWS]: from a
 ## little above its front, its right side and above, each [constant VIEW]), written into [param dir] as `prop_<side>.png`: their
-## paths, [] where no picture can be taken. Seeded by [param h] as its picture is; one studio, one picture at a time.
+## paths, [] where no picture can be taken. Seeded by [param h] as its picture is; one studio, one picture at a time. Played as its
+## scene plays it at rest ([PropRig]: its lights lit), as a prop's card picture never is.
 static func views(thing: Dictionary, materials: Dictionary, h: String, dir: String) -> Array:
 	if not can_see():
 		return []
@@ -305,6 +319,8 @@ static func views(thing: Dictionary, materials: Dictionary, h: String, dir: Stri
 			_shared = PropStudio.new()
 		var k := float(got["scale"])
 		var box: AABB = _shared.hold_built(got["built"])
+		# as its scene plays it at rest: its lights lit, its parts as they start - an agent changing a light sees what it changed
+		PropRig.new(got["built"])
 		_shared._held.scale = Vector3(k, k, k)
 		box = AABB(box.position * k, box.size * k)
 		DirAccess.make_dir_recursive_absolute(dir)
@@ -320,7 +336,7 @@ static func views(thing: Dictionary, materials: Dictionary, h: String, dir: Stri
 
 
 ## Thing [param thing] built of [param materials] whole, to be looked at and turned ([PropViewer]): `{node, box, size}` - its node
-## with its flames lit, at its own scale, out of any tree; its bounds there; its size as [method size_text] says it. {} where nothing
+## with its flames and its lights lit ([PropRig], as its scene plays it at rest), at its own scale, out of any tree; its bounds there; its size as [method size_text] says it. {} where nothing
 ## can be built. Built on a worker, seeded by [param h] as its picture is.
 static func model(thing: Dictionary, materials: Dictionary, h: String) -> Dictionary:
 	var got := await _built(thing, materials, h)
@@ -329,6 +345,7 @@ static func model(thing: Dictionary, materials: Dictionary, h: String) -> Dictio
 	var b: Dictionary = got["built"]
 	var k := float(got["scale"])
 	var node := lit(b)
+	PropRig.new(b)
 	node.scale = Vector3(k, k, k)
 	var box := bounds_of(b)
 	box = AABB(box.position * k, box.size * k)

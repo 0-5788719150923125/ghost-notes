@@ -51,7 +51,7 @@ const PART := {
 ## nothing ([method Motions.sanitize_law]): the rows and the agents' words are one list.
 static func law_fields(law: String) -> Dictionary:
 	var out := {
-		"law": {"type": "enum", "label": "Law", "blurb": "What the track does to its thing.", "options": Motions.LAWS.keys()},
+		"law": {"type": "enum", "label": "Law", "blurb": "What the track does to its thing.", "options": Motions.act_laws()},
 		"thing": {"type": "text", "label": "Thing", "blurb": "What it works: a thing on the table, by its name."},
 		"part": {"type": "text", "label": "Part", "blurb": "Which part of the thing, where it has parts (a lid, a hand, a jaw)."},
 	}

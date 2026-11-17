@@ -25,6 +25,7 @@ var _reads: Array = []    # hashes whose kept picture waits to be read
 var _reading := {}        # hash -> true from asked until read
 var _unread := {}         # hash -> true where the kept file would not read: taken again
 var _read_busy := false
+var _read_task := -1       # the worker reading kept pictures, -1 for none
 
 
 ## The picture of prop [param h] (a [param thing] built of [param mats]) once taken or read, null until then - asked for now if it
@@ -138,9 +139,13 @@ func _read_on() -> void:
 				var path := PropStudio.kept_path(String(h))
 				var img := Image.load_from_file(path) if FileAccess.file_exists(path) else null
 				got.append([String(h), img, FileAccess.get_file_as_string(path.get_basename() + ".txt").strip_edges()]))
+		_read_task = task
 		while not WorkerThreadPool.is_task_completed(task):
 			await tree.process_frame
-		WorkerThreadPool.wait_for_task_completion(task)
+		# (waited for already where [method settle] took it)
+		if _read_task == task:
+			WorkerThreadPool.wait_for_task_completion(task)
+			_read_task = -1
 		for g in got:
 			var h := String(g[0])
 			_reading.erase(h)
@@ -150,6 +155,18 @@ func _read_on() -> void:
 			else:
 				_unread[h] = true
 	_read_busy = false
+
+
+## Whatever is under way waited for and nothing more taken: before what holds these pictures goes, or the process does (a worker
+## still running as it quits brings it down).
+func settle() -> void:
+	_queue.clear()
+	_ready.clear()
+	_reads.clear()
+	if _read_task >= 0:
+		WorkerThreadPool.wait_for_task_completion(_read_task)
+		_read_task = -1
+	PropStudio.settle()
 
 
 func _pump() -> void:

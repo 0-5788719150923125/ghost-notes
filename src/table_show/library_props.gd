@@ -221,6 +221,7 @@ func settle() -> void:
 		WorkerThreadPool.wait_for_task_completion(_seen_task)
 		_seen_task = -1
 		_took_seen()
+	pictures.settle()
 
 
 ## What the worker read of the episodes taken as the seen props.

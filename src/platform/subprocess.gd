@@ -400,7 +400,7 @@ static func _program(path: String) -> String:
 	if not _warned.has(path):
 		_warned[path] = true
 		var why := Deps.hint(key) if not key.is_empty() else \
-			"not installed (or not on PATH) - see the Environment panel (the ⚙ in the bottom-right row)"
+			"not installed (or not on PATH) - see the Setup panel (the ⚙ in the bottom-right row)"
 		push_warning("ghost: cannot start '%s' - %s" % [path, why])
 		printerr("ghost: cannot start '%s' - %s" % [path, why])
 	return bin

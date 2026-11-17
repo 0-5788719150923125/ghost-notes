@@ -257,20 +257,21 @@ func _played() -> void:
 	_ok(m._pen_xf().origin.distance_to(lying.origin) > 0.03, "CONTROL: as its first stroke begins, the pen is in hand, off its place")
 	_ok(m.target_box(m._actions[2]).size.x > 0.0, "the point finds the line its act names")
 	_ok(float(m._plan[3]["start"]) >= float(m._plan[0]["end"]), "the strike comes after the line it strikes")
-	# the Desk's rows: its number and light, chosen
+	# the Desk's rows: its number, chosen; its light the Environment's (a `mood` on the rows is no longer read)
 	var own_desk := m._seed
 	var hand_was: Dictionary = (m._strokes as Dictionary).duplicate(true)
-	m.load_episode({"dir": DIR, "seed": 3, "plan": {}}, script, {"seed": 77, "mood": "dusk"})
+	m.set_environment(Surroundings.sanitize({"light": "dusk"}))
+	m.load_episode({"dir": DIR, "seed": 3, "plan": {}}, script, {"seed": 77, "mood": "candlelight"})
 	_ok(own_desk == 3 and m._seed == 77 and String(m.look["mood"]) == "dusk" and m._strokes == hand_was,
-		"the rows' number is the desk's and their light the one chosen; the hand is still the episode's (desk %d, then %d)" % [own_desk, m._seed])
+		"the rows' number is the desk's and its light the Environment's, never the rows' own `mood`; the hand is still the episode's (desk %d, then %d)" % [own_desk, m._seed])
 	# ...chosen while it plays: the desk dressed again, the episode as it was
 	var subs := Words.new()
-	subs.document = {"source": script, "table": {"dir": DIR, "seed": 3, "plan": {}}, "medium": {"seed": 77, "mood": "dusk"}}
+	subs.document = {"source": script, "table": {"dir": DIR, "seed": 3, "plan": {}}, "medium": {"seed": 77}, "environment": {"light": "dusk"}}
 	m._subs = subs
 	m._title = TitleCard.new()
 	m._ensure_doc()
 	var laid: Array = m._actions
-	(subs.document["medium"] as Dictionary)["mood"] = "candlelight"
+	(subs.document["environment"] as Dictionary)["light"] = "candlelight"
 	(subs.document["medium"] as Dictionary)["seed"] = 0
 	m._ensure_doc()
 	_ok(String(m.look["mood"]) == "candlelight" and is_same(m._actions, laid),

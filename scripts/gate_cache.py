@@ -11,7 +11,7 @@
 check.sh runs every gate under strace (STRACE, the calls in CALLS) and hands the trace here. A gate's
 INPUTS are what its processes opened to read, stat'ed, executed or listed inside the repo or Ghost's
 user:// folder (the fetched environments live there), and the paths they looked for and did not find.
-What a gate wrote is its own, and so is the listing of a folder it wrote into. A record keeps a content
+What a gate wrote is its own, and so is what is under a folder it made, moved or removed. A record keeps a content
 hash per file, a hash per listing, what was absent, and the meta check.sh hands in (Godot's version,
 the gate's run line, the runner's own hash). GHOST.CFG IS KEPT BY THE KEYS READ: the app rewrites it
 with any use, so each Godot process lists the keys its Settings reads (`GHOST_SETTINGS_READS`) and the
@@ -19,8 +19,9 @@ record holds those values alone - or the whole file when a process read it witho
 gate whose record still holds is cached: a gate given the same bytes does the same thing, which the
 gates are held to (pinned seeds, no timing the machine).
 
-A listing is kept as the names the gate saw (strace prints them), so a folder others write into
-while it runs (parallel probes' scenes in tests/) keeps what it read. A pass is kept only if nothing
+A listing is kept as the names the gate saw (strace prints them), less the names it made or removed
+there itself, which the check leaves out too: a folder others write into while it runs (parallel
+probes' scenes in tests/) keeps what it read, and its own leftovers never count. A pass is kept only if nothing
 else it read changed after the gate started (a file's ctime past the start, an absent path that
 appeared; for ghost.cfg, a key read whose value differs from check.sh's copy at the start): otherwise
 a file edited mid-run would be kept with bytes the gate never saw. A gate that connects off this machine is never kept. Hashes are remembered by device,
@@ -266,11 +267,14 @@ class Trace:
                     t.add_line(line.rstrip("\n"), cwd, pid)
         return t
 
+    def own_names(self, folder: str) -> set:
+        """The names in [folder] the gate made, moved or removed itself."""
+        return {os.path.basename(w) for w in self.written if os.path.dirname(w) == folder}
+
     def inputs(self, scope: Scope) -> dict:
         """{path: kind}: `f` a file's bytes, `e` a folder that exists, `d` a folder's listing (the names
         are in [member listed]), `a` absent."""
         written = self.written
-        scratch = written | {os.path.dirname(w) for w in written}
 
         def own(p: str) -> bool:
             """Written by the gate, or under a folder it made, moved or removed: its scratch."""
@@ -288,7 +292,7 @@ class Trace:
             if scope.holds(p) and not own(p):
                 out[p] = "f"  # a folder among them becomes `e` when it is hashed
         for p in self.listed:
-            if scope.holds(p) and p not in scratch and not own(p):
+            if scope.holds(p) and not own(p):
                 out[p] = "d"
         return out
 
@@ -371,24 +375,25 @@ class Hashes:
                     self.known[_dec(parts[2])] = (parts[0], parts[1])
 
     @staticmethod
-    def listing(names) -> str:
-        """A listing's state: its names, less `.`, `..` and the transient ones, hashed."""
-        kept = sorted(n for n in names if n not in (".", "..") and not TRANSIENT.match(n))
+    def listing(names, own=()) -> str:
+        """A listing's state: its names, less `.`, `..`, the transient ones and the gate's [own], hashed."""
+        kept = sorted(n for n in names if n not in (".", "..") and n not in own and not TRANSIENT.match(n))
         return "list:" + hashlib.sha1("\n".join(kept).encode("utf-8", "surrogateescape")).hexdigest()
 
     @staticmethod
     def _stamp(st) -> str:
         return f"{st.st_dev}:{st.st_ino}:{st.st_size}:{st.st_mtime_ns}:{st.st_ctime_ns}"
 
-    def state(self, path: str, kind: str) -> str:
-        """What a path is now, in the record's terms: a file's hash, `dir`, a listing's hash, `absent`."""
+    def state(self, path: str, kind: str, own=()) -> str:
+        """What a path is now, in the record's terms: a file's hash, `dir`, a listing's hash (less the
+        gate's [own] names), `absent`."""
         try:
             st = os.stat(path)
         except OSError:
             return "absent"
         if kind == "d":
             try:
-                return self.listing(os.listdir(path))
+                return self.listing(os.listdir(path), own)
             except OSError:
                 return "absent"
         if os.path.isdir(path):
@@ -458,7 +463,8 @@ def read_meta(path: Path, gate: str) -> dict:
 
 
 def write_record(out: Path, meta: dict, entries: dict) -> None:
-    """[entries] {path: (kind, state)}; a ghost.cfg key's path is `file\\0section\\0key`."""
+    """[entries] {path: (kind, state)}; a ghost.cfg key's path is `file\\0section\\0key`, a listing's
+    `folder\\0` and the gate's own names there, each a field."""
     lines = [f"m\t{k}\t{_enc(v)}" for k, v in sorted(meta.items())]
     lines += [f"{kind}\t{state}\t" + "\t".join(_enc(x) for x in p.split("\0"))
               for p, (kind, state) in sorted(entries.items())]
@@ -496,7 +502,8 @@ def why_runs(record: Path, meta: dict, hashes: Hashes, root: Path) -> str:
             if hashes.key_state(path, section, key) != state:
                 return f"{os.path.basename(path)} [{section}] {key} changed"
             continue
-        if hashes.state(p, kind) != state:
+        p, *own = p.split("\0")
+        if hashes.state(p, kind, set(own)) != state:
             shown = os.path.relpath(p, root) if p.startswith(str(root)) else p
             what = {"a": "appeared", "d": "listing changed"}.get(kind, "changed")
             return f"{shown} {what}"
@@ -533,7 +540,8 @@ def make_record(trace: Trace, scope: Scope, hashes: Hashes, start_ns: int, reads
             seen = trace.listed[p]
             if "\0partial" in seen:
                 return None, f"strace cut short the listing of {p}"
-            entries[p] = ("d", hashes.listing(seen))
+            mine = trace.own_names(p)
+            entries["\0".join([p, *sorted(mine)])] = ("d", hashes.listing(seen, mine))
             continue
         state = hashes.state(p, kind)
         if kind == "a":
@@ -668,8 +676,8 @@ def selftest() -> int:
         trace = Trace.load(tdir)
         inputs = trace.inputs(scope)
         expect("inputs", sorted((os.path.relpath(p, tmp), k) for p, k in inputs.items()), [
-            ("repo/data", "f"), ("repo/data/scenes", "d"), ("repo/src/a.gd", "f"), ("repo/src/b.gd", "f"),
-            ("repo/src/gone.gd", "a"), ("repo/src/odd\nname\tx.gd", "a"), ("user/ghost.cfg", "f")])
+            ("repo/data", "f"), ("repo/data/scenes", "d"), ("repo/scratch", "d"), ("repo/src/a.gd", "f"),
+            ("repo/src/b.gd", "f"), ("repo/src/gone.gd", "a"), ("repo/src/odd\nname\tx.gd", "a"), ("user/ghost.cfg", "f")])
         expect("names seen", trace.listed[str(root / "data/scenes")], {".", "..", "one.json"})
 
         cache = Path(tmp) / "cache"
@@ -706,9 +714,9 @@ def selftest() -> int:
         change_odd = root / "src/odd\nname\tx.gd"
         (root / "src/unread.gd").write_text("u2")
         (root / "dist/log.txt").write_text("log2")
-        (root / "scratch/new.txt").write_text("n")
+        (root / "scratch/out.txt").write_text("left")
         (root / "data/scenes/_probe_123.tscn").write_text("p")
-        expect("a file it never read, an output and a transient probe scene changed", runs(), "")
+        expect("a file it never read, an output, its own file left behind and a transient probe scene", runs(), "")
         (root / "data/scenes/_probe_123.tscn").unlink()
 
         def change(what, do, undo):
@@ -724,6 +732,8 @@ def selftest() -> int:
                lambda: (root / "src/gone.gd").unlink())
         change("a file added to a folder it listed", lambda: (root / "data/scenes/two.json").write_text("{}"),
                lambda: (root / "data/scenes/two.json").unlink())
+        change("a file added to a folder it listed and wrote into", lambda: (root / "scratch/new.txt").write_text("n"),
+               lambda: (root / "scratch/new.txt").unlink())
         change("a path holding a newline and a tab appearing", lambda: change_odd.write_text("o"),
                lambda: change_odd.unlink())
         change("its run line", lambda: meta_file.write_text("godot 4.7\nhow:g boot probe, 300s\n"),
@@ -753,7 +763,7 @@ def selftest() -> int:
         start_copy = Path(tmp) / "cfg.start"
         start_copy.write_text(text)
         entries, why = make_record(trace, scope, Hashes(), time.time_ns(), settings_read(reads_dir), start_copy)
-        expect("keyed", sorted(e[0] for e in entries.values()), ["a", "a", "d", "e", "f", "f", "k", "k", "k"])
+        expect("keyed", sorted(e[0] for e in entries.values()), ["a", "a", "d", "d", "e", "f", "f", "k", "k", "k"])
         write_record(cache / "g", meta, entries)
         expect("keyed, nothing changed", runs(), "")
         cfg.write_text(text.replace('"calm"', '"busy"').replace('[1, 2]', '[3]'))

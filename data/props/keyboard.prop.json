@@ -1,0 +1,445 @@
+{
+	"name": "the keyboard",
+	"line": "A narrow keyboard, a standard compact layout of five rows, its keys sculpted and its rows leaning toward the typist.",
+	"thing": {
+		"name": "the keyboard",
+		"parts": [
+			{
+				"parts": [
+					{
+						"shape": "box",
+						"size": [
+							30.35,
+							2.4,
+							13.45
+						],
+						"round": 0.8,
+						"at": [
+							0.0,
+							0.0,
+							0.0
+						],
+						"material": "beige",
+						"points": {
+							"cable": [
+								0.0,
+								1.2,
+								-6.725
+							]
+						}
+					},
+					{
+						"shape": "box",
+						"size": [
+							28.15,
+							0.2,
+							9.65
+						],
+						"round": 0.0,
+						"at": [
+							0.0,
+							2.22,
+							-0.4
+						],
+						"material": "beige dark"
+					},
+					{
+						"parts": [
+							{
+								"shape": "box",
+								"size": [
+									1.73,
+									1.08,
+									1.73
+								],
+								"round": 0.0,
+								"at": [
+									-12.95,
+									0.003,
+									-3.758
+								],
+								"material": "key",
+								"turn": [
+									6.17,
+									0.0,
+									0.0
+								],
+								"taper": 0.277,
+								"copies": {
+									"line": {
+										"count": 13,
+										"step": [
+											1.85,
+											0.0,
+											0.0
+										]
+									}
+								}
+							},
+							{
+								"shape": "box",
+								"size": [
+									3.58,
+									1.08,
+									1.73
+								],
+								"round": 0.0,
+								"at": [
+									12.025,
+									0.003,
+									-3.758
+								],
+								"material": "key gray",
+								"turn": [
+									6.17,
+									0.0,
+									0.0
+								],
+								"taper": 0.134
+							},
+							{
+								"shape": "box",
+								"size": [
+									2.655,
+									0.98,
+									1.73
+								],
+								"round": 0.0,
+								"at": [
+									-12.488,
+									0.001,
+									-1.882
+								],
+								"material": "key gray",
+								"turn": [
+									3.71,
+									0.0,
+									0.0
+								],
+								"taper": 0.181
+							},
+							{
+								"shape": "box",
+								"size": [
+									1.73,
+									0.98,
+									1.73
+								],
+								"round": 0.0,
+								"at": [
+									-10.175,
+									0.001,
+									-1.882
+								],
+								"material": "key",
+								"turn": [
+									3.71,
+									0.0,
+									0.0
+								],
+								"taper": 0.277,
+								"copies": {
+									"line": {
+										"count": 12,
+										"step": [
+											1.85,
+											0.0,
+											0.0
+										]
+									}
+								}
+							},
+							{
+								"shape": "box",
+								"size": [
+									2.655,
+									0.98,
+									1.73
+								],
+								"round": 0.0,
+								"at": [
+									12.488,
+									0.001,
+									-1.882
+								],
+								"material": "key",
+								"turn": [
+									3.71,
+									0.0,
+									0.0
+								],
+								"taper": 0.181
+							},
+							{
+								"shape": "box",
+								"size": [
+									3.118,
+									0.92,
+									1.73
+								],
+								"round": 0.0,
+								"at": [
+									-12.256,
+									0.0,
+									-0.01
+								],
+								"material": "key gray",
+								"turn": [
+									1.24,
+									0.0,
+									0.0
+								],
+								"taper": 0.154
+							},
+							{
+								"shape": "box",
+								"size": [
+									1.73,
+									0.92,
+									1.73
+								],
+								"round": 0.0,
+								"at": [
+									-9.713,
+									0.0,
+									-0.01
+								],
+								"material": "key",
+								"turn": [
+									1.24,
+									0.0,
+									0.0
+								],
+								"taper": 0.277,
+								"copies": {
+									"line": {
+										"count": 11,
+										"step": [
+											1.85,
+											0.0,
+											0.0
+										]
+									}
+								}
+							},
+							{
+								"shape": "box",
+								"size": [
+									4.042,
+									0.92,
+									1.73
+								],
+								"round": 0.0,
+								"at": [
+									11.794,
+									0.0,
+									-0.01
+								],
+								"material": "key gray",
+								"turn": [
+									1.24,
+									0.0,
+									0.0
+								],
+								"taper": 0.119
+							},
+							{
+								"shape": "box",
+								"size": [
+									4.042,
+									0.92,
+									1.73
+								],
+								"round": 0.0,
+								"at": [
+									-11.794,
+									0.0,
+									1.86
+								],
+								"material": "key gray",
+								"turn": [
+									-1.24,
+									0.0,
+									0.0
+								],
+								"taper": 0.119
+							},
+							{
+								"shape": "box",
+								"size": [
+									1.73,
+									0.92,
+									1.73
+								],
+								"round": 0.0,
+								"at": [
+									-8.788,
+									0.0,
+									1.86
+								],
+								"material": "key",
+								"turn": [
+									-1.24,
+									0.0,
+									0.0
+								],
+								"taper": 0.277,
+								"copies": {
+									"line": {
+										"count": 10,
+										"step": [
+											1.85,
+											0.0,
+											0.0
+										]
+									}
+								}
+							},
+							{
+								"shape": "box",
+								"size": [
+									4.967,
+									0.92,
+									1.73
+								],
+								"round": 0.0,
+								"at": [
+									11.331,
+									0.0,
+									1.86
+								],
+								"material": "key gray",
+								"turn": [
+									-1.24,
+									0.0,
+									0.0
+								],
+								"taper": 0.097
+							},
+							{
+								"shape": "box",
+								"size": [
+									2.655,
+									0.93,
+									1.73
+								],
+								"round": 0.0,
+								"at": [
+									-12.488,
+									0.0,
+									3.715
+								],
+								"material": "key gray",
+								"turn": [
+									-1.86,
+									0.0,
+									0.0
+								],
+								"taper": 0.181,
+								"copies": {
+									"line": {
+										"count": 2,
+										"step": [
+											4.625,
+											0.0,
+											0.0
+										]
+									}
+								}
+							},
+							{
+								"shape": "box",
+								"size": [
+									12.83,
+									0.93,
+									1.73
+								],
+								"round": 0.0,
+								"at": [
+									0.0,
+									0.0,
+									3.715
+								],
+								"material": "key",
+								"turn": [
+									-1.86,
+									0.0,
+									0.0
+								],
+								"taper": 0.037
+							},
+							{
+								"shape": "box",
+								"size": [
+									2.655,
+									0.93,
+									1.73
+								],
+								"round": 0.0,
+								"at": [
+									7.863,
+									0.0,
+									3.715
+								],
+								"material": "key gray",
+								"turn": [
+									-1.86,
+									0.0,
+									0.0
+								],
+								"taper": 0.181,
+								"copies": {
+									"line": {
+										"count": 2,
+										"step": [
+											4.625,
+											0.0,
+											0.0
+										]
+									}
+								}
+							}
+						],
+						"at": [
+							0.0,
+							2.4,
+							-0.4
+						]
+					}
+				],
+				"at": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"turn": [
+					4.0,
+					0.0,
+					0.0
+				]
+			}
+		]
+	},
+	"materials": {
+		"beige": {
+			"kind": "plastic",
+			"color": "#c7ba9e",
+			"polish": 0.5
+		},
+		"beige dark": {
+			"kind": "plastic",
+			"color": "#9e947d",
+			"polish": 0.4
+		},
+		"key": {
+			"kind": "plastic",
+			"color": "#d1c7b0",
+			"polish": 0.55
+		},
+		"key gray": {
+			"kind": "plastic",
+			"color": "#8f8a82",
+			"polish": 0.5
+		}
+	}
+}

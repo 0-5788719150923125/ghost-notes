@@ -7,7 +7,7 @@ class_name Capabilities
 ## - Possible here at all: decided by the platform (`Deps.platform()`, feature tags) and by `Provision.unsupported`
 ##   for what ghost downloads. A phone can start no program ghost fetches (Android 10 and later refuse to execute
 ##   a file from an app's own storage).
-## - Ready now: asked again whenever the Environment panel rescans. What ghost installs itself (FFmpeg, its
+## - Ready now: asked again whenever the Setup panel rescans. What ghost installs itself (FFmpeg, its
 ##   Python environments) is ready wherever it is possible, built the first time a feature asks. What only the
 ##   user can install (an agent's command-line tool) is ready when it is there.
 ##
@@ -97,7 +97,7 @@ static func not_ready(cap: String) -> String:
 		for k in (reg.REGISTRY as Dictionary).keys():
 			if reg.make(k).available():
 				return ""
-		return "No %s is installed - see the Environment panel (⚙)" % String(row["label"]).trim_prefix("an ")
+		return "No %s is installed - see the Setup panel (⚙)" % String(row["label"]).trim_prefix("an ")
 	return ""
 
 
@@ -131,7 +131,7 @@ static func _platform_name() -> String:
 # component is never lit for an agent its jobs cannot find.
 
 ## What every gate tells a person to do about a missing agent.
-const INSTALL_HINT := ("Install one or several of them, then press rescan in the Environment panel. "
+const INSTALL_HINT := ("Install one or several of them, then press rescan in the Setup panel. "
 	+ "Click an agent's row there for the command that installs it.")
 
 

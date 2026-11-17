@@ -1,0 +1,261 @@
+{
+	"name": "the radar",
+	"line": "A squat olive radar scope, its round green glass tipped back toward the chair, a gain knob numbered one to ten.",
+	"thing": {
+		"name": "the radar",
+		"parts": [
+			{
+				"shape": "box",
+				"size": [
+					30.0,
+					28.5,
+					30.0
+				],
+				"round": 1.5,
+				"at": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"material": "olive",
+				"light": {
+					"kind": "point",
+					"color": "#8cff9e",
+					"strength": 0.06,
+					"reach": 70.0,
+					"at": [
+						0.0,
+						18.5,
+						32.0
+					]
+				}
+			},
+			{
+				"parts": [
+					{
+						"shape": "box",
+						"size": [
+							28.0,
+							31.5,
+							4.0
+						],
+						"round": 1.2,
+						"at": [
+							0.0,
+							-18.0,
+							0.0
+						],
+						"material": "olive"
+					},
+					{
+						"shape": "box",
+						"size": [
+							24.0,
+							28.5,
+							10.0
+						],
+						"round": 0.0,
+						"at": [
+							0.0,
+							-18.5,
+							-6.0
+						],
+						"material": "olive"
+					},
+					{
+						"shape": "ring",
+						"radius": 12.0,
+						"thickness": 0.6,
+						"at": [
+							0.0,
+							1.0,
+							2.0
+						],
+						"material": "black",
+						"turn": [
+							90.0,
+							0.0,
+							0.0
+						]
+					},
+					{
+						"shape": "face",
+						"name": "scope",
+						"size": [
+							23.0,
+							23.0
+						],
+						"at": [
+							0.0,
+							1.0,
+							2.15
+						],
+						"material": "screen",
+						"outline": "round",
+						"lit": 1.0,
+						"glass": {
+							"curve": 0.05,
+							"lines": 0.12,
+							"bloom": 0.9,
+							"brightness": 1.5
+						}
+					},
+					{
+						"shape": "lathe",
+						"profile": [
+							[
+								0,
+								0
+							],
+							[
+								1.2,
+								0
+							],
+							[
+								1.1,
+								2.0
+							],
+							[
+								0,
+								2.0
+							]
+						],
+						"at": [
+							7.0,
+							-15.3,
+							1.8
+						],
+						"material": "black",
+						"turn": [
+							90.0,
+							0.0,
+							0.0
+						]
+					},
+					{
+						"parts": [
+							{
+								"shape": "lathe",
+								"profile": [
+									[
+										0,
+										0
+									],
+									[
+										1.2,
+										0
+									],
+									[
+										1.1,
+										2.0
+									],
+									[
+										0,
+										2.0
+									]
+								],
+								"at": [
+									0.0,
+									0.0,
+									-1.0
+								],
+								"material": "black",
+								"turn": [
+									90.0,
+									0.0,
+									0.0
+								]
+							},
+							{
+								"shape": "box",
+								"size": [
+									0.16,
+									0.85,
+									0.1
+								],
+								"round": 0.0,
+								"at": [
+									0.0,
+									0.155,
+									1.03
+								],
+								"material": "paper"
+							}
+						],
+						"at": [
+							-7.0,
+							-15.3,
+							2.8
+						],
+						"name": "gain",
+						"joint": {
+							"kind": "hinge",
+							"at": [
+								-7.0,
+								-15.3,
+								2.8
+							],
+							"axis": [
+								0,
+								0,
+								1
+							]
+						},
+						"runs": {
+							"law": "follow",
+							"feed": "gain",
+							"value": "165 - 30 * v",
+							"rest": 3
+						}
+					},
+					{
+						"shape": "face",
+						"name": "scale",
+						"size": [
+							4.4,
+							4.4
+						],
+						"at": [
+							-7.0,
+							-15.3,
+							2.06
+						],
+						"material": "olive"
+					}
+				],
+				"at": [
+					0.0,
+					18.5,
+					20.0
+				],
+				"turn": [
+					-18.0,
+					0.0,
+					0.0
+				]
+			}
+		]
+	},
+	"materials": {
+		"olive": {
+			"kind": "painted",
+			"color": "#3d4233",
+			"polish": 0.41
+		},
+		"black": {
+			"kind": "plastic",
+			"color": "#09090a",
+			"polish": 0.6
+		},
+		"paper": {
+			"kind": "paper",
+			"color": "#e0ded1",
+			"wear": 0.05
+		},
+		"screen": {
+			"kind": "plastic",
+			"color": "#040505",
+			"polish": 0.85
+		}
+	}
+}

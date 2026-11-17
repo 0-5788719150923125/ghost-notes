@@ -9,8 +9,15 @@ processes actually opened, stat'ed, listed and looked for, never what its source
   leaves out each gate whose record still holds. `--full` runs them anyway. ghost.cfg is kept by the keys each gate's
   Settings read (`GHOST_SETTINGS_READS`). `gate_cache` is the cache's control (`gate_cache.py --selftest`).
 - Measured: tracing costs about a second of engine boot per gate (a 1.8 s gate takes 2.9 s). A traced full run (233
-  headless gates, two at a time) is 87 min of gates in 46 min. Not yet measured: what a run after an edit takes (the
-  records' inputs and `.times` give it per changed file). The GPU gates have not run traced yet.
+  headless gates, two at a time) is 76-87 min of gates in 41-46 min. Sixteen gates of every kind run again with
+  nothing changed: 12 cached, 26 s against 3 min 41 s (the rest were refused passes and the failing `docs`). The GPU
+  gates have not run traced yet.
+- Measured, what one changed script reruns (206 records and their times, 48 min of gates; the five longest gates had
+  no record): an edit where git history's edits land reruns 44% of that time, against 57% under `--for`. By folder, a
+  script from `data` up to `scenes` reruns all of it (the autoloads compile them), `table` 28 min, `table_show` 15,
+  `voice` 9, `dispatch` 7, `desk` 6.5, `masking` 4, `app` 3.5, `letter` 2. After an hour of another session editing
+  `src/table/props.gd` (read by 58 gates, the longest among them), the next run skips 112 gates (17 min) and runs 122
+  (72 min).
 - For the user: whether a gate is ever cached wrongly. A `--full` run now and then is the check; CI is always one.
 - Open: `settings_check` writes the author's ghost.cfg (persistence is what it holds) and puts it back at the end; a
   gate beside it under `--jobs` reads its values in between. The cache refuses such a pass ("changed during the run"),

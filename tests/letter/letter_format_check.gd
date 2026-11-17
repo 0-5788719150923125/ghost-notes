@@ -14,10 +14,11 @@ extends SceneTree
 ##   tablet or a letter on a song alone: controls); their block round trips without a hand (the hand is the Medium card's
 ##   Handwriting; Random is drawn from the note's number; an unknown one is Kalam: control); the Medium's one block holds the format,
 ##   the hand and the rows' keys; the walk reads the letter as [method LetterScript.speakable] does, with no title announced.
-## - the desk and its light are chosen: with nothing chosen the desk is what its number drew, ticked on the Props card's row for every
-##   thing ([DeskProps]); another number keeps them and the light (control: that number's own desk is another) and is the desk's alone, the letter
-##   said the same at either (control: the hand seeded by the number otherwise); ticks and light are kept in the block, carried by
-##   the document and round trip through the frontmatter (an empty desk too; unknown things or lights are dropped). The index cards'
+## - what is on the desk is chosen: with nothing chosen the desk is what its number drew, ticked on the Props card's row for every
+##   thing ([DeskProps]); another number keeps them (control: that number's own desk is another) and is the desk's alone, the letter
+##   said the same at either (control: the hand seeded by the number otherwise); ticks are kept in the block, carried by the document
+##   and round trip through the frontmatter (an empty desk too; unknown things are dropped). Its light is no row of the Medium's: a
+##   `mood` in the block is dropped, the Environment card's. The index cards'
 ##   text box shows with the cards ticked and hides without them (control), is kept in the block and carried to the desk.
 ## - the steps the note's other cards add (the YouTube card's tags): the rows hand the reading how it goes out, so the Pipeline card
 ##   lists them under the Ink in the YouTube section only while the box is ticked (control: clear, no row). Generate makes it once
@@ -161,8 +162,8 @@ func _card() -> void:
 	as_letter.call("apply", {"format": "letter", "hand": "caveat", "seed": 7, "mood": "dusk"})
 	var whole: Dictionary = as_letter.call("capture")
 	_check(String(whole["format"]) == "letter" and String(whole["hand"]) == "caveat" and int(whole["seed"]) == 7
-		and String(whole["mood"]) == "dusk" and not whole.has("camera") and not whole.has("scene_hold"),
-		"the Medium's one block holds the format, the hand and the rows' keys - and nothing the letter does not use")
+		and not whole.has("mood") and not whole.has("camera") and not whole.has("scene_hold"),
+		"the Medium's one block holds the format, the hand and the rows' keys - and nothing the letter does not use (its light is the Environment's)")
 	# the hand back to the default the walk is compared against (the Medium card's own, which the walk follows)
 	director.set_hand(Handwriting.DEFAULT)
 	card.apply({})
@@ -185,7 +186,7 @@ func _rows(card: Object) -> Object:
 	return card.get("_desk")
 
 
-## What is on the desk and its light, chosen on the rows: what the number drew until anything on the desk changes, then kept.
+## What is on the desk, chosen on the rows: what the number drew until anything on the desk changes, then kept.
 func _desk() -> void:
 	print("-- what is on the desk, chosen")
 	var script: GDScript = load("res://src/letter/letter_format.gd")
@@ -194,25 +195,23 @@ func _desk() -> void:
 	root.add_child(card)
 	card.apply({"seed": 42})
 	var drawn := DeskLook.kinds(DeskLook.of(42))
-	var mood := String(DeskLook.of(42)["mood"])
 	var props: PropSection = _rows(card).call("props")
 	var listed: Array = props.rows()
 	var ticked := true
 	for r in listed:
 		ticked = ticked and bool((r as Dictionary)["on"]) == (String((r as Dictionary)["key"]) in drawn)
-	_check(_rows(card).call("desk_things") == drawn and _rows(card).call("desk_mood") == mood and not card.capture().has("things")
+	_check(_rows(card).call("desk_things") == drawn and not card.capture().has("things")
 		and listed.size() == DeskLook.THINGS.size() and ticked,
-		"with nothing chosen the desk is what its number drew, ticked so on the Props card's row for every thing (%s, %s)" % [", ".join(drawn), mood])
+		"with nothing chosen the desk is what its number drew, ticked so on the Props card's row for every thing (%s)" % ", ".join(drawn))
 	# another number, whose own desk is not this one's
 	var other := 43
-	while DeskLook.kinds(DeskLook.of(other)) == drawn and String(DeskLook.of(other)["mood"]) == mood:
+	while DeskLook.kinds(DeskLook.of(other)) == drawn:
 		other += 1
 	(_rows(card).get("_seed_box") as SpinBox).value = other
 	var block: Dictionary = card.capture()
-	var its_own := DeskLook.kinds(DeskLook.of(other)) != drawn or String(DeskLook.of(other)["mood"]) != mood
-	_check(int(block["seed"]) == other and block.get("things") == drawn and String(block["mood"]) == mood and its_own,
-		"another number keeps what was on the desk and its light - the control, that number's own desk, is another (%s, %s)"
-		% [", ".join(DeskLook.kinds(DeskLook.of(other))), String(DeskLook.of(other)["mood"])])
+	_check(int(block["seed"]) == other and block.get("things") == drawn and not block.has("mood"),
+		"another number keeps what was on the desk - the control, that number's own desk, is another (%s)"
+		% ", ".join(DeskLook.kinds(DeskLook.of(other))))
 	# the number is the desk's alone: the words written and said as they were
 	var long := LETTER + "\n" + "I keep the tag by the lamp, where I can see it while I write to you about the days we had. ".repeat(6) + "\n"
 	var walk: TextWalk = load("res://src/letter/letter_walk.gd").new(card)
@@ -223,26 +222,21 @@ func _desk() -> void:
 		and String(walk.spoken(long, "")["body"]) == at_other and LetterScript.speakable(long, 777) != LetterScript.speakable(long, other),
 		"the number is the desk's alone: the document's hand is the note's own, and the letter is said the same at either desk - the control, the hand seeded by the number, is said otherwise")
 	props.set_on("dog_tag", true)
-	var light: OptionButton = _rows(card).get("_light_pick")
-	var dusk := DeskLook.MOODS.keys().find("dusk")
-	light.select(dusk)
-	light.item_selected.emit(dusk)
 	block = card.capture()
 	var doc: Dictionary = card.call("document")
-	_check((block["things"] as Array).has("dog_tag") and String(block["mood"]) == "dusk"
-		and doc["things"] == block["things"] and String(doc["mood"]) == "dusk",
-		"a thing ticked and a light picked are kept in the block, and the document a render reads carries them")
+	_check((block["things"] as Array).has("dog_tag") and doc["things"] == block["things"] and not doc.has("mood"),
+		"a thing ticked is kept in the block, and the document a render reads carries it")
 	# the block as the note keeps it: written and read back
 	var again: Control = script.call("for_note", {})
 	again.apply(MiniYaml.parse(MiniYaml.emit({"letter": block}))["data"]["letter"])
 	var none: Control = script.call("for_note", {})
-	none.apply(MiniYaml.parse(MiniYaml.emit({"letter": {"seed": other, "things": [], "mood": "dusk"}}))["data"]["letter"])
+	none.apply(MiniYaml.parse(MiniYaml.emit({"letter": {"seed": other, "things": []}}))["data"]["letter"])
 	var odd: Control = script.call("for_note", {})
-	odd.apply({"seed": other, "things": ["mug", "a spaceship"], "mood": "noon"})
-	_check(_rows(again).call("desk_things") == block["things"] and _rows(again).call("desk_mood") == "dusk"
+	odd.apply({"seed": other, "things": ["mug", "a spaceship"], "mood": "dusk"})
+	_check(_rows(again).call("desk_things") == block["things"]
 		and (_rows(none).call("desk_things") as Array).is_empty() and _rows(odd).call("desk_things") == ["mug"]
-		and _rows(odd).call("desk_mood") == String(DeskLook.of(other)["mood"]),
-		"the block round trips through the note's frontmatter, an empty desk too; a thing or a light it does not know is dropped")
+		and not odd.capture().has("mood"),
+		"the block round trips through the note's frontmatter, an empty desk too; a thing it does not know is dropped, and a light too")
 	# what is written on the index cards
 	var cards_box: TextField = _rows(card).get("_card_box")
 	props.set_on("cards", false)

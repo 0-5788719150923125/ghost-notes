@@ -3,7 +3,7 @@ class_name Deps
 
 ## Deps - every external program and environment ghost uses, in one place. Resolution and reporting are the
 ## same code: [method resolve] is what launches things ([Subprocess] runs every child through it, so a bare
-## "ffmpeg" becomes an absolute path), and [method report] is what the Environment panel lists, asking the same
+## "ffmpeg" becomes an absolute path), and [method report] is what the Setup panel lists, asking the same
 ## resolver so the panel cannot claim a dependency is present while the launch path fails to find it.
 ##
 ## Three kinds of row. [constant FETCHED] are programs ghost downloads and keeps current (FFmpeg, uv);
@@ -19,7 +19,7 @@ class_name Deps
 ## Windows: every candidate is tried against `PATHEXT` (a `.cmd` shim is how npm tools appear), and a virtualenv
 ## keeps its programs in `Scripts\`, not `bin/` ([method venv_bin]).
 ##
-## Adding a dependency is one row in one of the three tables; the Environment panel, the `--deps` report, the
+## Adding a dependency is one row in one of the three tables; the Setup panel, the `--deps` report, the
 ## feedback record's environment block and the hints are all rendered off them.
 
 ## Severity: the consequence of the program being absent.

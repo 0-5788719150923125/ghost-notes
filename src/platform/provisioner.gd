@@ -14,7 +14,7 @@ extends Node
 ## tool never start a job; they read what is on disk. `--provision` is a headless run that installs on purpose.
 ##
 ## [signal changed] fires as a job moves and [method state] says what it is doing in words, with a fraction when
-## known; the Environment panel and every mode's badge are drawn from it.
+## known; the Setup panel and every mode's badge are drawn from it.
 
 signal changed(key: String)
 signal finished(key: String, ok: bool, message: String)

@@ -106,6 +106,13 @@ const LAWS := {
 		"blurb": "a pen (or any tool held by its tip) brought to something written or drawn on a sheet and held there, its nib just over the paper beside it - sweeping along under a wide formula or curve first - so the viewer sees what is being talked about; start it at the word that names the thing (<!-- act: name -->) and give it as long as the talk about it lasts",
 		"fields": [["on", "the sheet it points at, as a write names it (\"pad/page 1\")"],
 			["at", "what it points at: a part of a formula written as \\pin{name}{...}, an element of a drawing by its id=\"name\", or the name of the act that wrote the line"]]},
+		# what a scene feeds a prop it works (next/working_props.md): a part's `runs` only, never an act's, and never told the puppeteer
+		# ([method describe_laws]); at a table, where nothing is fed, the feed is its `rest`
+	"follow": {"label": "Follow", "on": ["angle", "offset", "glow", "shown", "light", "fill", "grow"], "fed": true,
+		"blurb": "it IS a formula at every moment, of the video's time and what the scene feeds the prop - a needle following a signal, a knob turned to a setting, a lid as open as the phone is, a light switched, a lamp's light blinking",
+		"fields": [["feed", "the name of what the scene feeds it, whose value is `v` (left out: nothing is fed, and it follows the time alone)"],
+			["value", "a formula of `v` and `T` (the video's seconds) giving the channel's value - degrees, centimeters or a share: \"48 - 96 * v\", \"1 - step(0.1, fract(T / 2.4))\" (left out: `v` itself)"],
+			["rest", "what `v` is when nothing is fed (left out: 0)"]]},
 		# a surface painted (next/painted_surface.md): the agent says which elements of the design, with what and from where; the hand
 		# finds the way ([TablePaint])
 	"paint": {"label": "Paint", "on": ["pose"],
@@ -131,6 +138,8 @@ const STATES := {
 	"boil": "how hard a liquid bubbles, 0 (still, only stirring) to 2 (a rolling boil)",
 	"written": "how much of the words a `write` puts on a sheet are written, 0-1",
 }
+## The channels only a scene plays ([PropRig]), beside [constant STATES]: what a part's `follow` may drive, never told a set dresser.
+const SCENE_STATES := {"light": "how bright the part's `light` is, 0-2 of as written (0 dark)"}
 ## The places on the table a law may name by a word, beside a thing's points ([method _place]; [TableWork] finds
 ## them): where the work is done ([method TablePlan.work_spot]).
 const SPOTS := {
@@ -248,6 +257,8 @@ static func ease_by(x: float, kind: String) -> float:
 
 ## The names a formula in a law may use ([Formula]).
 const VARS := ["t", "u", "d", "T", "n"]
+## ...and a `follow` law's ([constant LAWS]): the time, and what it is fed.
+const FOLLOW_VARS := ["T", "v"]
 
 
 # --- describing ---------------------------------------------------------------------------------
@@ -256,7 +267,7 @@ const VARS := ["t", "u", "d", "T", "n"]
 static func describe_parts() -> String:
 	var lines := PackedStringArray()
 	lines.append("WORKING PARTS. A part (or a group) can do more than stand: give it a `name` (unique in its thing) and what it can do -")
-	lines.append("- `joint`: how it can move - {\"kind\": \"hinge\" (it turns about `axis` through `at`: a clock's hand, a lid, a balance's beam), \"slide\" (it moves along `axis`: a cork, a drawer), or \"free\" (it can be picked up and moved anywhere: a pestle, a spoon, a vial, a knife), \"at\": [x, y, z] (in the thing's own centimeters, as a part's `at` is: the pivot - a hand's at the middle of the dial; left out, the part's middle), \"axis\": [x, y, z] (left out: up), \"range\": [least, most] (degrees, or centimeters for a slide)}. A whole thing can always be picked up and moved: it needs no joint.")
+	lines.append("- `joint`: how it can move - {\"kind\": \"hinge\" (it turns about `axis` through `at`: a clock's hand, a lid, a balance's beam), \"slide\" (it moves along `axis`: a cork, a drawer), or \"free\" (it can be picked up and moved anywhere: a pestle, a spoon, a vial, a knife), \"at\": [x, y, z] (the pivot, in the same centimeters as the part's own `at` - the thing's, or the group's it stands in: a hand's at the middle of the dial; left out, the part's middle), \"axis\": [x, y, z] (left out: up), \"range\": [least, most] (degrees, or centimeters for a slide)}. A whole thing can always be picked up and moved: it needs no joint.")
 	lines.append("- `points`: {\"name\": [x, y, z], ...} in the thing's own centimeters - the places the work holds and reaches with: a tool's `tip` and `grip`, a jug's `lip`, a bowl's `floor`, a pot's `mouth` (the middle of its liquid's top). At most %d." % MAX_POINTS)
 	lines.append("- `start`: the state it begins in, when not as built - {\"fill\": 0.2} a vessel nearly empty, {\"grow\": 0} powder not yet ground, {\"shown\": 0} not there yet, {\"tint\": \"#rrggbb\"}, {\"glow\": 0.3}. States:")
 	for k in STATES:
@@ -282,12 +293,23 @@ static func describe_parts() -> String:
 	return "\n".join(lines)
 
 
+## The laws an act may follow, as their keys: every one but those only a scene feeds (`fed`, a part's `runs` alone).
+static func act_laws() -> Array:
+	var out: Array = []
+	for k in LAWS:
+		if not bool((LAWS[k] as Dictionary).get("fed", false)):
+			out.append(String(k))
+	return out
+
+
 ## The laws, as a puppeteer reads them: each with what it drives and its fields.
 static func describe_laws() -> String:
 	var lines := PackedStringArray()
 	lines.append("LAWS (a track's `law`), and what each can drive - `angle` (a hinge), `offset` (a slide), `pose` (a free part or a whole thing), or a state:")
 	for k in LAWS:
 		var row: Dictionary = LAWS[k]
+		if bool(row.get("fed", false)):
+			continue
 		var on := ", ".join(PackedStringArray(row["on"])) if not (row["on"] as Array).is_empty() else "the vessels it names"
 		lines.append("- %s (%s): %s." % [k, on, String(row["blurb"])])
 		for f in row["fields"]:
@@ -297,6 +319,18 @@ static func describe_laws() -> String:
 	lines.append("")
 	lines.append("WHAT IS IN THINGS IS REAL (there is no law for it): a LIQUID stays level in its vessel, sloshes as it is carried and swirls as it is stirred; tipped until it reaches the rim it POURS BY ITSELF from the lowest point of the rim, faster the further it is tipped, in a stream that falls under gravity into whatever is under it - and nothing pours from a vessel stoppered or not tipped far enough. A vessel under a liquid's surface FILLS from it as far as it is under: `dip` it `into` what holds the liquid and the hand fills it and draws it up as level as it can. GRAINS in a vessel slide and spill out of its mouth when it is tipped. A LOOSE thing slides, rolls and tumbles out of what holds it when that is tipped, falls, and sinks or floats in a liquid; carried by a law, it is held, and falls from where it is let go. A tool `press`ed into loose things and moved over them (a pestle going round in a bowl) CRUSHES them - stones and crystals break into pieces and the pieces into powder; metal, glass and wood never break. To pour from one vessel into another, `pour` it `into` that one: the hand brings it there, holds its lip just over the mouth and turns it about that lip, so the stream falls in - its place and its tilt are the hand's, never written by hand. To tip something out over no vessel in particular (a dish's stones into a bowl), bring it over what is to catch it, tip it across the view and hold it there for as long as it should flow, then tip it back.")
 	return "\n".join(lines)
+
+
+## The `follow` law as an agent refining a prop a scene works reads it ([method Props.describe_working]).
+static func describe_follow() -> String:
+	var row: Dictionary = LAWS["follow"]
+	var fields := PackedStringArray()
+	for f in row["fields"]:
+		fields.append("`%s` %s" % [String(f[0]), String(f[1])])
+	var states := PackedStringArray()
+	for k in SCENE_STATES:
+		states.append("%s (%s)" % [k, SCENE_STATES[k]])
+	return "`runs` {\"law\": \"follow\", ...} on a named part: %s. On a hinge's angle or a slide's offset, or a state named in `state` - glow, shown, %s. %s. Keep each `feed` named as it is: the scene feeds those names. Functions: %s." % [String(row["blurb"]), ", ".join(states), "; ".join(fields), ", ".join(PackedStringArray(Formula.FUNCS.keys()))]
 
 
 ## The table's working parts in words, from [param things] as the table makes them safe
@@ -430,7 +464,7 @@ static func _states(v: Variant) -> Dictionary:
 					out["tint"] = Props._color((v as Dictionary)[k], "#808080")
 			"fill", "shown":
 				out[key] = Props._num((v as Dictionary)[k], 1.0, 0.0, 1.0)
-			"grow", "emit", "boil":
+			"grow", "emit", "boil", "light":
 				out[key] = Props._num((v as Dictionary)[k], 1.0, 0.0, 2.0)
 			"glow":
 				out[key] = Props._num((v as Dictionary)[k], 0.0, 0.0, 1.0)
@@ -494,15 +528,28 @@ static func sanitize_law(raw: Variant, notes: PackedStringArray, running := fals
 		law = "clock"
 	if not LAWS.has(law):
 		if law.is_empty():
-			notes.append("%s names no `law` - write {\"law\": one of %s, and its fields}" % [JSON.stringify(d).left(80), ", ".join(PackedStringArray(LAWS.keys()))])
+			notes.append("%s names no `law` - write {\"law\": one of %s, and its fields}" % [JSON.stringify(d).left(80), ", ".join(PackedStringArray(act_laws()))])
 		else:
-			notes.append("\"%s\" is not a law (the laws: %s)" % [law, ", ".join(PackedStringArray(LAWS.keys()))])
+			notes.append("\"%s\" is not a law (the laws: %s)" % [law, ", ".join(PackedStringArray(act_laws()))])
 		return {}
 	var out := {"law": law}
 	var st := String(d.get("state", "")).strip_edges().to_lower()
-	if STATES.has(st):
+	if STATES.has(st) or (law == "follow" and SCENE_STATES.has(st)):
 		out["state"] = st
 	match law:
+		"follow":
+			if not running:
+				notes.append("follow is a part's `runs`, kept all through the video - not an act's")
+				return {}
+			if d.get("feed") is String and not String(d["feed"]).strip_edges().is_empty():
+				out["feed"] = Props._text(d["feed"], 40)
+			out["rest"] = Props._num(d.get("rest"), 0.0, -36000.0, 36000.0)
+			if d.has("value"):
+				var c := Formula.compile(str(d["value"]), PackedStringArray(FOLLOW_VARS))
+				if bool(c["ok"]):
+					out["value"] = {"f": c["code"], "lo": -36000.0, "hi": 36000.0, "text": str(d["value"]).substr(0, 200)}
+				else:
+					notes.append("follow's value: %s - it follows its feed as fed" % String(c["error"]))
 		"turn":
 			out["rate"] = _num(d.get("rate"), 6.0, -3600.0, 3600.0, notes, "turn's rate")
 			if d.has("from"):
@@ -889,12 +936,18 @@ static func of_beat(acts: Array, beat: String) -> Array:
 # --- the laws, worked ---------------------------------------------------------------------------------
 
 ## A scalar channel under [param law] at [param t] seconds into an act of [param d] seconds, from [param
-## from] (where it was as the act began) - an angle, an offset or a state's number. [param T]: show time.
-static func scalar(law: Dictionary, from: float, t: float, d: float, T: float) -> float:
+## from] (where it was as the act began) - an angle, an offset or a state's number. [param T]: show time; [param feeds]: what a
+## scene feeds the prop, by name (a `follow` law's).
+static func scalar(law: Dictionary, from: float, t: float, d: float, T: float, feeds := {}) -> float:
 	var u := clampf(t / maxf(d, 1e-6), 0.0, 1.0)
 	var vars := {"t": t, "u": u, "d": d, "T": T, "n": 0.0}
 	var out := from
 	match String(law["law"]):
+		"follow":
+			# what the scene feeds it now ([param feeds], by the law's `feed`), or its rest where nothing is
+			var fed: Variant = feeds.get(String(law.get("feed", "")), null) if law.has("feed") else null
+			var v := float(fed) if (fed is float or fed is int) else float(law.get("rest", 0.0))
+			out = num(law["value"], {"T": T, "v": v}) if law.has("value") else v
 		"turn":
 			var base := num(law["from"], vars) if law.has("from") else from
 			var deg := num(law["rate"], vars) * t

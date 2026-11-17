@@ -1,0 +1,100 @@
+{
+	"name": "the chart",
+	"line": "A printed table of dates and hours taped down to the desk, some rows circled in pen.",
+	"thing": {
+		"name": "the chart",
+		"parts": [
+			{
+				"shape": "face",
+				"name": "chart",
+				"size": [
+					21.0,
+					15.0
+				],
+				"at": [
+					0.0,
+					0.12,
+					0.0
+				],
+				"material": "paper",
+				"turn": [
+					-90.0,
+					0.0,
+					0.0
+				]
+			},
+			{
+				"shape": "sheet",
+				"outline": "rect",
+				"size": [
+					3,
+					1.2
+				],
+				"thickness": 0.02,
+				"at": [
+					-10.0,
+					0.14,
+					-7.2
+				],
+				"turn": [
+					0,
+					40,
+					0
+				],
+				"material": "tape",
+				"copies": {
+					"line": {
+						"count": 2,
+						"step": [
+							20.0,
+							0.0,
+							14.4
+						]
+					}
+				}
+			},
+			{
+				"shape": "sheet",
+				"outline": "rect",
+				"size": [
+					3,
+					1.2
+				],
+				"thickness": 0.02,
+				"at": [
+					10.0,
+					0.14,
+					-7.2
+				],
+				"turn": [
+					0,
+					-40,
+					0
+				],
+				"material": "tape",
+				"copies": {
+					"line": {
+						"count": 2,
+						"step": [
+							-20.0,
+							0.0,
+							14.4
+						]
+					}
+				}
+			}
+		]
+	},
+	"materials": {
+		"paper": {
+			"kind": "paper",
+			"color": "#e0ded1",
+			"wear": 0.05
+		},
+		"tape": {
+			"kind": "paper",
+			"color": "#decf9e",
+			"wear": 0.15
+		}
+	}
+}

@@ -163,6 +163,10 @@ var workspace := "reading":
 ## episode's table).
 var bed: ReadingBed = ReadingBed.new()
 
+## What each card adds to the document a medium is drawn from, beside the format's ([member publish]): a card's block key ->
+## `() -> Dictionary`, merged in ([method book_document]) - the Environment card's `environment`. A card hands its own; none
+## names another.
+var document_parts := {}
 ## How the reading goes out ([ReadingPublish]): what its export is called, what is held while the take renders,
 ## what an upload says. A note's own, unless a component's card hands another.
 var publish: ReadingPublish = ReadingPublish.new()
@@ -959,9 +963,12 @@ func book_document(body := "") -> Dictionary:
 		var v := String((cast[who] as Dictionary).get("ink", ""))
 		if not v.is_empty():
 			inks[who] = v
-	return publish.book({"source": src, "title": _doc_field(src, "title"), "book": _doc_field(src, "book"),
+	var d := publish.book({"source": src, "title": _doc_field(src, "title"), "book": _doc_field(src, "book"),
 		"author": _doc_field(src, "author"), "inks": inks, "start_words": _stream.start_words(),
 		"start_index": _stream.start_index(), "start_time": _stream.start_time()}, body)
+	for k in document_parts:
+		d.merge((document_parts[k] as Callable).call(), true)
+	return d
 
 
 ## A top-level frontmatter field (`title:`, `book:`): what the source says (the synced file,

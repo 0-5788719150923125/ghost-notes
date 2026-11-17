@@ -3,6 +3,9 @@ extends SceneTree
 ## Gate for the dispatch desk ([DispatchMedium], next/dispatch.md), mounted headless and played on a steady voice over
 ## tests/fixtures/dispatch_note.md ([method DispatchScript.rehearsal]). It holds:
 ##
+## - the Environment ([Surroundings]): with none the hollow is its own; a light chosen, its colors and its share of the lamp; the
+##   brightness its exposure; shafts in the crack's place; what drifts; each lit thing at its share; candles where it burns them
+##   (the control: none again, as it was);
 ## - actions fit the voice's rests: each placed and done before the next word; two pings a hesitation apart stay apart;
 ## - phones: the one called is at the ear while its voice speaks, the previous one laid open, picked back up, all back at the end;
 ## - the desk is seen first: nothing happens and the camera stays home through the opening rest;
@@ -32,13 +35,14 @@ extends SceneTree
 ##   is speed-dialed (1 held, Send, ear);
 ## - captions: a typed word is read on the terminal, a spoken line is captioned;
 ## - a live reading, words arriving a sentence at a time: an action begun keeps its start when the plan is made again;
-## - the roots: some on the desk, grown further at the end than at the start, none under an open phone or its lid;
+## - the roots: some on the desk, grown further at the end than at the start, none under an open phone or its lid, none
+##   through the printer's paper or its heap (control: grown knowing nothing of them, they go through);
 ## - the desk is its number's: the same number is the same desk, across numbers it is mirrored and packed differently; on
 ##   forty desks no two things meet by their own meshes' outlines, nothing packed hides a label, dial, screen or the clock's
 ##   cards from the chair and nothing hides one in its own close-up (controls: a mug just before the clock hides it; a switch
-##   at the radar's face meets it), the satellite's monitor is on its arm turned to the chair, the handbook's spine faces the
-##   chair, the mug 25-40 cm in from the edge beside the keyboard; the keyboard is a standard layout (every row fifteen
-##   units) with every key on its case;
+##   at the radar's face meets it; the chart across the blotter's edge does not fit), the satellite's monitor is on its arm
+##   turned to the chair, the handbook's spine faces the chair, the chart lies wholly off the blotter, the mug 25-40 cm in
+##   from the edge beside the keyboard; the keyboard's keys all on its case; an open phone laid on the desk faces the chair;
 ## - the mug is drunk from: upright, brought to the mouth and out of the picture for the sip, back in its ring;
 ## - the gain knob turns from three to nine a click a step with the camera on the radar: at three only the target is on the
 ##   scope, at nine the clutter round it and the chair's own on the desk (not at eight), each blip painted once the sweep
@@ -154,7 +158,7 @@ func _run() -> void:
 	md._snap = true
 	md._tick_camera(0.016)
 	md._censor_at(shown_t)
-	var curve := float(DispatchMedium.TERMINAL_GLASS["curve"])
+	var curve := float(md._glass("terminal", "screen")["curve"])
 	var plate_seen := DispatchCensor.seen(covers[0]["rect"], md._set.terminal_screen, curve, md._cam)
 	var glass_seen := DispatchCensor.seen(Rect2(Vector2.ZERO, Vector2(DispatchScreens.TERM_SIZE)), md._set.terminal_screen, curve, md._cam)
 	var boxes: Array = md._censor.boxes
@@ -361,6 +365,7 @@ func _run() -> void:
 	_glass_hold(st, md.feed)
 	_opens_black(st)
 	_bridge_live(st, md.feed)
+	_environment(md)
 	# captions
 	md._follower.extend(words)
 	_ok(not md._captioned(mid, mid, 0.0) and md._captioned(hello, hello, 0.0), "a typed word is captioned, or a spoken one is not")
@@ -464,9 +469,9 @@ func _gain_bell_lamp(md: DispatchMedium, actions: Array, t0: PackedFloat32Array,
 	var turned := md._step_at(up, 9)
 	var mid_turn := (md._step_at(up, 4) + turned) * 0.5
 	md._pose(turned + 0.2)
-	var knob_at := md._set.gain_knob.rotation.z
+	var knob_at := deg_to_rad((md._set.rigs["radar"] as PropRig).value("gain", "angle"))
 	md._pose(t0[up] - 0.2)
-	var knob_was := md._set.gain_knob.rotation.z
+	var knob_was := deg_to_rad((md._set.rigs["radar"] as PropRig).value("gain", "angle"))
 	_ok(is_equal_approx(md.gain_at(t0[up] - 0.1), 3.0) and is_equal_approx(md.gain_at(turned + 0.05), 9.0)
 		and md.gain_at(mid_turn) > 4.0 and md.gain_at(mid_turn) < 9.0
 		and is_equal_approx(knob_at, DispatchSet.gain_angle(9.0)) and is_equal_approx(knob_was, DispatchSet.gain_angle(3.0)) and knob_at < knob_was,
@@ -518,7 +523,8 @@ func _gain_bell_lamp(md: DispatchMedium, actions: Array, t0: PackedFloat32Array,
 	md._pose(click + DispatchMedium.LAMP_FADE + 0.05)
 	var dark := md._set.lamp.light_energy == 0.0 and not md._set.lamp.visible
 	var clicked := heard.filter(func(x: Dictionary) -> bool: return String(x.get("what", "")) == "lamp" and absf(float(x["t"]) - click) < 0.01).size()
-	_ok(is_equal_approx(lit_before, DispatchSet.LAMP_ENERGY) and md.lamp_at(click + DispatchMedium.LAMP_FADE * 0.3) < 1.0 and dark and clicked == 1
+	var strength := float(((md._set.rigs["lamp"] as PropRig).built["lights"] as Array)[0]["energy"])
+	_ok(is_equal_approx(lit_before, strength) and md.lamp_at(click + DispatchMedium.LAMP_FADE * 0.3) < 1.0 and dark and clicked == 1
 		and md.looking_at(click + 0.5) == "home",
 		"the lamp goes out at its click, dark in a moment, the camera on the whole desk (the control: lit before - %.2f, %s, %d, %s)" % [lit_before, dark, clicked, md.looking_at(click + 0.5)])
 	# the outro waits for the desk: what it does after the last word (lamp, hesitation, sleep) is seen before the fade
@@ -865,6 +871,7 @@ func _layout() -> void:
 	var seen := ""
 	var arm := ""
 	var spine := ""
+	var blotter_cross := ""
 	var mug_reach := true
 	var spots_follow := true
 	var ring_ok := true
@@ -884,14 +891,19 @@ func _layout() -> void:
 					clear = "%s and %s, desk %d" % [keys[i], keys[j], seed]
 		if seen.is_empty():
 			seen = _hidden_on(s, seed)
-		var panel := (s.things["satellite"] as Node3D).get_node("Panel") as Node3D
-		var to := (DispatchSet.EYE - panel.transform.origin).normalized()
-		if arm.is_empty() and (s._arm_fold(panel.transform, s.at_of("satellite")).is_empty() or panel.transform.basis.z.dot(to) < 0.95):
+		var panel_rig: PropRig = s.rigs["satellite"]
+		var panel := s.bounds_xf(panel_rig.node) * Transform3D(Basis.IDENTITY, (panel_rig.built["size"] as AABB).get_center())
+		var to := (DispatchSet.EYE - panel.origin).normalized()
+		if arm.is_empty() and (s._arm_fold(panel, s.at_of("satellite")).is_empty() or panel.basis.z.dot(to) < 0.95):
 			arm = "desk %d" % seed
 		var label: Node3D = (s._faces["handbook"] as Array)[0]
-		var spine_xf := (s.things["handbook"] as Node3D).transform * label.transform
+		var spine_xf := s.bounds_xf(label)
 		if spine.is_empty() and spine_xf.basis.z.dot((DispatchSet.EYE - spine_xf.origin).normalized()) < 0.5:
 			spine = "desk %d" % seed
+		if s.bodies.has("chart") and blotter_cross.is_empty():
+			var cb: AABB = s.bodies["chart"]
+			if Rect2(cb.position.x, cb.position.z, cb.size.x, cb.size.z).intersects(DispatchSet.BLOTTER):
+				blotter_cross = "desk %d" % seed
 		var inward := DispatchSet.NEAR - m.y
 		if inward < 0.24 or inward > 0.42 or absf(m.x) > 0.65:
 			mug_reach = false
@@ -903,26 +915,17 @@ func _layout() -> void:
 		if mat == null or mat.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED or ring.mesh == null or ring.mesh.get_aabb().size.x > 0.11:
 			ring_ok = false
 		node.free()
-	# the keyboard: a standard layout (every row fifteen units) with every key on its case, none past its edge
-	var rows_ok := true
-	for row in DispatchSet.KEY_ROWS:
-		var units := 0.0
-		for k in row:
-			units += float((k as Array)[0])
-		if not is_equal_approx(units, 15.0):
-			rows_ok = false
+	# the keyboard: every key on its case, none past its edge, the rows across most of it
 	var probe_set := DispatchSet.new()
 	var probe_node := probe_set.build(labels, 2, tex)
-	var keys_mi := probe_node.get_node_or_null("Keyboard").find_child("Keys", true, false) as MeshInstance3D
-	var case_w := DispatchSet.KEY_U * 15.0 + 0.026
-	var case_d := DispatchSet.KEY_U * 5.0 + 0.042
-	var keys_box := keys_mi.mesh.get_aabb() if keys_mi != null else AABB()
-	keys_box.position += keys_mi.position if keys_mi != null else Vector3.ZERO
-	var on_case := keys_mi != null and keys_box.position.x >= -case_w * 0.5 and keys_box.end.x <= case_w * 0.5 \
-		and keys_box.position.z >= -case_d * 0.5 and keys_box.end.z <= case_d * 0.5 and keys_box.size.x > case_w * 0.85
+	var kb: Node3D = (probe_set.rigs["keyboard"] as PropRig).node
+	var case_box := _box_of(kb, ["beige"])
+	var keys_box := _box_of(kb, ["key", "key gray"])
+	var on_case := keys_box.has_volume() and keys_box.position.x >= case_box.position.x and keys_box.end.x <= case_box.end.x \
+		and keys_box.position.z >= case_box.position.z and keys_box.end.z <= case_box.end.z and keys_box.size.x > case_box.size.x * 0.85
 	var old_floating := Rect2(Vector2(0.12, -0.074) - Vector2(0.008, 0.007), Vector2(0.081, 0.014))
-	_ok(rows_ok and on_case and not Rect2(-case_w * 0.5, -case_d * 0.5, case_w, case_d).encloses(old_floating),
-		"the keyboard is a standard layout, every row fifteen units, its keys all on its case (the control: the old floating keys stood off it) - %s" % keys_box)
+	_ok(on_case and not Rect2(case_box.position.x, case_box.position.z, case_box.size.x, case_box.size.z).encloses(old_floating),
+		"the keyboard's keys are all on its case, across most of it (the control: the old floating keys stood off it) - %s in %s" % [keys_box, case_box])
 	probe_node.free()
 	var again := DispatchSet.new()
 	var again_node := again.build(labels, 1, tex)
@@ -933,10 +936,29 @@ func _layout() -> void:
 	_ok(seen.is_empty(), "nothing packed hides a label, dial, screen or the clock's cards from the chair, and nothing hides one in its own close-up (%s)" % seen)
 	_ok(arm.is_empty(), "the satellite's monitor is held on its arm, turned to the chair (%s)" % arm)
 	_ok(spine.is_empty(), "the handbook's spine faces the chair (%s)" % spine)
+	_ok(blotter_cross.is_empty(), "the chart is taped down wholly on the desk's own top, never across the blotter (%s)" % blotter_cross)
 	_layout_controls(labels, tex)
 	_ok(mug_reach, "the mug is at arm's reach, 25 to 40 cm in from the edge, beside the keyboard")
 	_ok(spots_follow, "the camera turns to where each thing is")
 	_ok(ring_ok, "the old coffee ring is a thin opaque rim, never a clear disc")
+
+
+## The box the meshes under [param n] made of any of [param mats] fill, in [param n]'s space.
+static func _box_of(n: Node3D, mats: Array) -> AABB:
+	var box := AABB()
+	var first := true
+	for mi in n.find_children("*", "MeshInstance3D", true, false):
+		if not String((mi as MeshInstance3D).get_meta("material", "")) in mats:
+			continue
+		var xf := Transform3D.IDENTITY
+		var at: Node = mi
+		while at != null and at != n:
+			xf = (at as Node3D).transform * xf
+			at = at.get_parent()
+		var b: AABB = xf * (mi as MeshInstance3D).mesh.get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	return box
 
 
 ## Whether things [param a] and [param b] of desk [param s] meet: any part of one ([method DispatchSet._parts_of]) inside any
@@ -989,6 +1011,13 @@ func _layout_controls(labels: PackedStringArray, tex: Dictionary) -> void:
 	var typed := Rect2(radar - Vector2(0.16, 0.17), Vector2(0.32, 0.34))
 	var outline := PackedVector2Array([sw.position, Vector2(sw.end.x, sw.position.y), sw.end, Vector2(sw.position.x, sw.end.y)])
 	var meets := DispatchSet._meets(outline, DispatchSet.DESK_Y, DispatchSet.DESK_Y + 0.055, s._parts["radar"])
+	var chart: Node3D = s.things.get("chart")
+	var on_blotter := 0.0
+	if chart != null:
+		var shape := DispatchSet._shape(chart)
+		on_blotter = s._misfit("chart", chart, shape, Transform3D(Basis.IDENTITY, Vector3(0.2, DispatchSet.DESK_Y, 0.3)), s.held_rect(),
+			Rect2(-0.26, 0.26, 0.52, 0.2), [])
+	_ok(on_blotter >= 10000.0, "the control: the chart laid where it once was packed, across the blotter's edge, does not fit (%.0f)" % on_blotter)
 	_ok(share > DispatchSet.HIDE_MOST and meets and not typed.intersects(sw),
 		"the control: a mug just before the clock hides %.0f%% of its cards; a switch at the radar's face meets it, though the radar's old typed footprint called it clear" % [share * 100.0])
 	node.free()
@@ -1061,12 +1090,40 @@ func _settling(md: DispatchMedium, radar: Dictionary) -> void:
 	md._attn = kept
 
 
+## The Environment's ([Surroundings]): with none chosen the hollow is its own; moonlight lights it in the moon's colors with its lamp
+## off, twice as bright doubles its exposure, shafts fall in the crack's place, pixies drift and the terminal shines at the share
+## asked; candlelight burns candles out of the shot; and with none again the hollow is as it was (the control).
+func _environment(md: DispatchMedium) -> void:
+	var exposure := md._env.tonemap_exposure
+	var own := md._env.ambient_light_color == DispatchMedium.AMBIENT and md._crack.visible and md._rays == null and is_equal_approx(md._lamp_share, 1.0)
+	md._surround = Surroundings.sanitize({"light": "moonlight", "brightness": 2.0, "rays": 4, "air": ["pixies"], "lights": {"terminal": 0.5}})
+	md._dress_environment()
+	var moon: Dictionary = Surroundings.LIGHTS["moonlight"]
+	var term: PropRig = md._set.rigs.get("terminal")
+	_ok(own and md._env.ambient_light_color.is_equal_approx(Color.html(String(moon["ambient"]))) and is_zero_approx(md._lamp_share)
+		and is_equal_approx(md._env.tonemap_exposure, exposure * 2.0) and not md._crack.visible and md._rays != null
+		and md._rays.get_child_count() == 4 and md._air != null and term != null and is_equal_approx(float(term.get("_light_scale")), 0.5)
+		and not md._candles.visible,
+		"the hollow is its own with no environment; moonlit, its ambient the moon's and its lamp off, twice as bright (%.2f of %.2f), four shafts for the crack, pixies, the terminal at half"
+		% [md._env.tonemap_exposure, exposure])
+	md._surround = Surroundings.sanitize({"light": "candlelight"})
+	md._dress_environment()
+	_ok(md._candles.visible and md._candles.light_energy > 0.0 and is_zero_approx(md._lamp_share) and md._rays == null and md._air == null,
+		"candlelit, candles burn out of the shot and the lamp is off")
+	md._surround = Surroundings.sanitize({})
+	md._dress_environment()
+	_ok(md._env.ambient_light_color == DispatchMedium.AMBIENT and md._crack.visible and md._rays == null and md._air == null
+		and not md._candles.visible and is_equal_approx(md._env.tonemap_exposure, exposure) and is_equal_approx(float(term.get("_light_scale")), 1.0),
+		"the control: with none again, the hollow as it was")
+
+
 func _ok(cond: bool, what: String) -> void:
 	if not cond:
 		_fails.append(what)
 
 ## No root lies where a phone is laid open, on eight desks: the held phones' whole footprint, lids included (control: the strip
-## round the bases leaves the lids out).
+## round the bases leaves the lids out). No root goes through the printer's paper or its heap (control: the same roots grown
+## knowing nothing of them go through).
 func _roots_clear() -> void:
 	var img := Image.create(8, 8, false, Image.FORMAT_RGBA8)
 	var t := ImageTexture.create_from_image(img)
@@ -1074,12 +1131,23 @@ func _roots_clear() -> void:
 	var labels := PackedStringArray(["AISLE", "VAN", "COUGH", "LIGHTS"])
 	var through := []
 	var lid_out := 0
+	var paper_through := []
+	var paper_blind := 0
+	var facing_least := 1.0
+	var was_most := -1.0
 	for sd in range(1, 9):
 		var ds := DispatchSet.new()
 		var node := ds.build(labels, sd, tex)
 		var held := ds.held_rect()
 		var rr := DispatchRoots.new()
-		var rn := rr.build(sd, ds.footprints, held)
+		var rn := rr.build(sd, ds.footprints, held, ds.clear)
+		if _in_paper(rr, ds.clear):
+			paper_through.append(sd)
+		var blind := DispatchRoots.new()
+		var bn := blind.build(sd, ds.footprints, held)
+		if _in_paper(blind, ds.clear):
+			paper_blind += 1
+		bn.free()
 		for path in rr.lying:
 			var pts: PackedVector3Array = path["points"]
 			var rad: PackedFloat32Array = path["radii"]
@@ -1093,7 +1161,29 @@ func _roots_clear() -> void:
 			Vector2(DispatchSet.HELD_STEP * 2.0 + 0.1, 0.16))
 		if held.has_point(Vector2(lid.x, lid.z)) and not strip.has_point(Vector2(lid.x, lid.z)):
 			lid_out += 1
+		# an open phone laid down faces the chair; the control, the turn it once had, faces it far less on the phones' side
+		for k in DispatchSet.HELD_SLOTS:
+			var xf := ds.held_xf(k)
+			var to := Vector2(DispatchSet.EYE.x - xf.origin.x, DispatchSet.EYE.z - xf.origin.z).normalized()
+			var front := Vector2(xf.basis.z.x, xf.basis.z.z).normalized()
+			var was := Basis(Vector3.UP, deg_to_rad((-22.0 + float(k) * 13.0) * ds.flip)) * Vector3.BACK
+			facing_least = minf(facing_least, front.dot(to))
+			was_most = maxf(was_most, Vector2(was.x, was.z).normalized().dot(to))
 		rn.free()
 		node.free()
 	_ok(through.is_empty() and lid_out == 8,
 		"no root lies where a phone is laid open, its lid with it (the control: the strip round the bases leaves the lid out on %d of 8; through on %s)" % [lid_out, str(through)])
+	_ok(facing_least > 0.98 and was_most < 0.9,
+		"an open phone laid on the desk faces the chair (the least %.3f; the control, the turn it once had, at most %.3f)" % [facing_least, was_most])
+	_ok(paper_through.is_empty() and paper_blind > 0,
+		"no root goes through the printer's paper or its heap (the control: grown knowing nothing of them, through on %d of 8; with them, on %s)" % [paper_blind, str(paper_through)])
+
+
+## Whether any root of [param rr] (off the desk's top or on it) has a point inside one of [param boxes].
+static func _in_paper(rr: DispatchRoots, boxes: Array) -> bool:
+	for path in rr.hanging + rr.lying:
+		for q in (path as Dictionary)["points"]:
+			for b in boxes:
+				if (b as AABB).grow(-0.002).has_point(q):
+					return true
+	return false

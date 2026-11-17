@@ -5,7 +5,7 @@ extends CanvasLayer
 ## environment, FFmpeg for a clip, an update at launch). Hidden the rest of the time.
 ##
 ## It shows the first running job (what it is doing, how far along, for how long) and how many are queued
-## behind it; the Environment panel has the full list. It never takes a click.
+## behind it; the Setup panel has the full list. It never takes a click.
 
 const COL_TEXT := Color(0.78, 0.84, 0.94)
 const COL_BAR := Color(0.45, 0.66, 1.0)

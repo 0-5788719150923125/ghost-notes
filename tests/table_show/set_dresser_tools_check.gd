@@ -399,7 +399,10 @@ func _prompts() -> bool:
 		_ok(text.contains("Exactly 2 lit things -") and text.contains("and %d to %d other things" % [size.x, size.y]),
 			"the set dresser %s is not told what the table holds" % tag)
 		for k in Props.SHAPES:
-			_ok(text.contains("- %s:" % k), "the set dresser %s is not told the shape %s" % [tag, k])
+			if k in Props.SCENE_SHAPES:
+				_ok(not text.contains("- %s:" % k), "the set dresser %s is told %s, a shape only a scene fills" % [tag, k])
+			else:
+				_ok(text.contains("- %s:" % k), "the set dresser %s is not told the shape %s" % [tag, k])
 		# Zones for the reply written blind; the blueprint for the one that sees
 		for z in CardTable.ZONES:
 			_ok(text.contains("\"%s\": %s; up to %d cm" % [z, String((CardTable.ZONES[z] as Dictionary)["about"]), int(head[z])]) == (looks == 0),

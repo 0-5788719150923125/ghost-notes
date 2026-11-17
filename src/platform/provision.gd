@@ -163,7 +163,7 @@ static func hint(key: String) -> String:
 		return "Ghost Notes is installing %s - %s." % [name, describe(key, s)]
 	var err := String(s.get("error", ""))
 	if not err.is_empty():
-		return "%s could not be installed (%s). Retry it from the Environment panel on the home screen." \
+		return "%s could not be installed (%s). Retry it from the Setup panel on the home screen." \
 			% [name, err]
 	if can_install():
 		return "Ghost Notes is about to install %s by itself." % name

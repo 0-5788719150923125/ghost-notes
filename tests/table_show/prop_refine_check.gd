@@ -12,10 +12,12 @@ extends Node
 ##   leaves it out; the controls: an answer that is no prop, or has no parts, adds nothing. Refining waits for words, and a session
 ##   that may not write refines nothing.
 ## - In the 3D view: a seen prop refined is kept first, once - the library gains one prop, and the seen one says Kept - and the
-##   version made is shown, 2 of 2, not yet used; stepping back shows the first; Use this one makes the shown one the prop. A thing
-##   built by code offers no Refine.
+##   version made is shown, 2 of 2, not yet used; stepping back shows the first; Use this one makes the shown one the prop. The
+##   Dispatch desk's terminal offers Refine (next/working_props.md); the control, a prop with no parts, offers none.
 ## - What uses it follows: a table's thing takes the version used, where it stands and why kept (the control: the same version again
-##   writes nothing), and a Dispatch desk's part refined is played by the prop kept from it.
+##   writes nothing); a Dispatch desk's part refined is played by the prop kept from it, its terminal too, and a version used that
+##   has lost its screen is said to (the desk's own plays it); a Letter desk's thing refined is played by the version used, and its
+##   Desk's own puts the number's back (the control).
 
 const ROOT := "user://prop_refine_check"
 const CUP := {"name": "cup", "parts": [{"shape": "lathe", "profile": [[0, 0], [3, 0], [3, 8], [0, 8]], "material": "clay"}]}
@@ -32,6 +34,15 @@ class Stand extends LibraryVersions:
 		asked += 1
 		told.call("thinking")
 		return land(name, answer, direction, by_of(pick), ThingLibrary.versions(name)[from]["thing"])
+
+
+## A section whose one prop has no parts: nothing to refine.
+class Bare extends PropSection:
+	func prop_of(_key: String) -> Dictionary:
+		return {"name": "bare", "thing": {"name": "bare"}, "materials": {}, "hash": "bare"}
+
+	func versions_of() -> PropVersions:
+		return LibraryVersions.new(LibraryProps.new())
 
 
 ## A library whose versions are the stand-in's.
@@ -154,8 +165,10 @@ func _viewer() -> void:
 	viewer.use_shown()
 	_ok(ThingLibrary.used_of(ThingLibrary.read("jug")) == 1 and viewer._use.text == "In use", "Use this one makes the version shown the prop")
 	var dp := DispatchProps.new()
-	viewer.open(dp, "built:terminal", "terminal")
-	_ok(viewer._refine_btn.disabled, "a thing built by code offers no Refine")
+	viewer.open(dp, "role:terminal", "terminal")
+	var terminal_refines := not viewer._refine_btn.disabled
+	viewer.open(Bare.new(), "bare", "bare")
+	_ok(terminal_refines and viewer._refine_btn.disabled, "the desk's terminal offers Refine; the control, a prop with no parts, does not")
 	viewer._close()
 	viewer.queue_free()
 	lib.settle()
@@ -201,9 +214,48 @@ func _scenes() -> void:
 	var dk := dp.versions_of().keep(dp.prop_of("role:mug"))
 	_ok(dp.refined("role:mug", String(dk.get("name", ""))).is_empty() and fmt.things().get("mug") == {"kept": String(dk.get("name", ""))},
 		"a desk's part refined is played by the prop kept from it (%s)" % str(fmt.things()))
+	var tk := String(dp.versions_of().keep(dp.prop_of("role:terminal")).get("name", ""))
+	_ok(not tk.is_empty() and dp.refined("role:terminal", tk).is_empty() and fmt.things().get("terminal") == {"kept": tk},
+		"the desk's terminal refined is played by the prop kept from it (%s)" % str(fmt.things()))
+	var blind: Dictionary = (ThingLibrary.read(tk)["thing"] as Dictionary).duplicate(true)
+	blind["parts"] = (blind["parts"] as Array).slice(0, 7)
+	ThingLibrary.add_version(tk, blind, ThingLibrary.read(tk)["materials"], "no screen", "claude")
+	ThingLibrary.use_version(tk, 1)
+	_ok(not dp.refined("role:terminal", tk).is_empty() and not PropMakes.fits("terminal", ThingLibrary.read(tk)["thing"]),
+		"a version used that has lost its screen is said to: the desk's own plays it")
 	dp.settle()
 	fmt.free()
+	# a Letter desk's thing refined
+	var rows := DeskRows.new()
+	rows.apply({"seed": 7, "things": ["cards", "pencil"], "card_text": "Send letters to:"})
+	var dsec := rows.props()
+	var own: Dictionary = dsec.prop_of("cards")
+	var ck := String(dsec.versions_of().keep(own).get("name", ""))
+	var blue: Dictionary = (ThingLibrary.read(ck)["materials"] as Dictionary).duplicate(true)
+	for m in blue:
+		(blue[m] as Dictionary)["color"] = "#2244aa"
+	ThingLibrary.add_version(ck, ThingLibrary.read(ck)["thing"], blue, "blue cards", "claude")
+	ThingLibrary.use_version(ck, 1)
+	_ok(dsec.refined("cards", ck).is_empty() and rows.desk_makes() == {"cards": {"kept": ck}}
+		and String(dsec.prop_of("cards").get("name", "")) == ck, "a desk's thing refined is played by the prop kept from it (%s)" % str(rows.desk_makes()))
+	var on_desk := _desk_thing(rows, "cards")
+	_ok(String((on_desk.get("materials", {}) as Dictionary).values()[0]["color"]) == "#2244aa" and String(on_desk.get("kind", "")) == "cards"
+		and String((on_desk.get("writing", {}) as Dictionary).get("text", "")) == "Send letters to:",
+		"the desk draws it as the version used, the words on its cards its own (%s)" % str(on_desk.get("writing", {})))
+	_ok(dsec.act("cards", "own").is_empty() and rows.desk_makes().is_empty()
+		and ThingLibrary.hash_of(_desk_thing(rows, "cards")["thing"], _desk_thing(rows, "cards")["materials"]) == String(own["hash"]),
+		"the control: Desk's own puts back the one the number draws")
+	dsec.settle()
+	rows.free()
 	ed.free()
+
+
+## Thing [param kind] as desk [param rows] draws it ([method DeskLook.of]).
+static func _desk_thing(rows: DeskRows, kind: String) -> Dictionary:
+	for t in DeskLook.of(rows.desk_seed(), DeskLook.picks_of(rows.picks()))["things"]:
+		if String((t as Dictionary)["kind"]) == kind:
+			return t
+	return {}
 
 
 func _clean(path: String) -> void:

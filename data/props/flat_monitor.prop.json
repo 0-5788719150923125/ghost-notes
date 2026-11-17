@@ -1,0 +1,93 @@
+{
+	"name": "the satellite's monitor",
+	"line": "A flat monitor that looks down from orbit, held on an arm.",
+	"thing": {
+		"name": "the satellite's monitor",
+		"parts": [
+			{
+				"shape": "box",
+				"size": [
+					36.0,
+					23.5,
+					2.5
+				],
+				"round": 0.6,
+				"at": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"material": "black"
+			},
+			{
+				"shape": "box",
+				"size": [
+					10.0,
+					10.0,
+					1.0
+				],
+				"round": 0.0,
+				"at": [
+					0.0,
+					6.75,
+					-1.75
+				],
+				"material": "dark"
+			},
+			{
+				"shape": "face",
+				"name": "screen",
+				"size": [
+					33.0,
+					20.6
+				],
+				"at": [
+					0.0,
+					11.75,
+					1.35
+				],
+				"material": "screen",
+				"lit": 1.0,
+				"glass": {
+					"curve": 0.0,
+					"lines": 0.0,
+					"bloom": 0.25
+				},
+				"light": {
+					"kind": "point",
+					"color": "#b3ccff",
+					"strength": 1.0,
+					"reach": 100.0,
+					"falloff": 1.5,
+					"at": [
+						0.0,
+						0.0,
+						25.0
+					]
+				},
+				"runs": {
+					"law": "follow",
+					"feed": "glow",
+					"state": "light"
+				}
+			}
+		]
+	},
+	"materials": {
+		"black": {
+			"kind": "plastic",
+			"color": "#09090a",
+			"polish": 0.6
+		},
+		"dark": {
+			"kind": "plastic",
+			"color": "#1a1a1c",
+			"polish": 0.5
+		},
+		"screen": {
+			"kind": "plastic",
+			"color": "#040505",
+			"polish": 0.85
+		}
+	}
+}

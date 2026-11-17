@@ -7,8 +7,9 @@
 # exactly as written, so two versions differ only where they were asked to.
 #
 # The code gives: {{name}} (the prop's name), {{line}} (what it is, maybe empty), {{spec}} (the prop as written: its parts and
-# materials as JSON), {{direction}} (as the author wrote it), {{props}}, {{max_parts}} (the prop language), and the flag
-# `pictured` (pictures of it as built come with the prompt).
+# materials as JSON), {{direction}} (as the author wrote it), {{props}}, {{max_parts}} (the prop language, with the parts a scene
+# plays where the prop has any), and the flags `pictured` (pictures of it as built come with the prompt) and `working` (a scene
+# works it: faces it shows pictures on, lights, parts that follow what it feeds them - next/working_props.md).
 system: >-
   You revise one prop of a 3D scene, written as parts and materials. Answer with the revised prop as one JSON object and nothing
   else.
@@ -35,6 +36,12 @@ prompt:
       Change what the author asks, and what that change needs so the prop still holds together - a part moved where another
       meets it, a material added for a new part - and nothing else. Every other part, size, color and material stays exactly as
       it is written. Where the author's words leave a choice open, make the smallest change that does what they ask.
+  - when: working
+    say: >-
+      A scene works this prop: it shows pictures on its faces, lights its lights and moves its named parts by what it feeds them.
+      A part changed in shape or size keeps its `name`, its face, its light and its `runs`, so the scene still works it; a face
+      moved or resized keeps facing the way it faced. In the pictures its lights are lit as the scene lights them at rest: a
+      light is changed by its `light` (where it is, the way it points, its cone, color, strength and shadows), never by a part.
   - ""
   - include: "table/set_dresser.thing_language"
   - ""

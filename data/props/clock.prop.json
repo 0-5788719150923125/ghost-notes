@@ -1,0 +1,86 @@
+{
+	"name": "the flip clock",
+	"line": "A small flip clock, its white numbers on black cards that turn over.",
+	"thing": {
+		"name": "the flip clock",
+		"parts": [
+			{
+				"shape": "box",
+				"size": [
+					13.0,
+					7.2,
+					6.5
+				],
+				"round": 0.9,
+				"at": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"material": "black"
+			},
+			{
+				"shape": "box",
+				"size": [
+					1.2,
+					0.6,
+					5.2
+				],
+				"round": 0.0,
+				"at": [
+					-4.68,
+					0.0,
+					0.0
+				],
+				"material": "dark",
+				"copies": {
+					"line": {
+						"count": 2,
+						"step": [
+							9.36,
+							0.0,
+							0.0
+						]
+					}
+				}
+			},
+			{
+				"shape": "face",
+				"name": "cards",
+				"size": [
+					11.2,
+					5.0
+				],
+				"at": [
+					0.0,
+					3.744,
+					3.37
+				],
+				"material": "screen",
+				"glass": {
+					"curve": 0.0,
+					"lines": 0.0,
+					"bloom": 0.1,
+					"brightness": 0.55
+				}
+			}
+		]
+	},
+	"materials": {
+		"black": {
+			"kind": "plastic",
+			"color": "#09090a",
+			"polish": 0.6
+		},
+		"dark": {
+			"kind": "plastic",
+			"color": "#1a1a1c",
+			"polish": 0.5
+		},
+		"screen": {
+			"kind": "plastic",
+			"color": "#040505",
+			"polish": 0.85
+		}
+	}
+}

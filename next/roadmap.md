@@ -74,7 +74,7 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
       An export takes about 9x the video's length on this PC (6.5 fps at 2880x1620). Cut into time spans rendered at once on spot GPU instances and stitched, a 30-minute video could take about 20 minutes on ten machines for about $1.50. Asked 2026-10-30; nothing built. See [cloud_render.md](cloud_render.md).
 
 - [ ] **A week behind the edge, and helpers in a sandbox**
-      Take nothing from upstream until it is seven days old (no pins), and run every helper program in a sandbox that is on by default, asked about once if it fails, with a checkbox on the Environment panel - not Docker. Decided 2026-10-26, waiting. See [supply_chain.md](supply_chain.md).
+      Take nothing from upstream until it is seven days old (no pins), and run every helper program in a sandbox that is on by default, asked about once if it fails, with a checkbox on the Setup panel - not Docker. Decided 2026-10-26, waiting. See [supply_chain.md](supply_chain.md).
 
 - [ ] **Portrait beyond full frame**
       Full frame shows and exports at 9:16 (step 10). Open: `cloth` and `two_eyes` tuned for the tall frame (cloth leaves most of it empty, two_eyes sits against its edges), the tablet's distances, the tarot's 16:9 values, and single-page comic, book and notebook layouts and a portrait tarot table - each design work of its own.
@@ -87,6 +87,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 
 - [ ] **Cards, generalized**
       Built: the rename (Cards), the table's verbs as one registry, positions as data, a dealer's tools and the reader's guard (step 9). Open: card state over show time; decks and faces read from the show's guide (the rules are every show's since 2026-10-08 - a tarot show is its brief; the card's size and face are still the tarot's); a dealer run by a real agent (the tools exist, and no episode step calls them yet); pick-a-pile episodes.
+
+- [ ] **The Environment: what is round a scene**
+      Built: one card for a scene's light (six presets, moonlight and no light among them), brightness, drawn light shafts, what drifts in the air, what is heard and each lit thing's share; the desk and the Dispatch desk read it, the desk's mood is its light. Open: the user's eye and ear on each; a table show's set and the seeded show reading it; an agent choosing one from the brief. See [environment.md](environment.md).
 
 - [ ] **One desk, continued**
       Built: one pen, one ink and one hand for the desk and the table; a table show's episode played at the Letter's desk (`EpisodeDesk`), its rows the Letter's (`DeskRows`). Open: the producer choosing an episode's medium among the formats the note allows; telling the producer and the puppeteer that a desk shows only writes, points and strikes; one way to draw ink for the Letter's page and a table's sheet; the GPU gates run over it. See [desk.md](desk.md), "Open".
@@ -105,6 +108,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 
 - [ ] **Verbs over geometry at the table**
       Audited ([framework_audit.md](framework_audit.md)): the bugs were the framework's, not the agent's, and the world is the table's now (dormant bodies, one table a puppeteer session, holds only across a pause, reports by part, a live frame posing only what changes, the viewer buffering while paused). Open: verbs that find their own geometry (`stir`, `grind`, `put`, `snap`) as `pour` and `dip` do; each verb's intent judged against the bake, as a pour's is; `check`'s plan poses folded into the physics' report; the bake's own cost (islands, a coarser step for settling).
+
+- [ ] **Working props: one kind of prop**
+      Built: faces, lights and the `follow` law in the prop language, `PropRig` playing any make, every thing the Dispatch desk works a role whose own make is shipped in `data/props/` (swappable, kept, refined), the refiner told the working parts, a Letter desk's things refined into versions. Open: the user's eye on the desk drawn by Props and a first real Refine of the terminal; face programs any face can name (a terminal kept and set on a table running); a Letter desk's card words and the dog tag's name as faces; the chair, the desk and the satellite's arm as props. See [working_props.md](working_props.md).
 
 - [ ] **A lesson at the table (Proof, as a table show)**
       Built as the Proof component; since 2026-11-11 a brief the Table plays (`~/repos/rift/animations/theorem-grooving.md`), on primitives any show can use: work a computer checks (a plan's `problem`, the `solve` step with Lean and sandboxed Python), math on a page (`write`'s `tex` and `draw`, a sheet filled a line at a time), a pen seen writing it (`with`) and pointing at what is talked about (`point`); two voices, Pen teaching and Ink asking. Its Medium is the desk. Open: a first lesson made and watched at the desk; the instruments (a calculator, a tablet with real pages); live. See [proof.md](proof.md).
@@ -145,11 +151,11 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [x] **Notes, not modes**
       Ghost Notes opens on a notes list. A note is a markdown file with components attached; the six modes are templates over one registry; every panel section is a colored card; one transport plays every timed show; one bottom-right row; one frontmatter block per component; every mode is left and entered again through one teardown; and every component declares what it asks of the platform. Steps 0-8 of [notes.md](notes.md).
 
+- [x] **Run only the gates whose inputs changed**
+      Built: check.sh traces every gate under strace and skips one while nothing it read has changed since it passed (`scripts/gate_cache.py`, `dist/gate_cache/`, `--full`); ghost.cfg counts by the keys a gate reads. A one-script edit reruns 44% of the gates' time (57% under `--for`); an edit under the autoloads reruns all of it. See [test_cache.md](test_cache.md).
+
 - [x] **One kind of note**
       New has no options: it makes a note with nothing attached, and "+" makes it what it becomes. The template table is gone; a component declares the room it takes and the workspace it needs, and the rest is derived. Every component detaches. A note keeps its own storyboard and edits it in the app. See [storyboard.md](storyboard.md).
-
-- [x] **Run only the gates whose inputs changed**
-      Built: check.sh traces every gate under strace and skips one while nothing it read has changed since it passed (`scripts/gate_cache.py`, `dist/gate_cache/`, `--full`); ghost.cfg counts by the keys a gate reads. What an edit saves is still to be measured. See [test_cache.md](test_cache.md).
 
 - [x] **After the first review**
       A clean notes list (New only; delete with ×, or a note's "⋯"), every note starting from nothing, a song as a note's component with Auto as a medium, Manual's storyboards as a card, Tarot renamed Cards, Masking's panel in the framework, and "Edit". See [notes.md](notes.md), "After the first review".

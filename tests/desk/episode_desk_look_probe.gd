@@ -4,14 +4,14 @@ extends Node
 ## its script at a steady pace, and each silence it writes) and writes PNGs to look at.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/desk/episode_desk_look_probe.gd 600 \
-##       --out <dir>/d [--episode <an episode's folder>] [--seed N] [--things mug,taper] [--mood candlelight] \
+##       --out <dir>/d [--episode <an episode's folder>] [--seed N] [--things mug,taper] [--light candlelight] \
 ##       --times 3,8,20 [--every S] [--page 1] [--words W] [--plan 1] [--take <a take's .json>] [--live S] [--audit 1]
 ##
 ## The episode's `acts.json` and `script.md` are read, and its `ink.json` - laid out here with TeX where it has none (the
 ## ink step's own call, [method TableInk.typeset]). With no `--episode` it plays a lesson of its own: a page and more of
 ## words, formulas and a drawing, a point and a strike, written to a scratch folder. `--every S` photographs every S
 ## seconds to the end instead of `--times`; `--page 1` also writes the flat pad texture beside each frame. `--words W` reads
-## at W seconds a word (0.32 by default). `--things` and `--mood` are what the Medium card chose for the desk ([method
+## at W seconds a word (0.32 by default). `--things` is what the Props card chose for the desk and `--light` the Environment card's light ([method
 ## DeskLook.picks_of]; none: the seed's). `--audit 1` renders nothing: every write's pen against its voice ([method
 ## PenPace.audit]) - how far behind and ahead of the words, its quickest pace, how often its pace jumps, how long it crawls -
 ## for voices of 0.35, 0.45 and 0.55 s a word reading the desk's rests (and `--take`'s, as it was recorded), each with every
@@ -35,7 +35,7 @@ var _every := 0.0
 var _page := false
 var _word := 0.32
 var _things: Variant = null
-var _mood := ""
+var _light := ""
 var _plan_only := false
 var _take := ""
 var _live := -1.0
@@ -60,7 +60,7 @@ func _run() -> void:
 			"--page": _page = args[i + 1] == "1"
 			"--words": _word = float(args[i + 1])
 			"--things": _things = Array(String(args[i + 1]).split(",", false))
-			"--mood": _mood = args[i + 1]
+			"--light": _light = args[i + 1]
 			"--plan": _plan_only = args[i + 1] == "1"
 			"--take": _take = args[i + 1]
 			"--live": _live = float(args[i + 1])
@@ -108,12 +108,10 @@ func _run() -> void:
 	var rows := {}
 	if _things is Array:
 		rows["things"] = _things
-	if not _mood.is_empty():
-		rows["mood"] = _mood
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	var opens := _sentence_starts(words)
 	subs.words = words if _live < 0.0 else _arrived(words, opens, 0.0)
-	subs.document = {"source": source, "table": pay, "medium": rows, "title": "Theorem-Grooving", "byline": "with Pen & Ink"}
+	subs.document = {"source": source, "table": pay, "medium": rows, "environment": {"light": _light}, "title": "Theorem-Grooving", "byline": "with Pen & Ink"}
 	add_child(subs)
 	if medium.bind_captions(subs):
 		subs.overlay_hidden = true

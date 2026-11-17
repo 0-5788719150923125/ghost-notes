@@ -42,6 +42,10 @@ class_name DispatchTerminal
 ## The glass: columns and rows; the body's first row and how many; the keys row and the command line (0-based rows).
 const COLUMNS := 70
 const ROWS := 22
+## How much of a character's cell its glyph lights, and the share of the screen's cells lit that is as bright as the screen gets
+## ([method lit_share]: a panel full of text).
+const LIT_GLYPH := 0.25
+const LIT_FULL := 0.22
 const BODY_TOP := 3
 const BODY_ROWS := 16
 const KEYS_ROW := 20
@@ -531,6 +535,23 @@ static func struck(glass: Dictionary, u: float) -> Dictionary:
 	if u >= 1.0:
 		g["last_typed"] = {}
 	return g
+
+
+## How much of the glass is lit in screen [param st] ([method DispatchMedium.terminal_at]'s: its lines, its inverse bar, its
+## alert's box), 0 dark to 1 a panel full of text: each character's cell a quarter lit by its glyph ([constant LIT_GLYPH]), the
+## bar's cells three quarters by their inverse, over [constant LIT_FULL] of the screen - what the screen throws on the desk.
+static func lit_share(st: Dictionary) -> float:
+	if bool(st.get("asleep", true)):
+		return 0.0
+	var lit := 0.0
+	for line in (st.get("lines", PackedStringArray()) as PackedStringArray):
+		lit += float(String(line).replace(" ", "").length()) * LIT_GLYPH
+	var bar: Variant = st.get("bar")
+	if bar is Vector2i and (bar as Vector2i).x >= 0:
+		lit += float((bar as Vector2i).y - (bar as Vector2i).x) * (0.75 - LIT_GLYPH)
+	for line in (st.get("alert", PackedStringArray()) as PackedStringArray):
+		lit += float(String(line).length() + 4) * LIT_GLYPH
+	return clampf(lit / (float(COLUMNS * ROWS) * LIT_FULL), 0.0, 1.0)
 
 
 ## The glass [param g] as its rows: `{lines (ROWS of them, the panel set in the middle), bar: Vector2i (row 1's columns,

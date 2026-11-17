@@ -103,7 +103,7 @@ Status: not started.
 
 ## The switch
 
-- **`[deps] sandbox`**, on by default. A checkbox in the Environment panel, "Run helper programs in a
+- **`[deps] sandbox`**, on by default. A checkbox in the Setup panel, "Run helper programs in a
   sandbox" (`Settings.bind`). Its row says what the sandbox is on this machine (bubblewrap, Landlock,
   Seatbelt), or why there is none and how to get one (bwrap's `TOOLS` row already has the install
   line).

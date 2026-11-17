@@ -1,12 +1,13 @@
 extends PropSection
 class_name MakeShelf
 
-## MakeShelf - the makes that may play one role on the Dex ([PropMakes]): the role's recipe drawn from many numbers, and every prop
-## kept or seen ([LibraryProps]), the Dex first filtered by the role's words. Use hands the one picked to the scene, which keeps the
-## choice; a seen prop is kept in the library first, so the choice can name it. The one chosen now says so.
+## MakeShelf - the makes that may play one role on the Dex ([PropMakes]): the role's own (its recipe drawn from many numbers, or the
+## prop it is shipped as), and every prop kept or seen ([LibraryProps]) that has the faces the scene shows something on, the Dex first
+## filtered by the role's words. Use hands the one picked to the scene, which keeps the choice; a seen prop is kept in the library
+## first, so the choice can name it. The one chosen now says so.
 
 const SHELVES := [
-	{"key": "drawn", "label": "Drawn", "tip": "The part's own recipe drawn from many numbers, each one of its kind."},
+	{"key": "drawn", "label": "Its own", "tip": "The part's own make: its recipe drawn from many numbers, or the one the scene comes with."},
 	{"key": "kept_makes", "label": "Kept props", "tip": "The props in your library: any can play the part, made the size it wants."},
 	{"key": "seen_makes", "label": "Seen props", "tip": "Every prop a set dresser has made: the one picked is kept in your library first."},
 ]
@@ -60,6 +61,10 @@ func offers() -> Array:
 		var od: Dictionary = o
 		var shelf := String(od["shelf"])
 		if shelf != "kept" and shelf != "seen":
+			continue
+		# a make the scene could not show its pictures on is never offered
+		if not ((PropMakes.ROLES.get(role, {}) as Dictionary).get("faces", []) as Array).is_empty() \
+				and not PropMakes.fits(role, library.prop_of(String(od["key"])).get("thing", {})):
 			continue
 		var as_kept := String(od["key"]).substr(5) if shelf == "kept" else String(kept.get(String(library.prop_of(String(od["key"])).get("hash", "")), ""))
 		var m := od.duplicate()
@@ -147,8 +152,9 @@ static func key_of(choice: Dictionary) -> String:
 
 func _draw_keys() -> Array:
 	var out: Array = ["own"]
-	for n in PropMakes.DRAWS:
-		out.append("draw:%d" % (n + 1))
+	if PropMakes.drawn(role):
+		for n in PropMakes.DRAWS:
+			out.append("draw:%d" % (n + 1))
 	return out
 
 

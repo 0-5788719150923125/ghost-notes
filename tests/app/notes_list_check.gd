@@ -11,7 +11,7 @@ extends Node
 ## - New has no options: a button, not a menu; it makes a note with nothing attached (no `ghost:` key) that
 ##   opens in its card ([NoteEditor]), whose open icon takes it to the note's own panel.
 ## - The app starts on the list: no home screen, the ⌂ hidden, the ⤓ export not there, no claim on the
-##   bottom of the frame, nothing in the row over the Environment panel, and the keyed handover (a note's
+##   bottom of the frame, nothing in the row over the Setup panel, and the keyed handover (a note's
 ##   claims survive the list leaving after it).
 ## - What needs an agent is gated in "+": with every agent's program hidden in `Deps._resolved`, New still
 ##   makes a note and in its "+" Cards is grayed with a tooltip that says what is missing and lists every
@@ -45,7 +45,7 @@ var _main: Node
 const ROOT := "user://notes_list_check"
 const MADE := "user://notes_list_check_made"   # the gate's own roots for what is made for a note
 const AGENT_PROGRAMS := ["claude", "codex", "grok", "aws"]
-const PROBE_WAIT_MS := 120000     # a backstop for the Environment panel's first probe
+const PROBE_WAIT_MS := 120000     # a backstop for the Setup panel's first probe
 const FixtureAudio := preload("res://tests/fixture_audio.gd")
 
 
@@ -185,11 +185,11 @@ func _check_furniture(list: NotesList) -> void:
 			ch.environment._toggle_detail(String(ch.environment._rows[0].get("key", "")))
 		await _frames(6)
 		var box := ch.environment.get_global_rect()
-		_ok(box.end.y <= floor_y - Shell.ROW_TOP, "the Environment panel (%s) stands above the row" % step)
+		_ok(box.end.y <= floor_y - Shell.ROW_TOP, "the Setup panel (%s) stands above the row" % step)
 		for b in ch.row.get_children():
 			if (b as Control).visible:
 				_ok(not (b as Control).get_global_rect().intersects(box),
-					"%s is not over the Environment panel (%s)" % [(b as Button).text, step])
+					"%s is not over the Setup panel (%s)" % [(b as Button).text, step])
 	for b in ch.row.get_children():
 		if (b as Control).visible:
 			_ok(absf((b as Control).get_global_rect().end.y - (floor_y - Shell.ROW_MARGIN)) < 0.5,
@@ -717,14 +717,14 @@ func _quiet(home_procs: int) -> void:
 		await _frames(5)
 
 
-## The Environment panel's first probe lands from a thread, its rows built as it does: waited on by the clock
+## The Setup panel's first probe lands from a thread, its rows built as it does: waited on by the clock
 ## (teardown_check's header says why). The panel's layout is checked with its rows in it.
 func _settle_probe() -> void:
 	var env: DepsPanel = _main._chrome.environment
 	var t0 := Time.get_ticks_msec()
 	while not _probed(env) and Time.get_ticks_msec() - t0 < PROBE_WAIT_MS:
 		await get_tree().process_frame
-	_ok(_probed(env), "the Environment panel's probe has landed before anything is measured (%d rows, %.1f s)"
+	_ok(_probed(env), "the Setup panel's probe has landed before anything is measured (%d rows, %.1f s)"
 		% [env._rows.size(), (Time.get_ticks_msec() - t0) / 1000.0])
 	await _frames(10)
 

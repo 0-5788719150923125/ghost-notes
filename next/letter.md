@@ -88,9 +88,10 @@ note and does nothing: the behavior it describes is written as `<!-- still -->`.
   are written at the pen's quickest (`LetterMedium._ahead_times`). Over a 20-turn chapter: after a mark, about 4 s rested;
   a broken sentence, 3.5 to 4.3 s at the next sentence; the pen never past 2.5 times the hand's pace over the page seen.
 - **The desk is lit as the card table is.** The Seed row's number is the seed of the desk's whole look. Each desk has a mood
-  (`DeskLook.MOODS`): lamplight (the lamp, a dark room - a screen's glow, a street lamp, a fire or the moon in a window),
+  (`Surroundings.LIGHTS`, chosen on the Environment card - next/environment.md - or drawn by the number): lamplight (the lamp, a dark room - a screen's glow, a street lamp, a fire or the moon in a window),
   candlelight (the lamp off, one to three candles on the desk, the one that lights the page most the key), daylight (the
-  sun through a window across the desk, clouds now and then) and dusk (a low gold sun through it, the lamp part on). The
+  sun through a window across the desk, clouds now and then) and dusk (a low gold sun through it, the lamp part on); moonlight
+  (the moon through the window, nearly white, every lamp off) and no light are only ever chosen. The
   room's light is a `Lights` spec written as the set dresser writes a table's and built by `Lights.build` on the desk's
   stage, fitted to the paper; the candles are `Props` things with wicks, their flames the table's (`TableLight`'s flame
   quad, flicker and filtered shadow, made static for any host), each held to what the page can take
@@ -207,9 +208,9 @@ note and does nothing: the behavior it describes is written as `<!-- still -->`.
   degrees up from the nib, 30 degrees toward the writer from straight right - on the screen 14 degrees under the level on
   average, 3 to 31 with the forearm's turn and the hand's sway). Its body lies over the paper not yet written, and the pen
   lies on the desk top toward the writer as it is picked up.
-- **What is on the desk and its light are chosen; the number only places them.** The Letter's "On the desk" bank is a tick
-  for each `DeskLook.THINGS` row (the mat and the candles among them), and a Light row holds the moods. Chosen (`DeskLook.of`'s
-  picks: the block's `things` and `mood`), each thing is drawn from a generator of its own kind and placed by it, so another
+- **What is on the desk and its light are chosen; the number only places them.** The Props card has a tick for each
+  `DeskLook.THINGS` row (the mat and the candles among them), and the Environment card's Light holds the moods. Chosen
+  (`DeskLook.of`'s picks: the block's `things`, the environment's `light`), each thing is drawn from a generator of its own kind and placed by it, so another
   seed moves and recolors them and ticking another changes nothing about how the rest look; until chosen they are what the
   number drew, and the first change of anything on the desk keeps them (`LetterFormat._hold_desk`). A candlelit desk given
   no candle gets a taper, since its page would have no light. Ticked while the letter plays, the desk is dressed again at

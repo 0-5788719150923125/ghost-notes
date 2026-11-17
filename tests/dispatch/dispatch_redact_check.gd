@@ -66,19 +66,21 @@ func _run() -> void:
 	_cam.current = true
 	_cam.look_at_from_position(EYE, Vector3.ZERO, Vector3.UP)
 	_glass = MeshInstance3D.new()
-	_glass.mesh = DispatchSet.quad(DispatchSet.SCREEN)
+	var face := _terminal_face()
+	var glass: Dictionary = face.get("glass", {})
+	_glass.mesh = DispatchSet.quad((face["size"] as Vector2) * 0.01)
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/dispatch_screen.gdshader")
 	m.set_shader_parameter("has_face", true)
 	m.set_shader_parameter("face", _screens.terminal.get_texture())
 	m.set_shader_parameter("tint", DispatchScreens.PHOSPHOR.lerp(Color.WHITE, 0.2))
-	for k in DispatchMedium.TERMINAL_GLASS:
-		m.set_shader_parameter(String(k), DispatchMedium.TERMINAL_GLASS[k])
+	for k in glass:
+		m.set_shader_parameter(String(k), glass[k])
 	_glass.material_override = m
 	_vp.add_child(_glass)
 	_censor = DispatchCensor.new()
 	_vp.add_child(_censor)
-	_ok(is_equal_approx(float(DispatchMedium.TERMINAL_GLASS["curve"]), CURVE), "the gate's bulge is the desk's")
+	_ok(is_equal_approx(float(glass.get("curve", 0.0)), CURVE), "the gate's bulge is the desk's terminal's")
 	# each run is last on its line: blanking one with spaces would move what follows it (the terminal's face kerns)
 	var lines := PackedStringArray(["> open 1", "NAME ........ " + _r("DOE, JANE QUINCY"), "BIRTH ....... 01/02/1970",
 		"PLATE ....... " + _r("XKC 4417"), "STATUS ...... CONTAINED", "",
@@ -267,3 +269,11 @@ func _shards(b: Dictionary) -> Dictionary:
 			if interior:
 				(out[id]["inner"] as Array).append(Vector2i(x, y))
 	return out
+
+
+## The terminal's own make's glass as written ([PropMakes] `terminal`, its `screen` face): its size and how it shows a picture.
+static func _terminal_face() -> Dictionary:
+	var b := PropMakes.made("terminal", {}, 1)
+	var part := PropRig.new(b).face_part("screen").duplicate(true)
+	(b["node"] as Node).free()
+	return part

@@ -1,0 +1,166 @@
+{
+	"name": "the printer",
+	"line": "A beige dot-matrix printer, its platen knob, its head on its rail.",
+	"thing": {
+		"name": "the printer",
+		"parts": [
+			{
+				"shape": "box",
+				"size": [
+					42.0,
+					12.0,
+					30.0
+				],
+				"round": 1.4,
+				"at": [
+					0.0,
+					0.0,
+					2.0
+				],
+				"material": "beige",
+				"points": {
+					"slot": [
+						0.0,
+						12.5,
+						-6.0
+					]
+				}
+			},
+			{
+				"shape": "box",
+				"size": [
+					38.0,
+					3.0,
+					12.0
+				],
+				"round": 1.0,
+				"at": [
+					0.0,
+					11.5,
+					-3.0
+				],
+				"material": "smoked"
+			},
+			{
+				"shape": "lathe",
+				"profile": [
+					[
+						0,
+						0
+					],
+					[
+						1.6,
+						0
+					],
+					[
+						1.6,
+						2.0
+					],
+					[
+						0,
+						2.0
+					]
+				],
+				"at": [
+					23.0,
+					7.2,
+					-4.0
+				],
+				"material": "dark",
+				"turn": [
+					0.0,
+					0.0,
+					90.0
+				]
+			},
+			{
+				"shape": "box",
+				"size": [
+					1.2,
+					0.6,
+					0.3
+				],
+				"round": 0.0,
+				"at": [
+					15.0,
+					6.3,
+					17.1
+				],
+				"material": "green light",
+				"name": "power light",
+				"start": {
+					"glow": 1.0
+				}
+			},
+			{
+				"parts": [
+					{
+						"shape": "box",
+						"size": [
+							4.0,
+							3.0,
+							4.0
+						],
+						"round": 0.6,
+						"at": [
+							0.0,
+							-1.5,
+							0.0
+						],
+						"material": "dark"
+					}
+				],
+				"at": [
+					0.0,
+					12.5,
+					-3.0
+				],
+				"name": "head",
+				"joint": {
+					"kind": "slide",
+					"at": [
+						0,
+						0,
+						0
+					],
+					"axis": [
+						1,
+						0,
+						0
+					],
+					"range": [
+						-16,
+						16
+					]
+				},
+				"runs": {
+					"law": "follow",
+					"feed": "head",
+					"value": "30 * v"
+				}
+			}
+		]
+	},
+	"materials": {
+		"beige": {
+			"kind": "plastic",
+			"color": "#c7ba9e",
+			"polish": 0.5
+		},
+		"dark": {
+			"kind": "plastic",
+			"color": "#1a1a1c",
+			"polish": 0.5
+		},
+		"green light": {
+			"kind": "painted",
+			"color": "#33ff59",
+			"polish": 0.6
+		},
+		"smoked": {
+			"kind": "plastic",
+			"color": "#1f1a14",
+			"polish": 0.8
+		}
+	}
+}

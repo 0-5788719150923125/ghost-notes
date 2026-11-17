@@ -213,6 +213,13 @@ void fragment() {
 		spec = 0.2;
 		sss = 0.3 * clarity;
 		back = albedo * 0.15;
+	} else if (kind == 17) {
+		// PLASTIC: molded, its color all through - satin to glossy as its polish says, no clear coat over it, scuffed and yellowed
+		// toward color2 where it is worn
+		float scuff = smoothstep(0.55, 0.9, n1 * 0.6 + n2 * 0.4) * wear;
+		albedo = mix(color * (0.97 + 0.04 * n2), color2, scuff * 0.6);
+		rough = clamp(mix(0.8, 0.16, polish) + scuff * 0.15, 0.05, 1.0);
+		spec = 0.45;
 	} else {
 		// PAINTED or lacquered: a color, as glossy as its polish
 		albedo = color * (0.95 + 0.08 * n1);

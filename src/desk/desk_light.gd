@@ -30,6 +30,8 @@ const FLAME_SQUAT := 0.65
 ## The flames' bloom (the card table's, [TableMedium]): only what is brighter than this glows - past a page in any light here.
 const GLOW_THRESHOLD := 1.6
 
+## How strongly each kind of candle throws its light ([method Surroundings.share_of], the Environment card's): a kind -> its share.
+var shares := {}
 var _rig = null                       # the room's light (Lights.Rig), or null
 var _candles: Array = []              # {light, energy, flames: [{mesh, base, flicker, glow}]}
 var _root: Node3D = null
@@ -51,7 +53,7 @@ func build(look: Dictionary, lit: Array, seed: int) -> void:
 		_rig = Lights.build(light, _stage(), hash([seed, "desk light"]))
 		medium._root3.add_child(_rig.root)
 		_rig.fit(paper)
-	var leads := bool((DeskLook.MOODS[String(look.get("mood", "lamplight"))] as Dictionary).get("leads", false))
+	var leads := bool((Surroundings.LIGHTS.get(String(look.get("mood", "lamplight")), {}) as Dictionary).get("leads", false))
 	var key := -1
 	var best := 0.0
 	var fields: Array = []
@@ -89,7 +91,7 @@ func build(look: Dictionary, lit: Array, seed: int) -> void:
 		if field.x > best:
 			best = field.x
 			key = i
-		_candles.append({"light": l, "energy": 0.0, "flames": flames})
+		_candles.append({"light": l, "energy": 0.0, "flames": flames, "kind": String(node.get_meta("kind", ""))})
 	if not _candles.is_empty():
 		_glow(medium._env, true)
 	for i in _candles.size():
@@ -126,7 +128,8 @@ func tick(t: float) -> void:
 				(f["glow"] as ShaderMaterial).set_shader_parameter("flame", fl.x)
 			bright += fl.x
 		var n := maxf(float(((c as Dictionary)["flames"] as Array).size()), 1.0)
-		((c as Dictionary)["light"] as OmniLight3D).light_energy = float((c as Dictionary)["energy"]) * bright / n
+		((c as Dictionary)["light"] as OmniLight3D).light_energy = float((c as Dictionary)["energy"]) * bright / n \
+			* float(shares.get(String((c as Dictionary)["kind"]), 1.0))
 
 
 ## Whether the room's light or a candle is up; the desk's own flat fill stands down for them.

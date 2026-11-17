@@ -17,7 +17,7 @@ A row's `script` is the path of the script that builds the component's card, loa
 
 Static and free of autoload names, like `Capabilities`, so a gate can read it under `--script`.
 
-Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (15 components, 2 slots, 4 workspaces).
+Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (16 components, 2 slots, 4 workspaces).
 
 ## Slots
 
@@ -84,6 +84,8 @@ By family - the color a component's card, chip and marks are drawn in.
 
 - **Medium** (`medium`) - What the note is shown in - Auto (the seeded show), full frame, a comic, a novel, a notebook, a tablet, a letter or a dispatch desk; a table show at its table or a desk - and that format's settings.
   - needs picture; gives places; brings Scenes; takes the presentation; asks for `forward_plus`; kept in `medium:`
+- **Environment** (`environment`) - What is round the scene: its light (lamplight, candlelight, daylight, dusk, moonlight, none) and how bright, shafts of light through the haze, what drifts in the air, what is heard, and how strongly each lamp, screen or candle shines.
+  - needs places; asks for `forward_plus`; kept in `environment:`
 
 ### Look
 

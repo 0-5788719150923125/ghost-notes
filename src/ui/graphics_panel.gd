@@ -31,7 +31,7 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
-	# The Environment panel's corner (see deps_panel.gd): pinned bottom-right, grown up and left, standing on the row
+	# The Setup panel's corner (see deps_panel.gd): pinned bottom-right, grown up and left, standing on the row
 	anchor_left = 1.0
 	anchor_top = 1.0
 	anchor_right = 1.0

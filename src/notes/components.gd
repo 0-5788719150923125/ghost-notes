@@ -61,13 +61,13 @@ const WORKSPACES := {
 		"blurb": "The note's own panel: its words, and a card for each thing attached."},
 	"reading": {"label": "Reading", "section": "generative",
 		"blurb": "A voice reads the note: the cast, each speaker's delivery and room, the stream.",
-		"hosts": ["direction", "voice", "voice_training", "medium", "illustrations", "actor", "look", "bookends"],
+		"hosts": ["direction", "voice", "voice_training", "medium", "environment", "illustrations", "actor", "look", "bookends"],
 		"classic": ["text", "voice", "medium", "illustrations", "look", "bookends"]},
 	# (its settings keep the section they had as Cards, or the workspace would forget them)
 	"table": {"label": "Table", "section": "cards", "mode": "table",
 		"blurb": "A show at a table: the episodes agents make from the note's brief, and the voice that reads them.",
 		# (the Pictures card comes with a show at a table, so it is left out here)
-		"hosts": ["table", "direction", "voice", "voice_training", "medium", "illustrations", "look", "bookends"],
+		"hosts": ["table", "direction", "voice", "voice_training", "medium", "environment", "illustrations", "look", "bookends"],
 		"classic": ["text", "table", "voice", "look", "bookends"]},
 	"clip": {"label": "Masking", "section": "",
 		"blurb": "A clip's editor: its markers, tracks, effects and timeline."},
@@ -117,6 +117,13 @@ const REGISTRY := {
 		"slots": [], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": ["pictures"], "block": "illustrations", "card": "pictures",
 		"script": "res://src/show/pictures_card.gd"},
+	# What is round the scene the note is shown in (next/environment.md): its light, shafts through its haze, what drifts in its air,
+	# what is heard round it and how strongly each lit thing in it shines - read by the scene its Medium's format shows
+	"environment": {"label": "Environment", "family": &"medium",
+		"blurb": "What is round the scene: its light (lamplight, candlelight, daylight, dusk, moonlight, none) and how bright, shafts of light through the haze, what drifts in the air, what is heard, and how strongly each lamp, screen or candle shines.",
+		"needs": ["places"], "provides": [], "requires": [], "slots": [], "workspace": "",
+		"capabilities": ["forward_plus"], "marks": [], "block": "environment", "card": "environment",
+		"script": "res://src/table/environment_card.gd"},
 	"look": {"label": "Look", "family": &"look",
 		"blurb": "A finish over the whole picture: filters such as grain, noir and a vignette, the tonemapper, and how subtitles appear.",
 		"needs": ["picture"], "provides": [], "requires": [], "slots": [], "workspace": "",
@@ -238,6 +245,8 @@ static func attach_blocks(key: String) -> Dictionary:
 			return {"look": {}}
 		"bookends":
 			return {"bookends": {}}
+		"environment":
+			return {"environment": {}}
 		# its card fills its defaults (nothing goes up until "Upload after export" is ticked)
 		"youtube":
 			return {"youtube": {}}

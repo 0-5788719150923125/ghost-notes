@@ -50,10 +50,10 @@ Every shelf a section puts on the Dex: the section, the shelf, and what it holds
 | Section | Shelf | What it holds |
 | --- | --- | --- |
 | [DeskRecipes](../src/desk/desk_recipes.gd) | Desk things | What a desk sets out - mugs, pencils, books, candles - as the first desk draws each. Keep one to use it anywhere. |
-| [MakeShelf](../src/desk/make_shelf.gd) | Drawn | The part's own recipe drawn from many numbers, each one of its kind. |
+| [MakeShelf](../src/desk/make_shelf.gd) | Its own | The part's own make: its recipe drawn from many numbers, or the one the scene comes with. |
 | [MakeShelf](../src/desk/make_shelf.gd) | Kept props | The props in your library: any can play the part, made the size it wants. |
 | [MakeShelf](../src/desk/make_shelf.gd) | Seen props | Every prop a set dresser has made: the one picked is kept in your library first. |
-| [DispatchProps](../src/dispatch/dispatch_props.gd) | Dispatch desk | What the Dispatch desk builds, and the parts any make can play there, as the first desk draws them. |
+| [DispatchProps](../src/dispatch/dispatch_props.gd) | Dispatch desk | What the Dispatch desk works, each as the first desk draws it. |
 | [LibraryProps](../src/table_show/library_props.gd) | Kept props | The props in your library, kept from any show. |
 | [LibraryProps](../src/table_show/library_props.gd) | Seen props | Every prop a set dresser has made for any episode, as it stands there. Keep one to have it in your library. |
 | [LibraryVoices](../src/voice/library_voices.gd) | Kept voices | The voices in your library, kept from any note's Voice card: every note can read in one by name. |
@@ -74,18 +74,36 @@ Source: [src/ui/prop_viewer.gd](../src/ui/prop_viewer.gd)
 
 ## Roles
 
-PropMakes - the parts a scene gives a prop to play (a role: the desk's mug, its cup of pencils), and the make chosen to play one, built. What a role does is the scene's - a mug is lifted to the mouth and set down in its ring of old coffee - and any make of it is built in the role's frame so that holds: its foot on y = 0, centered, its front toward +z, its height within the role's (`made`). A scene that works a role asks this for its make and never for a particular shape.
+PropMakes - the parts a scene gives a prop to play (a role: the desk's mug, its terminal, a phone), and the make chosen to play one, built (next/working_props.md). What a role does is the scene's - a mug is lifted to the mouth, a terminal shows its program on its screen - and any make of it is built in the role's frame so that holds: its foot on y = 0, centered, its front toward +z, its height within the role's (`made`). A scene works a make through its rig (`PropRig`: its faces, lights and named parts), never by its shapes.
 
-A choice is `{}` (the scene's own, drawn from its number), `{recipe, seed}` (the role's recipe drawn from another number, `DeskLook.spec_of`) or `{kept}` (a prop kept in the library by that name, `ThingLibrary`; where the library has none, the scene's own). The Dex offers them (`MakeShelf`); the scene keeps the choice in its note.
+A role's own make is a recipe drawn from the scene's number (`recipe`, `DeskLook.spec_of`) or a prop shipped with the app (`own`, a `.prop.json` as Export writes one). A choice is `{}` (the role's own), `{recipe, seed}` (its recipe drawn from another number) or `{kept}` (a prop kept in the library by that name, `ThingLibrary`). A make missing a face the scene fills (`faces`) cannot play the role: the role's own plays it. The Dex offers makes (`MakeShelf`); the scene keeps the choice in its note.
 
 Source: [src/desk/prop_makes.gd](../src/desk/prop_makes.gd)
 
-`PropMakes.ROLES` in [src/desk/prop_makes.gd](../src/desk/prop_makes.gd): each role, what the scene does with it, and the height a make is fitted to.
+`PropMakes.ROLES` in [src/desk/prop_makes.gd](../src/desk/prop_makes.gd): each role, what the scene does with it, its own make (a recipe drawn from the scene's number, or a prop shipped in `data/props/`), the faces the scene shows its pictures on, what it feeds the make's parts (next/working_props.md), and the height a kept make is fitted to.
 
-| Role | What it does | Recipe | Height (cm) |
-| --- | --- | --- | --- |
-| `mug` The mug | A mug drunk from: lifted to the mouth and set down again in its ring of old coffee. | `mug` | 7 - 13 |
-| `pencil_cup` The cup of pencils | A cup holding a few pencils, standing on the desk. | `pencil_cup` | 8 - 22 |
+| Role | What it does | Its own | Faces | Feeds | Height (cm) |
+| --- | --- | --- | --- | --- | --- |
+| `mug` The mug | A mug drunk from: lifted to the mouth and set down again in its ring of old coffee. | recipe `mug` |  |  | 7 - 13 |
+| `pencil_cup` The cup of pencils | A cup holding a few pencils, standing on the desk. | recipe `pencil_cup` |  |  | 8 - 22 |
+| `terminal` The terminal | A computer whose screen shows the council's program. | `data/props/terminal.prop.json` | `screen` | `lit` how much of the screen is lit, 0 dark to 1 a panel full of text | 30 - 60 |
+| `keyboard` The keyboard | The keyboard typed at, before the terminal, its cable coiled into the case. | `data/props/keyboard.prop.json` |  |  | 1.5 - 6 |
+| `phone` A phone | Each of the desk's phones: lifted to the ear, opened, rung, read; its name on its tape. | `data/props/phone.prop.json` | `inner`, `outer`, `tape` | `open` how open its lid is, 0 shut to 1 open | 1.5 - 4 |
+| `radar` The radar | The round scope its sweep and blips are drawn on, and its gain knob. | `data/props/radar.prop.json` | `scope` | `gain` the gain the script turns it to, one to ten | 18 - 45 |
+| `receiver` The receiver | The shortwave receiver: its dial at the frequency, the needle swinging with the static, the scope's trace. | `data/props/receiver.prop.json` | `dial`, `scope` | `signal` how strong what it hears is, 0 to 1 | 18 - 45 |
+| `printer` The printer | The printer whose paper feeds off the desk's end, its head running across as it prints. | `data/props/printer.prop.json` |  | `head` where the head is across its rail, -0.5 to 0.5 | 8 - 25 |
+| `feed` The security monitor | The little monitor the security cameras' pictures play on. | `data/props/security_monitor.prop.json` | `screen` | `glow` how brightly its picture lights the desk | 12 - 35 |
+| `satellite` The satellite's monitor | The flat monitor on its arm, the view straight down from orbit on it. | `data/props/flat_monitor.prop.json` | `screen` | `glow` how brightly its picture lights the desk | 12 - 35 |
+| `tv` The television | The small television: a live picture of the desk, a clip, static. | `data/props/tv.prop.json` | `screen` | `glow` how brightly its picture lights the desk | 20 - 58 |
+| `tv_stand` The television's stand | What the television stands on, high enough to be seen over the radar. | `data/props/tv_stand.prop.json` |  |  | 15 - 35 |
+| `lamp` The lamp | The desk lamp, its light on the keyboard, switched off by the script's lamp. | `data/props/lamp.prop.json` |  | `lit` how much of its light is on, 0 to 1 | 30 - 60 |
+| `switch` The switch box | The switch thrown to GOOD or BAD. | `data/props/switch.prop.json` |  | `side` which way it is thrown, -1 GOOD to 1 BAD | 5 - 15 |
+| `handbook` The handbook | The fat binder labeled HANDBOOK. | `data/props/handbook.prop.json` |  |  | 3 - 12 |
+| `stamp` The rubber stamp | A rubber stamp beside its pad. | `data/props/stamp.prop.json` |  |  | 3 - 12 |
+| `tracker` The GPS tracker | A small tracker, its light blinking. | `data/props/tracker.prop.json` |  |  | 1 - 5 |
+| `chart` The chart | The chart of the council's hours, taped down. | `data/props/chart.prop.json` | `chart` |  | 0.05 - 2 |
+| `clock` The flip clock | The clock whose cards turn over to the hour the script tells. | `data/props/clock.prop.json` | `cards` |  | 4 - 15 |
+| `tablet` The tablet | The tablet picked up and read, its pages on its screen. | `data/props/tablet.prop.json` | `screen` |  | 0.5 - 3 |
 
 ## Refining a prop
 
@@ -105,7 +123,7 @@ An agent draws its own curves - a lathe's profile, a tube's or a loft's path, an
 
 Source: [src/table/props.gd](../src/table/props.gd)
 
-### Shapes (20)
+### Shapes (21)
 
 A part is one of these (`Props.SHAPES`), as the set dresser reads them.
 
@@ -129,8 +147,9 @@ A part is one of these (`Props.SHAPES`), as the set dresser reads them.
 - **`tuft`** - A BRUSH'S HAIRS: a bundle of fine hairs rising from y = 0 (where they leave the ferrule) to their tips, which bend as the brush is pulled and pressed and spring back as it lifts. `kind` round (a soft point), liner (long and fine), flat (a chisel edge, wide across x), fan (spread wide), dome (full and rounded - a blending or powder brush) or bud (a cotton swab's tip: short, dense and rounded, barely bending - it lays no paint, it lifts a small or faint spill of fresh paint); `length` (centimeters out of the ferrule), `width` (across, at the ferrule), `thick` (a flat or fan's thinness), `hairs` (6-140). Build a brush as a group: a `tube` handle, a short `lathe` or `loft` ferrule, and the tuft standing out of it - give the group a free `joint` and `points` {"tip": the tuft's end, "grip": the handle's} so it can be picked up and painted with. A cotton swab is a thin `tube` stick with a bud tuft at its end, built the same way.
 - **`grains`** - LOOSE STUFF, poured and never one piece: sand, salt, sugar, snow, ash, flour, seeds, peppercorns, ground herbs, tea, powder, gravel, beads. Drawn where it lies, `at` inside the vessel that holds it - it fills that vessel's inside from the bottom up to `fill` (0-1 of the way to its rim), capped at 240 grains without enlarging them - or on the cloth or a dish, where it lies in a little heap of `amount` grains (up to 240). `grain`: one grain's size in centimeters (0.1 sugar or flour, drawn as small clumps, to 1 a pea or a bead); its material is its look, and how it behaves - heavy or light, whether it dissolves. An empty receiving vessel needs no grains part: what is poured into it arrives from the source. It is REAL: tipped, its vessel spills it from the mouth and it falls, runs and heaps where it lands, and in a liquid it sinks, floats or dissolves.
 - **`extrude`** - an outline raised straight up: trays, tiles, plaques, tablets, boxes, dishes and candles of any plan - a star, a hexagon, a heart. `outline` (polygon with `sides` 3-12, star with `sides` points, circle, rect, heart, lens (pointed at both ends, as a leaf or an eye is) or drop (round behind, pointed in front) - or `points` [[x, z], ...] for any outline, which may go in and out), `size` [width, depth], `height`; optional `taper` 0-0.9 (narrower at the top), `bevel` (centimeters cut off the top edge), `wall` (centimeters: hollow, as a tray or a dish is, its floor as thick as its wall). A wax extrude takes `wick` or `wicks` as a turned candle does.
+- **`face`** - A FACE THAT SHOWS SOMETHING: a flat panel, upright, facing the thing's front (+z), placed by its middle - the glass of a screen, a dial's card, a meter's scale, a label, a sticker. `size` [width, height]; `outline` rect, round (a disc or an ellipse - a round scope) or rounded (`round` its corners' radius); `turn` [-90, 0, 0] lays it face up. What it shows is the scene's, handed by the part's `name` (a terminal's `screen`, a radar's `scope`); with nothing handed it is its material - a dark glass, a white card. `lit` 0-1: how much it shines by itself (a screen, a lit dial) rather than by the room's light. `glass`, how a screen shows its picture: `curve` 0-0.3 (a tube's bulge), `lines` 0-1 (scanlines) and `line_count`, `bloom` 0-2 (a phosphor's glow round what is lit), `mono` 0-1 (black and white), `snow` 0-1, `brightness`. `text`: words printed or written on it, as large as fit (`hand` print, marker or type; `ink` their color) - a scene may hand it other words by its name.
 
-### Materials (17)
+### Materials (18)
 
 Each part's surface is one material (`Props.MATERIALS`), procedural.
 
@@ -152,6 +171,7 @@ Each part's surface is one material (`Props.MATERIALS`), procedural.
 | `powder` | loose fine stuff, and what is ground: snow, flour, ash, chalk, salt, sugar, pollen, ground spice, dust - matte and soft, `pattern` the sparkle of the grains that catch the light (snow, salt, sugar) in `color2`; its grains dissolve in a liquid in `dissolves` seconds (snow melts in 2, sugar in 6, salt in 10; 0 never - ash, sand) |
 | `cream` | a soft paste in a pot or a stick - greasepaint, cream makeup, a lipstick, a balm, frosting, butter, wax polish: smooth and a little waxy, `polish` its sheen, `pattern` the swirls a finger or a brush has left in its top; what a tool is loaded with paint from |
 | `sponge` | soft foam full of fine holes - a makeup sponge, a sea sponge, a foam wedge, a powder puff's face: matte, `pattern` how open its pores are, `wear` the paint soaked into it in `color2`; it gives where it is pressed |
+| `plastic` | molded plastic, its color all through - a computer's case, a phone, a keyboard's keys, a knob, a toy; `polish` its sheen (satin low, glossy high), `wear` scuffs and the yellowing of age toward `color2` |
 | `painted` | lacquer, enamel or paint over anything |
 
 ### Ornaments (10)

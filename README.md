@@ -10,7 +10,7 @@ _A spectral experience_
 
 **Download:** [the latest Linux, Windows, macOS and Android builds](https://github.com/0-5788719150923125/ghost-notes/releases/latest) ([all releases](https://github.com/0-5788719150923125/ghost-notes/releases)).
 
-Portable Linux and Windows release builds check for newer builds automatically. The Environment panel (⚙) shows the running commit and update status. A verified update replaces the executable in its current folder when you close the app; use **restart** there to install and reopen immediately. Source and debug runs do not update themselves.
+Portable Linux and Windows release builds check for newer builds automatically. The Setup panel (⚙) shows the running commit and update status. A verified update replaces the executable in its current folder when you close the app; use **restart** there to install and reopen immediately. Source and debug runs do not update themselves.
 
 The macOS build is not notarized, so macOS refuses it the first time: open it from System Settings > Privacy & Security > **Open Anyway**. A Mac gets new builds from the releases page.
 
@@ -28,15 +28,16 @@ Ghost Notes is an app made with [Godot](https://godotengine.org/) 4.7, in which 
 
 Ghost Notes is built from registries. Each page below is generated from one, listing every entry and where it lives; [docs/index.md](docs/index.md) is the whole map.
 
-- [Components](docs/components.md) (15 components, 4 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
+- [Components](docs/components.md) (16 components, 4 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](docs/scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
 - [Media](docs/media.md) (11) - what the show is carried on.
 - [Look filters](docs/filters.md) (8) - the post-process over the whole picture.
 - [Layers](docs/layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](docs/forces.md) (8) - the physics primitives particles compose.
 - [Stage actors and verbs](docs/stage.md) (3 actors, 24 verbs) - what a storyboard's `stage` entries are made of.
-- [Table](docs/table.md) (16 laws) - a table show's data as rows: what a person may set of an act, a thing and a part, and every law a track may move its thing by.
-- [Props and the library](docs/props.md) (20 shapes, 17 materials, 2 roles) - the library of props and voices, the Dex, the Props card, roles any make can play, refining a prop into versions, and what every prop is made of.
+- [Table](docs/table.md) (17 laws) - a table show's data as rows: what a person may set of an act, a thing and a part, and every law a track may move its thing by.
+- [Props and the library](docs/props.md) (21 shapes, 18 materials, 20 roles) - the library of props and voices, the Dex, the Props card, roles any make can play, refining a prop into versions, and what every prop is made of.
+- [The Environment](docs/surroundings.md) (6 lights, 7 things in the air, 6 sounds) - what is round the scene a note is shown in: its light, shafts through its haze, what drifts in its air, what is heard, and how strongly each lit thing shines.
 - [Masking effects](docs/masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
 - [Script marks](docs/script.md) (76) - every mark a script may carry - the script editor's palette.
 - [Agents](docs/agents.md) (4 writers, 3 painters, 3 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.

@@ -1,0 +1,102 @@
+{
+	"name": "the handbook",
+	"line": "A fat three-ring binder lying down, its spine labeled HANDBOOK, its pages soft with handling.",
+	"thing": {
+		"name": "the handbook",
+		"parts": [
+			{
+				"shape": "box",
+				"size": [
+					24.0,
+					0.6,
+					30.0
+				],
+				"round": 0.0,
+				"at": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"material": "cover",
+				"copies": {
+					"line": {
+						"count": 2,
+						"step": [
+							0.0,
+							6.6,
+							0.0
+						]
+					}
+				}
+			},
+			{
+				"shape": "box",
+				"size": [
+					22.5,
+					6.0,
+					28.5
+				],
+				"round": 0.0,
+				"at": [
+					0.5,
+					0.6,
+					0.0
+				],
+				"material": "pages"
+			},
+			{
+				"shape": "box",
+				"size": [
+					1.2,
+					7.2,
+					30.0
+				],
+				"round": 0.0,
+				"at": [
+					-12.0,
+					0.0,
+					0.0
+				],
+				"material": "cover"
+			},
+			{
+				"shape": "face",
+				"name": "spine",
+				"size": [
+					15.1,
+					3.4
+				],
+				"at": [
+					-12.65,
+					3.6,
+					0.0
+				],
+				"material": "label",
+				"turn": [
+					0.0,
+					-90.0,
+					0.0
+				],
+				"text": "HANDBOOK",
+				"hand": "type",
+				"ink": "#14141a"
+			}
+		]
+	},
+	"materials": {
+		"cover": {
+			"kind": "plastic",
+			"color": "#1a2442",
+			"polish": 0.4
+		},
+		"pages": {
+			"kind": "paper",
+			"color": "#e0ded1",
+			"wear": 0.3
+		},
+		"label": {
+			"kind": "paper",
+			"color": "#edebde"
+		}
+	}
+}

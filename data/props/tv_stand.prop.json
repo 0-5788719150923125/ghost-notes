@@ -1,0 +1,103 @@
+{
+	"name": "the television's stand",
+	"line": "A wooden crate and two hardbacks on it, to lift a small television over what is in front of it.",
+	"thing": {
+		"name": "the television's stand",
+		"parts": [
+			{
+				"shape": "box",
+				"size": [
+					31.0,
+					20.0,
+					26.0
+				],
+				"round": 0.0,
+				"at": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"material": "crate"
+			},
+			{
+				"shape": "box",
+				"size": [
+					31.4,
+					1.2,
+					26.4
+				],
+				"round": 0.0,
+				"at": [
+					0.0,
+					2.4,
+					0.0
+				],
+				"material": "crate dark",
+				"copies": {
+					"line": {
+						"count": 3,
+						"step": [
+							0.0,
+							7.0,
+							0.0
+						]
+					}
+				}
+			},
+			{
+				"shape": "box",
+				"size": [
+					30.0,
+					3.5,
+					24.0
+				],
+				"round": 0.2,
+				"at": [
+					0.0,
+					20.0,
+					0.0
+				],
+				"material": "red book"
+			},
+			{
+				"shape": "box",
+				"size": [
+					28.0,
+					3.0,
+					22.0
+				],
+				"round": 0.2,
+				"at": [
+					1.0,
+					23.5,
+					0.0
+				],
+				"material": "blue book"
+			}
+		]
+	},
+	"materials": {
+		"crate": {
+			"kind": "wood",
+			"color": "#4d3824",
+			"polish": 0.1,
+			"pattern": 0.6
+		},
+		"crate dark": {
+			"kind": "wood",
+			"color": "#38291a",
+			"polish": 0.1,
+			"pattern": 0.6
+		},
+		"red book": {
+			"kind": "leather",
+			"color": "#4d1f14",
+			"wear": 0.4
+		},
+		"blue book": {
+			"kind": "leather",
+			"color": "#1f334d",
+			"wear": 0.4
+		}
+	}
+}

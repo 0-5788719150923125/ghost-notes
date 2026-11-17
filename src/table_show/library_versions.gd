@@ -127,12 +127,15 @@ func busy() -> bool:
 
 
 ## What refining [param name] (said by [param line]) asks: its version written as [param thing] and [param materials], changed as
-## [param direction] says, with pictures of it where [param pictured]: `{system, prompt}`.
+## [param direction] says, with pictures of it where [param pictured]: `{system, prompt}`. A prop a scene works (a face, a light, a
+## part that follows what it is fed: [method Props.played]) is told the parts a scene plays, and to keep them (`working`).
 static func prompt(name: String, line: String, thing: Dictionary, materials: Dictionary, direction: String, pictured: bool) -> Dictionary:
 	var t := thing.duplicate(true)
 	t.erase("name")
+	var working := Props.played(thing.get("parts", []) if thing.get("parts") is Array else [])
 	var vars := {"name": name, "line": line, "spec": JSON.stringify({"thing": t, "materials": materials}, "  "), "direction": direction.strip_edges(),
-		"props": Props.describe(), "max_parts": Props.MAX_PARTS, "cardless": true, "tools": false, "pictured": pictured}
+		"props": Props.describe(working), "max_parts": Props.MAX_PARTS, "cardless": true, "tools": false, "pictured": pictured,
+		"working": working}
 	return {"system": Rules.say("table/prop_refiner.system", vars), "prompt": Rules.say("table/prop_refiner.prompt", vars)}
 
 

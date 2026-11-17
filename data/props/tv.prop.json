@@ -1,0 +1,246 @@
+{
+	"name": "the television",
+	"line": "A small old television with rabbit-ear antennas.",
+	"thing": {
+		"name": "the television",
+		"parts": [
+			{
+				"shape": "box",
+				"size": [
+					27.0,
+					23.0,
+					25.0
+				],
+				"round": 2.0,
+				"at": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"material": "cabinet"
+			},
+			{
+				"shape": "box",
+				"size": [
+					19.0,
+					15.0,
+					1.0
+				],
+				"round": 0.5,
+				"at": [
+					-2.5,
+					4.46,
+					12.6
+				],
+				"material": "black"
+			},
+			{
+				"shape": "face",
+				"name": "screen",
+				"size": [
+					17.0,
+					13.0
+				],
+				"at": [
+					-2.5,
+					11.96,
+					13.2
+				],
+				"material": "screen",
+				"lit": 1.0,
+				"glass": {
+					"curve": 0.14,
+					"lines": 0.3,
+					"line_count": 240.0,
+					"bloom": 0.5
+				},
+				"light": {
+					"kind": "point",
+					"color": "#99bfff",
+					"strength": 1.0,
+					"reach": 100.0,
+					"falloff": 1.5,
+					"at": [
+						0.0,
+						-0.46,
+						16.8
+					]
+				},
+				"runs": {
+					"law": "follow",
+					"feed": "glow",
+					"state": "light"
+				}
+			},
+			{
+				"shape": "lathe",
+				"profile": [
+					[
+						0,
+						0
+					],
+					[
+						1.0,
+						0
+					],
+					[
+						0.9,
+						1.2
+					],
+					[
+						0,
+						1.2
+					]
+				],
+				"at": [
+					10.0,
+					13.0,
+					12.4
+				],
+				"material": "dark",
+				"turn": [
+					90.0,
+					0.0,
+					0.0
+				],
+				"copies": {
+					"line": {
+						"count": 2,
+						"step": [
+							0.0,
+							-5.0,
+							0.0
+						]
+					}
+				}
+			},
+			{
+				"shape": "tube",
+				"path": [
+					[
+						0.0,
+						23.0,
+						-2.0
+					],
+					[
+						-13.0,
+						53.0,
+						-8.0
+					]
+				],
+				"radius": 0.18,
+				"material": "steel"
+			},
+			{
+				"shape": "tube",
+				"path": [
+					[
+						0.0,
+						23.0,
+						-2.0
+					],
+					[
+						13.0,
+						53.0,
+						-8.0
+					]
+				],
+				"radius": 0.18,
+				"material": "steel"
+			},
+			{
+				"shape": "lathe",
+				"profile": [
+					[
+						0,
+						0
+					],
+					[
+						0.4,
+						0
+					],
+					[
+						0.4,
+						0.6
+					],
+					[
+						0,
+						0.6
+					]
+				],
+				"at": [
+					-13.0,
+					52.7,
+					-8.0
+				],
+				"material": "steel",
+				"copies": {
+					"line": {
+						"count": 2,
+						"step": [
+							26.0,
+							0.0,
+							0.0
+						]
+					}
+				}
+			},
+			{
+				"shape": "lathe",
+				"profile": [
+					[
+						0,
+						0
+					],
+					[
+						2.4,
+						0
+					],
+					[
+						2.0,
+						1.2
+					],
+					[
+						0,
+						1.2
+					]
+				],
+				"at": [
+					0.0,
+					23.0,
+					-2.0
+				],
+				"material": "dark"
+			}
+		]
+	},
+	"materials": {
+		"black": {
+			"kind": "plastic",
+			"color": "#09090a",
+			"polish": 0.6
+		},
+		"dark": {
+			"kind": "plastic",
+			"color": "#1a1a1c",
+			"polish": 0.5
+		},
+		"steel": {
+			"kind": "metal",
+			"color": "#8c8f94",
+			"polish": 0.7,
+			"wear": 0.05
+		},
+		"screen": {
+			"kind": "plastic",
+			"color": "#040505",
+			"polish": 0.85
+		},
+		"cabinet": {
+			"kind": "wood",
+			"color": "#382b1f",
+			"polish": 0.5,
+			"pattern": 0.3
+		}
+	}
+}

@@ -9,7 +9,8 @@ extends Node
 ## `--picture` stands in for every picture the note shows. `--every S` photographs every S seconds to the end. `--live 1`
 ## hands the words a sentence at a time, a few seconds ahead, as a live reading does. `--sound <wav>` writes what the desk
 ## sounds like over the whole run to a file. `--opening title` opens on the channel's name over the blur, and `--lead S`
-## gives the voice's first word S seconds in, as the intro's hold does. It prints where each action falls, and asserts only that a frame is not uniform.
+## gives the voice's first word S seconds in, as the intro's hold does. `--light K`, `--bright X`, `--rays N`, `--air a,b` and
+## `--heard a,b` are the Environment card's ([Surroundings]). It prints where each action falls, and asserts only that a frame is not uniform.
 
 const W := 1280
 const H := 720
@@ -27,6 +28,7 @@ var _sound := ""
 var _flat := 0
 var _opening := Openings.DEFAULT
 var _lead := 1.0
+var _environment := {}             # the Environment card's block ([Surroundings]): --light, --bright, --rays, --air, --heard
 
 
 func _ready() -> void:
@@ -49,6 +51,11 @@ func _run() -> void:
 			"--sound": _sound = args[i + 1]
 			"--opening": _opening = args[i + 1]
 			"--lead": _lead = float(args[i + 1])
+			"--light": _environment["light"] = args[i + 1]
+			"--bright": _environment["brightness"] = float(args[i + 1])
+			"--rays": _environment["rays"] = int(args[i + 1])
+			"--air": _environment["air"] = Array(String(args[i + 1]).split(","))
+			"--heard": _environment["sound"] = Array(String(args[i + 1]).split(","))
 			"--times":
 				_times = []
 				for s in String(args[i + 1]).split(","):
@@ -81,8 +88,8 @@ func _run() -> void:
 	medium.feed.opening = _opening
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	subs.words = [] if _live else words
-	subs.document = {"source": source, "dispatch": {"seed": _seed, "pictures": pictures}, "title": "Targeted Individuality",
-		"author": "Pen & Ink"}
+	subs.document = {"source": source, "dispatch": {"seed": _seed, "pictures": pictures}, "environment": _environment,
+		"title": "Targeted Individuality", "author": "Pen & Ink"}
 	add_child(subs)
 	medium.bind_captions(subs)
 	var end := float((words.back() as Dictionary)["t1"]) + 8.0

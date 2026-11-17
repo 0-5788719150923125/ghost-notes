@@ -202,6 +202,16 @@ a pen (or any tool held by its tip) brought to something written or drawn on a s
 | `on` | the sheet it points at, as a write names it ("pad/page 1") |
 | `at` | what it points at: a part of a formula written as \pin{name}{...}, an element of a drawing by its id="name", or the name of the act that wrote the line |
 
+### `follow` - Follow
+
+it IS a formula at every moment, of the video's time and what the scene feeds the prop - a needle following a signal, a knob turned to a setting, a lid as open as the phone is, a light switched, a lamp's light blinking
+
+| Field | What it is |
+| --- | --- |
+| `feed` | the name of what the scene feeds it, whose value is `v` (left out: nothing is fed, and it follows the time alone) |
+| `value` | a formula of `v` and `T` (the video's seconds) giving the channel's value - degrees, centimeters or a share: "48 - 96 * v", "1 - step(0.1, fract(T / 2.4))" (left out: `v` itself) |
+| `rest` | what `v` is when nothing is fed (left out: 0) |
+
 ### `paint` - Paint
 
 a tool lays elements of a design onto a painted surface, as a careful hand does: fetched from where it rests, loaded from its paint, pressed onto the surface and moved over each element in the way its kind asks - a line drawn along its path in slow strokes, a fill swept back and forth, a fill stippled from its middle out with a sponge, a powder patted on (a little cloud at each pat), dots dabbed, a smear dragged in one pressed stroke, a mist sprayed from a hand's length off, stones carried from their dish and pressed on - lifting between strokes, going back for more when it runs dry, rinsed and dried between colors and before it is put down where there is water for it, and back where it rests at the end. The FIRST act to paint an element lays it; any later one goes over it again with nothing on the tool, softening and smearing its edges (a powder's: sweeping its excess off). It takes as long as its strokes take at a hand's pace, its length worked out from them; slowed, it rests between elements

@@ -147,14 +147,14 @@ static func groups(runs: Array) -> Array:
 	return out
 
 
-## Where terminal pixel [param px] is shown on [param glass], in the world: a quad whose face `shaders/dispatch_screen.gdshader`
-## bulges by [param curve], showing the face's point b at the quad's c where c (1 + curve |c|^2 / 2) = b.
+## Where terminal pixel [param px] is shown on [param glass], in the world: a face standing at its middle (a make's, its size in
+## its `size` meta, or a quad) that `shaders/dispatch_screen.gdshader` bulges by [param curve], showing the face's point b at the quad's c where c (1 + curve |c|^2 / 2) = b.
 static func on_glass(px: Vector2, glass: MeshInstance3D, curve: float) -> Vector3:
 	var b := px / Vector2(DispatchScreens.TERM_SIZE) * 2.0 - Vector2.ONE
 	var c := b
 	for _i in 10:
 		c = b / (1.0 + curve * c.dot(c) * 0.5)
-	var size := (glass.mesh as QuadMesh).size
+	var size: Vector2 = glass.get_meta("size") if glass.has_meta("size") else (glass.mesh as QuadMesh).size
 	return glass.global_transform * Vector3(c.x * 0.5 * size.x, -c.y * 0.5 * size.y, 0.0)
 
 

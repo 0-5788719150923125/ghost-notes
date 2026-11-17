@@ -81,7 +81,7 @@ func _ready() -> void:
 
 
 ## The real binary for a backend. A GUI launch's path differs from a shell's, so it is resolved through
-## [Deps], the same answer the Environment panel reports.
+## [Deps], the same answer the Setup panel reports.
 func _bin_for(backend: String) -> String:
 	var bin := Backends.dep(backend)
 	var path := Deps.resolve(bin)
@@ -1068,7 +1068,7 @@ func _set_expanded(on: bool) -> void:
 # --- which assistant runs (it was the home screen's dropdown) ---------------------------------
 
 const ASSIST_TIP := "Feedback left with ` gets handed to this, one-shot, the moment you submit it."
-const INSTALL_HINT := ("Install one or several of them, then press rescan in the Environment panel "
+const INSTALL_HINT := ("Install one or several of them, then press rescan in the Setup panel "
 	+ "(⚙). Click an agent's row there for the command that installs it.")
 
 ## The writers' own row ([method AgentPick.assistant]): Off or an agent, its model and its level - the

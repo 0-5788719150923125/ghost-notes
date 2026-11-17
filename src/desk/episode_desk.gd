@@ -62,6 +62,7 @@ func _ensure_doc() -> void:
 	if _subs == null or not is_instance_valid(_subs):
 		return
 	var d: Dictionary = _subs.document
+	set_environment(Surroundings.sanitize(d.get("environment")))
 	_title.channel = String(d.get("title", ""))
 	_title.byline = String(d.get("byline", ""))
 	var pay: Dictionary = d.get("table", {}) if d.get("table") is Dictionary else {}
@@ -75,8 +76,8 @@ func _ensure_doc() -> void:
 		_modified(dir.path_join("ink.json")), " ".join(start)]
 	if key == _doc_key:
 		# the desk's rows, chosen while it plays: the desk dressed again, the episode as it is
-		if DeskLook.picks_of(rows) != _picks or _desk_of(rows) != _seed:
-			_set_look(DeskLook.picks_of(rows), _desk_of(rows))
+		if DeskLook.picks_of(rows, environment) != _picks or _desk_of(rows) != _seed:
+			_set_look(DeskLook.picks_of(rows, environment), _desk_of(rows))
 		return
 	_doc_key = key
 	load_episode(pay, src, rows, start, int(d.get("start_index", -1)))
@@ -87,7 +88,7 @@ func _ensure_doc() -> void:
 ## near] the index they are about. Public for a gate, which hands it one by hand.
 func load_episode(pay: Dictionary, src: String, rows := {}, start := PackedStringArray(), near := -1) -> void:
 	_hand = int(pay.get("seed", 1))
-	_set_look(DeskLook.picks_of(rows), _desk_of(rows))
+	_set_look(DeskLook.picks_of(rows, environment), _desk_of(rows))
 	var dir := String(pay.get("dir", ""))
 	var plan: Dictionary = pay.get("plan", {}) if pay.get("plan") is Dictionary else {}
 	var parsed := CardReading.parse(src)

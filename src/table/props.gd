@@ -62,6 +62,7 @@ const SHAPES := {
 	"tuft": "A BRUSH'S HAIRS: a bundle of fine hairs rising from y = 0 (where they leave the ferrule) to their tips, which bend as the brush is pulled and pressed and spring back as it lifts. `kind` round (a soft point), liner (long and fine), flat (a chisel edge, wide across x), fan (spread wide), dome (full and rounded - a blending or powder brush) or bud (a cotton swab's tip: short, dense and rounded, barely bending - it lays no paint, it lifts a small or faint spill of fresh paint); `length` (centimeters out of the ferrule), `width` (across, at the ferrule), `thick` (a flat or fan's thinness), `hairs` (6-140). Build a brush as a group: a `tube` handle, a short `lathe` or `loft` ferrule, and the tuft standing out of it - give the group a free `joint` and `points` {\"tip\": the tuft's end, \"grip\": the handle's} so it can be picked up and painted with. A cotton swab is a thin `tube` stick with a bud tuft at its end, built the same way.",
 	"grains": "LOOSE STUFF, poured and never one piece: sand, salt, sugar, snow, ash, flour, seeds, peppercorns, ground herbs, tea, powder, gravel, beads. Drawn where it lies, `at` inside the vessel that holds it - it fills that vessel's inside from the bottom up to `fill` (0-1 of the way to its rim), capped at 240 grains without enlarging them - or on the cloth or a dish, where it lies in a little heap of `amount` grains (up to 240). `grain`: one grain's size in centimeters (0.1 sugar or flour, drawn as small clumps, to 1 a pea or a bead); its material is its look, and how it behaves - heavy or light, whether it dissolves. An empty receiving vessel needs no grains part: what is poured into it arrives from the source. It is REAL: tipped, its vessel spills it from the mouth and it falls, runs and heaps where it lands, and in a liquid it sinks, floats or dissolves.",
 	"extrude": "an outline raised straight up: trays, tiles, plaques, tablets, boxes, dishes and candles of any plan - a star, a hexagon, a heart. `outline` (polygon with `sides` 3-12, star with `sides` points, circle, rect, heart, lens (pointed at both ends, as a leaf or an eye is) or drop (round behind, pointed in front) - or `points` [[x, z], ...] for any outline, which may go in and out), `size` [width, depth], `height`; optional `taper` 0-0.9 (narrower at the top), `bevel` (centimeters cut off the top edge), `wall` (centimeters: hollow, as a tray or a dish is, its floor as thick as its wall). A wax extrude takes `wick` or `wicks` as a turned candle does.",
+	"face": "A FACE THAT SHOWS SOMETHING: a flat panel, upright, facing the thing's front (+z), placed by its middle - the glass of a screen, a dial's card, a meter's scale, a label, a sticker. `size` [width, height]; `outline` rect, round (a disc or an ellipse - a round scope) or rounded (`round` its corners' radius); `turn` [-90, 0, 0] lays it face up. What it shows is the scene's, handed by the part's `name` (a terminal's `screen`, a radar's `scope`); with nothing handed it is its material - a dark glass, a white card. `lit` 0-1: how much it shines by itself (a screen, a lit dial) rather than by the room's light. `glass`, how a screen shows its picture: `curve` 0-0.3 (a tube's bulge), `lines` 0-1 (scanlines) and `line_count`, `bloom` 0-2 (a phosphor's glow round what is lit), `mono` 0-1 (black and white), `snow` 0-1, `brightness`. `text`: words printed or written on it, as large as fit (`hand` print, marker or type; `ink` their color) - a scene may hand it other words by its name.",
 }
 
 ## The strands: what a strand can be, and the width it is when none is given (centimeters).
@@ -214,6 +215,8 @@ const MATERIALS := {
 		"about": "a soft paste in a pot or a stick - greasepaint, cream makeup, a lipstick, a balm, frosting, butter, wax polish: smooth and a little waxy, `polish` its sheen, `pattern` the swirls a finger or a brush has left in its top; what a tool is loaded with paint from"},
 	"sponge": {"code": 16, "polish": 0.05, "wear": 0.2, "pattern": 0.6, "clarity": 0.3, "grain": 0.4, "density": 0.1, "strength": 0.0, "dissolves": 0.0,
 		"about": "soft foam full of fine holes - a makeup sponge, a sea sponge, a foam wedge, a powder puff's face: matte, `pattern` how open its pores are, `wear` the paint soaked into it in `color2`; it gives where it is pressed"},
+	"plastic": {"code": 17, "polish": 0.45, "wear": 0.0, "pattern": 0.0, "clarity": 0.5, "grain": 1.0, "density": 1.1, "strength": 0.0, "dissolves": 0.0,
+		"about": "molded plastic, its color all through - a computer's case, a phone, a keyboard's keys, a knob, a toy; `polish` its sheen (satin low, glossy high), `wear` scuffs and the yellowing of age toward `color2`"},
 	"painted": {"code": 0, "polish": 0.5, "wear": 0.0, "pattern": 0.0, "clarity": 0.5, "grain": 1.0, "density": 1.0, "strength": 0.0, "dissolves": 0.0,
 		"about": "lacquer, enamel or paint over anything"},
 }
@@ -245,6 +248,20 @@ const PLAYS := {
 
 ## A sheet's outlines: its half-width along its length, 0 at the base to 1 at the tip.
 const OUTLINES := ["leaf", "petal", "feather", "oval", "rect"]
+## The shapes a set dresser is never told ([method describe]): a face shows what a scene hands it, and a table hands it nothing.
+const SCENE_SHAPES := ["face"]
+## A face's outlines; how a screen's glass shows the picture it is handed (each number's range: [constant SHAPES] `face`); the hands
+## its printed words may be in, a font each ("" is Godot's own, plain capitals); how large its words are drawn (pixels a letter, before
+## they are fitted to it) and how far off its face they stand (meters).
+const FACE_OUTLINES := ["rect", "round", "rounded"]
+const GLASS := {"curve": Vector2(0.0, 0.3), "lines": Vector2(0.0, 1.0), "line_count": Vector2(60.0, 600.0), "bloom": Vector2(0.0, 2.0),
+	"mono": Vector2(0.0, 1.0), "snow": Vector2(0.0, 1.0), "brightness": Vector2(0.2, 3.0)}
+const FACE_HANDS := {"print": "", "marker": "res://fonts/hands/PatrickHand-Regular.ttf", "type": "res://fonts/cards/CourierPrime-Bold.ttf"}
+const WORDS_PX := 64
+const WORDS_LIFT := 0.0003
+## A part's light ([method _sanitize_light]): its kinds, and the most it reaches (centimeters - past the thing, as light does).
+const LIGHT_KINDS := ["spot", "point"]
+const LIGHT_REACH := 600.0
 
 const _SHADER := preload("res://shaders/prop.gdshader")
 ## A PANE ([method _pane]): how much of its surface is flat, and how square to its thinnest way that means (5 degrees)
@@ -262,11 +279,14 @@ static func draped(thing: Dictionary) -> bool:
 	return false
 
 
-## The vocabulary, as an agent reads it: every shape, material and ornament with its words.
-static func describe() -> String:
+## The vocabulary, as an agent reads it: every shape, material and ornament with its words - and, [param working], the parts a scene
+## plays (a face, a light, a part that follows what the scene feeds it: [method describe_working]) for a prop a scene works.
+static func describe(working := false) -> String:
 	var lines := PackedStringArray()
 	lines.append("SHAPES (a part's `shape`):")
 	for k in SHAPES:
+		if k in SCENE_SHAPES and not working:
+			continue
 		lines.append("- %s: %s" % [k, SHAPES[k]])
 	lines.append("")
 	lines.append("MATERIALS: name each one used under `materials`, then give a part its name. A material is {\"kind\", \"color\", \"color2\", \"polish\", \"wear\", \"pattern\", \"clarity\", \"grain\", \"play\", \"rings\", \"density\", \"dissolves\"} - all but kind and color optional, numbers 0-1 except grain (centimeters), density (grams a cubic centimeter: below 1 a loose thing of it floats on a liquid - the kind's own when left out) and dissolves (seconds a grain of it takes to dissolve or melt in a liquid - snow 2, sugar 6, salt 10; 0 never). Kinds:")
@@ -298,6 +318,20 @@ static func describe() -> String:
 	lines.append(Rides.describe_moves())
 	lines.append("")
 	lines.append(Motions.describe_parts())
+	if working:
+		lines.append("")
+		lines.append(describe_working())
+	return "\n".join(lines)
+
+
+## What a scene plays of a prop it works, as an agent reads it ([method describe]'s `working`): its faces, its lights and what follows
+## the scene's feeds.
+static func describe_working() -> String:
+	var lines := PackedStringArray()
+	lines.append("PARTS A SCENE PLAYS. A scene works this prop through its NAMED parts, never by their shapes: it shows pictures on its faces, lights its lights and feeds numbers its parts follow. Keep every `name`, every face, every light and every `runs` as written unless the author asks to change one; a part renamed or left out is a part the scene can no longer work.")
+	lines.append("- A FACE (`shape` face) is where the scene shows something - a screen's picture, a dial, a label's words. Keep its `name`; its `size` may change, and its picture fills whatever size it is.")
+	lines.append("- `light` on a part: {\"kind\": %s, \"color\", \"strength\" (0-8), \"reach\" (centimeters), \"angle\" (a spot's cone, degrees), \"aim\" [x, y, z] (the way a spot points, in the part's own space; left out, down), \"at\" [x, y, z] (where it is in the part, centimeters), \"falloff\" (0.2-4), \"shadows\" true, \"soft\" (0-30: how soft its shadows' edges are), \"shade\" (0-1: how dark its shadows are)} - a lamp's bulb, the glow a screen throws on what is in front of it. It is dark until the scene lights it." % " or ".join(PackedStringArray(LIGHT_KINDS)))
+	lines.append("- " + Motions.describe_follow())
 	return "\n".join(lines)
 
 
@@ -568,6 +602,25 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			out["grain"] = _num(p.get("grain"), 0.3, 0.05, 1.5)
 			out["fill"] = _num(p.get("fill"), 0.4, 0.0, 1.0)
 			out["amount"] = int(_num(p.get("amount"), 0.0, 0.0, 240.0))
+		"face":
+			var fz := _points2([p.get("size")], Vector2(0.2, 0.2), Vector2(MAX_SIZE, MAX_SIZE))
+			out["size"] = fz[0] if not fz.is_empty() else Vector2(10.0, 7.5)
+			var fo := String(p.get("outline", "rect")).strip_edges().to_lower()
+			out["outline"] = fo if FACE_OUTLINES.has(fo) else "rect"
+			out["round"] = _num(p.get("round"), 0.5, 0.0, minf((out["size"] as Vector2).x, (out["size"] as Vector2).y) * 0.5)
+			out["lit"] = _num(p.get("lit"), 0.0, 0.0, 1.0)
+			var glass := {}
+			var gd: Dictionary = p["glass"] if p.get("glass") is Dictionary else {}
+			for k in GLASS:
+				if gd.has(k):
+					glass[k] = _num(gd[k], 0.0, (GLASS[k] as Vector2).x, (GLASS[k] as Vector2).y)
+			out["glass"] = glass
+			var words := _text(p.get("text", ""), 200) if p.get("text") is String else ""
+			if not words.is_empty():
+				out["text"] = words
+			var hand := String(p.get("hand", "print")).strip_edges().to_lower() if p.get("hand") is String else "print"
+			out["hand"] = hand if FACE_HANDS.has(hand) else "print"
+			out["ink"] = _color(p.get("ink", ""), "#141414")
 		"bloom":
 			out["petals"] = int(_num(p.get("petals"), 8.0, 3.0, 24.0))
 			out["layers"] = int(_num(p.get("layers"), 2.0, 1.0, 4.0))
@@ -580,6 +633,10 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 	if p.get("skin") == true and not shape in ["grains", "strand", "tuft"]:
 		out["skin"] = true
 	out["warp"] = _sanitize_warp(p.get("warp"))
+	# A light at it ([method _sanitize_light]): never a flame's (a candle's light is its flame's)
+	var lt := _sanitize_light(p.get("light"))
+	if not lt.is_empty() and not bool(out["wick"]):
+		out["light"] = lt
 	# How it moves with the ride and the wind ([Rides]): never a flame's (its light stands where it was lit), and never a strand laid
 	# across the table
 	out["move"] = {} if bool(out["wick"]) or String(out.get("lay", "")) == "drape" else Rides.sanitize_move(p.get("move"))
@@ -605,6 +662,46 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 	if not work.is_empty():
 		out["work"] = work
 	return out
+
+
+## A part's light as written ([method describe_working]): `{kind, color, strength, reach, angle, aim, at, falloff, shadows, soft,
+## shade}`, or {} for none.
+static func _sanitize_light(v: Variant) -> Dictionary:
+	if not (v is Dictionary):
+		return {}
+	var d: Dictionary = v
+	var kind := String(d.get("kind", "point")).strip_edges().to_lower() if d.get("kind") is String else "point"
+	if not LIGHT_KINDS.has(kind):
+		kind = "point"
+	var aim := _vec3(d.get("aim"), Vector3.DOWN, 1e6)
+	return {"kind": kind, "color": _color(d.get("color", ""), "#fff2dc"), "strength": _num(d.get("strength"), 1.0, 0.0, 8.0),
+		"reach": _num(d.get("reach"), 150.0, 1.0, LIGHT_REACH), "angle": _num(d.get("angle"), 45.0, 1.0, 89.0),
+		"aim": aim.normalized() if aim.length() > 1e-6 else Vector3.DOWN, "at": _vec3(d.get("at"), Vector3.ZERO, MAX_SIZE),
+		"falloff": _num(d.get("falloff"), 1.0, 0.2, 4.0), "shadows": _flag(d.get("shadows")), "soft": _num(d.get("soft"), 0.0, 0.0, 30.0),
+		"shade": _num(d.get("shade"), 1.0, 0.0, 1.0)}
+
+
+## Whether any of [param parts] (as written), or any part in their groups, is one a scene plays ([method describe_working]): a face,
+## a light, or a part that follows what it is fed.
+static func played(parts: Array) -> bool:
+	for q in parts:
+		if not (q is Dictionary):
+			continue
+		var d: Dictionary = q
+		if String(d.get("shape", "")) == "face" or d.get("light") is Dictionary or (d.get("parts") is Array and played(d["parts"])):
+			return true
+		for law in (d["runs"] if d.get("runs") is Array else [d.get("runs")]):
+			if law is Dictionary and String((law as Dictionary).get("law", "")) == "follow":
+				return true
+	return false
+
+
+## Whether any of [param parts] (as written), or any part in their groups, throws light of its own (a part's `light`).
+static func has_light(parts: Array) -> bool:
+	for q in parts:
+		if q is Dictionary and ((q as Dictionary).get("light") is Dictionary or ((q as Dictionary).get("parts") is Array and has_light(q["parts"]))):
+			return true
+	return false
 
 
 ## Whether any of [param parts] (made safe), or any part in their groups, has a flame.
@@ -919,8 +1016,9 @@ const SHELTER := Vector2(0.05, 0.1)
 ## A thing, built: `node` (its meshes, in meters: base on y = 0, centered over what it stands on, front toward +z), `size` (its bounds),
 ## `foot` (the convex outline of where it meets the cloth, up to [constant FOOT_H], x by z), `outline` (its whole outline seen from
 ## above), `wicks` (where its flames are lit), `glows` (each wick's wax material, whose `flame` the table sets as the flame flickers),
-## `meshes` (every MeshInstance3D in it), `movers` (what moves with the ride and the wind, [method _holder]) and `sized` (how much it was
-## made smaller). [param materials] are the sanitized materials; [param seed] varies drips, scatter, lumps and the patterns' noise.
+## `meshes` (every MeshInstance3D in it), `movers` (what moves with the ride and the wind, [method _holder]), `sized` (how much it was
+## made smaller), and what a scene plays ([PropRig]): `faces` (`{name, node, xform, part, words}` - a face's node stands at its middle,
+## facing +z, its size in its `size` meta) and `lights` (`{name, node, energy}`). [param materials] are the sanitized materials; [param seed] varies drips, scatter, lumps and the patterns' noise.
 ## [param keep]: built where it was written, neither moved to stand on the origin nor made smaller - a strand draped across the table is
 ## laid in the table's own space ([method TableThings._drape]).
 static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := false) -> Dictionary:
@@ -954,6 +1052,9 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	var solids: Array = []
 	var grains: Array = []
 	var skins: Array = []
+	# What a scene plays ([PropRig]): each face where it shows something, and each light, built dark
+	var faces: Array = []
+	var lights: Array = []
 	for leaf in leaves:
 		var part: Dictionary = leaf["part"]
 		var geos: Array = leaf["geos"]
@@ -1004,11 +1105,26 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 				var m: Dictionary = materials.get(nm, sanitize_material({}, "#808080"))
 				var mi := MeshInstance3D.new()
 				mi.mesh = merged.mesh()
+				# what it is: its part's shape and the material it is of, for a scene to ask (a rod is thin; a phone's body is tinted)
+				mi.set_meta("shape", String(part.get("shape", "")))
+				mi.set_meta("material", nm)
+				# ...and, one alone, where its part stands in it - the part's own frame, which a tight box round it is square to
+				if mine.size() == 1:
+					mi.set_meta("xform", mine[0])
+				# a face is one panel whose node stands where it is - its frame a scene shows a picture in ([PropRig]): its first copy alone
+				if String(part.get("shape", "")) == "face":
+					mi.mesh = g.placed([Transform3D.IDENTITY], [0]).mesh()
+					mi.transform = mine[0]
+					mi.set_meta("size", (part["size"] as Vector2) * 0.01)
 				var hid := ((takers[tk] as Dictionary)["holder"] as Node3D).get_instance_id()
 				if not held_meshes.has(hid):
 					held_meshes[hid] = []
 				(held_meshes[hid] as Array).append(mi)
 				var mat := material(m, part.get("ornament", {}), g.girth, g.height, hash([seed, salt, gi, nm]), _solid(part), not String(part.get("shape", "")) in ["lathe", "extrude"], see_through(m) and _pane(g))
+				# built as it starts: its own light (a face's, or a glow it starts with), which the work or a rig moves on from
+				var starts: Dictionary = (part.get("work", {}) as Dictionary).get("start", {}) if (part.get("work", {}) as Dictionary).get("start") is Dictionary else {}
+				if starts.has("glow") or part.has("lit"):
+					mat.set_shader_parameter("glow", float(starts.get("glow", part.get("lit", 0.0))))
 				# a part's copies each glow their own way (prop.gdshader `apart`)
 				if xforms.size() > 1:
 					mat.set_shader_parameter("apart", 1.0)
@@ -1042,6 +1158,23 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 			skins.append({"part": String((part.get("work", {}) as Dictionary).get("name", "")), "holder": sh,
 				"meshes": held_meshes.get(sh.get_instance_id(), []), "xform": xforms[0], "box": own_box, "shape": String(part.get("shape", "")),
 				"outline": FaceForm.outline_path(part["size"]) if String(part.get("shape", "")) == "mask" else ""})
+		# A face ([method _face]): its first copy's mesh, found by its part's name, where the face stands in it, and its words
+		var work_name := String((part.get("work", {}) as Dictionary).get("name", ""))
+		var ch0: Array = leaf["chains"]
+		var first := _holder(ch0[0] if not ch0.is_empty() else [], inner, movers, mover_at, seed, works)
+		if String(part.get("shape", "")) == "face" and not (held_meshes.get(first.get_instance_id(), []) as Array).is_empty():
+			var fmi: MeshInstance3D = (held_meshes[first.get_instance_id()] as Array)[0]
+			var rec := {"name": work_name, "node": fmi, "xform": Transform3D.IDENTITY, "part": part}
+			if part.has("text"):
+				var label := face_words(part, Transform3D.IDENTITY)
+				fmi.add_child(label)
+				rec["words"] = label
+			faces.append(rec)
+		# ...and its light, at its first copy: dark until a rig lights it
+		if part.get("light") is Dictionary:
+			var ln := _light_node(part["light"], xforms[0])
+			first.add_child(ln)
+			lights.append({"name": work_name, "node": ln, "energy": float((part["light"] as Dictionary)["strength"])})
 		var sch: Array = leaf["chains"]
 		for ci in xforms.size():
 			var holder := _holder(sch[ci] if ci < sch.size() else [], inner, movers, mover_at, seed, works)
@@ -1051,7 +1184,8 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	root.add_child(inner)
 	if all.is_empty():
 		return {"node": root, "size": AABB(), "foot": PackedVector2Array(), "outline": PackedVector2Array(),
-			"wicks": [], "glows": [], "meshes": [], "movers": [], "works": works, "solids": solids, "grains": grains, "inner": inner, "skins": skins}
+			"wicks": [], "glows": [], "meshes": [], "movers": [], "works": works, "solids": solids, "grains": grains, "inner": inner, "skins": skins,
+			"faces": faces, "lights": lights}
 	var box := AABB(all[0], Vector3.ZERO)
 	for p in all:
 		box = box.expand(p)
@@ -1069,7 +1203,40 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	var size := AABB((box.position + shift) * k, box.size * k)
 	return {"node": root, "size": size, "foot": _foot(placed, FOOT_H), "outline": _hull(placed, INF),
 		"wicks": wicks, "glows": glows, "meshes": meshes, "movers": movers, "works": works, "sized": k, "solids": solids, "grains": grains,
-		"inner": inner, "skins": skins}
+		"inner": inner, "skins": skins, "faces": faces, "lights": lights}
+
+
+## Light [param l] ([method _sanitize_light]) at a part standing at [param xf] (meters, in the node it hangs in): dark until a rig
+## lights it ([PropRig]), so a host that plays none - a table, a prop's picture on its card - never shows it.
+static func _light_node(l: Dictionary, xf: Transform3D) -> Light3D:
+	var light: Light3D
+	if String(l["kind"]) == "spot":
+		var sp := SpotLight3D.new()
+		sp.spot_range = float(l["reach"]) * 0.01
+		sp.spot_angle = float(l["angle"])
+		sp.spot_angle_attenuation = float(l["falloff"])
+		light = sp
+	else:
+		var om := OmniLight3D.new()
+		om.omni_range = float(l["reach"]) * 0.01
+		om.omni_attenuation = float(l["falloff"])
+		light = om
+	light.name = "light"
+	var aim := (xf.basis * (l["aim"] as Vector3)).normalized()
+	var up := Vector3.UP if absf(aim.dot(Vector3.UP)) < 0.98 else Vector3.BACK
+	# (set by its basis: a node off the tree has no global transform to look_at from)
+	light.transform = Transform3D(Basis.looking_at(aim, up), xf * ((l["at"] as Vector3) * 0.01))
+	light.light_color = Color.html(String(l["color"]))
+	light.light_energy = float(l["strength"])
+	if bool(l["shadows"]):
+		light.shadow_enabled = true
+		light.shadow_bias = 0.02
+		light.shadow_normal_bias = 1.0
+		light.shadow_opacity = float(l.get("shade", 1.0))
+		if float(l["soft"]) > 0.0:
+			light.shadow_blur = ShadowFilter.blur(float(l["soft"]))
+	light.visible = false
+	return light
 
 
 ## The node a copy hangs in, for its [param chain] of movers ([method _assemble], outermost first): each a node of its own under the one
@@ -2101,6 +2268,8 @@ static func _shaped(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 			return [{"geo": _sculpt(p)}]
 		"mask":
 			return [{"geo": FaceForm.build(p)}]
+		"face":
+			return [{"geo": _face(p)}]
 		"tuft":
 			return [{"geo": Bristles.build(p, rng)}]
 	return []
@@ -4754,6 +4923,87 @@ static func _extrude_rim(g: Tris, outer: Array, inner: Array, h: float) -> void:
 		g.quad(outer[i], outer[j], inner[j], inner[i], Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP,
 			Vector2(float(i) / n, 0.0), Vector2(float(i + 1) / n, 0.0), Vector2(float(i + 1) / n, 1.0), Vector2(float(i) / n, 1.0),
 			1.0, 1.0, 1.0, 1.0)
+
+
+# --- faces ---------------------------------------------------------------------------------------
+
+## A FACE: one flat panel facing +z, its middle at its origin, its outline [method face_outline]'s - a fan from the middle, its UV
+## the picture's (u across from its left, v down from its top) so whatever a scene hands it stands upright on it.
+static func _face(p: Dictionary) -> Tris:
+	var s: Vector2 = (p["size"] as Vector2) * 0.01
+	var g := Tris.new()
+	var ring := face_outline(p)
+	var nrm := Vector3.BACK
+	var uv := func(q: Vector2) -> Vector2:
+		return Vector2(q.x / s.x + 0.5, 0.5 - q.y / s.y)
+	for i in ring.size():
+		var a := ring[i]
+		var b := ring[(i + 1) % ring.size()]
+		g.tri(Vector3.ZERO, Vector3(a.x, a.y, 0.0), Vector3(b.x, b.y, 0.0), nrm, nrm, nrm, uv.call(Vector2.ZERO), uv.call(a), uv.call(b),
+			Vector2(0.5, 0.0), Vector2(a.y / s.y + 0.5, 0.0), Vector2(b.y / s.y + 0.5, 0.0))
+	g.girth = (s.x + s.y) * 100.0
+	g.height = s.y * 100.0
+	g.top = Vector3(0.0, s.y * 0.5, 0.0)
+	return g
+
+
+## A face's outline (meters, x across and y up from its middle, counterclockwise as its front sees it): a rectangle, an ellipse, or a
+## rectangle with its corners rounded `round` centimeters.
+static func face_outline(p: Dictionary) -> PackedVector2Array:
+	var h: Vector2 = (p["size"] as Vector2) * 0.005
+	var out := PackedVector2Array()
+	match String(p.get("outline", "rect")):
+		"round":
+			for i in 48:
+				var a := TAU * float(i) / 48.0
+				out.append(Vector2(cos(a) * h.x, sin(a) * h.y))
+		"rounded":
+			var r := minf(float(p.get("round", 0.0)) * 0.01, minf(h.x, h.y))
+			for c in [Vector2(1, 1), Vector2(-1, 1), Vector2(-1, -1), Vector2(1, -1)]:
+				var mid := Vector2(c.x * (h.x - r), c.y * (h.y - r))
+				var a0 := atan2(c.y, c.x) - PI * 0.25
+				for k in 7:
+					var a := a0 + PI * 0.5 * float(k) / 6.0
+					out.append(mid + Vector2(cos(a), sin(a)) * r)
+		_:
+			out = PackedVector2Array([Vector2(h.x, -h.y), Vector2(h.x, h.y), Vector2(-h.x, h.y), Vector2(-h.x, -h.y)])
+	return out
+
+
+## Words on a face: a Label3D lying on face [param part] as it stands at [param xf] (meters, in the node it hangs in), fitted to it
+## ([method fit_words]). Godot's own, built off the tree as any part is.
+static func face_words(part: Dictionary, xf: Transform3D) -> Label3D:
+	var label := Label3D.new()
+	label.name = "words"
+	var path := String(FACE_HANDS.get(String(part.get("hand", "print")), ""))
+	label.font = load(path) as Font if not path.is_empty() and ResourceLoader.exists(path) else ThemeDB.fallback_font
+	label.font_size = WORDS_PX
+	label.outline_size = 0
+	label.modulate = Color.html(String(part.get("ink", "#141414")))
+	# a marker's stroke is broad: drawn round in its own ink
+	if String(part.get("hand", "")) == "marker":
+		label.outline_size = 10
+		label.outline_modulate = label.modulate
+	label.shaded = true
+	label.alpha_cut = Label3D.ALPHA_CUT_DISCARD
+	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	label.transform = xf * Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, WORDS_LIFT))
+	fit_words(label, String(part.get("text", "")), (part["size"] as Vector2) * 0.01)
+	return label
+
+
+## [param label] saying [param text], as large as fits inside [param size] (meters) with a margin round it, every line whole.
+static func fit_words(label: Label3D, text: String, size: Vector2) -> void:
+	label.text = text
+	var widest := 1.0
+	var lines := text.split("\n")
+	for line in lines:
+		widest = maxf(widest, label.font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, WORDS_PX).x)
+	var tall := maxf(label.font.get_height(WORDS_PX) * float(lines.size()), 1.0)
+	label.pixel_size = minf(size.x * 0.86 / widest, size.y * 0.78 / tall)
 
 
 # --- footprints ------------------------------------------------------------------------------

@@ -57,7 +57,7 @@ func _yt_dl_dir() -> String:
 
 ## Resolve a binary. [Deps] owns this for the whole app - a GUI-launched Godot
 ## doesn't inherit a shell PATH, and the answer has to be the same one
-## [Subprocess] and the home screen's Environment panel get.
+## [Subprocess] and the home screen's Setup panel get.
 static func _which(prog: String) -> String:
 	return Deps.resolve(prog)
 

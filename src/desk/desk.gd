@@ -184,6 +184,12 @@ var _pad: LegalPad
 var _desk: Node3D                  # the desk's top and the things on it
 ## The desk's light beyond its lamp: the room's and the candles' ([DeskLight]).
 var _light := DeskLight.new()
+## What is round the desk, as the document's Environment chooses it ([Surroundings], made safe; [method set_environment]): how
+## bright, how strongly its lamp and each kind of candle shine, shafts of light through the haze, what drifts in the air. Its light
+## preset is the desk's mood ([method DeskLook.picks_of]).
+var environment := Surroundings.sanitize({})
+var _rays: Node3D = null
+var _air = null                       # what drifts in the air ([Effects]' Air), or null
 var _stage_was := {}                  # the stage's own settings, given back on leaving it
 var _lamp: SpotLight3D
 var _fill: DirectionalLight3D
@@ -336,6 +342,75 @@ func _page_viewport(parts: Array) -> SubViewport:
 	return vp
 
 
+# --- what is round the desk ---------------------------------------------------------------------------------------------
+
+## The regions what drifts in the air keeps to ([method Surroundings.effects_of]), in the desk's space: round the pad, past the desk
+## out of focus, and the room.
+const AIR_NEAR := AABB(Vector3(-0.42, 0.0, -0.34), Vector3(0.84, 0.32, 0.62))
+const AIR_FAR := AABB(Vector3(-1.6, -0.6, -2.6), Vector3(3.2, 1.8, 2.0))
+const AIR_ROOM := AABB(Vector3(-1.2, 0.0, -1.2), Vector3(2.4, 1.2, 1.6))
+## Where a desk with no window's light takes its shafts from (degrees round, and up: [method Surroundings.toward]): high on the
+## writer's left, as its lamp is.
+const RAYS_FROM := Vector2(250.0, 55.0)
+## How far from the lens the haze is worked out (m): the desk's own reach, so its grid is fine enough at a desk. How far a shaft
+## falls to the desk (m), from a window above it.
+const FOG_LENGTH := 4.0
+const RAYS_REACH := 1.6
+
+
+## The document's environment ([param env], made safe): the desk lit and dressed again as it says where it changed. Its light preset
+## reaches the desk as its mood, through the picks ([method DeskLook.picks_of]).
+func set_environment(env: Dictionary) -> void:
+	if env == environment:
+		return
+	environment = env
+	_dress_environment()
+
+
+## The lamp at its share of the desk's mood and of the environment's tuning of it (`lamp`).
+func _shine_lamp() -> void:
+	if look.is_empty() or _lamp == null:
+		return
+	var lamp: Dictionary = look["lamp"]
+	var share := float(lamp.get("share", 1.0)) * Surroundings.share_of(environment, "lamp")
+	_lamp.light_energy = float(lamp["energy"]) * share
+	_lamp.visible = share > 0.0
+
+
+## How bright the desk is, its lamp and candles, the shafts of light and what drifts in the air, as [member environment] says.
+func _dress_environment() -> void:
+	if _env == null or look.is_empty():
+		return
+	Tonemaps.dress(_env, 1.0 * float(environment["brightness"]))
+	_shine_lamp()
+	_light.shares = environment["lights"]
+	var row := Surroundings.light_of(environment, String(look.get("mood", "lamplight")))
+	var fog := Color.html(String(row["fog"]))
+	if _rays != null:
+		_rays.queue_free()
+		_rays = null
+	var n := maxi(int(environment["rays"]), 0)
+	if n > 0:
+		var sun: Dictionary = (look.get("light", {}) as Dictionary).get("sun", {}) if (look.get("light", {}) as Dictionary).get("sun") is Dictionary else {}
+		var from := float(sun.get("from", RAYS_FROM.x)) if sun.get("from") is float or sun.get("from") is int else RAYS_FROM.x
+		var toward := Surroundings.toward(from, float(sun.get("height", RAYS_FROM.y)))
+		_rays = Surroundings.rays(n, float(environment["ray_strength"]), Color.html(String(row["key_color"])), toward,
+			AABB(Vector3(-0.32, LegalPad.DESK_Y, -0.26), Vector3(0.64, 0.0, 0.5)), _seed, RAYS_REACH)
+		_root3.add_child(_rays)
+	Surroundings.fog_for(_env, environment, 0.0)
+	_env.volumetric_fog_length = FOG_LENGTH
+	if _air != null:
+		_air.release()
+		_air = null
+	var fx := Surroundings.effects_of(environment, fog)
+	if not fx.is_empty():
+		var y := Vector3(0.0, LegalPad.DESK_Y, 0.0)
+		_air = Effects.build(fx, {"regions": {"near": AABB(AIR_NEAR.position + y, AIR_NEAR.size),
+			"far": AABB(AIR_FAR.position + y, AIR_FAR.size), "room": AABB(AIR_ROOM.position + y, AIR_ROOM.size)},
+			"camera": _cam.transform, "fov": _cam.fov, "aspect": 16.0 / 9.0}, hash([_seed, "desk air"]))
+		_root3.add_child(_air.root)
+
+
 func _build_world() -> void:
 	_root3 = Node3D.new()
 	add_child(_root3)
@@ -407,8 +482,7 @@ func _dress() -> void:
 	_pad.build(look, _vp.get_texture(), _vp_turn.get_texture())
 	var lamp: Dictionary = look["lamp"]
 	_lamp.light_color = lamp["color"]
-	_lamp.light_energy = float(lamp["energy"]) * float(lamp.get("share", 1.0))
-	_lamp.visible = float(lamp.get("share", 1.0)) > 0.0
+	_shine_lamp()
 	_lamp.position = lamp["at"]
 	_lamp.look_at_from_position(_lamp.position, Vector3(0.02, 0.0, 0.02), Vector3.UP)
 	_fill.light_color = look["fill"]
@@ -417,6 +491,7 @@ func _dress() -> void:
 	_env.ambient_light_energy = AMBIENT_ENERGY
 	_light.build(look, dressed["lit"], _seed)
 	_fill.visible = not _light.lights_room()
+	_dress_environment()
 	# ...what casts a candle's shadow cut fine enough for its paraboloids ([ShadowCasters], [method TableLight.candle_shadow])
 	ShadowCasters.cut_under(_root3)
 	var pen: Dictionary = look["pen"]
@@ -502,10 +577,16 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_place_pen()
 	_tick_camera(delta)
 	_light.tick(_now)
+	if _air != null:
+		_air.tick(_now)
+	Surroundings.tick_rays(_rays, _now)
 
 
 func _exit_tree() -> void:
 	_light.release()
+	if _air != null:
+		_air.release()
+		_air = null
 	if stage != null and is_instance_valid(stage) and not _stage_was.is_empty():
 		for key in _stage_was:
 			stage.set(key, _stage_was[key])
@@ -569,7 +650,7 @@ func _ensure_doc() -> void:
 ## index they are about. Public for a gate, which hands it one by hand.
 func load_lesson(source: String, desk: Dictionary, start := PackedStringArray(), near := -1) -> void:
 	_seed = int(desk.get("seed", _seed))
-	look = DeskLook.of(_seed)
+	look = DeskLook.of(_seed, DeskLook.picks_of({}, environment))
 	_dress()
 	var typeset: Dictionary = desk.get("ink", {}) if desk.get("ink") is Dictionary else {}
 	var records := {}

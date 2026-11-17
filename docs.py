@@ -17,6 +17,7 @@ All of it is parsed statically (no Godot boot) and written to:
   docs/stage.md        - the storyboard stage: Cast actors + Actions verbs.
   docs/table.md        - a table show's data as rows: acts, things, parts, the laws.
   docs/props.md        - props and the library: the Dex, roles, refining, what a prop is made of.
+  docs/surroundings.md - the Environment card: light presets, shafts, what drifts in the air, what is heard.
   docs/masking.md      - the Masking: effects, controls, CLI.
   docs/script.md       - every mark a script may carry.
   docs/architecture.md - how the show is made, from the audio to a video file.
@@ -251,7 +252,7 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
      "Print the environment report - what ghost has installed for itself (FFmpeg, uv, Python, each feature's "
      "environment), what it uses from the machine, versions and resolved paths, and an install hint for anything of "
      "the machine's that is missing - then exit. Exits non-zero if something a feature needs is absent. Pairs with "
-     "`--headless`; the same report is the Environment panel, behind the ⚙ in the bottom-right row.", False),
+     "`--headless`; the same report is the Setup panel, behind the ⚙ in the bottom-right row.", False),
     ("--provision", "[all|update|KEY]",
      "Install ghost's own dependencies now, printing each step, then exit: uv, FFmpeg and Python by default, every "
      "feature's environment too with `all`, one row by its key with what it needs (`mathlib` brings Lean), or bring "
@@ -1187,10 +1188,14 @@ def props_page(classes: Dict[str, Script]) -> str:
         table(["Section", "Shelf", "What it holds"], shelves),
         "## The Props card", doc_of("PropsCard"), "### The 3D view", doc_of("PropViewer"),
         "## Roles", doc_of("PropMakes"),
-        f"`PropMakes.ROLES` in {link(makes.rel)}: each role, what the scene does with it, and the height a make is "
-        "fitted to.",
-        table(["Role", "What it does", "Recipe", "Height (cm)"],
-              ([f"`{k}` {text(r, 'label')}", md(text(r, "blurb")), f"`{text(r, 'recipe', k)}`",
+        f"`PropMakes.ROLES` in {link(makes.rel)}: each role, what the scene does with it, its own make (a recipe drawn from "
+        "the scene's number, or a prop shipped in `data/props/`), the faces the scene shows its pictures on, what it feeds "
+        "the make's parts (next/working_props.md), and the height a kept make is fitted to.",
+        table(["Role", "What it does", "Its own", "Faces", "Feeds", "Height (cm)"],
+              ([f"`{k}` {text(r, 'label')}", md(text(r, "blurb")),
+                f"recipe `{text(r, 'recipe')}`" if text(r, "recipe") else f"`{text(r, 'own').replace('res://', '')}`",
+                ", ".join(f"`{v}`" for v in items(r, "faces")),
+                "; ".join(f"`{fk}` {md(str(fv))}" for fk, fv in (r.get("feeds") or {}).items()) if isinstance(r.get("feeds"), dict) else "",
                 " - ".join(f"{float(v):g}" for v in items(r, "tall"))] for k, r in roles.items())),
         "## Refining a prop", doc_of("LibraryVersions"),
         "What the agent is told: [rules/table/prop_refiner.yaml](../rules/table/prop_refiner.yaml).",
@@ -1205,6 +1210,36 @@ def props_page(classes: Dict[str, Script]) -> str:
         table(["Play", "What it is"], ([f"`{k}`", md(text(r, "about"))] for k, r in plays.items())),
     ]
     return page("Props and the library", [b for b in blocks if b])
+
+
+def surroundings_page(card: Script, sur: Script) -> str:
+    """docs/surroundings.md: the Environment card (`EnvironmentCard`) and what it chooses from (`Surroundings`' LIGHTS, AIR and
+    SOUNDS), each row as a person picks it."""
+    lights, air, sounds = sur.const("LIGHTS", {}), sur.const("AIR", {}), sur.const("SOUNDS", {})
+    for name, reg in (("LIGHTS", lights), ("AIR", air), ("SOUNDS", sounds)):
+        if not reg:
+            warn(f"could not parse Surroundings.{name}")
+    blocks: List[Block] = [
+        "What is round the scene a note is shown in, chosen on its Environment card. The plan and its status are "
+        "[next/environment.md](../next/environment.md).",
+        "## The card", f"{full_doc(card.doc)}\n\nSource: {link(card.rel)}",
+        "## What it chooses from", f"{full_doc(sur.doc)}\n\nSource: {link(sur.rel)}",
+        f"### Light ({len(lights)})",
+        "Each preset (`Surroundings.LIGHTS`): how often a desk's number draws it (0: only ever chosen), and what it is.",
+        table(["Light", "Drawn", "What it is"],
+              ([f"`{k}` {text(r, 'label')}", f"{float(r.get('weight', 0)):g}", md(text(r, "blurb"))] for k, r in lights.items())),
+        f"### In the air ({len(air)})",
+        "Any together (`Surroundings.AIR`): each an effect of the table's `Effects`, over a region every host names.",
+        table(["Tick", "What it is", "Effect", "Where"],
+              ([f"`{k}` {text(r, 'label')}", md(text(r, "blurb")),
+                f"`{text(r.get('effect') or {}, 'kind')}`" + (f" `{text(r.get('effect') or {}, 'look')}`" if text(r.get('effect') or {}, 'look') else ""),
+                f"`{text(r.get('effect') or {}, 'where')}`"] for k, r in air.items())),
+        f"### Heard ({len(sounds)})",
+        "Any together (`Surroundings.SOUNDS`): each a part of a `Soundscape`'s sound, laid under the voice.",
+        table(["Tick", "What it is", "Soundscape part"],
+              ([f"`{k}` {text(r, 'label')}", md(text(r, "blurb")), f"`{text(r, 'part')}`"] for k, r in sounds.items())),
+    ]
+    return page("The Environment: what is round a scene", [b for b in blocks if b])
 
 
 def masking_page(session: Script, editor: Script) -> str:
@@ -1327,7 +1362,7 @@ def install_lines(row: Dict[str, Any]) -> List[str]:
 
 
 def environment_page(deps: Script) -> str:
-    """docs/environment.md, from Deps.FETCHED / MANAGED / TOOLS - the rows the Environment panel
+    """docs/environment.md, from Deps.FETCHED / MANAGED / TOOLS - the rows the Setup panel
     and `--deps` render: what each is for, its size, the machines it cannot be built on and why,
     and the install hints for what stays the machine's."""
     tables = {t: deps.const(t, []) for t in ("FETCHED", "MANAGED", "TOOLS")}
@@ -1353,7 +1388,7 @@ def environment_page(deps: Script) -> str:
         "into your own environments. uv, FFmpeg and Python download in the background the "
         "first time it opens; a feature's environment is built the first time that feature is "
         "used. While anything installs, a notice at the top of the screen says what and how far "
-        "along, and the Environment panel (the ⚙ in the bottom-right row) lists every piece with "
+        "along, and the Setup panel (the ⚙ in the bottom-right row) lists every piece with "
         "its version, what it is for and, if it failed, why. With **keep up to date** ticked "
         "there, Ghost Notes looks for newer releases once a day.",
         "The same report, and an install, from a terminal:",
@@ -1368,14 +1403,14 @@ def environment_page(deps: Script) -> str:
         rows_of("FETCHED", "MANAGED"),
         "## What stays the machine's",
         "A few programs are part of the system or keep their own logins, so they stay yours "
-        "to install; the Environment panel shows the command for each.",
+        "to install; the Setup panel shows the command for each.",
         rows_of("TOOLS"),
         "## Platforms",
         "Linux, macOS and Windows are all meant to work, and nothing needs a Unix shell: "
         "background programs are started directly, and where output has to be redirected "
         "Ghost Notes does it itself (through PowerShell on Windows). It is developed on Linux, "
         "so Windows and macOS are the least exercised - where something fails, the "
-        "Environment panel is the first place to look. The machines an environment cannot "
+        "Setup panel is the first place to look. The machines an environment cannot "
         "be built on are named under it above. On a phone Ghost Notes downloads nothing.",
         f"Source: `Deps.FETCHED`, `Deps.MANAGED` and `Deps.TOOLS` in {link(deps.rel)}, "
         "installed by [src/platform/provisioner.gd](../src/platform/provisioner.gd). The panel and every program "
@@ -1444,7 +1479,7 @@ def agents_page(text_gen: Script, image_gen: Script, assistant: Script, deps: Sc
         "which Ghost Notes never handles: it finds the tool, runs it only when you ask, and keeps "
         "what each run was sent and what it said beside the result. Install one or several. Until "
         "one is installed, a component that needs a writer or a painter is grayed in a note's **+**, "
-        "its tooltip naming every agent that would do; the Environment panel (the ⚙ in the bottom-right "
+        "its tooltip naming every agent that would do; the Setup panel (the ⚙ in the bottom-right "
         "row) lists each tool with the command that installs it.",
         "## Which tool does what",
         table(["Command-line tool", "Writer", "Painter", "Assistant", "Ghost Notes' own tools"],
@@ -1470,7 +1505,7 @@ def agents_page(text_gen: Script, image_gen: Script, assistant: Script, deps: Sc
         [line for d in clis for line in [f"- **{cli_name(d)}**" + (f" - {site(d)}" if site(d) else "")]
          + install_lines(tools.get(d, {}))],
         f"Source: the registries above, and `Deps.TOOLS` in {link(deps.rel)}, which the "
-        "Environment panel and every launch resolve through - see [environment.md](environment.md).",
+        "Setup panel and every launch resolve through - see [environment.md](environment.md).",
     ])
 
 
@@ -1955,7 +1990,8 @@ RULES: List[Rule] = [
     # A script path written anywhere names a script that exists. A class name is global, so a moved script breaks
     # nothing the compiler sees, but a `load("res://src/...")` from a string, a `--script` argument, a registry
     # row naming its script by path, or a gate reading a source as text breaks when it runs. Doc comments
-    # count; next/'s notes are allowed to remember a file that is gone.
+    # count; next/'s notes are allowed to remember a file that is gone. The gate cache's self-test makes scripts of its own
+    # under a scratch root, so it names paths no checkout has.
     Rule("paths", ("project.godot", "CLAUDE.md", "README.md", "src/**/*", "tests/**/*", "rules/**/*",
                    "shaders/**/*", "scenes/**/*", "hosts/**/*", "scripts/**/*"),
          r"(?<![\w/])(?:res://)?((?:src|tests)/[a-z_0-9]+(?:/[a-z_0-9]+)*\.gd)\b",
@@ -1963,7 +1999,7 @@ RULES: List[Rule] = [
          (("a.gd", 'load("res://src/platform/no_such_script.gd")', 1),
           ("a.gd", "src/platform/settings.gd and res://src/show/director.gd", 0)),
          kinds=(".gd", ".tscn", ".godot", ".cfg", ".py", ".sh", ".md", ".yaml", ".yml", ".gdshader", ".gdshaderinc"),
-         skip=("*__pycache__*",), comments=True, when=lambda m, _code: not (ROOT / m.group(1)).exists()),
+         skip=("*__pycache__*", "scripts/gate_cache.py"), comments=True, when=lambda m, _code: not (ROOT / m.group(1)).exists()),
     # A file is named by its `res://` path, never a `uid://`. The `.uid` files are gitignored (each checkout mints
     # its own), so a `uid://` naming another file resolves only in the checkout that wrote it. The editor
     # writes one when a file is dropped into the script editor (unless UID_OVERRIDE is kept) and when it saves
@@ -2351,6 +2387,11 @@ def main() -> int:
          f"{count('prop_makes', 'ROLES')} roles",
          "the library of props and voices, the Dex, the Props card, roles any make can play, refining a prop into "
          "versions, and what every prop is made of."),
+        ("surroundings", "The Environment",
+         f"{count('surroundings', 'LIGHTS')} lights, {count('surroundings', 'AIR')} things in the air, "
+         f"{count('surroundings', 'SOUNDS')} sounds",
+         "what is round the scene a note is shown in: its light, shafts through its haze, what drifts in its air, "
+         "what is heard, and how strongly each lit thing shines."),
         ("masking", "Masking effects", str(count("mask_session", "MASK_EFFECTS")),
          "the video effects editor: its model, its effects and its headless tools."),
         ("script", "Script marks", str(count("script_marks")),
@@ -2373,6 +2414,7 @@ def main() -> int:
         "stage": lambda: stage_page(s("cast"), s("actions"), s("track"), s("storyboard")),
         "table": lambda: table_page(s("table_rows"), s("motions")),
         "props": lambda: props_page(class_index()),
+        "surroundings": lambda: surroundings_page(s("environment_card"), s("surroundings")),
         "masking": lambda: masking_page(s("mask_session"), s("mask_editor")),
         "media": lambda: media_page(s("medium")),
         "filters": lambda: filters_page(s("filters")),

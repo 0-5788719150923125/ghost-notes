@@ -40,7 +40,7 @@ func _run() -> void:
 		_fail("could not make the note")
 		return
 	main.open_note(note)
-	#A first run opens the Environment panel (`[deps] open` defaults to true, and this user:// is new), and so
+	#A first run opens the Setup panel (`[deps] open` defaults to true, and this user:// is new), and so
 	#does any problem its probe finds later: closed now and after each, so the picture is the note and its show
 	var ch: Chrome = main._chrome
 	ch.set_environment_open(false, false)

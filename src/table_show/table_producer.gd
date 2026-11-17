@@ -2498,7 +2498,7 @@ func _make_solve() -> void:
 		_errors["solve"] = "the writer picked takes no tools, and a problem is worked with them: pick one that does"
 		return
 	if SolverTools.kind_of(problem) == "computation" and not SolverTools.can_run():
-		_errors["solve"] = "this problem is settled by running code, and this machine has no sandbox to run it in: install bubblewrap (see the Environment panel)"
+		_errors["solve"] = "this problem is settled by running code, and this machine has no sandbox to run it in: install bubblewrap (see the Setup panel)"
 		return
 	var dir := episode.job_dir("solve")
 	DirAccess.make_dir_recursive_absolute(dir)

@@ -832,7 +832,7 @@ func _build() -> void:
 		# no draw, reversals or jumpers knobs: the producer chooses them from the brief - how many cards in the plan's spread, the rest in its
 		# staging ([constant CardTable.REVERSALS], `jumpers`)
 	# The place, heard: what the set dresser wrote as the table's `sound`, and its wind ([Soundscape])
-	_environment_dial = Card.slider_row(box, "Environment", 0.0, 1.0, 0.05, float(_knobs["environment"]),
+	_environment_dial = Card.slider_row(box, "Place", 0.0, 1.0, 0.05, float(_knobs["environment"]),
 		("The place the reading is in, heard under the voice: the wind, the sea, rain, a fire - whatever "
 		+ "the set dresser gave the episode's table, and its wind whenever the table has one, every gust "
 		+ "heard as it moves the leaves, the shadows and the petals. 0 is off. Low is far and steady, a "

@@ -1,10 +1,10 @@
 extends Node
 class_name DispatchScreens
 
-## DispatchScreens - what the desk's screens and labels show, drawn in 2D (next/dispatch.md): the terminal's pale green
-## text on black, the radar's sweep and blip, the oscilloscope's trace, a phone's two little screens, the printer's paper;
-## and, drawn once, the names on the phones' tape, GOOD and BAD on the switch's, the chart of the council's hours, the
-## handbook's spine, the receiver's dial at 20.1, the radar's gain scale.
+## DispatchScreens - what the desk's screens show, drawn in 2D (next/dispatch.md): the terminal's pale green text on black, the
+## radar's sweep and blip, the oscilloscope's trace, a phone's two little screens, the printer's paper; and, drawn once, the chart
+## of the council's hours, the receiver's dial at 20.1, the radar's gain scale and a phone's keypad. Words printed on a thing (a
+## phone's tape, GOOD and BAD, the handbook's spine) are its make's own ([constant Props.SHAPES] `face`'s `text`).
 ##
 ## Each is a viewport of its own, drawn only as what it shows changes ([method DeskMedium]'s rule): the radar's sweep and
 ## the scope's trace move every frame, the terminal only as a key is struck. The medium hands each a state ([method
@@ -21,8 +21,6 @@ const PHONE_SIZE := Vector2i(300, 368)
 const KEYPAD_SIZE := Vector2i(262, 400)
 const PAPER_SIZE := Vector2i(768, 3072)
 const GAIN_SIZE := Vector2i(256, 256)
-const TAPE_CELL := Vector2i(256, 96)
-const TAPE_COLS := 4
 ## The flip clock's face and the digits its cards are cut from (one atlas, drawn once: a card's halves are its regions);
 ## the tablet's screen, landscape, and its browser bar's height (px).
 const CLOCK_SIZE := Vector2i(448, 200)
@@ -32,7 +30,6 @@ const TABLET_SIZE := Vector2i(1200, 1600)
 const PHONE_FACES := 5
 ## The terminal's type: its face, its size (px), its line (px), where its first line and first column are.
 const MONO := "res://fonts/cards/CourierPrime-Bold.ttf"
-const MARKER := "res://fonts/hands/PatrickHand-Regular.ttf"
 const TERM_FONT := 22
 const TERM_LINE := 33.0
 const TERM_MARGIN := Vector2(78.0, 70.0)
@@ -46,16 +43,13 @@ var keypad: SubViewport
 var radar: SubViewport
 var scope: SubViewport
 var paper: SubViewport
-var tape: SubViewport
 var chart: SubViewport
-var spine: SubViewport
 var dial: SubViewport
 var gain: SubViewport
 var clock: SubViewport
 var digits: SubViewport
 var tablet: SubViewport
 var faces: Array = []             # the phone screens' viewports
-var _words := {}                  # a word on tape -> its viewport
 var _term: Face
 var _radar: Face
 var _scope: Face
@@ -64,17 +58,15 @@ var _clock: Face
 var _tablet: Face
 var _faces: Array = []
 var _mono: Font
-var _marker: Font
 
 
 func _init() -> void:
 	name = "DispatchScreens"
 	_mono = load(MONO)
-	_marker = load(MARKER)
 
 
-## Build them for the phones [param labels] (their tape): the dynamic faces once, the labels drawn again for new labels.
-func build(labels: PackedStringArray) -> void:
+## Build them, once: [param _labels] (the phones' names) are their makes' own to show now.
+func build(_labels: PackedStringArray) -> void:
 	if terminal == null:
 		terminal = _vp(TERM_SIZE, true)
 		_term = Face.new(self, "terminal")
@@ -96,8 +88,6 @@ func build(labels: PackedStringArray) -> void:
 			_faces.append(f)
 		chart = _vp(Vector2i(840, 600), false)
 		chart.add_child(Face.new(self, "chart"))
-		spine = _vp(Vector2i(512, 140), false)
-		spine.add_child(Face.new(self, "spine"))
 		dial = _vp(Vector2i(512, 256), false)
 		dial.add_child(Face.new(self, "dial"))
 		gain = _vp(GAIN_SIZE, false)
@@ -114,40 +104,12 @@ func build(labels: PackedStringArray) -> void:
 		tablet = _vp(TABLET_SIZE, true)
 		_tablet = Face.new(self, "tablet")
 		tablet.add_child(_tablet)
-	word("GOOD")
-	word("BAD")
-	if tape != null:
-		tape.queue_free()
-	var rows := maxi(1, ceili(float(labels.size()) / float(TAPE_COLS)))
-	tape = _vp(Vector2i(TAPE_CELL.x * TAPE_COLS, TAPE_CELL.y * rows), false)
-	var tf := Face.new(self, "tape")
-	tf.state = {"labels": labels}
-	tape.add_child(tf)
 
 
-## What the desk's build is handed of these ([method DispatchSet.build]): the tape, the chart, the spine, the dial, the gain
-## scale and the switch's words, by name - taken on the main thread, so the build may run on a worker.
+## What the desk's build is handed of these ([method DispatchSet.build]): the chart, the dial, the keypad and the gain scale, by
+## name - taken on the main thread, so the build may run on a worker.
 func textures() -> Dictionary:
-	return {"tape": tape.get_texture(), "chart": chart.get_texture(), "spine": spine.get_texture(), "dial": dial.get_texture(),
-		"keypad": keypad.get_texture(), "gain": gain.get_texture(),
-		"GOOD": word("GOOD"), "BAD": word("BAD")}
-
-
-## A word on a strip of tape (the switch's GOOD and BAD), drawn once.
-func word(text: String) -> Texture2D:
-	if not _words.has(text):
-		var vp := _vp(Vector2i(320, 104), false)
-		var f := Face.new(self, "word")
-		f.state = {"text": text}
-		vp.add_child(f)
-		_words[text] = vp
-	return (_words[text] as SubViewport).get_texture()
-
-
-## The tape atlas's cell (UV) of phone [param i] of [param n].
-static func tape_cell(i: int, n: int) -> Rect2:
-	var rows := maxi(1, ceili(float(n) / float(TAPE_COLS)))
-	return Rect2(float(i % TAPE_COLS) / float(TAPE_COLS), float(i / TAPE_COLS) / float(rows), 1.0 / float(TAPE_COLS), 1.0 / float(rows))
+	return {"chart": chart.get_texture(), "dial": dial.get_texture(), "keypad": keypad.get_texture(), "gain": gain.get_texture()}
 
 
 func _vp(size: Vector2i, live: bool) -> SubViewport:
@@ -250,10 +212,7 @@ class Face extends Node2D:
 			"scope": screens._draw_scope(self, state)
 			"paper": screens._draw_paper(self, state)
 			"phone": screens._draw_phone(self, state)
-			"tape": screens._draw_tape(self, state)
-			"word": screens._draw_word(self, state)
 			"chart": screens._draw_chart(self)
-			"spine": screens._draw_spine(self)
 			"dial": screens._draw_dial(self)
 			"gain": screens._draw_gain(self)
 			"keypad": screens._draw_keypad(self)
@@ -595,35 +554,6 @@ func _draw_handset(c: CanvasItem, at: Vector2, r: float, col: Color, down: bool)
 		c.draw_circle(at + Vector2(e * r * 0.82, r * 0.08).rotated(tilt), r * 0.24, col)
 
 
-## The phones' tape: a strip of masking tape a cell, its name across it in black marker, a little crooked.
-func _draw_tape(c: CanvasItem, st: Dictionary) -> void:
-	var labels: PackedStringArray = st.get("labels", PackedStringArray())
-	var cell := Vector2(TAPE_CELL)
-	for i in labels.size():
-		var at := Vector2(float(i % TAPE_COLS) * cell.x, float(i / TAPE_COLS) * cell.y)
-		var r := RandomNumberGenerator.new()
-		r.seed = hash(["tape", labels[i]])
-		c.draw_rect(Rect2(at, cell), Color(0.87, 0.81, 0.62).darkened(r.randf_range(0.0, 0.08)))
-		for k in 6:
-			var y := cell.y * float(k) / 6.0
-			c.draw_rect(Rect2(at + Vector2(0, y), Vector2(r.randf_range(0, 7), cell.y / 6.0)), Color(0, 0, 0, 0.0))
-		var size := 58
-		var w := _marker.get_string_size(labels[i], HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-		var scale := minf(1.0, (cell.x - 26.0) / maxf(w, 1.0))
-		c.draw_set_transform(at + cell * 0.5 + Vector2(r.randf_range(-6, 6), r.randf_range(-3, 3)), r.randf_range(-0.05, 0.05), Vector2(scale, 1.0))
-		for dx in [-1.2, 0.0, 1.2]:
-			c.draw_string(_marker, Vector2(-w * 0.5 + dx, size * 0.35), labels[i], HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(0.05, 0.05, 0.06, 0.92))
-		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-
-
-func _draw_word(c: CanvasItem, st: Dictionary) -> void:
-	var size := Vector2(320, 104)
-	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.87, 0.81, 0.62))
-	var text := String(st.get("text", ""))
-	var w := _marker.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 72).x
-	for dx in [-1.5, 0.0, 1.5]:
-		c.draw_string(_marker, Vector2((size.x - w) * 0.5 + dx, 78), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 72, Color(0.05, 0.05, 0.06, 0.92))
-
 
 ## The chart: the hobbyist's table printed out - dates and hours in three columns headed IO-A, IO-B and IO-C, some rows
 ## circled in pen.
@@ -658,14 +588,6 @@ func _draw_chart(c: CanvasItem) -> void:
 				var a := float(i) / 32.0 * TAU * 1.08
 				pts.append(mid + Vector2(cos(a) * (96.0 + r.randf_range(-3, 3)), sin(a) * (17.0 + r.randf_range(-2, 2))))
 			c.draw_polyline(pts, pen, 2.4, true)
-
-
-func _draw_spine(c: CanvasItem) -> void:
-	var size := Vector2(512, 140)
-	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.10, 0.14, 0.26))
-	c.draw_rect(Rect2(Vector2(80, 30), Vector2(352, 80)), Color(0.93, 0.92, 0.87))
-	var w := _mono.get_string_size("HANDBOOK", HORIZONTAL_ALIGNMENT_LEFT, -1, 54).x
-	c.draw_string(_mono, Vector2((size.x - w) * 0.5, 90), "HANDBOOK", HORIZONTAL_ALIGNMENT_LEFT, -1, 54, Color(0.08, 0.08, 0.1))
 
 
 ## The radar's gain scale, printed round its knob: a tick and a number for each step, one to ten, from the lower left round

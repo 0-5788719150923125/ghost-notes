@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Is a desk lit as the card table is ([DeskLook]'s moods and light, [DeskLight])?
 ##
-## - Every mood comes up across 400 desks, each what it says: lamplight's lamp on, no sun but the moon; candlelight's lamp
+## - Every mood a number draws comes up across 400 desks, each what it says: lamplight's lamp on, no sun but the moon; candlelight's lamp
 ##   off and a candle burning on the desk, no sun; daylight's sun through a window, the lamp off; dusk's sun low, the lamp
 ##   part on. The same seed is the same light, another seed another.
 ## - Every candle is set down, and most in their bands: on 60 candlelit desks each candle the mood asks for is placed (a
@@ -20,6 +20,9 @@ extends SceneTree
 ##   under a quarter.
 ## - The stage is the card table's: a mounted desk sets [constant TableMedium.STAGE] on its stage (the big shadow atlas and
 ##   debanding) and gives it back as it leaves; the control, the stage's own atlas, is not the table's.
+## - The Environment's ([Surroundings]): moonlight and no light are never drawn by a desk's number, and chosen each is as it says.
+##   A mounted desk takes its brightness as its exposure, its share of the lamp, shafts of light (in volumetric fog) and what drifts
+##   in the air; a lamp at 0 is dark; and with no environment it is as it was (the control).
 ##
 ##   godot --headless --path . --script tests/desk/desk_light_check.gd
 
@@ -38,6 +41,7 @@ func _process(_delta: float) -> bool:
 	_candles()
 	_tea_lights()
 	_stage()
+	_environment()
 	if _fails.is_empty():
 		print("desk_light_check: ALL OK")
 		quit(0)
@@ -83,8 +87,23 @@ func _moods() -> void:
 		if not ok and right:
 			why = "seed %d (%s)" % [seed, mood]
 		right = right and ok
-	_check(seen.size() == DeskLook.MOODS.size() and right,
-		"every mood comes up across 400 desks (%s), each lit as it says%s" % [str(seen), "" if right else ": not " + why])
+	var drawn := 0
+	for k in Surroundings.LIGHTS:
+		drawn += int(float((Surroundings.LIGHTS[k] as Dictionary)["weight"]) > 0.0)
+	_check(seen.size() == drawn and right and not seen.has("moonlight") and not seen.has("darkness"),
+		"every mood a number draws comes up across 400 desks (%s), each lit as it says, and never one only chosen%s" % [str(seen), "" if right else ": not " + why])
+	# the lights only ever chosen, each as it says
+	var moon := DeskLook.of(9, {"mood": "moonlight"})
+	var msun: Dictionary = (moon["light"] as Dictionary).get("sun", {})
+	var dark := DeskLook.of(9, {"mood": "darkness"})
+	var burning := 0
+	for l in [moon, dark]:
+		for t in (l as Dictionary)["things"]:
+			burning += int(bool((DeskLook.THINGS[String((t as Dictionary)["kind"])] as Dictionary).get("lit", false)))
+	_check(String(msun.get("look", "")) == "moon" and Color.html(String(msun["color"])).s < 0.15
+		and not ((moon["light"] as Dictionary)["through"] as Array).is_empty() and float((moon["lamp"] as Dictionary)["share"]) == 0.0
+		and ((dark["light"] as Dictionary).get("sun", {}) as Dictionary).is_empty() and float((dark["lamp"] as Dictionary)["share"]) == 0.0 and burning == 0,
+		"chosen, moonlight is the moon through a window, nearly white, no lamp; no light has no sun and no lamp; neither burns a candle")
 	_check(str(DeskLook.of(9)["light"]) == str(DeskLook.of(9)["light"]) and str(DeskLook.of(9)["light"]) != str(DeskLook.of(10)["light"]),
 		"the same seed is the same light, another seed another")
 	# every candle set down, most in the band
@@ -263,5 +282,35 @@ func _stage() -> void:
 	_check(set_ok and differs and back,
 		"a mounted desk sets the card table's stage (atlas %d, debanding) and gives it back as it leaves (the control: the stage's own, atlas %d, differs)"
 		% [int(TableMedium.STAGE["positional_shadow_atlas_size"]), int(before["positional_shadow_atlas_size"])])
+	m.free()
+	vp.queue_free()
+
+
+func _environment() -> void:
+	print("-- the Environment")
+	var vp := SubViewport.new()
+	vp.size = Vector2i(320, 180)
+	root.add_child(vp)
+	var m := DeskMedium.new()
+	m.feed = ShowFeed.new()
+	m.mount(vp)
+	var seed := 1
+	while String(DeskLook.of(seed)["mood"]) != "lamplight":
+		seed += 1
+	m.load_lesson("", {"seed": seed})
+	var base := m._env.tonemap_exposure
+	var lamp := m._lamp.light_energy
+	m.set_environment(Surroundings.sanitize({"brightness": 2.0, "rays": 3, "air": ["pixies", "haze"], "lights": {"lamp": 0.5}}))
+	_check(is_equal_approx(m._env.tonemap_exposure, base * 2.0) and is_equal_approx(m._lamp.light_energy, lamp * 0.5)
+		and m._rays != null and m._rays.get_child_count() == 3 and m._env.volumetric_fog_enabled and m._air != null,
+		"a desk takes the Environment: twice as bright (%.2f of %.2f), its lamp at half (%.2f of %.2f), three shafts in its haze and the air"
+		% [m._env.tonemap_exposure, base, m._lamp.light_energy, lamp])
+	m.set_environment(Surroundings.sanitize({"lights": {"lamp": 0.0}}))
+	_check(not m._lamp.visible and m._rays == null and m._air == null and not m._env.volumetric_fog_enabled,
+		"its lamp at 0 is dark; no shafts or air chosen, none stand")
+	m.set_environment(Surroundings.sanitize({}))
+	_check(m._lamp.visible and is_equal_approx(m._lamp.light_energy, lamp) and is_equal_approx(m._env.tonemap_exposure, base),
+		"the control: with no environment the desk is as it was")
+	vp.remove_child(m)
 	m.free()
 	vp.queue_free()

@@ -11,7 +11,7 @@ what is built and what is left.
 - The continuous meeting point between components is a **feed**, not a signal: Godot already uses
   that word for something else ([How components meet](#how-components-meet)).
 - **No home screen.** Ghost Notes opens on the left panel, with the notes listed and the name and
-  tagline at its head. The Environment panel sits behind a fourth button in the bottom-right row, open
+  tagline at its head. The Setup panel sits behind a fourth button in the bottom-right row, open
   until first closed ([The shell around the note](#the-shell-around-the-note)).
 - **One transport** - play, pause, stop and the scrubber - for every note ([The transport](#the-transport)).
 - **Two frames**, landscape 16:9 and portrait 9:16, exported in either where the presentation allows
@@ -336,7 +336,7 @@ Everything on the old home screen (`src/splash.gd`) has a new home:
 | Import… and the path or URL field (`[audio] last`, `[video] last`, `[ui] kind`) | the Song and Clip cards; a file or link dropped on the list makes a note with that component attached |
 | the Assistant dropdown (`[assistant] backend`)                           | the Assistant's own panel, its only user                                                                    |
 | the key hint (F11, the feedback key, Esc)                                | tooltips                                                                                                    |
-| the Environment panel (`DepsPanel`)                                      | its own button in the bottom-right row                                                                      |
+| the Setup panel (`DepsPanel`)                                      | its own button in the bottom-right row                                                                      |
 
 **The list.** The notes in the default folder and in every folder or file the author has added, newest
 first, all through one storage interface. The unsaved text ghost kept per mode becomes ordinary notes
@@ -459,7 +459,7 @@ failure.
 
 **One capability table.** `Capabilities` answers two questions for each entry, with a reason: is it
 possible on this platform (decided once at boot, from `OS.has_feature` and `Provision.unsupported`), and
-is it ready now (asked again whenever the Environment panel rescans).
+is it ready now (asked again whenever the Setup panel rescans).
 
 | capability      | means                                                          | possible on   |
 | --------------- | -------------------------------------------------------------- | ------------- |
@@ -883,7 +883,7 @@ open at a time, and reads `[deps] open` back after a restart.
 **Status: done.** `Chrome.row` is one HBoxContainer on its own layer, and each piece of furniture hands it its
 button with `row_button(who, b)`; the row keeps `Chrome.ROW_ORDER` and closes up around a hidden one.
 
-- The Environment panel is Chrome's, behind the button at the left end: open until the author closes it
+- The Setup panel is Chrome's, behind the button at the left end: open until the author closes it
   (`[deps] open`, written only by the button), opened without writing when the probe finds a problem; its
   state line and color are the button's tooltip and dot.
 - One panel above the row at a time: each registers its closer (`register_panel`) and reports opening

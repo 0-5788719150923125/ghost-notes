@@ -1,7 +1,7 @@
 extends PanelContainer
 class_name DepsPanel
 
-## DepsPanel - the environment readout above the bottom-right row, behind its ⚙ (Chrome).
+## DepsPanel - the Setup panel above the bottom-right row, behind its ⚙ (Chrome): what ghost runs on.
 ##
 ## ghost runs on things it does not draw itself: FFmpeg for video, a Python and its per-feature
 ## environments for the voice, the trackers, URL import and page capture. ghost installs and updates them
@@ -127,7 +127,7 @@ func _build_ui() -> void:
 	head.add_child(toggle)
 
 	_title = Label.new()
-	_title.text = "Environment"
+	_title.text = "Setup"
 	_title.add_theme_font_size_override("font_size", 13)
 	_title.add_theme_color_override("font_color", COL_TEXT)
 	_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -302,7 +302,7 @@ func _rescan() -> void:
 
 func _copy_report() -> void:
 	DisplayServer.clipboard_set(Deps.format_report(_rows))
-	_title.text = "Environment  · copied"
+	_title.text = "Setup  · copied"
 	get_tree().create_timer(1.5).timeout.connect(_refresh_title)
 
 
@@ -453,29 +453,29 @@ func _refresh_title() -> void:
 	var running := Provision.active()
 	var problem := _problem()
 	if _rows.is_empty():
-		_title.text = "Environment"
+		_title.text = "Setup"
 		_title.add_theme_color_override("font_color", COL_TEXT)
 	elif not running.is_empty():
 		var s := Provision.state(running[0])
 		var name := String(Deps.entry(running[0]).get("name", running[0]))
 		var f := float(s.get("fraction", -1.0))
-		_title.text = "Environment  ·  %s %s%s" % [
+		_title.text = "Setup  ·  %s %s%s" % [
 			"updating" if String(s.get("action", "")) == "update" else "installing", name,
 			("  %d%%" % int(f * 100.0)) if f >= 0.0 else ""]
 		if running.size() > 1:
 			_title.text += "  +%d" % (running.size() - 1)
 		_title.add_theme_color_override("font_color", COL_RUN)
 	elif not problem.is_empty():
-		_title.text = "Environment  ·  " + problem
+		_title.text = "Setup  ·  " + problem
 		_title.add_theme_color_override("font_color", COL_BAD)
 	elif _app_update != null and _app_update.update_ready:
-		_title.text = "Environment  ·  app update ready"
+		_title.text = "Setup  ·  app update ready"
 		_title.add_theme_color_override("font_color", COL_RUN)
 	elif _pending() > 0:
-		_title.text = "Environment  ·  %d to download" % _pending()
+		_title.text = "Setup  ·  %d to download" % _pending()
 		_title.add_theme_color_override("font_color", COL_DIM)
 	else:
-		_title.text = "Environment  ·  all present"
+		_title.text = "Setup  ·  all present"
 		_title.add_theme_color_override("font_color", COL_OK)
 	state_changed.emit()
 
@@ -500,7 +500,7 @@ func _on_app_action() -> void:
 
 ## The panel's state in one line - the row's ⚙ tooltip.
 func state_line() -> String:
-	return _title.text if _title != null else "Environment"
+	return _title.text if _title != null else "Setup"
 
 
 ## ...and its color: the dot on the ⚙.

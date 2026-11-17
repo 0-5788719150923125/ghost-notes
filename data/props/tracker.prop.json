@@ -1,0 +1,72 @@
+{
+	"name": "the GPS tracker",
+	"line": "A small black GPS tracker, its light blinking green.",
+	"thing": {
+		"name": "the GPS tracker",
+		"parts": [
+			{
+				"shape": "box",
+				"size": [
+					5.0,
+					1.6,
+					3.5
+				],
+				"round": 0.6,
+				"at": [
+					0.0,
+					0.0,
+					0.0
+				],
+				"material": "black"
+			},
+			{
+				"shape": "lathe",
+				"profile": [
+					[
+						0,
+						0
+					],
+					[
+						0.2,
+						0
+					],
+					[
+						0.2,
+						0.2
+					],
+					[
+						0,
+						0.2
+					]
+				],
+				"at": [
+					1.2,
+					1.6,
+					0.4
+				],
+				"material": "green light",
+				"name": "light",
+				"start": {
+					"glow": 1.0
+				},
+				"runs": {
+					"law": "follow",
+					"state": "shown",
+					"value": "1 - step(0.25 / 2.4, fract(T / 2.4))"
+				}
+			}
+		]
+	},
+	"materials": {
+		"black": {
+			"kind": "plastic",
+			"color": "#09090a",
+			"polish": 0.6
+		},
+		"green light": {
+			"kind": "painted",
+			"color": "#33ff59",
+			"polish": 0.6
+		}
+	}
+}

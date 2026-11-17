@@ -91,7 +91,7 @@ Verified on the Steamworks pages unless marked as inference.
 - **Downloading programs after install:** no rule forbids it and no store field covers it. The nearest rule is the "unexpected
   or harmful ways" ban, so downloads are expected (a consent prompt or the existing progress UI), disclosed, and kept in
   ghost's own folders. Valve expects uninstall to clean up, and Steam has no Linux install scripts, so a "remove
-  downloaded components" action in the Environment panel is worth having.
+  downloaded components" action in the Setup panel is worth having.
 - **External AI services:** for a service with ongoing costs, the developer must manage access on the players' behalf and
   collect payment through Steam. Bring-your-own-account fits none of Valve's suggested models; AI Roguelite is live with
   "custom via API", so it can pass, but **ASK** Steamworks support. That the table is grayed out without an agent, and

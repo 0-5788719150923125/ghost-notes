@@ -10,7 +10,7 @@ class_name Chrome
 ##
 ## - **row**         - the bottom-right row: one container holding every piece of furniture's button
 ##                     ([method row_button]), the ⌂ that leaves a mode among them ([method set_home]).
-## - **environment** - the Environment panel (deps_panel.gd) behind the row's ⚙: what ghost runs on and
+## - **environment** - the Setup panel (deps_panel.gd) behind the row's ⚙: what ghost runs on and
 ##                     what it is installing. Open until the user first closes it (`[deps] open`).
 ## - **graphics**    - the Graphics panel ([GraphicsPanel]) behind the row's picture: how finely the stage
 ##                     is drawn, live and in an export ([Graphics]).
@@ -95,9 +95,9 @@ func ask_delete() -> void:
 	DeleteDialog.ask(self, path, func(answer: String) -> void: del.call(path, answer))
 
 
-# --- the Environment ----------------------------------------------------------------------------
+# --- the Setup panel ----------------------------------------------------------------------------
 
-## The Environment panel, behind a button at the row's left end. Open until the user first closes it
+## The Setup panel, behind a button at the row's left end. Open until the user first closes it
 ## (`[deps] open`, default true, written by the button). A problem the probe finds opens it without
 ## writing that, and the panel's one-line state is the button's tooltip and dot, so a problem shows while
 ## it is closed.
@@ -113,7 +113,7 @@ func _build_environment() -> void:
 	_env_button.text = "⚙"
 	_env_button.focus_mode = Control.FOCUS_NONE
 	_env_button.custom_minimum_size = Vector2(40, 40)
-	_env_button.tooltip_text = "Environment"
+	_env_button.tooltip_text = "Setup"
 	_env_button.pressed.connect(func() -> void: set_environment_open(not environment.visible, true))
 	# the dot: green when everything is there, blue while installing, red for a problem
 	_env_dot = Label.new()
@@ -130,7 +130,7 @@ func _build_environment() -> void:
 	set_environment_open(bool(Settings.read("deps", "open", true)), false)
 
 
-## Open or close the Environment panel. [param remember] writes `[deps] open` (the user's own click does,
+## Open or close the Setup panel. [param remember] writes `[deps] open` (the user's own click does,
 ## a problem the probe found does not).
 func set_environment_open(on: bool, remember: bool) -> void:
 	_show_environment(on)
@@ -156,7 +156,7 @@ func _paint_environment_button() -> void:
 	if _env_button == null:
 		return
 	var line := environment.state_line()
-	_env_button.tooltip_text = line + "\n\nClick to %s the Environment panel." % ("close" if environment.visible else "open")
+	_env_button.tooltip_text = line + "\n\nClick to %s the Setup panel." % ("close" if environment.visible else "open")
 	_env_dot.add_theme_color_override("font_color", environment.state_color())
 
 

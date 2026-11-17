@@ -195,11 +195,27 @@ const RECEIVER_TAIL := 1.2
 const RECEIVER_JOIN := 1.0
 const UNDER_LEAD := 0.25
 const UNDER_TAIL := 0.35
-## The terminal's glass (`shaders/dispatch_screen.gdshader`): its bulge, scanlines and bloom; the censor follows its bulge.
-const TERMINAL_GLASS := {"curve": 0.12, "lines": 0.32, "line_count": 300.0, "bloom": 0.7}
 ## The environment: the hollow's fog and its ambient light.
 const FOG := Color(0.11, 0.12, 0.135)
 const AMBIENT := Color(0.18, 0.2, 0.24)
+const AMBIENT_ENERGY := 0.22
+## The hollow's own light, where the Environment chooses none: the exposure it is seen at, the faint fill from above and the cold
+## shaft down through a crack behind the desk (where it falls from and what it falls on) - and how strongly candles out of the shot
+## burn where a light chooses candles and no lamp.
+const EXPOSURE := 1.25
+const FILL_COLOR := Color(0.55, 0.62, 0.75)
+const FILL_ENERGY := 0.1
+const CRACK_COLOR := Color(0.62, 0.7, 0.82)
+const CRACK_ENERGY := 6.0
+const CRACK_AT := Vector3(0.5, 3.35, -1.6)
+const CRACK_AIM := Vector3(-0.1, 0.4, -1.1)
+const CANDLES_ENERGY := 0.45
+## Where shafts chosen on the Environment fall (the roots behind the desk), and what drifts keeps to: over the desk, the hollow behind
+## it, the whole hollow.
+const RAYS_OVER := AABB(Vector3(-1.3, 0.35, -1.7), Vector3(2.6, 0.0, 0.8))
+const AIR_NEAR := AABB(Vector3(-1.2, 0.76, -0.55), Vector3(2.4, 0.5, 0.95))
+const AIR_FAR := AABB(Vector3(-3.0, 0.0, -3.2), Vector3(6.0, 2.6, 2.4))
+const AIR_ROOM := AABB(Vector3(-3.0, 0.0, -3.0), Vector3(6.0, 3.3, 4.0))
 
 var _subs = null
 var _doc_key := ""                      # the document as last loaded, but for its seed ([member _doc_seed])
@@ -254,6 +270,17 @@ var _build_task := -1                   # the set's build on a worker, -1 for no
 var _pic_task := -1                     # ...the pictures' decoding
 var _decoded := {}                      # ...what it decoded, waiting to be made textures
 var _made := {}                         # ...what it made, waiting to be put in
+var _feeds := {}                        # what each thing on the desk is fed now ([method _pose]), by thing
+## What is round the desk, as the document's Environment chooses it ([Surroundings], made safe; [method _dress_environment]): its
+## light (none chosen: the hollow's own), how bright, the shafts that fall through the ceiling, what drifts in the air, and how
+## strongly each lit thing on the desk shines.
+var _surround := Surroundings.sanitize({})
+var _surround_key := "-"
+var _crack: SpotLight3D = null          # the hollow's own shaft, down through a crack behind the desk
+var _rays: Node3D = null                # the shafts the Environment chooses in its place
+var _candles: OmniLight3D = null        # candles out of the shot, where the light chosen burns them and no lamp
+var _air = null                         # what drifts in the air ([Effects]' Air), or null
+var _lamp_share := 1.0
 var _waiting := false                   # the show held for it
 
 var _placeholder: GhostScene
@@ -332,9 +359,10 @@ func _build_world() -> void:
 	_env.background_color = Color(0.006, 0.007, 0.008)
 	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_env.ambient_light_color = AMBIENT
-	_env.ambient_light_energy = 0.22
-	# the tonemapper, as the Look has it ([Tonemaps]): Filmic unless a note picks another, at the exposure tuned under Filmic
-	Tonemaps.dress(_env, 1.1)
+	_env.ambient_light_energy = AMBIENT_ENERGY
+	# the tonemapper, as the Look has it ([Tonemaps]): Filmic unless a note picks another, at the exposure tuned under Filmic - the
+	# Environment's brightness over it ([method _dress_environment])
+	Tonemaps.dress(_env, EXPOSURE)
 	_env.glow_enabled = true
 	_env.glow_intensity = 0.55
 	_env.glow_bloom = 0.04
@@ -362,21 +390,30 @@ func _build_world() -> void:
 	_root3.add_child(_cam)
 	# a faint cold light from somewhere above, so the roots stand out of the dark
 	_fill = DirectionalLight3D.new()
-	_fill.light_color = Color(0.55, 0.62, 0.75)
-	_fill.light_energy = 0.1
+	_fill.light_color = FILL_COLOR
+	_fill.light_energy = FILL_ENERGY
 	_fill.rotation_degrees = Vector3(-62.0, 25.0, 0.0)
 	_root3.add_child(_fill)
 	# ...and down through a crack in the ceiling behind the desk: cold light falling through the fog onto the roots there
 	var crack := SpotLight3D.new()
-	crack.light_color = Color(0.62, 0.7, 0.82)
-	crack.light_energy = 6.0
+	crack.light_color = CRACK_COLOR
+	crack.light_energy = CRACK_ENERGY
 	crack.spot_range = 7.0
 	crack.spot_angle = 26.0
 	crack.spot_angle_attenuation = 0.8
 	crack.shadow_enabled = true
 	crack.light_volumetric_fog_energy = 2.5
 	_root3.add_child(crack)
-	crack.look_at_from_position(Vector3(0.5, 3.35, -1.6), Vector3(-0.1, 0.4, -1.1), Vector3.UP)
+	crack.look_at_from_position(CRACK_AT, CRACK_AIM, Vector3.UP)
+	_crack = crack
+	# candles somewhere in the hollow, out of the shot: lit only where the Environment's light burns candles and no lamp
+	_candles = OmniLight3D.new()
+	_candles.light_color = Color(1.0, 0.69, 0.4)
+	_candles.omni_range = 2.6
+	_candles.omni_attenuation = 1.4
+	_candles.position = Vector3(-0.7, DispatchSet.DESK_Y + 0.35, 0.55)
+	_candles.visible = false
+	_root3.add_child(_candles)
 
 
 ## The desk built for [param labels] and [param seed] (again only when either changed): the screens' labels here, then the
@@ -409,7 +446,7 @@ func _make_set(labels: PackedStringArray, seed: int, tex: Dictionary, wants: Dic
 	s.makes = makes
 	var node := s.build(labels, seed, tex, wants)
 	var r := DispatchRoots.new()
-	var rn := r.build(seed, s.footprints, s.held_rect())
+	var rn := r.build(seed, s.footprints, s.held_rect(), s.clear)
 	_made = {"set": s, "node": node, "roots": r, "roots_node": rn}
 
 
@@ -430,12 +467,14 @@ func _land_set() -> void:
 	_root3.add_child(_set_node)
 	_root3.add_child(_roots_node)
 	_mats = {}
-	_set.terminal_screen.material_override = _screen_mat("terminal", _screens.terminal.get_texture(), DispatchScreens.PHOSPHOR.lerp(Color.WHITE, 0.2),
-		TERMINAL_GLASS)
-	_set.radar_screen.material_override = _screen_mat("radar", _screens.radar.get_texture(), Color(0.85, 1.0, 0.85),
-		{"curve": 0.05, "lines": 0.12, "bloom": 0.9, "round_mask": 1.0, "brightness": 1.5})
-	_set.scope_screen.material_override = _screen_mat("scope", _screens.scope.get_texture(), Color(0.9, 1.0, 0.9),
-		{"curve": 0.08, "lines": 0.2, "bloom": 0.8})
+	# each glass shows its picture as its make's face says ([method _glass])
+	if _set.terminal_screen != null:
+		_set.terminal_screen.material_override = _screen_mat("terminal", _screens.terminal.get_texture(), DispatchScreens.PHOSPHOR.lerp(Color.WHITE, 0.2),
+			_glass("terminal", "screen"))
+	if _set.radar_screen != null:
+		_set.radar_screen.material_override = _screen_mat("radar", _screens.radar.get_texture(), Color(0.85, 1.0, 0.85), _glass("radar", "scope"))
+	if _set.scope_screen != null:
+		_set.scope_screen.material_override = _screen_mat("scope", _screens.scope.get_texture(), Color(0.9, 1.0, 0.9), _glass("receiver", "scope"))
 	var pm := StandardMaterial3D.new()
 	pm.albedo_texture = _screens.paper.get_texture()
 	pm.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -443,29 +482,27 @@ func _land_set() -> void:
 	_set.paper.material_override = pm
 	for k in _set.screens:
 		var sc: Dictionary = _set.screens[k]
-		var opts: Dictionary = {"feed": {"curve": 0.1, "lines": 0.4, "mono": 1.0, "snow": 0.35, "line_count": 220.0},
-			"satellite": {"curve": 0.0, "lines": 0.0, "bloom": 0.25},
-			"tv": {"curve": 0.14, "lines": 0.3, "line_count": 240.0, "bloom": 0.5}}[k]
-		(sc["mesh"] as MeshInstance3D).material_override = _screen_mat(k, null, Color(1, 1, 1), opts)
+		if sc["mesh"] != null:
+			(sc["mesh"] as MeshInstance3D).material_override = _screen_mat(k, null, Color(1, 1, 1), _glass(k, "screen"))
 	if _set.clock_face != null:
-		_set.clock_face.material_override = _screen_mat("clock", _screens.clock.get_texture(), Color(1, 1, 1),
-			{"curve": 0.0, "lines": 0.0, "bloom": 0.1, "brightness": 0.55})
+		_set.clock_face.material_override = _screen_mat("clock", _screens.clock.get_texture(), Color(1, 1, 1), _glass("clock", "cards"))
 	if _set.tablet_screen != null:
-		# the tablet medium's own glass: its rounded corners, its glow
+		# the tablet medium's own glass: its rounded corners, its glow - its size and corners the make's face's
+		var face := (_set.rigs["tablet"] as PropRig).face_part("screen")
 		var glass := ShaderMaterial.new()
 		glass.shader = _tablet_glass()
 		glass.set_shader_parameter("screen_tex", _screens.tablet.get_texture())
-		glass.set_shader_parameter("size", DispatchSet.TABLET_SCREEN)
-		glass.set_shader_parameter("radius", DispatchSet.TABLET_SCREEN_CORNER)
+		glass.set_shader_parameter("size", (face.get("size", Vector2(15.0, 20.0)) as Vector2) * 0.01)
+		glass.set_shader_parameter("radius", float(face.get("round", 0.6)) * 0.01 if String(face.get("outline", "")) == "rounded" else 0.0)
 		glass.set_shader_parameter("glow", 0.0)
 		_set.tablet_screen.material_override = glass
 		_mats["tablet"] = glass
 	for i in _set.phones.size():
 		var ph: Dictionary = _set.phones[i]
-		(ph["inner"] as MeshInstance3D).material_override = _screen_mat("inner %d" % i, null, Color(1, 1, 1),
-			{"curve": 0.0, "lines": 0.0, "bloom": 0.15, "brightness": 1.1})
-		(ph["outer"] as MeshInstance3D).material_override = _screen_mat("outer %d" % i, null, Color(1, 1, 1),
-			{"curve": 0.0, "lines": 0.0, "bloom": 0.15, "brightness": 1.1})
+		for which in ["inner", "outer"]:
+			if ph[which] != null:
+				(ph[which] as MeshInstance3D).material_override = _screen_mat("%s %d" % [which, i], null, Color(1, 1, 1),
+					_glass_of((ph["rig"] as PropRig).face_part(which)))
 	_live_vp = SubViewport.new()
 	_live_vp.size = LIVE_SIZE
 	_live_vp.own_world_3d = false
@@ -477,6 +514,7 @@ func _land_set() -> void:
 	_live_vp.add_child(_live_cam)
 	_set_node.add_child(_live_vp)
 	_live_cam.look_at_from_position(LIVE_EYE, LIVE_AIM, Vector3.UP)
+	_shine_things()
 	_snap = true
 	if _built_n > 0:
 		_build_attention()
@@ -494,6 +532,72 @@ static func _tablet_glass() -> Shader:
 		_glass_shader = Shader.new()
 		_glass_shader.code = TabletMedium.SCREEN_SHADER
 	return _glass_shader
+
+
+# --- what is round the desk -------------------------------------------------------------------------------------------
+
+## The hollow lit, its shafts and its air as [member _surround] says: with no light chosen, the hollow's own (its ambient, the fill,
+## the shaft through the crack, the lamp); a light chosen, its preset's colors and shares of them ([constant Surroundings.LIGHTS]) -
+## candles out of the shot where it burns candles and no lamp. Brightness over the exposure; shafts chosen in the crack's place;
+## what drifts, built over the desk and the hollow; each lit thing on the desk at its share.
+func _dress_environment() -> void:
+	if _env == null:
+		return
+	var own := String(_surround["light"]).is_empty()
+	var row := Surroundings.light_of(_surround)
+	var key := Color.html(String(row["key_color"]))
+	_env.ambient_light_color = AMBIENT if own else Color.html(String(row["ambient"]))
+	_env.ambient_light_energy = AMBIENT_ENERGY * (1.0 if own else float(row["ambient_energy"]))
+	_fill.light_color = FILL_COLOR if own else FILL_COLOR.lerp(key, 0.5)
+	_fill.light_energy = FILL_ENERGY * (1.0 if own else float(row["ambient_energy"]))
+	_lamp_share = 1.0 if own else float(row["lamp"])
+	var candles := not own and int((row["candles"] as Array)[1]) > 0 and float(row["lamp"]) <= 0.0
+	_candles.visible = candles
+	_candles.light_energy = CANDLES_ENERGY if candles else 0.0
+	Tonemaps.dress(_env, EXPOSURE * float(_surround["brightness"]))
+	var n := int(_surround["rays"])
+	_crack.visible = n < 0
+	_crack.light_color = CRACK_COLOR if own else key
+	_crack.light_energy = CRACK_ENERGY * (1.0 if own else float(row["key_strength"]))
+	if _rays != null:
+		_rays.queue_free()
+		_rays = null
+	if n > 0:
+		_rays = Surroundings.rays(n, float(_surround["ray_strength"]), CRACK_COLOR if own else key, CRACK_AT - CRACK_AIM, RAYS_OVER,
+			_seed, CRACK_AT.y - RAYS_OVER.end.y)
+		_root3.add_child(_rays)
+	if not own:
+		_env.volumetric_fog_albedo = Color.html(String(row["fog"])).lerp(Color(0.75, 0.76, 0.8), 0.5)
+	if _air != null:
+		_air.release()
+		_air = null
+	var fx := Surroundings.effects_of(_surround, Color.html(String(row["fog"])) if not own else FOG)
+	if not fx.is_empty():
+		_air = Effects.build(fx, {"regions": {"near": AIR_NEAR, "far": AIR_FAR, "room": AIR_ROOM}, "camera": _cam.transform,
+			"fov": _cam.fov, "aspect": 16.0 / 9.0}, hash([_seed, "dispatch air"]))
+		_root3.add_child(_air.root)
+	_shine_things()
+
+
+## Each lit thing on the desk at its share of its light ([method Surroundings.share_of], by its role).
+func _shine_things() -> void:
+	if _set == null:
+		return
+	for k in _set.rigs:
+		(_set.rigs[k] as PropRig).set_light_scale(Surroundings.share_of(_surround, String(k)))
+
+
+## How thing [param k]'s make shows a picture on its face [param face] ([constant Props.SHAPES] `face`: its `glass`, a round one
+## masked round) - the screen shader's settings ([method _screen_mat]).
+func _glass(k: String, face: String) -> Dictionary:
+	var rig: PropRig = _set.rigs.get(k)
+	return _glass_of(rig.face_part(face) if rig != null else {})
+
+
+static func _glass_of(part: Dictionary) -> Dictionary:
+	var out: Dictionary = (part.get("glass", {}) as Dictionary).duplicate() if part.get("glass") is Dictionary else {}
+	out["round_mask"] = 1.0 if String(part.get("outline", "")) == "round" else 0.0
+	return out
 
 
 func _screen_mat(name: String, tex: Texture2D, tint: Color, opts: Dictionary) -> ShaderMaterial:
@@ -520,6 +624,9 @@ func release() -> void:
 
 
 func _exit_tree() -> void:
+	if _air != null:
+		_air.release()
+		_air = null
 	if _build_task >= 0:
 		WorkerThreadPool.wait_for_task_completion(_build_task)
 		_build_task = -1
@@ -657,6 +764,12 @@ func _ensure_doc() -> void:
 	if _subs == null or not is_instance_valid(_subs):
 		return
 	var d: Dictionary = _subs.document
+	var env := Surroundings.sanitize(d.get("environment"))
+	var ek := JSON.stringify(env)
+	if ek != _surround_key:
+		_surround_key = ek
+		_surround = env
+		_dress_environment()
 	_title.channel = String(d.get("title", ""))
 	_title.byline = String(d.get("byline", d.get("author", "")))
 	var src := String(d.get("source", ""))
@@ -704,7 +817,7 @@ static func makes_of(dispatch: Dictionary) -> Dictionary:
 	var out := {}
 	var things: Dictionary = dispatch.get("things", {}) if dispatch.get("things") is Dictionary else {}
 	for role in things:
-		if PropMakes.valid(things[role]) and not (things[role] as Dictionary).is_empty():
+		if PropMakes.valid_for(String(role), things[role]) and not (things[role] as Dictionary).is_empty():
 			out[String(role)] = (things[role] as Dictionary).duplicate(true)
 	return out
 
@@ -1548,8 +1661,11 @@ func sound_rev() -> int:
 # --- the desk at a moment ---------------------------------------------------------------------------------------------
 
 ## Everything on the desk at [param t]: the phones, the terminal, the radar, the receiver, the printer, the screens, the
-## switch, the mug, the roots.
+## switch, the mug, the roots. What a thing's parts do is its make's: each is fed what the script has it at now ([member _feeds],
+## by thing: the receiver's signal, the radar's gain, the switch's side, the lamp's light...) and its rig poses it
+## ([method DispatchSet.pose]).
 func _pose(t: float) -> void:
+	_feeds = {}
 	_pose_phones(t)
 	_screens.show_terminal(terminal_at(t))
 	_screens.show_radar(radar_at(t))
@@ -1557,23 +1673,23 @@ func _pose(t: float) -> void:
 	var voice := float(st.get("voice", 0.0))
 	_screens.show_scope({"t": snappedf(t, 1.0 / 30.0), "level": float(st.get("level", 0.0)), "storm": String(st.get("storm", "")),
 		"voice": voice})
-	_set.needle.rotation_degrees = Vector3(0, 0, lerpf(48.0, -48.0, clampf(0.08 + float(st.get("level", 0.0)) * 0.85 + voice * 0.45
-		+ 0.03 * sin(t * 1.3), 0.0, 1.0)))
-	_set.terminal_glow.light_energy = 0.03 if bool(terminal_at(t).get("asleep", true)) else 0.16
+	# what the receiver hears: the storm, swelling in a word said over it, never quite still
+	_feeds["receiver"] = {"signal": clampf(0.08 + float(st.get("level", 0.0)) * 0.85 + voice * 0.45 + 0.03 * sin(t * 1.3), 0.0, 1.0)}
+	# what the screen throws on the desk: as much as its glass is lit, never a whole screen's worth for a cursor alone
+	_feeds["terminal"] = {"lit": DispatchTerminal.lit_share(terminal_at(t))}
 	_pose_printer(t)
 	_pose_screens(t)
 	_pose_clock(t)
 	_pose_tablet(t)
 	_pose_switch(t)
 	_pose_mug(t)
-	if _set.gain_knob != null:
-		_set.gain_knob.rotation.z = DispatchSet.gain_angle(gain_at(t))
-	var lit := lamp_at(t)
-	_set.lamp.light_energy = DispatchSet.LAMP_ENERGY * lit
-	_set.lamp.visible = lit > 0.0
+	_feeds["radar"] = {"gain": gain_at(t)}
+	_feeds["lamp"] = {"lit": lamp_at(t) * _lamp_share}
+	_set.pose(t, _feeds)
 	_roots.grow(t)
-	var blink := fposmod(t, 2.4) < 0.25
-	_set.tracker_led.visible = blink
+	if _air != null:
+		_air.tick(t)
+	Surroundings.tick_rays(_rays, t)
 
 
 ## Where each phone is at [param t], its lid, and what its screens show: in its row, rising to the ear, at the ear, laid open
@@ -1637,7 +1753,7 @@ func _pose_phones(t: float) -> void:
 					xf = xf.translated(Vector3(sin(j * 1.9) * RATTLE * 0.6, 0.0, cos(j * 2.1) * RATTLE * 0.6))
 				lit.append([i, "outer", {"mode": "text", "label": label, "words": String(a["words"])}])
 		(ph["node"] as Node3D).global_transform = xf
-		(ph["hinge"] as Node3D).rotation_degrees = Vector3(-DispatchSet.LID_OPEN * open, 0, 0)
+		(ph["rig"] as PropRig).pose(t, {"open": open})
 	var used := {}
 	var k := 0
 	lit.sort_custom(func(x: Array, y: Array) -> bool: return _rank(String(x[2]["mode"])) < _rank(String(y[2]["mode"])))
@@ -2271,11 +2387,11 @@ func _pose_printer(t: float) -> void:
 			head = (across if k % 2 == 0 else 1.0 - across) - 0.5
 			feed = clampf((w - 0.82) / 0.18, 0.0, 1.0)
 	_screens.show_paper({"lines": lines, "partial": partial, "feed": snappedf(feed, 0.05), "total": lines.size()})
-	_set.printer_head.position.x = head * 0.3
+	_feeds["printer"] = {"head": head}
 
 
 ## The three screens at [param t]: each the last picture pinned to it (or this desk, live), or dark after an `off`; the feed
-## snowy with nothing on it.
+## snowy with nothing on it; each fed how brightly its picture lights the desk (`glow`).
 func _pose_screens(t: float) -> void:
 	var live := false
 	for k in _set.screens:
@@ -2296,8 +2412,9 @@ func _pose_screens(t: float) -> void:
 				"off":
 					shown = ""
 					since = -(t - _t0[i])
+		if not _mats.has(key):
+			continue
 		var m: ShaderMaterial = _mats[key]
-		var glow: OmniLight3D = (_set.screens[k] as Dictionary)["glow"]
 		var power := 1.0
 		var tex: Texture2D = null
 		var snowing := false
@@ -2319,7 +2436,7 @@ func _pose_screens(t: float) -> void:
 			m.set_shader_parameter("has_face", false)
 			m.set_shader_parameter("power", power)
 			m.set_shader_parameter("frame", floor(t * 24.0))
-			glow.light_energy = (0.3 + 0.05 * sin(t * 17.0) * sin(t * 5.3)) * power
+			_feeds[key] = {"glow": (0.3 + 0.05 * sin(t * 17.0) * sin(t * 5.3)) * power}
 			continue
 		if key != "feed":
 			m.set_shader_parameter("snow", 0.06 if tex != null and shown.begins_with("clip:") else 0.0)
@@ -2330,7 +2447,7 @@ func _pose_screens(t: float) -> void:
 			m.set_shader_parameter("power", 1.0)
 			m.set_shader_parameter("brightness", 0.5)
 			m.set_shader_parameter("frame", floor(t * 24.0))
-			glow.light_energy = 0.32 + 0.06 * sin(t * 17.0) * sin(t * 5.3)
+			_feeds[key] = {"glow": 0.32 + 0.06 * sin(t * 17.0) * sin(t * 5.3)}
 			continue
 		if key == "feed":
 			m.set_shader_parameter("snow", 0.12)
@@ -2340,7 +2457,7 @@ func _pose_screens(t: float) -> void:
 		if tex != null:
 			m.set_shader_parameter("face", tex)
 		m.set_shader_parameter("power", power if (tex != null or since < 0.0) else 0.0)
-		glow.light_energy = 0.35 * power if tex != null else 0.0
+		_feeds[key] = {"glow": 0.35 * power if tex != null else 0.0}
 	_live_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if live else SubViewport.UPDATE_DISABLED
 	if live and _live_cam != null:
 		_live_cam.look_at_from_position(LIVE_EYE, LIVE_AIM, Vector3.UP)
@@ -2363,7 +2480,8 @@ func _pose_switch(t: float) -> void:
 			u = 1.0
 	var up := 28.0
 	var want := -up if side == "GOOD" else up
-	_set.lever.rotation_degrees = Vector3(want, 0, 0) if u >= 1.0 else Vector3(lerpf(-want, want, u), 0, 0)
+	var angle := want if u >= 1.0 else lerpf(-want, want, u)
+	_feeds["switch"] = {"side": angle / up}
 
 
 ## The mug at [param t]: in its ring, or drunk from: lifted upright out of its ring and brought to the mouth, just under
@@ -2402,7 +2520,7 @@ func _censor_at(t: float) -> void:
 			var whole: PackedStringArray = terminal_at(t, true)["lines"]
 			if whole.size() == lines.size() and whole[0] == lines[0]:
 				runs = _screens.redactions(whole)
-	_censor.cover(runs, _set.terminal_screen, float(TERMINAL_GLASS["curve"]), _cam, t)
+	_censor.cover(runs, _set.terminal_screen, float(_glass("terminal", "screen").get("curve", 0.0)), _cam, t)
 	_after_censor.visible = _censor.visible and _blur.visible
 
 
