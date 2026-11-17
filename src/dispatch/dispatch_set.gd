@@ -1665,6 +1665,11 @@ func tablet_held_xf() -> Transform3D:
 
 # --- where the camera looks -------------------------------------------------------------------------------------------
 
+## The whole desk from the chair (the `home` spot): the same on every desk, so it can be asked before one is built.
+static func home_spot() -> Dictionary:
+	return {"aim": Vector3(0.0, DESK_Y + 0.17, -0.16), "eye": EYE, "fov": 54.0}
+
+
 ## The spot the camera turns to for [param k] ([constant DispatchMedium.SPOTS]; {} where this desk has none): what it aims
 ## at, where the eye is (the chair's, leaned toward it), and how wide the lens is (degrees, vertical). Read from where
 ## things stand now, so the packer asks it of a place it tries ([method _misfit]).
@@ -1672,7 +1677,7 @@ func spot_of(k: String) -> Dictionary:
 	var y := DESK_Y
 	match k:
 		"home":
-			return {"aim": Vector3(0.0, y + 0.17, -0.16), "eye": EYE, "fov": 54.0}
+			return home_spot()
 		"terminal":
 			# square on its glass, wherever its make has it
 			var glass := bounds_xf(terminal_screen).origin if terminal_screen != null else Vector3(0.0, y + 0.35, CASE_AT.y + 0.18)

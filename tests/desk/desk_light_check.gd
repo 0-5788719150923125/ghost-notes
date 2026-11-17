@@ -21,8 +21,8 @@ extends SceneTree
 ## - The stage is the card table's: a mounted desk sets [constant TableMedium.STAGE] on its stage (the big shadow atlas and
 ##   debanding) and gives it back as it leaves; the control, the stage's own atlas, is not the table's.
 ## - The Environment's ([Surroundings]): moonlight and no light are never drawn by a desk's number, and chosen each is as it says.
-##   A mounted desk takes its brightness as its exposure, its share of the lamp, shafts of light (in volumetric fog) and what drifts
-##   in the air; a lamp at 0 is dark; and with no environment it is as it was (the control).
+##   A mounted desk takes its brightness as its exposure, its share of the lamp, shafts of light and what drifts in the air, its
+##   motes spread over the desk as its wide framing sees it; a lamp at 0 is dark; and with no environment it is as it was (the control).
 ##
 ##   godot --headless --path . --script tests/desk/desk_light_check.gd
 
@@ -305,6 +305,7 @@ func _environment() -> void:
 		and m._rays != null and m._rays.get_child_count() == 3 and m._env.volumetric_fog_enabled and m._air != null,
 		"a desk takes the Environment: twice as bright (%.2f of %.2f), its lamp at half (%.2f of %.2f), three shafts in its haze and the air"
 		% [m._env.tonemap_exposure, base, m._lamp.light_energy, lamp])
+	_check(_spread(m._air) > 0.1, "the desk's motes are spread over the desk as its wide framing sees it, never piled in their region's middle (%.2f m apart at most)" % _spread(m._air))
 	m.set_environment(Surroundings.sanitize({"lights": {"lamp": 0.0}}))
 	_check(not m._lamp.visible and m._rays == null and m._air == null and not m._env.volumetric_fog_enabled,
 		"its lamp at 0 is dark; no shafts or air chosen, none stand")
@@ -314,3 +315,17 @@ func _environment() -> void:
 	vp.remove_child(m)
 	m.free()
 	vp.queue_free()
+
+
+## How far apart the motes of [param air] are at most (m): 0 where every one is at one spot.
+static func _spread(air: Variant) -> float:
+	var homes: Array = []
+	if air != null:
+		for pop in air.motes:
+			for mo in (pop as Dictionary)["each"]:
+				homes.append((mo as Dictionary)["home"])
+	var most := 0.0
+	for a in homes:
+		for b in homes:
+			most = maxf(most, (a as Vector3).distance_to(b as Vector3))
+	return most

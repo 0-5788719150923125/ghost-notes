@@ -573,8 +573,13 @@ func _dress_environment() -> void:
 		_air = null
 	var fx := Surroundings.effects_of(_surround, Color.html(String(row["fog"])) if not own else FOG)
 	if not fx.is_empty():
-		_air = Effects.build(fx, {"regions": {"near": AIR_NEAR, "far": AIR_FAR, "room": AIR_ROOM}, "camera": _cam.transform,
-			"fov": _cam.fov, "aspect": 16.0 / 9.0}, hash([_seed, "dispatch air"]))
+		# its motes spread over the whole desk as the chair sees it, never over wherever the camera happens to be (on first
+		# dressing it is placed nowhere yet, and every mote would be put in the middle of its region)
+		var home := DispatchSet.home_spot()
+		var eye: Vector3 = home["eye"]
+		_air = Effects.build(fx, {"regions": {"near": AIR_NEAR, "far": AIR_FAR, "room": AIR_ROOM},
+			"camera": Transform3D(Basis.looking_at((home["aim"] as Vector3) - eye, Vector3.UP), eye), "fov": float(home["fov"]),
+			"aspect": 16.0 / 9.0}, hash([_seed, "dispatch air"]))
 		_root3.add_child(_air.root)
 	_shine_things()
 

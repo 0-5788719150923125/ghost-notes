@@ -405,9 +405,11 @@ func _dress_environment() -> void:
 	var fx := Surroundings.effects_of(environment, fog)
 	if not fx.is_empty():
 		var y := Vector3(0.0, LegalPad.DESK_Y, 0.0)
+		# its motes spread over the desk as the wide framing sees it, never over wherever the camera happens to be (on first
+		# dressing it is placed nowhere yet, and every mote would be put in the middle of its region)
 		_air = Effects.build(fx, {"regions": {"near": AABB(AIR_NEAR.position + y, AIR_NEAR.size),
 			"far": AABB(AIR_FAR.position + y, AIR_FAR.size), "room": AABB(AIR_ROOM.position + y, AIR_ROOM.size)},
-			"camera": _cam.transform, "fov": _cam.fov, "aspect": 16.0 / 9.0}, hash([_seed, "desk air"]))
+			"camera": _wide_camera(), "fov": _cam.fov, "aspect": 16.0 / 9.0}, hash([_seed, "desk air"]))
 		_root3.add_child(_air.root)
 
 
@@ -1794,6 +1796,15 @@ func _tick_camera(delta: float) -> void:
 ## The camera's wide and close framings ([constant WIDE], [constant LOCAL]).
 func _wide_frame() -> Dictionary:
 	return WIDE
+
+
+## Where the camera stands in its wide framing, unturned: over the whole pad, as [method _tick_camera] frames it.
+func _wide_camera() -> Transform3D:
+	var aim := _world(Vector2(PW * 0.5, PH * 0.45), 0.0)
+	var wide := _wide_frame()
+	var p := deg_to_rad(float(wide["pitch"]))
+	var eye := aim + Vector3(0.0, sin(p), cos(p)) * float(wide["dist"])
+	return Transform3D(Basis.looking_at(aim - eye, Vector3.UP), eye)
 
 
 func _local_frame() -> Dictionary:

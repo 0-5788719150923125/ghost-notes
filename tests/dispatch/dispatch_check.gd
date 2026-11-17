@@ -1124,6 +1124,23 @@ func _environment(md: DispatchMedium) -> void:
 		and not md._candles.visible,
 		"the hollow is its own with no environment; moonlit, its ambient the moon's and its lamp off, twice as bright (%.2f of %.2f), four shafts for the crack, pixies, the terminal at half"
 		% [md._env.tonemap_exposure, exposure])
+	var homes: Array = []
+	for pop in md._air.motes:
+		for mo in (pop as Dictionary)["each"]:
+			homes.append((mo as Dictionary)["home"])
+	var apart := 0.0
+	for a in homes:
+		for b in homes:
+			apart = maxf(apart, (a as Vector3).distance_to(b as Vector3))
+	# the control: placed from a camera put nowhere yet, as it is before the first frame, every mote is in its region's middle
+	var nowhere: Variant = Effects.build(Surroundings.effects_of(md._surround, DispatchMedium.FOG), {"regions": {"near": DispatchMedium.AIR_NEAR,
+		"far": DispatchMedium.AIR_FAR, "room": DispatchMedium.AIR_ROOM}, "camera": Transform3D.IDENTITY, "fov": 54.0, "aspect": 16.0 / 9.0}, 1)
+	var piled := 0.0
+	for pop in nowhere.motes:
+		for mo in (pop as Dictionary)["each"]:
+			piled = maxf(piled, ((mo as Dictionary)["home"] as Vector3).distance_to(DispatchMedium.AIR_NEAR.get_center()))
+	nowhere.release()
+	_ok(apart > 0.3 and piled < 0.01, "the motes are spread over the desk as the chair sees it (%.2f m apart at most) - the control, placed from a camera put nowhere yet, all in their region's middle (%.3f off it)" % [apart, piled])
 	md._surround = Surroundings.sanitize({"light": "candlelight"})
 	md._dress_environment()
 	_ok(md._candles.visible and md._candles.light_energy > 0.0 and is_zero_approx(md._lamp_share) and md._rays == null and md._air == null,
