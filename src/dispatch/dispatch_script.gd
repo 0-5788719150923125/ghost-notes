@@ -174,9 +174,19 @@ const READ_WORD := 0.32
 const READ_BEAT := 0.9
 const READ_DOWN := 0.9
 const TEXT_AGAIN := 9.0
-## A reply, typed into the phone in hand as it is said: a beat before its first key, and its sending after its last.
+## A reply, typed into the phone in hand on its keypad before it is said: a beat before its first key, its keys at a practiced
+## thumb's pace on a phone's keys (characters a second, on the whole: each letter takes as long as its presses, and a hand's
+## unevenness, [method key_times]), at most this long in all, and its sending once it is typed and said. An answer to it comes back no sooner than the other end could have read it,
+## thought a moment and typed it back at the same pace (at most this long).
 const REPLY_LEAD := 0.4
 const REPLY_SEND := 0.7
+const T9_RATE := 3.5
+const REPLY_MOST := 18.0
+const THEIRS_THINK := 2.5
+## A phone's keypad: each letter, and how many presses it takes there.
+const T9_KEYS := "abcdefghijklmnopqrstuvwxyz"
+const T9_PRESSES := [1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4]
+const THEIRS_MOST := 16.0
 ## The radar's ping: the voice's rest, and its ring's length. Its alarm as the target sets off: the voice's rest, and how
 ## long it sounds.
 const PING := 1.2
@@ -634,6 +644,7 @@ static func parse(body: String) -> Dictionary:
 	var open_image := -1                  # the picture over the whole screen still up (an index into spans)
 	var last_text := ""                   # the phone that texted last
 	var reply_to := ""                    # the phone the room's next words are typed into
+	var replied := {}                     # a phone the room has just sent a reply to, whose next text answers it
 	var gain := GAIN_REST                 # where the radar's gain knob stands
 	var storm := "popcorn"                # the storm the receiver last opened on
 	var term := DispatchTerminal.config_of(body)
@@ -777,8 +788,10 @@ static func parse(body: String) -> Dictionary:
 				if not reply_to.is_empty() and who == room:
 					var shown := " ".join(text.split("\n", false))
 					var wn := words_of(text).size()
+					var typing := reply_typing(shown)
 					_act(actions, gap, pending, spoken.size(), {"kind": "reply", "label": reply_to, "text": shown, "from": spoken.size(),
-						"to": spoken.size() + wn, "spans": typed_spans(shown)}, REPLY_LEAD, REPLY_LEAD)
+						"to": spoken.size() + wn, "spans": typed_spans(shown)}, REPLY_LEAD + typing, REPLY_LEAD + typing)
+					replied[reply_to] = true
 					reply_to = ""
 				_flush(speak, pending, who, heard, said_as, heard_as)
 				said_as = who
@@ -848,6 +861,12 @@ static func parse(body: String) -> Dictionary:
 							warnings.append("text: %s is no phone on the desk" % label)
 							phones.append(label)
 						var rest := TEXT_CHIME + READ_LIFT + READ_WORD * float(words.split(" ", false).size()) + READ_BEAT
+						# an answer to what was just sent: not before the other end could have typed it back
+						if replied.has(label):
+							var theirs := answer_wait(words)
+							gap.append([theirs, -1])
+							pending.append("<!-- action-hold: %s -->" % String.num(theirs, 2))
+							replied.erase(label)
 						_act(actions, gap, pending, at, {"kind": "text", "label": label, "words": words}, rest, rest + READ_DOWN)
 						last_text = label
 					"reply":
@@ -1134,6 +1153,43 @@ static func flap_starts(was: String, now: String) -> PackedFloat32Array:
 			out[k] = float(n) * CLOCK_STAGGER
 			n += 1
 	return out
+
+
+## How long a reply [param shown] takes to type on a phone's keypad (seconds): its characters at [constant T9_RATE], at most
+## [constant REPLY_MOST].
+static func reply_typing(shown: String) -> float:
+	return minf(float(shown.length()) / T9_RATE, REPLY_MOST)
+
+
+## Where each character of [param text] is typed on a phone's keypad, 0 to 1 of the way through its typing (the middle of its
+## keys): a letter takes as many presses as it does there (an "a" one, a "c" three, an "s" four), a space or a mark one, each
+## with a hand's unevenness of its own - drawn from the text, so the same reply is typed the same way.
+static func key_times(text: String) -> PackedFloat32Array:
+	var w := PackedFloat32Array()
+	w.resize(text.length())
+	var total := 0.0
+	for c in text.length():
+		var ch := text[c].to_lower()
+		var presses := 1.0
+		var at := T9_KEYS.find(ch)
+		if at >= 0:
+			presses = float(T9_PRESSES[at])
+		var r := hash([text, c]) % 1000
+		w[c] = (0.55 + 0.45 * presses) * lerpf(0.65, 1.45, float(r) / 999.0)
+		total += w[c]
+	var out := PackedFloat32Array()
+	out.resize(text.length())
+	var run := 0.0
+	for c in text.length():
+		out[c] = (run + w[c] * 0.5) / maxf(total, 1e-6)
+		run += w[c]
+	return out
+
+
+## How long after the room's reply its answer [param words] comes back: read and thought over ([constant THEIRS_THINK]), and
+## typed at the same pace, at most [constant THEIRS_MOST].
+static func answer_wait(words: String) -> float:
+	return minf(THEIRS_THINK + float(words.length()) / T9_RATE, THEIRS_MOST)
 
 
 ## Does the note open in the black: its first block that shows or says anything a fade up from it?

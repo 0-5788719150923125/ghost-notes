@@ -40,6 +40,8 @@ extends SceneTree
 ## - a synced note's words, which come without their frontmatter, are read with the note's put back (control: alone, the
 ##   terminal's keys and the desk block are missing);
 ## - controls: a call to a phone not on the desk, and a call left open, are each said;
+## - a text answering the room's reply comes no sooner than the other end could type it (the control: a text answering nothing),
+##   and the room's reply waits for its own typing on the keypad;
 ## - the flip clock's cards fall as a flap let go, slap down within a fifth of a second and bounce (the control: an even turn
 ##   is half way at half its time), the rightmost changed digit first; a digit that stays never flaps.
 ##
@@ -386,6 +388,21 @@ func _init() -> void:
 	var mute := DispatchScript.parse(desk + "<!-- speaker: Van -->\n\nHello.\n")
 	_ok(String(mute["warnings"][0]).contains("no phone open") and not String(mute["speakable"]).contains("heard"),
 		"the control: a voice whose phone is not open is said, and heard in the room")
+	# a text answering what the room sent comes back no sooner than the other end could type it on its keypad (the control: a text
+	# answering nothing comes as the script has it); the room's reply waits for its own typing
+	var texting := "---\ndesk:\n  phones: [AISLE]\n---\n\n<!-- speaker: Control -->\n\nListen.\n\n<!-- text: AISLE | Where are you -->\n\n"
+	var convo := DispatchScript.parse(texting + "<!-- reply -->\n\nAt the store, by the window.\n\n<!-- text: AISLE | Which one -->\n\nShe will know.\n")
+	var unasked := DispatchScript.parse(texting + "At the store, by the window.\n\n<!-- text: AISLE | Which one -->\n\nShe will know.\n")
+	var second_text := func(p: Dictionary) -> Dictionary:
+		var ts: Array = (p["actions"] as Array).filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "text")
+		return ts[1] if ts.size() > 1 else {}
+	var replied_a: Array = (convo["actions"] as Array).filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "reply")
+	var answer_waited := float((second_text.call(convo) as Dictionary).get("fwd", 0.0))
+	var unwaited := float((second_text.call(unasked) as Dictionary).get("fwd", 0.0))
+	_ok(answer_waited >= DispatchScript.answer_wait("Which one") - 0.01 and unwaited < DispatchScript.THEIRS_THINK and replied_a.size() == 1
+		and is_equal_approx(float(replied_a[0]["rest"]), DispatchScript.REPLY_LEAD + DispatchScript.reply_typing("At the store, by the window.")),
+		"an answer to what was sent waits for the other end to type it (%.1f s; the control, a text answering nothing, %.1f s), and a reply for its own typing (%.1f s)"
+		% [answer_waited, unwaited, float(replied_a[0]["rest"]) if not replied_a.is_empty() else -1.0])
 	# the flip clock's cards: a flap falls faster all the way and slaps down within a fifth of a second, then bounces once off
 	# its stop; the rightmost digit that changes flaps first, each changed one to its left after it
 	var half_way := DispatchScript.flap_angle(DispatchScript.CLOCK_LAND * 0.5)

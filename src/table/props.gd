@@ -259,6 +259,9 @@ const GLASS := {"curve": Vector2(0.0, 0.3), "lines": Vector2(0.0, 1.0), "line_co
 const FACE_HANDS := {"print": "", "marker": "res://fonts/hands/PatrickHand-Regular.ttf", "type": "res://fonts/cards/CourierPrime-Bold.ttf"}
 const WORDS_PX := 64
 const WORDS_LIFT := 0.0003
+## How much a face's light glints on what is glossy (Godot's own is 0.5): a lit screen is a pane, whose glint would be a broad
+## soft one, never a point's.
+const FACE_GLINT := 0.15
 ## A part's light ([method _sanitize_light]): its kinds, and the most it reaches (centimeters - past the thing, as light does).
 const LIGHT_KINDS := ["spot", "point"]
 const LIGHT_REACH := 600.0
@@ -1173,6 +1176,9 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 		# ...and its light, at its first copy: dark until a rig lights it
 		if part.get("light") is Dictionary:
 			var ln := _light_node(part["light"], xforms[0])
+			# a screen lights as the broad pane it is: never a point's sharp glint on what is glossy
+			if String(part.get("shape", "")) == "face":
+				ln.light_specular = FACE_GLINT
 			first.add_child(ln)
 			lights.append({"name": work_name, "node": ln, "energy": float((part["light"] as Dictionary)["strength"])})
 		var sch: Array = leaf["chains"]
@@ -1228,6 +1234,9 @@ static func _light_node(l: Dictionary, xf: Transform3D) -> Light3D:
 	light.transform = Transform3D(Basis.looking_at(aim, up), xf * ((l["at"] as Vector3) * 0.01))
 	light.light_color = Color.html(String(l["color"]))
 	light.light_energy = float(l["strength"])
+	# never in the haze: a scene's volumetric fog is worked out on a coarse grid, and a light inside a thing the camera comes
+	# close to paints that grid's squares over what it looks at, shimmering as the fog's samples move
+	light.light_volumetric_fog_energy = 0.0
 	if bool(l["shadows"]):
 		light.shadow_enabled = true
 		light.shadow_bias = 0.02

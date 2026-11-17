@@ -13,14 +13,15 @@ extends SceneTree
 ##   panel it opens comes up, the header at once and the body a line at a time; redacted words are one run on their row,
 ##   hidden over the frame by one box round them as the camera sees them, and covered whole from their first key; a typed
 ##   line is said behind its keys under the panel up; a strike removes it; after a block the camera stays on the glass while
-##   the voice talks of it and through to what comes soon, going home only when nothing comes for long;
+##   the voice talks of it, however long, through to what comes next (control: a linger of 8 s goes home before it);
 ## - the black and the clock: fades down and up; in the black the camera is on the clock, its cards turned over to the time
-##   given and running on a minute a minute, and a reading started past the fade turns it where a whole reading does
+##   given and running on a minute a minute, a later fade up turning from a minute before its own time (control: the clock as it
+##   ran, before the black), and a reading started past the fade turns it where a whole reading does
 ##   (control: the fade counted from the far past a mid-way start places it in); what is marked in the black is unseen; no
 ##   track is drawn across it; a note opening in the black shows its title over the blurred desk first, going black as the
 ##   title goes, its blur never lifting on the desk (controls: no title, black from the start; the usual pull lifting by then);
-## - two looks at the same thing are one, the camera held between them; in a live reading the camera holds on for a next
-##   look that comes soon, before its words are heard (controls: a look at something else between; a next look far off);
+## - two looks at the same thing are one, the camera held between them; in a live reading the camera holds on the glass for a
+##   next look before its words are heard, a long talk away too (controls: a look at something else between; a look home);
 ## - the tablet: picked up and held low over the desk, the camera on it, and put down dark; an address typed into its bar, a
 ##   link on the page tapped; a page following the words said on it, else easing down, the words read off it lit as said
 ##   (control: a page nothing is read off); its player dark until the desk is played live into it;
@@ -113,6 +114,15 @@ func _run() -> void:
 		"calling another lays the first down open on the desk (%s, %s)" % [md.phone_at("AISLE", at.call(van)), md.phone_at("VAN", at.call(van))])
 	_ok(md.phone_at("AISLE", at.call(eight)) == "ear" and md.phone_at("VAN", at.call(door)) == "desk",
 		"a phone lying open is picked back up, the other laid down")
+	# a call's timer runs from when it began, lying open on the desk and picked back up (the control: from when it was laid down,
+	# it would start again)
+	var aisle_began := md._call_began("AISLE", at.call(hello))
+	var laid_at := INF
+	for mv in md._phone_moves:
+		if String((mv as Dictionary)["label"]) == "AISLE" and String(mv["to"]) == "desk":
+			laid_at = minf(laid_at, float(mv["t0"]))
+	_ok(md._call_began("AISLE", at.call(van)) == aisle_began and md._call_began("AISLE", at.call(eight)) == aisle_began and laid_at > aisle_began + 1.0,
+		"a call's timer runs from when it began, lying open on the desk and picked back up (began %.1f s; the control, laid down at %.1f s)" % [aisle_began, laid_at])
 	var end_t := float((words.back() as Dictionary)["t1"]) + 5.0
 	_ok(md.phone_at("AISLE", end_t) == "row" and md.phone_at("VAN", end_t) == "row" and md.phone_at("COUGH", end_t) == "row",
 		"every phone is back in its row at the end")
@@ -289,6 +299,32 @@ func _run() -> void:
 	md._pose_mug(t0[lift_i] - 0.5)
 	_ok(upright_on_way and at_mouth and unseen and md._set.mug.global_transform.origin.distance_to(md._set.mug_home.origin) < 0.001,
 		"the mug is drunk from: upright all the way, at the mouth and out of the picture for the sip, in its ring before (%s %s %s)" % [upright_on_way, at_mouth, unseen])
+	# carried over what stands between it and the chair: a block 10 cm tall set just before the mug is never met, out or back
+	# (the control: the old way, straight with a lift of MUG_CLEAR, goes through it)
+	var mh := md._set.mug_home
+	var toward := (md._cam.global_position - mh.origin) * Vector3(1, 0, 1)
+	toward = toward.normalized()
+	var block_at := mh.origin + toward * (md._set.mug_radius + 0.05)
+	var block := AABB(Vector3(block_at.x - 0.04, DispatchSet.DESK_Y, block_at.z - 0.02), Vector3(0.08, 0.10, 0.04))
+	md._set._parts["test block"] = [{"box": block}]
+	var mug_box: AABB = md._set.bodies["mug"]
+	var met := false
+	var old_met := false
+	for k in 41:
+		var tt := t0[lift_i] + (DispatchScript.LIFT_UP + DispatchScript.LIFT_HOLD + DispatchScript.LIFT_DOWN) * float(k) / 40.0 / md._sp[lift_i]
+		md._pose_mug(tt)
+		var off: Vector3 = md._set.mug.global_transform.origin - mh.origin
+		met = met or AABB(mug_box.position + off, mug_box.size).grow(-0.002).intersects(block)
+		var held_now := Transform3D(mh.basis, md._cam.global_transform * DispatchMedium.MUG_MOUTH)
+		var u := (tt - t0[lift_i]) * md._sp[lift_i]
+		var kk := DispatchMedium._jerkless(u / DispatchScript.LIFT_UP) if u < DispatchScript.LIFT_UP else (1.0 if u < DispatchScript.LIFT_UP + DispatchScript.LIFT_HOLD
+			else 1.0 - DispatchMedium._jerkless((u - DispatchScript.LIFT_UP - DispatchScript.LIFT_HOLD) / DispatchScript.LIFT_DOWN))
+		var old_off: Vector3 = DispatchMedium._arc(mh, held_now, kk, DispatchMedium.MUG_CLEAR).origin - mh.origin
+		old_met = old_met or AABB(mug_box.position + old_off, mug_box.size).grow(-0.002).intersects(block)
+	md._set._parts.erase("test block")
+	md._pose_mug(t0[lift_i] - 0.5)
+	_ok(not met and old_met, "the mug is carried over what stands between it and the chair, out and back (the control: straight with a lift of %.0f cm, it goes through)"
+		% (DispatchMedium.MUG_CLEAR * 100.0))
 	# a real sip: at the mouth from the end of its rise to the end of its hold (at least 2.5 s), after a rise of at least 1.5 s,
 	# the voice silent until the sip is done (control: before its rise is over it is not there yet)
 	var sip0 := t0[lift_i] + DispatchScript.LIFT_UP / md._sp[lift_i]
@@ -334,7 +370,27 @@ func _run() -> void:
 	var after_r := md._reading("AISLE", sent_t + 0.05)["thread"] as Array
 	_ok(half_r.size() == 2 and String(half_r[1][0]) == "out" and String(half_r[1][1]).length() < "Good. Let him wonder.".length() and not bool(half_r[1][2])
 		and String(after_r[1][1]) == "Good. Let him wonder." and bool(after_r[1][2]),
-		"the answer is typed under it as it is said, and sent (%s / %s)" % [str(half_r), str(after_r)])
+		"the answer is typed, and sent once said (%s / %s)" % [str(half_r), str(after_r)])
+	# typed on the phone's keypad at a thumb's pace, all of it before it is said (the control: under its words as they are said,
+	# it would go at the voice's pace, far quicker)
+	var reply_text := String(actions[reply_i]["text"])
+	var keyed := keys_r[keys_r.size() - 1] - keys_r[0]
+	var first_said := md._word_t0(int(actions[reply_i]["from"]))
+	var said_for := md._word_t1(int(actions[reply_i]["to"]) - 1) - first_said
+	var gaps := PackedFloat32Array()
+	for c in range(1, keys_r.size()):
+		gaps.append(keys_r[c] - keys_r[c - 1])
+	var mean := 0.0
+	for g in gaps:
+		mean += g / float(gaps.size())
+	var spread := 0.0
+	for g in gaps:
+		spread += (g - mean) * (g - mean) / float(gaps.size())
+	spread = sqrt(spread) / maxf(mean, 1e-6)
+	_ok(keyed >= float(keys_r.size() - 1) / DispatchScript.T9_RATE / md._sp[reply_i] * 0.85 and keys_r[keys_r.size() - 1] <= first_said
+		and float(reply_text.length()) / said_for > DispatchScript.T9_RATE and spread > 0.2,
+		"a reply is typed on the phone's keys at %.1f a second on the whole, unevenly (each key %.0f%% off the mean - the control, even keys, 0), %.1f s for its %d characters, before it is said (said, it goes by at %.1f a second)"
+		% [DispatchScript.T9_RATE, spread * 100.0, keyed, reply_text.length(), float(reply_text.length()) / said_for])
 	_ok(md.phone_at("AISLE", sent_t + DispatchScript.READ_DOWN + 0.3) == "row", "then the phone goes home (%s)" % md.phone_at("AISLE", sent_t + DispatchScript.READ_DOWN + 0.3))
 	var plan_r := md.sound_plan()
 	var chimed := plan_r.filter(func(x: Dictionary) -> bool: return String(x.get("what", "")) == "chime" and absf(float(x["t"]) - t0[text_i]) < 0.01).size()
@@ -357,10 +413,24 @@ func _run() -> void:
 	_ok(not dial_mv.is_empty() and md.phone_at(String(dial_mv["label"]), pressed_t) == "read" and dialed_one == 1
 		and md.phone_at(String(dial_mv["label"]), float(dial_mv["dialed"]) + DispatchScript.DIAL + 0.2) == "ear",
 		"a call is speed-dialed: up before the eye, 1 held, then to the ear for the rings (%s)" % str(dial_mv.get("label")))
+	# the far end rings until it answers: never on under its first word (the control: answered a second into the rings, they stop
+	# there)
+	var answered := float(dial_mv.get("answered", INF))
+	var ring_from := float(dial_mv["dialed"]) + DispatchScript.DIAL / md._sp_of(dial_mv)
+	var rings_over := plan_r.filter(func(x: Dictionary) -> bool: return String(x.get("kind", "")) == "ringback" and absf(float(x["t"]) - ring_from) < 0.001 \
+		and float(x["t1"]) > answered + 0.001).size()
+	dial_mv["answered"] = ring_from + 1.0
+	md._build_sound()
+	var early := md.sound_plan().filter(func(x: Dictionary) -> bool: return String(x.get("kind", "")) == "ringback")
+	dial_mv["answered"] = answered
+	md._build_sound()
+	_ok(answered < INF and rings_over == 0 and early.size() >= 1 and is_equal_approx(float((early[0] as Dictionary)["t1"]), ring_from + 1.0),
+		"the far end rings until it answers, never on under its first word (the control: answered a second into its rings, they stop there)")
 	var bell_block := _first(actions, "bell") + 1
 	_gain_bell_lamp(md, actions, t0, plan_r, bell_block)
 	_black_tablet_clip(md, actions, t0, plan_r, st)
 	_clock_mid_way(md, body, parsed, words, st)
+	_clock_skip(st, md.feed)
 	_receiver(st, md.feed)
 	_glass_hold(st, md.feed)
 	_opens_black(st)
@@ -588,9 +658,9 @@ func _receiver(st: SubViewport, feed: ShowFeed) -> void:
 		"the control: the room's own typed line opens nothing on the receiver")
 
 
-## The camera on the terminal: after a block it stays on the glass while the voice talks of what is up, and through to
-## what comes next when that is soon, rather than pull back to the whole desk for nothing; with nothing coming for long,
-## it goes home in the end (the controls: a block's look as it was, home within seconds; the same note talked on long).
+## The camera on the terminal: after a block it stays on the glass while the voice talks of what is up, however long, through
+## to what comes next, never pulled back to the whole desk for nothing (the controls: a block's look as it was, home within
+## seconds; the same long talk with a linger of 8 s, home before the look).
 func _glass_hold(st: SubViewport, feed: ShowFeed) -> void:
 	var talk := "He keeps a log. Of course he keeps a log. He has a column for could be nothing, and he uses it for most of the night. "
 	var made := func(paras: int) -> DispatchMedium:
@@ -621,10 +691,21 @@ func _glass_hold(st: SubViewport, feed: ShowFeed) -> void:
 	var far: DispatchMedium = made.call(12)
 	var f_done := far.starts()[_first(far._actions, "session")] + float(far._actions[_first(far._actions, "session")]["rest"])
 	var f_look := far.starts()[_first(far._actions, "look")]
-	_ok(stays and look - done > DispatchMedium.GLASS_LEAST and old_home and far.looking_at(f_done + 4.0) == "terminal"
-		and far.looking_at(f_look - 3.0) == "home",
-		"after a block the camera stays on the glass while the voice talks of it, on to what comes next when that is soon, and goes home when nothing comes for long (the controls: as it was, home by %.0f s; talked on, home before the look) - %s %.1f %s %s %s" % [DispatchMedium.HOME_AFTER + 5.0,
-			stays, look - done, old_home, far.looking_at(f_done + 4.0), far.looking_at(f_look - 3.0)])
+	var held_on := true
+	t = f_done
+	while t < f_look - 0.3:
+		held_on = held_on and far.looking_at(t) == "terminal"
+		t += 1.0
+	# the control: the same two looks settled with a linger of 8 s, as the glass once had
+	var kept: Array = far._attn
+	var fs := _first(far._actions, "session")
+	far._attn = far._settled([{"t0": far.starts()[fs], "t1": far._end_of(fs) + 1.5, "hold": far._glass_hold(fs, f_done), "linger": 8.0,
+		"spot": far._spot("terminal")}, {"t0": f_look, "t1": INF, "spot": far._spot("radar"), "sticky": true}])
+	var lingered_home := far.looking_at(f_look - 3.0) == "home"
+	far._attn = kept
+	_ok(stays and look - done > DispatchMedium.GLASS_LEAST and old_home and held_on and f_look - f_done > 40.0 and lingered_home,
+		"after a block the camera stays on the glass while the voice talks of it, %.0f s of talk too, through to what comes next (the controls: as it was, home by %.0f s; with a linger of 8 s, home before the look) - %s %.1f %s %s %s" % [f_look - f_done,
+			DispatchMedium.HOME_AFTER + 5.0, stays, look - done, old_home, held_on, lingered_home])
 	near.queue_free()
 	far.queue_free()
 
@@ -866,8 +947,9 @@ func _bridge_live(st: SubViewport, feed: ShowFeed) -> void:
 	var again: Array = made.call("```terminal\n> 1\npanel: subjects = SUBJECTS\n```")
 	var radar: Array = made.call("<!-- look: radar -->")
 	var later: Array = made.call("<!-- look: radar -->", true)
-	_ok(String(again[0]) == "session" and float(again[1]) == INF and float(radar[1]) == INF and float(later[1]) < INF,
-		"live, with the next look's words not heard yet, the camera holds on for it when it comes soon (the control: a long talk away, not held - %s, %s, %s)" % [str(again), str(radar), str(later)])
+	var home: Array = made.call("<!-- look: home -->", true)
+	_ok(String(again[0]) == "session" and float(again[1]) == INF and float(radar[1]) == INF and float(later[1]) == INF and float(home[1]) < INF,
+		"live, with the next look's words not heard yet, the camera holds on the glass for it, a long talk away too (the control: a look back to the whole desk is not held for - %s, %s, %s, %s)" % [str(again), str(radar), str(later), str(home)])
 
 
 static func _first(actions: Array, kind: String) -> int:
@@ -1150,6 +1232,36 @@ func _environment(md: DispatchMedium) -> void:
 	_ok(md._env.ambient_light_color == DispatchMedium.AMBIENT and md._crack.visible and md._rays == null and md._air == null
 		and not md._candles.visible and is_equal_approx(md._env.tonemap_exposure, exposure) and is_equal_approx(float(term.get("_light_scale")), 1.0),
 		"the control: with none again, the hollow as it was")
+
+
+## A fade to black is a jump in the story's time: a later fade up with a time turns the cards from a minute before it, never from
+## wherever the clock had run to (the control: just before the black it still reads the earlier night's time).
+func _clock_skip(st: SubViewport, feed: ShowFeed) -> void:
+	var body := ("---\ndesk:\n  phones: [VAN]\n---\n\n<!-- speaker: Control -->\n\n<!-- fade: from-black, 22:40 -->\n\nFirst.\n\n"
+		+ "The night goes on and on, and nothing moves out there. ".repeat(12) + "\n\nSit on his lot until I tell you.\n\n"
+		+ "<!-- fade: to-black -->\n\n<!-- hesitation: 1.5 -->\n\n<!-- fade: from-black, 00:06 -->\n\nThen.\n")
+	var md := DispatchMedium.new()
+	md.feed = feed
+	md.mount(st)
+	md.load_note(body, {"seed": 3})
+	md._now = 0.0
+	md.take_words(DispatchScript.rehearsal(DispatchScript.parse(body), 0.32))
+	var up := -1
+	var down := -1
+	for i in md._actions.size():
+		var a: Dictionary = md._actions[i]
+		if String(a["kind"]) == "fade" and not bool(a["to"]):
+			up = i
+		elif String(a["kind"]) == "fade" and bool(a["to"]):
+			down = i
+	var turn := md.starts()[up] + float(md._actions[up]["secs"]) / md._sp[up]
+	var before := String(md.clock_at(turn - 0.2).get("to", ""))
+	var turning: Dictionary = md.clock_at(turn + DispatchScript.CLOCK_TURN * 0.5)
+	var earlier := String(md.clock_at(md.starts()[down] - 0.1).get("to", ""))
+	_ok(before == "00:05" and String(turning.get("from", "")) == "00:05" and String(turning.get("to", "")) == "00:06" and earlier.begins_with("22:4"),
+		"after the black the cards come up at 00:05 and turn to 00:06, never from where the clock had run to (%s, %s; the control, before the black, %s)"
+		% [before, str(turning), earlier])
+	md.queue_free()
 
 
 func _ok(cond: bool, what: String) -> void:

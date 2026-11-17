@@ -74,6 +74,23 @@ func _run() -> void:
 	for l in b["lights"]:
 		studio_dark = studio_dark and not ((l as Dictionary)["node"] as Light3D).visible
 	_ok(studio_dark, "a light is built dark: a host with no rig never shows it")
+	var hazeless := true
+	for l in b["lights"]:
+		hazeless = hazeless and is_zero_approx(((l as Dictionary)["node"] as Light3D).light_volumetric_fog_energy)
+	# a screen's light glints softly, as the pane it is (the control: the bulb's, a point, as Godot makes it)
+	var lit_screen := Props.sanitize({"things": [{"name": "set", "parts": [{"shape": "face", "name": "glass", "size": [10, 8],
+		"light": {"kind": "point", "strength": 1.0, "reach": 80}}]}]}, [])
+	var sb := Props.build((lit_screen["things"] as Array)[0], lit_screen["materials"], 1)
+	var screen_glint := ((sb["lights"] as Array)[0]["node"] as Light3D).light_specular if not (sb["lights"] as Array).is_empty() else -1.0
+	var bulb_glint := ((b["lights"] as Array)[0]["node"] as Light3D).light_specular
+	(sb["node"] as Node).free()
+	_ok(is_equal_approx(screen_glint, Props.FACE_GLINT) and bulb_glint > Props.FACE_GLINT,
+		"a screen's light glints softly, as the pane it is (%.2f; the control, a bulb's, %.2f)" % [screen_glint, bulb_glint])
+	var made := OmniLight3D.new()
+	var godot_own := made.light_volumetric_fog_energy
+	made.free()
+	_ok(hazeless and godot_own > 0.0,
+		"a thing's light never lights the haze, whose coarse grid it would paint over what the camera is close to (the control: a light as Godot makes it does)")
 
 	var rig := PropRig.new(b)
 	_ok(rig.face("screen") != null and rig.face("scope") == null, "a face is found by its name; one the make lacks is null")

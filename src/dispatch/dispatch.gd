@@ -144,19 +144,24 @@ const RATTLE := 0.0025
 const RATTLE_TURN := 3.0
 ## The mug, drunk from: where its foot comes to in the camera's own frame (m: well under the eye and barely in front of it,
 ## the mouth, so the whole mug is out of the picture whichever way the camera looks); and how high it is lifted clear of
-## the desk on its way.
+## the desk on its way, at the least.
 const MUG_MOUTH := Vector3(0.03, -0.17, -0.01)
 const MUG_CLEAR := 0.06
+## A thing carried off the desk ([method _carry]): the share of its way it spends going straight up out of where it stood (and
+## straight down into where it goes), and how far over the tallest thing in its way it is carried (m).
+const CARRY_RISE := 0.3
+const CARRY_GAP := 0.025
 ## The terminal's cursor blinks this often (seconds).
 const BLINK := 0.53
 ## The camera on the terminal after a block or a said line: the glass read at GLASS_WORD a word on it, held GLASS_LEAST to
-## GLASS_MOST, on to the end of the sentence the voice is in if that ends within GLASS_SENTENCE; then it stays rather than
-## pull back to the whole desk for nothing, unless nothing else comes for GLASS_LINGER and AWAY_LEAST more.
+## GLASS_MOST, on to the end of the sentence the voice is in if that ends within GLASS_SENTENCE; then it stays on the panel
+## left up however long the voice goes on about it (GLASS_LINGER: never pulled back to the whole desk for nothing) - until
+## something else is looked at, or the script says `<!-- look: home -->`.
 const GLASS_WORD := 0.3
 const GLASS_LEAST := 6.0
 const GLASS_MOST := 16.0
 const GLASS_SENTENCE := 6.0
-const GLASS_LINGER := 8.0
+const GLASS_LINGER := INF
 ## A note that opens in the black goes down to it as its title goes: from this long before the opening to this long after,
 ## as [method ShowOpening.title_alpha] fades the name out.
 const BLACK_LEAD := 0.6
@@ -167,8 +172,8 @@ const BLACK_TAIL := 0.3
 ## tablet medium lights what its voice reads; a word is looked for this many words on from the last.
 const PAGE_EASE := 0.9
 ## How bright the tablet's screen glows lit (the tablet medium's own is 1.15, in a lighter room): a page read in the dark of
-## the desk keeps its words' color.
-const TABLET_GLOW := 1.0
+## the desk keeps its words' color, its white just under full at the hollow's exposure ([constant EXPOSURE]), never blown out.
+const TABLET_GLOW := 0.6
 const PAGE_KEEP := 0.32
 const PAGE_DRIFT := 18.0
 const FOLLOW_LETTERS := 5
@@ -1039,8 +1044,9 @@ func _end_of(i: int) -> float:
 ## A typed block's characters, each's moment ([constant DispatchScript.AHEAD_WORDS]): the first words at a typist's pace
 ## in the rest before the voice, done as it begins; each word after typed while the voice says the one that many before
 ## it, through to the next one's start, at most [constant DispatchScript.KEY_QUICK] a key and always done before it is
-## itself said, so the voice reads behind the keys and is never waiting on them. A reply's keys under each word as it is
-## said. INF for a word not heard yet.
+## itself said, so the voice reads behind the keys and is never waiting on them. A reply's keys on a phone's keypad, at
+## [constant DispatchScript.T9_RATE] a second on the whole, unevenly ([method DispatchScript.key_times]), in the rest before
+## it is said. INF for a word not heard yet.
 func _char_times(i: int) -> PackedFloat32Array:
 	var a: Dictionary = _actions[i]
 	var text := String(a["text"])
@@ -1048,6 +1054,15 @@ func _char_times(i: int) -> PackedFloat32Array:
 	out.resize(text.length())
 	out.fill(INF)
 	if _t0[i] == INF:
+		return out
+	if String(a["kind"]) == "reply":
+		# a reply: typed on the phone's keypad, every key in the rest before it is said, each as long as its presses and a hand's
+		# unevenness make it ([method DispatchScript.key_times])
+		var at := DispatchScript.key_times(text)
+		var t9 := _t0[i] + DispatchScript.REPLY_LEAD / _sp[i]
+		var typing := DispatchScript.reply_typing(text) / _sp[i]
+		for c in text.length():
+			out[c] = t9 + at[c] * typing
 		return out
 	var spans: Array = a["spans"]
 	var from := int(a["from"])
@@ -1084,8 +1099,8 @@ func _char_times(i: int) -> PackedFloat32Array:
 			var w1 := _word_t1(from + k)
 			if w0 == INF or w1 == INF:
 				break
-			s = maxf(w0 - DispatchScript.REPLY_AHEAD, last)
-			e = maxf(w1 - DispatchScript.REPLY_AHEAD * 0.3, s + 0.04 * float(c1 - c0))
+			s = maxf(w0, last)
+			e = maxf(w1, s + 0.04 * float(c1 - c0))
 		for c in range(c0, c1):
 			out[c] = s + (float(c - c0) + 0.5) / keys * (e - s)
 		last = e
@@ -1126,7 +1141,8 @@ func _build_phones() -> void:
 						"dial":
 							var until := t + float(a["rest"]) / s
 							_phone_moves.append({"label": label, "from": "row", "to": "read", "t0": at, "dur": DispatchScript.LIFT / s,
-								"how": "dial", "dialed": at + DispatchScript.LIFT / s, "until": until, "slot": -1, "began": t})
+								"how": "dial", "dialed": at + DispatchScript.LIFT / s, "until": until, "slot": -1, "began": t,
+								"answered": _word_t0(int(a["after"]))})
 							_phone_moves.append({"label": label, "from": "read", "to": "ear", "t0": at + (DispatchScript.LIFT + DispatchScript.DIAL
 								- DispatchScript.TO_EAR) / s, "dur": DispatchScript.TO_EAR / s, "how": "dial", "until": until, "slot": -1, "began": t})
 							continue
@@ -1202,12 +1218,13 @@ func _read_until(i: int) -> float:
 	return done
 
 
-## When reply [param k] is sent: its last key, and a beat; INF until it is heard.
+## When reply [param k] is sent: typed and said, and a beat; INF until it is heard.
 func _sent_at(k: int) -> float:
 	var times: PackedFloat32Array = _chars.get(k, PackedFloat32Array())
-	if times.is_empty() or times[times.size() - 1] == INF:
+	var said := _word_t1(int((_actions[k] as Dictionary)["to"]) - 1)
+	if times.is_empty() or times[times.size() - 1] == INF or said == INF:
 		return INF
-	return times[times.size() - 1] + DispatchScript.REPLY_SEND / _sp[k]
+	return maxf(times[times.size() - 1], said) + DispatchScript.REPLY_SEND / _sp[k]
 
 
 ## The next text from [param label] after action [param i], -1 for none.
@@ -1513,7 +1530,9 @@ func _build_sound() -> void:
 					out.append({"t": dialed + DispatchScript.SPEED_PRESS / k, "what": "dtmf", "digit": 1, "secs": DispatchScript.SPEED_HOLD / k, "at": at})
 					out.append({"t": dialed + DispatchScript.SEND_AT / k, "what": "pad", "at": at})
 					var ring_from := dialed + DispatchScript.DIAL / k
-					out.append({"t": ring_from, "t1": ring_from + DispatchScript.RING_CYCLE * float(DispatchScript.SCOPE_RINGS - 1) + DispatchScript.RING_ON, "kind": "ringback"})
+					# the far end rings until it answers: its rings, cut off the moment its first word is said
+					var rung := ring_from + DispatchScript.RING_CYCLE * float(DispatchScript.SCOPE_RINGS - 1) + DispatchScript.RING_ON
+					out.append({"t": ring_from, "t1": minf(rung, float(m.get("answered", INF))), "kind": "ringback"})
 			["ear", "desk"]:
 				out.append({"t": t + dur * 0.9, "what": "lay", "at": at})
 			["desk", "ear"]:
@@ -1734,12 +1753,12 @@ func _pose_phones(t: float) -> void:
 				var pressed := t >= float(mv.get("dialed", INF)) + DispatchScript.SPEED_PRESS / _sp_of(mv)
 				lit.append([i, "inner", {"mode": "dial", "label": label, "digits": "1" if pressed else ""}])
 			elif place == "ear" or (place == "moving" and String(mv["to"]) == "ear") or dialing:
-				var secs := t - float(mv.get("began", mv["t0"]))
+				var secs := t - _call_began(label, t)
 				lit.append([i, "inner", {"mode": "calling" if dialing else "call", "label": label, "secs": snappedf(maxf(secs, 0.0), 1.0)}])
 			elif place == "read" or (place == "moving" and (String(mv["to"]) == "read" or String(mv["from"]) == "read")):
 				lit.append([i, "inner", _reading(label, t)])
 			elif place == "desk" or (place == "moving" and String(mv["to"]) == "desk"):
-				lit.append([i, "inner", {"mode": "hold", "label": label, "secs": snappedf(t - float(mv["t0"]), 1.0)}])
+				lit.append([i, "inner", {"mode": "hold", "label": label, "secs": snappedf(maxf(t - _call_began(label, t), 0.0), 1.0)}])
 		# Ringing: rattling in the row, its little screen saying who; a text: its little screen with the words
 		for k in _actions.size():
 			var a: Dictionary = _actions[k]
@@ -1788,6 +1807,25 @@ static func _rank(mode: String) -> int:
 
 
 ## The speed a move [param mv] was made at (its action's), for the moments inside it.
+## When the call phone [param label] is on at [param t] began: its call's first move up out of its row, whether it has been laid
+## on the desk and picked up since - a call's timer runs from there until it is hung up, wherever the handset lies.
+func _call_began(label: String, t: float) -> float:
+	var began := t
+	var latest := -INF
+	for m in _phone_moves:
+		var mv: Dictionary = m
+		var at := float(mv["t0"])
+		if String(mv["label"]) != label or at > t or at < latest:
+			continue
+		if String(mv["from"]) == "row" and String(mv["to"]) in ["ear", "read"]:
+			began = float(mv.get("began", at))
+			latest = at
+		elif String(mv["to"]) == "row":
+			began = t
+			latest = at
+	return began
+
+
 func _sp_of(mv: Dictionary) -> float:
 	return clampf(DispatchScript.LIFT / maxf(float(mv["dur"]), 0.001), 1.0, 4.0) if String(mv.get("how", "")) == "dial" else 1.0
 
@@ -1839,6 +1877,24 @@ func _where(place: String, home: Transform3D, ear: Transform3D, held: Transform3
 static func _arc(a: Transform3D, b: Transform3D, u: float, lift: float) -> Transform3D:
 	var o := a.origin.lerp(b.origin, u) + Vector3(0, lift * sin(u * PI), 0)
 	var q := a.basis.get_rotation_quaternion().slerp(b.basis.get_rotation_quaternion(), u)
+	return Transform3D(Basis(q), o)
+
+
+## A thing carried from [param a] to [param b], [param u] of the way (0-1), as a hand carries it past what stands in its way:
+## straight up out of where it stood until it is at [param over] (a height, over the tallest thing in its way), across no lower,
+## and straight down into where it goes - each end that is below that height; the rest of the way smoothly, a hand's.
+static func _carry(a: Transform3D, b: Transform3D, u: float, over: float) -> Transform3D:
+	var up := CARRY_RISE if a.origin.y < over else 0.0
+	var down := CARRY_RISE if b.origin.y < over else 0.0
+	var h := _jerkless(clampf((u - up) / maxf(1.0 - up - down, 1e-3), 0.0, 1.0))
+	var o := a.origin.lerp(b.origin, h)
+	var floor_y := over
+	if u < up:
+		floor_y = lerpf(a.origin.y, over, _jerkless(u / up))
+	elif u > 1.0 - down:
+		floor_y = lerpf(over, b.origin.y, _jerkless((u - (1.0 - down)) / down))
+	o.y = maxf(lerpf(a.origin.y, b.origin.y, _jerkless(u)), floor_y)
+	var q := a.basis.get_rotation_quaternion().slerp(b.basis.get_rotation_quaternion(), h)
 	return Transform3D(Basis(q), o)
 
 
@@ -2443,7 +2499,7 @@ func _pose_screens(t: float) -> void:
 			m.set_shader_parameter("has_face", false)
 			m.set_shader_parameter("power", power)
 			m.set_shader_parameter("frame", floor(t * 24.0))
-			_feeds[key] = {"glow": (0.3 + 0.05 * sin(t * 17.0) * sin(t * 5.3)) * power}
+			_feeds[key] = {"glow": (0.3 + 0.025 * sin(t * 17.0) * sin(t * 5.3)) * power}
 			continue
 		if key != "feed":
 			m.set_shader_parameter("snow", 0.06 if tex != null and shown.begins_with("clip:") else 0.0)
@@ -2454,7 +2510,7 @@ func _pose_screens(t: float) -> void:
 			m.set_shader_parameter("power", 1.0)
 			m.set_shader_parameter("brightness", 0.5)
 			m.set_shader_parameter("frame", floor(t * 24.0))
-			_feeds[key] = {"glow": 0.32 + 0.06 * sin(t * 17.0) * sin(t * 5.3)}
+			_feeds[key] = {"glow": 0.32 + 0.03 * sin(t * 17.0) * sin(t * 5.3)}
 			continue
 		if key == "feed":
 			m.set_shader_parameter("snow", 0.12)
@@ -2491,9 +2547,9 @@ func _pose_switch(t: float) -> void:
 	_feeds["switch"] = {"side": angle / up}
 
 
-## The mug at [param t]: in its ring, or drunk from: lifted upright out of its ring and brought to the mouth, just under
-## the eye and out of the picture past its lower edge, held there for the sip, and set back down in its ring. It never
-## tips where it is seen.
+## The mug at [param t]: in its ring, or drunk from: lifted upright out of its ring, over what stands between it and the chair,
+## and brought to the mouth, just under the eye and out of the picture past its lower edge, held there for the sip, and set
+## back down in its ring the same way ([method _carry]). It never tips where it is seen.
 func _pose_mug(t: float) -> void:
 	var xf := _set.mug_home
 	for i in _actions.size():
@@ -2510,7 +2566,8 @@ func _pose_mug(t: float) -> void:
 			k = 1.0
 		else:
 			k = 1.0 - _jerkless((u - DispatchScript.LIFT_UP - DispatchScript.LIFT_HOLD) / DispatchScript.LIFT_DOWN)
-		xf = _arc(_set.mug_home, held, k, MUG_CLEAR)
+		xf = _carry(_set.mug_home, held, k, maxf(_set.clear_over(_set.mug_home.origin, held.origin, _set.mug_radius, ["mug"]) + CARRY_GAP,
+			_set.mug_home.origin.y + MUG_CLEAR))
 	_set.mug.global_transform = xf
 
 
@@ -2585,8 +2642,8 @@ func _black_from(i: int) -> float:
 
 
 ## The clock at [param t]: `{from, to, u}` - what its cards show and, while they turn, what they turn from - {} with no
-## time given yet. A fade up with a time turns them to it as the picture comes up; from there it runs a minute a minute,
-## each minute turning over. A mid-way start's fades before it count from where they fall on the reading ([method
+## time given yet. A fade up with a time turns them to it from a minute before it as the picture comes up (the black is a jump in
+## the story's time); from there it runs a minute a minute, each minute turning over. A mid-way start's fades before it count from where they fall on the reading ([method
 ## _on_reading]), never from the far past its earlier actions are placed in.
 func clock_at(t: float) -> Dictionary:
 	var set_t := -INF
@@ -2599,7 +2656,9 @@ func clock_at(t: float) -> Dictionary:
 		var turn := _on_reading(i, _t0[i] + float(a["secs"]) / _sp[i])
 		if _t0[i] > t:
 			break
-		was = set_to + int(floor((turn - set_t) / 60.0)) if set_to >= 0 else int(a["clock"]) - 1
+		# the black is a jump in the story's time: the cards come up a minute short of the time given and turn that minute,
+		# never from wherever the clock had run to before it
+		was = int(a["clock"]) - 1
 		set_t = turn
 		set_to = int(a["clock"])
 	if set_to < 0:
@@ -2974,7 +3033,10 @@ func _pose_tablet(t: float) -> void:
 	var lift := float(st["lift"])
 	var xf := _set.tablet_home
 	if lift > 0.0:
-		xf = _arc(_set.tablet_home, _set.tablet_held_xf(), _jerkless(lift), 0.07)
+		var held := _set.tablet_held_xf()
+		var reach := maxf(_set.bodies["tablet"].size.x, _set.bodies["tablet"].size.z) * 0.5 if _set.bodies.has("tablet") else 0.1
+		xf = _carry(_set.tablet_home, held, _jerkless(lift), maxf(_set.clear_over(_set.tablet_home.origin, held.origin, reach, ["tablet"])
+			+ CARRY_GAP, _set.tablet_home.origin.y + 0.07))
 	_set.tablet.global_transform = xf
 	var face: Dictionary = st["face"]
 	_screens.show_tablet(face)

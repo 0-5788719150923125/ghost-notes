@@ -161,6 +161,7 @@ var heap_top: MeshInstance3D
 var screens := {}                 # feed / satellite / tv -> {mesh, rig, node}
 var mug: Node3D
 var mug_home := Transform3D()
+var mug_radius := 0.04            # how far the mug reaches out from its middle (m), for what it must clear when carried
 var lamp: Light3D                 # the lamp's light (its make's `lamp`), lit by the medium's feed
 var chair: Node3D
 var clock_face: MeshInstance3D    # the flip clock's cards (null without a clock)
@@ -1539,6 +1540,7 @@ func _things() -> void:
 	rigs["mug"] = mr
 	mug.add_child(mr.node)
 	var mug_rad := maxf((mr.built["size"] as AABB).size.z * 0.5, 0.01) if mr.built.get("size") is AABB else 0.04
+	mug_radius = mug_rad
 	made["mug"] = mug
 	_faces["mug"] = [mug]
 	var cup := _rig("pencil_cup")
@@ -1664,6 +1666,27 @@ func tablet_held_xf() -> Transform3D:
 
 
 # --- where the camera looks -------------------------------------------------------------------------------------------
+
+## The highest top (m) of what is on the desk within [param radius] of the way across it from [param from] to [param to] (x, z),
+## [param skip]'s things aside (what is carried): what a thing carried between them must clear. The desk's own top where nothing
+## stands in the way.
+func clear_over(from: Vector3, to: Vector3, radius: float, skip: Array) -> float:
+	var top := DESK_Y
+	for k in _parts:
+		if k in skip:
+			continue
+		for part in _parts[k]:
+			var b: AABB = (part as Dictionary)["box"]
+			if b.end.y <= top:
+				continue
+			var r := Rect2(b.position.x, b.position.z, b.size.x, b.size.z).grow(radius)
+			for s in 33:
+				var p := from.lerp(to, float(s) / 32.0)
+				if r.has_point(Vector2(p.x, p.z)):
+					top = b.end.y
+					break
+	return top
+
 
 ## The whole desk from the chair (the `home` spot): the same on every desk, so it can be asked before one is built.
 static func home_spot() -> Dictionary:

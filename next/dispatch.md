@@ -307,8 +307,8 @@ The revised night (rift's `MEDIUM.md`, its design and what differs from it) is t
   one by its words, one come back to a glance - unless a `wait:` says how long.
 - **The camera stays on the glass** after a block or a typed line while the voice talks of what is up
   (`DispatchMedium._glass_hold`: the panel's words read, `GLASS_LEAST` to `GLASS_MOST`, to the end of the sentence), and on
-  through to what comes next when that is soon (`GLASS_LINGER` and `AWAY_LEAST`), rather than pull back to the whole desk
-  for nothing; with nothing coming for long, it goes home.
+  however long the voice goes on, through to what comes next (`GLASS_LINGER` is unbounded): never pulled back to the whole
+  desk for nothing. A script takes it home sooner with `<!-- look: home -->`.
 - **A ping is where a radar reports it**: bearing clockwise from the scope's top, range in the desk's range rings
   (`rings:`, the scope's edge the last; `DispatchMedium.scope_at`). A place named again bare is the same spot; a place
   never given numbers is laid out from the words, as before, and warned of.
