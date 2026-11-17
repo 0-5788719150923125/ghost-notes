@@ -27,6 +27,11 @@ var _dirty_since := 0
 ## True in a process that must never write: an export render and the offline analyzer boot the whole app
 ## against this same file (see exporter.gd).
 var _read_only := false
+## A folder scripts/check.sh names for a gate's run: each process lists in `<folder>/<pid>` every key it reads,
+## once, so the gate cache keeps a pass on those values rather than on the whole of ghost.cfg.
+var _reads_dir := OS.get_environment("GHOST_SETTINGS_READS")
+var _reads_log: FileAccess = null
+var _reads_seen := {}
 
 
 func _ready() -> void:
@@ -86,12 +91,31 @@ func allow_writes_for_test() -> void:
 ## The stored value for [param section]/[param key], or [param dflt] when never set. Reads come from the
 ## in-memory copy.
 func read(section: String, key: String, dflt: Variant) -> Variant:
+	if not _reads_dir.is_empty():
+		_note_read(section, key)
 	return _own(_cfg.get_value(section, key, dflt))
 
 
 ## Whether this key has ever been stored. An empty string is still a user's stored choice.
 func has(section: String, key: String) -> bool:
+	if not _reads_dir.is_empty():
+		_note_read(section, key)
 	return _cfg.has_section_key(section, key)
+
+
+## One line a key, `section<TAB>key`, the first time this process reads it (see [member _reads_dir]).
+func _note_read(section: String, key: String) -> void:
+	var line := section + "\t" + key
+	if _reads_seen.has(line):
+		return
+	_reads_seen[line] = true
+	if _reads_log == null:
+		_reads_log = FileAccess.open(_reads_dir.path_join(str(OS.get_process_id())), FileAccess.WRITE)
+		if _reads_log == null:
+			_reads_dir = ""
+			return
+	_reads_log.store_line(line)
+	_reads_log.flush()
 
 
 ## Remember [param value]. Writing an unchanged value is a no-op, so this is safe to call

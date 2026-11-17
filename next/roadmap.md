@@ -76,9 +76,6 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **A week behind the edge, and helpers in a sandbox**
       Take nothing from upstream until it is seven days old (no pins), and run every helper program in a sandbox that is on by default, asked about once if it fails, with a checkbox on the Environment panel - not Docker. Decided 2026-10-26, waiting. See [supply_chain.md](supply_chain.md).
 
-- [ ] **Run only the gates whose inputs changed**
-      Trace what each gate reads; on a pass keep a hash per file, and skip it next time while every hash holds. A static graph misses directory walks, paths in strings, shaders, rules and data. Every gate compiles the autoloads' 126 scripts, the floor; strace is the user's call. See [test_cache.md](test_cache.md).
-
 - [ ] **Portrait beyond full frame**
       Full frame shows and exports at 9:16 (step 10). Open: `cloth` and `two_eyes` tuned for the tall frame (cloth leaves most of it empty, two_eyes sits against its edges), the tablet's distances, the tarot's 16:9 values, and single-page comic, book and notebook layouts and a portrait tarot table - each design work of its own.
 
@@ -150,6 +147,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 
 - [x] **One kind of note**
       New has no options: it makes a note with nothing attached, and "+" makes it what it becomes. The template table is gone; a component declares the room it takes and the workspace it needs, and the rest is derived. Every component detaches. A note keeps its own storyboard and edits it in the app. See [storyboard.md](storyboard.md).
+
+- [x] **Run only the gates whose inputs changed**
+      Built: check.sh traces every gate under strace and skips one while nothing it read has changed since it passed (`scripts/gate_cache.py`, `dist/gate_cache/`, `--full`); ghost.cfg counts by the keys a gate reads. What an edit saves is still to be measured. See [test_cache.md](test_cache.md).
 
 - [x] **After the first review**
       A clean notes list (New only; delete with ×, or a note's "⋯"), every note starting from nothing, a song as a note's component with Auto as a medium, Manual's storyboards as a card, Tarot renamed Cards, Masking's panel in the framework, and "Edit". See [notes.md](notes.md), "After the first review".

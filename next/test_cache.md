@@ -1,16 +1,20 @@
 # Running only the gates whose inputs changed
 
-The question: can a gate be skipped when nothing it depends on has changed since it last passed? Yes, safely, if "depends
-on" means what the gate actually read, not what its source seems to name.
+`scripts/check.sh` skips a gate while nothing it read has changed since it passed. "What it read" is what the gate's
+processes actually opened, stat'ed, listed and looked for, never what its source seems to name.
 
 ## Status
 
-- Built: nothing. `check.sh --for` already narrows by folder (against the last commit), and `.times` orders the run.
-- Looked at: docs.py's static reference graph, Godot's own load log, and a file-read trace of four runs (a throwaway
-  LD_PRELOAD shim, kept out of the repo).
-- For the user: whether to take strace as a test-only system tool, and whether CI stays uncached.
-
-259 gates; their last passing times add up to 104 minutes. The 11 over 100 s are 55% of that (`table_place_check` alone 15).
+- Built: every gate runs under strace; a pass keeps a record in `dist/gate_cache/` (`scripts/gate_cache.py`), and a run
+  leaves out each gate whose record still holds. `--full` runs them anyway. ghost.cfg is kept by the keys each gate's
+  Settings read (`GHOST_SETTINGS_READS`). `gate_cache` is the cache's control (`gate_cache.py --selftest`).
+- Measured: tracing costs about a second of engine boot per gate (a 1.8 s gate takes 2.9 s). A traced full run (233
+  headless gates, two at a time) is 87 min of gates in 46 min. Not yet measured: what a run after an edit takes (the
+  records' inputs and `.times` give it per changed file). The GPU gates have not run traced yet.
+- For the user: whether a gate is ever cached wrongly. A `--full` run now and then is the check; CI is always one.
+- Open: `settings_check` writes the author's ghost.cfg (persistence is what it holds) and puts it back at the end; a
+  gate beside it under `--jobs` reads its values in between. The cache refuses such a pass ("changed during the run"),
+  but the gate itself ran on them.
 
 ## What a gate depends on (measured)
 
@@ -21,50 +25,35 @@ on" means what the gate actually read, not what its source seems to name.
 - **docs.py's graph (`_references`) is right where code names a class, and blind elsewhere.** With the autoloads, it
   matched the trace exactly for `voice_readers_check` (127 scripts) and `tables_check` (230), and missed 303 of 430 for
   `timeline_kit_check`, which walks `res://src` itself. It never sees the other inputs: `tables_check` read two rules files
-  and ten shaders, `voice_readers_check` a data JSON. A scene picked by key, a script named by path in a registry row, a
-  `.tscn`, a Python host - the same.
+  and ten shaders, `voice_readers_check` a data JSON. So the key is a trace, never a static graph.
 - **Godot's verbose log is no trace:** it names 9 resources for `timeline_kit_check`, which read 438 files.
+- **Every gate reads the author's ghost.cfg** (read-only), and the app rewrites it with nearly any use. Kept whole, it
+  would rerun every gate after the app was touched; `voice_readers_check` reads 14 of its keys.
 
-So an AST pass is not enough. A key that misses an input skips a gate that should run, which is worse than no cache. The
-inputs are what the process read, and a process can be watched.
+## How it works
 
-## The design
+1. **Trace.** `strace -ff -y --seccomp-bpf` with only the file calls (`gate_cache.CALLS`) wraps each gate's command,
+   OUTSIDE its timeout: with `-o` strace holds fatal signals, so a timeout signalling strace would never end the gate.
+2. **Inputs.** In the repo and user:// (the fetched environments live there): each file opened to read, stat'ed or run;
+   each folder listed; each path looked for and not found. What the gate wrote is its own, and so is everything under a
+   folder it made, moved or removed, and the listing of a folder it wrote into. Left out: `dist/`, `.git/`, the engine's
+   and Python's caches, user:// logs, the recovery lock, and the boot probe runner's `tests/_probe_<pid>.tscn`.
+3. **Record.** A content hash per file, the names the gate saw per listing (strace prints them, so parallel probes
+   writing into `tests/` change nothing), what was absent, each ghost.cfg key read with its value, and the meta: Godot's
+   version and binary, the gate's run line (with the driver for a GPU gate), the locale, and the hash of check.sh and
+   gate_cache.py. A pass is kept only if no file it read changed after it started; a failure deletes it.
+4. **Check.** One pass over every record at the start of a run (hashes remembered by device, inode, size, mtime and ctime).
+   When `parse` runs, the gates found cached are checked again after it: it rewrites the `.godot/` caches they read
+   (byte for byte the same when nothing changed, which is measured).
 
-1. **Trace each gate's run:** every file its process tree opened (failed opens too - a file that appears later counts),
-   every directory it listed, every program it spawned. What it wrote is not an input.
-2. **On a pass, keep a record** in `$OUT/.passed/<gate>`: a content hash per file read and per directory listing, Godot's
-   `--version`, the gate's run line and the env check.sh sets, and for a GPU gate the driver version. A failure is never kept.
-3. **Next run, rehash the record.** All equal: print `cached` and skip. Anything differs: run it traced, replace the record.
-4. **`--fresh`** ignores the records. `--for` composes with it unchanged.
-
-This is how tracing build tools cache (fabricate, tup): a deterministic program given the same bytes does the same thing.
-The gates are already held to that - pinned seeds, no timing the machine (`tests/work_clock.gd`).
-
-## The problems
-
-- **The tracer.** strace (`-f`, opens, execs, directory reads, `--seccomp-bpf` so only those stop) is not installed: one
-  Arch package, 1.7 MB. An LD_PRELOAD shim also works, but can miss a statically linked child. Without a tracer, check.sh
-  runs every gate as it does now. The overhead is unmeasured: time one long gate both ways first.
-- **Inputs outside the repo.** Hash what a gate reads in the repo, `user://` and the `Deps` folder (the venvs); skip
-  `/usr`, `/sys`, `/proc`, `/dev` and the gate's own scratch.
-- **`.godot/`.** Every gate reads the class and UID caches, which `parse` rewrites. Verify a rescan with nothing changed
-  writes them byte for byte; if not, hash a sorted form. `.godot/imported/` is hashed like any file: it is what a gate sees.
-- **A file edited mid-run** (dispatched runs share this tree): keep a pass only if nothing it read changed after it started.
-- **Flaky gates** stay cached after one pass until something they read changes. `--fresh` and CI find them.
-- **The network:** a gate that opens a socket is never cached (the trace sees `connect`).
-- **The cache is two-sided like any gate:** edit a file a gate read and it runs; edit one it didn't and it is cached; add
-  a file to a directory it listed and it runs.
+A gate that connects off this machine is never kept. A flaky gate stays cached after one pass until something it reads
+changes.
 
 ## What to expect
 
-- **Run again after a fix: only the gates that read the fixed file.** The largest win, since `--for` compares with the
-  last commit and so repeats, on long work, every gate that already passed since.
+- **Run again after a fix: only the gates that read the fixed file.** `--for` compares with the last commit, so on long
+  work it repeats every gate that already passed since; the cache does not.
 - **A one-file edit to `src/`,** weighted by where git's edits land: about 38% of the suite's time reruns, against 61% for
-  `--for`'s folder rule (from the static graph, which agrees with the trace except for gates that walk the source).
-- **The floor drops as the autoloads name less:** every script they pull in is read by all 259 gates, and compiled by each.
-- CI stays fresh, since proving a clean checkout is its job; it could carry `.passed` the way it carries `.times`.
-
-## The build
-
-A tracer around `run_gate`'s command and a record written in `settle` (check.sh), a small `scripts/gate_cache.py` that
-turns a trace into a record and checks one, and the two-sided gate above. No gate changes.
+  `--for`'s folder rule (estimated from the static graph).
+- **The floor drops as the autoloads name less:** every script they pull in is read by every gate.
+- **An edit to check.sh or gate_cache.py reruns everything** (they are in every record's meta).

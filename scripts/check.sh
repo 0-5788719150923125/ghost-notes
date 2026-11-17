@@ -10,6 +10,7 @@
 #   scripts/check.sh --list          # what would run, how, and (with --jobs) in what order
 #   scripts/check.sh --for           # the gates that cover what changed since the last commit
 #   scripts/check.sh --for src/table # ...or what is under these paths
+#   scripts/check.sh --full          # run every gate picked, even one nothing it read has changed for
 #
 # Logs go to dist/check/<gate>.log; a passing gate's log is removed unless --keep. Two runs in one
 # working tree (two sessions at once) each name a folder of their own - GHOST_CHECK_OUT=dist/check_b -
@@ -22,9 +23,9 @@
 # boot probe (tests/run_boot_probe.sh: the real app with its autoloads, in a scene of its
 # own, read-only). A gate that needs a REAL RENDERER is named in GPU below - a pixel read
 # back under --headless is null - and runs only with --gpu, under xvfb, never in a window.
-# Three more: `parse` (the editor's own load of every script, first, because a parse error
+# Four more: `parse` (the editor's own load of every script, first, because a parse error
 # fails every gate after it in a less readable way), `scene_smoke` (tests/run_scene_smoke.sh,
-# every scene in the roster) and `docs` (python docs.py --check).
+# every scene in the roster), `docs` (python docs.py --check) and `gate_cache` (below).
 #
 # THE VERDICT. Exit 0 is a pass. Several gates print their verdict and then the ENGINE dies
 # in its own teardown - an abort, a segfault, or a hang until the timeout - the fault
@@ -54,6 +55,16 @@
 # changed runs itself. A path outside src/ and tests/ (a shader, a host, the rules) gives no
 # folder, so `--for` says so and runs everything - it never guesses smaller. The order of the
 # stack is docs.py's (`python3 docs.py --folders`), never a copy here.
+#
+# A GATE IS SKIPPED WHILE NOTHING IT READ HAS CHANGED since it passed (next/test_cache.md). Every gate
+# runs under strace, and a pass keeps a record in dist/gate_cache/ of what its processes read in the
+# repo and in user:// (scripts/gate_cache.py: the files' hashes, the folders it listed, what it looked
+# for and did not find, the keys of ghost.cfg its Settings read), with Godot's version, the gate's run
+# line and this script's own hash. A run checks every record first and leaves out each gate whose
+# record still holds; a failure deletes its record. `--full` runs them anyway (and records again);
+# without strace on the machine every gate runs, as on CI, whose runs start with no records. strace is
+# OUTSIDE the timeout: with `-o` it holds fatal signals, so a timeout signalling it would never end the
+# gate. `gate_cache` is the cache's own control (`gate_cache.py --selftest`).
 
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
@@ -87,6 +98,7 @@ keep=0
 fail_fast=0
 jobs=1
 list=0
+full=0
 only=""
 skip=""
 for_set=0
@@ -99,6 +111,7 @@ while [ "$#" -gt 0 ]; do
 		--jobs|-j) jobs="${2:-1}"; shift ;;
 		--jobs=*) jobs="${1#--jobs=}" ;;
 		--list) list=1 ;;
+		--full) full=1 ;;
 		--only) only="${2:-}"; shift ;;
 		--only=*) only="${1#--only=}" ;;
 		--skip) skip="${2:-}"; shift ;;
@@ -155,7 +168,7 @@ args_of() {
 # -- what runs ------------------------------------------------------------------
 
 ## `docs` is a second long, so it runs second: a stale generated doc fails before any slow gate starts.
-gates=(parse docs)
+gates=(parse docs gate_cache)
 for name in $(printf '%s\n' "${!path_of[@]}" | sort); do
 	if is_gpu "$name" && [ "$gpu" -eq 0 ] && [ -z "$only" ]; then
 		continue
@@ -194,7 +207,7 @@ if [ "$for_set" -eq 1 ]; then
 		picked=()
 		for g in "${gates[@]}"; do
 			case "$g" in
-				parse|docs|compile_check) picked+=("$g"); continue ;;
+				parse|docs|gate_cache|compile_check) picked+=("$g"); continue ;;
 				scene_smoke) [ -n "${reach[scenes]:-}" ] && picked+=("$g"); continue ;;
 			esac
 			folder=$(cut -d/ -f2 <<<"${path_of[$g]}")
@@ -225,6 +238,7 @@ how() {
 		parse) echo "godot --headless --editor --quit (every script loads)" ;;
 		scene_smoke) echo "tests/run_scene_smoke.sh" ;;
 		docs) echo "python3 docs.py --check" ;;
+		gate_cache) echo "python3 scripts/gate_cache.py --selftest" ;;
 		*)
 			local k t
 			k=$(kind_of "$1"); t=$(timeout_of "$1")
@@ -268,18 +282,54 @@ if ! [[ "$jobs" =~ ^[1-9][0-9]*$ ]]; then
 	exit 2
 fi
 
+## The gate cache (the header's "A GATE IS SKIPPED"): every gate is traced when strace is here; a gate whose
+## record still holds is left out unless --full. What a record must match besides what the gate read is
+## written to $OUT/.meta, one `key value` a line, `how:<gate>` the gate's own run line.
+CACHE=dist/gate_cache
+read -ra STRACE <<<"$(python3 scripts/gate_cache.py strace)"
+tracing=0
+command -v strace >/dev/null 2>&1 && tracing=1
+declare -A why_runs=()
+cached=()
+mkdir -p "$OUT"
+META="$OUT/.meta.$$"
+trap 'stop_running; rm -f "$META"' EXIT
+if [ "$tracing" -eq 1 ]; then
+	USER_DIR=$(python3 scripts/gate_cache.py user-dir)
+	driver=$(head -n1 /proc/driver/nvidia/version 2>/dev/null)
+	{
+		echo "godot $("$GODOT" --version 2>/dev/null | head -n1) $(stat -Lc '%s %Y' "$(command -v "$GODOT")")"
+		echo "runner $(cat scripts/check.sh scripts/gate_cache.py | sha1sum | cut -c1-40)"
+		echo "locale ${LANG:-}:${LC_ALL:-}:${TZ:-}"
+		for g in "${gates[@]}"; do
+			echo "how:$g $(how "$g")$(is_gpu "$g" && echo " | ${driver:-no driver}")"
+		done
+	} >"$META"
+	if [ "$full" -eq 0 ]; then
+		while IFS=$'\t' read -r g w; do
+			if [ "$w" = cached ]; then cached+=("$g"); else why_runs[$g]="$w"; fi
+		done < <(python3 scripts/gate_cache.py check --dir "$CACHE" --meta "$META" "${gates[@]}")
+	fi
+fi
+
 if [ "$list" -eq 1 ]; then
-	# in the order they would start, each with how it runs and how long it took last time
+	# in the order they would start, each with how it runs, how long it took last time and whether it is cached
 	listed=("${gates[@]}")
 	[ "$jobs" -gt 1 ] && mapfile -t listed < <(start_order "${gates[@]}")
 	for g in "${listed[@]}"; do
-		printf '    %-28s %-46s %s\n' "$g" "$(how "$g")" "${took[$g]:+last ${took[$g]}s}"
+		if in_list "$g" "${cached[*]}"; then w="cached"; else w="${why_runs[$g]:-}"; fi
+		printf '    %-28s %-46s %-10s %s\n' "$g" "$(how "$g")" "${took[$g]:+last ${took[$g]}s}" "$w"
 	done
 	[ "$gpu" -eq 0 ] && [ -z "$only" ] && printf '    (%d GPU gates need --gpu)\n' "${#GPU[@]}"
+	[ "$tracing" -eq 0 ] && printf '    (no strace here: nothing is cached, every gate runs)\n'
 	exit 0
 fi
 
-mkdir -p "$OUT"
+if [ "${#cached[@]}" -gt 0 ]; then
+	left=()
+	for g in "${gates[@]}"; do in_list "$g" "${cached[*]}" || left+=("$g"); done
+	gates=("${left[@]}")
+fi
 # One run at a time: two runs would write the same logs. Probes themselves may overlap with
 # anything (each boots its own scene), so this guards only this script's own output.
 exec 9>"$OUT/.lock"
@@ -293,13 +343,14 @@ save_times() {
 	for g in "${!took[@]}"; do echo "$g ${took[$g]}"; done | sort >"$OUT/.times.new" \
 		&& mv -f "$OUT/.times.new" "$OUT/.times"
 }
-trap 'stop_running; save_times' EXIT
+trap 'stop_running; save_times; rm -f "$META"' EXIT
 work=0          # this run's gates, added up, in seconds
 longest=0
 longest_g=""
 
 # -- run ------------------------------------------------------------------------
 
+## `tr` is run_one's: the strace a traced gate runs under (empty when nothing is traced), outermost.
 run_gate() {  # run_gate <name> <log>; returns the raw exit code
 	local g="$1" log="$2" t
 	case "$g" in
@@ -308,23 +359,24 @@ run_gate() {  # run_gate <name> <log>; returns the raw exit code
 			# resolved. It also refreshes the class cache, which a `--script` gate needs for a
 			# class_name added since the editor last ran.
 			# Keep Godot in the terminal's process group so Ctrl+C reaches it.
-			timeout --foreground 600 "$GODOT" --headless --path . --editor --quit >"$log" 2>&1
+			"${tr[@]}" timeout --foreground 600 "$GODOT" --headless --path . --editor --quit >"$log" 2>&1
 			local rc=$?
 			if grep -qiE 'Parse Error|Failed to load script|Failed loading resource|invalid UID|Unrecognized UID|SCRIPT ERROR|Compile Error' "$log"; then
 				return 1
 			fi
 			return "$rc" ;;
-		scene_smoke) tests/run_scene_smoke.sh 900 >"$log" 2>&1 ;;
-		docs) python3 docs.py --check >"$log" 2>&1 ;;
+		scene_smoke) "${tr[@]}" tests/run_scene_smoke.sh 900 >"$log" 2>&1 ;;
+		docs) "${tr[@]}" python3 docs.py --check >"$log" 2>&1 ;;
+		gate_cache) "${tr[@]}" python3 scripts/gate_cache.py --selftest >"$log" 2>&1 ;;
 		*)
 			t=$(timeout_of "$g")
 			if [ "$(kind_of "$g")" = script ]; then
 				if is_gpu "$g"; then
-					timeout --foreground "$t" tests/run_quiet.sh "${path_of[$g]}" >"$log" 2>&1
+					"${tr[@]}" timeout --foreground "$t" tests/run_quiet.sh "${path_of[$g]}" >"$log" 2>&1
 				else
 					local plog
 					plog=$(mktemp)
-					timeout --foreground "$t" "$GODOT" --headless --log-file "$plog" --path . --script "res://${path_of[$g]}" >"$log" 2>&1
+					"${tr[@]}" timeout --foreground "$t" "$GODOT" --headless --log-file "$plog" --path . --script "res://${path_of[$g]}" >"$log" 2>&1
 					local rc=$?
 					rm -f "$plog"
 					return "$rc"
@@ -333,9 +385,9 @@ run_gate() {  # run_gate <name> <log>; returns the raw exit code
 				local -a pa=()
 				read -ra pa <<<"$(args_of "$g")"
 				if is_gpu "$g"; then
-					GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 tests/run_boot_probe.sh "${path_of[$g]}" "$t" "${pa[@]}" >"$log" 2>&1
+					GHOST_PROBE_GPU=1 GHOST_PROBE_MUTE=1 "${tr[@]}" tests/run_boot_probe.sh "${path_of[$g]}" "$t" "${pa[@]}" >"$log" 2>&1
 				else
-					tests/run_boot_probe.sh "${path_of[$g]}" "$t" "${pa[@]}" >"$log" 2>&1
+					"${tr[@]}" tests/run_boot_probe.sh "${path_of[$g]}" "$t" "${pa[@]}" >"$log" 2>&1
 				fi
 			fi ;;
 	esac
@@ -348,17 +400,58 @@ said_pass() {
 }
 
 say "${#gates[@]} gate(s)$([ "$gpu" -eq 1 ] && echo ', GPU included')"
+if [ "${#cached[@]}" -gt 0 ]; then
+	say "${#cached[@]} more cached: nothing they read has changed since they passed (--full runs them)"
+elif [ "$tracing" -eq 0 ]; then
+	say "no strace here: nothing is cached, every gate runs"
+fi
 failed=()
 dirty=()
 t_all=$(date +%s)
 
-## Run one gate; leave its exit code and seconds in $OUT/.res.<gate> for settle.
+## Run one gate; leave its exit code and seconds in $OUT/.res.<gate> for settle. Traced, a gate that
+## passed leaves what its record would be in $CACHE/.<gate>.new (made here, so --jobs makes them in
+## parallel), or why it cannot be kept in $OUT/.nokeep.<gate>; settle keeps it or throws it away.
 run_one() {
-	local g="$1" t0 rc
+	local g="$1" t0 rc dt start tdir="$OUT/.trace/$1"
+	local -a tr=()
+	rm -rf "$tdir" "$CACHE/.$g.new" "$OUT/.nokeep.$g"
+	if [ "$tracing" -eq 1 ]; then
+		mkdir -p "$tdir/settings"
+		cp -p "$USER_DIR/ghost.cfg" "$tdir/ghost.cfg.start" 2>/dev/null
+		tr=(strace "${STRACE[@]}" -o "$tdir/t")
+		local -x GHOST_SETTINGS_READS="$tdir/settings"
+	fi
+	start=$(date +%s%N)
 	t0=$(date +%s)
 	run_gate "$g" "$OUT/$g.log"
 	rc=$?
-	echo "$rc $(( $(date +%s) - t0 ))" >"$OUT/.res.$g"
+	dt=$(( $(date +%s) - t0 ))
+	if [ "$tracing" -eq 1 ]; then
+		if [ "$rc" -eq 0 ] || said_pass "$g" "$OUT/$g.log"; then
+			python3 scripts/gate_cache.py record --dir "$CACHE" --meta "$META" --gate "$g" --trace "$tdir" \
+				--start "$start" --settings-reads "$tdir/settings" --cfg-start "$tdir/ghost.cfg.start" \
+				--out "$CACHE/.$g.new" >"$OUT/.nokeep.$g" 2>&1
+		fi
+		rm -rf "$tdir"
+	fi
+	echo "$rc $dt" >"$OUT/.res.$g"
+}
+
+## A pass keeps the record run_one made; a failure deletes the gate's record, so it runs next time.
+keep_record() {
+	[ "$tracing" -eq 1 ] || return 0
+	if [ -f "$CACHE/.$1.new" ]; then
+		mv -f "$CACHE/.$1.new" "$CACHE/$1"
+	else
+		rm -f "$CACHE/$1"
+		[ -s "$OUT/.nokeep.$1" ] && sed 's/^/           /' "$OUT/.nokeep.$1"
+	fi
+	rm -f "$OUT/.nokeep.$1"
+}
+drop_record() {
+	[ "$tracing" -eq 1 ] || return 0
+	rm -f "$CACHE/.$1.new" "$CACHE/$1" "$OUT/.nokeep.$1"
 }
 
 ## Print one finished gate's verdict. Returns 1 when it failed.
@@ -391,11 +484,13 @@ settle() {
 	if [ "$rc" -eq 0 ]; then
 		printf '  ok     %-28s %4ds\n' "$g" "$dt"
 		took[$g]=$dt
+		keep_record "$g"
 		[ "$keep" -eq 1 ] || rm -f "$log"
 	elif [ "$rc" -eq 137 ] && said_pass "$g" "$log"; then
 		# the probe ended itself with a SIGKILL after its verdict, to skip the engine's teardown
 		printf '  ok     %-28s %4ds   (hard exit after its verdict)\n' "$g" "$dt"
 		took[$g]=$dt
+		keep_record "$g"
 		[ "$keep" -eq 1 ] || rm -f "$log"
 	elif { [ "$rc" -eq 124 ] || [ "$rc" -ge 128 ]; } && said_pass "$g" "$log"; then
 		printf '  ok*    %-28s %4ds   passed, then the engine %s in teardown (exit %d)\n' "$g" "$dt" \
@@ -403,11 +498,13 @@ settle() {
 		dirty+=("$g")
 		# (a hang's time is its timeout, not the gate's: only a crash after the verdict is kept)
 		[ "$rc" -eq 124 ] || took[$g]=$dt
+		keep_record "$g"
 		[ "$keep" -eq 1 ] || rm -f "$log"
 	else
 		printf '  FAIL   %-28s %4ds   exit %d - %s\n' "$g" "$dt" "$rc" "$log"
 		grep -E 'FAIL|ERROR|Error|TIMED OUT' "$log" | grep -vE '^\s*at:' | head -5 | sed 's/^/           /'
 		failed+=("$g")
+		drop_record "$g"
 		if [ "$fail_fast" -eq 1 ]; then
 			echo "  --- $log (first 80 lines) ---"
 			head -n 80 "$log" | sed 's/^/  | /'
@@ -416,17 +513,41 @@ settle() {
 	fi
 }
 
+## `parse` first and alone in either mode: it registers the class names every other gate loads, and
+## rewrites the caches under .godot/ they read, so a gate found cached before it ran is checked again.
+parsed=0
+if in_list parse "${gates[*]}"; then
+	run_one parse
+	settle parse
+	parsed=1
+	if [ "${#cached[@]}" -gt 0 ] && ! { [ "${#failed[@]}" -gt 0 ] && [ "$fail_fast" -eq 1 ]; }; then
+		still=()
+		again=()
+		while IFS=$'\t' read -r g w; do
+			if [ "$w" = cached ]; then still+=("$g"); else again+=("$g"); fi
+		done < <(python3 scripts/gate_cache.py check --dir "$CACHE" --meta "$META" "${cached[@]}")
+		cached=("${still[@]}")
+		if [ "${#again[@]}" -gt 0 ]; then
+			say "after parse, ${#again[@]} cached gate(s) run after all: ${again[*]}"
+			gates+=("${again[@]}")
+		fi
+	fi
+fi
+
 if [ "$jobs" -le 1 ]; then
 	for g in "${gates[@]}"; do
+		[ "$g" = parse ] && [ "$parsed" -eq 1 ] && continue
+		[ "${#failed[@]}" -gt 0 ] && [ "$fail_fast" -eq 1 ] && break
 		run_one "$g"
 		settle "$g" || [ "$fail_fast" -eq 0 ] || break
 	done
 else
 	set -m
-	## `parse` first and alone (it registers the class names every other gate loads), then `docs`.
+	## then `docs`, alone too.
 	queue=()
 	for g in "${gates[@]}"; do
-		if [ "$g" = parse ] || [ "$g" = docs ]; then
+		[ "$g" = parse ] && [ "$parsed" -eq 1 ] && continue
+		if [ "$g" = docs ]; then
 			[ "${#failed[@]}" -gt 0 ] && [ "$fail_fast" -eq 1 ] && continue
 			run_one "$g"
 			settle "$g"
@@ -478,7 +599,7 @@ if [ "${#dirty[@]}" -gt 0 ]; then
 	say "ok* = passed, then the engine died in teardown: ${dirty[*]}"
 fi
 if [ "${#failed[@]}" -eq 0 ]; then
-	say "all ${#gates[@]} gate(s) passed in $((t_total / 60))m$((t_total % 60))s$([ "$gpu" -eq 0 ] && echo ' (GPU gates not run: --gpu)')"
+	say "all ${#gates[@]} gate(s) passed$([ "${#cached[@]}" -gt 0 ] && echo " (${#cached[@]} cached)") in $((t_total / 60))m$((t_total % 60))s$([ "$gpu" -eq 0 ] && echo ' (GPU gates not run: --gpu)')"
 	exit 0
 fi
 bad "${#failed[@]} of ${#gates[@]} gate(s) FAILED: ${failed[*]}$([ "$fail_fast" -eq 1 ] && echo " (--fail-fast: the rest did not run)")"
