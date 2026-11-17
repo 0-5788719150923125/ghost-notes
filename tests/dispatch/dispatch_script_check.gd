@@ -39,6 +39,7 @@ extends SceneTree
 ##   crackle before any), and the room's voice comes back after (the control: a bare `type:` is the room's);
 ## - a synced note's words, which come without their frontmatter, are read with the note's put back (control: alone, the
 ##   terminal's keys and the desk block are missing);
+## - a command held with `{2}` is typed, held that long and then entered (the control: bare, at once);
 ## - controls: a call to a phone not on the desk, and a call left open, are each said;
 ## - a text answering the room's reply comes no sooner than the other end could type it (the control: a text answering nothing),
 ##   and the room's reply waits for its own typing on the keypad;
@@ -192,6 +193,18 @@ func _init() -> void:
 		"a wait holds what is up as long as it says, in place of the read (the control: with none the panel is read, %.2f s)" % read)
 	_ok(float(session["rest"]) <= float(session["len"]) and not spoken.has("council") and not spoken.has("subjects") and not spoken.has("match"),
 		"nothing of a block is said but its typed lines, the voice waiting for its steps")
+	# a command held typed before it is entered (`{1.5}`), then the panel it opens (the control: the same command bare, entered at
+	# once)
+	var held_ops := func(cmd: String) -> Dictionary:
+		var p := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```terminal\n%s\npanel: done = DONE\n```\n\nSaid.\n" % cmd)
+		var sess: Dictionary = (p["actions"] as Array).filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "session")[0]
+		return (sess["ops"] as Array).filter(func(o: Dictionary) -> bool: return String(o["op"]) == "command")[0]
+	var held_cmd: Dictionary = held_ops.call("> d {1.5}")
+	var bare_cmd: Dictionary = held_ops.call("> d")
+	var held_wait := float(held_cmd["enter"]) - (held_cmd["keys"] as PackedFloat32Array)[0]
+	var bare_wait := float(bare_cmd["enter"]) - (bare_cmd["keys"] as PackedFloat32Array)[0]
+	_ok(String(held_cmd["text"]) == "d" and is_equal_approx(held_wait - bare_wait, 1.5),
+		"a command held `{1.5}` is typed, held that long, then entered - its mark never typed (%.2f s; the control, bare, %.2f s)" % [held_wait, bare_wait])
 	# a typed line is added to the panel up and kept with it; a key opens that panel again as it last stood
 	var log := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```terminal\n> log\npanel: log = LOG\ntype: ONE.\n```\n\nSaid.\n\n"
 		+ "```terminal\n> x\npanel: menu = MENU\nkeys: L LOG > log\n> l\n```\n")

@@ -19,6 +19,8 @@ const SHELVES := [{"key": "dispatch", "label": "Dispatch desk", "tip": "What the
 var library := LibraryProps.new()
 var _format: DispatchFormat
 var _specs := {}                 # "<role>|<choice key>|<seed>" -> [hash, thing, materials]
+var _lit_key := ""               # what [method lit] was last worked out for, and what it found
+var _lit: Array = []
 
 
 ## The desk's things for the Dispatch format [param format] (its note's Props card), or with none, the shelf of them all.
@@ -113,12 +115,19 @@ func model_of(key: String) -> Dictionary:
 
 
 ## The desk's things whose make throws light - its lamp, its screens - each by its role ([DispatchMedium] reads their shares).
+## Worked out again only when the desk's makes or number change (the Environment card asks every second; a kept make is read
+## from the library).
 func lit() -> Array:
+	var key := "%d|%s|%s" % [_desk_seed(), str(_format.things() if _format != null else {}), str(_roles())]
+	if key == _lit_key:
+		return _lit
 	var out: Array = []
 	for role in _roles():
 		var p := prop_of("role:" + String(role))
 		if not p.is_empty() and Props.has_light((p["thing"] as Dictionary).get("parts", [])):
 			out.append({"key": String(role), "name": String((PropMakes.ROLES[role] as Dictionary)["label"])})
+	_lit_key = key
+	_lit = out
 	return out
 
 

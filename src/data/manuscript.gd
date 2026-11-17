@@ -53,6 +53,9 @@ const OVER_BARE := 0.35
 ## the whole turn is heard through that, a key of [constant VoiceFX.HEARD] - group 1. A turn with none is heard
 ## in the room. [ReadingPlan], [ReadingJoin].
 const HEARD := "<!--\\s*heard\\s*:\\s*([A-Za-z_]+)\\s*-->"
+## How a word is said (next/voice.md): `<!-- say: Io-A = AY1 OW0 EY1; Io-B = AY1 OW0 B IY1 -->` - each word its ARPAbet, a
+## vowel's stress its digit - said so wherever it comes in the note, and shown as written: group 1. [ReadingPlan], [Phonemes].
+const SAY := "<!--\\s*say\\s*:\\s*([^>]*?)\\s*-->"
 
 static var _re := {}
 

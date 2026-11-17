@@ -11,7 +11,7 @@ An entry does not implement its mark. The parsers of record stay where they are 
 
 A table brief is not a script, and has marks of its own: a show's document is the brief its agents work from, never read aloud, so a mark in it does something only where the code reads it out of the brief or an agent is told to honor it. Those are offered ("table" in `modes`), each saying what it does there (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its deck, a macro reads as its default and a note to self is taken out before any agent sees the brief (`TablePrompts.brief`), and a hesitation, a delivery or a stressed word stands in a line the brief gives the host word for word (rules/table/reader.yaml, `spoken`). The marks of a page or a tablet (pictures, scene lines, web pages) and the inline pronunciation are not offered: the table is the only medium there, and a reader's passage keeps no bracket (`TableProducer.clean_spoken`).
 
-Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (76 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
+Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (77 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
 
 ## Voices
 
@@ -47,6 +47,7 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | Mark | Example | Panels | What it does |
 |---|---|---|---|
 | Pronunciation | `[K AE T]` | Generative | Spells a word in ARPAbet phonemes, read exactly as written. For a name the voice gets wrong. |
+| Say as | `<!-- say: Io-A = AY1 OW0 EY1 -->` | Generative | How words are said, in ARPAbet (a vowel's stress its digit), wherever they come in the note - each still shown as written. For a name every voice gets wrong. |
 | Letter | `[a]` | Generative | A letter that names something - a number, a point, a case - said by its name and shown as the letter: [a] is "ay", where a bare a is read as the word a. |
 
 ## Text

@@ -112,6 +112,11 @@ func _air() -> void:
 	_ok(int((twice[0] as Dictionary)["count"]) == 2 * int((fx[1] as Dictionary)["count"]),
 		"the control: at twice the amount, twice the motes (%d, %d)" % [int((twice[0] as Dictionary)["count"]), int((fx[1] as Dictionary)["count"])])
 	_ok(Surroundings.effects_of(Surroundings.sanitize({}), fog).is_empty(), "nothing ticked, nothing drifts")
+	var spread_out := Surroundings.effects_of(Surroundings.sanitize({"air": ["pixies", "fireflies"]}), fog, 2.0)
+	var plain := Surroundings.effects_of(Surroundings.sanitize({"air": ["pixies", "fireflies"]}), fog)
+	_ok(int(spread_out[0]["count"]) == 2 * int(plain[0]["count"]) and int(spread_out[1]["count"]) == int(plain[1]["count"]),
+		"a host with more air round the work has as many more motes there (%d of %d), and no more past it (the control: fireflies, far, %d)"
+		% [int(spread_out[0]["count"]), int(plain[0]["count"]), int(spread_out[1]["count"])])
 	var stays := true
 	for e in Surroundings.effects_of(Surroundings.sanitize({"air": ["dust", "pixies", "fireflies", "wisps", "embers", "snow"]}), fog):
 		stays = stays and is_zero_approx(float((e as Dictionary).get("away", -1.0)))
@@ -133,7 +138,7 @@ func _sound() -> void:
 func _rays() -> void:
 	var over := AABB(Vector3(-1.0, 0.4, -1.0), Vector3(2.0, 0.0, 1.0))
 	var toward := Vector3(0.3, 1.0, -0.2).normalized()
-	var r := Surroundings.rays(4, 0.7, Color.WHITE, toward, over, 11, 3.0)
+	var r := Surroundings.rays(4, 0.7, Color.WHITE, toward, [over], 11, 3.0)
 	_ok(r.get_child_count() == 4, "as many shafts as asked")
 	var apart := true
 	var inside := true
@@ -157,6 +162,17 @@ func _rays() -> void:
 	_ok(drawn, "each a drawn shaft along its light's way")
 	_ok(inside, "each lands inside the box, falling from the way of its light, its shaft between")
 	_ok(apart, "no two land together")
+	# round the viewer: shared out among boxes by their size, each box its share (the control: one box takes them all)
+	var left := AABB(Vector3(-3.0, 0.0, -1.0), Vector3(1.0, 0.0, 2.0))
+	var right := AABB(Vector3(2.0, 0.0, -1.0), Vector3(1.0, 0.0, 2.0))
+	var behind := AABB(Vector3(-1.0, 0.0, -3.0), Vector3(2.0, 0.0, 1.0))
+	var round_r := Surroundings.rays(3, 0.7, Color.WHITE, Vector3.UP, [left, behind, right], 11, 3.0)
+	var sides := []
+	for c in round_r.get_children():
+		var land := (c.get_node("Light") as SpotLight3D).position - Vector3.UP * 3.0
+		sides.append("left" if land.x < -1.5 else ("right" if land.x > 1.5 else "behind"))
+	round_r.free()
+	_ok(sides.has("left") and sides.has("right") and sides.has("behind"), "three shafts round the viewer fall left, behind and right, one each (%s)" % str(sides))
 	Surroundings.tick_rays(r, 5.0)
 	_ok(is_equal_approx(float((r.get_meta("shaft") as ShaderMaterial).get_shader_parameter("t")), 5.0), "the dust in them goes by show time")
 	r.free()

@@ -214,6 +214,13 @@ func _parsers_agree() -> void:
 				_ok(ws.size() == 3 and bool(ws[1].get("literal", false))
 						and (ws[1]["phones"] as Array) == ["K", "AE", "T"],
 					"an inline pronunciation is not read as its phonemes")
+			"say":
+				# the mark's words said as it spells them, and shown as written
+				var told := ReadingPlan.said_in(ex)
+				var ws: Array = Phonemes.parse("Three columns, Io-A here.", told)[0]
+				var io: Dictionary = ws[2] if ws.size() > 2 else {}
+				_ok(bool(io.get("literal", false)) and (io.get("phones", []) as Array) == ["AY", "OW", "EY"] and String(io.get("display", "")) == "Io-A",
+					"a say mark does not have its word said as it spells it and shown as written (%s)" % str(io))
 			"letter":
 				var ws: Array = Phonemes.parse("Take %s to be two." % ex)[0]
 				_ok(ws.size() == 5 and String(ws[1]["text"]) == TextNorm.LETTER_NAMES[fill]

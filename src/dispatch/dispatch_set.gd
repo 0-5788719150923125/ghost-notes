@@ -161,7 +161,9 @@ var heap_top: MeshInstance3D
 var screens := {}                 # feed / satellite / tv -> {mesh, rig, node}
 var mug: Node3D
 var mug_home := Transform3D()
-var mug_radius := 0.04            # how far the mug reaches out from its middle (m), for what it must clear when carried
+var mug_radius := 0.04
+var _cable_nodes: Array = []      # the patch panel's cables as laid ([method lay_cables])
+var cable_paths: Array = []       # ...and their paths (the set's space)            # how far the mug reaches out from its middle (m), for what it must clear when carried
 var lamp: Light3D                 # the lamp's light (its make's `lamp`), lit by the medium's feed
 var chair: Node3D
 var clock_face: MeshInstance3D    # the flip clock's cards (null without a clock)
@@ -223,6 +225,7 @@ func build(labels: PackedStringArray, seed: int, tex: Dictionary, wants := {}) -
 	_monitors()
 	_things()
 	_chair()
+	lay_cables()
 	for k in DispatchMedium.SPOTS:
 		var s := spot_of(String(k))
 		if not s.is_empty():
@@ -1110,6 +1113,12 @@ static func gain_angle(level: float) -> float:
 
 # --- the receiver -----------------------------------------------------------------------------------------------------
 
+## The receiver's dial: how much of the room's light its card takes, and how much it glows from behind - a faint warmth, its
+## scale and numbers read whole at the hollow's exposure, never blown out.
+const DIAL_PAPER := 0.7
+const DIAL_GLOW := 0.22
+
+
 ## The receiver's make ([PropMakes] `receiver`): its `dial` face printed with the frequency ([DispatchScreens]' dial, lit from
 ## behind), its needle swinging as the medium feeds it (`signal`), its oscilloscope's trace ([member scope_screen]) the medium's;
 ## and two wires run up from its `antenna` points into the dark.
@@ -1119,10 +1128,11 @@ func _receiver() -> void:
 	if dial != null and _tex.has("dial"):
 		var dmat := StandardMaterial3D.new()
 		dmat.albedo_texture = _tex["dial"]
+		dmat.albedo_color = Color(DIAL_PAPER, DIAL_PAPER, DIAL_PAPER)
 		dmat.emission_enabled = true
 		dmat.emission_texture = _tex["dial"]
 		dmat.emission = Color(1.0, 0.85, 0.55)
-		dmat.emission_energy_multiplier = 0.55
+		dmat.emission_energy_multiplier = DIAL_GLOW
 		dial.material_override = dmat
 	scope_screen = t.face("scope")
 	for k in 2:
@@ -1504,16 +1514,88 @@ func _things_back() -> void:
 	var pa := at_of("patch")
 	var pp := _desk_pos(pa)
 	var panel := put(root, box(Vector3(0.44, 0.045, 0.05)), _mats["black"], pp + Vector3(0, 0.0225, 0))
+	_body("patch", panel)
+
+
+## The patch panel's cables ([method lay_cables]): each out of one of its sockets to the back of a thing on the desk that takes
+## a cable (in [constant CABLED]'s order, as many as there are), the rest over the desk's far edge and down out of sight -
+## laid on the desk and over any root lying in their way ([param lying]: [member DispatchRoots.lying]), so none ends on the
+## desk or goes through what it meets. Laid again whenever the roots are known.
+func lay_cables(lying: Array = []) -> void:
+	for n in _cable_nodes:
+		if is_instance_valid(n):
+			(n as Node).free()
+	_cable_nodes = []
+	cable_paths = []
+	if not things.has("patch"):
+		return
+	var pp: Vector3 = _desk_pos(at_of("patch"))
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([_seed, "patch"])
-	for k in 12:
+	var ports: Array = []
+	for k in CABLED:
+		if bodies.has(k):
+			var b: AABB = bodies[k]
+			ports.append(Vector3(b.get_center().x + r.randf_range(-0.25, 0.25) * b.size.x, b.position.y + minf(0.05, b.size.y * 0.25),
+				b.position.z + 0.015))
+	for k in CABLES:
 		var a := pp + Vector3(-0.19 + float(k) * 0.034, 0.03, 0.026)
-		var b := Vector3(r.randf_range(-0.55, 0.65) * flip, DESK_Y + 0.004, r.randf_range(-0.55, -0.44))
-		if k % 3 == 0:
-			b = Vector3(r.randf_range(-0.2, 0.3) * flip, DESK_Y + 0.004, FAR - 0.02)
+		var path: PackedVector3Array
+		var port_i := k if k < ports.size() else -1
+		if port_i >= 0:
+			path = sag_path(a, ports[port_i], -0.02, DESK_Y + CABLE_R, 22)
+		else:
+			# over the far edge and down out of sight
+			var edge := Vector3(a.x + r.randf_range(-0.25, 0.25) * flip, DESK_Y + CABLE_R, FAR + 0.004)
+			path = sag_path(a, edge, -0.02, DESK_Y + CABLE_R, 12)
+			for i in range(1, 9):
+				var u := float(i) / 8.0
+				path.append(edge + Vector3(0.0, -0.32 * u * u, -0.035 * sin(u * PI * 0.5)))
+		path = _over_roots(path, lying)
+		cable_paths.append(path)
 		var mat: Material = _mats["cable_blue"] if k % 2 == 0 else _mats["cable_yellow"]
-		put(root, tube(sag_path(a, b, -0.02, DESK_Y + 0.003, 18), 0.0024, 6), mat, Vector3.ZERO)
-	_body("patch", panel)
+		_cable_nodes.append(put(root, tube(path, CABLE_R, 6), mat, Vector3.ZERO))
+
+
+## [param path] (a cable along the desk) raised over every root lying on it ([param lying]): where it would pass within a
+## root's reach on the desk's top it goes over it, and the run is eased so it drapes rather than steps.
+static func _over_roots(path: PackedVector3Array, lying: Array) -> PackedVector3Array:
+	if lying.is_empty():
+		return path
+	var lift := PackedFloat32Array()
+	lift.resize(path.size())
+	var any := false
+	for i in path.size():
+		var p := path[i]
+		var need := 0.0
+		# on the desk's top: past its far edge a cable drops out of sight behind it
+		if p.z < FAR:
+			continue
+		for root_path in lying:
+			var pts: PackedVector3Array = (root_path as Dictionary)["points"]
+			var rad: PackedFloat32Array = (root_path as Dictionary)["radii"]
+			for j in range(int((root_path as Dictionary).get("from", 0)), pts.size()):
+				var reach := rad[j] + CABLE_R + CABLE_CLEAR
+				var d := Vector2(p.x - pts[j].x, p.z - pts[j].z).length()
+				if d < reach * 1.6:
+					var top := pts[j].y + rad[j] + CABLE_R + CABLE_CLEAR
+					need = maxf(need, (top - p.y) * (1.0 - smoothstep(reach, reach * 1.6, d)))
+		lift[i] = maxf(need, 0.0)
+		any = any or need > 0.0
+	if not any:
+		return path
+	# eased: each point's lift the most of its neighbours', so the cable climbs before and settles after
+	for _pass in 2:
+		var eased := lift.duplicate()
+		for i in path.size():
+			var a := lift[maxi(i - 1, 0)]
+			var b := lift[mini(i + 1, path.size() - 1)]
+			eased[i] = maxf(lift[i], (a + b) * 0.45)
+		lift = eased
+	var out := PackedVector3Array()
+	for i in path.size():
+		out.append(path[i] + Vector3(0.0, lift[i], 0.0))
+	return out
 
 
 ## The small things, each a make ([PropMakes]) built at the origin and then packed ([method _pack]): the handbook, the mug
@@ -1686,6 +1768,14 @@ func clear_over(from: Vector3, to: Vector3, radius: float, skip: Array) -> float
 					top = b.end.y
 					break
 	return top
+
+
+## The patch panel's cables ([method lay_cables]): how many, how thick (radius, m), how far over a root they go, and the things
+## on the desk they run to the back of, in turn.
+const CABLES := 12
+const CABLE_R := 0.0024
+const CABLE_CLEAR := 0.003
+const CABLED := ["terminal", "radar", "receiver", "printer", "feed", "satellite", "tv", "lamp"]
 
 
 ## The whole desk from the chair (the `home` spot): the same on every desk, so it can be asked before one is built.

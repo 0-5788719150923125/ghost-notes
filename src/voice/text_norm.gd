@@ -508,6 +508,14 @@ static func _is_digits(s: String) -> bool:
 ## spans over the returned text - what this pass rewrites and whatever came in, moved to where it now
 ## sits. This pass knows both offsets (input cursor and output length at every token boundary), so it
 ## merges them. The two rewrites cannot overlap: nothing in ABBREV expands to digits.
+## A word spelled in ARPAbet phonemes in brackets, its stress digits allowed (`[K AE1 T]`).
+static var _PHONETIC := RegEx.create_from_string("^\\[[A-Za-z]{1,2}[0-2]?(?:\\s+[A-Za-z]{1,2}[0-2]?)*\\]$")
+
+
+static func _rx_phonetic() -> RegEx:
+	return _PHONETIC
+
+
 static func _expand_numbers(text: String, marks_in: Array = [],
 		marks_out: Array = []) -> String:
 	var out := ""
@@ -526,6 +534,15 @@ static func _expand_numbers(text: String, marks_in: Array = [],
 				starts = true
 			i += 1
 			continue
+		# a word spelled in phonemes (`[K AE1 T]`, ARPAbet) is the voice's as written, its stress digits too: never a numeral
+		if c == "[":
+			var close := text.find("]", i)
+			# (a lone letter, `[a]`, is the letter named - [method _expand_core] - never a one-phoneme word)
+			if close > i + 2 and _rx_phonetic().search(text.substr(i, close - i + 1)) != null:
+				out += text.substr(i, close - i + 1)
+				i = close + 1
+				starts = false
+				continue
 		var j := i
 		while j < n and not (text[j] in " \t\n\r"):
 			j += 1

@@ -150,6 +150,8 @@ const MUG_CLEAR := 0.06
 ## A thing carried off the desk ([method _carry]): the share of its way it spends going straight up out of where it stood (and
 ## straight down into where it goes), and how far over the tallest thing in its way it is carried (m).
 const CARRY_RISE := 0.3
+## How far past the last word heard the clock's turns are planned (seconds), while the reading's end is not heard yet.
+const CLOCK_AHEAD := 180.0
 const CARRY_GAP := 0.025
 ## The terminal's cursor blinks this often (seconds).
 const BLINK := 0.53
@@ -215,10 +217,14 @@ const CRACK_ENERGY := 6.0
 const CRACK_AT := Vector3(0.5, 3.35, -1.6)
 const CRACK_AIM := Vector3(-0.1, 0.4, -1.1)
 const CANDLES_ENERGY := 0.45
-## Where shafts chosen on the Environment fall (the roots behind the desk), and what drifts keeps to: over the desk, the hollow behind
-## it, the whole hollow.
-const RAYS_OVER := AABB(Vector3(-1.3, 0.35, -1.7), Vector3(2.6, 0.0, 0.8))
-const AIR_NEAR := AABB(Vector3(-1.2, 0.76, -0.55), Vector3(2.4, 0.5, 0.95))
+## Where shafts chosen on the Environment fall - all round the chair, behind the desk among the roots and out to either side of
+## it, so light comes down wherever the camera turns - and what drifts keeps to, anywhere in each (the camera turns): round the
+## desk and past both its ends, the hollow behind it, the whole hollow.
+const RAYS_ROUND := [AABB(Vector3(-3.0, 0.35, -1.0), Vector3(1.4, 0.0, 2.6)), AABB(Vector3(-2.4, 0.35, -2.5), Vector3(4.8, 0.0, 1.5)),
+	AABB(Vector3(1.6, 0.35, -1.0), Vector3(1.4, 0.0, 2.6))]
+const AIR_NEAR := AABB(Vector3(-2.6, 0.6, -1.2), Vector3(5.2, 0.9, 2.2))
+## How many more motes round the desk than the Environment's own count, for the air there reaching past both its ends.
+const AIR_NEAR_MORE := 2.2
 const AIR_FAR := AABB(Vector3(-3.0, 0.0, -3.2), Vector3(6.0, 2.6, 2.4))
 const AIR_ROOM := AABB(Vector3(-3.0, 0.0, -3.0), Vector3(6.0, 3.3, 4.0))
 
@@ -452,6 +458,8 @@ func _make_set(labels: PackedStringArray, seed: int, tex: Dictionary, wants: Dic
 	var node := s.build(labels, seed, tex, wants)
 	var r := DispatchRoots.new()
 	var rn := r.build(seed, s.footprints, s.held_rect(), s.clear)
+	# the patch panel's cables laid again over the roots lying on the desk, now they are known
+	s.lay_cables(r.lying)
 	_made = {"set": s, "node": node, "roots": r, "roots_node": rn}
 
 
@@ -568,15 +576,15 @@ func _dress_environment() -> void:
 		_rays.queue_free()
 		_rays = null
 	if n > 0:
-		_rays = Surroundings.rays(n, float(_surround["ray_strength"]), CRACK_COLOR if own else key, CRACK_AT - CRACK_AIM, RAYS_OVER,
-			_seed, CRACK_AT.y - RAYS_OVER.end.y)
+		_rays = Surroundings.rays(n, float(_surround["ray_strength"]), CRACK_COLOR if own else key, CRACK_AT - CRACK_AIM, RAYS_ROUND,
+			_seed, CRACK_AT.y - (RAYS_ROUND[0] as AABB).end.y)
 		_root3.add_child(_rays)
 	if not own:
 		_env.volumetric_fog_albedo = Color.html(String(row["fog"])).lerp(Color(0.75, 0.76, 0.8), 0.5)
 	if _air != null:
 		_air.release()
 		_air = null
-	var fx := Surroundings.effects_of(_surround, Color.html(String(row["fog"])) if not own else FOG)
+	var fx := Surroundings.effects_of(_surround, Color.html(String(row["fog"])) if not own else FOG, AIR_NEAR_MORE)
 	if not fx.is_empty():
 		# its motes spread over the whole desk as the chair sees it, never over wherever the camera happens to be (on first
 		# dressing it is placed nowhere yet, and every mote would be put in the middle of its region)
@@ -584,7 +592,7 @@ func _dress_environment() -> void:
 		var eye: Vector3 = home["eye"]
 		_air = Effects.build(fx, {"regions": {"near": AIR_NEAR, "far": AIR_FAR, "room": AIR_ROOM},
 			"camera": Transform3D(Basis.looking_at((home["aim"] as Vector3) - eye, Vector3.UP), eye), "fov": float(home["fov"]),
-			"aspect": 16.0 / 9.0}, hash([_seed, "dispatch air"]))
+			"aspect": 16.0 / 9.0, "around": true}, hash([_seed, "dispatch air"]))
 		_root3.add_child(_air.root)
 	_shine_things()
 
@@ -2675,30 +2683,32 @@ func clock_at(t: float) -> Dictionary:
 	return {"from": DispatchScript.clock_text(set_to + gone), "to": DispatchScript.clock_text(set_to + gone), "u": 1.0}
 
 
-## Every turn of the clock's cards: `[t, from, to]` - each time a fade up sets (as it comes up) and each minute after, to the next
-## time set or the voice's last word and what the desk does after it ([method _after_last]); none past what is heard yet.
+## Every turn of the clock's cards: `[t, from, to]` - each time a fade up sets (from a minute before it, as it comes up) and each
+## minute after, to the next time set or the voice's last word and what the desk does after it ([method _after_last]); while the
+## last word is not heard yet, only [constant CLOCK_AHEAD] past the last word that is (the plan is made again as words come).
+## Counted, never asked of [method clock_at] a minute at a time: it is made again with every sentence a live reading hears.
 func _clock_turns() -> Array:
 	var out: Array = []
 	var last := _word_t1(_spoken_n - 1)
-	var until := last + _after_last() + feed.tail() if last < INF else INF
+	var until := last + _after_last() + feed.tail()
+	if last == INF:
+		var k := _follower.known_last()
+		var heard := _word_t1(k) if k >= 0 else 0.0
+		until = (heard if heard < INF else 0.0) + CLOCK_AHEAD
 	var sets: Array = []
 	for i in _actions.size():
 		var a: Dictionary = _actions[i]
 		if String(a["kind"]) == "fade" and int(a.get("clock", -1)) >= 0 and _t0[i] < INF:
-			sets.append(_on_reading(i, _t0[i] + float(a["secs"]) / _sp[i]))
+			sets.append([_on_reading(i, _t0[i] + float(a["secs"]) / _sp[i]), int(a["clock"])])
 	for k in sets.size():
-		var t: float = sets[k]
-		var was := String(clock_at(t - 0.01).get("to", ""))
-		var c := clock_at(t + DispatchScript.CLOCK_TURN + 0.01)
-		if c.is_empty():
-			continue
-		if not was.is_empty() and was != String(c["to"]):
-			out.append([t, was, String(c["to"])])
-		var stop: float = sets[k + 1] if k + 1 < sets.size() else until
-		var m := t + 60.0
-		while m < stop and m < t + 60.0 * 600.0:
-			out.append([m, String(clock_at(m - 0.01).get("to", "")), String(clock_at(m + DispatchScript.CLOCK_TURN + 0.01).get("to", ""))])
-			m += 60.0
+		var t := float(sets[k][0])
+		var c := int(sets[k][1])
+		out.append([t, DispatchScript.clock_text(c - 1), DispatchScript.clock_text(c)])
+		var stop: float = sets[k + 1][0] if k + 1 < sets.size() else until
+		var g := 1
+		while t + 60.0 * float(g) < stop and g < 600:
+			out.append([t + 60.0 * float(g), DispatchScript.clock_text(c + g - 1), DispatchScript.clock_text(c + g)])
+			g += 1
 	return out
 
 

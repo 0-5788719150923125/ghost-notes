@@ -105,6 +105,8 @@ const SHAPES := {"orb": 0, "streak": 1, "flame": 2, "puff": 3, "star": 4, "flake
 ## The most of each: effects in all, fogs, motes in one population and in all, lit motes (each a
 ## light), and particles a burst makes over all its moments.
 const MAX_EFFECTS := 8
+## A mote's home where the camera turns round the scene (stage `around`): never nearer the lens than this (m).
+const AROUND_CLEAR := 0.45
 const MAX_FOG := 3
 const MAX_MOTES := 40
 const MAX_MOTES_ALL := 96
@@ -365,10 +367,11 @@ static func fog_environment(env: Environment, on: bool) -> void:
 
 ## Build [param effects] (sanitized) for a host whose [param stage] is
 ## `{regions: {name: AABB}, camera: Transform3D, fov: float (vertical, degrees), aspect: float,
-## occluders: [AABB], sharp: Vector2, defocus: float, deep: float}` - the occluders being what stands in
+## occluders: [AABB], sharp: Vector2, defocus: float, deep: float, around: bool}` - the occluders being what stands in
 ## the air (a table, the things on it); `sharp` the depths the lens has in focus (meters along its axis),
 ## `defocus` how fast a thing past them blurs (its blur, a share of the frame's width, is `defocus` times
-## the difference of the reciprocal depths) and `deep` how far the air goes before the room's picture.
+## the difference of the reciprocal depths), `deep` how far the air goes before the room's picture, and `around` a camera
+## that turns round the scene: each mote's home anywhere in its region, never only where this one picture sees.
 ## [param seed] varies everything sampled. An [Air] to add to the scene and tick.
 static func build(effects: Array, stage: Dictionary, seed: int) -> Air:
 	var air := Air.new()
@@ -605,6 +608,13 @@ static func _stretch(home: Vector3, depth: float, frame_h: float, stage: Diction
 ## few times before taking the middle of the box.
 static func _in_view(box: AABB, stage: Dictionary, rng: RandomNumberGenerator) -> Vector3:
 	var cam: Transform3D = stage.get("camera", Transform3D.IDENTITY)
+	if bool(stage.get("around", false)):
+		# a camera that turns: anywhere in the region, never right at the lens
+		for i in 64:
+			var p := box.position + Vector3(rng.randf(), rng.randf(), rng.randf()) * box.size
+			if p.distance_to(cam.origin) > AROUND_CLEAR:
+				return p
+		return box.get_center()
 	var k := tan(deg_to_rad(float(stage.get("fov", 42.0)) * 0.5))
 	var aspect := float(stage.get("aspect", 16.0 / 9.0))
 	for i in 64:

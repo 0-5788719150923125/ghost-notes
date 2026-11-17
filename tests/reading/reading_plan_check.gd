@@ -19,7 +19,10 @@ extends SceneTree
 ## - a reading can grow: a second piece planned on from the first's `sentences` numbers its sentences after the
 ##   first's, says the same words it would as one script, and starts where the scrub's estimate of the first ends.
 ##
-## Controls: Hesitate off rests nowhere and tells the voice of nothing; a reader asked by another name gets the
+## - a `say:` mark tells the voice how a word is said: that word goes to the host pinned to the mark's phonemes (`arpa`, which
+##   always wins) and is shown as written; the mark itself is never said; a bracketed spelling keeps its stressed phonemes;
+##
+## Controls: a word no mark tells goes to the host to say as it would; Hesitate off rests nowhere and tells the voice of nothing; a reader asked by another name gets the
 ## cue; a second piece planned from sentence 0 collides with the first.
 ##
 ## Loaded by path after the tree is up: named here, the plan would compile with this gate before the autoloads
@@ -45,6 +48,7 @@ func _run() -> void:
 	_check_told(ask)
 	_check_fade(ask)
 	_check_grows(ask)
+	_check_said()
 	for f in _fails:
 		printerr("FAIL: ", f)
 	print("reading_plan_check: %s" % ("ALL OK" if _fails.is_empty() else "%d FAILED" % _fails.size()))
@@ -154,3 +158,26 @@ func _said(chunks: Array) -> Array:
 func _ok(cond: bool, msg: String) -> void:
 	if not cond:
 		_fails.append(msg)
+
+
+func _check_said() -> void:
+	var src := "<!-- say: Io-A = AY1 OW0 EY1; Io-B = AY1 OW0 B IY1 -->\n\nThree columns, Io-A, Io-B and Io-C. Then [AY1 OW0 EY1] once."
+	var plan: Dictionary = _plan.call("make", src, "", {"reader": "Ryan", "said": _plan.call("said_in", src)})
+	var told := {}
+	var said_words: Array = []
+	var bracket: Array = []
+	for c in plan["chunks"]:
+		for t in (c as Dictionary).get("tokens", []):
+			told[String((t as Dictionary).get("text", ""))] = (t as Dictionary).get("arpa", [])
+		for w in (c as Dictionary).get("words", []):
+			var wd: Dictionary = w
+			said_words.append(String(wd.get("text", "")).to_lower())
+			if String(wd.get("text", "")).begins_with("[AY1") or String(wd.get("text", "")).begins_with("AY1"):
+				bracket.append(String(wd.get("text", "")))
+	_ok(told.get("io-a", []) == ["AY1", "OW0", "EY1"] and (told.get("io-b", []) as Array).size() == 4 and said_words.has("io-a,"),
+		"a word a `say:` mark tells goes to the voice pinned to its phonemes, and is shown as written (%s; shown %s)" % [str(told.get("io-a")), str(said_words)])
+	_ok((told.get("io-c", []) as Array).is_empty() and told.has("io-c"), "the control: a word no mark tells goes to the voice to say as it would")
+	_ok(not said_words.has("say") and not said_words.has("say:"), "the mark itself is never said (%s)" % " ".join(PackedStringArray(said_words)))
+	var spelled: Array = told.get("ay1 ow0 ey1", told.get("[ay1 ow0 ey1]", []))
+	_ok(spelled == ["AY1", "OW0", "EY1"] and not said_words.has("zero"),
+		"a bracketed spelling keeps its stressed phonemes, its digits never read as numbers (%s; shown %s)" % [str(spelled), str(bracket)])

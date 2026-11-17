@@ -145,17 +145,18 @@ static func heard_of(spec: Dictionary, name: String) -> float:
 
 
 ## What drifts in the air ([constant AIR] ticked in [param spec]) as [Effects] effects over a host's regions `far`, `near` and `room`,
-## each as many as the amount dial says, its fog the color of [param fog]: made safe by [method Effects.sanitize]. A mote never
+## each as many as the amount dial says (those round the work [param near] times as many, for a host whose region round it is
+## larger), its fog the color of [param fog]: made safe by [method Effects.sanitize]. A mote never
 ## goes away on a visit: its exit is out of the picture the air was built for, and a host's camera moves on to another, where
 ## the motes leaving and waiting there would stand in a line.
-static func effects_of(spec: Dictionary, fog: Color) -> Array:
+static func effects_of(spec: Dictionary, fog: Color, near := 1.0) -> Array:
 	var raw: Array = []
 	var amount := float(spec.get("air_amount", 1.0))
 	for k in spec.get("air", []):
 		var fx: Dictionary = (AIR[k] as Dictionary)["effect"].duplicate(true)
 		fx["name"] = String(k)
 		if fx.has("count"):
-			fx["count"] = maxi(1, roundi(float(fx["count"]) * amount))
+			fx["count"] = maxi(1, roundi(float(fx["count"]) * amount * (near if String(fx.get("where", "")) == "near" else 1.0)))
 		if String(fx["kind"]) == "motes":
 			fx["away"] = 0.0
 		if String(fx["kind"]) == "fog":
@@ -175,11 +176,12 @@ static func sound_of(spec: Dictionary) -> Dictionary:
 
 
 ## [param count] shafts of light through the haze, each falling [param reach] (m) from [param toward] (the way to their light, from
-## where they land) onto its own place in [param over] (a box in the host's space, its top where they land), colored [param color]
-## and as strong as [param strength] says: under one node, out of any tree, each a drawn shaft ([constant SHAFT_SHADER]) and a narrow
-## spot lighting where it lands. Its places are drawn from [param seed], spread so no two land together; the dust in them drifts by
-## show time ([method tick_rays]).
-static func rays(count: int, strength: float, color: Color, toward: Vector3, over: AABB, seed: int, reach := 3.0) -> Node3D:
+## where they land) onto its own place in one of [param over] (boxes in the host's space, each's top where they land: round the
+## viewer, so light comes down wherever they look - shared out by each box's size), colored [param color] and as strong as
+## [param strength] says: under one node, out of any tree, each a drawn shaft ([constant SHAFT_SHADER]) and a narrow spot lighting
+## where it lands. Its places are drawn from [param seed], spread so no two land together; the dust in them drifts by show time
+## ([method tick_rays]).
+static func rays(count: int, strength: float, color: Color, toward: Vector3, over: Array, seed: int, reach := 3.0) -> Node3D:
 	var root := Node3D.new()
 	root.name = "Rays"
 	var mat := ShaderMaterial.new()
@@ -193,10 +195,30 @@ static func rays(count: int, strength: float, color: Color, toward: Vector3, ove
 	r.seed = hash([seed, "rays"])
 	var dir := toward.normalized() if toward.length() > 1e-4 else Vector3.UP
 	var up := Vector3.UP if absf(dir.dot(Vector3.UP)) < 0.98 else Vector3.BACK
+	# each shaft's box: the boxes laid end to end by their size, each shaft at its own share of the way along them
+	var sizes: Array = over.map(func(b: AABB) -> float: return maxf(b.size.x * b.size.z, 1e-4))
+	var whole: float = sizes.reduce(func(x: float, y: float) -> float: return x + y, 0.0)
+	var in_box: Array = []
+	var counts: Array = []
+	counts.resize(over.size())
+	counts.fill(0)
 	for i in count:
-		# a place in its own stretch of the box, so the shafts stand apart
-		var u := (float(i) + r.randf_range(0.2, 0.8)) / float(maxi(count, 1))
-		var land := Vector3(lerpf(over.position.x, over.end.x, u), over.end.y, lerpf(over.position.z, over.end.z, r.randf()))
+		var at_share := (float(i) + 0.5) / float(maxi(count, 1)) * whole
+		var bi := 0
+		while bi < over.size() - 1 and at_share > float(sizes[bi]):
+			at_share -= float(sizes[bi])
+			bi += 1
+		in_box.append([bi, int(counts[bi])])
+		counts[bi] = int(counts[bi]) + 1
+	for i in count:
+		# a place in its own stretch of its box, along the box's longer side, so the shafts stand apart
+		var box: AABB = over[int(in_box[i][0])]
+		var n := maxi(int(counts[int(in_box[i][0])]), 1)
+		var u := (float(int(in_box[i][1])) + r.randf_range(0.2, 0.8)) / float(n)
+		var v := r.randf()
+		var along_x := box.size.x >= box.size.z
+		var land := Vector3(lerpf(box.position.x, box.end.x, u if along_x else v), box.end.y,
+			lerpf(box.position.z, box.end.z, v if along_x else u))
 		var at := land + dir * reach
 		var cone := RAY_CONE * r.randf_range(0.7, 1.3)
 		var ray := Node3D.new()

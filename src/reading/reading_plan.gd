@@ -67,7 +67,7 @@ static func make(body: String, title: String, ask: Dictionary, from_sentence := 
 				# Asked per passage rather than of the whole box, so a macro in a stripped authoring note is not reported as
 				# missing from the reading.
 		bare.append_array(TextNorm.unresolved_macros(text))
-		var part := cut(text, sentence_no, (seg as Dictionary).get("holds", []))
+		var part := cut(text, sentence_no, (seg as Dictionary).get("holds", []), (seg as Dictionary).get("said", {}))
 		var chunks: Array = part["chunks"]
 		sentence_no = int(part["sentence_no"])
 		if chunks.is_empty():
@@ -124,7 +124,16 @@ static func make(body: String, title: String, ask: Dictionary, from_sentence := 
 	return {"chunks": trimmed["chunks"], "note": note, "fade": trimmed["fade"], "sentences": sentence_no}
 
 
-## Split a script into passages by speaker: `[{speaker, text, fade, leans, holds}]`. Text before the first cue
+## Every word [param source]'s `say:` marks tell ([constant Manuscript.SAY]): the note's own, for [method passages]' `said`.
+static func said_in(source: String) -> Dictionary:
+	var said := {}
+	for sm in Manuscript._rx(Manuscript.SAY).search_all(source):
+		said = said.merged(Phonemes.said_as(sm.get_string(1)), true)
+	return said
+
+
+## Split a script into passages by speaker: `[{speaker, text, fade, leans, holds, said}]` - `said` every word a `say:` mark has
+## told so far ([constant Manuscript.SAY]). Text before the first cue
 ## (and a script with no cues at all) is the reader's ([param ask] `reader`).
 ##
 ## Also where the hesitations are resolved, as the last place that still sees the markers in their text: each
@@ -143,8 +152,13 @@ static func passages(body: String, title: String, ask: Dictionary) -> Array:
 		# that one. A chapter read off a screen announces nothing (its walk hands no title).
 	var first := true
 	var fading := false
+	# every word a `say:` mark has told so far, as its phones ([constant Manuscript.SAY]): the note's own (a medium's walk hands
+	# on only what is spoken, its marks gone), and any in the text read
+	var said: Dictionary = (ask.get("said", {}) as Dictionary).duplicate()
 	for p in Manuscript.passages(body):
 		var raw := String((p as Dictionary)["text"])
+		for sm in Manuscript._rx(Manuscript.SAY).search_all(raw):
+			said = said.merged(Phonemes.said_as(sm.get_string(1)), true)
 				# the first passage with anything in it: a chapter opening on a cue has an empty one before it, and a title
 				# put there would invent a narrator to read it
 		if first and not title.is_empty() and not raw.strip_edges().is_empty():
@@ -185,7 +199,7 @@ static func passages(body: String, title: String, ask: Dictionary) -> Array:
 			if not out.replace(TextNorm.HOLD_MARK, "").strip_edges().is_empty():
 				kept.append({"speaker": reader if name == Manuscript.NARRATOR else name, "text": out,
 					"fade": fading, "leans": res["leans"], "holds": res["holds"], "over": over, "together": together,
-					"heard": heard})
+					"heard": heard, "said": said})
 		# A tablet's opening run (wake, open the browser, type) comes after the intro, end to end: the intro is the
 		# tablet lying dark on the desk, and its rest is the run's own
 	return kept
@@ -253,11 +267,12 @@ static func resolve_marks(t: String, on: bool, bare: float) -> Dictionary:
 	return {"text": said, "holds": holds, "leans": leans}
 
 
-## One passage, cut at sentence boundaries: `{chunks, sentence_no}`, each chunk `{tokens, words, holds}`.
+## One passage, cut at sentence boundaries: `{chunks, sentence_no}`, each chunk `{tokens, words, holds}`. [param said]: the
+## words a script's `say:` marks tell so far ([method Phonemes.said_as]), each said exactly so.
 ## [param holds] are the lengths of its hesitations in text order ([method passages]), handed out as the phonemizer
 ## meets the sentinels that mark their places. `sentence_no` runs across the whole script, not per passage:
 ## [Subtitles] windows the display by that index, and two speakers sharing a number would be drawn at once.
-static func cut(body: String, sentence_no: int, holds: Array = []) -> Dictionary:
+static func cut(body: String, sentence_no: int, holds: Array = [], said := {}) -> Dictionary:
 	var out: Array = []
 	var toks: Array = []
 	var words: Array = []
@@ -265,7 +280,7 @@ static func cut(body: String, sentence_no: int, holds: Array = []) -> Dictionary
 	var after := 0.0               # the rest spliced in after the token being built
 	var hold_i := 0
 	var sentences := 0
-	var parsed := Phonemes.parse(body)
+	var parsed := Phonemes.parse(body, said)
 	var stressed_at := Delivery.stressed_words(parsed)
 	var flat := -1
 	for sentence in parsed:

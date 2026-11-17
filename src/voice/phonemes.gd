@@ -193,8 +193,9 @@ const FUNCTION_WORDS := [
 ## Expand a paragraph into sentences of timed-ready words. Returns an Array of sentences; each sentence
 ## is an Array of word Dictionaries:
 ## `{text, phones: [String], stressed: bool, pause_after: "none"|"comma"|"stop"}`.
-## `[K AE T]` bracket groups pass through as literal phonemes (shown as the bracketed text in subtitles).
-static func parse(text: String) -> Array:
+## `[K AE T]` bracket groups pass through as literal phonemes (shown as the bracketed text in subtitles); a word in
+## [param said] (a script's `say:` marks, [method said_as]) is said with its own phonemes and shown as written.
+static func parse(text: String, said := {}) -> Array:
 	var sentences: Array = []
 	var words: Array = []
 	# Normalize first: fold typographic punctuation to ASCII and turn numerals, ordinals, currency,
@@ -318,7 +319,9 @@ static func parse(text: String) -> Array:
 			if not mark.is_empty() and mark != "\n":
 				prev["display"] = String(prev.get("display", "")) + " " + mark
 		if bare.length() > 0:
-			var got := lookup(bare)
+			# a word the script says how to say ([method said_as]): exactly so
+			var told: Dictionary = said.get(bare, {})
+			var got := told if not told.is_empty() else lookup(bare)
 			var phones: Array = got.phones
 			if phones.is_empty():
 				# nothing may leave the pipeline silently: a token that reaches here as digits (word_to_phones
@@ -359,6 +362,10 @@ static func parse(text: String) -> Array:
 				if bare == "a" and not words.is_empty() and _letter_a(token):
 					entry["phones"] = ["EY"]
 					entry["stress"] = [1]
+					entry["stressed"] = true
+					entry["literal"] = true
+				# said as the script says: pinned, so the voice host's own reading cannot replace it
+				if not told.is_empty():
 					entry["stressed"] = true
 					entry["literal"] = true
 				words.append(entry)
@@ -446,20 +453,49 @@ static func _letter_a(token: String) -> bool:
 
 static func _literal_word(token: String) -> Dictionary:
 	var inner := token.trim_prefix("[").trim_suffix("]").strip_edges()
-	var phones: Array = []
-	for p in inner.split(" ", false):
-		var key := String(p).to_upper()
-		if TABLE.has(key):
-			phones.append(key)
-		elif key == "CH":
-			phones.append_array(["T", "SH"])
-		elif key == "JH":
-			phones.append_array(["D", "ZH"])
-	var st := _with_default_stress(phones)
+	var st := arpabet(inner)
 	# `literal` makes ghost's own ARPAbet beat eSpeak downstream (see ReadingPlan.cut): without it an
 	# inline [K AE T] would be re-phonemized by eSpeak like any other word.
-	return {"text": inner.to_lower(), "display": inner, "phones": phones,
+	return {"text": inner.to_lower(), "display": inner, "phones": st.phones,
 		"stress": st.stress, "stressed": true, "pause_after": "none", "literal": true}
+
+
+## ARPAbet written out ([param spelled]: `K AE1 T`, a vowel's stress its digit) as `{phones, stress}`: each phone the table
+## knows (CH and JH as their two), each vowel at its digit's stress - and where no digit is written at all, the first vowel
+## stressed.
+static func arpabet(spelled: String) -> Dictionary:
+	var phones: Array = []
+	var stress: Array = []
+	var marked := false
+	for p in spelled.split(" ", false):
+		var key := String(p).to_upper()
+		var d := -1
+		if key.length() > 1 and key[key.length() - 1] in "012":
+			d = int(key[key.length() - 1])
+			key = key.substr(0, key.length() - 1)
+			marked = true
+		var parts: Array = [key] if TABLE.has(key) else ({"CH": ["T", "SH"], "JH": ["D", "ZH"]} as Dictionary).get(key, [])
+		for k in parts:
+			phones.append(k)
+			stress.append(maxi(d, 0) if TABLE.get(k, {}).get("type", "") == "vowel" else 0)
+	if not marked:
+		return _with_default_stress(phones)
+	return {"phones": phones, "stress": stress}
+
+
+## A `say:` mark's words ([ReadingPlan]: `<!-- say: Io-A = AY1 OW0 EY1; Io-B = AY1 OW0 B IY1 -->`): each word as the voice reads
+## it -> its `{phones, stress}`, said exactly so ([method parse]'s [param said]).
+static func said_as(body: String) -> Dictionary:
+	var out := {}
+	for part in body.split(";", false):
+		var kv := String(part).split("=", true, 1)
+		if kv.size() != 2:
+			continue
+		var word := TextNorm.normalize(String(kv[0]).strip_edges()).strip_edges().to_lower()
+		var st := arpabet(String(kv[1]).strip_edges())
+		if not word.is_empty() and not (st.phones as Array).is_empty():
+			out[word] = st
+	return out
 
 
 # ---- the external language data ---------------------------------------------

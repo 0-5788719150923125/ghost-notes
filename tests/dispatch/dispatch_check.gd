@@ -1261,6 +1261,17 @@ func _clock_skip(st: SubViewport, feed: ShowFeed) -> void:
 	_ok(before == "00:05" and String(turning.get("from", "")) == "00:05" and String(turning.get("to", "")) == "00:06" and earlier.begins_with("22:4"),
 		"after the black the cards come up at 00:05 and turn to 00:06, never from where the clock had run to (%s, %s; the control, before the black, %s)"
 		% [before, str(turning), earlier])
+	# a live reading, its end not heard yet: the clock's turns are planned only a little past the last word heard, as the plan is
+	# made again with every sentence (the control: the whole reading heard, with a long outro, plans its every minute)
+	var all_words := DispatchScript.rehearsal(DispatchScript.parse(body), 0.32)
+	md.feed.outro_hold = 1200.0
+	md._build_sound()
+	var whole := md._clock_turns().size()
+	md.take_words(all_words.slice(0, all_words.size() - 2))
+	var live := md._clock_turns().size()
+	md.feed.outro_hold = ShowFeed.OUTRO_DEFAULT
+	_ok(live <= 2 + int(DispatchMedium.CLOCK_AHEAD / 60.0) + 2 and whole > live + 5,
+		"live, the clock's turns are planned only a little past the last word heard (%d; the control, the whole reading and a long outro, %d)" % [live, whole])
 	md.queue_free()
 
 
@@ -1271,7 +1282,8 @@ func _ok(cond: bool, what: String) -> void:
 ## No root lies where a phone is laid open, on eight desks: the held phones' whole footprint, lids included (control: the strip
 ## round the bases leaves the lids out). No root goes through the printer's paper or its heap (control: the same roots grown
 ## knowing nothing of them go through), nor lies across the chart taped to the desk (control: grown with it left out, they do).
-## The chart lies a hair over the desk's top, never in its plane (control: its make seats its sheet on its own foot).
+## The chart lies a hair over the desk's top, never in its plane (control: its make seats its sheet on its own foot). The patch
+## panel's cables end in what they plug into or past the desk's edge, and go over the roots on the desk (control: laid blind).
 func _roots_clear() -> void:
 	var img := Image.create(8, 8, false, Image.FORMAT_RGBA8)
 	var t := ImageTexture.create_from_image(img)
@@ -1287,6 +1299,9 @@ func _roots_clear() -> void:
 	var chart_blind := 0
 	var chart_lift := INF
 	var chart_seat := 0.0
+	var loose_ends := []
+	var cable_through := []
+	var cable_blind := 0
 	for sd in range(1, 9):
 		var ds := DispatchSet.new()
 		var node := ds.build(labels, sd, tex)
@@ -1300,6 +1315,20 @@ func _roots_clear() -> void:
 		if _in_paper(blind, ds.clear):
 			paper_blind += 1
 		bn.free()
+		# the patch panel's cables: each ends in a thing it plugs into or out of sight past the desk's edge, never loose on the
+		# desk; laid over the roots lying there, none goes through one (the control: laid knowing nothing of the roots, they do)
+		ds.lay_cables(rr.lying)
+		for path in ds.cable_paths:
+			var end: Vector3 = (path as PackedVector3Array)[(path as PackedVector3Array).size() - 1]
+			var plugged := end.y < DispatchSet.DESK_Y - 0.1
+			for k in DispatchSet.CABLED:
+				plugged = plugged or (ds.bodies.has(k) and (ds.bodies[k] as AABB).grow(0.005).has_point(end))
+			if not plugged:
+				loose_ends.append(sd)
+		if _cables_through(ds.cable_paths, rr.lying):
+			cable_through.append(sd)
+		ds.lay_cables([])
+		cable_blind += int(_cables_through(ds.cable_paths, rr.lying))
 		# the chart taped flat on the desk: no root lying on the desk crosses it (the control: grown with it left out of what
 		# they go round, they cross it)
 		var chart := _foot(ds, "chart")
@@ -1344,6 +1373,9 @@ func _roots_clear() -> void:
 		"an open phone laid on the desk faces the chair (the least %.3f; the control, the turn it once had, at most %.3f)" % [facing_least, was_most])
 	_ok(paper_through.is_empty() and paper_blind > 0,
 		"no root goes through the printer's paper or its heap (the control: grown knowing nothing of them, through on %d of 8; with them, on %s)" % [paper_blind, str(paper_through)])
+	_ok(loose_ends.is_empty() and cable_through.is_empty() and cable_blind > 0,
+		"the patch panel's cables end in what they plug into or past the desk's edge, never loose (%s), and go over the roots on the desk, through none (the control: laid knowing nothing of them, through on %d of 8; laid over them, on %s)"
+		% [str(loose_ends), cable_blind, str(cable_through)])
 	_ok(chart_lift >= DispatchSet.FLAT_LIFT * 0.9 and chart_seat < 0.0002,
 		"the chart lies %.2f mm over the desk's top, never in its plane (the control: its make seats its sheet on its own foot, %.2f mm up)"
 		% [chart_lift * 1000.0, chart_seat * 1000.0])
@@ -1360,6 +1392,21 @@ static func _xf_in(n: Node3D, top: Node3D) -> Transform3D:
 			xf = (at as Node3D).transform * xf
 		at = at.get_parent()
 	return xf
+
+
+## Whether any of [param paths] (cables) passes inside a root of [param lying] on the desk's top - within its radius of its middle.
+static func _cables_through(paths: Array, lying: Array) -> bool:
+	for path in paths:
+		for p in (path as PackedVector3Array):
+			if (p as Vector3).z < DispatchSet.FAR:
+				continue
+			for root_path in lying:
+				var pts: PackedVector3Array = (root_path as Dictionary)["points"]
+				var rad: PackedFloat32Array = (root_path as Dictionary)["radii"]
+				for j in range(int((root_path as Dictionary).get("from", 0)), pts.size()):
+					if (p as Vector3).distance_to(pts[j]) < rad[j]:
+						return true
+	return false
 
 
 ## Thing [param k]'s footprint on the desk of [param ds] (x, z): its parts' boxes, merged; empty where the desk has none.

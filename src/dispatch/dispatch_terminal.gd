@@ -14,7 +14,8 @@ class_name DispatchTerminal
 ##
 ##     > words                    typed on the command line a key at a time, entered and cleared. It opens the panel
 ##                                written on the next line; else what it is bound to - the panel up's keys, then the
-##                                frontmatter's (a digit too); `> open ID` a kept panel. Nothing: INVALID OPTION, warned
+##                                frontmatter's (a digit too); `> open ID` a kept panel. Nothing: INVALID OPTION, warned.
+##                                `> words {2}`: held two seconds typed, before it is entered
 ##     panel: id = NAME | L | R   a new panel replacing the glass, rows 1 and 2 at once, then the lines after it down the
 ##                                body; with an id it is kept, and comes back as it last stood. `NAME`, `NAME | L` too
 ##     panel: id                  a kept panel opened again, its body drawn down the glass
@@ -214,7 +215,14 @@ static func compile(lines: PackedStringArray, glass: Dictionary, cfg: Dictionary
 			reading = -1.0
 		match kind:
 			"command":
-				var typed := DispatchScript.redacted(s.substr(1).strip_edges())
+				# `{2}` after it: held that long, typed, before it is entered
+				var asked := s.substr(1).strip_edges()
+				var held := 0.0
+				var pm := _rx(PAUSE).search(asked)
+				if pm != null:
+					held = float(pm.get_string(1))
+					asked = _rx(PAUSE).sub(asked, "", true).strip_edges()
+				var typed := DispatchScript.redacted(asked)
 				var keys := PackedFloat32Array()
 				var c0 := t + PROMPT_WAIT
 				var tk := c0
@@ -223,7 +231,7 @@ static func compile(lines: PackedStringArray, glass: Dictionary, cfg: Dictionary
 					var space := typed[c] == " " or typed.unicode_at(c) == DispatchScript.REDACT_BASE + 32
 					tk += KEY_EACH * (1.0 + KEY_JITTER * j) * (SPACE_MORE if space else 1.0)
 					keys.append(tk)
-				var enter := tk + ENTER_AFTER
+				var enter := tk + ENTER_AFTER + held
 				_step(g, ops, {"op": "command", "t": t, "text": typed, "keys": keys, "enter": enter}, t)
 				t = enter + ANSWER_AFTER
 				steps += 1

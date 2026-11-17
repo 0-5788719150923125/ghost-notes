@@ -163,6 +163,14 @@ const REGISTRY := {
 		"modes": ["generative"],
 		"pattern": "\\[[A-Za-z]{1,2}[0-2]?(?:\\s+[A-Za-z]{1,2}[0-2]?)*\\]",
 	},
+	"say": {
+		"label": "Say as",
+		"group": "pronunciation",
+		"blurb": "How words are said, in ARPAbet (a vowel's stress its digit), wherever they come in the note - each still shown as written. For a name every voice gets wrong.",
+		"before": "<!-- say: ", "fill": "Io-A = AY1 OW0 EY1", "after": " -->", "line": "own",
+		"modes": ["generative"],
+		"pattern": Manuscript.SAY,
+	},
 	"letter": {
 		"label": "Letter",
 		"group": "pronunciation",

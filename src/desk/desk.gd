@@ -395,7 +395,7 @@ func _dress_environment() -> void:
 		var from := float(sun.get("from", RAYS_FROM.x)) if sun.get("from") is float or sun.get("from") is int else RAYS_FROM.x
 		var toward := Surroundings.toward(from, float(sun.get("height", RAYS_FROM.y)))
 		_rays = Surroundings.rays(n, float(environment["ray_strength"]), Color.html(String(row["key_color"])), toward,
-			AABB(Vector3(-0.32, LegalPad.DESK_Y, -0.26), Vector3(0.64, 0.0, 0.5)), _seed, RAYS_REACH)
+			[AABB(Vector3(-0.32, LegalPad.DESK_Y, -0.26), Vector3(0.64, 0.0, 0.5))], _seed, RAYS_REACH)
 		_root3.add_child(_rays)
 	Surroundings.fog_for(_env, environment, 0.0)
 	_env.volumetric_fog_length = FOG_LENGTH

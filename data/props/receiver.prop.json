@@ -59,7 +59,7 @@
 					12.5
 				],
 				"material": "dial",
-				"lit": 0.55
+				"lit": 0.22
 			},
 			{
 				"shape": "lathe",
@@ -106,7 +106,7 @@
 					12.5
 				],
 				"material": "meter",
-				"lit": 0.5
+				"lit": 0.2
 			},
 			{
 				"parts": [

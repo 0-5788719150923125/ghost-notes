@@ -983,10 +983,12 @@ func _doc_field(src: String, key: String) -> String:
 
 ## What the plan is asked ([method ReadingPlan.make]): whose voice the reader's cue is (the cast's first), the
 ## Hesitate row as it stands, and the Outro's length.
-func _plan_ask() -> Dictionary:
+func _plan_ask(body := "") -> Dictionary:
 	var ask := _cast.hesitation()
 	ask["reader"] = _cast.reader()
 	ask["outro"] = Director.outro_hold
+	# how the note says its words ([constant Manuscript.SAY]), read off its own text: a medium's walk hands on only what is said
+	ask["said"] = ReadingPlan.said_in(body)
 	return ask
 
 
@@ -995,7 +997,7 @@ func _plan_ask() -> Dictionary:
 ## ([member _plan_note]).
 func _plan_of(body: String) -> Dictionary:
 	var read := _reading_of(body)
-	var plan := ReadingPlan.make(String(read["body"]), String(read["title"]), _plan_ask())
+	var plan := ReadingPlan.make(String(read["body"]), String(read["title"]), _plan_ask(body))
 	_plan_note = ""
 	if not String(plan["note"]).is_empty():
 		_note(String(plan["note"]))
@@ -1010,7 +1012,7 @@ func _build_chunks(body: String) -> Array:
 ## [param body]'s passages by speaker, as the walk reads it ([method ReadingPlan.passages]).
 func _split_speakers(body: String) -> Array:
 	var read := _reading_of(body)
-	return ReadingPlan.passages(String(read["body"]), String(read["title"]), _plan_ask())
+	return ReadingPlan.passages(String(read["body"]), String(read["title"]), _plan_ask(body))
 
 
 ## Where the reader is, sentence by sentence, in [param chunks] from [param from] on
