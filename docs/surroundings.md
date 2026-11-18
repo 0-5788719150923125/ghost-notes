@@ -9,6 +9,8 @@ EnvironmentCard - the Environment: what is round the scene a note is shown in, a
 
 Its block in a document is `environment:` (`Surroundings.KNOBS`). It hands the reading its part of the document a medium is drawn from (`ReadingPanel.document_parts`: `environment`), and the sound it chose as the bed under the voice where no other card hands one (`ReadingPanel.bed`). Changed while the note plays, the playing scene takes it at once (the live document's `environment`). A scene that hosts no environment reads none of it.
 
+Each element that is heard has a Test: it alone, at the level it has under the voice, following what is changed on it until pressed again (`test`, `SoundTest`).
+
 Source: [src/table/environment_card.gd](../src/table/environment_card.gd)
 
 ## What can be round a scene
@@ -138,7 +140,10 @@ Size, glow, speed and color default to each kind's own (the table's `Effects.MOT
 | Property | What it is | Type | Bounds | Rolled in |
 | --- | --- | --- | --- | --- |
 | `strength` Strength | How loud they are. | `float` | 0 to 1 | 0.25 to 0.55 |
-| `kind` Kind | Which insects sing. | `enum` |  | `crickets`, `cicadas` |
+| `sort` Kind | Which insects sing. | `enum` |  | `crickets`, `cicadas` |
+| `amount` How many | A lone cricket to a whole field of them; a few cicadas to a chorus. | `float` | 0 to 1 | 0.1 to 0.5 |
+| `pitch` Pitch | How high they sing. | `float` | 0 to 1 | 0.3 to 0.7 |
+| `pace` Pace | How quickly each chirps, or the chorus swells and fades. | `float` | 0 to 1 | 0.3 to 0.7 |
 
 ### Heard: `stream` (`SOUND_FIELDS`)
 
@@ -153,4 +158,4 @@ Size, glow, speed and color default to each kind's own (the table's `Effects.MOT
 | --- | --- | --- | --- | --- |
 | `size` Size | How big the waves are. | `float` | 0 to 1 | 0.25 to 0.5 |
 | `distance` Distance | How far off the water is. | `float` | 0 to 1 | 0.4 to 0.8 |
-| `kind` Kind | What the water is. | `enum` |  | `shore`, `dock` |
+| `sort` Kind | What the water is. | `enum` |  | `shore`, `dock` |

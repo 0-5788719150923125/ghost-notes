@@ -157,6 +157,8 @@ const RAINS := {
 ## Cicadas in each of the two groups that swell and fade in turn, and their level at full strength:
 ## a chorus some way off, under the voice (see the cicadas in [method _init]).
 const CICADAS := 4
+## The most crickets a field of them is ([code]amount[/code] 1).
+const CRICKETS_MOST := 14
 const CICADA_GAIN := 0.2
 const INSECTS := {
 	"crickets": "crickets in the grass - chirp after chirp, each at its own pace",
@@ -209,7 +211,7 @@ static func describe() -> String:
 		lines.append("  - %s: %s" % [k, String((RAINS[k] as Dictionary)["about"])])
 	lines.append("- fire: {\"size\" 0-1 (a few embers to a roaring blaze), \"from\", \"distance\" 0-1} - %s: it roars, hisses and crackles, and a gust fans it." % String(LAYERS["fire"]))
 	lines.append("- stream: {\"size\" 0-1 (a trickle to a rushing brook), \"from\", \"distance\" 0-1} - %s." % String(LAYERS["stream"]))
-	lines.append("- insects: {\"kind\", \"strength\" 0-1} - %s. kind:" % String(LAYERS["insects"]))
+	lines.append("- insects: {\"kind\", \"strength\" 0-1, \"amount\" 0-1 (a lone one to a field of them), \"pitch\" 0-1 (low to high), \"pace\" 0-1 (slow to quick)} - %s. kind:" % String(LAYERS["insects"]))
 	for k in INSECTS:
 		lines.append("  - %s: %s" % [k, String(INSECTS[k])])
 	lines.append("- ride: {\"level\" 0-1} - %s. Heard only on a table with a `ride`: give it whenever the ride should be heard - a train's rumble and its wheels knocking, a cart's jolting, an airplane's drone (0.6 when left out)." % String(LAYERS["ride"]))
@@ -284,6 +286,10 @@ static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray(
 	if ins is Dictionary:
 		out["insects"] = {"kind": _kind((ins as Dictionary).get("kind"), INSECTS, "crickets", "the insects' `kind`", notes),
 			"strength": Props._num((ins as Dictionary).get("strength"), 0.5, 0.0, 1.0)}
+		# how many sing, how high and how quickly: each only where it is told (left out, drawn as the insects always were)
+		for k in ["amount", "pitch", "pace"]:
+			if typeof((ins as Dictionary).get(k)) in [TYPE_INT, TYPE_FLOAT]:
+				out["insects"][k] = Props._num((ins as Dictionary)[k], 0.5, 0.0, 1.0)
 	elif ins != null:
 		notes.append("the insects were not an object {kind, strength} - left out")
 	var cr: Variant = d.get("creatures")
@@ -1064,11 +1070,20 @@ func _setup() -> void:
 		var i: Dictionary = _sound["insects"]
 		var kind := String(i["kind"])
 		var strength := float(i["strength"])
+		# how many (none told: as drawn), how high (an octave and a half round their own) and how quickly (a third to three times)
+		var amount := float(i.get("amount", -1.0))
+		var pitch := pow(2.0, (float(i.get("pitch", 0.5)) - 0.5) * 1.6)
+		var pace := pow(3.0, (float(i.get("pace", 0.5)) - 0.5) * 2.0)
 		if kind == "crickets":
 			var crickets: Array = []
-			for c in 3 + int(_rand() * 3.0):
-				crickets.append({"f": _range(3900.0, 5200.0), "every": _range(0.5, 1.1), "pulses": 3 + int(_rand() * 2.0),
-					"gap": _range(0.026, 0.038), "amp": _range(0.35, 1.0), "ears": _ears(_range(0.0, 360.0), 0.85),
+			var n := 3 + int(_rand() * 3.0)
+			if amount >= 0.0:
+				n = maxi(1, roundi(lerpf(1.0, float(CRICKETS_MOST), amount)))
+			# many sing as a field does, not louder for each one more
+			var each := sqrt(4.0 / float(n)) if amount >= 0.0 else 1.0
+			for c in n:
+				crickets.append({"f": _range(3900.0, 5200.0) * pitch, "every": _range(0.5, 1.1) / pace, "pulses": 3 + int(_rand() * 2.0),
+					"gap": _range(0.026, 0.038) / sqrt(pace), "amp": _range(0.35, 1.0) * each, "ears": _ears(_range(0.0, 360.0), 0.85),
 					"next": _range(0.0, 1.0), "sing": _range(4.0, 20.0)})
 			_in = {"crickets": crickets, "strength": strength}
 		else:
@@ -1076,16 +1091,17 @@ func _setup() -> void:
 			# own broad band and its own shallow pulse, so the pulses blur into the shimmer of a chorus some way off (two narrow bands
 			# chopped at one rate screech).
 			var bands: Array = []
+			var voices_n := CICADAS if amount < 0.0 else maxi(1, roundi(lerpf(1.0, float(CICADAS * 3), amount)))
 			for c in 2:
 				var from := _range(0.0, 360.0)
 				var voices: Array = []
-				for v in CICADAS:
-					var b := _band(0, 1, _range(4000.0, 6500.0), _range(1.4, 2.2), false)
-					b.am_rate = _range(110.0, 420.0)
+				for v in voices_n:
+					var b := _band(0, 1, _range(4000.0, 6500.0) * pitch, _range(1.4, 2.2), false)
+					b.am_rate = _range(110.0, 420.0) * pace
 					b.am_depth = _range(0.25, 0.45)
 					voices.append({"band": b, "ears": _ears(from + _range(-40.0, 40.0), 0.8)})
-				bands.append({"voices": voices, "t": _range(-8.0, 0.0), "rise": 3.0,
-					"hold": _range(4.0, 10.0), "fall": 2.5, "rest": _range(5.0, 18.0)})
+				bands.append({"voices": voices, "t": _range(-8.0, 0.0), "rise": 3.0 / pace,
+					"hold": _range(4.0, 10.0) / pace, "fall": 2.5 / pace, "rest": _range(5.0, 18.0) / pace})
 			_in = {"cicadas": bands, "strength": strength}
 	if _sound.get("creatures") is Array:
 		# each creature's plan from the window that could still be sounding when the soundscape starts

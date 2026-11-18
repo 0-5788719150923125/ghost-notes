@@ -225,11 +225,11 @@ const BACKSPACE_MOST := 4.0
 ## The others: a screen going dark, a look, the switch thrown, a picture landing on a screen.
 const OFF := 0.5
 const LOOK := 1.0
-## A thing lifted (the mug drunk from): brought up unhurried, held at the mouth for a sip, and set back down; the voice
-## goes on this far into its way down.
-const LIFT_UP := 2.0
+## A thing lifted (the mug drunk from): brought up gently, carefully, as a full mug is, held at the mouth for a sip, and set back
+## down as gently; the voice goes on this far into its way down.
+const LIFT_UP := 2.8
 const LIFT_HOLD := 3.0
-const LIFT_DOWN := 1.8
+const LIFT_DOWN := 2.4
 const LIFT_SAID := 0.5
 const SWITCH := 1.3
 const SWITCH_AT := 0.65

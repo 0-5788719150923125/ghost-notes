@@ -24,6 +24,42 @@ static func values(fields: Dictionary, set: Dictionary, seed: int) -> Dictionary
 	return out
 
 
+## Every field of [param fields] for a thing kept as [param spec] - `{seed, <its fields set>}` - that is its own until it is rolled:
+## with no `seed`, each field not set its `default`; with one, drawn by it ([method values]). What is set is set either way.
+static func own_or_drawn(fields: Dictionary, spec: Dictionary) -> Dictionary:
+	var set := spec.duplicate()
+	set.erase("seed")
+	if typeof(spec.get("seed")) in [TYPE_INT, TYPE_FLOAT]:
+		return values(fields, set, int(spec["seed"]))
+	var out := {}
+	for k in fields:
+		out[k] = set[k] if set.has(k) else (fields[k] as Dictionary).get("default")
+	return out
+
+
+## [param fields] as [method own_or_drawn] shows them for [param spec]: each unset field's `default` what it is now - [SchemaForm]
+## shows it dimmed.
+static func shown_for(fields: Dictionary, spec: Dictionary) -> Dictionary:
+	var now := own_or_drawn(fields, spec)
+	var out := {}
+	for k in fields:
+		var row: Dictionary = (fields[k] as Dictionary).duplicate()
+		if not spec.has(k):
+			row["default"] = now[k]
+		out[k] = row
+	return out
+
+
+## [param raw] made safe as a thing kept by [method own_or_drawn]: its `seed` where it has one, and what it sets of [param fields]
+## ([method clean]).
+static func clean_spec(fields: Dictionary, raw: Variant) -> Dictionary:
+	var d: Dictionary = raw if raw is Dictionary else {}
+	var out := clean(fields, d)
+	if typeof(d.get("seed")) in [TYPE_INT, TYPE_FLOAT]:
+		out["seed"] = int(d["seed"])
+	return out
+
+
 ## Field [param row] (named [param key]) as the number [param seed] draws it inside its `roll`, or its `default` where it has none.
 static func drawn(row: Dictionary, key: String, seed: int) -> Variant:
 	var roll: Variant = row.get("roll")

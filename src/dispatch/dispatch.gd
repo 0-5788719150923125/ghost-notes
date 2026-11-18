@@ -143,10 +143,14 @@ const READ_LEAN := 74.0
 const RATTLE := 0.0025
 const RATTLE_TURN := 3.0
 ## The mug, drunk from: where its foot comes to in the camera's own frame (m: well under the eye and barely in front of it,
-## the mouth, so the whole mug is out of the picture whichever way the camera looks); and how high it is lifted clear of
-## the desk on its way, at the least.
+## the mouth, so the whole mug is out of the picture whichever way the camera looks); how far it is lifted out of its ring before
+## it goes toward the mouth, at the least and at the most (m: higher only to clear what stands under its way); how much lower than
+## the mouth it comes up to it from, and from how far nearer the desk; and how far it keeps over what it passes over (m).
 const MUG_MOUTH := Vector3(0.03, -0.17, -0.01)
-const MUG_CLEAR := 0.06
+const MUG_LIFT := Vector2(0.06, 0.32)
+const MUG_UNDER := 0.06
+const MUG_NEARER := 0.12
+const MUG_GAP := 0.02
 ## A thing carried off the desk ([method _carry]): the share of its way it spends going straight up out of where it stood (and
 ## straight down into where it goes), and how far over the tallest thing in its way it is carried (m).
 const CARRY_RISE := 0.3
@@ -258,7 +262,7 @@ var _rings := 4.0                       # the radar's range rings: a ping's rang
 var _term_key := Vector2(NAN, NAN)      # the moment [method terminal_at] last drew, and whether whole...
 var _term_at := {}                      # ...and what it drew
 var _wants := {}                        # the things the script uses that only some desks have: clock, tablet
-var _makes := {}                        # the makes chosen for the desk's parts ([method makes_of])
+var _makes := {}                        # the makes chosen for the desk's parts, and the desk and its roots ([method makes_of])
 var _dark0 := false                     # the note opens in the black, until its first fade up
 var _tablet_doc := {}                   # the tablet's pages as the tablet medium reads them ([TabletScript])
 var _tablet_pages := {}                 # ...a page's index -> its [TabletPage], set when first shown
@@ -451,15 +455,17 @@ func _build_set(labels: PackedStringArray, seed: int) -> void:
 	_land_set()
 
 
-## The set and its roots, made out of the tree (a worker's, or the caller's), its parts played by the makes [param makes] chooses.
+## The set and its roots, made out of the tree (a worker's, or the caller's), its parts played by the makes [param makes] chooses,
+## the desk and the roots as it keeps them ([method makes_of]).
 func _make_set(labels: PackedStringArray, seed: int, tex: Dictionary, wants: Dictionary, makes: Dictionary) -> void:
 	var s := DispatchSet.new()
 	s.makes = makes
+	s.desk = makes.get("desk", {})
 	var node := s.build(labels, seed, tex, wants)
 	var r := DispatchRoots.new()
-	var rn := r.build(seed, s.footprints, s.held_rect(), s.clear)
+	var rn := r.build(seed, s.footprints, s.held_rect(), s.clear, makes.get("roots", {}))
 	# the patch panel's cables laid again over the roots lying on the desk, now they are known
-	s.lay_cables(r.lying)
+	s.lay_cables(r.lying, r.hanging)
 	_made = {"set": s, "node": node, "roots": r, "roots_node": rn}
 
 
@@ -804,7 +810,7 @@ func _ensure_doc() -> void:
 		if seed != _doc_seed:
 			_doc_seed = seed
 			reseed(_seed_of(seed, src))
-		# another make chosen for one of the desk's parts: the desk built again, the reading kept where it is
+		# another make chosen for one of the desk's parts, or the desk or its roots changed: built again, the reading kept where it is
 		var makes := makes_of(dispatch)
 		if makes != _makes:
 			_makes = makes
@@ -843,13 +849,24 @@ static func wants_of(parsed: Dictionary, source: String) -> Dictionary:
 	return out
 
 
-## The makes a document's [param dispatch] chooses for the desk's parts: `{role: choice}` ([DispatchProps], [PropMakes]).
+## The makes a document's [param dispatch] chooses for the desk's parts: `{role: choice}` ([DispatchProps], [PropMakes]) - and, where
+## it keeps them otherwise than its own, the desk itself (`desk`, [DispatchDesk]), the roots (`roots`, [DispatchRoots]) and the
+## phones' colors (`phones`, [constant DispatchSet.PHONE_FIELDS]), each `{seed, <its fields set>}`.
 static func makes_of(dispatch: Dictionary) -> Dictionary:
 	var out := {}
 	var things: Dictionary = dispatch.get("things", {}) if dispatch.get("things") is Dictionary else {}
 	for role in things:
 		if PropMakes.valid_for(String(role), things[role]) and not (things[role] as Dictionary).is_empty():
 			out[String(role)] = (things[role] as Dictionary).duplicate(true)
+	var desk := Roll.clean_spec(DispatchDesk.FIELDS, dispatch.get("desk"))
+	if not desk.is_empty():
+		out["desk"] = desk
+	var roots := Roll.clean_spec(DispatchRoots.FIELDS, dispatch.get("roots"))
+	if not roots.is_empty():
+		out["roots"] = roots
+	var phones := Roll.clean_spec(DispatchSet.PHONE_FIELDS, dispatch.get("phones"))
+	if not phones.is_empty():
+		out["phones"] = phones
 	return out
 
 
@@ -2565,9 +2582,9 @@ func _pose_switch(t: float) -> void:
 	_feeds["switch"] = {"side": angle / up}
 
 
-## The mug at [param t]: in its ring, or drunk from: lifted upright out of its ring, over what stands between it and the chair,
-## and brought to the mouth, just under the eye and out of the picture past its lower edge, held there for the sip, and set
-## back down in its ring the same way ([method _carry]). It never tips where it is seen.
+## The mug at [param t]: in its ring, or drunk from: lifted gently upright out of its ring and carried on an arc to the mouth
+## ([method mug_way]: only as high as clears what stands under it), coming up to it from a little below, just under the eye and out
+## of the picture past its lower edge; held there for the sip, and set back down in its ring the same way. It never tips.
 func _pose_mug(t: float) -> void:
 	var xf := _set.mug_home
 	for i in _actions.size():
@@ -2584,9 +2601,38 @@ func _pose_mug(t: float) -> void:
 			k = 1.0
 		else:
 			k = 1.0 - _jerkless((u - DispatchScript.LIFT_UP - DispatchScript.LIFT_HOLD) / DispatchScript.LIFT_DOWN)
-		xf = _carry(_set.mug_home, held, k, maxf(_set.clear_over(_set.mug_home.origin, held.origin, _set.mug_radius, ["mug"]) + CARRY_GAP,
-			_set.mug_home.origin.y + MUG_CLEAR))
+		xf = Transform3D(_set.mug_home.basis, mug_way(_set, _set.mug_home.origin, held.origin, k))
 	_set.mug.global_transform = xf
+
+
+## Where the mug is [param s] of its way (0 in its ring at [param home], 1 at the mouth at [param mouth]) on the desk of [param set]:
+## a smooth arc - lifted straight up out of its ring first, then on toward the face, coming up to the mouth from a little below and
+## nearer the desk - lifted no higher than clears what stands under its way ([constant MUG_LIFT]; the tallest it may be where
+## nothing lower clears).
+static func mug_way(set: DispatchSet, home: Vector3, mouth: Vector3, s: float) -> Vector3:
+	var lift := MUG_LIFT.x
+	while lift < MUG_LIFT.y and not set.way_clear(_mug_samples(home, mouth, lift), set.mug_radius, set.mug_tall(), MUG_GAP, ["mug"]):
+		lift += 0.02
+	return _mug_at(home, mouth, minf(lift, MUG_LIFT.y), s)
+
+
+## The mug's arc ([method mug_way]) lifted [param lift] out of its ring, at [param s] of the way: a cubic curve from its ring up and
+## over to the mouth.
+static func _mug_at(home: Vector3, mouth: Vector3, lift: float, s: float) -> Vector3:
+	var flat := Vector3(home.x - mouth.x, 0.0, home.z - mouth.z)
+	var back := flat.normalized() * MUG_NEARER if flat.length() > 1e-4 else Vector3.ZERO
+	var p1 := home + Vector3(0.0, lift, 0.0)
+	var p2 := mouth + back + Vector3(0.0, -MUG_UNDER, 0.0)
+	var u := clampf(s, 0.0, 1.0)
+	var v := 1.0 - u
+	return home * (v * v * v) + p1 * (3.0 * v * v * u) + p2 * (3.0 * v * u * u) + mouth * (u * u * u)
+
+
+static func _mug_samples(home: Vector3, mouth: Vector3, lift: float) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for i in range(1, 25):
+		out.append(_mug_at(home, mouth, lift, float(i) / 24.0))
+	return out
 
 
 ## The redacted words on the terminal at [param t], hidden over this frame where the camera sees them ([DispatchCensor]):

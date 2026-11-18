@@ -9,12 +9,20 @@ class_name DispatchProps
 ## setting it out again. Every other thing's × stands grayed: the desk works it. Opened with no note (the Dex on its own), it is a
 ## shelf of them all as the first desk draws them, to look at in 3D and keep.
 ##
+## Above them stand the desk itself ([DispatchDesk]) and the hollow's roots ([DispatchRoots]): each a prop of properties a person sets
+## or Roll draws from a number of its own, kept in the block's `desk` and `roots` (Desk's own: back to how the desk's number has it).
+## Each is pictured and turned in 3D as it is built - the roots grown round the note's own desk, which stands with them for scale -
+## and the desk's Choose… opens the Dex on desks drawn from many numbers ([DeskDraws]). The phones' entry carries their colors the
+## same way ([constant ROLE_PARTS], [constant DispatchSet.PHONE_FIELDS]): each its own from a palette, or all the make's.
+##
 ## A row's make is pictured from what it is written as ([PropPictures], [ThingLibrary.hash_of]), on a worker, as every prop is:
 ## its faces show their own materials and words, never the program the desk runs on them.
 
 const GROUPS := [
-	{"key": "desk", "label": "On the desk", "tip": "What the desk works. Choose… another make to play a part - the desk works it the same way - or open its picture to turn it and refine it."},
+	{"key": "desk", "label": "In the scene", "tip": "The desk, the roots and everything the desk works. Choose… another make to play a part - the desk works it the same way - or open its picture to turn it and refine it."},
 ]
+## A role whose entry also carries properties of its own, kept as a part ([constant DispatchFormat.PARTS]): the phones' colors.
+const ROLE_PARTS := {"phone": "phones"}
 const SHELVES := [{"key": "dispatch", "label": "Dispatch desk", "tip": "What the Dispatch desk works, each as the first desk draws it."}]
 const OFF_SHELF := [{"key": "taken_off", "label": "Taken off", "tip": "What was taken off this desk: Use sets it out again."}]
 
@@ -24,6 +32,9 @@ var _format: DispatchFormat
 var _specs := {}                 # "<role>|<choice key>|<seed>" -> [hash, thing, materials]
 var _lit_key := ""               # what [method lit] was last worked out for, and what it found
 var _lit: Array = []
+var _grown_hash := ""            # the roots last grown ([method _roots_grown]), kept to hand out copies of
+var _grown: Node3D = null
+var _grown_box := AABB()
 
 
 ## The desk's things for the Dispatch format [param format] (its note's Props card), or with none, the shelf of them all.
@@ -42,7 +53,7 @@ func shelves() -> Array:
 func rows() -> Array:
 	if _format == null:
 		return []
-	var out: Array = []
+	var out: Array = _part_rows()
 	var seed := _desk_seed()
 	var kept := library.kept_by_hash()
 	for role in _roles():
@@ -64,6 +75,14 @@ func rows() -> Array:
 		var row := {"key": "role:" + String(role), "name": PropMakes.name_of(String(role), choice), "line": " - ".join(line),
 			"tip": String((PropMakes.ROLES[role] as Dictionary)["blurb"]), "group": "desk",
 			"picture": library.pictures.of(h, sp[1], sp[2]) if not h.is_empty() else null, "verbs": verbs}
+		if ROLE_PARTS.has(role):
+			var part := String(ROLE_PARTS[role])
+			var spec := _format.part(part)
+			row["fields"] = Roll.shown_for(DispatchFormat.PARTS[part], spec)
+			row["values"] = _set_of(spec)
+			verbs.insert(1, {"key": "roll", "label": "Roll", "tip": "Other colors: every property you have not set drawn again."})
+			if choice.is_empty() and not spec.is_empty():
+				verbs.insert(2, {"key": "own", "label": "Desk's own", "tip": "Back to the desk's own, colors and all."})
 		if not String(role) in DispatchSet.SPARE:
 			row["remove_off"] = "The desk works it: Choose… another make to play it."
 		elif _format.works().has(role):
@@ -118,9 +137,33 @@ func offers() -> Array:
 
 
 func act(key: String, verb: String) -> String:
+	var part := _part_of(key)
+	if not part.is_empty() and _format != null:
+		match verb:
+			"roll":
+				var spec := _format.part(part)
+				var was := int(spec.get("seed", -1))
+				spec["seed"] = Roll.fresh()
+				while int(spec["seed"]) == was:
+					spec["seed"] = Roll.fresh()
+				return _format.set_part(part, spec)
+			"own":
+				return _format.set_part(part, {})
+		return "nothing here does that"
 	var role := _role_of(key)
 	if role.is_empty():
 		return "nothing here does that"
+	if ROLE_PARTS.has(role) and _format != null and verb in ["roll", "own"]:
+		var part_of := String(ROLE_PARTS[role])
+		if verb == "roll":
+			var spec := _format.part(part_of)
+			var was := int(spec.get("seed", -1))
+			spec["seed"] = Roll.fresh()
+			while int(spec["seed"]) == was:
+				spec["seed"] = Roll.fresh()
+			return _format.set_part(part_of, spec)
+		var undone := _format.set_part(part_of, {})
+		return undone if not undone.is_empty() else _format.choose(role, {})
 	match verb:
 		"keep":
 			var p := prop_of(key)
@@ -132,7 +175,23 @@ func act(key: String, verb: String) -> String:
 	return "nothing here does that"
 
 
+func set_field(key: String, field: String, value: Variant) -> String:
+	var part := _part_of(key)
+	if part.is_empty():
+		part = String(ROLE_PARTS.get(_role_of(key), ""))
+	if part.is_empty() or _format == null:
+		return "nothing here is tuned"
+	var spec := _format.part(part)
+	if value == null:
+		spec.erase(field)
+	else:
+		spec[field] = value
+	return _format.set_part(part, spec)
+
+
 func choices(key: String) -> PropSection:
+	if key == "part:desk" and _format != null:
+		return DeskDraws.new(self)
 	var role := _role_of(key)
 	if _format == null or role.is_empty():
 		return null
@@ -152,6 +211,17 @@ func prop_of(key: String) -> Dictionary:
 
 
 func model_of(key: String) -> Dictionary:
+	if key == "part:roots" and _format != null:
+		var grown: Dictionary = await _roots_grown([_format.phones(), _desk_seed(), _format.wants(), _makes()])
+		if grown.is_empty():
+			return {}
+		return {"node": grown["node"], "box": grown["size"], "size": PropStudio.size_text(grown["size"])}
+	if key == "part:desk" and _format != null:
+		var spec := _format.part("desk")
+		var made: Dictionary = await desk_away(DispatchDesk.values_of(spec), _part_seed(spec))
+		if made.is_empty():
+			return {}
+		return {"node": made["node"], "box": made["size"], "size": PropStudio.size_text(made["size"])}
 	var p := prop_of(key)
 	if p.is_empty():
 		return {}
@@ -223,6 +293,210 @@ func _notification(what: int) -> void:
 	# (its own methods cannot be called while it goes: what settle() does, done here by hand)
 	if what == NOTIFICATION_PREDELETE and library != null:
 		library.settle()
+	if what == NOTIFICATION_PREDELETE and _grown != null and is_instance_valid(_grown):
+		_grown.free()
+
+
+# --- the desk and its roots ------------------------------------------------------------------------------------------------
+
+## The desk's and the roots' entries, as the block keeps them.
+func _part_rows() -> Array:
+	var desk := _format.part("desk")
+	var dv := DispatchDesk.values_of(desk)
+	var dseed := _part_seed(desk)
+	var h := part_hash(dv, dseed)
+	var desk_verbs: Array = [{"key": "choose", "label": "Choose…", "opens": true, "tip": "Pick another desk from many drawn, each pictured."},
+		{"key": "roll", "label": "Roll", "tip": "Another desk: every property you have not set drawn again."}]
+	var roots := _format.part("roots")
+	var rv := DispatchRoots.values_of(roots)
+	var grow := [_format.phones(), _desk_seed(), _format.wants(), _makes()]
+	var root_verbs: Array = [{"key": "roll", "label": "Roll", "tip": "Other roots: grown anew, every property you have not set drawn again."}]
+	if not desk.is_empty():
+		desk_verbs.append({"key": "own", "label": "Desk's own", "tip": "Back to the desk the hollow has always had."})
+	if not roots.is_empty():
+		root_verbs.append({"key": "own", "label": "Desk's own", "tip": "Back to the roots the desk's number grows."})
+	return [
+		{"key": "part:desk", "name": "The desk", "line": DispatchDesk.line_of(dv), "group": "desk",
+			"tip": "The desk everything stands on: its wood, its top, its pad and what holds it up.",
+			"picture": library.pictures.of_made(h, func() -> Dictionary: return await desk_away(dv, dseed)),
+			"verbs": desk_verbs, "fields": Roll.shown_for(DispatchDesk.FIELDS, desk), "values": _set_of(desk),
+			"remove_off": "The desk stays: everything stands on it."},
+		{"key": "part:roots", "name": "The roots", "line": DispatchRoots.line_of(rv), "group": "desk",
+			"tip": "The roots crawling down from the hollow's ceiling, beside the desk and across it.",
+			"picture": library.pictures.of_made(roots_hash(grow), func() -> Dictionary: return await _roots_grown(grow)),
+			"verbs": root_verbs, "fields": Roll.shown_for(DispatchRoots.FIELDS, roots), "values": _set_of(roots),
+			"remove_off": "Set how many hang, cross the desk and stand beside it to 0 for none."},
+	]
+
+
+## The part row [param key] stands for (`desk`, `roots`), "" for none.
+static func _part_of(key: String) -> String:
+	return key.substr(5) if key in ["part:desk", "part:roots"] else ""
+
+
+## The number part [param spec] is drawn from: its own where it was rolled, else the desk's.
+func _part_seed(spec: Dictionary) -> int:
+	return int(spec["seed"]) if typeof(spec.get("seed")) in [TYPE_INT, TYPE_FLOAT] else _desk_seed()
+
+
+## What part [param spec] sets of its fields: the spec without its number.
+static func _set_of(spec: Dictionary) -> Dictionary:
+	var out := spec.duplicate()
+	out.erase("seed")
+	return out
+
+
+## What a desk of [param v] drawn from [param seed] is, as a short hash: its picture's name.
+static func part_hash(v: Dictionary, seed: int) -> String:
+	return ("dispatch desk " + JSON.stringify([v, seed], "", true)).sha256_text().left(16)
+
+
+## The desk of [param v] drawn from [param seed] built alone on a worker ([method DispatchDesk.made]): `{node, size}`.
+static func desk_away(v: Dictionary, seed: int) -> Dictionary:
+	var out := [{}]
+	var task := WorkerThreadPool.add_task(func() -> void: out[0] = DispatchDesk.made(v, seed), false, "a desk pictured")
+	var tree := Engine.get_main_loop() as SceneTree
+	while not WorkerThreadPool.is_task_completed(task):
+		await tree.process_frame
+	WorkerThreadPool.wait_for_task_completion(task)
+	return out[0]
+
+
+## The roots of a desk of [param grow] ([method roots_away]), grown once for as long as nothing changes them: a copy each time
+## asked (its picture, its 3D view), `{node, size}`.
+func _roots_grown(grow: Array) -> Dictionary:
+	var h := roots_hash(grow)
+	if h != _grown_hash or _grown == null or not is_instance_valid(_grown):
+		var made: Dictionary = await roots_away(grow[0], grow[1], grow[2], grow[3])
+		if made.is_empty():
+			return {}
+		if _grown != null and is_instance_valid(_grown):
+			_grown.free()
+		_grown = made["node"]
+		_grown_box = made["size"]
+		_grown_hash = h
+	return {"node": _grown.duplicate(), "size": _grown_box}
+
+
+## The makes the note's desk is built with, as the medium reads them ([method DispatchMedium.makes_of]).
+func _makes() -> Dictionary:
+	return DispatchMedium.makes_of({"things": _format.things(), "desk": _format.part("desk"), "roots": _format.part("roots"),
+		"phones": _format.part("phones")})
+
+
+## What the roots grown round a desk of [param grow] (`[labels, seed, wants, makes]`, [method roots_away]) are, as a short hash: their
+## picture's name.
+static func roots_hash(grow: Array) -> String:
+	return ("dispatch roots " + JSON.stringify([Array(grow[0]), grow[1], (grow[2] as Dictionary).keys(), grow[3]], "", true)).sha256_text().left(16)
+
+
+## The roots of the desk built from [param labels] (the phones), [param seed], [param wants] and [param makes], grown on a worker as
+## the medium grows them (round the set, which is then let go), the desk standing with them for scale: `{node, size}` (the roots' box).
+static func roots_away(labels: PackedStringArray, seed: int, wants: Dictionary, makes: Dictionary) -> Dictionary:
+	var out := [{}]
+	var task := WorkerThreadPool.add_task(func() -> void: out[0] = _roots_made(labels, seed, wants, makes), false, "the roots pictured")
+	var tree := Engine.get_main_loop() as SceneTree
+	while not WorkerThreadPool.is_task_completed(task):
+		await tree.process_frame
+	WorkerThreadPool.wait_for_task_completion(task)
+	return out[0]
+
+
+static func _roots_made(labels: PackedStringArray, seed: int, wants: Dictionary, makes: Dictionary) -> Dictionary:
+	var s := DispatchSet.new()
+	s.makes = makes
+	s.desk = makes.get("desk", {})
+	var set_node := s.build(labels, seed, {}, wants)
+	var r := DispatchRoots.new()
+	var grown := r.build(seed, s.footprints, s.held_rect(), s.clear, makes.get("roots", {}))
+	set_node.free()
+	var box := _bounds(grown, grown.transform, AABB())
+	if not box.has_volume():
+		grown.free()
+		return {}
+	var node := Node3D.new()
+	node.add_child(grown)
+	var desk: Dictionary = makes.get("desk", {})
+	var own := typeof(desk.get("seed")) in [TYPE_INT, TYPE_FLOAT]
+	node.add_child(DispatchDesk.build(DispatchDesk.values_of(desk), int(desk["seed"]) if own else seed))
+	return {"node": node, "size": box}
+
+
+## The box every mesh under [param n] fills, [param xf] its place, merged into [param box].
+static func _bounds(n: Node, xf: Transform3D, box: AABB) -> AABB:
+	var mi := n as MeshInstance3D
+	if mi != null and mi.mesh != null:
+		var b := xf * mi.mesh.get_aabb()
+		box = b if not box.has_volume() else box.merge(b)
+	for c in n.get_children():
+		var c3 := c as Node3D
+		if c3 != null:
+			box = _bounds(c3, xf * c3.transform, box)
+	return box
+
+
+## Desks drawn from many numbers, on the Dex ([DispatchDesk]): the desk's own first, then [constant DRAWS] others, each pictured as it
+## is built; Use keeps the one picked as the desk. The one in use says so.
+class DeskDraws extends PropSection:
+	const DRAWS := 23
+	var owner: DispatchProps
+
+	func _init(o: DispatchProps) -> void:
+		owner = o
+
+	func title() -> String:
+		return "The desk"
+
+	func turns() -> bool:
+		return true
+
+	func file_kind() -> Dictionary:
+		return {}
+
+	func shelves() -> Array:
+		return [{"key": "desks", "label": "Desks", "tip": "The desk's own, and desks drawn from other numbers."}]
+
+	## Each offer's number: -1 the desk's own, else a draw.
+	func _seeds() -> Array:
+		var out: Array = [-1]
+		for i in DRAWS:
+			out.append(absi(hash([owner._desk_seed(), "desk draw", i])) % 1000000)
+		return out
+
+	func offers() -> Array:
+		var now := owner._format.part("desk") if owner._format != null else {}
+		var out: Array = []
+		for sd in _seeds():
+			var spec := {} if int(sd) < 0 else {"seed": int(sd)}
+			var v := DispatchDesk.values_of(spec)
+			var seed := owner._part_seed(spec)
+			var in_use := now == spec
+			out.append({"key": "desk:%d" % int(sd), "name": "The desk's own" if int(sd) < 0 else "Desk no. %d" % int(sd),
+				"line": DispatchDesk.line_of(v), "shelf": "desks", "tip": DispatchDesk.line_of(v),
+				"picture": owner.library.pictures.of_made(DispatchProps.part_hash(v, seed), func() -> Dictionary: return await DispatchProps.desk_away(v, seed)),
+				"verbs": [{"key": "now", "label": "In use", "off": true, "tip": "The desk in use."}] if in_use else []})
+		return out
+
+	func picture(key: String) -> Variant:
+		for o in offers():
+			if String((o as Dictionary)["key"]) == key:
+				return (o as Dictionary)["picture"]
+		return null
+
+	func model_of(key: String) -> Dictionary:
+		var sd := int(key.substr(5)) if key.begins_with("desk:") else -1
+		var spec := {} if sd < 0 else {"seed": sd}
+		var made: Dictionary = await DispatchProps.desk_away(DispatchDesk.values_of(spec), owner._part_seed(spec))
+		return {} if made.is_empty() else {"node": made["node"], "box": made["size"], "size": PropStudio.size_text(made["size"])}
+
+	func adds() -> Dictionary:
+		return {"label": "Use", "verb": "Use", "tip": "Use it as the desk."}
+
+	func add(key: String) -> String:
+		if not key.begins_with("desk:") or owner._format == null:
+			return "there is no such desk"
+		var sd := int(key.substr(5))
+		return owner._format.set_part("desk", {} if sd < 0 else {"seed": sd})
 
 
 # --- the roles -----------------------------------------------------------------------------------------------------------

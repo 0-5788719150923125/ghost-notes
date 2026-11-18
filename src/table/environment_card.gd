@@ -11,6 +11,9 @@ class_name EnvironmentCard
 ## medium is drawn from ([member ReadingPanel.document_parts]: `environment`), and the sound it chose as the bed under the voice
 ## where no other card hands one ([member ReadingPanel.bed]). Changed while the note plays, the playing scene takes it at once (the
 ## live document's `environment`). A scene that hosts no environment reads none of it.
+##
+## Each element that is heard has a Test: it alone, at the level it has under the voice, following what is changed on it until
+## pressed again ([method test], [SoundTest]).
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "environment"
@@ -20,6 +23,9 @@ var section: EnvironmentSection
 var list: PropsCard
 var _panel: ReadingPanel = null
 var _spec := Surroundings.sanitize({})
+## What a Test plays, and the element it plays (-1 none).
+var tester := SoundTest.new()
+var _test_i := -1
 
 
 ## This card for a note's panel, from what the panel says of itself ([method NoteCards.make]): its workspace, which is handed the
@@ -39,6 +45,7 @@ func _init() -> void:
 	section = EnvironmentSection.new(self)
 	list = PropsCard.new(func() -> Array: return [section])
 	add_child(list)
+	add_child(tester)
 
 
 # --- the block ---------------------------------------------------------------------------------------------------------
@@ -74,7 +81,50 @@ func add(el: Dictionary) -> String:
 ## Element [param i] taken away.
 func remove(i: int) -> String:
 	(_spec["elements"] as Array).remove_at(i)
+	if i == _test_i:
+		_test_i = -1
+		tester.stop()
+	elif i < _test_i:
+		_test_i -= 1
 	return _changed()
+
+
+## Whether element [param i] is heard alone now ([method test]).
+func testing(i: int) -> bool:
+	return tester.playing() and _test_i == i
+
+
+## Element [param i] heard alone, at the level it has under the voice, following what is changed on it; pressed again, stopped.
+## "" done, else why not.
+func test(i: int) -> String:
+	if testing(i):
+		_test_i = -1
+		tester.stop()
+		return ""
+	var els: Array = _spec["elements"]
+	if i < 0 or i >= els.size() or String((Surroundings.KINDS.get(String((els[i] as Dictionary)["kind"]), {}) as Dictionary).get("group", "")) != "sound":
+		return "it makes no sound to hear"
+	_test_i = i
+	_keep_testing()
+	return ""
+
+
+## The Test made again from the element as it is now (left as it is where nothing it plays changed).
+func _keep_testing() -> void:
+	var els: Array = _spec["elements"]
+	if _test_i < 0 or _test_i >= els.size():
+		_test_i = -1
+		tester.stop()
+		return
+	var el: Dictionary = (els[_test_i] as Dictionary).duplicate(true)
+	el.erase("off")
+	var sound := Surroundings.sound_of({"elements": [el]})
+	if sound.is_empty():
+		_test_i = -1
+		tester.stop()
+		return
+	var key := JSON.stringify(sound)
+	tester.play(key, func(rate: int, t0: float) -> SoundBed: return Soundscape.new(sound, {}, hash(key), rate, t0), Surroundings.BED_LEVEL)
 
 
 ## Element [param i] drawn again: a new number, every property not set drawn from it ([Roll]).
@@ -98,12 +148,17 @@ func set_off(i: int, off: bool) -> String:
 
 ## Property [param field] of element [param i] set to [param value], or unset (null): drawn by its number again.
 func set_field(i: int, field: String, value: Variant) -> String:
-	var el: Dictionary = (_spec["elements"] as Array)[i]
+	if field in Surroundings.OWN_KEYS:
+		return "%s is no property of it" % field
+	var el: Dictionary = ((_spec["elements"] as Array)[i] as Dictionary).duplicate(true)
 	if value == null:
 		el.erase(field)
 	else:
 		el[field] = value
-	(_spec["elements"] as Array)[i] = Surroundings.element(el)
+	var made := Surroundings.element(el)
+	if made.is_empty():
+		return "that would make it nothing"
+	(_spec["elements"] as Array)[i] = made
 	return _changed()
 
 
@@ -157,6 +212,8 @@ class Bed extends ReadingBed:
 
 ## The note touched, and a playing scene given the environment at once. "" (nothing went wrong), for the list to say.
 func _changed() -> String:
+	if _test_i >= 0:
+		_keep_testing()
 	if _panel == null:
 		return ""
 	_panel.touch()

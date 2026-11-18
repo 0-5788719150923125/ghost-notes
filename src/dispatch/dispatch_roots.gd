@@ -14,19 +14,34 @@ class_name DispatchRoots
 ## each is grown is a pure function of show time ([method grow]), its tip a taper moving on along it. No root goes through
 ## what fills the air beside the desk ([member DispatchSet.clear]: the printer's paper and its heap): it goes round ([method
 ## _cleared]).
+##
+## A prop on the Dispatch desk's Props card ([DispatchProps]): how many hang, cross the desk and stand beside it, how thick they are,
+## how much they wander and how often they split are its properties ([constant FIELDS]), each set by a person or drawn by its own
+## number ([Roll]); kept unrolled, they are the hollow's own, grown from the desk's number.
 
-## How many: hanging systems, and roots on the desk; systems beside the desk on each side, and how far out from the middle
-## they keep (m: never in front of what the chair sees at the desk's ends); roots along under each end.
-const HANGING := 24
-const ON_DESK := 4
-const BESIDE := 8
+## What the roots can be told: how many hang from the ceiling, cross the desk and stand beside it on each side, how thick they are
+## (over their own), how much they wander and how often they split. Their defaults are the hollow's own.
+const FIELDS := {
+	"hanging": {"label": "Hanging", "blurb": "How many systems of roots hang from the ceiling.", "type": "int", "min": 0, "max": 48, "step": 1,
+		"default": 24, "roll": [12, 36]},
+	"on_desk": {"label": "On the desk", "blurb": "How many crawl across the desk toward the chair.", "type": "int", "min": 0, "max": 8,
+		"step": 1, "default": 4, "roll": [2, 6]},
+	"beside": {"label": "Beside", "blurb": "How many stand beside the desk on each side.", "type": "int", "min": 0, "max": 16, "step": 1,
+		"default": 8, "roll": [4, 12]},
+	"thick": {"label": "Thickness", "blurb": "How thick they are, over the hollow's own.", "type": "float", "min": 0.4, "max": 2.0,
+		"step": 0.05, "default": 1.0, "roll": [0.7, 1.35]},
+	"wander": {"label": "Wander", "blurb": "How much they wander as they come down.", "type": "float", "min": 0.05, "max": 0.9, "step": 0.01,
+		"default": 0.42, "roll": [0.26, 0.6]},
+	"split": {"label": "Splits", "blurb": "How often they split into thinner roots.", "type": "float", "min": 0.0, "max": 0.15, "step": 0.005,
+		"default": 0.05, "roll": [0.025, 0.085]},
+}
+## How far out from the middle the systems beside the desk keep (m: never in front of what the chair sees at the desk's ends), and
+## how many roots run along under each end.
 const BESIDE_OUT := 1.45
 const UNDER := 1
-## A walk's step (m), how much it wanders a step, how hard it is drawn down, and how likely it is to split a step.
+## A walk's step (m) and how hard it is drawn down (how much it wanders a step and how likely it is to split, [constant FIELDS]).
 const STEP := 0.055
-const WANDER := 0.42
 const DOWN := 0.32
-const SPLIT := 0.05
 ## Radii (m): a hanging root's at the ceiling, least and most; its tip; a root on the desk's at the edge.
 const THICK := Vector2(0.035, 0.11)
 const TIP := 0.004
@@ -45,6 +60,7 @@ const KEEP_OUT_TERMINAL := Rect2(-0.55, -1.25, 1.1, 0.7)
 const CLEAR_GAP := 0.015
 
 var _seed := 1
+var _v := {}                     # what the roots are told ([constant FIELDS]), as this build has it
 var _desk_mat: ShaderMaterial
 var _feet: Array = []
 var _held := Rect2()
@@ -58,11 +74,27 @@ var on_desk: Array = []
 var lying: Array = []
 
 
+## What roots kept as [param spec] (`{seed, <its fields set>}`, [method Roll.own_or_drawn]) are told, every field.
+static func values_of(spec: Dictionary) -> Dictionary:
+	return Roll.own_or_drawn(FIELDS, spec)
+
+
+## What roots told [param v] ([method values_of]) are, in a line.
+static func line_of(v: Dictionary) -> String:
+	return "%d hanging, %d across the desk, %d beside it each side" % [int(v["hanging"]), int(v["on_desk"]), int(v["beside"])]
+
+
 ## Build them for [param seed], keeping clear of [param footprints] on the desk (Rect2s in x, z) and of [param held], where a
 ## phone laid open lies ([method DispatchSet.held_rect]): its way, its tendrils and its wander all avoid them - and going round
-## [param clear] (AABBs: [member DispatchSet.clear]).
-func build(seed: int, footprints: Array, held := Rect2(), clear: Array = []) -> Node3D:
-	_seed = seed
+## [param clear] (AABBs: [member DispatchSet.clear]) - as [param spec] keeps them (`{seed, <its fields set>}`, [method
+## Roll.own_or_drawn]: rolled, grown from its own number instead).
+func build(seed: int, footprints: Array, held := Rect2(), clear: Array = [], spec := {}) -> Node3D:
+	_v = Roll.own_or_drawn(FIELDS, spec)
+	_seed = int(spec["seed"]) if typeof(spec.get("seed")) in [TYPE_INT, TYPE_FLOAT] else seed
+	seed = _seed
+	var hanging_n := int(_v["hanging"])
+	var beside_n := int(_v["beside"])
+	var thick: Vector2 = THICK * float(_v["thick"])
 	_feet = footprints + ([held] if held.has_area() else [])
 	_held = held
 	_clear = _merged(clear)
@@ -74,26 +106,26 @@ func build(seed: int, footprints: Array, held := Rect2(), clear: Array = []) -> 
 	r.seed = hash([seed, "roots"])
 	var paths: Array = []
 	var tries := 0
-	while paths.size() < HANGING * 3 and tries < HANGING * 6:
+	while paths.size() < hanging_n * 3 and tries < hanging_n * 6:
 		tries += 1
 		var near := r.randf() < 0.6
 		var at := Vector3(r.randf_range(-2.4, 2.4), DispatchSet.CEILING, r.randf_range(-1.5, -0.62) if near else r.randf_range(-2.4, 0.6))
 		if _kept_out(at):
 			continue
 		var made: Array = []
-		_walk(r, at, Vector3(r.randf_range(-0.4, 0.4), -1.0, r.randf_range(-0.3, 0.3)).normalized(), r.randf_range(THICK.x, THICK.y),
+		_walk(r, at, Vector3(r.randf_range(-0.4, 0.4), -1.0, r.randf_range(-0.3, 0.3)).normalized(), r.randf_range(thick.x, thick.y),
 			r.randf_range(2.6, 5.0), 0, made)
 		paths.append_array(made)
-		if paths.size() >= HANGING * 3:
+		if paths.size() >= hanging_n * 3:
 			break
 	for side in [-1.0, 1.0]:
 		var n := 0
 		var tries_side := 0
-		while n < BESIDE and tries_side < BESIDE * 4:
+		while n < beside_n and tries_side < beside_n * 4:
 			tries_side += 1
 			var at := Vector3(side * r.randf_range(BESIDE_OUT, DispatchSet.ROOM.x - 0.3), DispatchSet.CEILING, r.randf_range(-1.8, 0.7))
 			var made: Array = []
-			_walk(r, at, Vector3(r.randf_range(-0.3, 0.3), -1.0, r.randf_range(-0.3, 0.3)).normalized(), r.randf_range(THICK.x, THICK.y * 0.85),
+			_walk(r, at, Vector3(r.randf_range(-0.3, 0.3), -1.0, r.randf_range(-0.3, 0.3)).normalized(), r.randf_range(thick.x, thick.y * 0.85),
 				r.randf_range(3.2, 5.6), 1, made, 0.55, BESIDE_OUT * side)
 			paths.append_array(made)
 			n += 1
@@ -110,7 +142,7 @@ func build(seed: int, footprints: Array, held := Rect2(), clear: Array = []) -> 
 	var desk: Array = []
 	var grid := _desk_grid()
 	var used: Array = []
-	for k in ON_DESK:
+	for k in int(_v["on_desk"]):
 		_desk_root(r, k, grid, desk, used)
 	var on := MeshInstance3D.new()
 	on.name = "OnTheDesk"
@@ -158,7 +190,7 @@ func _walk(r: RandomNumberGenerator, at: Vector3, dir: Vector3, r0: float, budge
 	var gone := 0.0
 	var on_floor := 0.0
 	while gone < budget:
-		d = (d + Vector3(r.randf_range(-1, 1), r.randf_range(-0.6, 0.6), r.randf_range(-1, 1)) * WANDER + Vector3.DOWN * DOWN).normalized()
+		d = (d + Vector3(r.randf_range(-1, 1), r.randf_range(-0.6, 0.6), r.randf_range(-1, 1)) * float(_v["wander"]) + Vector3.DOWN * DOWN).normalized()
 		var next := p + d * STEP
 		if _kept_out(next):
 			var away := _away(next)
@@ -181,7 +213,7 @@ func _walk(r: RandomNumberGenerator, at: Vector3, dir: Vector3, r0: float, budge
 		gone += STEP
 		pts.append(p)
 		rad.append(_radius(r0, gone / budget))
-		if depth < 3 and r.randf() < SPLIT and rad[rad.size() - 1] > 0.012 and gone > 0.4:
+		if depth < 3 and r.randf() < float(_v["split"]) and rad[rad.size() - 1] > 0.012 and gone > 0.4:
 			rad[rad.size() - 1] *= 1.35
 			var axis := d.cross(Vector3(r.randf(), r.randf(), r.randf()).normalized()).normalized()
 			var cd := d.rotated(axis, deg_to_rad(r.randf_range(35.0, 70.0)))
@@ -332,7 +364,7 @@ func _desk_root(r: RandomNumberGenerator, k: int, grid: AStarGrid2D, out: Array,
 		return
 	used.append(entry)
 	var y := DispatchSet.DESK_Y
-	var r0 := r.randf_range(DESK_THICK.x, DESK_THICK.y)
+	var r0 := r.randf_range(DESK_THICK.x, DESK_THICK.y) * float(_v["thick"])
 	var pts := PackedVector3Array()
 	var behind := entry + (Vector2(0, -0.08) if absf(entry.y - DispatchSet.FAR) < 0.03 else Vector2(signf(entry.x) * 0.08, 0))
 	var top := Vector3(behind.x + r.randf_range(-0.5, 0.5), DispatchSet.CEILING, behind.y - r.randf_range(0.2, 0.6))

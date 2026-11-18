@@ -30,6 +30,8 @@ extends SceneTree
 ## - It steps back for the voice: under speech the place is quieter than in the gaps (control: the same place with no voice).
 ## - Cicadas are a chorus: their loudness over 2 ms wobbles little round its 50 ms average while they sing (control: one narrow
 ##   band a group, chopped deep at one rate, is rough).
+## - The insects' dials: how many (one cricket to a field), pitch and pace each move what is drawn; left out, they are drawn as they
+##   always were (the control).
 ## - (Nothing pulses at one rate is a gate of its own, tests/table/soundscape_pulse_check.gd.)
 ## - Every part sounds: each part and kind alone is heard at the dial's middle, in a sane range, and none is NaN.
 
@@ -48,7 +50,7 @@ func _ok(cond: bool, what: String) -> void:
 
 
 func _run() -> void:
-	for check in [_sanitize, _table_wind, _floor, _churn, _entry, _space, _follows, _sides, _sliced, _dial, _duck, _every, _cicadas]:
+	for check in [_sanitize, _table_wind, _floor, _churn, _entry, _space, _follows, _sides, _sliced, _dial, _duck, _every, _cicadas, _insect_dials]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("soundscape_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -228,6 +230,34 @@ func _cicadas() -> bool:
 	var whine := _rough(_one_whine(_make(place, {}, 5)).render(SR * 20))
 	_ok(chorus < 0.3, "cicadas rasp: %.2f of their loudness wobbles in 2 ms (a chorus is under 0.3)" % chorus)
 	_ok(whine > 0.4, "the control: one deep-pulsed narrow band a group is not found rough (%.2f)" % whine)
+	return true
+
+
+## The insects' dials: how many sing (one to a field), how high and how quickly; left out, drawn as they always were.
+func _insect_dials() -> bool:
+	var crickets := func(extra: Dictionary) -> Array:
+		var ins := {"kind": "crickets", "strength": 0.5}
+		ins.merge(extra)
+		return _make({"insects": ins}, {}, 5)._in["crickets"]
+	var mean_of := func(cs: Array, k: String) -> float:
+		var sum := 0.0
+		for c in cs:
+			sum += float((c as Dictionary)[k])
+		return sum / float(maxi(cs.size(), 1))
+	var own: Array = crickets.call({})
+	var lone: Array = crickets.call({"amount": 0.0})
+	var field: Array = crickets.call({"amount": 1.0})
+	_ok(lone.size() == 1 and field.size() == Soundscape.CRICKETS_MOST and own.size() >= 3 and own.size() <= 5,
+		"how many: one cricket at 0, a field of %d at 1 (the control: left out, the 3-5 they always were - %d)" % [field.size(), own.size()])
+	var high := float(mean_of.call(crickets.call({"amount": 0.5, "pitch": 1.0}), "f"))
+	var low := float(mean_of.call(crickets.call({"amount": 0.5, "pitch": 0.0}), "f"))
+	var quick := float(mean_of.call(crickets.call({"amount": 0.5, "pace": 1.0}), "every"))
+	var slow := float(mean_of.call(crickets.call({"amount": 0.5, "pace": 0.0}), "every"))
+	_ok(high > low * 2.5 and slow > quick * 6.0, "pitch and pace: higher sung higher (%.0f Hz to %.0f), quicker chirped quicker (%.2f s to %.2f)"
+		% [low, high, slow, quick])
+	_ok(own.all(func(c: Dictionary) -> bool: return float(c["f"]) >= 3900.0 and float(c["f"]) <= 5200.0)
+		and not Soundscape.sanitize({"insects": {"kind": "crickets"}})["insects"].has("amount"),
+		"the control: told nothing, they sing where they always did, and nothing is told for them")
 	return true
 
 

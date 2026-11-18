@@ -12,7 +12,9 @@ extends SceneTree
 ## - Every preset a row a desk can read; every kind's fields rows a person can tune, each roll inside its bounds and its options.
 ## - What drifts: each air element an effect over a region every host names, as many as its Amount (the control: twice the amount,
 ##   twice the motes), never going away on a visit, each element's number its own placing; one set aside adds none.
-## - What is heard: each sound element a part of the Soundscape's sound, its properties reaching it; none, silence.
+## - What is heard: each sound element a part of the Soundscape's sound, its properties reaching it (its Kind, `sort`, the sound's
+##   `kind`); none, silence. An element's own keys are no property (the control: told it is crickets, an element is nothing). Test
+##   plays a sound element alone and follows what is changed on it, stopped when pressed again (the control: a light has none).
 ## - Shafts: columns, never cones (the control: a cone is told apart), parallel to the light's way unless spread (the control: spread,
 ##   ways of their own within it, a beam's shafts parallel), turned and tipped as Direction and Steepness say, up to thirty beams, as wide as Width says
 ##   (the control: wider asked, wider drawn), Variety 0 all alike, above it some much fatter, below some much skinnier, each
@@ -435,6 +437,38 @@ func _card(trashed: Array) -> void:
 	sec.add("preset:daylight")
 	var lights := (card.capture()["elements"] as Array).filter(func(e: Dictionary) -> bool: return String(e["kind"]) == "light")
 	_ok(lights.size() == 1 and Surroundings.preset_of(card.capture()) == "daylight", "a light added takes the light's place")
+	# a sound's Kind is a property of its own: set, the element stays what it is and its sound takes it; an element's own keys are
+	# no property (the control: an element told it is crickets is nothing at all)
+	sec.add("kind:insects")
+	var ins := (card.capture()["elements"] as Array).size() - 1
+	var told := sec.set_field("el:%d" % ins, "sort", "cicadas")
+	var bug: Dictionary = Surroundings.sound_of(card.capture()).get("insects", {})
+	_ok(told.is_empty() and String(card.capture()["elements"][ins]["kind"]) == "insects" and String(bug.get("kind", "")) == "cicadas"
+		and sec.rows().size() > ins, "an insect's Kind set: still insects, the cicadas heard (%s %s)" % [told, bug])
+	_ok(not sec.set_field("el:%d" % ins, "kind", "crickets").is_empty() and String(card.capture()["elements"][ins]["kind"]) == "insects",
+		"an element's own kind is no property: told otherwise, it stays")
+	_ok(Surroundings.element({"kind": "crickets"}).is_empty(), "the control: an element told it is crickets is nothing")
+	# Test: a sound heard alone, following what is changed on it, stopped when pressed again; the insects' dials reach their sound
+	var test_label := func() -> String:
+		for v in (sec.rows()[ins]["verbs"] as Array):
+			if String((v as Dictionary)["key"]) == "test":
+				return String((v as Dictionary)["label"])
+		return ""
+	_ok(sec.act("el:%d" % ins, "test").is_empty() and card.testing(ins) and card.tester.playing() and test_label.call() == "Test ■",
+		"Test on a sound plays it alone (%s)" % test_label.call())
+	var heard_was: String = card.tester.key()
+	sec.set_field("el:%d" % ins, "amount", 1.0)
+	_ok(card.tester.key() != heard_was and float((Surroundings.sound_of(card.capture())["insects"] as Dictionary).get("amount", -1.0)) == 1.0,
+		"a property changed while it plays is heard at once, the insects' How many reaching their sound")
+	_ok(sec.act("el:%d" % ins, "test").is_empty() and not card.tester.playing() and test_label.call() == "Test", "pressed again, it stops")
+	var light_i := -1
+	for i in (card.capture()["elements"] as Array).size():
+		if String(card.capture()["elements"][i]["kind"]) == "light":
+			light_i = i
+	_ok(light_i >= 0 and not card.test(light_i).is_empty() and not card.tester.playing()
+		and not (sec.rows()[light_i]["verbs"] as Array).any(func(v: Dictionary) -> bool: return String(v["key"]) == "test"),
+		"the control: a light has no Test and makes no sound to hear")
+	sec.remove("el:%d" % ins)
 	# Roll, properties, Used, Remove: on the pixies (row 1)
 	_ok(sec.set_field("el:1", "amount", 2.0).is_empty() and is_equal_approx(float(card.capture()["elements"][1]["amount"]), 2.0),
 		"a property set is pinned")

@@ -15,6 +15,12 @@ extends Node
 ## - The format keeps a choice in its block and hands it to the desk's document; one for no part, or of no shape, is refused.
 ## - A spare thing's × takes it off the desk (kept as `{aside: true}`, left off the desk built) and "+ Add a prop" sets it out
 ##   again; the terminal's × stands grayed and refuses (the control), as the switch's does while the script throws it.
+## - The desk and the roots stand first on the card ([DispatchDesk], [DispatchRoots]), never taken off: the hollow's own until rolled
+##   (the block says nothing of them); a property set stays when rolled, and a roll draws the rest from a number of its own, kept in
+##   the block and read by the medium (four legs drawn - the control, the desk's own, none); the desk's own takes it back; Choose…
+##   offers the desk's own and drawn desks, Use keeping one; the roots roll too, and are pictured and turned in 3D, grown round the
+##   desk, which stands with them. The phones' entry carries their colors (each its own from a palette, or all the make's): a palette
+##   set is kept in the block, read by the medium and paints them (the control: the desk's own palette).
 ## - The card's rows: every thing the desk works, the mug and the cup of pencils first, each with Choose… (which opens the Dex
 ##   on its makes, Use choosing for the desk) and Keep, the clock and the tablet only where the script uses them; the Dex on its
 ##   own offers the desk's things and a desk's recipes to keep, never a desk's mat.
@@ -61,7 +67,7 @@ func _run() -> void:
 	_makes()
 	_choices()
 	await _shelf()
-	_format_and_card()
+	await _format_and_card()
 	_working()
 	_medium()
 	_remade_live()
@@ -163,7 +169,7 @@ func _format_and_card() -> void:
 	again.apply({"seed": 3, "things": {"bookshelf": {"recipe": "mug", "seed": 1}, "printer": {"recipe": "mug", "seed": 1}, "mug": "a mug"}})
 	_ok(again.things().is_empty(), "the control: a block's choices for no part, a draw for a part with no recipe, or of no shape are dropped")
 	var sec := DispatchProps.new(fmt)
-	var rows := sec.rows()
+	var rows := sec.rows().filter(func(r: Dictionary) -> bool: return String(r["key"]).begins_with("role:"))
 	var keys: Array = rows.map(func(r: Dictionary) -> String: return String(r["key"]))
 	_ok(keys.slice(0, 2) == ["role:mug", "role:pencil_cup"] and keys.has("role:terminal") and keys.has("role:phone") and not keys.has("role:clock"),
 		"the card's rows: the mug and the cup, then every thing the desk works, no clock its script does not use (%s)" % str(keys))
@@ -195,14 +201,83 @@ func _format_and_card() -> void:
 	_ok((by_key.call("role:switch") as Dictionary).has("remove_off") and not sec.remove("role:switch").is_empty() and not fmt.things().has("switch"),
 		"the switch stays while the script throws it")
 	fmt._works = {}
+	# the desk and its roots: props of properties and a number of their own, the hollow's own until rolled
+	var keys_now: Array = sec.rows().map(func(r: Dictionary) -> String: return String(r["key"]))
+	var desk_row: Dictionary = by_key.call("part:desk")
+	_ok(keys_now.slice(0, 2) == ["part:desk", "part:roots"] and (desk_row["fields"] as Dictionary).has("base")
+		and desk_row.has("remove_off") and (by_key.call("part:roots") as Dictionary).has("remove_off") and fmt.part("desk").is_empty()
+		and not fmt.capture().has("desk") and not fmt.capture().has("roots"),
+		"the desk and the roots stand first, their properties shown, never taken off; kept as their own, the block says nothing of them")
+	_ok(DispatchDesk.values_of({})["base"] == "pedestals" and DispatchDesk.values_of({})["wood"] == "#2a1810"
+		and DispatchRoots.values_of({})["hanging"] == 24, "unrolled, the desk and the roots are the hollow's own")
+	_ok(sec.set_field("part:desk", "base", "legs").is_empty() and sec.act("part:desk", "roll").is_empty(), "a property set, and rolled")
+	var rolled := fmt.part("desk")
+	var legs := DispatchDesk.build(DispatchDesk.values_of(rolled), 3)
+	var own_desk := DispatchDesk.build(DispatchDesk.values_of({}), 3)
+	_ok(rolled.get("base") == "legs" and rolled.has("seed") and fmt.capture()["desk"] == rolled and fmt.document()["desk"] == rolled
+		and legs.find_children("Leg*", "", true, false).size() == 4 and own_desk.find_children("Leg*", "", true, false).is_empty(),
+		"Roll keeps what is set and draws the rest from a number of its own, kept in the block and the document: four legs - the control, the desk's own, none")
+	legs.free()
+	own_desk.free()
+	_ok(DispatchMedium.makes_of(fmt.document())["desk"] == rolled, "the medium reads the desk as the block keeps it")
+	_ok(sec.act("part:desk", "own").is_empty() and fmt.part("desk").is_empty(), "the desk's own takes it back")
+	var draws := sec.choices("part:desk")
+	_ok(draws != null and draws.offers().size() == 24 and String(draws.offers()[0]["key"]) == "desk:-1"
+		and draws.add(String(draws.offers()[3]["key"])).is_empty() and fmt.part("desk").has("seed"),
+		"Choose… opens the Dex on the desk's own and desks drawn from many numbers; Use keeps the one picked")
+	sec.act("part:desk", "own")
+	_ok(sec.act("part:roots", "roll").is_empty() and fmt.part("roots").has("seed")
+		and DispatchRoots.values_of(fmt.part("roots")) != DispatchRoots.values_of({}), "the roots roll too, other than their own")
+	sec.act("part:roots", "own")
+	# the roots pictured and turned in 3D: grown round the note's desk, the desk with them, their box a hollow's height
+	var grown: Dictionary = await sec.model_of("part:roots")
+	var root_box: AABB = grown.get("box", AABB())
+	_ok(grown.get("node") is Node3D and root_box.size.y > 1.5 and (grown["node"] as Node3D).get_child_count() == 2
+		and (by_key.call("part:roots") as Dictionary).has("picture"),
+		"the roots are pictured and turned in 3D, grown round the desk, which stands with them (%s)" % root_box)
+	if grown.get("node") is Node:
+		(grown["node"] as Node).free()
+	# the phones' colors: properties on their entry, each its own from a palette until set; a palette chosen paints them in it, all
+	# the make's leaves them its own (the control: the desk's own palette, office plastics)
+	var phone_row: Dictionary = by_key.call("role:phone")
+	var phone_verbs: Array = (phone_row["verbs"] as Array).map(func(v: Dictionary) -> String: return String(v["key"]))
+	_ok((phone_row.get("fields", {}) as Dictionary).has("palette") and phone_verbs.has("roll") and fmt.part("phones").is_empty()
+		and DispatchSet.phones_of({})["palette"] == "office", "the phones' entry carries their colors, office plastics until set (%s)" % str(phone_verbs))
+	_ok(sec.set_field("role:phone", "palette", "pastel").is_empty() and fmt.part("phones") == {"palette": "pastel"}
+		and DispatchMedium.makes_of(fmt.document())["phones"] == {"palette": "pastel"}, "a palette set is kept in the block and read by the medium")
+	var tints := func(makes: Dictionary) -> Array:
+		var ds := DispatchSet.new()
+		ds.makes = makes
+		var n := ds.build(PackedStringArray(["A", "B", "C", "D"]), 3, {})
+		var out: Array = []
+		for ph in ds.phones:
+			for mi in ((ph as Dictionary)["node"] as Node).find_children("*", "MeshInstance3D", true, false):
+				var mat := (mi as MeshInstance3D).material_override as ShaderMaterial
+				if mat != null and String((mi as MeshInstance3D).get_meta("material", "")) == DispatchSet.PHONE_TINT:
+					out.append(mat.get_shader_parameter("color"))
+					break
+		n.free()
+		return out
+	var pastel: Array = tints.call({"phones": {"palette": "pastel"}})
+	var office: Array = tints.call({})
+	var plain: Array = tints.call({"phones": {"colors": "own"}})
+	var in_palette := func(cs: Array, k: String) -> bool:
+		return not cs.is_empty() and cs.all(func(c: Variant) -> bool: return c is Color and (DispatchSet.PHONE_PALETTES[k] as Array).has(c))
+	_ok(in_palette.call(pastel, "pastel") and in_palette.call(office, "office") and not in_palette.call(pastel, "office")
+		and not in_palette.call(plain, "office") and not in_palette.call(plain, "pastel"),
+		"the phones are painted in the palette chosen (the control: the desk's own, office plastics); all the make's, in none")
+	_ok(sec.act("role:phone", "own").is_empty() and fmt.part("phones").is_empty(), "the desk's own takes their colors back")
 	var card := PropsCard.new(func() -> Array: return [sec])
 	add_child(card)
 	card.refresh(true)
 	var choose: Button = null
-	for b in card.find_children("*", "Button", true, false):
-		if (b as Button).text == "Choose…":
-			choose = b
-			break
+	for e in card.find_children("*", "EntryCard", true, false):
+		if not (e as EntryCard).name_label.text.contains("mug"):
+			continue
+		for b in (e as Node).find_children("*", "Button", true, false):
+			if (b as Button).text == "Choose…":
+				choose = b
+				break
 	if choose != null:
 		choose.pressed.emit()
 	_ok(choose != null and card._shelf != null and card._shelf.title == "Dex - The mug", "the card's Choose… opens the Dex on the part's makes")

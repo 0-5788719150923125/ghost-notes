@@ -73,11 +73,12 @@ stays a note. The ScriptMarks registry has a row for each (docs/script.md).
 | `dispatch_terminal.gd` | `DispatchTerminal`: the terminal's one program - the glass (a fixed 70 by 22 screen), panels kept by id, keys, every line kind of a block, timed; simulated through the whole note, played at a moment |
 | `dispatch.gd` | `DispatchMedium`: the world, the schedule (a [ReadingFollower]), the state of every thing at a moment, the camera, the opening, the pictures, the captions |
 | `dispatch_set.gd` | `DispatchSet`: the desk and everything on it, built - terminal, keyboard, phones, radar, receiver and scope, printer and its heap, the three screens, the switch, the chart, the handbook, the things, the chair, the room |
-| `dispatch_roots.gd` | `DispatchRoots`: the roots grown and meshed |
+| `dispatch_desk.gd` | `DispatchDesk`: the desk itself - its wood, top, blotter and base - built from properties (`FIELDS`), each drawn by its number until set |
+| `dispatch_roots.gd` | `DispatchRoots`: the roots grown and meshed, how many hang, lie on the desk and stand beside it, how thick and how they wander (`FIELDS`) |
 | `dispatch_screens.gd` | the 2D faces drawn into the screens: the terminal (its redacted words as written, and where they lie), the radar and its clutter, the scope, a phone's two screens and keypad, the receiver's dial, the gain knob's scale |
 | `dispatch_censor.gd` | `DispatchCensor`: redacted words hidden over the finished frame - a tracked box cracked into flat shards (`shaders/dispatch_redact.gdshader`) |
 | `dispatch_sounds.gd` | `DispatchSounds`: every sound of the desk, a function of show time |
-| `dispatch_props.gd` | `DispatchProps`: the desk's things on the note's Props card and the Dex - the mug and the cup of pencils as roles any make can play (Choose…, kept in the Medium block's `things`; next/library.md, "Roles"), and every thing the desk builds, pictured alone |
+| `dispatch_props.gd` | `DispatchProps`: the desk's things on the note's Props card and the Dex - the mug and the cup of pencils as roles any make can play (Choose…, kept in the Medium block's `things`; next/library.md, "Roles"), the desk and the roots as parts with properties and a Roll (kept in the Medium block's `desk` and `roots`; the desk's Choose… offers desks drawn by other numbers), and every thing the desk builds, pictured alone |
 | `dispatch_format.gd`, `dispatch_walk.gd` | its own rows on the Medium card (the desk's number) and what they hand the reading; the pictures are the note's Pictures card's (next/pictures.md), `DispatchMedium.pictures_in` saying which marks they are |
 
 And in the voice: `Manuscript.HEARD`, a passage's `heard` through [ReadingPlan], a mark in [ReadingJoin], applied by the
@@ -99,11 +100,27 @@ look at).
 
 **Built.** The author has not yet watched or heard it.
 
-The patch panel's cables are laid over the desk as a hand lays them (`DispatchSet.lay_cables`: a path round everything standing
-there on a 1 cm grid, the desk's back preferred, each beside the last; never round the front of what it plugs into), each plugged
-into the side of the part its thing stands on that faces the panel (`ports_of`, three sides tried) or laid round the panel and
-over the desk's far edge. Gate: `dispatch_check` (ends in a part, through nothing on the desk; controls: laid blind of the roots,
-laid straight).
+The patch panel's cables are soft cords (`Rope` in `geometry/`: a chain of points held to their spacing and to how sharply a cord
+bends, falling under gravity, settled once at build). Each is laid first as a hand lays it (`DispatchSet.lay_cables`: a path round
+everything standing there on a 1 cm grid, the desk's back preferred, each beside the last, over a root where it is lowest; never
+round the front of what it plugs into), a little slack, then let fall: it drapes over the roots on the desk and past its far edge
+and rests on the desk, out of every part by the part's own outline. Each is plugged into the side of the part its thing stands
+on that faces the panel (`ports_of`, three sides tried), or laid round the panel and over the far edge, hanging free. Gate:
+`dispatch_check` (ends in a part, through nothing on the desk; controls: laid blind of the roots, laid straight).
+
+A cable plugs into the back of what it plugs into (its own back first, then its sides, never its front nor a side the chair sees:
+`PORT_FRONT`), going round to it, under the printer's paper where it arches over the desk: each mesh's part is split at the desk's
+edge (`_mesh_parts`), so what hangs past the edge closes nothing on the desk under it. A port inside a root pressed against that side
+is passed over. Each cable comes straight out of its socket and its port for a plug's length (`CABLE_PLUG`), lies over the cables laid
+before it where they cross (never through: they keep `CABLE_GAP`), and keeps clear of the other sockets' plugs; the patch panel stands
+far enough behind the terminal for them to drop out of its sockets.
+
+The desk and the roots are props on the Props card like the rest (`DispatchDesk`, `DispatchRoots`): each a list of properties
+drawn by its own number until set (`Roll`), Roll for another, and the desk's Choose… for one picked from desks drawn by other
+numbers. A desk with no number kept is the one the night was made with. The roots are pictured and turned in 3D grown round the
+note's own desk, the desk with them for scale (`DispatchProps.roots_away`, grown once while nothing changes them). The phones'
+entry carries their colors (`DispatchSet.PHONE_FIELDS`, kept in the block's `phones`): each a color of its own drawn from a palette
+(office plastics, bright, metal, pastel), or all the make's own. The Props card's heading is "In the scene".
 
 Looked at (rendered with `tests/dispatch/dispatch_look_probe.gd` on a steady rehearsed voice, frames read by eye): the
 home view from the chair, every camera spot settled, the record and the target's log on the terminal (legible close up),
@@ -177,9 +194,11 @@ The opening, the radar, the terminal and the desk's props were reworked; what st
   mug that the screens' cool glows (which cast no shadows) otherwise light. The coffee ring is a thin opaque, matte rim with
   an older arc beside it, a little off the mug's foot (a translucent disc read as glass, and a `Decal` drew its footprint
   pale).
-- **The mug is drunk from**: upright all the way, lifted out of its ring and brought under the eye (`MUG_MOUTH`, in the
-  camera's own frame, so it is out of the picture whichever way the camera looks), held for the sip, set back down; the
-  camera stays on the whole desk, so the mug is seen to rise and leave past the lower edge.
+- **The mug is drunk from**: upright all the way, lifted gently out of its ring and carried on an arc to just under the eye
+  (`DispatchMedium.mug_way`, `MUG_MOUTH` in the camera's own frame, so it is out of the picture whichever way the camera
+  looks), coming up to the mouth from a little below and nearer the desk, lifted only as high as clears what stands under its
+  way and never higher than the mouth; held for the sip, set back down as gently. The camera stays on the whole desk, so the
+  mug is seen to rise and leave past the lower edge.
 - **The keyboard is a real one**: a standard compact layout, five rows of fifteen units (`DispatchSet.KEY_ROWS`), each key
   a sculpted cap (a skirt tapering to a dished top, the rows leaning toward the typist: `KEY_PROFILE`), letters beige, the
   rest gray, one mesh, on a case sized to it.
@@ -240,7 +259,7 @@ let go a second later where 4 s was wanted. `DispatchMedium._settled` now makes 
 - **No swerve**: a look cut before the camera could get there (`GLANCE_LEAST`, 3 s - a phone hung up as the radar pings)
   is not taken, nor a short turn away between two looks at the same thing - but words to be read are always looked at
   (`TO_READ`: a typed word is never captioned).
-- **The mug, drunk from**: brought up over 2 s, held at the mouth 3 s for the sip, set down over 1.8 s; the voice waits
+- **The mug, drunk from**: brought up over 2.8 s, held at the mouth 3 s for the sip, set down over 2.4 s; the voice waits
   through the sip and goes on as it comes down.
 
 In the episode the ping at "And there's the rest of him" is held about 8 s and the walk at "No, no, no" is on the radar

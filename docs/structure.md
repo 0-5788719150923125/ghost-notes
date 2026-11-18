@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 743 references inside a folder, 1282 down the stack, 0 up it.
+Between scripts today: 752 references inside a folder, 1290 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -14,7 +14,7 @@ Between scripts today: 743 references inside a folder, 1282 down the stack, 0 up
 | `app/` | The shell | 14 | `masking`, `dispatch`, `letter`, `desk`, `table_show`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `render`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 14 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `likeness/` | Likeness | 15 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
-| `dispatch/` | Dispatch desk | 11 | `desk`, `table_show`, `table`, `reading`, `media`, `voice`, `ui`, `scene_kit`, `render`, `audio`, `data` |
+| `dispatch/` | Dispatch desk | 12 | `desk`, `table_show`, `table`, `reading`, `media`, `voice`, `ui`, `scene_kit`, `geometry`, `render`, `audio`, `data` |
 | `letter/` | Letter | 3 | `desk`, `table`, `reading`, `show`, `media`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 15 | `table_show`, `table`, `reading`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `render`, `data` |
 | `table_show/` | The table's show | 25 | `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `geometry`, `audio`, `platform`, `data` |
@@ -31,10 +31,10 @@ Between scripts today: 743 references inside a folder, 1282 down the stack, 0 up
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
 | `stage/` | Storyboards & stage | 5 | `scene_kit`, `geometry`, `render`, `audio`, `data` |
 | `scene_kit/` | Scene substrate | 9 | `geometry`, `motion`, `render`, `audio`, `data` |
-| `geometry/` | Generative form | 12 | `motion`, `render` |
+| `geometry/` | Generative form | 13 | `motion`, `render` |
 | `motion/` | Motion & simulation | 13 | `render`, `audio` |
 | `render/` | Drawing | 13 | `data` |
-| `audio/` | Audio & analysis | 8 | `platform` |
+| `audio/` | Audio & analysis | 9 | `platform` |
 | `platform/` | The machine | 12 | `data` |
 | `data/` | Plain data | 9 | nothing |
 
@@ -56,7 +56,7 @@ The machine under Ghost Notes: the one owner of its settings file, the earliest 
 
 From a song file to the typed per-frame `AudioFeatures` every scene consumes - live analyzer, offline bake, and the content descriptors that make sessions deterministic per song.
 
-[`audio_features`](../src/audio/audio_features.gd), [`bake`](../src/audio/bake.gd), [`bake_runner`](../src/audio/bake_runner.gd), [`echo`](../src/audio/echo.gd), [`harmonic_signature`](../src/audio/harmonic_signature.gd), [`sound_bed`](../src/audio/sound_bed.gd), [`spectrum`](../src/audio/spectrum.gd), [`still_clock`](../src/audio/still_clock.gd)
+[`audio_features`](../src/audio/audio_features.gd), [`bake`](../src/audio/bake.gd), [`bake_runner`](../src/audio/bake_runner.gd), [`echo`](../src/audio/echo.gd), [`harmonic_signature`](../src/audio/harmonic_signature.gd), [`sound_bed`](../src/audio/sound_bed.gd), [`sound_test`](../src/audio/sound_test.gd), [`spectrum`](../src/audio/spectrum.gd), [`still_clock`](../src/audio/still_clock.gd)
 
 ### `render/` - Drawing
 
@@ -74,7 +74,7 @@ How things move: seeded oscillators, sparse response gating, the nonlinear kit a
 
 Self-contained generators a scene composes rather than hand-models - each one samples a space of shapes from a seed and hands back plain geometry - with the procedural fields, terrain heightfields and shadowing of the 3D world, and the composed bodies. The `cattle, not pets` discipline, made into parts.
 
-[`branch3d`](../src/geometry/branch3d.gd), [`contour`](../src/geometry/contour.gd), [`crystal`](../src/geometry/crystal.gd), [`eye_body`](../src/geometry/eye_body.gd), [`field`](../src/geometry/field.gd), [`filament`](../src/geometry/filament.gd), [`geometry`](../src/geometry/geometry.gd), [`glyphs`](../src/geometry/glyphs.gd), [`prism_body`](../src/geometry/prism_body.gd), [`shadow_field`](../src/geometry/shadow_field.gd), [`terrain`](../src/geometry/terrain.gd), [`wallpaper_group`](../src/geometry/wallpaper_group.gd)
+[`branch3d`](../src/geometry/branch3d.gd), [`contour`](../src/geometry/contour.gd), [`crystal`](../src/geometry/crystal.gd), [`eye_body`](../src/geometry/eye_body.gd), [`field`](../src/geometry/field.gd), [`filament`](../src/geometry/filament.gd), [`geometry`](../src/geometry/geometry.gd), [`glyphs`](../src/geometry/glyphs.gd), [`prism_body`](../src/geometry/prism_body.gd), [`rope`](../src/geometry/rope.gd), [`shadow_field`](../src/geometry/shadow_field.gd), [`terrain`](../src/geometry/terrain.gd), [`wallpaper_group`](../src/geometry/wallpaper_group.gd)
 
 ### `scene_kit/` - Scene substrate
 
@@ -174,7 +174,7 @@ A note read as a letter written by hand at a desk, one of the Medium card's form
 
 A note played at a desk late at night in a hollow under the ground, seen from the chair: the script's marks read into the desk's actions and the voice's rests (calls, rings, texts, pings, the terminal's typed and shown blocks, the printer, the static), the desk and everything on it built by code (a beige terminal, a dozen labeled flip phones, a radar, a shortwave receiver, a printer, small screens), the roots grown over and across it, every sound synthesized, the medium that turns its camera to whatever is active - one of the Medium card's formats - and its own rows there. Design: next/dispatch.md.
 
-[`dispatch`](../src/dispatch/dispatch.gd), [`dispatch_censor`](../src/dispatch/dispatch_censor.gd), [`dispatch_format`](../src/dispatch/dispatch_format.gd), [`dispatch_props`](../src/dispatch/dispatch_props.gd), [`dispatch_roots`](../src/dispatch/dispatch_roots.gd), [`dispatch_screens`](../src/dispatch/dispatch_screens.gd), [`dispatch_script`](../src/dispatch/dispatch_script.gd), [`dispatch_set`](../src/dispatch/dispatch_set.gd), [`dispatch_sounds`](../src/dispatch/dispatch_sounds.gd), [`dispatch_terminal`](../src/dispatch/dispatch_terminal.gd), [`dispatch_walk`](../src/dispatch/dispatch_walk.gd)
+[`dispatch`](../src/dispatch/dispatch.gd), [`dispatch_censor`](../src/dispatch/dispatch_censor.gd), [`dispatch_desk`](../src/dispatch/dispatch_desk.gd), [`dispatch_format`](../src/dispatch/dispatch_format.gd), [`dispatch_props`](../src/dispatch/dispatch_props.gd), [`dispatch_roots`](../src/dispatch/dispatch_roots.gd), [`dispatch_screens`](../src/dispatch/dispatch_screens.gd), [`dispatch_script`](../src/dispatch/dispatch_script.gd), [`dispatch_set`](../src/dispatch/dispatch_set.gd), [`dispatch_sounds`](../src/dispatch/dispatch_sounds.gd), [`dispatch_terminal`](../src/dispatch/dispatch_terminal.gd), [`dispatch_walk`](../src/dispatch/dispatch_walk.gd)
 
 ### `likeness/` - Likeness
 

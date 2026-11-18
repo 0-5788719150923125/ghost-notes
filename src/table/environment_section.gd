@@ -75,7 +75,10 @@ func rows() -> Array:
 			"tip": Registry.blurb(Surroundings.KINDS, kind), "picture": _picture(el, spec), "on": el.get("off") != true,
 			"on_tip": "Ticked, it is round the scene; unticked, it is set aside, with everything set on it.",
 			"remove_tip": "Take it away from round the scene, with everything set on it.",
-			"verbs": [{"key": "roll", "label": "Roll", "tip": "Another of it: every property you have not set drawn again, inside its bounds."},
+			"verbs": ([{"key": "test", "label": "Test ■" if card.testing(i) else "Test",
+					"tip": "Hear it alone, as it sounds under the voice; it follows what you change. Press again to stop."}]
+					if String((Surroundings.KINDS.get(kind, {}) as Dictionary).get("group", "")) == "sound" else [])
+				+ [{"key": "roll", "label": "Roll", "tip": "Another of it: every property you have not set drawn again, inside its bounds."},
 				{"key": "keep", "label": "Kept" if not as_kept.is_empty() else "Keep", "off": not as_kept.is_empty(),
 					"tip": ("In your library as %s." % as_kept) if not as_kept.is_empty() else "Keep it in your library, to use on any note."}],
 			"fields": Roll.shown(Surroundings.fields_of(kind, key_color), set, int(el["seed"])), "values": set})
@@ -128,6 +131,8 @@ func act(key: String, verb: String) -> String:
 	if i < 0:
 		return "nothing here does that"
 	match verb:
+		"test":
+			return card.test(i)
 		"roll":
 			return card.roll(i)
 		"keep":

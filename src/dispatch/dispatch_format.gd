@@ -18,13 +18,17 @@ class_name DispatchFormat
 ## is handed to the reading's live document and the desk is drawn again at once ([method _redress_live]).
 ##
 ## What is on the desk is on the Props card ([DispatchProps]): the parts any make can play (the mug, the cup of pencils) are
-## chosen there, kept in the block's `things` (`{role: choice}`, [PropMakes]) and handed to the desk as the seed is.
+## chosen there, kept in the block's `things` (`{role: choice}`, [PropMakes]) and handed to the desk as the seed is; so are the desk
+## itself (`desk`, [DispatchDesk]), the roots (`roots`, [DispatchRoots]) and the phones' colors (`phones`, [constant
+## DispatchSet.PHONE_FIELDS]), each `{seed, <its fields set>}` - none, their own.
 
 ## Its format's key in [constant Medium.REGISTRY].
 const KEY := "dispatch"
-## Its keys in the Medium's block: the desk's seed (0: the note's own), and the makes chosen for its parts (`{role: choice}`,
-## none for the desk's own).
-const KNOBS := {"seed": 0, "things": {}}
+## Its keys in the Medium's block: the desk's seed (0: the note's own), the makes chosen for its parts (`{role: choice}`, none for
+## the desk's own), and the desk, the roots and the phones as they are kept (none: their own).
+const KNOBS := {"seed": 0, "things": {}, "desk": {}, "roots": {}, "phones": {}}
+## The parts kept as properties and a number, and what each can be told.
+const PARTS := {"desk": DispatchDesk.FIELDS, "roots": DispatchRoots.FIELDS, "phones": DispatchSet.PHONE_FIELDS}
 
 signal noted(text: String)
 
@@ -39,6 +43,7 @@ var _seed_box: SpinBox
 var _about: Label
 var _wants := {}                 # what the script last read asks the desk to build only for it ([method wants])
 var _works := {}                 # the spare things the script last read works ([method works])
+var _phones := PackedStringArray()  # the phones' labels, as the script last read names them ([method phones])
 
 
 static func for_note(ctx: Dictionary) -> DispatchFormat:
@@ -76,7 +81,12 @@ func _process(delta: float) -> void:
 # --- the block ---------------------------------------------------------------------------------------------------------
 
 func capture() -> Dictionary:
-	return _knobs.duplicate(true)
+	var out := _knobs.duplicate(true)
+	# a part kept as its own says nothing in the block
+	for part in PARTS:
+		if (out[part] as Dictionary).is_empty():
+			out.erase(part)
+	return out
 
 
 func apply(cfg: Dictionary) -> void:
@@ -88,6 +98,8 @@ func apply(cfg: Dictionary) -> void:
 			var c: Variant = (cfg["things"] as Dictionary)[role]
 			if DispatchSet.MAKE_SALTS.has(String(role)) and PropMakes.valid_for(String(role), c) and not (c as Dictionary).is_empty():
 				_knobs["things"][String(role)] = (c as Dictionary).duplicate(true)
+	for part in PARTS:
+		_knobs[part] = Roll.clean_spec(PARTS[part], cfg.get(part))
 	_show_knobs()
 
 
@@ -130,7 +142,9 @@ func document() -> Dictionary:
 		var path := Illustrations.path_for(key)
 		if not path.is_empty():
 			pictures[key] = ProjectSettings.globalize_path(path)
-	return {"seed": desk_seed(), "things": things().duplicate(true), "pictures": pictures, "clips": clips, "head": _head()}
+	return {"seed": desk_seed(), "things": things().duplicate(true), "desk": part("desk"), "roots": part("roots"), "phones": part("phones"),
+		"pictures": pictures,
+		"clips": clips, "head": _head()}
 
 
 ## The makes chosen for the desk's parts: `{role: choice}` ([PropMakes]), a part not in it the desk's own.
@@ -154,6 +168,22 @@ func choose(role: String, choice: Dictionary) -> String:
 	return ""
 
 
+## Part [param name] (`desk`, `roots` or `phones`) as kept: `{seed, <its fields set>}`, {} its own.
+func part(name: String) -> Dictionary:
+	return (_knobs.get(name, {}) as Dictionary).duplicate(true)
+
+
+## Part [param name] kept as [param spec] from here ({} its own), made safe: kept in the block and drawn at once while the note
+## plays. "" done, else why not.
+func set_part(name: String, spec: Dictionary) -> String:
+	if not PARTS.has(name):
+		return "the desk has no such part"
+	_knobs[name] = Roll.clean_spec(PARTS[name], spec)
+	_touch()
+	_redress_live()
+	return ""
+
+
 ## The note as written, its frontmatter on it ([method _note]).
 func note() -> String:
 	return _note()
@@ -167,6 +197,11 @@ func wants() -> Dictionary:
 ## The spare things the script works, which cannot be taken off ([method DispatchMedium.works_of]).
 func works() -> Dictionary:
 	return _works
+
+
+## The phones' labels, in order, as the script was last read ([method DispatchScript.phones_of]).
+func phones() -> PackedStringArray:
+	return _phones
 
 
 func _body() -> String:
@@ -234,6 +269,7 @@ func _say_about(body: String) -> void:
 	_wants = DispatchMedium.wants_of(p, body)
 	_works = DispatchMedium.works_of(p)
 	var phones: PackedStringArray = p["phones"]
+	_phones = phones
 	var n := (p["actions"] as Array).size()
 	var line := "%d phones (%s); %d things the desk does." % [phones.size(), ", ".join(phones), n]
 	var warn: PackedStringArray = p["warnings"]
@@ -269,3 +305,6 @@ func _redress_live() -> void:
 	if doc.get("dispatch") is Dictionary:
 		(doc["dispatch"] as Dictionary)["seed"] = desk_seed()
 		(doc["dispatch"] as Dictionary)["things"] = things().duplicate(true)
+		(doc["dispatch"] as Dictionary)["desk"] = part("desk")
+		(doc["dispatch"] as Dictionary)["roots"] = part("roots")
+		(doc["dispatch"] as Dictionary)["phones"] = part("phones")

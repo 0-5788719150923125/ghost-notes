@@ -44,7 +44,8 @@ func of(h: String, thing: Dictionary, mats: Dictionary) -> Variant:
 	return null
 
 
-## The picture of a prop built by code ([param maker]: `() -> {node, size}`, [method PropStudio.picture_made]), kept by [param h],
+## The picture of a prop built by code ([param maker]: `() -> {node, size}`, a coroutine where it builds on a worker, [method
+## PropStudio.picture_made]), kept by [param h],
 ## as [method of] answers for a spec.
 func of_made(h: String, maker: Callable) -> Variant:
 	if h.is_empty():
@@ -179,7 +180,8 @@ func _pump() -> void:
 			continue
 		var got := {}
 		if q[1] is Callable:
-			var made: Dictionary = (q[1] as Callable).call()
+			# (a maker may build on a worker and come back when it is done)
+			var made: Dictionary = await (q[1] as Callable).call()
 			if not made.is_empty():
 				got = await PropStudio.picture_made(made, String(q[0]), Library.writable())
 		else:

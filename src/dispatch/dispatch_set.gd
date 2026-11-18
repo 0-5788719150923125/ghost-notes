@@ -33,7 +33,7 @@ const EYE := Vector3(0.0, 1.24, 0.80)
 ## The phones: closed, a phone's width, length and thickness (m); the rows - the first phone's middle, the step along a
 ## row and between the rows; where a phone laid open on the desk lies (the first, and the step).
 const PHONE := Vector3(0.05, 0.022, 0.096)
-const PHONE_AT := Vector2(-1.04, -0.08)
+const PHONE_AT := Vector2(-1.04, -0.06)
 const PHONE_STEP := Vector2(0.105, 0.155)
 const ROW := 6
 const HELD_AT := Vector2(-0.94, 0.318)
@@ -126,9 +126,24 @@ const MAKE_SALTS := {"mug": "mug", "pencil_cup": "cup", "terminal": "terminal", 
 ## What of each thing the camera reads, by its make's faces ([member _faces]): what is packed is kept from hiding them.
 const READ := {"terminal": ["screen"], "radar": ["scope", "scale"], "receiver": ["dial", "meter", "scope"], "feed": ["screen"],
 	"satellite": ["screen"], "tv": ["screen"], "switch": ["good", "bad"], "handbook": ["spine"], "chart": ["chart"], "clock": ["cards"]}
-## The material each phone's make wears in a color of its own ([constant PHONE_COLORS], drawn phone by phone).
+## The material each phone's make wears in a color of its own, drawn phone by phone from its palette ([constant PHONE_FIELDS]).
 const PHONE_TINT := "body"
-const PHONE_COLORS := [Color(0.08, 0.08, 0.09), Color(0.42, 0.43, 0.46), Color(0.07, 0.10, 0.18), Color(0.18, 0.18, 0.2), Color(0.30, 0.06, 0.06)]
+## The phones' properties ([Roll]; kept in the block's `phones`, [DispatchProps]): each a color of its own from a palette, or all the
+## make's own; and the palettes, each a few colors a phone is drawn in.
+const PHONE_FIELDS := {
+	"colors": {"label": "Colors", "blurb": "Each phone a color of its own, drawn from the palette, or every one in its make's own.",
+		"type": "enum", "options": ["mixed", "own"], "labels": {"mixed": "Each its own", "own": "All the make's"}, "default": "mixed"},
+	"palette": {"label": "Palette", "blurb": "The colors the phones are drawn in.", "type": "enum",
+		"options": ["office", "bright", "metal", "pastel"],
+		"labels": {"office": "Office (dark plastics)", "bright": "Bright", "metal": "Metal", "pastel": "Pastel"},
+		"default": "office", "roll": ["office", "office", "bright", "metal", "pastel"]},
+}
+const PHONE_PALETTES := {
+	"office": [Color(0.08, 0.08, 0.09), Color(0.42, 0.43, 0.46), Color(0.07, 0.10, 0.18), Color(0.18, 0.18, 0.2), Color(0.30, 0.06, 0.06)],
+	"bright": [Color(0.62, 0.07, 0.06), Color(0.06, 0.22, 0.58), Color(0.78, 0.6, 0.06), Color(0.08, 0.42, 0.18), Color(0.85, 0.36, 0.05)],
+	"metal": [Color(0.62, 0.63, 0.66), Color(0.27, 0.28, 0.3), Color(0.66, 0.57, 0.42), Color(0.16, 0.16, 0.17), Color(0.45, 0.47, 0.5)],
+	"pastel": [Color(0.86, 0.6, 0.66), Color(0.58, 0.8, 0.7), Color(0.58, 0.72, 0.88), Color(0.72, 0.64, 0.86), Color(0.9, 0.86, 0.68)],
+}
 const PACK_TRIES := 300
 ## What the camera turns to keeps in sight ([method _sights]): of each face read (a label, a dial, a screen, the clock's
 ## cards), at most this share hidden by a nearer thing packed in front of it, seen from the chair and from its own spot...
@@ -178,6 +193,7 @@ var clear: Array = []             # AABBs of what fills the air by the desk, whi
 var bodies := {}                  # a thing -> the box its meshes fill, in the set's space ([method bounds])
 var things := {}                  # a thing -> its node, as built
 var makes := {}                   # the makes chosen for the desk's parts in place of its own ({role: choice}, [DispatchProps])
+var desk := {}                    # the desk itself, as the note keeps it ([DispatchDesk]: `{seed, <its fields set>}`; {} its own)
 var misfit := {}                  # a small thing -> how badly it fits where it was packed ([method _misfit]; 0: it fits)
 var spots := {}                   # what the camera can turn to ([constant DispatchMedium.SPOTS] keys) -> {aim, eye, fov}
 
@@ -228,7 +244,6 @@ func build(labels: PackedStringArray, seed: int, tex: Dictionary, wants := {}) -
 	_monitors()
 	_things()
 	_chair()
-	lay_cables()
 	for k in DispatchMedium.SPOTS:
 		var s := spot_of(String(k))
 		if not s.is_empty():
@@ -266,7 +281,7 @@ func _lay_out() -> void:
 	turn = {"case": 0.0, "keyboard": 0.0}
 	var base := {"radar": [RADAR_AT, -14.0], "receiver": [RECEIVER_AT, -30.0], "printer": [PRINTER_AT, 90.0],
 		"feed": [FEED_AT, 12.0], "tv": [TV_AT, -18.0], "lamp": [LAMP_AT, 0.0],
-		"phones": [PHONE_AT, 0.0], "held": [HELD_AT, 0.0], "heap": [HEAP_AT, 0.0], "patch": [Vector2(0.02, -0.50), 0.0]}
+		"phones": [PHONE_AT, 0.0], "held": [HELD_AT, 0.0], "heap": [HEAP_AT, 0.0], "patch": [Vector2(0.02, -0.515), 0.0]}
 	# each end of the desk moves as one, outward and back or forward a little, so what stands close together stays close;
 	# the screens along the back move only back and forth
 	var groups := {"radio": ["radar", "receiver", "tv"], "phones": ["phones", "printer", "feed", "lamp", "held", "heap"],
@@ -274,7 +289,7 @@ func _lay_out() -> void:
 	var shifts := {}
 	for g in groups:
 		var out := r.randf_range(0.0, JITTER) if g != "back" else 0.0
-		shifts[g] = Vector2(out, r.randf_range(-JITTER, JITTER) * (0.6 if g == "back" else 1.0))
+		shifts[g] = Vector2(out, r.randf_range(-JITTER, JITTER) * (0.3 if g == "back" else 1.0))
 	for k in base:
 		var b: Array = base[k]
 		var p: Vector2 = b[0]
@@ -633,16 +648,54 @@ func _parts_of(node: Node3D, whole: bool) -> Array:
 	return out
 
 
+## Each mesh under [param n] a part ([method _part_of]) - two where it reaches past the desk's edges: what is over the desk and
+## what is past it, so the printer's paper, high over the desk and falling past its end, closes nothing under it on the desk.
 static func _mesh_parts(n: Node3D, xf: Transform3D, out: Array) -> void:
 	var mi := n as MeshInstance3D
 	if mi != null and mi.mesh != null and not mi.mesh.has_meta(THIN) and not _flat(mi):
 		var pts := xf * mi.mesh.get_faces()
-		if not pts.is_empty():
-			out.append(_part_of(pts))
+		var over := PackedVector3Array()
+		var past := PackedVector3Array()
+		for q in pts:
+			if _on_desk(q):
+				over.append(q)
+			else:
+				past.append(q)
+		if not over.is_empty() and not past.is_empty():
+			# where an edge of a triangle crosses the desk's edge, the point it crosses at belongs to both
+			for t in range(0, pts.size() - 2, 3):
+				for e in [[t, t + 1], [t + 1, t + 2], [t + 2, t]]:
+					var a := pts[int(e[0])]
+					var b := pts[int(e[1])]
+					if _on_desk(a) != _on_desk(b):
+						var c := _desk_crossing(a, b)
+						over.append(c)
+						past.append(c)
+		for some in [over, past]:
+			if (some as PackedVector3Array).size() >= 3:
+				out.append(_part_of(some))
 	for c in n.get_children():
 		var c3 := c as Node3D
 		if c3 != null:
 			_mesh_parts(c3, xf * c3.transform, out)
+
+
+## Whether [param q] (the set's space) is over the desk's top, seen from above, or within a centimeter of its edge.
+static func _on_desk(q: Vector3) -> bool:
+	return absf(q.x) <= DESK_W * 0.5 + 0.01 and q.z >= FAR - 0.01 and q.z <= NEAR + 0.01
+
+
+## Where the segment from [param a] to [param b], one end over the desk and one past it, crosses the desk's edge.
+static func _desk_crossing(a: Vector3, b: Vector3) -> Vector3:
+	var inside := a if _on_desk(a) else b
+	var outside := b if _on_desk(a) else a
+	for i in 12:
+		var m := inside.lerp(outside, 0.5)
+		if _on_desk(m):
+			inside = m
+		else:
+			outside = m
+	return inside
 
 
 ## One part round [param pts] (in the set's space): their outline from above, how high they reach, their box.
@@ -685,13 +738,13 @@ func held_rect() -> Rect2:
 
 # --- materials --------------------------------------------------------------------------------------------------------
 
-## What the desk's own is made of: the cables, the arm, the chair, the heap's paper, the pedestals and the hollow's earth.
+## What the desk's own is made of: the cables, the arm, the chair, the heap's paper and the hollow's earth (the desk is its own prop's,
+## [DispatchDesk]).
 func _materials() -> void:
 	_mats["beige_dark"] = _std(Color(0.62, 0.58, 0.49), 0.6)
 	_mats["black"] = _std(Color(0.035, 0.035, 0.04), 0.4)
 	_mats["dark"] = _std(Color(0.10, 0.10, 0.11), 0.5)
 	_mats["metal"] = _std(Color(0.55, 0.56, 0.58), 0.3, 0.85)
-	_mats["wood_dark"] = _std(Color(0.12, 0.07, 0.045), 0.55)
 	_mats["cable"] = _std(Color(0.08, 0.08, 0.085), 0.6)
 	_mats["cable_blue"] = _std(Color(0.10, 0.28, 0.72), 0.45)
 	_mats["cable_yellow"] = _std(Color(0.85, 0.70, 0.10), 0.45)
@@ -900,34 +953,11 @@ func _room() -> void:
 
 # --- the desk ---------------------------------------------------------------------------------------------------------
 
-## The desk: its top built as the card table's is ([Tables]: dark boards, their grain and seams), a worn green blotter laid
-## on it, and two pedestals under it.
+## The desk: its own prop ([DispatchDesk]) as [member desk] keeps it - unrolled, the desk the hollow has always had, its grain
+## drawn from the desk's number; rolled, from its own.
 func _desk() -> void:
-	var r := RandomNumberGenerator.new()
-	r.seed = hash([_seed, "dispatch desk"])
-	var mat := {"kind": "wood", "color": "#2a1810", "color2": "#140a06", "polish": 0.22, "pattern": 0.6, "grain": 1.4, "wear": 0.4}
-	var top := {"shape": "rect", "size": [DESK_W * 100.0, DESK_D * 100.0], "thickness": 4.5, "edge": "eased", "material": "the desk",
-		"boards": {"width": 19.0, "turn": 0.0}}
-	var mid := Vector2(0.0, (NEAR + FAR) * 0.5)
-	var blot := BLOTTER.get_center()
-	var lay := {"name": "the blotter", "what": "a worn green blotter", "outline": "rect", "size": [BLOTTER.size.x * 100.0, BLOTTER.size.y * 100.0],
-		"at": [(blot.x - mid.x - Tables.TOP_AT.x) * 100.0, (blot.y - mid.y - Tables.TOP_AT.y) * 100.0], "turn": BLOTTER_TURN,
-		"fabric": "felt", "pattern": {"kind": "plain", "colors": ["#2c4a33"]},
-		"border": {"width": 2.6, "inset": 0.0, "color": "#3b2a1c"}}
-	var spec := Tables.sanitize(top, [lay], {"the desk": Props.sanitize_material(mat, "#2a1810")}, [])
-	var built := Tables.build(spec, _seed)
-	var furniture: Node3D = built["node"]
-	furniture.position = Vector3(mid.x - Tables.ORIGIN.x - Tables.TOP_AT.x, DESK_Y, mid.y - Tables.ORIGIN.y - Tables.TOP_AT.y)
-	root.add_child(furniture)
-	var wood: Material = _mats["wood_dark"]
-	for side in [-1.0, 1.0]:
-		var ped := Vector3(0.48, DESK_Y - 0.05, DESK_D - 0.08)
-		put(root, rbox(ped, 0.01), wood, Vector3(side * (DESK_W * 0.5 - ped.x * 0.5 - 0.03), ped.y * 0.5, mid.y))
-		for k in 3:
-			var y := 0.12 + float(k) * 0.21
-			put(root, rbox(Vector3(0.44, 0.19, 0.012), 0.004), wood, Vector3(side * (DESK_W * 0.5 - 0.27), y + 0.05, NEAR - 0.035))
-			put(root, cyl(0.006, 0.006, 0.07, 8), _mats["metal"], Vector3(side * (DESK_W * 0.5 - 0.27), y + 0.08, NEAR - 0.022), Vector3(0, 0, 90))
-	put(root, box(Vector3(DESK_W - 1.0, DESK_Y - 0.25, 0.025)), wood, Vector3(0, DESK_Y * 0.5 + 0.1, FAR + 0.08))
+	var own := typeof(desk.get("seed")) in [TYPE_INT, TYPE_FLOAT]
+	root.add_child(DispatchDesk.build(DispatchDesk.values_of(desk), int(desk["seed"]) if own else _seed))
 
 
 # --- the makes ----------------------------------------------------------------------------------------------------------
@@ -1014,20 +1044,30 @@ func _terminal() -> void:
 
 # --- the phones -------------------------------------------------------------------------------------------------------
 
+## The phones' properties ([constant PHONE_FIELDS]) as kept in [param spec] (`{seed, <its fields set>}`): their own until rolled,
+## then drawn by their own number.
+static func phones_of(spec: Dictionary) -> Dictionary:
+	return Roll.own_or_drawn(PHONE_FIELDS, spec)
+
+
 ## The phones, two rows of six (or as many as there are labels): each the phone's make ([PropMakes] `phone`) lying lid up, its
-## name handed to its `tape` face, its `body` in a color of its own ([constant PHONE_TINT]); its lid opens as the medium feeds it
+## name handed to its `tape` face, its `body` in a color of its own ([constant PHONE_TINT]) from the palette its properties choose
+## ([method phones_of]), or all the make's own; its lid opens as the medium feeds it
 ## (`open`). Each phone's node is posed by the medium from its place in the row ([member phones]' `home`).
 func _phones() -> void:
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([_seed, "phones"])
 	var n := _labels.size()
+	var v := phones_of(makes.get("phones", {}))
+	var mixed := String(v["colors"]) == "mixed"
+	var colors: Array = PHONE_PALETTES.get(String(v["palette"]), PHONE_PALETTES["office"])
 	# one make built, each phone a copy of it with its own materials ([method PropRig.copy])
 	var made := _rig("phone") if n > 0 else null
 	for i in n:
 		var row := i / ROW
 		var col := i % ROW
 		var at := _phone_spot(col, row)
-		var tint: Color = PHONE_COLORS[r.randi_range(0, PHONE_COLORS.size() - 1)]
+		var tint: Color = colors[r.randi_range(0, colors.size() - 1)]
 		var polish := 1.0 - r.randf_range(0.3, 0.55)
 		var rig := made if i == n - 1 else made.copy()
 		var node := rig.node
@@ -1037,7 +1077,7 @@ func _phones() -> void:
 		node.transform = home
 		root.add_child(node)
 		rig.say("tape", _labels[i])
-		for mi in node.find_children("*", "MeshInstance3D", true, false):
+		for mi in node.find_children("*", "MeshInstance3D", true, false) if mixed else []:
 			var mat := (mi as MeshInstance3D).material_override as ShaderMaterial
 			if mat != null and String((mi as MeshInstance3D).get_meta("material", "")) == PHONE_TINT:
 				mat.set_shader_parameter("color", tint)
@@ -1525,14 +1565,15 @@ func _things_back() -> void:
 	_body("patch", panel)
 
 
-## The patch panel's cables ([method lay_cables]): each droops out of one of its sockets onto the desk and is laid along it as a hand
-## would lay it - round everything standing there ([method _desk_grid]), along the desk's back where it can, beside the cables
-## laid before it rather than through them - to a thing that takes a cable ([constant CABLED]), plugged into the part it stands on,
-## on the side that faces the panel ([method port_of]), coming at it straight and rising up it where the part stands higher; the
-## sockets go to the things in order from the left. The rest are laid round the panel to the desk's far edge and over it, curving
-## down out of sight. Over any root lying in their way ([param lying]: [member DispatchRoots.lying]), so none ends on the desk or
-## goes through what it meets. Laid again whenever the roots are known.
-func lay_cables(lying: Array = []) -> void:
+## The patch panel's cables ([method lay_cables]): each a soft cord ([Rope]) from one of its sockets, laid first as a hand would lay
+## it - round everything standing on the desk ([method _desk_grid]), along its back where it can, beside the cables laid before it -
+## a little slack, then let fall and settled: draped over the roots lying in its way and those beside the desk ([param lying], [param
+## hanging]: [member DispatchRoots.lying], [member DispatchRoots.hanging]) and over the cables laid before it where it crosses them,
+## resting on the desk, never through what stands there. It
+## runs to a thing that takes a cable ([constant CABLED]), plugged into the part it stands on, on the side that faces the panel
+## ([method ports_of]); the sockets go to the things in order from the left. The rest are laid round the panel to the desk's far edge
+## and fall over it, down out of sight. Laid again whenever the roots are known.
+func lay_cables(lying: Array = [], hanging: Array = []) -> void:
 	for n in _cable_nodes:
 		if is_instance_valid(n):
 			(n as Node).free()
@@ -1551,26 +1592,36 @@ func lay_cables(lying: Array = []) -> void:
 	ports.sort_custom(func(a: Array, b: Array) -> bool: return ((a[0] as Dictionary)["at"] as Vector3).x < ((b[0] as Dictionary)["at"] as Vector3).x)
 	var grid := _desk_grid()
 	var low := DESK_Y + CABLE_R
+	var solids := _cable_solids()
+	var caps := _cable_capsules(lying + hanging)
+	_over_roots_dear(grid, caps)
 	var panel_front: float = pp.z + 0.025
+	# each socket's plug, which the other cables keep clear of
+	var stubs: Array = []
+	for k in CABLES:
+		var s0 := pp + Vector3(-0.19 + float(k) * 0.034, 0.03, 0.026)
+		stubs.append([s0, s0 + Vector3(0.0, 0.0, CABLE_PLUG), CABLE_R + CABLE_GAP])
 	for k in CABLES:
 		var a := pp + Vector3(-0.19 + float(k) * 0.034, 0.03, 0.026)
-		var from := Vector2(a.x, panel_front + CABLE_ROOM + 0.006)
-		var pts: Array = [a, a + Vector3(0.0, -0.016, 0.008)]
+		var from := Vector2(a.x, panel_front + CABLE_PLUG + CABLE_ROOM)
+		var pts: Array = [a, a + Vector3(0.0, 0.0, CABLE_PLUG)]
 		var laid := false
+		var plug_out := Vector3.ZERO      # the way the cable comes out of the port it is plugged into
 		for port in (ports[k] if k < ports.size() else []):
 			var at: Vector3 = (port as Dictionary)["at"]
 			var out: Vector3 = (port as Dictionary)["out"]
 			var near := Vector3(at.x, low, at.z) + out * 0.03
-			var way := _lay(grid, from, Vector2(near.x, near.z), maxf(near.z, from.y) + CABLE_AHEAD, true)
+			if _in_capsules(at + out * CABLE_PLUG, caps, CABLE_R) or _in_capsules(near, caps, CABLE_R):
+				continue                    # (a root pressed against that side)
+			var way := _lay(grid, from, Vector2(near.x, near.z), maxf(maxf(near.z, from.y), float(port.get("front", near.z)) + CABLE_ROOM) + CABLE_AHEAD, true)
 			if way.is_empty():
 				continue
 			for q in way:
 				pts.append(Vector3((q as Vector2).x, low, (q as Vector2).y))
-			if at.y > low + 0.03:
-				# up the side of what it plugs into
-				pts.append(Vector3(at.x, low, at.z) + out * 0.012 + Vector3(0.0, 0.006, 0.0))
-				pts.append(at + out * 0.01 + Vector3(0.0, -0.02, 0.0))
+			# into its port level, as a plug goes in: straight out of it, then down to the desk
+			pts.append(at + out * CABLE_PLUG)
 			pts.append(at)
+			plug_out = out
 			laid = true
 			break
 		if not laid:
@@ -1584,14 +1635,71 @@ func lay_cables(lying: Array = []) -> void:
 			pts.append(Vector3(x, low + 0.003, FAR - 0.004))
 			pts.append(Vector3(x, DESK_Y - 0.02, FAR - 0.014))
 			pts.append(Vector3(x + r.randf_range(-0.03, 0.03), DESK_Y - 0.34, FAR - 0.03))
-		# smoothed, unless the curve would cut into something it was laid round: then as it was laid
-		var path := _floored(curve(pts, 5), low)
-		if _cuts(grid, path, low):
-			path = _floored(curve(pts, 1), low)
-		path = _over_roots(path, lying)
+		# a rope laid along that way, a little slack and a little over it, let fall and settled on what is under it ([Rope])
+		# (along the way as laid: a curve drawn through its corners can overshoot into a loop the rope would keep; the rope's own
+		# stiffness rounds them as it settles)
+		var rope := Rope.resampled(_floored(PackedVector3Array(pts), low), CABLE_LINK)
+		for i in range(1, rope.size() - 1):
+			rope[i].y += CABLE_DROP
+		rope = Rope.lifted_over(rope, caps, CABLE_R)
+		# the first link straight out of its socket, the last straight out of its port: held so, the bend begins past them
+		rope[1] = rope[0] + Vector3(0.0, 0.0, 1.0) * rope[0].distance_to(rope[1])
+		if laid:
+			var n := rope.size()
+			rope[n - 2] = rope[n - 1] + plug_out * rope[n - 1].distance_to(rope[n - 2])
+		# held at its socket, and at its port where it is plugged in, straight for a link out of each as a plug holds it; one fallen
+		# over the edge hangs free
+		var pins := [0, 1, rope.size() - 2, rope.size() - 1] if laid else [0, 1]
+		var settled := Rope.settle(rope, pins, CABLE_R, CABLE_STIFF, solids, caps + stubs.slice(0, k) + stubs.slice(k + 1), 0.0, CABLE_SLACK)
+		# what the next cables lie on: this one, where it crosses their way
+		for i in settled.size() - 1:
+			caps.append([settled[i], settled[i + 1], CABLE_R + CABLE_GAP])
+		var path := curve(Array(settled), 3)
 		cable_paths.append(path)
 		var mat: Material = _mats["cable_blue"] if k % 2 == 0 else _mats["cable_yellow"]
 		_cable_nodes.append(put(root, tube(path, CABLE_R, 6), mat, Vector3.ZERO))
+
+
+## Whether [param p] is within [param radius] of a capsule of [param caps] (each `[from, to, radius]`).
+static func _in_capsules(p: Vector3, caps: Array, radius: float) -> bool:
+	for c in caps:
+		var a: Vector3 = c[0]
+		var b: Vector3 = c[1]
+		var ab := b - a
+		var t := clampf((p - a).dot(ab) / maxf(ab.length_squared(), 1e-9), 0.0, 1.0)
+		if p.distance_to(a + ab * t) < float(c[2]) + radius:
+			return true
+	return false
+
+
+## What a cable lies on and keeps out of ([Rope]): the desk's top, every part on it by its own outline from its foot to its top, and
+## what fills the air beside it (the printer's paper and its heap).
+func _cable_solids() -> Array:
+	# (the desk as a deep block: a cable pulled hard into its top always comes out on top, never through)
+	var out: Array = [AABB(Vector3(-DESK_W * 0.5, DESK_Y - 0.5, FAR), Vector3(DESK_W, 0.5, NEAR - FAR))]
+	for k in _parts:
+		for part in _parts[k]:
+			var pd: Dictionary = part
+			if (pd["outline"] as PackedVector2Array).size() >= 3:
+				out.append({"outline": pd["outline"], "lo": pd["lo"], "hi": pd["hi"]})
+			else:
+				out.append(pd["box"])
+	out.append_array(clear)
+	return out
+
+
+## The roots of [param paths] ([member DispatchRoots.lying], [member DispatchRoots.hanging]) down at the desk - on its top, or just
+## past its far edge where a cable falls over it - as capsules a cable lies over ([Rope]): each `[from, to, radius]`.
+func _cable_capsules(paths: Array) -> Array:
+	var near := AABB(Vector3(-DESK_W * 0.5 - 0.05, DESK_Y - 0.4, FAR - 0.12), Vector3(DESK_W + 0.1, 0.55, NEAR - FAR + 0.12))
+	var out: Array = []
+	for path in paths:
+		var pts: PackedVector3Array = (path as Dictionary)["points"]
+		var rad: PackedFloat32Array = (path as Dictionary)["radii"]
+		for j in pts.size() - 1:
+			if near.has_point(pts[j]) or near.has_point(pts[j + 1]):
+				out.append([pts[j], pts[j + 1], maxf(rad[j], rad[j + 1]) + CABLE_GAP])
+	return out
 
 
 ## The desk's top as a grid a cable is laid over ([constant CABLE_CELL] a cell): every cell under something standing on the desk
@@ -1630,6 +1738,34 @@ func _desk_grid() -> AStarGrid2D:
 	return g
 
 
+## The cells of [param grid] under a root of [param caps] ([method _cable_capsules]) made dearer the higher it stands off the desk
+## there, so a cable is laid over a root where it is lowest and round where it stands up, as a hand would lay it - never under one
+## (one well over the desk it passes beneath).
+func _over_roots_dear(grid: AStarGrid2D, caps: Array) -> void:
+	var dear := {}
+	for c in caps:
+		var a: Vector3 = c[0]
+		var b: Vector3 = c[1]
+		var rad := float(c[2])
+		var n := maxi(1, ceili(a.distance_to(b) / CABLE_CELL))
+		for i in n + 1:
+			var q := a.lerp(b, float(i) / float(n))
+			if q.y - rad > DESK_Y + 0.08:
+				continue
+			var top := q.y + rad - DESK_Y
+			var w := 1.0 + pow(maxf(top, 0.0) / 0.02, 2.0)
+			var reach := rad + CABLE_ROOM
+			var c0 := _cell(Vector2(q.x - reach, q.z - reach))
+			var c1 := _cell(Vector2(q.x + reach, q.z + reach))
+			for row in range(maxi(c0.y, 0), mini(c1.y, grid.region.size.y - 1) + 1):
+				for col in range(maxi(c0.x, 0), mini(c1.x, grid.region.size.x - 1) + 1):
+					var cell := Vector2i(col, row)
+					if _at_cell(cell).distance_to(Vector2(q.x, q.z)) <= reach:
+						dear[cell] = maxf(float(dear.get(cell, 1.0)), w)
+	for cell in dear:
+		grid.set_point_weight_scale(cell, grid.get_point_weight_scale(cell) * float(dear[cell]))
+
+
 ## A cable laid over [param grid] from [param from] to [param to] (on the desk, x and z): the way round what stands there, its
 ## corners cut where nothing is in the way, ending at [param to] - and the cells it lies on made dearer, so the next lies beside it.
 ## [] where there is no way, or where the way comes further forward than [param ahead] (z): a cable is never laid round the front
@@ -1657,19 +1793,6 @@ func _lay(grid: AStarGrid2D, from: Vector2, to: Vector2, ahead := INF, exact := 
 		i = j
 	out[out.size() - 1] = to
 	return out
-
-
-## Whether [param path] (a cable) cuts into a closed cell of [param grid] while it lies on the desk (at [param low]), short of its
-## last few centimeters, where it plugs in.
-static func _cuts(grid: AStarGrid2D, path: PackedVector3Array, low: float) -> bool:
-	var end := path[path.size() - 1]
-	for p in path:
-		if p.z < FAR or p.y > low + 0.002 or p.distance_to(end) < 0.045:
-			continue
-		var c := _cell(Vector2(p.x, p.z))
-		if grid.region.has_point(c) and grid.is_point_solid(c):
-			return true
-	return false
 
 
 ## Whether the cells between [param a] and [param b] (in a straight line) are all open on [param grid].
@@ -1707,9 +1830,11 @@ static func _at_cell(c: Vector2i) -> Vector2:
 
 ## Where a cable may plug into thing [param k] ([constant CABLED]), the likeliest first ([] where the desk has none): each `{at,
 ## out}` - on the part it stands on (of its parts on the desk, one whose foot is lowest and which reaches nearest the panel at
-## [param panel]: the case of a terminal, the base of a lamp), on stretches of that part's outline facing other ways, the one facing
-## the panel most first (a long one before a short one), a little way along it ([param r]), half its height up (at most 3 cm) and
-## just inside it; `out` the way that stretch faces, along the desk.
+## [param panel]: the case of a terminal, the base of a lamp), on stretches of that part's outline facing other ways: its own back
+## first (the way its make faces turned about), then its sides, never its front nor a side the chair sees ([constant PORT_FRONT]) -
+## a cable goes round to the back of what it plugs into, as one does; of two alike, the one facing the panel and a long one first. A
+## little way along it ([param r]), half its height up (at most 3 cm) and just inside it; `out` the way that stretch faces, along the
+## desk; `front` how far toward the chair that part comes (z), which a cable may go round it as far as.
 func ports_of(k: String, panel: Vector2, r: RandomNumberGenerator) -> Array:
 	var parts: Array = (_parts.get(k, []) as Array).filter(func(p: Dictionary) -> bool: return float(p["lo"]) >= DESK_Y - 0.02)
 	if parts.is_empty():
@@ -1736,6 +1861,10 @@ func ports_of(k: String, panel: Vector2, r: RandomNumberGenerator) -> Array:
 		mid += q
 	mid /= float(hull.size())
 	var toward := (panel - mid).normalized() if panel.distance_to(mid) > 1e-4 else Vector2(0.0, -1.0)
+	var rig: PropRig = rigs.get(k)
+	var faces := rig.node.transform.basis.z if rig != null else Vector3.BACK
+	var front := Vector2(faces.x, faces.z).normalized() if Vector2(faces.x, faces.z).length() > 1e-4 else Vector2(0.0, 1.0)
+	var seen := (Vector2(EYE.x, EYE.z) - mid).normalized()
 	var edges: Array = []             # [score, p0, p1, out]
 	for i in hull.size():
 		var p0: Vector2 = hull[i]
@@ -1746,7 +1875,9 @@ func ports_of(k: String, panel: Vector2, r: RandomNumberGenerator) -> Array:
 		var out := Vector2(along.y, -along.x).normalized()
 		if out.dot((p0 + p1) * 0.5 - mid) < 0.0:
 			out = -out
-		edges.append([out.dot(toward) + 0.2 * minf(along.length() / 0.1, 1.0), p0, p1, out])
+		if out.dot(front) > PORT_FRONT or out.dot(seen) > PORT_FRONT:
+			continue
+		edges.append([-out.dot(front) + 0.25 * out.dot(toward) + 0.2 * minf(along.length() / 0.1, 1.0), p0, p1, out])
 	edges.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) > float(b[0]))
 	var lo := float(best["lo"])
 	var y := lo + clampf((float(best["hi"]) - lo) * 0.5, 0.004, 0.03)
@@ -1760,7 +1891,7 @@ func ports_of(k: String, panel: Vector2, r: RandomNumberGenerator) -> Array:
 			continue
 		tried.append(facing)
 		var at: Vector2 = (e[1] as Vector2).lerp(e[2], r.randf_range(0.3, 0.7)) - facing * 0.004
-		out_ports.append({"at": Vector3(at.x, y, at.y), "out": Vector3(facing.x, 0.0, facing.y)})
+		out_ports.append({"at": Vector3(at.x, y, at.y), "out": Vector3(facing.x, 0.0, facing.y), "front": (best["box"] as AABB).end.z})
 	return out_ports
 
 
@@ -1791,47 +1922,6 @@ static func _floored(path: PackedVector3Array, low: float) -> PackedVector3Array
 		if path[i].z >= FAR and path[i].y < low:
 			path[i].y = low
 	return path
-
-
-## [param path] (a cable along the desk) raised over every root lying on it ([param lying]): where it would pass within a
-## root's reach on the desk's top it goes over it, and the run is eased so it drapes rather than steps.
-static func _over_roots(path: PackedVector3Array, lying: Array) -> PackedVector3Array:
-	if lying.is_empty():
-		return path
-	var lift := PackedFloat32Array()
-	lift.resize(path.size())
-	var any := false
-	for i in path.size():
-		var p := path[i]
-		var need := 0.0
-		# on the desk's top: past its far edge a cable drops out of sight behind it
-		if p.z < FAR:
-			continue
-		for root_path in lying:
-			var pts: PackedVector3Array = (root_path as Dictionary)["points"]
-			var rad: PackedFloat32Array = (root_path as Dictionary)["radii"]
-			for j in range(int((root_path as Dictionary).get("from", 0)), pts.size()):
-				var reach := rad[j] + CABLE_R + CABLE_CLEAR
-				var d := Vector2(p.x - pts[j].x, p.z - pts[j].z).length()
-				if d < reach * 1.6:
-					var top := pts[j].y + rad[j] + CABLE_R + CABLE_CLEAR
-					need = maxf(need, (top - p.y) * (1.0 - smoothstep(reach, reach * 1.6, d)))
-		lift[i] = maxf(need, 0.0)
-		any = any or need > 0.0
-	if not any:
-		return path
-	# eased: each point's lift the most of its neighbours', so the cable climbs before and settles after
-	for _pass in 2:
-		var eased := lift.duplicate()
-		for i in path.size():
-			var a := lift[maxi(i - 1, 0)]
-			var b := lift[mini(i + 1, path.size() - 1)]
-			eased[i] = maxf(lift[i], (a + b) * 0.45)
-		lift = eased
-	var out := PackedVector3Array()
-	for i in path.size():
-		out.append(path[i] + Vector3(0.0, lift[i], 0.0))
-	return out
 
 
 ## The small things, each a make ([PropMakes]) built at the origin and then packed ([method _pack]): the handbook, the mug
@@ -2011,11 +2101,41 @@ func clear_over(from: Vector3, to: Vector3, radius: float, skip: Array) -> float
 	return top
 
 
-## The patch panel's cables ([method lay_cables]): how many, how thick (radius, m), how far over a root they go, and the things
-## on the desk they run to the back of.
+## Whether a thing [param radius] round and [param tall] high carried along [param way] (its foot at each point, the set's space)
+## keeps [param gap] over everything standing on the desk under it but what [param skip] names - never through any part it passes.
+func way_clear(way: PackedVector3Array, radius: float, tall: float, gap: float, skip: Array) -> bool:
+	for p in way:
+		for k in _parts:
+			if k in skip:
+				continue
+			for part in _parts[k]:
+				var b: AABB = (part as Dictionary)["box"]
+				if p.y >= b.end.y + gap or p.y + tall <= b.position.y:
+					continue
+				if Rect2(b.position.x, b.position.z, b.size.x, b.size.z).grow(radius).has_point(Vector2(p.x, p.z)):
+					return false
+	return true
+
+
+## How tall the mug is (m): its own make's height.
+func mug_tall() -> float:
+	var rig: PropRig = rigs.get("mug")
+	return (rig.built["size"] as AABB).size.y if rig != null and rig.built.get("size") is AABB else 0.1
+
+
+## The patch panel's cables ([method lay_cables]): how many, how thick (radius, m), and the things on the desk they run to the back
+## of; each a rope ([Rope]) of links this long (m), this stiff, this much longer than the way it is laid, let fall from this far over
+## it (m).
 const CABLES := 12
 const CABLE_R := 0.0024
-const CABLE_CLEAR := 0.003
+const CABLE_LINK := 0.015
+const CABLE_STIFF := 0.9
+const CABLE_SLACK := 0.015
+const CABLE_DROP := 0.012
+## How far a cable comes straight out of a socket or a port before it bends (m): a plug's length, held as it is; and how far it
+## keeps from a root or another cable it lies over (m: the curve drawn through its links cuts a bend by about a millimeter).
+const CABLE_PLUG := 0.012
+const CABLE_GAP := 0.002
 ## A cable laid over the desk ([method _desk_grid]): the grid's cell (m), how much dearer the desk's front edge is than its back,
 ## and how much dearer a cell is once a cable lies on it.
 const CABLE_CELL := 0.01
@@ -2023,10 +2143,13 @@ const CABLE_CELL := 0.01
 const CABLE_ROOM := 0.0065
 const CABLE_FRONT := 2.0
 const CABLE_BESIDE := 1.5
-## How far forward of where it comes at its port a cable may be laid (m): no further, or it would go round the front of something;
-## and how many of a thing's sides a cable tries, the one facing the panel first.
+## How far forward of where it comes at its port, or of the front of what it plugs into, a cable may be laid (m): no further, or it
+## would go round the front of something else;
+## and how many of a thing's sides a cable tries, its back first.
 const CABLE_AHEAD := 0.06
 const PORT_TRIES := 3
+## How nearly a side may face the way its thing faces and still take a cable (the cosine): its front and the corners beside it never.
+const PORT_FRONT := 0.5
 ## How far apart the ways the sides a cable tries face (radians): a round foot offers three ways, not three of one.
 const PORT_APART := 0.7
 const CABLED := ["terminal", "radar", "receiver", "printer", "feed", "satellite", "tv", "lamp"]

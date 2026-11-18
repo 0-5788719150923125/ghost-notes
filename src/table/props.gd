@@ -5004,14 +5004,16 @@ static func face_words(part: Dictionary, xf: Transform3D) -> Label3D:
 	return label
 
 
-## [param label] saying [param text], as large as fits inside [param size] (meters) with a margin round it, every line whole.
+## [param label] saying [param text], as large as fits inside [param size] (meters) with a margin round it, every line whole - its
+## outline (a marker's broad stroke) counted in.
 static func fit_words(label: Label3D, text: String, size: Vector2) -> void:
 	label.text = text
 	var widest := 1.0
 	var lines := text.split("\n")
 	for line in lines:
 		widest = maxf(widest, label.font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, WORDS_PX).x)
-	var tall := maxf(label.font.get_height(WORDS_PX) * float(lines.size()), 1.0)
+	widest += 2.0 * float(label.outline_size)
+	var tall := maxf(label.font.get_height(WORDS_PX) * float(lines.size()) + 2.0 * float(label.outline_size), 1.0)
 	label.pixel_size = minf(size.x * 0.86 / widest, size.y * 0.78 / tall)
 
 

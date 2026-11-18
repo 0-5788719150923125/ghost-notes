@@ -300,7 +300,7 @@ func _run() -> void:
 	_ok(upright_on_way and at_mouth and unseen and md._set.mug.global_transform.origin.distance_to(md._set.mug_home.origin) < 0.001,
 		"the mug is drunk from: upright all the way, at the mouth and out of the picture for the sip, in its ring before (%s %s %s)" % [upright_on_way, at_mouth, unseen])
 	# carried over what stands between it and the chair: a block 10 cm tall set just before the mug is never met, out or back
-	# (the control: the old way, straight with a lift of MUG_CLEAR, goes through it)
+	# (the control: its arc at its least lift, as if nothing stood there, goes through it); and never higher than the mouth
 	var mh := md._set.mug_home
 	var toward := (md._cam.global_position - mh.origin) * Vector3(1, 0, 1)
 	toward = toward.normalized()
@@ -310,21 +310,26 @@ func _run() -> void:
 	var mug_box: AABB = md._set.bodies["mug"]
 	var met := false
 	var old_met := false
+	var highest := -INF
+	var mouth_y := INF
 	for k in 41:
 		var tt := t0[lift_i] + (DispatchScript.LIFT_UP + DispatchScript.LIFT_HOLD + DispatchScript.LIFT_DOWN) * float(k) / 40.0 / md._sp[lift_i]
 		md._pose_mug(tt)
 		var off: Vector3 = md._set.mug.global_transform.origin - mh.origin
 		met = met or AABB(mug_box.position + off, mug_box.size).grow(-0.002).intersects(block)
 		var held_now := Transform3D(mh.basis, md._cam.global_transform * DispatchMedium.MUG_MOUTH)
+		highest = maxf(highest, md._set.mug.global_transform.origin.y)
+		mouth_y = minf(mouth_y, held_now.origin.y)
 		var u := (tt - t0[lift_i]) * md._sp[lift_i]
 		var kk := DispatchMedium._jerkless(u / DispatchScript.LIFT_UP) if u < DispatchScript.LIFT_UP else (1.0 if u < DispatchScript.LIFT_UP + DispatchScript.LIFT_HOLD
 			else 1.0 - DispatchMedium._jerkless((u - DispatchScript.LIFT_UP - DispatchScript.LIFT_HOLD) / DispatchScript.LIFT_DOWN))
-		var old_off: Vector3 = DispatchMedium._arc(mh, held_now, kk, DispatchMedium.MUG_CLEAR).origin - mh.origin
+		var old_off: Vector3 = DispatchMedium._mug_at(mh.origin, held_now.origin, DispatchMedium.MUG_LIFT.x, kk) - mh.origin
 		old_met = old_met or AABB(mug_box.position + old_off, mug_box.size).grow(-0.002).intersects(block)
 	md._set._parts.erase("test block")
 	md._pose_mug(t0[lift_i] - 0.5)
-	_ok(not met and old_met, "the mug is carried over what stands between it and the chair, out and back (the control: straight with a lift of %.0f cm, it goes through)"
-		% (DispatchMedium.MUG_CLEAR * 100.0))
+	_ok(not met and old_met, "the mug is carried over what stands between it and the chair, out and back (the control: its arc lifted only %.0f cm, as if nothing stood there, goes through)"
+		% (DispatchMedium.MUG_LIFT.x * 100.0))
+	_ok(highest <= mouth_y + 0.01, "it is never lifted higher than the mouth on its way - never over the head (%.2f m, the mouth %.2f m)" % [highest, mouth_y])
 	# a real sip: at the mouth from the end of its rise to the end of its hold (at least 2.5 s), after a rise of at least 1.5 s,
 	# the voice silent until the sip is done (control: before its rise is over it is not there yet)
 	var sip0 := t0[lift_i] + DispatchScript.LIFT_UP / md._sp[lift_i]
@@ -1285,7 +1290,9 @@ func _ok(cond: bool, what: String) -> void:
 ## knowing nothing of them go through), nor lies across the chart taped to the desk (control: grown with it left out, they do).
 ## The chart lies a hair over the desk's top, never in its plane (control: its make seats its sheet on its own foot). The patch
 ## panel's cables end in a part of what they plug into or past the desk's edge, go over the roots on the desk (control: laid
-## blind) and round what stands on it, through none of it (control: laid straight from socket to port).
+## blind) and round what stands on it, through none of it (control: laid straight from socket to port); each plugs into a side
+## neither its thing's front nor one the chair sees (control: the side facing the panel, as ports once were, is one of them);
+## where two cross on the desk one lies over the other, never through it (control: pressed flat onto the desk, they meet).
 func _roots_clear() -> void:
 	var img := Image.create(8, 8, false, Image.FORMAT_RGBA8)
 	var t := ImageTexture.create_from_image(img)
@@ -1306,6 +1313,10 @@ func _roots_clear() -> void:
 	var cable_blind := 0
 	var cable_in_things := []
 	var straight_in_things := 0
+	var in_front := []
+	var panel_front := 0
+	var crossed := []
+	var flat_crossed := 0
 	for sd in range(1, 9):
 		var ds := DispatchSet.new()
 		var node := ds.build(labels, sd, tex)
@@ -1320,8 +1331,8 @@ func _roots_clear() -> void:
 			paper_blind += 1
 		bn.free()
 		# the patch panel's cables: each ends in a thing it plugs into or out of sight past the desk's edge, never loose on the
-		# desk; laid over the roots lying there, none goes through one (the control: laid knowing nothing of the roots, they do)
-		ds.lay_cables(rr.lying)
+		# desk; draped over the roots lying there, none goes through one (the control: laid knowing nothing of the roots, they do)
+		ds.lay_cables(rr.lying, rr.hanging)
 		for path in ds.cable_paths:
 			var end: Vector3 = (path as PackedVector3Array)[(path as PackedVector3Array).size() - 1]
 			var plugged := end.y < DispatchSet.DESK_Y - 0.1
@@ -1330,6 +1341,19 @@ func _roots_clear() -> void:
 					plugged = plugged or ((part as Dictionary)["box"] as AABB).grow(0.002).has_point(end)
 			if not plugged:
 				loose_ends.append(sd)
+			var side := _plugged_side(ds, end)
+			if not side.is_empty() and _faces_front(ds, side["k"], side["out"], side["mid"]):
+				in_front.append("%s, desk %d" % [side["k"], sd])
+		# one cable lies on another where they cross, never through it (the control: pressed flat onto the desk, they meet)
+		if _cables_cross(ds.cable_paths, false):
+			crossed.append(sd)
+		flat_crossed += int(_cables_cross(ds.cable_paths, true))
+		# (the control: of each thing's part on the desk, the side facing the panel most)
+		var panel_at: Vector3 = ds._desk_pos(ds.at_of("patch"))
+		for k in DispatchSet.CABLED:
+			var faced := _panel_side(ds, String(k), Vector2(panel_at.x, panel_at.z))
+			if not faced.is_empty() and _faces_front(ds, String(k), faced["out"], faced["mid"]):
+				panel_front += 1
 		# laid round what stands on the desk: no cable lying on it goes through a thing standing there, short of its own port
 		# (the control: laid straight from socket to port, as they once were, they do)
 		if _cables_in_things(ds, ds.cable_paths, 0.03):
@@ -1394,6 +1418,12 @@ func _roots_clear() -> void:
 	_ok(loose_ends.is_empty() and cable_through.is_empty() and cable_blind > 0,
 		"the patch panel's cables end in a part of what they plug into or past the desk's edge, never loose (%s), and go over the roots on the desk, through none (the control: laid knowing nothing of them, through on %d of 8; laid over them, on %s)"
 		% [str(loose_ends), cable_blind, str(cable_through)])
+	_ok(crossed.is_empty() and flat_crossed > 0,
+		"one cable lies over another where they cross, through none on the desk (%s) - the control: pressed flat onto the desk, they meet on %d of 8"
+		% [str(crossed), flat_crossed])
+	_ok(in_front.is_empty() and panel_front > 0,
+		"each plugs in round the back of what it plugs into, never its front nor a side the chair sees (%s) - the control: the side facing the panel is one of them %d times"
+		% [str(in_front), panel_front])
 	_ok(cable_in_things.is_empty() and straight_in_things > 0,
 		"they are laid round what stands on the desk, through none of it (%s) - the control: laid straight from socket to port, through it on %d of 8"
 		% [str(cable_in_things), straight_in_things])
@@ -1438,6 +1468,117 @@ static func _cables_in_things(ds: DispatchSet, paths: Array, spare: float) -> bo
 					if Geometry2D.is_point_in_polygon(Vector2(p.x, p.z), pd["outline"]):
 						return true
 	return false
+
+
+## Whether any two of [param paths] (cables) come closer on the desk than they are thick - one through the other; with [param flat],
+## each pressed flat onto the desk first.
+static func _cables_cross(paths: Array, flat: bool) -> bool:
+	var chunks: Array = []                # per cable: [[box, from, to]] of ten links each
+	var ways: Array = []
+	for path in paths:
+		var pp := (path as PackedVector3Array).duplicate()
+		if flat:
+			for i in pp.size():
+				pp[i].y = DispatchSet.DESK_Y + DispatchSet.CABLE_R
+		ways.append(pp)
+		var mine: Array = []
+		var i := 0
+		while i < pp.size() - 1:
+			var j := mini(i + 10, pp.size() - 1)
+			var box := AABB(pp[i], Vector3.ZERO)
+			for k in range(i, j + 1):
+				box = box.expand(pp[k])
+			if box.end.y >= DispatchSet.DESK_Y - 0.01:
+				mine.append([box.grow(DispatchSet.CABLE_R), i, j])
+			i = j
+		chunks.append(mine)
+	var least := 2.0 * DispatchSet.CABLE_R - 0.0008
+	for a in ways.size():
+		for b in range(a + 1, ways.size()):
+			for ca in chunks[a]:
+				for cb in chunks[b]:
+					if not (ca[0] as AABB).intersects(cb[0]):
+						continue
+					var pa: PackedVector3Array = ways[a]
+					var pb: PackedVector3Array = ways[b]
+					for u in range(int(ca[1]), int(ca[2])):
+						for v in range(int(cb[1]), int(cb[2])):
+							var st := Rope._closest(pa[u], pa[u + 1], pb[v], pb[v + 1])
+							var p := pa[u].lerp(pa[u + 1], st.x)
+							if p.y >= DispatchSet.DESK_Y - 0.005 and p.distance_to(pb[v].lerp(pb[v + 1], st.y)) < least:
+								return true
+	return false
+
+
+## The side of a part a cable ending at [param end] is plugged into on desk [param ds]: `{k, out, mid}` - the thing, the way the
+## side of its part nearest the end faces (x, z), and the middle of that part's outline; {} where it ends in none.
+static func _plugged_side(ds: DispatchSet, end: Vector3) -> Dictionary:
+	for k in DispatchSet.CABLED:
+		for part in ds._parts.get(k, []):
+			var pd: Dictionary = part
+			if not (pd["box"] as AABB).grow(0.002).has_point(end) or (pd["outline"] as PackedVector2Array).size() < 3:
+				continue
+			var hull: PackedVector2Array = pd["outline"]
+			var at := Vector2(end.x, end.z)
+			var mid := Vector2.ZERO
+			for q in hull:
+				mid += q
+			mid /= float(hull.size())
+			var best := INF
+			var out := Vector2.ZERO
+			for i in hull.size():
+				var a: Vector2 = hull[i]
+				var b: Vector2 = hull[(i + 1) % hull.size()]
+				if a.distance_to(b) < 0.001:
+					continue
+				var d := at.distance_to(Geometry2D.get_closest_point_to_segment(at, a, b))
+				if d < best:
+					best = d
+					out = Vector2(b.y - a.y, a.x - b.x).normalized()
+					if out.dot((a + b) * 0.5 - mid) < 0.0:
+						out = -out
+			return {"k": String(k), "out": out, "mid": mid}
+	return {}
+
+
+## Of thing [param k]'s lowest part on desk [param ds], the side facing [param panel] most: `{out, mid}` ({} for none).
+static func _panel_side(ds: DispatchSet, k: String, panel: Vector2) -> Dictionary:
+	var parts: Array = (ds._parts.get(k, []) as Array).filter(func(p: Dictionary) -> bool:
+		return float(p["lo"]) >= DispatchSet.DESK_Y - 0.02 and (p["outline"] as PackedVector2Array).size() >= 3)
+	if parts.is_empty():
+		return {}
+	parts.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["box"] as AABB).get_volume() > (b["box"] as AABB).get_volume())
+	var hull: PackedVector2Array = parts[0]["outline"]
+	var mid := Vector2.ZERO
+	for q in hull:
+		mid += q
+	mid /= float(hull.size())
+	var toward := (panel - mid).normalized()
+	var best := -INF
+	var out := Vector2.ZERO
+	for i in hull.size():
+		var a: Vector2 = hull[i]
+		var b: Vector2 = hull[(i + 1) % hull.size()]
+		if a.distance_to(b) < 0.001:
+			continue
+		var n := Vector2(b.y - a.y, a.x - b.x).normalized()
+		if n.dot((a + b) * 0.5 - mid) < 0.0:
+			n = -n
+		if n.dot(toward) > best:
+			best = n.dot(toward)
+			out = n
+	return {"out": out, "mid": mid}
+
+
+## Whether a side facing [param out] (x, z) of thing [param k] on desk [param ds], whose part's middle is [param mid], is its front
+## or faces the chair ([constant DispatchSet.PORT_FRONT]).
+static func _faces_front(ds: DispatchSet, k: String, out: Vector2, mid: Vector2) -> bool:
+	var rig: PropRig = ds.rigs.get(k)
+	if rig == null:
+		return false
+	var z := rig.node.transform.basis.z
+	var seen := (Vector2(DispatchSet.EYE.x, DispatchSet.EYE.z) - mid).normalized()
+	return out.dot(Vector2(z.x, z.z).normalized()) > DispatchSet.PORT_FRONT + 0.01 or out.dot(seen) > DispatchSet.PORT_FRONT + 0.01
 
 
 ## Whether any of [param paths] (cables) passes inside a root of [param lying] on the desk's top - within its radius of its middle.

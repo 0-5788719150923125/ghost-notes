@@ -37,6 +37,15 @@ Built:
   by Flicker. Its patch is drawn by the same shader - what the screen shows there made `LANDS` times brighter, as squarely as it faces
   the light, its edge the shaft's - because Godot's light grid drops a spot cone centimeters wide and a light's projector needs a
   shadow map: no glint, no bounce, no shadow behind what it lands on.
+- **What is heard** (`SOUND_FIELDS`, `Soundscape`): each sound element's properties reach its part of the sound. A sound's own choice
+  of what it is (the insects' crickets or cicadas, the sea's shore or dock) is the field `sort`, labeled Kind, handed to the sound as
+  its `kind` (`Surroundings._heard_key`): an element's own keys (`OWN_KEYS`) are no property, and a change that would unmake an
+  element is refused. The insects have How many (one cricket to a field of `CRICKETS_MOST`, a few cicadas to a chorus; many sing as
+  a field does, not louder for each one more), Pitch (an octave and a half round their own) and Pace (a third to three times as
+  quick); a table's sound that leaves them out draws its insects as it always did.
+- **Test** (`SoundTest` in `src/audio/`): a sound element's entry has a Test, as a voice's has - it alone, at the level it has under
+  the voice, made again whenever a property changes so the change is heard at once, until pressed again. Any card that hands a sound
+  can use it (a key and a maker of a `SoundBed`).
 - **Dust** is posed on the GPU (`Effects.drifts`, `MAX_ADRIFT`): 160 at Amount 1 (on the Dispatch desk, whose air reaches round the
   whole hollow, 2.2 times as many), each 2.2 mm, so a view holds more than a few and they read on screen.
 - **The desk** (Letter, Desk, a table show at the desk): its mood is the light element's preset; brightness its exposure; the lamp
@@ -58,7 +67,9 @@ For the user to judge:
 - The shafts on the Dispatch desk and a Letter desk: how thin, how many inside each beam, the patches, the streaks, how bright
   looking toward the light (`LightShafts.WIDTH`, `INNER`, `SHARE`, `GLOW`, `LANDS`; the shader's `streaks`, `clouds`, `forward`).
 - The list: rows and the Properties toggle, Roll, the drawn pictures; the Dex's left-side list.
-- Which properties each kind should show, and their roll bounds (a first, small set).
+- Which properties each kind should show, and their roll bounds (a first, small set); the insects' How many, Pitch and Pace by ear,
+  with Test; whether the other sounds want more dials (distance for the insects, gusts for the wind), and a Test for a prop's own
+  sound (the receiver's hiss).
 
 ## Open
 

@@ -154,12 +154,18 @@ const SOUND_FIELDS := {
 	"fire": {"size": {"label": "Size", "blurb": "How big the fire is.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "roll": [0.3, 0.6]},
 		"distance": {"label": "Distance", "blurb": "How far off it burns.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "roll": [0.3, 0.7]}},
 	"insects": {"strength": {"label": "Strength", "blurb": "How loud they are.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "roll": [0.25, 0.55]},
-		"kind": {"label": "Kind", "blurb": "Which insects sing.", "type": "enum", "roll": ["crickets", "cicadas"]}},
+		"sort": {"label": "Kind", "blurb": "Which insects sing.", "type": "enum", "roll": ["crickets", "cicadas"]},
+		"amount": {"label": "How many", "blurb": "A lone cricket to a whole field of them; a few cicadas to a chorus.", "type": "float",
+			"min": 0.0, "max": 1.0, "step": 0.05, "default": 0.25, "roll": [0.1, 0.5]},
+		"pitch": {"label": "Pitch", "blurb": "How high they sing.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "default": 0.5,
+			"roll": [0.3, 0.7]},
+		"pace": {"label": "Pace", "blurb": "How quickly each chirps, or the chorus swells and fades.", "type": "float", "min": 0.0, "max": 1.0,
+			"step": 0.05, "default": 0.5, "roll": [0.3, 0.7]}},
 	"stream": {"size": {"label": "Size", "blurb": "How much water runs.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "roll": [0.25, 0.5]},
 		"distance": {"label": "Distance", "blurb": "How far off it runs.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "roll": [0.4, 0.8]}},
 	"water": {"size": {"label": "Size", "blurb": "How big the waves are.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "roll": [0.25, 0.5]},
 		"distance": {"label": "Distance", "blurb": "How far off the water is.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "roll": [0.4, 0.8]},
-		"kind": {"label": "Kind", "blurb": "What the water is.", "type": "enum", "roll": ["shore", "dock"]}},
+		"sort": {"label": "Kind", "blurb": "What the water is.", "type": "enum", "roll": ["shore", "dock"]}},
 }
 ## The block's keys and what each is when it says nothing.
 const KNOBS := {"elements": [], "lights": {}, "heard": {}}
@@ -255,12 +261,12 @@ static func fields_of(kind: String, color := "") -> Dictionary:
 		var part := String(row["part"])
 		var out: Dictionary = (SOUND_FIELDS.get(part, {}) as Dictionary).duplicate(true)
 		var spec: Dictionary = row["spec"]
-		var tables := {"on": Soundscape.RAINS, "through": Soundscape.THROUGH, "kind": Soundscape.INSECTS if part == "insects" else Soundscape.WATERS}
+		var tables := {"on": Soundscape.RAINS, "through": Soundscape.THROUGH, "sort": Soundscape.INSECTS if part == "insects" else Soundscape.WATERS}
 		for k in out:
 			var f: Dictionary = out[k]
 			if String(f["type"]) == "enum":
 				f["options"] = (tables[k] as Dictionary).keys()
-			f["default"] = spec.get(k, f.get("min", 0.0) if String(f["type"]) == "float" else (f["options"] as Array)[0])
+			f["default"] = spec.get(_heard_key(k), f.get("default", f.get("min", 0.0) if String(f["type"]) == "float" else (f["options"] as Array)[0]))
 		return out
 	return {}
 
@@ -277,6 +283,8 @@ static func in_use(spec: Dictionary, group := "") -> Array:
 	for e in (spec.get("elements", []) as Array):
 		var el: Dictionary = e
 		if el.get("off") == true:
+			continue
+		if not KINDS.has(String(el.get("kind", ""))):
 			continue
 		if group.is_empty() or String((KINDS[String(el["kind"])] as Dictionary)["group"]) == group:
 			out.append(el)
@@ -381,9 +389,16 @@ static func sound_of(spec: Dictionary) -> Dictionary:
 	for e in in_use(spec, "sound"):
 		var row: Dictionary = KINDS[String((e as Dictionary)["kind"])]
 		var part: Dictionary = (row["spec"] as Dictionary).duplicate(true)
-		part.merge(values_of(e), true)
+		var v := values_of(e)
+		for k in v:
+			part[_heard_key(String(k))] = v[k]
 		raw[String(row["part"])] = part
 	return Soundscape.sanitize(raw) if not raw.is_empty() else {}
+
+
+## A sound's field [param k] as [Soundscape] names it: its `sort` is the soundscape's `kind` (an element's own `kind` is what it is).
+static func _heard_key(k: String) -> String:
+	return "kind" if k == "sort" else k
 
 
 ## Whether a bank of haze is in use in [param spec].
