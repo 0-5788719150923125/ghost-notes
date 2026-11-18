@@ -38,6 +38,7 @@
 
 set -uo pipefail
 cd "$(dirname "$0")/.."          # the project root
+renice -n 19 -p $$ >/dev/null 2>&1 || true   # yields the processor to the app beside it (scripts/check.sh)
 TIMEOUT="${1:-600}"
 LOG=$(mktemp)
 trap 'rm -f "$LOG"' EXIT

@@ -19,16 +19,21 @@ class_name DispatchFormat
 ##
 ## What is on the desk is on the Props card ([DispatchProps]): the parts any make can play (the mug, the cup of pencils) are
 ## chosen there, kept in the block's `things` (`{role: choice}`, [PropMakes]) and handed to the desk as the seed is; so are the desk
-## itself (`desk`, [DispatchDesk]), the roots (`roots`, [DispatchRoots]) and the phones' colors (`phones`, [constant
-## DispatchSet.PHONE_FIELDS]), each `{seed, <its fields set>}` - none, their own.
+## itself (`desk`, [DispatchDesk]), the roots (`roots`, [DispatchRoots]), the phones' colors (`phones`, [constant
+## DispatchSet.PHONE_FIELDS]), the terminal's and the radar's glass colors (`terminal_screen`, `radar_screen`, [constant
+## DispatchSet.TERMINAL_FIELDS], [constant DispatchSet.RADAR_FIELDS]) and the receiver's glows (`receiver_glow`, [constant
+## DispatchSet.RECEIVER_FIELDS]), each `{seed, <its fields set>}` - none, their own.
 
 ## Its format's key in [constant Medium.REGISTRY].
 const KEY := "dispatch"
 ## Its keys in the Medium's block: the desk's seed (0: the note's own), the makes chosen for its parts (`{role: choice}`, none for
-## the desk's own), and the desk, the roots and the phones as they are kept (none: their own).
-const KNOBS := {"seed": 0, "things": {}, "desk": {}, "roots": {}, "phones": {}}
+## the desk's own), and the desk, the roots, the phones, the terminal's and the radar's glass and the receiver's glows as they are
+## kept (none: their own).
+const KNOBS := {"seed": 0, "things": {}, "desk": {}, "roots": {}, "phones": {}, "terminal_screen": {}, "radar_screen": {},
+	"receiver_glow": {}}
 ## The parts kept as properties and a number, and what each can be told.
-const PARTS := {"desk": DispatchDesk.FIELDS, "roots": DispatchRoots.FIELDS, "phones": DispatchSet.PHONE_FIELDS}
+const PARTS := {"desk": DispatchDesk.FIELDS, "roots": DispatchRoots.FIELDS, "phones": DispatchSet.PHONE_FIELDS,
+	"terminal_screen": DispatchSet.TERMINAL_FIELDS, "radar_screen": DispatchSet.RADAR_FIELDS, "receiver_glow": DispatchSet.RECEIVER_FIELDS}
 
 signal noted(text: String)
 
@@ -142,9 +147,10 @@ func document() -> Dictionary:
 		var path := Illustrations.path_for(key)
 		if not path.is_empty():
 			pictures[key] = ProjectSettings.globalize_path(path)
-	return {"seed": desk_seed(), "things": things().duplicate(true), "desk": part("desk"), "roots": part("roots"), "phones": part("phones"),
-		"pictures": pictures,
-		"clips": clips, "head": _head()}
+	var out := {"seed": desk_seed(), "things": things().duplicate(true), "pictures": pictures, "clips": clips, "head": _head()}
+	for p in PARTS:
+		out[p] = part(p)
+	return out
 
 
 ## The makes chosen for the desk's parts: `{role: choice}` ([PropMakes]), a part not in it the desk's own.
@@ -168,7 +174,7 @@ func choose(role: String, choice: Dictionary) -> String:
 	return ""
 
 
-## Part [param name] (`desk`, `roots` or `phones`) as kept: `{seed, <its fields set>}`, {} its own.
+## Part [param name] (a key of [constant PARTS]) as kept: `{seed, <its fields set>}`, {} its own.
 func part(name: String) -> Dictionary:
 	return (_knobs.get(name, {}) as Dictionary).duplicate(true)
 
@@ -305,6 +311,5 @@ func _redress_live() -> void:
 	if doc.get("dispatch") is Dictionary:
 		(doc["dispatch"] as Dictionary)["seed"] = desk_seed()
 		(doc["dispatch"] as Dictionary)["things"] = things().duplicate(true)
-		(doc["dispatch"] as Dictionary)["desk"] = part("desk")
-		(doc["dispatch"] as Dictionary)["roots"] = part("roots")
-		(doc["dispatch"] as Dictionary)["phones"] = part("phones")
+		for p in PARTS:
+			(doc["dispatch"] as Dictionary)[p] = part(p)

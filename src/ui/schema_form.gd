@@ -274,11 +274,13 @@ func _control(key: String, field: Dictionary, value: Variant, has: bool, context
 			pick.color = Color.from_string(String(value if has and value != null else field.get("default", "#ffffff")), Color.WHITE)
 			pick.edit_alpha = false
 			pick.disabled = read_only
-			# one edit as the picker closes, as a slider's is as its drag ends: never one for every color dragged through
+			# one edit as the picker closes, as a slider's is as its drag ends: never one for every color dragged through. Handed on
+			# deferred: the button asks for its tree after `popup_closed`, and an edit that rebuilds the form (a Props card's row) would
+			# have taken it out of the tree by then - an engine crash
 			var was := pick.color
 			pick.popup_closed.connect(func() -> void:
 				if not pick.color.is_equal_approx(was):
-					_emit(key, "#" + pick.color.to_html(false)))
+					_emit.call_deferred(key, "#" + pick.color.to_html(false)))
 			return pick
 		"ref":
 			return _choice(key, [""] + (context.get(String(field.get("of", "")), []) as Array), String(value) if value != null else "")

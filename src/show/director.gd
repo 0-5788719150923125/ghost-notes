@@ -1030,7 +1030,7 @@ func _locked_scene_arg() -> int:
 			if v.is_valid_int():
 				return clampi(int(v), 0, SceneRoster.SCENES.size() - 1)
 			for s in SceneRoster.SCENES.size():
-				if String(SceneRoster.SCENES[s].script.resource_path).contains(v):
+				if String(SceneRoster.SCENES[s].path).contains(v):
 					return s
 	return -1
 
@@ -1722,9 +1722,9 @@ func forecast(count: int) -> Array:
 		var swaps := maxi(0, k - 1)
 		index = _pick(session, 0, swaps, index, kind_last, null)
 		var e: Dictionary = SceneRoster.SCENES[index]
-		kind_last[String(e.script.resource_path)] = swaps
+		kind_last[String(e.path)] = swaps
 		out.append({
-			"scene": String(e.script.resource_path).get_file().get_basename(),
+			"scene": SceneRoster.name_at(index),
 			"behavior": String(e.behavior),
 			"seed": session ^ _scene_key(index) ^ (swaps * 0x85EBCA77)})
 	return out
@@ -1734,8 +1734,7 @@ func forecast(count: int) -> Array:
 # in SceneRoster.SCENES, so scenes can be added or reordered without changing how the existing ones
 # are chosen or look.
 func _scene_key(i: int) -> int:
-	var e: Dictionary = SceneRoster.SCENES[i]
-	return hash(String(e.script.resource_path).get_file().get_basename() + "|" + String(e.behavior))
+	return hash(SceneRoster.name_at(i) + "|" + String(SceneRoster.SCENES[i].behavior))
 
 
 ## How many cuts back the novelty term can see. Past this a kind is simply due, no more than any other
@@ -1760,8 +1759,8 @@ func _novelty_weight(i: int) -> float:
 func _novelty(i: int, index: int, kind_last: Dictionary, swaps: int) -> float:
 	if i == index:
 		return 0.0
-	var kind := String(SceneRoster.SCENES[i].script.resource_path)
-	if index >= 0 and kind == String(SceneRoster.SCENES[index].script.resource_path):
+	var kind := String(SceneRoster.SCENES[i].path)
+	if index >= 0 and kind == String(SceneRoster.SCENES[index].path):
 		return 0.05
 	# An unseen kind is maximally due, not infinitely due: the -1000 sentinel is harmless as the clamp
 	# decides how far novelty reaches.
@@ -1774,14 +1773,14 @@ func _novelty(i: int, index: int, kind_last: Dictionary, swaps: int) -> float:
 func _next_entry() -> Dictionary:
 	if _storyboard_seq.is_empty():
 		_index = _pick_index()
-		_kind_last[String(SceneRoster.SCENES[_index].script.resource_path)] = _swaps
+		_kind_last[String(SceneRoster.SCENES[_index].path)] = _swaps
 		var e: Dictionary = SceneRoster.SCENES[_index]
 		# session identity (from the song fingerprint) ^ scene identity (not its array slot) ^ history
 		# (swaps). Deterministic: the same song yields the same seed every run, so a scene's structure
 		# reproduces exactly. The live Spectrum.seed_bias() is not folded in (not frame-reproducible).
 		var seed := _session_seed ^ _scene_key(_index) ^ (_swaps * 0x85EBCA77) \
 			^ (_pick_salt * 0x165667B1)
-		return {"script": e.script, "behavior": e.behavior, "seed": seed,
+		return {"script": SceneRoster.script_at(_index), "behavior": e.behavior, "seed": seed,
 			"shot": "", "exit_spec": {}, "transition": "", "sensitivity": sensitivity}   # "" -> auto STYLE_BAG
 	# Manual: walk the sequence (wrap when looping; past the end of a non-looping board, cycle the tail
 	# entries if there are any, else hold on the last entry).
@@ -1805,7 +1804,7 @@ func _next_entry() -> Dictionary:
 	_step += 1                                       # the tail free-runs from wherever it began
 	var nm := String(item.get("scene", ""))
 	var path := "res://src/scenes/%s.gd" % nm
-	var script: Resource = load(path) if ResourceLoader.exists(path) else SceneRoster.SCENES[0].script
+	var script: Resource = load(path) if ResourceLoader.exists(path) else SceneRoster.script_at(0)
 	if not ResourceLoader.exists(path):
 		push_warning("ghost: storyboard scene '%s' not found, substituting" % nm)
 	# The seed is keyed to the entry's position, never to how many times it was visited: the same

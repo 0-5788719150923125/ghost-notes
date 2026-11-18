@@ -129,9 +129,9 @@ func _cut() -> void:
 			_live = handed
 		return
 	var entry: Dictionary = SceneRoster.SCENES[randi() % SceneRoster.SCENES.size()]
-	var sc: GhostScene = (entry["script"] as Resource).new()
+	var sc: GhostScene = load(String(entry["path"])).new()
 	sc.init_with_seed(randi(), String(entry["behavior"]))
-	sc.scene_name = String((entry["script"] as Resource).resource_path).get_file().get_basename()
+	sc.scene_name = String(entry["path"]).get_file().get_basename()
 	var prev: GhostScene = _live
 	_medium.host_for(sc).add_child(sc)
 	_live = sc
@@ -147,8 +147,8 @@ func _catalog_run() -> void:
 	_medium.mount(stage)
 	for i in SceneRoster.SCENES.size():
 		var entry: Dictionary = SceneRoster.SCENES[i]
-		var script: Resource = entry["script"]
-		var name := String(script.resource_path).get_file().get_basename()
+		var script: Resource = SceneRoster.script_at(i)
+		var name := SceneRoster.name_at(i)
 		if not _only.is_empty() and not name.contains(_only):
 			continue
 		var sc: GhostScene = script.new()

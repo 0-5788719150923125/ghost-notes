@@ -73,7 +73,7 @@ func _run() -> void:
 	m.shader = load("res://shaders/dispatch_screen.gdshader")
 	m.set_shader_parameter("has_face", true)
 	m.set_shader_parameter("face", _screens.terminal.get_texture())
-	m.set_shader_parameter("tint", DispatchScreens.PHOSPHOR.lerp(Color.WHITE, 0.2))
+	m.set_shader_parameter("tint", Color.WHITE)
 	for k in glass:
 		m.set_shader_parameter(String(k), glass[k])
 	_glass.material_override = m

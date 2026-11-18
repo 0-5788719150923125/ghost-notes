@@ -2,21 +2,33 @@ extends RefCounted
 class_name Rope
 
 ## Rope - a cord settled where it would lie: a chain of points, each held to its neighbours' spacing and bent no sharper than a cord
-## of its stiffness bends, falling under gravity onto what is under it - solids (a box, or an outline standing between two heights),
+## of its stiffness can - over a few lengths at once, so no stretch of it curves tighter than its least radius and it never kinks -
+## falling under gravity onto what is under it - solids (a box, or an outline standing between two heights),
 ## capsules (a root, a pipe) and a floor - its pinned points held where they are. Position based (Verlet steps, the constraints worked over each step), run to rest once from where it
 ## is laid; pure and deterministic, so a scene settles it on a worker and gets the same cord every time.
 ##
-## Where it touches something it sticks a little (friction), so it rests where it lands rather than sliding off every slope. A point
+## A point that goes into a solid is put back where it went in (never out through the far side of a thin thing), so a cord resting
+## on something holds its place rather than being drawn along by its own stiffness; off a root or another cord, it is pushed out
+## round it and may slide. A point
 ## inside a solid leaves it by its nearest side that is free - never down into what the solid stands on. A link
 ## is kept out of a capsule as well as its points, so a cord never slips through a root thinner than its links; laid where a capsule
 ## lies across its way, start it over the capsule ([method lifted_over]) so it falls onto it rather than being pushed under.
 
-## A settle's steps (each 1/60 s), the passes over its lengths and bends each step (what it touches pushed out of after each), the
-## passes that only push it out at the end, how much of its motion each step keeps, and how much of it a touch takes away along the
+## A settle's steps (each 1/60 s), the passes over its lengths and bends each step (what it touches pushed out of halfway and at the
+## step's end), the passes that only push it out at the end, how much of its motion each step keeps, and how much of it a touch takes away along the
 ## surface.
-const STEPS := 80
+const STEPS := 60
 const ITERATIONS := 4
-const SETTLE_PASSES := 3
+const SETTLE_PASSES := 8
+## The least radius the stiffest cord bends round (m), and over how many links at once its bending is held to it.
+const BEND_MOST := 0.035
+const SPANS := [2, 4, 6]
+## How much of the way a chord bent too short is pushed back each pass: soft, under the lengths.
+const BEND_SHARE := 0.3
+## How little of its bending reaches a point resting on something (1: none), and how much of its slide along a face it meets a point
+## keeps (the rest its friction takes).
+const RESTING_BEND := 0.9
+const SLIDE := 0.5
 ## The cell of the grid what it lies on is sorted into (m), so a point asks only what is near it.
 const CELL := 0.06
 const DAMPING := 0.97
@@ -29,9 +41,10 @@ const DT := 1.0 / 60.0
 ## are (its ends, say), [param radius] how thick it is (m), [param stiff] 0 limp to 1 stiff (how sharply it may bend between three
 ## points), and what it lies on: [param solids] (each an AABB, or `{outline: PackedVector2Array (x, z), lo, hi}` - an outline standing
 ## from one height to another), [param capsules] (each `[from, to, radius]`) and [param floor] (the height it never goes under). [param slack]: how much longer it is than the way it was laid
-## (0.04: four percent), so it lies in easy curves rather than pulled taut. Returns its points at rest.
+## (0.04: four percent), so it lies in easy curves rather than pulled taut; [param margin], how far further it keeps from a solid
+## (m: a curve drawn through its points may cut a hair inside). Returns its points at rest.
 static func settle(path: PackedVector3Array, pinned: Array, radius: float, stiff: float, solids: Array, capsules: Array,
-		floor := -INF, slack := 0.0) -> PackedVector3Array:
+		floor := -INF, slack := 0.0, margin := 0.0) -> PackedVector3Array:
 	var n := path.size()
 	if n < 3:
 		return path
@@ -52,17 +65,31 @@ static func settle(path: PackedVector3Array, pinned: Array, radius: float, stiff
 	reach = reach.grow(0.25)
 	var near_solids: Array = []
 	for one in solids:
-		var sd := _solid(one, radius)
+		var sd := _solid(one, radius + margin)
 		if not sd.is_empty() and (sd["box"] as AABB).intersects(reach):
 			near_solids.append(sd)
 	var near_caps: Array = capsules.filter(func(c: Array) -> bool:
 		return AABB((c[0] as Vector3), Vector3.ZERO).expand(c[1] as Vector3).grow(float(c[2]) + radius).intersects(reach))
 	var grid := _grid(near_solids, near_caps, radius)
 	# how far apart a point and the one after next may come: a cord this stiff bends no sharper
-	var bend := lerpf(0.9, 1.94, clampf(stiff, 0.0, 1.0))
+	# the least radius it bends round: a limp cord's as tight as it is thick, the stiffest's BEND_MOST
+	var bend_radius := lerpf(radius * 2.0, BEND_MOST, clampf(stiff, 0.0, 1.0))
+	var least_chords: Array = []          # per span, the shortest chord from each point an arc of that radius allows
+	for span in SPANS:
+		var chords := PackedFloat32Array()
+		chords.resize(maxi(n - int(span), 0))
+		for i in n - int(span):
+			var arc := 0.0
+			for j in range(i, i + int(span)):
+				arc += rest[j]
+			chords[i] = 2.0 * bend_radius * sin(minf(arc / (2.0 * bend_radius), PI * 0.5))
+		least_chords.append(chords)
 	var touched := PackedByteArray()
 	touched.resize(n)
+	var resting := PackedByteArray()
+	resting.resize(n)
 	for step in STEPS:
+		var before := p.duplicate()
 		for i in n:
 			if held.has(i):
 				continue
@@ -73,14 +100,30 @@ static func settle(path: PackedVector3Array, pinned: Array, radius: float, stiff
 			p[i] += v + GRAVITY * DT * DT
 		touched.fill(0)
 		for k in ITERATIONS:
-			for i in n - 1:
-				_hold_apart(p, i, i + 1, rest[i], held, 1.0)
-			for i in n - 2:
-				var d := p[i].distance_to(p[i + 2])
-				var least := bend * 0.5 * (rest[i] + rest[i + 1])
-				if d < least:
-					_hold_apart(p, i, i + 2, least, held, 0.5)
-			_push_out(p, held, touched, grid, radius, floor, k == ITERATIONS - 1)
+			# no stretch of it bent tighter than its least radius: the chord across a few links never shorter than an arc that round
+			for si in SPANS.size():
+				var span: int = SPANS[si]
+				var chords: PackedFloat32Array = least_chords[si]
+				for i in n - span:
+					# (a stretch from a point held - a plug - bends as tight as it must: the plug takes the strain)
+					if held.has(i) or held.has(i + span):
+						continue
+					var d := p[i + span] - p[i]
+					var now := d.length()
+					if now >= chords[i] or now < 1e-6:
+						continue
+					# pushed apart along the chord - a point resting on something hardly at all: what lies on the desk keeps the
+					# curves it was laid in, what hangs or drapes is shaped by its stiffness, and nothing is pulled taut by it
+					var fix := d * ((chords[i] - now) / now) * BEND_SHARE * 0.5
+					p[i] -= fix * (1.0 - RESTING_BEND if resting[i] != 0 else 1.0)
+					p[i + span] += fix * (1.0 - RESTING_BEND if resting[i + span] != 0 else 1.0)
+			# its lengths last, twice, so bending reshapes it and never stretches it
+			for _again in 2:
+				for i in n - 1:
+					_hold_apart(p, i, i + 1, rest[i], held, 1.0)
+			_push_out(p, held, touched, grid, radius, floor, k == ITERATIONS - 1, before)
+		for i in n:
+			resting[i] = touched[i]
 	# what it rests on pushed out of a last few times, nothing pulling it back in
 	for _k in SETTLE_PASSES:
 		_push_out(p, held, touched, grid, radius, floor, true)
@@ -154,17 +197,35 @@ static func _cell(q: Vector3) -> Vector3i:
 ## Every point of [param p] not [param held] put out of what it lies on near it ([param grid], [method _grid]: each grown already),
 ## each moved marked [param touched]; with [param links], each link out of each capsule near it too.
 static func _push_out(p: PackedVector3Array, held: Dictionary, touched: PackedByteArray, grid: Dictionary, radius: float,
-		floor: float, links: bool) -> void:
+		floor: float, links: bool, before := PackedVector3Array()) -> void:
 	for i in p.size():
 		if held.has(i):
 			continue
 		var q := p[i]
 		var here: Dictionary = grid.get(_cell(q), {})
-		var near: Array = here.get("solids", [])
-		for sd in near:
-			q = _out_of(q, sd, near)
+		# out of the capsules first, then the solids, which always win: a cord pressed between a root or another cord and a thing
+		# stays outside the thing
 		for c in here.get("caps", []):
 			q = _out_of_capsule(q, c[0], c[1], float(c[2]))
+		var near: Array = (grid.get(_cell(q), {}) as Dictionary).get("solids", [])
+		for sd in near:
+			if not _inside(q, sd):
+				continue
+			# put back where it went in, on its way this step: never out through the far side of a thing, and a point at rest
+			# comes back to where it lay (it holds its place) - else, where it began inside, by the nearest side that is free
+			if not before.is_empty() and not _inside(before[i], sd):
+				var entry := _entered(before[i], q, sd)
+				# with some of its slide along the face it met kept, so its slack spreads rather than gathering into a loop
+				var face := _out_of(q, sd, near) - q
+				var slid := q - entry
+				if face.length() > 1e-7:
+					var nrm := face.normalized()
+					var along := entry + (slid - nrm * slid.dot(nrm)) * SLIDE
+					q = along if not _inside(along, sd) else entry
+				else:
+					q = entry
+			else:
+				q = _out_of(q, sd, near)
 		q.y = maxf(q.y, floor + radius)
 		if not q.is_equal_approx(p[i]):
 			touched[i] = 1
@@ -275,6 +336,19 @@ static func _hold_apart(p: PackedVector3Array, i: int, j: int, length: float, he
 		p[j] -= fix * 0.5
 
 
+## Where the way from [param a] (outside solid [param sd]) to [param b] (inside it) went in: the last point of it still outside.
+static func _entered(a: Vector3, b: Vector3, sd: Dictionary) -> Vector3:
+	var out := a
+	var into := b
+	for _i in 14:
+		var m := out.lerp(into, 0.5)
+		if _inside(m, sd):
+			into = m
+		else:
+			out = m
+	return out
+
+
 ## Whether [param q] is inside solid [param sd] ([method _solid]).
 static func _inside(q: Vector3, sd: Dictionary) -> bool:
 	if not (sd["box"] as AABB).has_point(q):
@@ -306,6 +380,7 @@ static func _out_of(q: Vector3, sd: Dictionary, near: Array) -> Vector3:
 	else:
 		ways.append_array([[e.x - q.x, Vector3(e.x, q.y, q.z)], [q.x - o.x, Vector3(o.x, q.y, q.z)],
 			[e.z - q.z, Vector3(q.x, q.y, e.z)], [q.z - o.z, Vector3(q.x, q.y, o.z)]])
+	var down: Vector3 = ways[1][1]
 	ways.sort_custom(func(a: Array, c: Array) -> bool: return float(a[0]) < float(c[0]))
 	for w in ways:
 		var to: Vector3 = w[1]
@@ -316,6 +391,10 @@ static func _out_of(q: Vector3, sd: Dictionary, near: Array) -> Vector3:
 				break
 		if free:
 			return to
+	# none clear: the nearest that is not down through its foot, so it is never caught between a solid and what that stands on
+	for w in ways:
+		if not (w[1] as Vector3).is_equal_approx(down):
+			return w[1]
 	return ways[0][1]
 
 
@@ -331,6 +410,53 @@ static func _out_of_capsule(q: Vector3, a: Vector3, b: Vector3, r: float) -> Vec
 	if l < 1e-6:
 		return c + Vector3.UP * r
 	return c + d / l * r
+
+
+## [param path] with its corners cut, [param times] over (Chaikin's way, never past the path it was): each corner replaced by two
+## points [param cut] along its sides (at most; a quarter of a side where that is less), the first and last [param keep] points as
+## they are.
+static func rounded(path: PackedVector3Array, cut: float, times: int, keep: int) -> PackedVector3Array:
+	var out := path
+	for _t in times:
+		if out.size() < 3:
+			return out
+		var next := PackedVector3Array()
+		for i in mini(keep, out.size()):
+			next.append(out[i])
+		for i in range(keep, out.size() - keep):
+			var a := out[i - 1]
+			var b := out[i]
+			var c := out[i + 1]
+			next.append(b + (a - b).limit_length(minf(cut, a.distance_to(b) * 0.25)))
+			next.append(b + (c - b).limit_length(minf(cut, b.distance_to(c) * 0.25)))
+		for i in range(maxi(out.size() - keep, keep), out.size()):
+			next.append(out[i])
+		out = next
+	return out
+
+
+## [param path] laid in a gentle meander: each point moved sideways (across its way, along the ground) by up to [param amplitude],
+## a slow wave [param wavelength] long beginning at [param phase] (radians) and a second, slower one under it, none of it within
+## [param keep] of either end - so a cord laid along straight runs lies as one does, in curves.
+static func meandered(path: PackedVector3Array, amplitude: float, wavelength: float, phase: float, keep: float) -> PackedVector3Array:
+	var out := path.duplicate()
+	var n := path.size()
+	if n < 3:
+		return out
+	var along := PackedFloat32Array([0.0])
+	for i in range(1, n):
+		along.append(along[i - 1] + path[i].distance_to(path[i - 1]))
+	var whole := along[n - 1]
+	for i in range(1, n - 1):
+		var dir := path[i + 1] - path[i - 1]
+		var side := Vector3(-dir.z, 0.0, dir.x)
+		if side.length() < 1e-6:
+			continue
+		side = side.normalized()
+		var taper := clampf(minf(along[i], whole - along[i]) / maxf(keep, 1e-4) - 1.0, 0.0, 1.0)
+		var u := along[i] / wavelength * TAU
+		out[i] += side * amplitude * taper * (0.7 * sin(u + phase) + 0.3 * sin(u * 0.43 + phase * 1.7))
+	return out
 
 
 ## [param path] resampled to points [param spacing] apart along it (its ends kept).

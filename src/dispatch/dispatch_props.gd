@@ -13,7 +13,9 @@ class_name DispatchProps
 ## or Roll draws from a number of its own, kept in the block's `desk` and `roots` (Desk's own: back to how the desk's number has it).
 ## Each is pictured and turned in 3D as it is built - the roots grown round the note's own desk, which stands with them for scale -
 ## and the desk's Choose… opens the Dex on desks drawn from many numbers ([DeskDraws]). The phones' entry carries their colors the
-## same way ([constant ROLE_PARTS], [constant DispatchSet.PHONE_FIELDS]): each its own from a palette, or all the make's.
+## same way ([constant ROLE_PARTS], [constant DispatchSet.PHONE_FIELDS]): each its own from a palette, or all the make's; the
+## terminal's and the radar's carry the color their glass glows in, and the receiver's its oscilloscope's and its dial lamp's, any
+## color picked ([constant DispatchSet.TERMINAL_FIELDS], [constant DispatchSet.RADAR_FIELDS], [constant DispatchSet.RECEIVER_FIELDS]).
 ##
 ## A row's make is pictured from what it is written as ([PropPictures], [ThingLibrary.hash_of]), on a worker, as every prop is:
 ## its faces show their own materials and words, never the program the desk runs on them.
@@ -21,8 +23,9 @@ class_name DispatchProps
 const GROUPS := [
 	{"key": "desk", "label": "In the scene", "tip": "The desk, the roots and everything the desk works. Choose… another make to play a part - the desk works it the same way - or open its picture to turn it and refine it."},
 ]
-## A role whose entry also carries properties of its own, kept as a part ([constant DispatchFormat.PARTS]): the phones' colors.
-const ROLE_PARTS := {"phone": "phones"}
+## A role whose entry also carries properties of its own, kept as a part ([constant DispatchFormat.PARTS]): the phones' colors, the
+## terminal's and the radar's glass, the receiver's glows.
+const ROLE_PARTS := {"phone": "phones", "terminal": "terminal_screen", "radar": "radar_screen", "receiver": "receiver_glow"}
 const SHELVES := [{"key": "dispatch", "label": "Dispatch desk", "tip": "What the Dispatch desk works, each as the first desk draws it."}]
 const OFF_SHELF := [{"key": "taken_off", "label": "Taken off", "tip": "What was taken off this desk: Use sets it out again."}]
 

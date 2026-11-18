@@ -36,10 +36,10 @@ func _run() -> void:
 		% [entries.size(), SEEDS.size(), FRAMES])
 	var by_script := {}
 	for e in entries:
-		var path := String((e["script"] as Script).resource_path)
+		var path := String(e["path"])
 		by_script[path] = true
 		for sv in SEEDS:
-			await _run_one(path, e["script"], String(e.get("behavior", "drift")), int(sv))
+			await _run_one(path, load(path), String(e.get("behavior", "drift")), int(sv))
 	print("scene_smoke: %d distinct scripts, %d instantiations, %d rendered frames"
 		% [by_script.size(), _checked, _drawn])
 	if _fails.is_empty():

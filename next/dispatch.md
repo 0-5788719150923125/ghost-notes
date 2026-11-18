@@ -100,12 +100,16 @@ look at).
 
 **Built.** The author has not yet watched or heard it.
 
-The patch panel's cables are soft cords (`Rope` in `geometry/`: a chain of points held to their spacing and to how sharply a cord
-bends, falling under gravity, settled once at build). Each is laid first as a hand lays it (`DispatchSet.lay_cables`: a path round
+The patch panel's cables are soft cords (`Rope` in `geometry/`: a chain of points held to their spacing, no stretch of it bent
+tighter than its least radius over a few lengths at once - about CAT-5e's - falling under gravity, settled once at build). A point
+that goes into a thing is put back where it went in, keeping half its slide along the face, so a cord at rest holds its place (and
+never passes out through the far side of a thin thing); a point resting on something hardly feels the bending, so nothing pulls a
+cord taut, while what drapes - over a root, off an edge - rests on its peak and comes down in a long curve. The way is laid with its
+corners rounded and a gentle meander (`Rope.rounded`, `Rope.meandered`), 2 cm in from the desk's back and ends. Each is laid first as a hand lays it (`DispatchSet.lay_cables`: a path round
 everything standing there on a 1 cm grid, the desk's back preferred, each beside the last, over a root where it is lowest; never
 round the front of what it plugs into), a little slack, then let fall: it drapes over the roots on the desk and past its far edge
 and rests on the desk, out of every part by the part's own outline. Each is plugged into the side of the part its thing stands
-on that faces the panel (`ports_of`, three sides tried), or laid round the panel and over the far edge, hanging free. Gate:
+on that faces the panel (`ports_of`, three sides tried), or laid round the panel and over the far edge, beside the panel where no root climbs off it, held where it crosses the edge and where it hangs. Gate:
 `dispatch_check` (ends in a part, through nothing on the desk; controls: laid blind of the roots, laid straight).
 
 A cable plugs into the back of what it plugs into (its own back first, then its sides, never its front nor a side the chair sees:
@@ -120,7 +124,11 @@ drawn by its own number until set (`Roll`), Roll for another, and the desk's Cho
 numbers. A desk with no number kept is the one the night was made with. The roots are pictured and turned in 3D grown round the
 note's own desk, the desk with them for scale (`DispatchProps.roots_away`, grown once while nothing changes them). The phones'
 entry carries their colors (`DispatchSet.PHONE_FIELDS`, kept in the block's `phones`): each a color of its own drawn from a palette
-(office plastics, bright, metal, pastel), or all the make's own. The Props card's heading is "In the scene".
+(office plastics, bright, metal, pastel), or all the make's own. The terminal's and the radar's entries carry the color their glass
+glows in, any color picked (`TERMINAL_FIELDS`, `RADAR_FIELDS`, kept in the block's `terminal_screen` and `radar_screen`): the glass
+shows it as drawn, so the hue picked is the hue seen; the terminal's power and case lights, the light each screen throws and the
+title over the opening take its hue. The receiver's entry carries its oscilloscope's color and its dial lamp's (`RECEIVER_FIELDS`,
+kept in the block's `receiver_glow`), the scope shown as drawn as the other two are. The Props card's heading is "In the scene".
 
 Looked at (rendered with `tests/dispatch/dispatch_look_probe.gd` on a steady rehearsed voice, frames read by eye): the
 home view from the chair, every camera spot settled, the record and the target's log on the terminal (legible close up),

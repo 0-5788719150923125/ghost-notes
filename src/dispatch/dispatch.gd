@@ -206,6 +206,8 @@ const RECEIVER_TAIL := 1.2
 const RECEIVER_JOIN := 1.0
 const UNDER_LEAD := 0.25
 const UNDER_TAIL := 0.35
+## The title typed over the opening: a paler phosphor than the terminal's own, taking the hue picked for its text.
+const TITLE_INK := Color(0.62, 1.0, 0.68)
 ## The environment: the hollow's fog and its ambient light.
 const FOG := Color(0.11, 0.12, 0.135)
 const AMBIENT := Color(0.18, 0.2, 0.24)
@@ -361,7 +363,7 @@ func mount(st: SubViewport) -> void:
 	_title = TitleCard.new()
 	_title.face = CardTable.font("typed")
 	_title.italic = CardTable.font("typed")
-	_title.ink = Color(0.62, 1.0, 0.68)
+	_title.ink = TITLE_INK
 	add_child(_title)
 	_sounds = DispatchSounds.new(self)
 
@@ -444,6 +446,7 @@ func _build_set(labels: PackedStringArray, seed: int) -> void:
 		WorkerThreadPool.wait_for_task_completion(_build_task)
 		_build_task = -1
 	_screens.build(labels)
+	_dress_inks()
 	var tex := _screens.textures()
 	if is_inside_tree() and (away_in_tests or not TablePhysics.render_waits()):
 		_waiting = true
@@ -487,13 +490,13 @@ func _land_set() -> void:
 	_root3.add_child(_roots_node)
 	_mats = {}
 	# each glass shows its picture as its make's face says ([method _glass])
+	# (the terminal, the radar and the oscilloscope shown as drawn, so the color picked for each is the one seen, [method _dress_inks])
 	if _set.terminal_screen != null:
-		_set.terminal_screen.material_override = _screen_mat("terminal", _screens.terminal.get_texture(), DispatchScreens.PHOSPHOR.lerp(Color.WHITE, 0.2),
-			_glass("terminal", "screen"))
+		_set.terminal_screen.material_override = _screen_mat("terminal", _screens.terminal.get_texture(), Color.WHITE, _glass("terminal", "screen"))
 	if _set.radar_screen != null:
-		_set.radar_screen.material_override = _screen_mat("radar", _screens.radar.get_texture(), Color(0.85, 1.0, 0.85), _glass("radar", "scope"))
+		_set.radar_screen.material_override = _screen_mat("radar", _screens.radar.get_texture(), Color.WHITE, _glass("radar", "scope"))
 	if _set.scope_screen != null:
-		_set.scope_screen.material_override = _screen_mat("scope", _screens.scope.get_texture(), Color(0.9, 1.0, 0.9), _glass("receiver", "scope"))
+		_set.scope_screen.material_override = _screen_mat("scope", _screens.scope.get_texture(), Color.WHITE, _glass("receiver", "scope"))
 	var pm := StandardMaterial3D.new()
 	pm.albedo_texture = _screens.paper.get_texture()
 	pm.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -541,6 +544,16 @@ func _land_set() -> void:
 	if _waiting:
 		_waiting = false
 		feed.wait_for(WAIT_FOR, false)
+
+
+## The terminal's text, the radar's glow and the receiver's oscilloscope as the note keeps them ([method DispatchSet.terminal_ink],
+## [method DispatchSet.radar_ink], [method DispatchSet.receiver_inks]): the screens drawn in them, the title typed in the terminal's hue.
+func _dress_inks() -> void:
+	var term := DispatchSet.terminal_ink(_makes.get("terminal_screen", {}))
+	_screens.set_inks(term, DispatchSet.radar_ink(_makes.get("radar_screen", {})),
+		DispatchSet.receiver_inks(_makes.get("receiver_glow", {}))["scope"])
+	if _title != null:
+		_title.ink = DispatchScreens.tinted(TITLE_INK, DispatchScreens.PHOSPHOR, term)
 
 
 ## The tablet medium's screen shader ([constant TabletMedium.SCREEN_SHADER]), made once.
@@ -850,23 +863,22 @@ static func wants_of(parsed: Dictionary, source: String) -> Dictionary:
 
 
 ## The makes a document's [param dispatch] chooses for the desk's parts: `{role: choice}` ([DispatchProps], [PropMakes]) - and, where
-## it keeps them otherwise than its own, the desk itself (`desk`, [DispatchDesk]), the roots (`roots`, [DispatchRoots]) and the
-## phones' colors (`phones`, [constant DispatchSet.PHONE_FIELDS]), each `{seed, <its fields set>}`.
+## it keeps them otherwise than its own, the desk itself (`desk`, [DispatchDesk]), the roots (`roots`, [DispatchRoots]), the
+## phones' colors (`phones`, [constant DispatchSet.PHONE_FIELDS]), the terminal's and the radar's glass colors (`terminal_screen`,
+## `radar_screen`, [constant DispatchSet.TERMINAL_FIELDS], [constant DispatchSet.RADAR_FIELDS]) and the receiver's glows
+## (`receiver_glow`, [constant DispatchSet.RECEIVER_FIELDS]), each `{seed, <its fields set>}`.
 static func makes_of(dispatch: Dictionary) -> Dictionary:
 	var out := {}
 	var things: Dictionary = dispatch.get("things", {}) if dispatch.get("things") is Dictionary else {}
 	for role in things:
 		if PropMakes.valid_for(String(role), things[role]) and not (things[role] as Dictionary).is_empty():
 			out[String(role)] = (things[role] as Dictionary).duplicate(true)
-	var desk := Roll.clean_spec(DispatchDesk.FIELDS, dispatch.get("desk"))
-	if not desk.is_empty():
-		out["desk"] = desk
-	var roots := Roll.clean_spec(DispatchRoots.FIELDS, dispatch.get("roots"))
-	if not roots.is_empty():
-		out["roots"] = roots
-	var phones := Roll.clean_spec(DispatchSet.PHONE_FIELDS, dispatch.get("phones"))
-	if not phones.is_empty():
-		out["phones"] = phones
+	var parts := {"desk": DispatchDesk.FIELDS, "roots": DispatchRoots.FIELDS, "phones": DispatchSet.PHONE_FIELDS,
+		"terminal_screen": DispatchSet.TERMINAL_FIELDS, "radar_screen": DispatchSet.RADAR_FIELDS, "receiver_glow": DispatchSet.RECEIVER_FIELDS}
+	for part in parts:
+		var spec := Roll.clean_spec(parts[part], dispatch.get(part))
+		if not spec.is_empty():
+			out[part] = spec
 	return out
 
 
@@ -1985,7 +1997,7 @@ func terminal_at(t: float, whole := false) -> Dictionary:
 	if not asleep:
 		var rows := DispatchTerminal.rows_of(g, _term)
 		out = {"lines": rows["lines"], "asleep": false, "cursor": fposmod(t, BLINK * 2.0) < BLINK, "cursor_at": rows["cursor"],
-			"bar": rows["bar"], "alert": rows["alert"]}
+			"bar": rows["bar"], "chosen": rows["chosen"], "alert": rows["alert"]}
 	_term_key = key
 	_term_at = out
 	return out

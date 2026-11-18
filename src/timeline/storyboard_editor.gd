@@ -194,8 +194,8 @@ func pick_item(i: int) -> void:
 ## Every scene an entry can name: the stage first, then the catalog, each once.
 static func scene_names() -> Array:
 	var out: Array = []
-	for e in SceneRoster.SCENES:
-		var n := String((e as Dictionary).script.resource_path).get_file().get_basename()
+	for i in SceneRoster.SCENES.size():
+		var n := SceneRoster.name_at(i)
 		if not out.has(n):
 			out.append(n)
 	out.sort()

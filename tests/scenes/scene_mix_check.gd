@@ -33,7 +33,7 @@ func _ready() -> void:
 
 	var kinds := {}
 	for e in SceneRoster.SCENES:
-		kinds[String(e.script.resource_path)] = true
+		kinds[String(e.path)] = true
 	var k := kinds.size()
 	var expect := sqrt(PI * float(k) / 2.0)
 
@@ -57,7 +57,7 @@ func _ready() -> void:
 		var seq: Array = []
 		for _c in CUTS:
 			var i: int = Director._pick_index()
-			var path := String(SceneRoster.SCENES[i].script.resource_path)
+			var path := String(SceneRoster.SCENES[i].path)
 			Director._kind_last[path] = Director._swaps
 			Director._index = i
 			Director._swaps += 1
@@ -135,7 +135,7 @@ func _ready() -> void:
 	Director._session_seed = 0x5bd1e995 ^ (0 * 0x9E3779B1)
 	for _c in CUTS:
 		var i2: int = Director._pick_index()
-		var p2 := String(SceneRoster.SCENES[i2].script.resource_path)
+		var p2 := String(SceneRoster.SCENES[i2].path)
 		Director._kind_last[p2] = Director._swaps
 		Director._index = i2
 		Director._swaps += 1

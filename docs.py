@@ -213,6 +213,16 @@ HANDED: Dict[str, List[str]] = {
     "show/director": ["table", "desk"],
 }
 
+# What compiles before anything shows: Godot compiles a script with every script it names by class or preload, so a
+# launch compiles the closure of the autoloads and what it builds, and its lines stand for its time. (the launch, the
+# scripts it builds besides the autoloads, its budget in lines). `check_boot` fails a launch past its budget and names
+# the references that bring the most in: what is opened is loaded by path when it opens (CLAUDE.md, "The structure of
+# src/").
+BOOT: List[Tuple[str, Tuple[str, ...], int]] = [
+    ("the phone shell", ("app/main", "app/phone_shell"), 40000),
+    ("the desktop's notes list", ("app/main", "app/chrome", "app/notes_list", "app/showcase", "app/auto_docs"), 65000),
+]
+
 # (flag, argument placeholder, description, internal). Internal flags are passed between ghost's own
 # processes (exporter -> render, editor -> render). Held against the flags the code reads (`flags_read`) both ways.
 CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
@@ -808,7 +818,7 @@ def collect_scenes() -> Tuple[Dict[str, Scene], List[str]]:
         if s.startswith("#"):
             group = s.lstrip("# ").strip()
             continue
-        m = re.search(r'scenes/(\w+)\.gd"\).*?"behavior":\s*"(\w+)"', s)
+        m = re.search(r'"path":\s*"res://src/scenes/(\w+)\.gd".*?"behavior":\s*"(\w+)"', s)
         if not m:
             continue
         name, behavior = m.groups()
@@ -1625,8 +1635,8 @@ func _draw() -> void:
         draw_circle(p, 6, Color.from_hsv(params.hue, 0.7, 1.0))
 ```
 
-Register it in `SceneRoster.SCENES` - `{"script": preload("res://src/scenes/my_scene.gd"),
-"behavior": "fluid"}` - more than once with different behaviors to keep several looks. A oneshot
+Register it in `SceneRoster.SCENES` - `{"path": "res://src/scenes/my_scene.gd",
+"behavior": "fluid"}`, by path and never a preload - more than once with different behaviors to keep several looks. A oneshot
 sets `lifecycle = "oneshot"` in `build_params` and returns `true` from `finished()`. Weather and
 atmosphere are layers, composed the way forces are:
 
@@ -1841,8 +1851,8 @@ def index_page(scenes: Dict[str, Scene], features: List[Tuple[str, str, str, str
     return page("Ghost Notes docs index", blocks)
 
 
-def structure_page(edges: Dict[str, set]) -> str:
-    """docs/structure.md: the stack, what each folder names, and what still points up."""
+def structure_page(edges: Dict[str, set], boot: Dict[str, Tuple[int, int]]) -> str:
+    """docs/structure.md: the stack, what each folder names, what still points up, and what a launch compiles."""
     rank = {folder: i for i, (folder, _t, _d) in enumerate(FOLDERS)}
     names: Dict[str, set] = {folder: set() for folder in rank}
     inside = down = 0
@@ -1887,6 +1897,16 @@ def structure_page(edges: Dict[str, set]) -> str:
                       "above it; a pattern's rows go when its fix lands.")
     for pattern, fix, pairs_ in UPWARD:
         blocks += [f"### {pattern} ({len(pairs_)})", f"The fix: {fix}.", [f"- `{a}` names `{b}`" for a, b in pairs_]]
+    blocks += [
+        "## What a launch compiles",
+        "Godot compiles a script with every script it names by class or preload, wherever in it that is, so before "
+        "anything shows a launch compiles the autoloads and what it builds, and all they name. What is opened later "
+        "is loaded by path when it opens. `python docs.py --check` fails a launch past its budget (`BOOT` in "
+        "[docs.py](../docs.py)) and names the references that brought the most in.",
+        table(["launch", "builds", "scripts", "lines", "budget"],
+              ([launch, ", ".join(f"`{k}`" for k in start), boot[launch][0], f"{boot[launch][1]:,}", f"{budget:,}"]
+               for launch, start, budget in BOOT)),
+    ]
     return page("The structure", blocks)
 
 
@@ -2100,9 +2120,10 @@ def check_rules() -> None:
                 warn(said)
 
 
-def _references() -> Dict[str, set]:
+def _references(loads: bool = True) -> Dict[str, set]:
     """{script: the scripts it names}, each as `folder/name`: a class name or an autoload's
-    name in its code, or a `preload` / `load` of a script's path."""
+    name in its code, or a `preload` / `load` of a script's path. Without [loads], only what
+    compiles with it: a `load` runs when it is reached."""
     paths = sorted(SCRIPTS.glob("*/*.gd"))
     key = lambda p: f"{p.parent.name}/{p.stem}"  # noqa: E731
     text_ = {key(p): script_at(p).text for p in paths}
@@ -2116,7 +2137,8 @@ def _references() -> Dict[str, set]:
     for k, t in text_.items():
         for m in re.finditer(r"\b[A-Z][A-Za-z0-9_]*\b", code_of(t, strings=False)):
             edges[k].add(named.get(m.group(0), k))
-        for m in re.finditer(r'(?:pre)?load\(\s*"res://(src/[\w/]+\.gd)"', t):
+        for m in re.finditer(r'(?:pre)?load\(\s*"res://(src/[\w/]+\.gd)"' if loads else
+                             r'\bpreload\(\s*"res://(src/[\w/]+\.gd)"', t):
             edges[k].add(by_res.get(m.group(1), k))
         edges[k].discard(k)
     return edges
@@ -2180,6 +2202,63 @@ def check_structure() -> Dict[str, set]:
     for problem in _structure_problems(edges, order, listed) + _handed_problems(edges, HANDED):
         warn(problem)
     return edges
+
+
+def _closure(edges: Dict[str, set], start: Iterable[str], cut: Optional[Tuple[str, str]] = None) -> set:
+    """Every script [start] reaches through [edges], leaving out the one reference [cut]."""
+    seen: set = set()
+    todo = list(start)
+    while todo:
+        a = todo.pop()
+        if a in seen:
+            continue
+        seen.add(a)
+        todo += [b for b in edges.get(a, ()) if (a, b) != cut and b not in seen]
+    return seen
+
+
+def _boot_problems(edges: Dict[str, set], lines: Dict[str, int], launch: str, start: Tuple[str, ...],
+                   budget: int) -> List[str]:
+    """What is wrong with one launch of BOOT: past its budget, with the references whose loss would shed the most.
+    Pure, so its control can be run on a made-up graph: see `check_boot`."""
+    reached = _closure(edges, start)
+    size = sum(lines.get(k, 0) for k in reached)
+    if size <= budget:
+        return []
+    # only a reference to a script that alone reaches a tenth of the budget can shed much
+    heavy = {b for b in reached if sum(lines.get(k, 0) for k in _closure(edges, [b])) * 10 >= budget}
+    shed = sorted(((size - sum(lines.get(k, 0) for k in _closure(edges, start, (a, b))), a, b)
+                   for a in reached for b in edges.get(a, ()) if b in heavy and b not in start), reverse=True)
+    worst = "; ".join(f"src/{a}.gd names src/{b}.gd (+{n:,})" for n, a, b in shed[:3] if n > 0)
+    return [f"{launch} compiles {size:,} lines of script before anything shows, past its {budget:,} (docs.py BOOT): "
+            f"{worst or 'no one reference brings much in'}. A class name or a preload compiles all it names: load "
+            "what is opened by path when it opens (CLAUDE.md, \"The structure of src/\")"]
+
+
+def check_boot() -> Dict[str, Tuple[int, int]]:
+    """Each launch in BOOT compiles no more than its budget before anything shows: {launch: (scripts, lines)}.
+
+    The control, run first: on a made-up graph, a start that names a heavy script must be reported with that
+    reference, and the same start without it must not.
+    """
+    lines_ = {"app/main": 10, "app/light": 10, "app/heavy": 10, "table/big": 1000}
+    named = {"app/main": {"app/light", "app/heavy"}, "app/heavy": {"table/big"}}
+    caught = _boot_problems(named, lines_, "a launch", ("app/main",), 100)
+    passed = _boot_problems({"app/main": {"app/light"}, "app/heavy": {"table/big"}}, lines_, "a launch", ("app/main",), 100)
+    control("check_boot", len(caught) == 1 and "src/app/main.gd names src/app/heavy.gd" in caught[0] and not passed)
+    edges = _references(loads=False)
+    lines = {f"{p.parent.name}/{p.stem}": script_at(p).text.count("\n") for p in sorted(SCRIPTS.glob("*/*.gd"))}
+    loaded = tuple(f"{Path(rel).parent.name}/{Path(rel).stem}" for rel in autoloads().values() if rel.startswith("src/"))
+    out: Dict[str, Tuple[int, int]] = {}
+    for launch, start, budget in BOOT:
+        for k in start:
+            if k not in lines:
+                warn(f"docs.py BOOT: {launch} builds src/{k}.gd, which does not exist")
+        for problem in _boot_problems(edges, lines, launch, loaded + start, budget):
+            warn(problem)
+        reached = _closure(edges, loaded + start)
+        out[launch] = (len(reached), sum(lines.get(k, 0) for k in reached))
+    return out
 
 
 def _reads(body: str) -> Dict[str, Tuple[str, str]]:
@@ -2393,6 +2472,7 @@ def main() -> int:
     s = find
     scenes, groups = collect_scenes()
     edges = check_structure()
+    boot = check_boot()
     check_rules()
     check_user_dir()
     check_fields()
@@ -2456,7 +2536,7 @@ def main() -> int:
         "architecture": lambda: architecture_page(class_index(), scenes, s("layer"), s("primitives"), s("medium")),
         "environment": lambda: environment_page(s("deps")),
         "agents": lambda: agents_page(s("text_gen"), s("image_gen"), s("assistant_backends"), s("deps")),
-        "structure": lambda: structure_page(edges),
+        "structure": lambda: structure_page(edges, boot),
         "cli": lambda: cli_page(scan_flags()),
         "index": lambda: index_page(scenes, features),
     }

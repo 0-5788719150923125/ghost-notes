@@ -68,6 +68,10 @@
 
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
+# The gates yield the processor to the app running beside them: at nice 19 a core both want goes almost wholly to
+# the app, and an idle one to the gates as before. Everything this starts inherits it. A gate's work clock
+# (tests/work_clock.gd, the thread's own time) does not change with it; its wall time can.
+renice -n 19 -p $$ >/dev/null 2>&1 || true
 declare -A running=()   # pid -> gate, while --jobs runs several at once
 ## A gate runs in a process group of its own under --jobs (set -m), so a stop reaches its Godot and
 ## everything below it. Exact groups, by the pid this script started; never a pattern.

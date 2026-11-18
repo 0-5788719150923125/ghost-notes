@@ -39,6 +39,7 @@
 
 set -uo pipefail
 cd "$(dirname "$0")/.."          # the project root
+renice -n 19 -p $$ >/dev/null 2>&1 || true   # yields the processor to the app beside it (scripts/check.sh)
 PROBE_SRC="${1:-}"
 TIMEOUT="${2:-90}"
 if [[ -z "$PROBE_SRC" || ! -f "$PROBE_SRC" ]]; then

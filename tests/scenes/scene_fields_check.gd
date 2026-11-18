@@ -41,11 +41,11 @@ func _ok(cond: bool, what: String) -> void:
 func _run() -> void:
 	var scripts: Array = []
 	var behaviors := {}
-	for row in SceneRoster.SCENES:
-		var s: Script = row["script"]
+	for i in SceneRoster.SCENES.size():
+		var s := SceneRoster.script_at(i)
 		if not scripts.has(s):
 			scripts.append(s)
-			behaviors[s] = String(row["behavior"])
+			behaviors[s] = String(SceneRoster.SCENES[i]["behavior"])
 	# ...and every scene file a storyboard may name that has settings, in the rotation or not
 	for f in DirAccess.get_files_at("res://src/scenes"):
 		if f.ends_with(".gd"):

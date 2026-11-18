@@ -661,8 +661,10 @@ static func parse(body: String) -> Dictionary:
 	if not dark:
 		gap.append([OPENING, -1])
 		pending.append("<!-- action-hold: %s -->" % String.num(OPENING, 2))
+	var bi := -1
 	for b in all:
 		var blk: Dictionary = b
+		bi += 1
 		if hush_from >= 0:
 			_hush(actions, gap, pending, hush_from)
 			hush_from = actions.size()
@@ -731,8 +733,14 @@ static func parse(body: String) -> Dictionary:
 				var run := DispatchTerminal.compile(blk["lines"], glass, term, warnings)
 				if (run["ops"] as Array).is_empty():
 					continue
-				_act(actions, gap, pending, spoken.size(), {"kind": "session", "ops": run["ops"], "glass": glass},
-					float(run["rest"]), float(run["len"]))
+				# a line typed straight after it is typed once the panel is read: the voice waits for the read too, and for a while
+				# longer where that line chooses one of the panel's options - it is thought over
+				var then_typed := bi + 1 < all.size() and String((all[bi + 1] as Dictionary).get("kind", "")) == "type"
+				var waits := float(run["len"]) if then_typed else float(run["rest"])
+				if then_typed and DispatchTerminal.choice_row(run["glass"], shown_of(String((all[bi + 1] as Dictionary)["text"]))) >= 0:
+					waits += DispatchTerminal.CHOICE_THINK
+				_act(actions, gap, pending, spoken.size(), {"kind": "session", "ops": run["ops"], "glass": glass}, waits,
+					maxf(float(run["len"]), waits))
 				glass = run["glass"]
 				ringing = ""
 			"type":
@@ -759,6 +767,7 @@ static func parse(body: String) -> Dictionary:
 				if heard == RECEIVER:
 					typed_as["heard"] = RECEIVER
 					typed_as["storm"] = storm
+				var chose := DispatchTerminal.choice_row(glass, shown) >= 0
 				glass = DispatchTerminal.typed(glass, shown, shown.length())
 				var i := _act(actions, gap, pending, from, typed_as, ahead, ahead)
 				_flush(speak, pending, who, heard, said_as, heard_as)
@@ -769,6 +778,10 @@ static func parse(body: String) -> Dictionary:
 				typed.append(i)
 				last_typed = i
 				ringing = ""
+				# a choice stays in sight a while once it is made: the camera holds on the terminal before what follows
+				if chose:
+					_act(actions, gap, pending, spoken.size(), {"kind": "look", "at": "terminal"}, DispatchTerminal.CHOICE_HOLD,
+						DispatchTerminal.CHOICE_HOLD)
 			"para":
 				var text := String(blk["text"])
 				var who := speaker if not speaker.is_empty() else Manuscript.NARRATOR

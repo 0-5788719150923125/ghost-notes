@@ -1,8 +1,8 @@
 extends Node
 class_name DispatchScreens
 
-## DispatchScreens - what the desk's screens show, drawn in 2D (next/dispatch.md): the terminal's pale green text on black, the
-## radar's sweep and blip, the oscilloscope's trace, a phone's two little screens, the printer's paper; and, drawn once, the chart
+## DispatchScreens - what the desk's screens show, drawn in 2D (next/dispatch.md): the terminal's text on black, the radar's sweep
+## and blip, the oscilloscope's trace (each green unless the Props card picks its color, [method set_inks]), a phone's two little screens, the printer's paper; and, drawn once, the chart
 ## of the council's hours, the receiver's dial at 20.1, the radar's gain scale and a phone's keypad. Words printed on a thing (a
 ## phone's tape, GOOD and BAD, the handbook's spine) are its make's own ([constant Props.SHAPES] `face`'s `text`).
 ##
@@ -33,10 +33,14 @@ const MONO := "res://fonts/cards/CourierPrime-Bold.ttf"
 const TERM_FONT := 22
 const TERM_LINE := 33.0
 const TERM_MARGIN := Vector2(78.0, 70.0)
-## The colors: the terminal's phosphor, its dark; the radar's green.
-const PHOSPHOR := Color(0.62, 1.0, 0.68)
-const SCREEN_DARK := Color(0.008, 0.016, 0.01)
-const RADAR_GREEN := Color(0.32, 1.0, 0.42)
+## The terminal's own phosphor and its dark, the radar's own glow and its glass, and the receiver's oscilloscope's: what is drawn is
+## what the glass shows (its tint white), so a color picked ([method set_inks]) is seen at its own hue.
+const PHOSPHOR := Color(0.4315, 1.0, 0.5059)
+const SCREEN_DARK := Color(0.0056, 0.016, 0.0074)
+const RADAR_GLOW := Color(0.2706, 1.0, 0.3569)
+const RADAR_GLASS := Color(0.0085, 0.05, 0.017)
+const SCOPE_GLOW := Color(0.2863, 1.0, 0.3765)
+const SCOPE_GLASS := Color(0.0045, 0.02, 0.009)
 
 var terminal: SubViewport
 var keypad: SubViewport
@@ -58,6 +62,12 @@ var _clock: Face
 var _tablet: Face
 var _faces: Array = []
 var _mono: Font
+var _term_ink := PHOSPHOR        # the terminal's text and its dark, the radar's glow and its glass ([method set_inks])
+var _term_dark := SCREEN_DARK
+var _radar_ink := RADAR_GLOW
+var _radar_glass := RADAR_GLASS
+var _scope_ink := SCOPE_GLOW
+var _scope_glass := SCOPE_GLASS
 
 
 func _init() -> void:
@@ -124,6 +134,40 @@ func _vp(size: Vector2i, live: bool) -> SubViewport:
 
 
 # --- what the medium hands them ---------------------------------------------------------------------------------------
+
+## The terminal's text drawn in [param term], the radar in [param glow] and the receiver's oscilloscope in [param trace] from here,
+## each dark going with it ([method tinted]): a screen drawn again where its color changed.
+func set_inks(term: Color, glow: Color, trace: Color) -> void:
+	if term != _term_ink:
+		_term_ink = term
+		_term_dark = tinted(SCREEN_DARK, PHOSPHOR, term)
+		if _term != null:
+			_term.queue_redraw()
+			terminal.render_target_update_mode = SubViewport.UPDATE_ONCE
+	if glow != _radar_ink:
+		_radar_ink = glow
+		_radar_glass = tinted(RADAR_GLASS, RADAR_GLOW, glow)
+		if _radar != null:
+			_radar.queue_redraw()
+			radar.render_target_update_mode = SubViewport.UPDATE_ONCE
+	if trace != _scope_ink:
+		_scope_ink = trace
+		_scope_glass = tinted(SCOPE_GLASS, SCOPE_GLOW, trace)
+		if _scope != null:
+			_scope.queue_redraw()
+			scope.render_target_update_mode = SubViewport.UPDATE_ONCE
+
+
+## [param own], a color made to go with [param from], made to go with [param to] instead: [param to]'s hue, its saturation and
+## brightness scaled by how far [param to]'s are from [param from]'s (a pale tint stays paler than the color, a gray one goes
+## gray). [param own] itself where the two are the same color to 8 bits.
+static func tinted(own: Color, from: Color, to: Color) -> Color:
+	if from.to_html(false) == to.to_html(false):
+		return own
+	var s := clampf(own.s * to.s / maxf(from.s, 0.001), 0.0, 1.0)
+	var v := clampf(own.v * to.v / maxf(from.v, 0.001), 0.0, 1.0)
+	return Color.from_hsv(to.h if to.s > 0.001 else own.h, s, v, own.a)
+
 
 ## The terminal as [param st] has it: `{lines: PackedStringArray, asleep, cursor (bool), t}`; drawn again only when it changed.
 func show_terminal(st: Dictionary) -> void:
@@ -222,30 +266,33 @@ class Face extends Node2D:
 
 
 ## The terminal ([method DispatchTerminal.rows_of]): its rows from the top (redacted words as themselves; [DispatchCensor]
-## hides them over the picture), the title row in inverse across the panel (`bar`, its columns), a block cursor at
+## hides them over the picture), the title row in inverse across the panel (`bar`, its columns), a chosen option's row in inverse
+## across its words (`chosen`: row, first and last column), a block cursor at
 ## `cursor_at` (column, row) when `cursor` is on, and an `alert` boxed over the middle of the panel; dark when asleep.
 func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(TERM_SIZE)
-	c.draw_rect(Rect2(Vector2.ZERO, size), SCREEN_DARK)
+	c.draw_rect(Rect2(Vector2.ZERO, size), _term_dark)
 	if bool(st.get("asleep", true)):
 		return
 	var lines: PackedStringArray = st.get("lines", PackedStringArray())
 	var cw := _mono.get_string_size("M", HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT).x
 	var bar: Vector2i = st.get("bar", Vector2i(-1, -1))
+	var pick: Vector3i = st.get("chosen", Vector3i(-1, 0, 0))
 	for k in lines.size():
 		var y := TERM_MARGIN.y + TERM_LINE * float(k)
 		var text := String(DispatchScript.unredacted(String(lines[k]))["text"])
-		var ink := PHOSPHOR
-		if k == 0 and bar.x >= 0:
-			var x0 := TERM_MARGIN.x + _advance(text.substr(0, bar.x)) - 4.0
-			var x1 := TERM_MARGIN.x + _advance(text.substr(0, bar.y)) + 4.0
-			c.draw_rect(Rect2(x0, y - TERM_LINE * 0.74, x1 - x0, TERM_LINE * 0.98), PHOSPHOR)
-			ink = SCREEN_DARK
+		var ink := _term_ink
+		var span := Vector2i(bar.x, bar.y) if k == 0 and bar.x >= 0 else (Vector2i(pick.y, pick.z) if k == pick.x else Vector2i(-1, -1))
+		if span.x >= 0:
+			var x0 := TERM_MARGIN.x + _advance(text.substr(0, span.x)) - 4.0
+			var x1 := TERM_MARGIN.x + _advance(text.substr(0, span.y)) + 4.0
+			c.draw_rect(Rect2(x0, y - TERM_LINE * 0.74, x1 - x0, TERM_LINE * 0.98), _term_ink)
+			ink = _term_dark
 		c.draw_string(_mono, Vector2(TERM_MARGIN.x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT, ink)
 	if bool(st.get("cursor", false)):
 		var at: Vector2i = st.get("cursor_at", Vector2i(0, maxi(lines.size() - 1, 0)))
 		var cy := TERM_MARGIN.y + TERM_LINE * float(at.y)
-		c.draw_rect(Rect2(TERM_MARGIN.x + cw * float(at.x) + 2.0, cy - float(TERM_FONT) * 0.78, cw * 0.9, float(TERM_FONT) * 0.95), PHOSPHOR)
+		c.draw_rect(Rect2(TERM_MARGIN.x + cw * float(at.x) + 2.0, cy - float(TERM_FONT) * 0.78, cw * 0.9, float(TERM_FONT) * 0.95), _term_ink)
 	var alert: PackedStringArray = st.get("alert", PackedStringArray())
 	if not alert.is_empty():
 		var wide := 0
@@ -256,13 +303,13 @@ func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 		var top_row := float(DispatchTerminal.BODY_TOP + DispatchTerminal.BODY_ROWS / 2) - float(alert.size() + 2) * 0.5
 		var box := Rect2(TERM_MARGIN.x + cw * (mid_col - cols * 0.5), TERM_MARGIN.y + TERM_LINE * (top_row - 0.74),
 			cw * cols, TERM_LINE * float(alert.size() + 2))
-		c.draw_rect(box, SCREEN_DARK)
-		c.draw_rect(box, PHOSPHOR, false, 3.0)
-		c.draw_rect(box.grow(-7.0), PHOSPHOR, false, 1.5)
+		c.draw_rect(box, _term_dark)
+		c.draw_rect(box, _term_ink, false, 3.0)
+		c.draw_rect(box.grow(-7.0), _term_ink, false, 1.5)
 		for k in alert.size():
 			var l := String(alert[k])
 			var x := TERM_MARGIN.x + cw * (mid_col - float(l.length()) * 0.5)
-			c.draw_string(_mono, Vector2(x, TERM_MARGIN.y + TERM_LINE * (top_row + 1.0 + float(k))), l, HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT, PHOSPHOR)
+			c.draw_string(_mono, Vector2(x, TERM_MARGIN.y + TERM_LINE * (top_row + 1.0 + float(k))), l, HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT, _term_ink)
 
 
 ## The radar: dark green glass, its range rings and cross, the sweep going round with its glow fading behind it, the desk
@@ -275,62 +322,62 @@ func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
 	var mid := size * 0.5
 	var rad := size.x * 0.47
 	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.0, 0.0, 0.0))
-	c.draw_circle(mid, rad, Color(0.01, 0.05, 0.02))
+	c.draw_circle(mid, rad, _radar_glass)
 	var t := float(st.get("t", 0.0))
 	var sweep := fposmod(t / DispatchMedium.SWEEP, 1.0) * TAU - PI * 0.5
 	for k in 48:
 		var a0 := sweep - float(k + 1) * 0.035
 		var a1 := sweep - float(k) * 0.035
 		var al := 0.32 * pow(1.0 - float(k) / 48.0, 2.0)
-		c.draw_colored_polygon(PackedVector2Array([mid, mid + Vector2.from_angle(a0) * rad, mid + Vector2.from_angle(a1) * rad]), Color(RADAR_GREEN, al))
+		c.draw_colored_polygon(PackedVector2Array([mid, mid + Vector2.from_angle(a0) * rad, mid + Vector2.from_angle(a1) * rad]), Color(_radar_ink, al))
 	var rings := clampi(int(st.get("rings", DispatchScript.SCOPE_RINGS)), 1, 12)
 	for k in rings:
-		c.draw_arc(mid, rad * float(k + 1) / float(rings), 0.0, TAU, 96, Color(RADAR_GREEN, 0.28), 1.6, true)
-	c.draw_line(mid - Vector2(rad, 0), mid + Vector2(rad, 0), Color(RADAR_GREEN, 0.18), 1.2)
-	c.draw_line(mid - Vector2(0, rad), mid + Vector2(0, rad), Color(RADAR_GREEN, 0.18), 1.2)
+		c.draw_arc(mid, rad * float(k + 1) / float(rings), 0.0, TAU, 96, Color(_radar_ink, 0.28), 1.6, true)
+	c.draw_line(mid - Vector2(rad, 0), mid + Vector2(rad, 0), Color(_radar_ink, 0.18), 1.2)
+	c.draw_line(mid - Vector2(0, rad), mid + Vector2(0, rad), Color(_radar_ink, 0.18), 1.2)
 	for k in 36:
 		var a := float(k) / 36.0 * TAU
 		var inner := 0.95 if k % 3 == 0 else 0.975
-		c.draw_line(mid + Vector2.from_angle(a) * rad * inner, mid + Vector2.from_angle(a) * rad, Color(RADAR_GREEN, 0.4), 1.4)
-	c.draw_line(mid, mid + Vector2.from_angle(sweep) * rad, Color(RADAR_GREEN, 0.95), 2.6, true)
-	c.draw_rect(Rect2(mid - Vector2(4, 4), Vector2(8, 8)), Color(RADAR_GREEN, 0.9))
+		c.draw_line(mid + Vector2.from_angle(a) * rad * inner, mid + Vector2.from_angle(a) * rad, Color(_radar_ink, 0.4), 1.4)
+	c.draw_line(mid, mid + Vector2.from_angle(sweep) * rad, Color(_radar_ink, 0.95), 2.6, true)
+	c.draw_rect(Rect2(mid - Vector2(4, 4), Vector2(8, 8)), Color(_radar_ink, 0.9))
 	for p in st.get("planes", []):
 		var pd: Dictionary = p
 		var at := mid + (pd["at"] as Vector2) * rad
 		var hd := Vector2.from_angle(float(pd.get("heading", 0.0)))
 		var lit := _lit(at - mid, sweep)
 		c.draw_colored_polygon(PackedVector2Array([at + hd * 7.0, at - hd * 5.0 + hd.orthogonal() * 4.5, at - hd * 2.5, at - hd * 5.0 - hd.orthogonal() * 4.5]),
-			Color(RADAR_GREEN, 0.35 + 0.6 * lit))
+			Color(_radar_ink, 0.35 + 0.6 * lit))
 	for cl in st.get("clutter", []):
 		var cd: Dictionary = cl
 		var at := mid + (cd["at"] as Vector2) * rad
-		c.draw_circle(at, 3.3, Color(RADAR_GREEN, float(cd["fade"]) * (0.18 + 0.5 * _lit(at - mid, sweep))))
+		c.draw_circle(at, 3.3, Color(_radar_ink, float(cd["fade"]) * (0.18 + 0.5 * _lit(at - mid, sweep))))
 	for tr in st.get("trail", []):
 		var td: Dictionary = tr
 		var at := mid + (td["at"] as Vector2) * rad
-		c.draw_circle(at, 3.6, Color(RADAR_GREEN, 0.55 * clampf(float(td.get("fade", 1.0 - float(td["age"]) / 4.0)), 0.0, 1.0)))
+		c.draw_circle(at, 3.6, Color(_radar_ink, 0.55 * clampf(float(td.get("fade", 1.0 - float(td["age"]) / 4.0)), 0.0, 1.0)))
 	var blip: Dictionary = st.get("blip", {})
 	if not blip.is_empty():
 		var at := mid + (blip["at"] as Vector2) * rad
 		var lit := _lit(at - mid, sweep)
 		var since := float(blip.get("since", 99.0))
 		var fresh := clampf(1.0 - since / 1.2, 0.0, 1.0)
-		c.draw_circle(at, 7.0 + 4.0 * fresh, Color(RADAR_GREEN, 0.25 + 0.4 * lit))
-		c.draw_circle(at, 4.5, Color(RADAR_GREEN.lightened(0.4), 0.55 + 0.45 * maxf(lit, fresh)))
+		c.draw_circle(at, 7.0 + 4.0 * fresh, Color(_radar_ink, 0.25 + 0.4 * lit))
+		c.draw_circle(at, 4.5, Color(_radar_ink.lightened(0.4), 0.55 + 0.45 * maxf(lit, fresh)))
 		var label := String(blip.get("label", ""))
 		var right := at.x < mid.x + rad * 0.3
 		var pos := at + Vector2(12.0 if right else -12.0, -10.0)
 		var w := _mono.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
 		if not right:
 			pos.x -= w
-		c.draw_string(_mono, pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(RADAR_GREEN, 0.85))
+		c.draw_string(_mono, pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(_radar_ink, 0.85))
 		var ping := float(st.get("ping", -1.0))
 		if ping >= 0.0 and ping < DispatchScript.PING_LEN:
 			var u := ping / DispatchScript.PING_LEN
 			for k in 2:
 				var uu := clampf(u - float(k) * 0.18, 0.0, 1.0)
 				if uu > 0.0:
-					c.draw_arc(at, 8.0 + uu * rad * 0.55, 0.0, TAU, 72, Color(RADAR_GREEN, 0.85 * (1.0 - uu)), 2.2, true)
+					c.draw_arc(at, 8.0 + uu * rad * 0.55, 0.0, TAU, 72, Color(_radar_ink, 0.85 * (1.0 - uu)), 2.2, true)
 	c.draw_arc(mid, rad, 0.0, TAU, 128, Color(0.0, 0.0, 0.0), 8.0, true)
 
 
@@ -344,13 +391,13 @@ static func _lit(at: Vector2, sweep: float) -> float:
 ## a voice coming in on the receiver as a fast wave swelling and shrinking along it.
 func _draw_scope(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(SCOPE_SIZE)
-	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.005, 0.02, 0.01))
+	c.draw_rect(Rect2(Vector2.ZERO, size), _scope_glass)
 	for k in range(1, 8):
 		var x := size.x * float(k) / 8.0
-		c.draw_line(Vector2(x, 0), Vector2(x, size.y), Color(RADAR_GREEN, 0.12), 1.0)
+		c.draw_line(Vector2(x, 0), Vector2(x, size.y), Color(_scope_ink, 0.12), 1.0)
 	for k in range(1, 6):
 		var y := size.y * float(k) / 6.0
-		c.draw_line(Vector2(0, y), Vector2(size.x, y), Color(RADAR_GREEN, 0.12), 1.0)
+		c.draw_line(Vector2(0, y), Vector2(size.x, y), Color(_scope_ink, 0.12), 1.0)
 	var t := float(st.get("t", 0.0))
 	var level := float(st.get("level", 0.0))
 	var storm := String(st.get("storm", ""))
@@ -373,7 +420,7 @@ func _draw_scope(c: CanvasItem, st: Dictionary) -> void:
 				var spike := 1.0 if DispatchSounds.hash01(seed + 3, i) < 0.06 * level else 0.0
 				y += (n * 0.25 + spike * n * 1.6) * level * size.y * 0.4
 		pts.append(Vector2(x, size.y * 0.5 + y))
-	c.draw_polyline(pts, Color(RADAR_GREEN.lightened(0.2), 0.9), 2.0, true)
+	c.draw_polyline(pts, Color(_scope_ink.lightened(0.2), 0.9), 2.0, true)
 
 
 ## The paper: continuous paper, sprocket holes down both edges and a perforation every eleven inches; the lines printed,

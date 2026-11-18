@@ -1286,13 +1286,14 @@ func _ok(cond: bool, what: String) -> void:
 		_fails.append(what)
 
 ## No root lies where a phone is laid open, on eight desks: the held phones' whole footprint, lids included (control: the strip
-## round the bases leaves the lids out). No root goes through the printer's paper or its heap (control: the same roots grown
+## round the bases leaves the lids out). No root goes through the printer's paper or its heap, anywhere along the line its tube is drawn on (control: the same roots grown
 ## knowing nothing of them go through), nor lies across the chart taped to the desk (control: grown with it left out, they do).
 ## The chart lies a hair over the desk's top, never in its plane (control: its make seats its sheet on its own foot). The patch
 ## panel's cables end in a part of what they plug into or past the desk's edge, go over the roots on the desk (control: laid
 ## blind) and round what stands on it, through none of it (control: laid straight from socket to port); each plugs into a side
 ## neither its thing's front nor one the chair sees (control: the side facing the panel, as ports once were, is one of them);
-## where two cross on the desk one lies over the other, never through it (control: pressed flat onto the desk, they meet).
+## where two cross on the desk one lies over the other, never through it, but where they bunch leaving the panel (control: pressed
+## flat onto the desk, they meet).
 func _roots_clear() -> void:
 	var img := Image.create(8, 8, false, Image.FORMAT_RGBA8)
 	var t := ImageTexture.create_from_image(img)
@@ -1345,9 +1346,9 @@ func _roots_clear() -> void:
 			if not side.is_empty() and _faces_front(ds, side["k"], side["out"], side["mid"]):
 				in_front.append("%s, desk %d" % [side["k"], sd])
 		# one cable lies on another where they cross, never through it (the control: pressed flat onto the desk, they meet)
-		if _cables_cross(ds.cable_paths, false):
+		if _cables_cross(ds, ds.cable_paths, false):
 			crossed.append(sd)
-		flat_crossed += int(_cables_cross(ds.cable_paths, true))
+		flat_crossed += int(_cables_cross(ds, ds.cable_paths, true))
 		# (the control: of each thing's part on the desk, the side facing the panel most)
 		var panel_at: Vector3 = ds._desk_pos(ds.at_of("patch"))
 		for k in DispatchSet.CABLED:
@@ -1470,9 +1471,12 @@ static func _cables_in_things(ds: DispatchSet, paths: Array, spare: float) -> bo
 	return false
 
 
-## Whether any two of [param paths] (cables) come closer on the desk than they are thick - one through the other; with [param flat],
-## each pressed flat onto the desk first.
-static func _cables_cross(paths: Array, flat: bool) -> bool:
+## Whether any two of [param paths] (cables) on desk [param ds] come closer on the desk than they are thick - one through the other;
+## with [param flat], each pressed flat onto the desk first. Where they leave the patch panel together (within 6 cm of it) and past
+## the desk's back edge they bunch, as a bundle does, out of sight.
+static func _cables_cross(ds: DispatchSet, paths: Array, flat: bool) -> bool:
+	var bundle: AABB = (ds._parts["patch"][0] as Dictionary)["box"]
+	bundle = bundle.grow(0.06)
 	var chunks: Array = []                # per cable: [[box, from, to]] of ten links each
 	var ways: Array = []
 	for path in paths:
@@ -1505,7 +1509,9 @@ static func _cables_cross(paths: Array, flat: bool) -> bool:
 						for v in range(int(cb[1]), int(cb[2])):
 							var st := Rope._closest(pa[u], pa[u + 1], pb[v], pb[v + 1])
 							var p := pa[u].lerp(pa[u + 1], st.x)
-							if p.y >= DispatchSet.DESK_Y - 0.005 and p.distance_to(pb[v].lerp(pb[v + 1], st.y)) < least:
+							if p.y < DispatchSet.DESK_Y - 0.005 or p.z < DispatchSet.FAR or bundle.has_point(p):
+								continue
+							if p.distance_to(pb[v].lerp(pb[v + 1], st.y)) < least:
 								return true
 	return false
 
@@ -1622,8 +1628,17 @@ static func _lies_in(rr: DispatchRoots, rect: Rect2) -> bool:
 ## Whether any root of [param rr] (off the desk's top or on it) has a point inside one of [param boxes].
 static func _in_paper(rr: DispatchRoots, boxes: Array) -> bool:
 	for path in rr.hanging + rr.lying:
-		for q in (path as Dictionary)["points"]:
-			for b in boxes:
-				if (b as AABB).grow(-0.002).has_point(q):
-					return true
+		# along the line its tube is drawn on (smoothed once, as the mesh is), every centimeter - not only at its points
+		var pts: PackedVector3Array = (path as Dictionary)["points"]
+		var n := pts.size()
+		var drawn := PackedVector3Array()
+		for i in n:
+			drawn.append(pts[i] if i == 0 or i == n - 1 else (pts[i - 1] + pts[i] * 2.0 + pts[i + 1]) * 0.25)
+		for i in n - 1:
+			var steps := maxi(1, ceili(drawn[i].distance_to(drawn[i + 1]) / 0.01))
+			for k in steps + 1:
+				var q := drawn[i].lerp(drawn[i + 1], float(k) / float(steps))
+				for b in boxes:
+					if (b as AABB).grow(-0.002).has_point(q):
+						return true
 	return false

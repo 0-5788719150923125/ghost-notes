@@ -66,6 +66,10 @@ const STARTED := "started"
 const SOURCE_DIRS := ["src", "shaders", "scenes", "fonts", "data"]
 ## Read with FileAccess rather than loaded as resources, so the cache never lists them.
 const ALWAYS := ["res://project.godot", "res://scenes/main.tscn", STORYBOARD]
+## What only the demo note's making asks, loaded then: every desktop launch builds this node, and these reach the
+## reading's whole stack.
+const RECORDER := "res://src/app/showcase_recorder.gd"
+const NOTE_UPLOAD := "res://src/reading/note_upload.gd"
 
 var _render_pid := -1
 var _encode_pid := -1
@@ -181,14 +185,15 @@ static func make_demo_note(song_path := DEMO_SONG) -> String:
 		return ""
 	var song := ProjectSettings.globalize_path(song_path)
 	DirAccess.make_dir_recursive_absolute(song.get_base_dir())
-	if not FileAccess.file_exists(song) and not ShowcaseRecorder.write_song(song):
+	if not FileAccess.file_exists(song) and not bool((load(RECORDER) as GDScript).call("write_song", song)):
 		push_warning("ghost: could not write the demo note's song (%s)" % song)
 		return ""
 	var note := NoteStore.create(TITLE, BODY, {"song": {"path": song}, "medium": {"format": "full"},
 		"bookends": {"intro": INTRO, "outro": OUTRO}})
 	if note.is_empty():
 		return ""
-	var err := NoteStoryboard.write(NoteUpload.folder_of(note), read["data"])
+	var folder := String((load(NOTE_UPLOAD) as GDScript).call("folder_of", note))
+	var err := NoteStoryboard.write(folder, read["data"])
 	if not err.is_empty():
 		push_warning("ghost: could not keep the demo note's storyboard - %s" % err)
 	return note

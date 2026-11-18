@@ -84,8 +84,8 @@ func _run() -> void:
 	var seen := {}
 	var done := 0
 	for e in SceneRoster.SCENES:
-		var script: Script = e["script"]
-		var path := String(script.resource_path)
+		var path := String(e["path"])
+		var script: Script = load(path)
 		if seen.has(path):
 			continue
 		seen[path] = true

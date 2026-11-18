@@ -37,8 +37,14 @@ var transport: Node
 var provision: Node
 var environment: DepsPanel
 var graphics: GraphicsPanel
-var dex: DexWindow
+var dex: Window                 # a DexWindow, built when first opened
 var _dex_shelves: Array = []    # what the Dex opened on its own shows: the library's props and voices, and what scenes build
+
+## The Dex and its shelves, by path and loaded when it first opens: each shelf reaches most of what a show is made of,
+## which named here would compile before the notes list could show.
+const DEX := "res://src/ui/dex_window.gd"
+const DEX_SHELVES := ["res://src/table_show/library_props.gd", "res://src/voice/library_voices.gd",
+	"res://src/desk/desk_recipes.gd", "res://src/dispatch/dispatch_props.gd", "res://src/table/environment_section.gd"]
 
 var _env_layer: CanvasLayer
 var _env_button: Button
@@ -222,11 +228,12 @@ func open_dex(on: bool) -> void:
 			dex.hide()
 		return
 	if dex == null:
-		dex = DexWindow.new()
+		dex = (load(DEX) as GDScript).new()
 		add_child(dex)
 	if _dex_shelves.is_empty():
-		_dex_shelves = [LibraryProps.new(), LibraryVoices.new(), DeskRecipes.new(), DispatchProps.new(), EnvironmentSection.new()]
-	dex.open(_dex_shelves)
+		for path in DEX_SHELVES:
+			_dex_shelves.append((load(path) as GDScript).new())
+	dex.call("open", _dex_shelves)
 
 
 # --- the feedback console -----------------------------------------------------------------------

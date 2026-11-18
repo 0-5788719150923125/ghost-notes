@@ -5,13 +5,13 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 752 references inside a folder, 1290 down the stack, 0 up it.
+Between scripts today: 691 references inside a folder, 1277 down the stack, 0 up it.
 
 ## The stack, top first
 
 | folder | what it is | scripts | names |
 | --- | --- | --- | --- |
-| `app/` | The shell | 14 | `masking`, `dispatch`, `letter`, `desk`, `table_show`, `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `render`, `audio`, `platform`, `data` |
+| `app/` | The shell | 14 | `reading`, `export`, `timeline`, `show`, `media`, `ui`, `notes`, `agents`, `stage`, `render`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 14 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `likeness/` | Likeness | 15 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
 | `dispatch/` | Dispatch desk | 12 | `desk`, `table_show`, `table`, `reading`, `media`, `voice`, `ui`, `scene_kit`, `geometry`, `render`, `audio`, `data` |
@@ -197,3 +197,12 @@ The lifecycle around everything, and the one folder that names every other: main
 ## What still points up
 
 Nothing. Every reference between scripts stays in its folder or points down, and `python docs.py --check` fails the first one that does not.
+
+## What a launch compiles
+
+Godot compiles a script with every script it names by class or preload, wherever in it that is, so before anything shows a launch compiles the autoloads and what it builds, and all they name. What is opened later is loaded by path when it opens. `python docs.py --check` fails a launch past its budget (`BOOT` in [docs.py](../docs.py)) and names the references that brought the most in.
+
+| launch | builds | scripts | lines | budget |
+| --- | --- | --- | --- | --- |
+| the phone shell | `app/main`, `app/phone_shell` | 74 | 29,579 | 40,000 |
+| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 111 | 47,503 | 65,000 |

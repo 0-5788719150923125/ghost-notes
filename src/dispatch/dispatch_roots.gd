@@ -57,7 +57,11 @@ const GROWN_BY := 1500.0
 const KEEP_OUT_DESK := Rect2(-1.32, -0.62, 2.64, 2.6)
 const KEEP_OUT_TERMINAL := Rect2(-0.55, -1.25, 1.1, 0.7)
 ## How far a root keeps from what it goes round, past its own thickness (m).
-const CLEAR_GAP := 0.015
+const CLEAR_GAP := 0.04
+## The longest step along a hanging root's line before it is filled in (m, [method _dense]).
+const DENSE_STEP := 0.05
+## How many times a root's line is smoothed and cleared again before it is drawn ([method _kept_clear]).
+const CLEAR_PASSES := 4
 
 var _seed := 1
 var _v := {}                     # what the roots are told ([constant FIELDS]), as this build has it
@@ -131,8 +135,8 @@ func build(seed: int, footprints: Array, held := Rect2(), clear: Array = [], spe
 			n += 1
 		for k in UNDER:
 			_under_root(r, side, paths)
-	for path in paths:
-		(path as Dictionary)["points"] = _cleared((path as Dictionary)["points"], (path as Dictionary)["radii"])
+	for i in paths.size():
+		paths[i] = _drawn_clear(paths[i])
 	hanging = paths
 	var hang := MeshInstance3D.new()
 	hang.name = "Hanging"
@@ -242,40 +246,125 @@ static func _merged(boxes: Array) -> Array:
 
 
 ## [param pts] (each [param rad] thick) kept out of what no root goes through ([member _clear]) - the first [param upto] of them,
-## all for -1: a run of points inside one box pushed out together through the side nearest where it went in (x or z, never up
-## or down), so the root goes round it, [constant CLEAR_GAP] off.
+## all for -1: each run of points inside one box pushed out together through the side (x or z, never up or down) that moves the run
+## least in all - so a root passing through goes round the box's side, one only grazing it out by the face it touched -
+## [constant CLEAR_GAP] off.
 func _cleared(pts: PackedVector3Array, rad: PackedFloat32Array, upto := -1) -> PackedVector3Array:
 	if _clear.is_empty():
 		return pts
 	var out := pts.duplicate()
 	var n := pts.size() if upto < 0 else mini(upto, pts.size())
-	var face := -1
-	var was := -1
-	for i in n:
-		var p := out[i]
-		var inside := -1
+	var i := 0
+	while i < n:
+		var box := -1
 		for b in _clear.size():
-			if (_clear[b] as AABB).grow(rad[i] + CLEAR_GAP).has_point(p):
-				inside = b
+			if (_clear[b] as AABB).grow(rad[i] + CLEAR_GAP).has_point(out[i]):
+				box = b
 				break
-		if inside < 0:
-			face = -1
+		if box < 0:
+			i += 1
 			continue
-		var g: AABB = (_clear[inside] as AABB).grow(rad[i] + CLEAR_GAP)
-		if inside != was or face < 0:
-			was = inside
-			var by := [p.x - g.position.x, g.end.x - p.x, p.z - g.position.z, g.end.z - p.z]
-			face = by.find(by.min())
-		match face:
-			0:
-				p.x = g.position.x
-			1:
-				p.x = g.end.x
-			2:
-				p.z = g.position.z
-			_:
-				p.z = g.end.z
-		out[i] = p
+		var j := i
+		while j < n and (_clear[box] as AABB).grow(rad[j] + CLEAR_GAP).has_point(out[j]):
+			j += 1
+		var best := 0
+		var least := INF
+		for face in 4:
+			var cost := 0.0
+			for k in range(i, j):
+				cost += out[k].distance_to(_to_face(out[k], (_clear[box] as AABB).grow(rad[k] + CLEAR_GAP), face))
+			if cost < least:
+				least = cost
+				best = face
+		for k in range(i, j):
+			out[k] = _to_face(out[k], (_clear[box] as AABB).grow(rad[k] + CLEAR_GAP), best)
+		i = j
+	return out
+
+
+## [param p] moved out to side [param face] of [param g] (0 its low x, 1 high x, 2 low z, 3 high z).
+static func _to_face(p: Vector3, g: AABB, face: int) -> Vector3:
+	match face:
+		0:
+			p.x = g.position.x
+		1:
+			p.x = g.end.x
+		2:
+			p.z = g.position.z
+		_:
+			p.z = g.end.z
+	return p
+
+
+## [param path] (`{points, radii}`) with each step longer than [constant DENSE_STEP] filled in along a smooth curve through its own
+## points (Catmull-Rom; its radii between): the line its tube is drawn along ([method _mesh]), so what is kept clear ([method
+## _cleared]) is what is drawn - a long step's chord never cuts through what its ends go round.
+static func _dense(path: Dictionary) -> Dictionary:
+	var pts: PackedVector3Array = path["points"]
+	var rad: PackedFloat32Array = path["radii"]
+	var n := pts.size()
+	if n < 2:
+		return path
+	var out_p := PackedVector3Array()
+	var out_r := PackedFloat32Array()
+	for i in n - 1:
+		out_p.append(pts[i])
+		out_r.append(rad[i])
+		var steps := ceili(pts[i].distance_to(pts[i + 1]) / DENSE_STEP)
+		var a := pts[maxi(i - 1, 0)]
+		var b := pts[i]
+		var c := pts[i + 1]
+		var d := pts[mini(i + 2, n - 1)]
+		for k in range(1, steps):
+			var u := float(k) / float(steps)
+			var u2 := u * u
+			out_p.append(0.5 * (2.0 * b + (c - a) * u + (2.0 * a - 5.0 * b + 4.0 * c - d) * u2 + (3.0 * b - a - 3.0 * c + d) * u2 * u))
+			out_r.append(lerpf(rad[i], rad[i + 1], u))
+	out_p.append(pts[n - 1])
+	out_r.append(rad[n - 1])
+	var out := path.duplicate()
+	out["points"] = out_p
+	out["radii"] = out_r
+	return out
+
+
+## [param pts] kept out of what no root goes through ([method _cleared]) as it will be drawn: cleared, smoothed as its tube is
+## ([method _smoothed]) and cleared again, [constant CLEAR_PASSES] times - so where a run of it was moved out to a face, the stretch
+## between that and the rest is drawn outside too. The first [param upto] of them, all for -1.
+func _kept_clear(pts: PackedVector3Array, rad: PackedFloat32Array, upto := -1) -> PackedVector3Array:
+	var out := _cleared(pts, rad, upto)
+	if _clear.is_empty():
+		return out
+	for _k in CLEAR_PASSES:
+		out = _cleared(_smoothed(out, upto), rad, upto)
+	return out
+
+
+## Hanging root [param path] (`{points, radii}`) as it is drawn, kept out of what no root goes through ([member _clear]): filled in
+## ([method _dense]), cleared, then [constant CLEAR_PASSES] times filled in where clearing left a jump, smoothed and cleared again,
+## and filled in and cleared a last time - kept `drawn`, so its tube is drawn on just these points ([method _mesh]).
+func _drawn_clear(path: Dictionary) -> Dictionary:
+	var out := _dense(path)
+	if _clear.is_empty():
+		return out
+	out["points"] = _cleared(out["points"], out["radii"])
+	for _k in CLEAR_PASSES:
+		out = _dense(out)
+		out["points"] = _cleared(_smoothed(out["points"]), out["radii"])
+	out = _dense(out)
+	out["points"] = _cleared(out["points"], out["radii"])
+	out["drawn"] = true
+	return out
+
+
+## [param pts] smoothed once as a root's tube is drawn ([method _mesh]): each point a quarter of the way to its neighbours' middle, its
+## ends kept; the first [param upto] of them, all for -1.
+static func _smoothed(pts: PackedVector3Array, upto := -1) -> PackedVector3Array:
+	var n := pts.size()
+	var m := n if upto < 0 else mini(upto, n)
+	var out := pts.duplicate()
+	for i in range(1, mini(m, n - 1)):
+		out[i] = (pts[i - 1] + pts[i] * 2.0 + pts[i + 1]) * 0.25
 	return out
 
 
@@ -384,8 +473,15 @@ func _desk_root(r: RandomNumberGenerator, k: int, grid: AStarGrid2D, out: Array,
 	for i in n:
 		var u := float(i) / float(n - 1)
 		rad.append(lerpf(r0 * 1.8, TIP, pow(u, 0.9)))
-	# its way down round what fills the air by the desk; its way across the top keeps clear of what stands there already
-	pts = _cleared(pts, rad, edge)
+	# its way down filled in to the line it is drawn on, then round what fills the air by the desk; its way across the top keeps
+	# clear of what stands there already
+	var head := _dense({"points": pts.slice(0, edge + 1), "radii": rad.slice(0, edge + 1)})
+	var head_p: PackedVector3Array = head["points"]
+	var head_r: PackedFloat32Array = head["radii"]
+	pts = head_p.slice(0, head_p.size() - 1) + pts.slice(edge)
+	rad = head_r.slice(0, head_r.size() - 1) + rad.slice(edge)
+	edge = head_p.size() - 1
+	pts = _kept_clear(pts, rad, edge)
 	out.append({"points": pts, "radii": rad, "grow_at": edge})
 	lying.append({"points": pts, "radii": rad, "from": edge})
 	on_desk.append({"from": entry, "to": flat[flat.size() - 1]})
@@ -491,13 +587,14 @@ func _wander(r: RandomNumberGenerator, way: PackedVector2Array, amount: float) -
 	return out
 
 
-## Where a root can come onto the desk: points along its far edge, and down its ends, with nothing standing there.
+## Where a root can come onto the desk: points along its far edge, and down its ends, with nothing standing there and nothing it
+## must not go through ([member _clear]: the printer's paper falling past the end, its heap) where it comes down to it.
 func _gaps() -> Array:
 	var out: Array = []
 	var x := -DispatchSet.DESK_W * 0.5 + 0.06
 	while x < DispatchSet.DESK_W * 0.5 - 0.06:
 		var p := Vector2(x, DispatchSet.FAR + 0.015)
-		if not _blocked(p, 0.035) and not _blocked(p + Vector2(0, 0.06), 0.035):
+		if not _blocked(p, 0.035) and not _blocked(p + Vector2(0, 0.06), 0.035) and not _drops_through(p + Vector2(0, -0.08)):
 			out.append(p)
 			x += 0.16
 		x += 0.02
@@ -505,11 +602,21 @@ func _gaps() -> Array:
 		var z := DispatchSet.FAR + 0.1
 		while z < 0.1:
 			var p := Vector2(side * (DispatchSet.DESK_W * 0.5 - 0.015), z)
-			if not _blocked(p, 0.035):
+			if not _blocked(p, 0.035) and not _drops_through(p + Vector2(side * 0.08, 0)):
 				out.append(p)
 				z += 0.2
 			z += 0.03
 	return out
+
+
+## Whether a root coming down at [param p] (x, z) would come down through what it must not go through ([member _clear]), as thick as
+## a root on the desk at its thickest, and far enough round for its drop's wander.
+func _drops_through(p: Vector2) -> bool:
+	for b in _clear:
+		var box: AABB = b
+		if Rect2(box.position.x, box.position.z, box.size.x, box.size.z).grow(DESK_THICK.y * 1.8 + CLEAR_GAP + 0.06).has_point(p):
+			return true
+	return false
 
 
 func _blocked(p: Vector2, margin: float) -> bool:
@@ -545,13 +652,13 @@ func _mesh(paths: Array) -> ArrayMesh:
 		var n := pts.size()
 		if n < 2:
 			continue
-		# smoothed once, so the walk's steps are curves
+		# smoothed once, so the walk's steps are curves (a path kept as drawn already is: [method _drawn_clear])
 		var sm := PackedVector3Array()
 		for i in n:
 			var a := pts[maxi(i - 1, 0)]
 			var b := pts[i]
 			var c := pts[mini(i + 1, n - 1)]
-			sm.append(b if i == 0 or i == n - 1 else (a + b * 2.0 + c) * 0.25)
+			sm.append(b if i == 0 or i == n - 1 or pa.get("drawn", false) else (a + b * 2.0 + c) * 0.25)
 		var lens := PackedFloat32Array([0.0])
 		for i in range(1, n):
 			lens.append(lens[i - 1] + sm[i].distance_to(sm[i - 1]))

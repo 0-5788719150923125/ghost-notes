@@ -10,6 +10,22 @@ extends Node2D
 
 const Bake := preload("res://src/audio/bake.gd")
 
+## What main opens or asks, named by path and loaded when first used ([method _script]): a script named here by its
+## class or a preload compiles, with everything it names, before the notes list can show. The workspaces are most of
+## the app; the furniture and the notes list form one cycle the phone shell never shows.
+const CHROME := "res://src/app/chrome.gd"
+const NOTES_LIST := "res://src/app/notes_list.gd"
+const FEEDBACK := "res://src/app/feedback.gd"
+const SHOWCASE := "res://src/app/showcase.gd"
+const SHOWCASE_RECORDER := "res://src/app/showcase_recorder.gd"
+const NOTE_PANEL := "res://src/app/note_panel.gd"
+const READING_PANEL := "res://src/reading/reading_panel.gd"
+const NOTE_UPLOAD := "res://src/reading/note_upload.gd"
+const MASK_EDITOR := "res://src/masking/mask_editor.gd"
+const CARD_TABLE := "res://src/table/card_table.gd"
+const TABLE_EPISODE := "res://src/table_show/table_episode.gd"
+const LETTER_SKETCHES := "res://src/letter/letter_sketches.gd"
+
 ## How long the show clock may stand still in a render before it is reported, in seconds of render time.
 const CLOCK_STALL_WARN := 0.5
 
@@ -96,23 +112,24 @@ func _ready() -> void:
 				printerr("ghost/export-smoke: missing ", path)
 				get_tree().quit(1)
 				return
-		for face in CardTable.FACES:
-			if CardTable.font(String(face)) == ThemeDB.fallback_font:
+		var card_table := _script(CARD_TABLE)
+		for face in card_table.FACES:
+			if card_table.call("font", String(face)) == ThemeDB.fallback_font:
 				printerr("ghost/export-smoke: missing card font ", face)
 				get_tree().quit(1)
 				return
-		for path in [CardTable.BOOK_FACE, CardTable.BOOK_ITALIC]:
-			if CardTable.font(path) == ThemeDB.fallback_font:
+		for path in [card_table.BOOK_FACE, card_table.BOOK_ITALIC]:
+			if card_table.call("font", String(path)) == ThemeDB.fallback_font:
 				printerr("ghost/export-smoke: missing card font ", path)
 				get_tree().quit(1)
 				return
-		var feedback_probe := FeedbackConsole.new()
-		var feedback_dir := feedback_probe.dir
+		var feedback_probe: Node = _script(FEEDBACK).new()
+		var feedback_dir := String(feedback_probe.dir)
 		feedback_probe.free()
 		if Boot.project_dir() != OS.get_executable_path().get_base_dir() \
 				or not Boot.project_args().is_empty() \
 				or feedback_dir != "user://feedback" \
-				or MaskEditor._masks_dir() != "user://masks":
+				or String(_script(MASK_EDITOR).call("_masks_dir")) != "user://masks":
 			printerr("ghost/export-smoke: exported paths are not physical/user data paths")
 			get_tree().quit(1)
 			return
@@ -134,14 +151,15 @@ func _ready() -> void:
 	#`--episode-check <dir>`: print what is wrong with an episode as it stands, then exit; non-zero when
 	#anything is (next/editing.md).
 	if args.has("--episode-check"):
-		var said := TableEpisode.at_dir(_arg_value(args, "--episode-check")).problems()
+		var said: PackedStringArray = _script(TABLE_EPISODE).call("at_dir",
+			_arg_value(args, "--episode-check")).problems()
 		for p in said:
 			print("ghost: episode - " + p)
 		print("ghost: episode - %s" % ("nothing wrong" if said.is_empty() else "%d problem(s)" % said.size()))
 		get_tree().quit(0 if said.is_empty() else 1)
 		return
 	if args.has("--showcase-now"):
-		add_child(Showcase.new())
+		add_child(_script(SHOWCASE).new())
 		return
 	#The phone shell (next/notes.md): on a phone, or with --handheld, only the notes list and editor - no
 	#stage, transport, furniture or agent.
@@ -184,17 +202,17 @@ func _ready() -> void:
 	#The chrome is the shared session furniture (exporter, assistant, feedback console), created once
 	#here for every interactive mode; it persists across sessions so an in-flight export and a queued
 	#assistant dispatch survive the return to the home screen.
-	_chrome = preload("res://src/app/chrome.gd").new()
+	_chrome = _script(CHROME).new()
 	add_child(_chrome)
 	#something docked under the show took, or gave back, part of the frame: the stage refits
 	_chrome.stage_room_changed.connect(_sync_stage_size)
 	if args.has("--showcase"):
-		var rec := ShowcaseRecorder.new()
+		var rec: Node = _script(SHOWCASE_RECORDER).new()
 		rec.main = self
 		rec.work = _arg_value(args, "--showcase")
 		add_child(rec)
 		return
-	add_child(Showcase.new())
+	add_child(_script(SHOWCASE).new())
 	add_child(AutoDocs.new())
 	Spectrum.song_finished.connect(_on_song_finished)
 	_adopt_old_episodes()
@@ -226,8 +244,13 @@ func _wants_direct_boot() -> bool:
 	return args.has("--audio") or args.has("--scene") or args.has("--storyboard")
 
 
+## The script at [param path], compiled the first time it is asked for (see [constant CHROME]).
+static func _script(path: String) -> GDScript:
+	return load(path) as GDScript
+
+
 func _show_list() -> void:
-	var list := preload("res://src/app/notes_list.gd").new()
+	var list: Node = _script(NOTES_LIST).new()
 	list.open_note = open_note
 	_list = list
 	_note = ""
@@ -242,9 +265,11 @@ func _show_list() -> void:
 ## folder already there. Remove once it has run.
 func _adopt_old_episodes() -> void:
 	var old := ProjectSettings.globalize_path("user://cards")
-	var now := ProjectSettings.globalize_path(TableEpisode.ROOT)
-	if Settings.is_read_only() or TableEpisode.root != TableEpisode.ROOT \
-			or not DirAccess.dir_exists_absolute(old) or DirAccess.dir_exists_absolute(now):
+	if Settings.is_read_only() or not DirAccess.dir_exists_absolute(old):
+		return
+	var episodes := _script(TABLE_EPISODE)
+	var now := ProjectSettings.globalize_path(String(episodes.ROOT))
+	if String(episodes.root) != String(episodes.ROOT) or DirAccess.dir_exists_absolute(now):
 		return
 	if DirAccess.rename_absolute(old, now) != OK:
 		push_warning("ghost: could not move the episodes from %s to %s" % [old, now])
@@ -284,11 +309,12 @@ func _seed_demo_note() -> void:
 	if Settings.is_read_only() or NoteStore.root != NoteStore.DEFAULT \
 			or bool(Settings.read(NoteStore.SECTION, "demo_made", false)):
 		return
-	var path := Showcase.make_demo_note()
+	var showcase := _script(SHOWCASE)
+	var path := String(showcase.call("make_demo_note"))
 	if path.is_empty():
 		return
 	Settings.write(NoteStore.SECTION, "demo_made", true)
-	print("ghost: the demo note \"%s\" is in the notes list (%s)" % [Showcase.TITLE, path])
+	print("ghost: the demo note \"%s\" is in the notes list (%s)" % [showcase.TITLE, path])
 
 
 ## Open a note: every note opens the same way. What it has attached is read off its blocks
@@ -360,7 +386,8 @@ func note_moved(from: String, to: String) -> String:
 		_chrome.set_note(_note, delete_note, open_file)
 	var kept := ""
 	var may := not Settings.is_read_only()
-	for why in [LetterSketches.carry(from, to, may), NoteUpload.carry(from, to, may)]:
+	for why in [_script(LETTER_SKETCHES).call("carry", from, to, may),
+			_script(NOTE_UPLOAD).call("carry", from, to, may)]:
 		if not String(why).is_empty():
 			push_warning("ghost: " + String(why))
 			kept += " " + String(why)
@@ -416,7 +443,7 @@ func start_workspace(key: String, source := "", note := "") -> void:
 
 
 func _open_note_panel(path: String) -> void:
-	var panel: Node = preload("res://src/app/note_panel.gd").new()
+	var panel: Node = _script(NOTE_PANEL).new()
 	panel.path = path
 	panel.reopen = reopen_note
 	panel.note_moved = note_moved
@@ -889,7 +916,7 @@ func _arg_value(args: PackedStringArray, flag: String) -> String:
 ## is written by agents (its episode is a card on the same panel) - the same stream, export and
 ## subtitles.
 func _open_reading(workspace := "reading") -> void:
-	var editor := ReadingPanel.new()
+	var editor: Node = _script(READING_PANEL).new()
 	editor.workspace = workspace
 	editor.note_path = _note
 	editor.note_moved = note_moved
@@ -1005,7 +1032,7 @@ func _bind_captions(subs: Node) -> void:
 ## --mask-render <session.json>: the export relaunch. No notes list, no Director - just the clip,
 ## shader and audio, autoplaying, quitting when the audio ends (mirrors _export_mode, one layer down).
 func _begin_mask_render(session_path: String) -> void:
-	var editor := preload("res://src/masking/mask_editor.gd").new()
+	var editor: Node = _script(MASK_EDITOR).new()
 	editor.render_mode = true
 	add_child(editor)
 	editor.open_source(session_path)
@@ -1015,7 +1042,7 @@ func _begin_mask_render(session_path: String) -> void:
 ## (transcoded once and cached), or empty (its panel asks for one). [param note] is the note it is,
 ## where a clip chosen in the editor is written.
 func _open_mask_editor(path: String, note := "") -> void:
-	var editor := preload("res://src/masking/mask_editor.gd").new()
+	var editor: Node = _script(MASK_EDITOR).new()
 	editor.note_path = note
 	editor.reopen = reopen_note
 	_mask_editor = editor

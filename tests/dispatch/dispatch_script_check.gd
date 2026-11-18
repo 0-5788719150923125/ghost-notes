@@ -20,7 +20,9 @@ extends SceneTree
 ##   kept by id and opened again by a key as they last stood, typed lines kept with them, a digit's panel written after it,
 ##   a series key, `set:` changing a row in place, `{N}` holding a line part-drawn, `wait:` in place of the read (the control:
 ##   with none, the panel is read), `clear`, the body scrolling past sixteen rows, a command that opens nothing an INVALID
-##   OPTION and a warning, a strike taking the typed line off the glass, a print of what was typed (with none, the panel up);
+##   OPTION and a warning, a strike taking the typed line off the glass, a print of what was typed (with none, the panel up); a
+##   typed line naming an option chooses it - typed at the prompt, that row in inverse, read and thought over first, the camera
+##   held on it after (the control: a line naming none is typed into the body);
 ## - redacted words on the glass are themselves in the private plane, each character one, drawn back with their columns; a
 ##   command types them a key each; a run wraps whole (control: plain words wrap between them); on a said line they are
 ##   warned of and neither shown nor said;
@@ -212,6 +214,28 @@ func _init() -> void:
 	var shown_log := DispatchTerminal.at(back["glass"], back["ops"], INF)
 	_ok(String(shown_log["up"]) == "log" and Array(DispatchTerminal.up(shown_log)["body"]) == ["ONE."] and (log["warnings"] as PackedStringArray).is_empty(),
 		"a typed line is kept with its panel, and a key opens that panel again as it last stood (%s)" % str(DispatchTerminal.up(shown_log).get("body")))
+	# a typed line naming an option chooses it: typed on the command line, no line added, that row in inverse; the panel read
+	# and thought over before, the camera held on the choice after (the control: a line naming no option is typed into the body)
+	var pick := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```terminal\n> f\npanel: form = FORM 7\nCHOOSE ONE.\n"
+		+ "    [A] DID NOT NOTICE\n    [D] ALL OF THE ABOVE\ntype: [D]\n```\n\nSaid.\n")
+	var pacts: Array = pick["actions"]
+	var pi := _nth(pacts, "type", 0)
+	var pty: Dictionary = pacts[pi]
+	var psess: Dictionary = pacts[pi - 1]
+	var ptext := String(pty["text"])
+	var half := DispatchTerminal.typed(pty["glass"], ptext, 1)
+	var chose := DispatchTerminal.typed(pty["glass"], ptext, ptext.length())
+	var prows := DispatchTerminal.rows_of(chose, pick["terminal"])
+	var plain := DispatchTerminal.typed(pty["glass"], "ONE.", 4)
+	var after_pick: Dictionary = pacts[pi + 1] if pi + 1 < pacts.size() else {}
+	_ok(DispatchTerminal.up(chose)["body"] == DispatchTerminal.up(pty["glass"])["body"] and (prows["chosen"] as Vector3i).x == DispatchTerminal.BODY_TOP + 2
+		and String(half.get("command", "")) == "[" and String(after_pick.get("kind", "")) == "look" and String(after_pick.get("at", "")) == "terminal"
+		and float(after_pick.get("rest", 0.0)) >= DispatchTerminal.CHOICE_HOLD
+		and float(psess["rest"]) >= float(psess["len"]) - 0.001 and float(psess["rest"]) >= DispatchTerminal.READ_LEAST + DispatchTerminal.CHOICE_THINK
+		and (DispatchTerminal.up(plain)["body"] as PackedStringArray).size() == (DispatchTerminal.up(pty["glass"])["body"] as PackedStringArray).size() + 1
+		and DispatchTerminal.choice_row(pty["glass"], "ONE.") < 0,
+		"a typed [D] under its option chooses it - typed at the prompt, that row in inverse, read and thought over first (%.1f s), held after - the control: ONE. is typed into the body (%s)"
+		% [float(psess["rest"]), str(prows["chosen"])])
 	# a series key; set: a row changed in place; {N}: a line part-drawn
 	var again: Dictionary = actions[_nth(actions, "session", 2)]
 	var reopened := DispatchTerminal.at(again["glass"], again["ops"], INF)

@@ -10,7 +10,9 @@ extends Node
 ## hands the words a sentence at a time, a few seconds ahead, as a live reading does. `--sound <wav>` writes what the desk
 ## sounds like over the whole run to a file. `--opening title` opens on the channel's name over the blur, and `--lead S`
 ## gives the voice's first word S seconds in, as the intro's hold does. `--light K`, `--bright X`, `--shafts k=v,...`, `--air a,b`
-## and `--heard a,b` are the Environment card's (tests/table/environment_flags.gd). It prints where each action falls, and asserts
+## and `--heard a,b` are the Environment card's (tests/table/environment_flags.gd); `--terminal`, `--radar`, `--scope` and `--dial`
+## (each `#rrggbb`) the Props card's colors for the terminal's text, the radar's glow, the receiver's oscilloscope and its dial lamp.
+## It prints where each action falls, and asserts
 ## only that a frame is not uniform.
 
 const W := 1280
@@ -30,6 +32,7 @@ var _flat := 0
 var _opening := Openings.DEFAULT
 var _lead := 1.0
 var _environment := {}             # the Environment card's block ([Surroundings]): --light, --bright, --shafts, --air, --heard
+var _glass := {}                   # the screens' colors, as the Props card keeps them: --terminal, --radar, --scope, --dial
 
 const EnvFlags := preload("res://tests/table/environment_flags.gd")
 
@@ -55,6 +58,12 @@ func _run() -> void:
 			"--opening": _opening = args[i + 1]
 			"--lead": _lead = float(args[i + 1])
 			"--light", "--bright", "--shafts", "--air", "--heard": EnvFlags.take(_environment, args[i], args[i + 1])
+			"--terminal": _glass["terminal_screen"] = {"text": args[i + 1]}
+			"--radar": _glass["radar_screen"] = {"glow": args[i + 1]}
+			"--scope", "--dial":
+				if not _glass.has("receiver_glow"):
+					_glass["receiver_glow"] = {}
+				_glass["receiver_glow"][args[i].substr(2)] = args[i + 1]
 			"--times":
 				_times = []
 				for s in String(args[i + 1]).split(","):
@@ -87,7 +96,9 @@ func _run() -> void:
 	medium.feed.opening = _opening
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	subs.words = [] if _live else words
-	subs.document = {"source": source, "dispatch": {"seed": _seed, "pictures": pictures}, "environment": _environment,
+	var dispatch := {"seed": _seed, "pictures": pictures}
+	dispatch.merge(_glass)
+	subs.document = {"source": source, "dispatch": dispatch, "environment": _environment,
 		"title": "Targeted Individuality", "author": "Pen & Ink"}
 	add_child(subs)
 	medium.bind_captions(subs)

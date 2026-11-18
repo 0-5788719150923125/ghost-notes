@@ -172,7 +172,7 @@ func _cut(medium: Medium) -> void:
 			_live = handed
 		return
 	var entry: Dictionary = SceneRoster.SCENES[randi() % SceneRoster.SCENES.size()]
-	var sc: GhostScene = (entry["script"] as Resource).new()
+	var sc: GhostScene = load(String(entry["path"])).new()
 	# The Director's order: init_with_seed first, add_child second (see Director._make_scene); reversed, Node2D
 	# draws the node once uninitialized.
 	sc.init_with_seed(randi(), String(entry["behavior"]))

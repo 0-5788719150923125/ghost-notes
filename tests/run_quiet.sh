@@ -29,6 +29,7 @@
 # says so, rather than silently doing the annoying thing.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
+renice -n 19 -p $$ >/dev/null 2>&1 || true   # yields the processor to the app beside it (scripts/check.sh)
 
 GODOT="${GODOT:-godot}"   # scripts/check.sh and build.sh pass theirs
 RUNNER=("$GODOT")

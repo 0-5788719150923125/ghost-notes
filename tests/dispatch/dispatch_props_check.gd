@@ -20,7 +20,10 @@ extends Node
 ##   the block and read by the medium (four legs drawn - the control, the desk's own, none); the desk's own takes it back; Choose…
 ##   offers the desk's own and drawn desks, Use keeping one; the roots roll too, and are pictured and turned in 3D, grown round the
 ##   desk, which stands with them. The phones' entry carries their colors (each its own from a palette, or all the make's): a palette
-##   set is kept in the block, read by the medium and paints them (the control: the desk's own palette).
+##   set is kept in the block, read by the medium and paints them (the control: the desk's own palette). The terminal's, the radar's
+##   and the receiver's entries carry their glass's colors, kept apart from the make chosen: one picked is taken by the terminal's
+##   power light, the lights the two throw and the receiver's dial lamp, and draws each screen while the note plays (the controls:
+##   the desk's own lamps, lights and screens).
 ## - The card's rows: every thing the desk works, the mug and the cup of pencils first, each with Choose… (which opens the Dex
 ##   on its makes, Use choosing for the desk) and Keep, the clock and the tablet only where the script uses them; the Dex on its
 ##   own offers the desk's things and a desk's recipes to keep, never a desk's mat.
@@ -267,6 +270,71 @@ func _format_and_card() -> void:
 		and not in_palette.call(plain, "office") and not in_palette.call(plain, "pastel"),
 		"the phones are painted in the palette chosen (the control: the desk's own, office plastics); all the make's, in none")
 	_ok(sec.act("role:phone", "own").is_empty() and fmt.part("phones").is_empty(), "the desk's own takes their colors back")
+	# the terminal's and the radar's glass: a color on each entry, the screens' own until set; one picked is kept in the block apart
+	# from the make chosen, read by the medium, and its hue taken by the terminal's power light and every light the two throw (the
+	# control: the desk's own, its lamps and lights as the makes have them)
+	var term_row: Dictionary = by_key.call("role:terminal")
+	var radar_row: Dictionary = by_key.call("role:radar")
+	_ok((term_row.get("fields", {}) as Dictionary).has("text") and (radar_row.get("fields", {}) as Dictionary).has("glow")
+		and DispatchSet.terminal_ink({}).to_html(false) == DispatchScreens.PHOSPHOR.to_html(false)
+		and DispatchSet.radar_ink({}).to_html(false) == DispatchScreens.RADAR_GLOW.to_html(false),
+		"the terminal's and the radar's entries carry their glass's color, the screens' own until set")
+	var picked := DispatchMedium.makes_of(fmt.document()) if sec.set_field("role:terminal", "text", "#ffb000").is_empty() \
+		and sec.set_field("role:radar", "glow", "#ffa31a").is_empty() else {}
+	_ok(fmt.part("terminal_screen") == {"text": "#ffb000"} and picked.get("terminal_screen") == {"text": "#ffb000"}
+		and picked.get("radar_screen") == {"glow": "#ffa31a"} and not picked.has("terminal") and not picked.has("radar"),
+		"a color picked is kept in the block and read by the medium, apart from the make chosen (%s)" % str(picked))
+	var lit := func(makes: Dictionary) -> Dictionary:
+		var ds := DispatchSet.new()
+		ds.makes = makes
+		var n := ds.build(PackedStringArray(["A", "B"]), 3, {})
+		var out := {"lamps": [], "terminal": [], "radar": []}
+		for mi in (ds.rigs["terminal"] as PropRig).node.find_children("*", "MeshInstance3D", true, false):
+			var mat := (mi as MeshInstance3D).material_override as ShaderMaterial
+			if mat != null and String((mi as MeshInstance3D).get_meta("material", "")) == DispatchSet.TERMINAL_LAMP:
+				(out["lamps"] as Array).append(mat.get_shader_parameter("color"))
+		for k in ["terminal", "radar"]:
+			for l in (ds.rigs[k] as PropRig).lights():
+				(out[k] as Array).append((l as Light3D).light_color)
+		n.free()
+		return out
+	var hue_near := func(cs: Array, h: float) -> bool:
+		return not cs.is_empty() and cs.all(func(c: Color) -> bool: return absf(c.h - h) < 0.01 and c.s > 0.2)
+	var own_lit: Dictionary = lit.call({})
+	var amber_lit: Dictionary = lit.call(picked)
+	var own_lamp := Color.html(String(((PropMakes.own_of("terminal")["materials"] as Dictionary)[DispatchSet.TERMINAL_LAMP] as Dictionary)["color"]))
+	_ok((own_lit["lamps"] as Array).size() >= 2 and (own_lit["lamps"] as Array).all(func(c: Color) -> bool: return c.is_equal_approx(own_lamp))
+		and not hue_near.call(own_lit["terminal"], Color.html("#ffb000").h) and not hue_near.call(own_lit["radar"], Color.html("#ffa31a").h),
+		"the control: with nothing picked the terminal's lamps and the lights are the makes' own (%s)" % str(own_lit))
+	_ok(hue_near.call(amber_lit["lamps"], Color.html("#ffb000").h) and hue_near.call(amber_lit["terminal"], Color.html("#ffb000").h)
+		and hue_near.call(amber_lit["radar"], Color.html("#ffa31a").h),
+		"a color picked is taken by the terminal's power light and the lights the two throw (%s)" % str(amber_lit))
+	_ok(sec.act("role:terminal", "roll").is_empty() and fmt.part("terminal_screen").get("text") == "#ffb000"
+		and fmt.part("terminal_screen").has("seed"), "a roll keeps the color picked")
+	_ok(sec.act("role:terminal", "own").is_empty() and fmt.part("terminal_screen").is_empty() and sec.act("role:radar", "own").is_empty()
+		and fmt.part("radar_screen").is_empty(), "the desk's own takes the colors back")
+	# the receiver's glows: its oscilloscope's color and its dial's lamp on its entry, kept apart from its make, the lamp lighting
+	# the dial in the color picked (the control: the desk's own, the warm lamp it has always had)
+	var recv_row: Dictionary = by_key.call("role:receiver")
+	_ok((recv_row.get("fields", {}) as Dictionary).has("scope") and (recv_row.get("fields", {}) as Dictionary).has("dial")
+		and (DispatchSet.receiver_inks({})["scope"] as Color).to_html(false) == DispatchScreens.SCOPE_GLOW.to_html(false),
+		"the receiver's entry carries its oscilloscope's color and its dial lamp's, the scope's own until set")
+	var glows := DispatchMedium.makes_of(fmt.document()) if sec.set_field("role:receiver", "dial", "#b8ffc8").is_empty() \
+		and sec.set_field("role:receiver", "scope", "#7fd4ff").is_empty() else {}
+	_ok(glows.get("receiver_glow") == {"dial": "#b8ffc8", "scope": "#7fd4ff"} and not glows.has("receiver"),
+		"the receiver's colors are kept in the block and read by the medium, apart from its make (%s)" % str(glows))
+	var lamp_of := func(makes: Dictionary) -> String:
+		var ds := DispatchSet.new()
+		ds.makes = makes
+		var n := ds.build(PackedStringArray(["A"]), 3, {"dial": PlaceholderTexture2D.new()})
+		var m := ds.dial.material_override as StandardMaterial3D if ds.dial != null else null
+		var out := m.emission.to_html(false) if m != null else ""
+		n.free()
+		return out
+	var own_dial: String = lamp_of.call({})
+	var green_dial: String = lamp_of.call(glows)
+	_ok(own_dial == "ffd98c" and green_dial == "b8ffc8", "the dial's lamp lights it in the color picked (%s; the control, its own: %s)" % [green_dial, own_dial])
+	_ok(sec.act("role:receiver", "own").is_empty() and fmt.part("receiver_glow").is_empty(), "the desk's own takes the receiver's colors back")
 	var card := PropsCard.new(func() -> Array: return [sec])
 	add_child(card)
 	card.refresh(true)
@@ -476,6 +544,18 @@ func _remade_live() -> void:
 	var set_now: DispatchSet = md._set
 	md._ensure_doc()
 	_ok(md._set == set_now, "the control: the same choices again build nothing")
+	# colors picked while the note plays: each screen drawn in its own, the title in the terminal's hue, the reading kept where it is
+	# (the control: the screens' own until then)
+	var inks := func() -> PackedStringArray:
+		return PackedStringArray([md._screens._term_ink.to_html(false), md._screens._radar_ink.to_html(false), md._screens._scope_ink.to_html(false)])
+	var own_inks: PackedStringArray = inks.call()
+	(subs.document["dispatch"] as Dictionary)["terminal_screen"] = {"text": "#ffb000"}
+	(subs.document["dispatch"] as Dictionary)["radar_screen"] = {"glow": "#ffa31a"}
+	(subs.document["dispatch"] as Dictionary)["receiver_glow"] = {"scope": "#7fd4ff"}
+	md._ensure_doc()
+	_ok(own_inks == PackedStringArray([DispatchScreens.PHOSPHOR.to_html(false), DispatchScreens.RADAR_GLOW.to_html(false), DispatchScreens.SCOPE_GLOW.to_html(false)])
+		and inks.call() == PackedStringArray(["ffb000", "ffa31a", "7fd4ff"]) and absf(md._title.ink.h - Color.html("#ffb000").h) < 0.01
+		and md._built_n == built_n, "colors picked while the note plays draw each screen in its own, the reading kept (%s, was %s)" % [inks.call(), own_inks])
 	md.free()
 	st.queue_free()
 

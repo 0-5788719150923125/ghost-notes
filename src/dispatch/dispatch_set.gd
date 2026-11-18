@@ -144,6 +144,27 @@ const PHONE_PALETTES := {
 	"metal": [Color(0.62, 0.63, 0.66), Color(0.27, 0.28, 0.3), Color(0.66, 0.57, 0.42), Color(0.16, 0.16, 0.17), Color(0.45, 0.47, 0.5)],
 	"pastel": [Color(0.86, 0.6, 0.66), Color(0.58, 0.8, 0.7), Color(0.58, 0.72, 0.88), Color(0.72, 0.64, 0.86), Color(0.9, 0.86, 0.68)],
 }
+## The terminal's and the radar's glass colors ([Roll]; kept in the block's `terminal_screen` and `radar_screen`, [DispatchProps]): any
+## color picked, green until then, a roll drawing among a few phosphors. Each default is [constant DispatchScreens.PHOSPHOR] and
+## [constant DispatchScreens.RADAR_GLOW] to 8 bits.
+const TERMINAL_FIELDS := {
+	"text": {"label": "Text color", "blurb": "The color the screen's text glows in. The light the screen throws and the power light take its hue.",
+		"type": "color", "default": "#6eff81", "roll": ["#6eff81", "#ffb000", "#e8eef2"]},
+}
+const RADAR_FIELDS := {
+	"glow": {"label": "Glow color", "blurb": "The color the scope's sweep, rings and blips glow in. The light the radar throws takes its hue.",
+		"type": "color", "default": "#45ff5b", "roll": ["#45ff5b", "#ffa31a", "#d9ff4d"]},
+}
+## The receiver's glows ([Roll]; kept in the block's `receiver_glow`): its oscilloscope's trace and the lamp behind its dial, any color
+## picked, the scope's default [constant DispatchScreens.SCOPE_GLOW] to 8 bits.
+const RECEIVER_FIELDS := {
+	"scope": {"label": "Scope color", "blurb": "The color the oscilloscope's grid and trace glow in.",
+		"type": "color", "default": "#49ff60", "roll": ["#49ff60", "#ffb000", "#7fd4ff"]},
+	"dial": {"label": "Dial light", "blurb": "The color of the lamp lighting the tuning dial from behind.",
+		"type": "color", "default": "#ffd98c", "roll": ["#ffd98c", "#ffc070", "#b8ffc8"]},
+}
+## The material a terminal make's lamps wear (its power light, its case's light), which take the hue of its text.
+const TERMINAL_LAMP := "green light"
 const PACK_TRIES := 300
 ## What the camera turns to keeps in sight ([method _sights]): of each face read (a label, a dial, a screen, the clock's
 ## cards), at most this share hidden by a nearer thing packed in front of it, seen from the chair and from its own spot...
@@ -1017,12 +1038,46 @@ static func own_seed(k: String, seed: int) -> int:
 
 # --- the terminal -----------------------------------------------------------------------------------------------------
 
+## The terminal's text color as [param spec] keeps it (`{seed, <its fields set>}`, [constant TERMINAL_FIELDS]): its own until set or
+## rolled.
+static func terminal_ink(spec: Dictionary) -> Color:
+	return Color.html(String(Roll.own_or_drawn(TERMINAL_FIELDS, spec)["text"]))
+
+
+## The radar's glow as [param spec] keeps it ([constant RADAR_FIELDS]).
+static func radar_ink(spec: Dictionary) -> Color:
+	return Color.html(String(Roll.own_or_drawn(RADAR_FIELDS, spec)["glow"]))
+
+
+## The receiver's oscilloscope's color and its dial's lamp ([constant RECEIVER_FIELDS]) as [param spec] keeps them: `{scope, dial}`.
+static func receiver_inks(spec: Dictionary) -> Dictionary:
+	var v := Roll.own_or_drawn(RECEIVER_FIELDS, spec)
+	return {"scope": Color.html(String(v["scope"])), "dial": Color.html(String(v["dial"]))}
+
+
+## [param rig]'s lights, and its parts of material [param lamp] ("" for none), made to go with [param ink] in place of [param own],
+## the glass color its make was made with ([method DispatchScreens.tinted]): a screen's light and a power light take the hue picked.
+func _tint(rig: PropRig, lamp: String, own: Color, ink: Color) -> void:
+	for l in rig.lights():
+		(l as Light3D).light_color = DispatchScreens.tinted((l as Light3D).light_color, own, ink)
+	if lamp.is_empty():
+		return
+	var done := {}
+	for mi in rig.node.find_children("*", "MeshInstance3D", true, false):
+		var mat := (mi as MeshInstance3D).material_override as ShaderMaterial
+		if mat == null or done.has(mat) or String((mi as MeshInstance3D).get_meta("material", "")) != lamp:
+			continue
+		done[mat] = true
+		mat.set_shader_parameter("color", DispatchScreens.tinted(mat.get_shader_parameter("color"), own, ink))
+
+
 ## The terminal and its keyboard, their makes ([PropMakes] `terminal`, `keyboard`) standing where the desk keeps them, and the
 ## keyboard's coiled cable laid from the keyboard's `cable` point to the terminal's. The glass ([member terminal_screen]) is the
-## medium's to hand a picture.
+## medium's to hand a picture; its lights and lamps take the hue of its text ([method _tint]).
 func _terminal() -> void:
 	var t := _place("terminal", _desk_pos(CASE_AT), 0.0)
 	terminal_screen = t.face("screen")
+	_tint(t, TERMINAL_LAMP, DispatchScreens.PHOSPHOR, terminal_ink(makes.get("terminal_screen", {})))
 	_body("terminal", t.node)
 	_faces["terminal"] = _read("terminal")
 	var kb := _place("keyboard", _desk_pos(KEYBOARD_AT), 0.8)
@@ -1137,10 +1192,12 @@ func _keypad_mat() -> Material:
 # --- the radar --------------------------------------------------------------------------------------------------------
 
 ## The radar's make ([PropMakes] `radar`) where the desk keeps it, turned to the chair: its glass ([member radar_screen]) the
-## medium's, its gain knob turned as the medium feeds it (`gain`), and the scale printed round the knob on its `scale` face.
+## medium's, its gain knob turned as the medium feeds it (`gain`), and the scale printed round the knob on its `scale` face; its light
+## takes the hue of its glow ([method _tint]).
 func _radar() -> void:
 	var t := _place("radar", desk_at("radar"), turn["radar"])
 	radar_screen = t.face("scope")
+	_tint(t, "", DispatchScreens.RADAR_GLOW, radar_ink(makes.get("radar_screen", {})))
 	var sf := t.face("scale")
 	if sf != null and _tex.has("gain"):
 		var scale := StandardMaterial3D.new()
@@ -1168,8 +1225,9 @@ const DIAL_GLOW := 0.22
 
 
 ## The receiver's make ([PropMakes] `receiver`): its `dial` face printed with the frequency ([DispatchScreens]' dial, lit from
-## behind), its needle swinging as the medium feeds it (`signal`), its oscilloscope's trace ([member scope_screen]) the medium's;
-## and two wires run up from its `antenna` points into the dark.
+## behind by a lamp of the color its properties pick, [constant RECEIVER_FIELDS]), its needle swinging as the medium feeds it
+## (`signal`), its oscilloscope's trace ([member scope_screen]) the medium's; and two wires run up from its `antenna` points into
+## the dark.
 func _receiver() -> void:
 	var t := _place("receiver", desk_at("receiver"), turn["receiver"])
 	dial = t.face("dial")
@@ -1179,7 +1237,7 @@ func _receiver() -> void:
 		dmat.albedo_color = Color(DIAL_PAPER, DIAL_PAPER, DIAL_PAPER)
 		dmat.emission_enabled = true
 		dmat.emission_texture = _tex["dial"]
-		dmat.emission = Color(1.0, 0.85, 0.55)
+		dmat.emission = receiver_inks(makes.get("receiver_glow", {}))["dial"]
 		dmat.emission_energy_multiplier = DIAL_GLOW
 		dial.material_override = dmat
 	scope_screen = t.face("scope")
@@ -1594,6 +1652,7 @@ func lay_cables(lying: Array = [], hanging: Array = []) -> void:
 	var low := DESK_Y + CABLE_R
 	var solids := _cable_solids()
 	var caps := _cable_capsules(lying + hanging)
+	var roots_caps := caps.duplicate()
 	_over_roots_dear(grid, caps)
 	var panel_front: float = pp.z + 0.025
 	# each socket's plug, which the other cables keep clear of
@@ -1625,9 +1684,23 @@ func lay_cables(lying: Array = [], hanging: Array = []) -> void:
 			laid = true
 			break
 		if not laid:
-			# round the panel to the desk's far edge beside it, and over the edge, down out of sight
+			# round the panel to the desk's far edge beside it and over the edge, down out of sight: on its own side where the way
+			# along the edge there crosses no root, else on the other, else where it was going
 			var side := signf(a.x - pp.x + 0.001)
-			var edge_x := pp.x + side * (0.24 + 0.012 * float(maxi(k - ports.size(), 0)) + r.randf_range(0.0, 0.03))
+			var off := 0.24 + 0.012 * float(maxi(k - ports.size(), 0)) + r.randf_range(0.0, 0.03)
+			var edge_x := pp.x + side * off
+			var found := false
+			for way_side in [side, -side]:
+				for step in 12:
+					var x: float = pp.x + way_side * (off + 0.025 * float(step))
+					if absf(x) > DESK_W * 0.5 - 0.05:
+						break
+					if not _edge_crosses_root(pp.x + way_side * 0.22, x, roots_caps):
+						edge_x = x
+						found = true
+						break
+				if found:
+					break
 			var way := _lay(grid, from, Vector2(edge_x, FAR + 0.012))
 			for q in way:
 				pts.append(Vector3((q as Vector2).x, low, (q as Vector2).y))
@@ -1638,7 +1711,15 @@ func lay_cables(lying: Array = [], hanging: Array = []) -> void:
 		# a rope laid along that way, a little slack and a little over it, let fall and settled on what is under it ([Rope])
 		# (along the way as laid: a curve drawn through its corners can overshoot into a loop the rope would keep; the rope's own
 		# stiffness rounds them as it settles)
-		var rope := Rope.resampled(_floored(PackedVector3Array(pts), low), CABLE_LINK)
+		var rope := Rope.resampled(Rope.rounded(_floored(PackedVector3Array(pts), low), CABLE_ROUND, 2, 2), CABLE_LINK)
+		var laid_rope := rope
+		rope = Rope.meandered(rope, CABLE_MEANDER.x, CABLE_MEANDER.y, r.randf_range(0.0, TAU), CABLE_PLUG + CABLE_LINK * 2.0)
+		# (never wandered off the desk: what was laid on its top stays on it, back from its edges)
+		for i in rope.size():
+			var was := laid_rope[i]
+			if was.y <= low + 0.01 and _on_desk(was):
+				rope[i].z = clampf(rope[i].z, FAR + CABLE_EDGE_KEEP, NEAR - CABLE_EDGE_KEEP)
+				rope[i].x = clampf(rope[i].x, -DESK_W * 0.5 + CABLE_EDGE_KEEP, DESK_W * 0.5 - CABLE_EDGE_KEEP)
 		for i in range(1, rope.size() - 1):
 			rope[i].y += CABLE_DROP
 		rope = Rope.lifted_over(rope, caps, CABLE_R)
@@ -1648,9 +1729,16 @@ func lay_cables(lying: Array = [], hanging: Array = []) -> void:
 			var n := rope.size()
 			rope[n - 2] = rope[n - 1] + plug_out * rope[n - 1].distance_to(rope[n - 2])
 		# held at its socket, and at its port where it is plugged in, straight for a link out of each as a plug holds it; one fallen
-		# over the edge hangs free
-		var pins := [0, 1, rope.size() - 2, rope.size() - 1] if laid else [0, 1]
-		var settled := Rope.settle(rope, pins, CABLE_R, CABLE_STIFF, solids, caps + stubs.slice(0, k) + stubs.slice(k + 1), 0.0, CABLE_SLACK)
+		# over the edge held where it crosses it and where it hangs down out of sight, so its weight never pulls the rest taut
+		var pins := [0, 1, rope.size() - 2, rope.size() - 1] if laid else [0, 1, rope.size() - 1]
+		if not laid:
+			# and where it goes over the edge, so what hangs never drags what lies on the desk
+			for i in range(2, rope.size() - 1):
+				if rope[i].z < FAR:
+					pins.append(i)
+					break
+		var settled := Rope.settle(rope, pins, CABLE_R, CABLE_STIFF, solids, caps + stubs.slice(0, k) + stubs.slice(k + 1), 0.0, CABLE_SLACK,
+			CABLE_GAP)
 		# what the next cables lie on: this one, where it crosses their way
 		for i in settled.size() - 1:
 			caps.append([settled[i], settled[i + 1], CABLE_R + CABLE_GAP])
@@ -1658,6 +1746,17 @@ func lay_cables(lying: Array = [], hanging: Array = []) -> void:
 		cable_paths.append(path)
 		var mat: Material = _mats["cable_blue"] if k % 2 == 0 else _mats["cable_yellow"]
 		_cable_nodes.append(put(root, tube(path, CABLE_R, 6), mat, Vector3.ZERO))
+
+
+## Whether the way along the desk's far edge from [param x0] to [param x1] passes a root of [param roots] ([constant CABLE_EDGE_CLEAR]),
+## or the cable falling over the edge at [param x1] would.
+static func _edge_crosses_root(x0: float, x1: float, roots: Array) -> bool:
+	var n := maxi(1, ceili(absf(x1 - x0) / 0.01))
+	for i in n + 1:
+		var x := lerpf(x0, x1, float(i) / float(n))
+		if _in_capsules(Vector3(x, DESK_Y + 0.01, FAR + 0.02), roots, CABLE_EDGE_CLEAR if i == n else 0.01):
+			return true
+	return false
 
 
 ## Whether [param p] is within [param radius] of a capsule of [param caps] (each `[from, to, radius]`).
@@ -1680,8 +1779,12 @@ func _cable_solids() -> Array:
 	for k in _parts:
 		for part in _parts[k]:
 			var pd: Dictionary = part
+			# (what stands on the desk reaches down into it, so a cable caught under its foot leaves by its side, never between them)
+			var lo := float(pd["lo"])
+			if lo <= DESK_Y + 0.003:
+				lo = DESK_Y - 0.5
 			if (pd["outline"] as PackedVector2Array).size() >= 3:
-				out.append({"outline": pd["outline"], "lo": pd["lo"], "hi": pd["hi"]})
+				out.append({"outline": pd["outline"], "lo": lo, "hi": pd["hi"]})
 			else:
 				out.append(pd["box"])
 	out.append_array(clear)
@@ -1719,6 +1822,10 @@ func _desk_grid() -> AStarGrid2D:
 		var w := 1.0 + CABLE_FRONT * float(row) / float(rows)
 		for col in cols:
 			g.set_point_weight_scale(Vector2i(col, row), w)
+			# (never along the very back edge or an end, where a nudge would tip a cable over it)
+			var c := _at_cell(Vector2i(col, row))
+			if c.y < FAR + CABLE_EDGE_ROOM or absf(c.x) > DESK_W * 0.5 - CABLE_EDGE_ROOM:
+				g.set_point_solid(Vector2i(col, row), true)
 	for k in _parts:
 		for part in _parts[k]:
 			var pd: Dictionary = part
@@ -2130,12 +2237,23 @@ const CABLES := 12
 const CABLE_R := 0.0024
 const CABLE_LINK := 0.015
 const CABLE_STIFF := 0.9
-const CABLE_SLACK := 0.015
+const CABLE_SLACK := 0.03
 const CABLE_DROP := 0.012
 ## How far a cable comes straight out of a socket or a port before it bends (m): a plug's length, held as it is; and how far it
-## keeps from a root or another cable it lies over (m: the curve drawn through its links cuts a bend by about a millimeter).
+## keeps from a thing, a root or another cable (m: the curve drawn through its links cuts a bend by about a millimeter).
 const CABLE_PLUG := 0.012
 const CABLE_GAP := 0.002
+## How far each corner of a cable's way is rounded off along either side before it settles (m: at most; a quarter of a side where
+## that is less), so it lies in curves, not runs and corners.
+const CABLE_ROUND := 0.025
+## How far a cable laid along the desk wanders to either side of its way, and how long a wander is (m): it lies in curves.
+const CABLE_MEANDER := Vector2(0.012, 0.28)
+## How far back from the desk's edges a cable laid on it is kept as it wanders (m), and how far from a root a cable falling over its
+## far edge falls (m).
+const CABLE_EDGE_KEEP := 0.008
+## How far in from the desk's back edge and its ends a cable is laid along them (m).
+const CABLE_EDGE_ROOM := 0.02
+const CABLE_EDGE_CLEAR := 0.06
 ## A cable laid over the desk ([method _desk_grid]): the grid's cell (m), how much dearer the desk's front edge is than its back,
 ## and how much dearer a cell is once a cable lies on it.
 const CABLE_CELL := 0.01

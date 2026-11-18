@@ -11,88 +11,91 @@ class_name SceneRoster
 ## The order and the names are the show's: the Director picks by an entry's file name and
 ## behavior (`_scene_key`), so renaming a file or moving an entry's behavior re-rolls every
 ## seeded show that drew it.
+##
+## A row names its scene BY PATH, loaded when the scene is built ([method script_at]): a preload here
+## compiles every scene and all it uses wherever the Director is, at every launch and in every gate.
 
-## Each entry pairs a scene script with a motion behavior (see GhostScene). A scene may appear
+## Each entry pairs a scene script (`path`) with a motion behavior (see GhostScene). A scene may appear
 ## with several behaviors; that keeps the un-modulated "static" looks as options.
 const SCENES := [
-	{"script": preload("res://src/scenes/spectrum_ring.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/spectrum_ring.gd"), "behavior": "fluid"},
-	{"script": preload("res://src/scenes/harmonic_lattice.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/harmonic_lattice.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/rooted_growth.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/filaments.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/filaments.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/furry.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/furry.gd"), "behavior": "fluid"},
-	{"script": preload("res://src/scenes/fog_lights.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/strata.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/bloom.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/bloom.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/wire_solid.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/planes.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/planes.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/voxel_blocks.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/cityscape.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/shatter_glass.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/gaussian_landscape.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/rocks.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/embers.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/metropolis.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/clockwork.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/clockwork.gd"), "behavior": "drift"},
+	{"path": "res://src/scenes/spectrum_ring.gd", "behavior": "static"},
+	{"path": "res://src/scenes/spectrum_ring.gd", "behavior": "fluid"},
+	{"path": "res://src/scenes/harmonic_lattice.gd", "behavior": "static"},
+	{"path": "res://src/scenes/harmonic_lattice.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/rooted_growth.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/filaments.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/filaments.gd", "behavior": "static"},
+	{"path": "res://src/scenes/furry.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/furry.gd", "behavior": "fluid"},
+	{"path": "res://src/scenes/fog_lights.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/strata.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/bloom.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/bloom.gd", "behavior": "static"},
+	{"path": "res://src/scenes/wire_solid.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/planes.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/planes.gd", "behavior": "static"},
+	{"path": "res://src/scenes/voxel_blocks.gd", "behavior": "static"},
+	{"path": "res://src/scenes/cityscape.gd", "behavior": "static"},
+	{"path": "res://src/scenes/shatter_glass.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/gaussian_landscape.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/rocks.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/embers.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/metropolis.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/clockwork.gd", "behavior": "static"},
+	{"path": "res://src/scenes/clockwork.gd", "behavior": "drift"},
 	# Weather & atmosphere - composed from the shared Layer registry (see src/scene_kit/layer.gd).
-	{"script": preload("res://src/scenes/snowfall.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/snowflakes.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/rainfall.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/clouds.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/clouds.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/fog_volume.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/fire.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/underwater.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/fireflies.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/starfield.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/starfield.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/aurora.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/fog_bank.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/petals.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/bubbles.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/motes.gd"), "behavior": "drift"},
+	{"path": "res://src/scenes/snowfall.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/snowflakes.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/rainfall.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/clouds.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/clouds.gd", "behavior": "static"},
+	{"path": "res://src/scenes/fog_volume.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/fire.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/underwater.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/fireflies.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/starfield.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/starfield.gd", "behavior": "static"},
+	{"path": "res://src/scenes/aurora.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/fog_bank.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/petals.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/bubbles.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/motes.gd", "behavior": "drift"},
 	# Vapors - the field half of the atmosphere (see scenes/vapors.gd): a fragment program with a hard front and fiber, on both behaviors.
-	{"script": preload("res://src/scenes/vapors.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/vapors.gd"), "behavior": "static"},
+	{"path": "res://src/scenes/vapors.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/vapors.gd", "behavior": "static"},
 	# Worlds & projections - real 3D terrain, cities on it, latent geometry.
-	{"script": preload("res://src/scenes/projection.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/projection.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/terrain.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/terrain.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/terrain_city.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/spires.gd"), "behavior": "drift"},
+	{"path": "res://src/scenes/projection.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/projection.gd", "behavior": "static"},
+	{"path": "res://src/scenes/terrain.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/terrain.gd", "behavior": "static"},
+	{"path": "res://src/scenes/terrain_city.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/spires.gd", "behavior": "drift"},
 	# wallpaper.gd is not registered: an unchanging motif reads as a texture and a beat glide as the camera slipping. [WallpaperGroup] stays for a redesign.
 	# Simulation, structure and graphic work - each a language nothing else speaks: a running physical state, a symmetry group, a written script, a routed graph, a plant in depth, standing waves.
-	{"script": preload("res://src/scenes/chladni.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/chladni.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/glyphs.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/falling_sand.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/falling_sand.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/neural_field.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/canopy.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/cloth.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/murmuration.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/tidepool.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/tidepool.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/contour_map.gd"), "behavior": "drift"},
+	{"path": "res://src/scenes/chladni.gd", "behavior": "static"},
+	{"path": "res://src/scenes/chladni.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/glyphs.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/falling_sand.gd", "behavior": "static"},
+	{"path": "res://src/scenes/falling_sand.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/neural_field.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/canopy.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/cloth.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/murmuration.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/tidepool.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/tidepool.gd", "behavior": "static"},
+	{"path": "res://src/scenes/contour_map.gd", "behavior": "drift"},
 	# Long-form motion - `fractal_zoom` (detail at every scale, so the camera can move forward forever) and `tunnel_run` (a first-person ride); both on `drift`, the fractal also on `static`.
-	{"script": preload("res://src/scenes/fractal_zoom.gd"), "behavior": "drift"},
-	{"script": preload("res://src/scenes/fractal_zoom.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/tunnel_run.gd"), "behavior": "drift"},
+	{"path": "res://src/scenes/fractal_zoom.gd", "behavior": "drift"},
+	{"path": "res://src/scenes/fractal_zoom.gd", "behavior": "static"},
+	{"path": "res://src/scenes/tunnel_run.gd", "behavior": "drift"},
 	# "the-point" scenes (camera holds, per the brief).
-	{"script": preload("res://src/scenes/eye.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/two_eyes.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/prism.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/prism_split.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/eye_prism.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/two_prisms.gd"), "behavior": "static"},
-	{"script": preload("res://src/scenes/prism_swarm.gd"), "behavior": "drift"},
+	{"path": "res://src/scenes/eye.gd", "behavior": "static"},
+	{"path": "res://src/scenes/two_eyes.gd", "behavior": "static"},
+	{"path": "res://src/scenes/prism.gd", "behavior": "static"},
+	{"path": "res://src/scenes/prism_split.gd", "behavior": "static"},
+	{"path": "res://src/scenes/eye_prism.gd", "behavior": "static"},
+	{"path": "res://src/scenes/two_prisms.gd", "behavior": "static"},
+	{"path": "res://src/scenes/prism_swarm.gd", "behavior": "drift"},
 ]
 
 ## The LAYER transition phases two scenes asynchronously: the incoming fades in over the
@@ -115,13 +118,19 @@ const ATMOSPHERIC := [
 ]
 
 
+## The script of entry [param i], compiled the first time a scene of it is asked for.
+static func script_at(i: int) -> Script:
+	return load(String(SCENES[i]["path"])) as Script
+
+
+## The name of entry [param i]'s scene: its file's name, the pick key.
+static func name_at(i: int) -> String:
+	return String(SCENES[i]["path"]).get_file().get_basename()
+
+
 ## The script of the scene named [param name] (its file's name) - the rotation's, or any scene file a
 ## storyboard may name, as the Director loads it - or null.
 static func script_of(name: String) -> Script:
-	for e in SCENES:
-		var s: Script = (e as Dictionary)["script"]
-		if s.resource_path.get_file().get_basename() == name:
-			return s
 	var path := "res://src/scenes/%s.gd" % name
 	return load(path) as Script if ResourceLoader.exists(path) else null
 

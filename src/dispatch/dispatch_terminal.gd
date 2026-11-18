@@ -20,7 +20,9 @@ class_name DispatchTerminal
 ##                                body; with an id it is kept, and comes back as it last stood. `NAME`, `NAME | L` too
 ##     panel: id                  a kept panel opened again, its body drawn down the glass
 ##     keys: N NEXT > id, X MENU  the panel's keys, on its keys row; `> id` binds the key to a kept panel
-##     type: words                typed into the body and said behind the keys ([DispatchScript]), wrapped at the width
+##     type: words                typed into the body and said behind the keys ([DispatchScript]), wrapped at the width; one that
+##                                names an option on the panel (`type: [D]` under `[D] ALL OF THE ABOVE`) chooses it: typed on
+##                                the command line and entered, that row shown in inverse - thought over first, kept in sight after
 ##     type (Name): words         ...said in that voice
 ##     key: words                 typed into the body quickly and never said
 ##     show: words                drawn down the body, wrapped at the width
@@ -69,6 +71,10 @@ const KEY_LINE := 0.06
 const KEY_LINE_MOST := 7.0
 ## A panel read before the next step: a new one READ_LEAST and READ_WORD a word, at most READ_MOST; one come back to, a
 ## glance. An alert, the same way.
+## How long the operator thinks over the options of a panel before choosing one, past reading it (s), and how long the choice
+## stays in sight before what follows ([method choice_row]).
+const CHOICE_THINK := 1.5
+const CHOICE_HOLD := 1.8
 const READ_LEAST := 1.0
 const READ_WORD := 0.1
 const READ_MOST := 5.0
@@ -502,8 +508,20 @@ static func _typed_n(times: PackedFloat32Array, r: float, text: String, whole: b
 
 
 ## The glass [param glass] with the first [param n] characters of a said line [param text] (wrapped, its rows on lines)
-## typed under the panel up; all of it noted as the line last typed, which a strike takes away.
+## typed under the panel up; all of it noted as the line last typed, which a strike takes away. A line naming an option on the
+## panel ([method choice_row]) is typed on the command line instead and, entered, chooses that row: shown in inverse.
 static func typed(glass: Dictionary, text: String, n: int) -> Dictionary:
+	var choice := choice_row(glass, text)
+	if choice >= 0:
+		var gc := glass.duplicate()
+		var pc := _own_up(gc)
+		gc["cursor"] = "command"
+		if n < text.length():
+			gc["command"] = text.substr(0, maxi(n, 0))
+		else:
+			gc["command"] = ""
+			pc["chosen"] = choice
+		return gc
 	var g := glass.duplicate()
 	var p := _own_up(g)
 	var body: PackedStringArray = p["body"]
@@ -557,13 +575,37 @@ static func lit_share(st: Dictionary) -> float:
 	var bar: Variant = st.get("bar")
 	if bar is Vector2i and (bar as Vector2i).x >= 0:
 		lit += float((bar as Vector2i).y - (bar as Vector2i).x) * (0.75 - LIT_GLYPH)
+	var pick: Variant = st.get("chosen")
+	if pick is Vector3i and (pick as Vector3i).x >= 0:
+		lit += float((pick as Vector3i).z - (pick as Vector3i).y) * (0.75 - LIT_GLYPH)
 	for line in (st.get("alert", PackedStringArray()) as PackedStringArray):
 		lit += float(String(line).length() + 4) * LIT_GLYPH
 	return clampf(lit / (float(COLUMNS * ROWS) * LIT_FULL), 0.0, 1.0)
 
 
+## The body row of the panel up on [param glass] that a typed [param text] chooses - an option row beginning with its bracketed
+## label (`[D] ALL OF THE ABOVE` for `[D]` or `D`), the last such - or -1 where it names none.
+static func choice_row(glass: Dictionary, text: String) -> int:
+	var t := text.strip_edges().to_upper()
+	if t.is_empty() or t.contains("\n") or t.length() > 5:
+		return -1
+	var label := t if t.begins_with("[") else "[%s]" % t
+	if _rx("^\\[[^\\]\\s]{1,3}\\]$").search(label) == null:
+		return -1
+	var p := up(glass)
+	if p.is_empty():
+		return -1
+	var body: PackedStringArray = p.get("body", PackedStringArray())
+	for i in range(body.size() - 1, -1, -1):
+		var row := String(body[i]).strip_edges().to_upper()
+		if row.begins_with(label) and row.length() > label.length():
+			return i
+	return -1
+
+
 ## The glass [param g] as its rows: `{lines (ROWS of them, the panel set in the middle), bar: Vector2i (row 1's columns,
-## inverse), cursor: Vector2i (column, row), alert: PackedStringArray}`.
+## inverse), chosen: Vector3i (a chosen option's row and its first and last columns, inverse; row -1 none), cursor: Vector2i
+## (column, row), alert: PackedStringArray}`.
 static func rows_of(g: Dictionary, cfg: Dictionary) -> Dictionary:
 	var width := int(cfg.get("width", WIDTH))
 	var pad := maxi(0, (COLUMNS - width) / 2)
@@ -571,6 +613,7 @@ static func rows_of(g: Dictionary, cfg: Dictionary) -> Dictionary:
 	lines.resize(ROWS)
 	var p := up(g)
 	var bar := Vector2i(-1, -1)
+	var chosen := Vector3i(-1, 0, 0)
 	var body_end := BODY_TOP
 	var last_row := ""
 	if not p.is_empty():
@@ -584,6 +627,11 @@ static func rows_of(g: Dictionary, cfg: Dictionary) -> Dictionary:
 		var from := maxi(0, shown.size() - BODY_ROWS)
 		for k in range(from, shown.size()):
 			lines[BODY_TOP + k - from] = shown[k]
+		var pick := int(p.get("chosen", -1))
+		if pick >= from and pick < shown.size():
+			var text := String(shown[pick])
+			var lead_in := text.length() - text.lstrip(" ").length()
+			chosen = Vector3i(BODY_TOP + pick - from, pad + lead_in, pad + text.rstrip(" ").length())
 		body_end = BODY_TOP + shown.size() - from
 		last_row = String(shown[shown.size() - 1]) if not shown.is_empty() else ""
 		lines[KEYS_ROW] = spread(_labels(p["keys"] as Array), width)
@@ -594,7 +642,7 @@ static func rows_of(g: Dictionary, cfg: Dictionary) -> Dictionary:
 	var cursor := Vector2i(pad + PROMPT.length() + String(g.get("command", "")).length(), COMMAND_ROW)
 	if String(g.get("cursor", "command")) == "body":
 		cursor = Vector2i(pad + last_row.length(), maxi(body_end - 1, BODY_TOP))
-	return {"lines": lines, "bar": bar, "cursor": cursor, "alert": g.get("alert", PackedStringArray())}
+	return {"lines": lines, "bar": bar, "chosen": chosen, "cursor": cursor, "alert": g.get("alert", PackedStringArray())}
 
 
 ## How long the operator reads panel [param p] before going on: [constant READ_LEAST] and [constant READ_WORD] a word on it,
