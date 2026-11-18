@@ -74,7 +74,7 @@ stays a note. The ScriptMarks registry has a row for each (docs/script.md).
 | `dispatch.gd` | `DispatchMedium`: the world, the schedule (a [ReadingFollower]), the state of every thing at a moment, the camera, the opening, the pictures, the captions |
 | `dispatch_set.gd` | `DispatchSet`: the desk and everything on it, built - terminal, keyboard, phones, radar, receiver and scope, printer and its heap, the three screens, the switch, the chart, the handbook, the things, the chair, the room |
 | `dispatch_desk.gd` | `DispatchDesk`: the desk itself - its wood, top, blotter and base - built from properties (`FIELDS`), each drawn by its number until set |
-| `dispatch_roots.gd` | `DispatchRoots`: the roots grown and meshed, how many hang, lie on the desk and stand beside it, how thick and how they wander (`FIELDS`) |
+| `dispatch_roots.gd` | `DispatchRoots`: the roots grown and meshed, how many hang, lie on the desk and stand beside it, how thick and how they wander (`FIELDS`); a hanging root kept clear of the printer's paper and heap along the very line its tube is drawn on (`_drawn_clear`: filled in, each run moved round the side that moves it least, smoothed and cleared again), and none comes down onto the desk where the paper falls |
 | `dispatch_screens.gd` | the 2D faces drawn into the screens: the terminal (its redacted words as written, and where they lie), the radar and its clutter, the scope, a phone's two screens and keypad, the receiver's dial, the gain knob's scale |
 | `dispatch_censor.gd` | `DispatchCensor`: redacted words hidden over the finished frame - a tracked box cracked into flat shards (`shaders/dispatch_redact.gdshader`) |
 | `dispatch_sounds.gd` | `DispatchSounds`: every sound of the desk, a function of show time |
@@ -337,7 +337,10 @@ The revised night (rift's `MEDIUM.md`, its design and what differs from it) is t
   any desk mark at its point. The note's `terminal:` block holds the title, the width and the keys every panel shares. The
   parse simulates the glass through the whole note, so every action at the terminal carries the glass it starts from and
   the medium plays its own steps at a moment (`DispatchMedium.terminal_at`). A panel is read before the next step - a new
-  one by its words, one come back to a glance - unless a `wait:` says how long.
+  one by its words, one come back to a glance - unless a `wait:` says how long; a typed line straight after it waits for the
+  read too. A typed line naming an option on the panel (`type: [D]` under `[D] ALL OF THE ABOVE`) chooses it: thought over
+  past the read (`CHOICE_THINK`), typed at the prompt, that row shown in inverse (never a new line), and the camera held on it
+  after (`CHOICE_HOLD`, a `look` at the terminal).
 - **The camera stays on the glass** after a block or a typed line while the voice talks of what is up
   (`DispatchMedium._glass_hold`: the panel's words read, `GLASS_LEAST` to `GLASS_MOST`, to the end of the sentence), and on
   however long the voice goes on, through to what comes next (`GLASS_LINGER` is unbounded): never pulled back to the whole

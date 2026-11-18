@@ -480,14 +480,20 @@ func _run() -> void:
 	away.mount(st)
 	away.load_note(body, {"seed": 3})
 	var on_worker := away._set == null and away._build_task >= 0 and away._waiting
+	# waited for as long as the build takes (CI runs four gates on four cores): the clock only stops a hang
+	var held_all := true
 	var frames := 0
-	while away._set == null and frames < 900:
+	var a0 := Time.get_ticks_msec()
+	while away._set == null and Time.get_ticks_msec() - a0 < 120000:
+		held_all = held_all and away._waiting
 		away.advance(null, 0.016, 1.0)
 		await process_frame
 		frames += 1
+	var away_ms := Time.get_ticks_msec() - a0
 	DispatchMedium.away_in_tests = false
-	_ok(on_worker and away._set != null and not away._waiting and away._roots.on_desk.size() >= 2,
-		"in the app the desk is built on a worker, the show held until it lands (%d frames)" % frames)
+	print("  the desk built on a worker in %d ms (%d frames)" % [away_ms, frames])
+	_ok(on_worker and held_all and away._set != null and not away._waiting and away._roots.on_desk.size() >= 2,
+		"in the app the desk is built on a worker, the show held until it lands (%d frames, %d ms)" % [frames, away_ms])
 	md.queue_free()
 	live.queue_free()
 	away.queue_free()
