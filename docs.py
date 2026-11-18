@@ -17,7 +17,7 @@ All of it is parsed statically (no Godot boot) and written to:
   docs/stage.md        - the storyboard stage: Cast actors + Actions verbs.
   docs/table.md        - a table show's data as rows: acts, things, parts, the laws.
   docs/props.md        - props and the library: the Dex, roles, refining, what a prop is made of.
-  docs/surroundings.md - the Environment card: light presets, shafts, what drifts in the air, what is heard.
+  docs/surroundings.md - the Environment card: kinds of element, light presets, looks of shafts, and every property each takes.
   docs/masking.md      - the Masking: effects, controls, CLI.
   docs/script.md       - every mark a script may carry.
   docs/architecture.md - how the show is made, from the audio to a video file.
@@ -1213,32 +1213,67 @@ def props_page(classes: Dict[str, Script]) -> str:
 
 
 def surroundings_page(card: Script, sur: Script) -> str:
-    """docs/surroundings.md: the Environment card (`EnvironmentCard`) and what it chooses from (`Surroundings`' LIGHTS, AIR and
-    SOUNDS), each row as a person picks it."""
-    lights, air, sounds = sur.const("LIGHTS", {}), sur.const("AIR", {}), sur.const("SOUNDS", {})
-    for name, reg in (("LIGHTS", lights), ("AIR", air), ("SOUNDS", sounds)):
+    """docs/surroundings.md: the Environment card (`EnvironmentCard`) and what can be round a scene (`Surroundings`' KINDS, the
+    light presets, the looks of shafts) with every property each kind can be told and the bounds Roll draws it in."""
+    kinds, lights, looks = sur.const("KINDS", {}), sur.const("LIGHTS", {}), sur.const("SHAFT_LOOKS", {})
+    for name, reg in (("KINDS", kinds), ("LIGHTS", lights), ("SHAFT_LOOKS", looks)):
         if not reg:
             warn(f"could not parse Surroundings.{name}")
+
+    def bounds(f: Dict[str, Any]) -> str:
+        if "options" in f and isinstance(f["options"], list):
+            return ", ".join(f"`{o}`" for o in f["options"])
+        if "min" in f and "max" in f:
+            return f"{f['min']:g} to {f['max']:g}"
+        return ""
+
+    def roll(f: Dict[str, Any]) -> str:
+        r = f.get("roll")
+        if isinstance(r, list) and len(r) == 2 and all(type(x) in (int, float) for x in r):
+            return f"{r[0]:g} to {r[1]:g}"
+        if isinstance(r, list):
+            return ", ".join(f"`{o}`" for o in r)
+        return "never: its default until set"
+
+    def fields_table(fields: Dict[str, Any]) -> List[str]:
+        return table(["Property", "What it is", "Type", "Bounds", "Rolled in"],
+                     ([f"`{k}` {text(f, 'label')}", md(text(f, "blurb")), f"`{text(f, 'type')}`", bounds(f), roll(f)]
+                      for k, f in fields.items() if isinstance(f, dict)))
+
+    sounds = sur.const("SOUND_FIELDS", {})
     blocks: List[Block] = [
-        "What is round the scene a note is shown in, chosen on its Environment card. The plan and its status are "
+        "What is round the scene a note is shown in, a list of elements on its Environment card. The plan and its status are "
         "[next/environment.md](../next/environment.md).",
         "## The card", f"{full_doc(card.doc)}\n\nSource: {link(card.rel)}",
-        "## What it chooses from", f"{full_doc(sur.doc)}\n\nSource: {link(sur.rel)}",
-        f"### Light ({len(lights)})",
-        "Each preset (`Surroundings.LIGHTS`): how often a desk's number draws it (0: only ever chosen), and what it is.",
+        "## What can be round a scene", f"{full_doc(sur.doc)}\n\nSource: {link(sur.rel)}",
+        f"### Kinds ({len(kinds)})",
+        "Each kind of element (`Surroundings.KINDS`): the Dex's shelf it stands on, and whether a scene has at most one.",
+        table(["Kind", "Shelf", "One", "What it is"],
+              ([f"`{k}` {text(r, 'label')}", f"`{text(r, 'group')}`", "yes" if r.get("one") else "", md(text(r, "blurb"))]
+               for k, r in kinds.items())),
+        f"### Light presets ({len(lights)})",
+        "Each preset (`Surroundings.LIGHTS`) a light element chooses: how often a desk's number draws it (0: only ever chosen), "
+        "and what it is. The Dex offers each as an element of its own.",
         table(["Light", "Drawn", "What it is"],
               ([f"`{k}` {text(r, 'label')}", f"{float(r.get('weight', 0)):g}", md(text(r, "blurb"))] for k, r in lights.items())),
-        f"### In the air ({len(air)})",
-        "Any together (`Surroundings.AIR`): each an effect of the table's `Effects`, over a region every host names.",
-        table(["Tick", "What it is", "Effect", "Where"],
+        f"### Looks of light shafts ({len(looks)})",
+        "Shafts offered on the Dex beside the kind as it rolls (`Surroundings.SHAFT_LOOKS`), each with some properties set.",
+        table(["Look", "What it is", "Set"],
               ([f"`{k}` {text(r, 'label')}", md(text(r, "blurb")),
-                f"`{text(r.get('effect') or {}, 'kind')}`" + (f" `{text(r.get('effect') or {}, 'look')}`" if text(r.get('effect') or {}, 'look') else ""),
-                f"`{text(r.get('effect') or {}, 'where')}`"] for k, r in air.items())),
-        f"### Heard ({len(sounds)})",
-        "Any together (`Surroundings.SOUNDS`): each a part of a `Soundscape`'s sound, laid under the voice.",
-        table(["Tick", "What it is", "Soundscape part"],
-              ([f"`{k}` {text(r, 'label')}", md(text(r, "blurb")), f"`{text(r, 'part')}`"] for k, r in sounds.items())),
+                ", ".join(f"`{a}` {b:g}" if type(b) in (int, float) else f"`{a}` {b}" for a, b in pairs(r, "set").items())]
+               for k, r in looks.items())),
+        "## What each can be told",
+        "A property set stays; one left unset is drawn from the element's own number inside the bounds it is rolled in (`Roll`), "
+        "so Roll gives another of the same thing.",
+        "### A light (`LIGHT_FIELDS`)", fields_table(sur.const("LIGHT_FIELDS", {})),
+        "### Light shafts (`SHAFT_FIELDS`)", fields_table(sur.const("SHAFT_FIELDS", {})),
+        "### Haze (`FOG_FIELDS`)", fields_table(sur.const("FOG_FIELDS", {})),
+        "### What drifts (`MOTE_FIELDS`)",
+        "Size, glow, speed and color default to each kind's own (the table's `Effects.MOTES`), and are rolled near them.",
+        fields_table(sur.const("MOTE_FIELDS", {})),
     ]
+    for part, fields in sounds.items():
+        blocks += [f"### Heard: `{part}` (`SOUND_FIELDS`)", fields_table(fields)]
     return page("The Environment: what is round a scene", [b for b in blocks if b])
 
 
@@ -2388,10 +2423,9 @@ def main() -> int:
          "the library of props and voices, the Dex, the Props card, roles any make can play, refining a prop into "
          "versions, and what every prop is made of."),
         ("surroundings", "The Environment",
-         f"{count('surroundings', 'LIGHTS')} lights, {count('surroundings', 'AIR')} things in the air, "
-         f"{count('surroundings', 'SOUNDS')} sounds",
-         "what is round the scene a note is shown in: its light, shafts through its haze, what drifts in its air, "
-         "what is heard, and how strongly each lit thing shines."),
+         f"{count('surroundings', 'KINDS')} kinds, {count('surroundings', 'LIGHTS')} lights",
+         "what is round the scene a note is shown in, a list of elements: its light, shafts through its haze, what drifts "
+         "in its air, what is heard - each with properties a person sets or Roll draws - and how strongly each lit thing shines."),
         ("masking", "Masking effects", str(count("mask_session", "MASK_EFFECTS")),
          "the video effects editor: its model, its effects and its headless tools."),
         ("script", "Script marks", str(count("script_marks")),

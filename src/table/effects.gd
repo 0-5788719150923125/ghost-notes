@@ -12,7 +12,8 @@ class_name Effects
 ## time and the seed, never stepped frame by frame, so a render and a scrub see the same picture. The fog is Godot's own volumetric fog
 ## (a FogVolume per stretch, [constant FOG_SHADER]): lights in it light it, so candles glow through it, and a mote that carries a light
 ## makes a colored glow in the fog around it. Sparks fly on the GPU from where and when they were born ([constant SPRITE_SHADER]); motes
-## are placed on the CPU, which also moves their lights.
+## are placed on the CPU, which also moves their lights - but motes that only drift (dust: no light, no visits, no wind, [method
+## drifts]) wander on the GPU too, from their homes and ways of wandering, so there can be hundreds of them for nothing.
 ##
 ## The wind moves the air ([Winds], the stage's `wind`, when the light wrote one - [method Winds.blows]): what rides the air (dust, snow,
 ## embers) is carried through the shot and tossed in its eddies, and the shot keeps about as many as it had, each gone downwind coming
@@ -103,8 +104,10 @@ const BURSTS := {
 const SHAPES := {"orb": 0, "streak": 1, "flame": 2, "puff": 3, "star": 4, "flake": 5, "speck": 6}
 
 ## The most of each: effects in all, fogs, motes in one population and in all, lit motes (each a
-## light), and particles a burst makes over all its moments.
+## light), and particles a burst makes over all its moments. Motes that only drift ([method drifts]) are posed on the GPU and cost no
+## frame: up to [constant MAX_ADRIFT] in one population, none of them counted in [constant MAX_MOTES_ALL].
 const MAX_EFFECTS := 8
+const MAX_ADRIFT := 600
 ## A mote's home where the camera turns round the scene (stage `around`): never nearer the lens than this (m).
 const AROUND_CLEAR := 0.45
 const MAX_FOG := 3
@@ -235,11 +238,15 @@ static func sanitize(raw: Variant, palette: Array, regions: Array, moments: Arra
 				if not MOTES.has(look) or where.is_empty():
 					continue
 				var base: Dictionary = MOTES[look]
-				var n := int(Props._num(d.get("count"), 8.0, 1.0, float(MAX_MOTES)))
-				n = mini(n, MAX_MOTES_ALL - motes)
+				var lit := Props._flag(d.get("light"), bool(base["light"])) and String(base["shape"]) != "speck"
+				var adrift := drifts(base, lit)
+				var n := int(Props._num(d.get("count"), 8.0, 1.0, float(MAX_ADRIFT if adrift else MAX_MOTES)))
+				if not adrift:
+					n = mini(n, MAX_MOTES_ALL - motes)
 				if n <= 0:
 					continue
-				motes += n
+				if not adrift:
+					motes += n
 				fx["look"] = look
 				fx["where"] = where
 				fx["count"] = n
@@ -249,7 +256,7 @@ static func sanitize(raw: Variant, palette: Array, regions: Array, moments: Arra
 				fx["speed"] = Props._num(d.get("speed"), 0.5, 0.0, 1.0)
 				fx["away"] = Props._num(d.get("away"), 0.3, 0.0, 0.9)
 				# a dark speck carries no light
-				fx["light"] = Props._flag(d.get("light"), bool(base["light"])) and String(base["shape"]) != "speck"
+				fx["light"] = lit
 			"burst":
 				var look := String(d.get("look", "")).strip_edges().to_lower()
 				var on := _pick(d.get("on", ""), moments)
@@ -277,6 +284,14 @@ static func sanitize(raw: Variant, palette: Array, regions: Array, moments: Arra
 				continue
 		out.append(fx)
 	return out
+
+
+## Whether motes of look [param look] (a [constant MOTES] row), carrying a light or not ([param lit]), only drift - wander about
+## their homes, never rising, falling, blinking or zig-zagging, and carrying no light - so the GPU can pose them ([constant
+## MAX_ADRIFT]) where nothing else moves them (no wind, no visits).
+static func drifts(look: Dictionary, lit: bool) -> bool:
+	return String(look["flight"]) == "drift" and float(look["rise"]) == 0.0 and float(look["blink"]) == 0.0 and not lit \
+		and String(look["shape"]) != "speck"
 
 
 ## Which times a moment happens a burst marks, made safe: "every", "first", "last", or a list of times
@@ -478,13 +493,18 @@ static func _sprites(count: int, shader: Shader, root: Node3D) -> Dictionary:
 static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, lights_left: int) -> Dictionary:
 	var look: Dictionary = MOTES[String(fx["look"])]
 	var box: AABB = _info(stage, String(fx["where"]))["motes"]
-	var n := int(fx["count"])
+	var stage_wind: Dictionary = stage.get("wind", {}) if stage.get("wind") is Dictionary else {}
+	# posed on the GPU where it only drifts: no light, no visits, no wind to ride; otherwise on the CPU, as many as it can afford
+	var adrift := drifts(look, bool(fx["light"])) and float(fx.get("away", 0.0)) <= 0.0 and not Winds.blows(stage_wind)
+	var n := int(fx["count"]) if adrift else mini(int(fx["count"]), MAX_MOTES)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = salt
 	var speck := String(look["shape"]) == "speck"
 	var layer := _sprites(n, SPECK_SHADER if speck else SPRITE_SHADER, root)
 	var mat: ShaderMaterial = layer["mat"]
-	mat.set_shader_parameter("posed", true)
+	mat.set_shader_parameter("posed", not adrift)
+	mat.set_shader_parameter("drifting", adrift)
+	mat.set_shader_parameter("flicker", float(look["flicker"]))
 	mat.set_shader_parameter("shape", int(SHAPES[String(look["shape"])]))
 	if speck:
 		# its body is a third of its quad, so the quad smears three times as far as the body moves
@@ -552,7 +572,14 @@ static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, l
 		each.append(m)
 		var mm: MultiMesh = layer["mm"]
 		# the quad holds the mote's halo as well as its core: three times the core's size
-		mm.set_instance_custom_data(i, Color(0, 0, 0, size * 3.0 * rng.randf_range(0.8, 1.2)))
+		var quad := size * 3.0 * rng.randf_range(0.8, 1.2)
+		mm.set_instance_custom_data(i, Color(0, 0, 0, quad))
+		if adrift:
+			# its home and ways of wandering in its transform, its own number and speed in its custom data: the GPU poses it
+			mm.set_instance_transform(i, Transform3D(Basis(m["ax"], m["ay"], m["az"]), home))
+			mm.set_instance_custom_data(i, Color(float(m["seed"]), speed, 0.0, quad))
+			var lc := (m["color"] as Color).srgb_to_linear()
+			mm.set_instance_color(i, Color(lc.r, lc.g, lc.b, 1.0))
 		if bool(fx["light"]) and lights.size() < lights_left:
 			var l := OmniLight3D.new()
 			l.light_color = m["color"]
@@ -568,7 +595,7 @@ static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, l
 	# the air lifts motes over itself, and past a table's edge a mote leaving into the room may go down
 	var floor_y := minf(_air_floor(stage), box.position.y)
 	var wind: Dictionary = stage.get("wind", {}) if stage.get("wind") is Dictionary else {}
-	return {"fx": fx, "look": look, "box": box, "each": each, "layer": layer, "lights": lights,
+	return {"fx": fx, "look": look, "box": box, "each": each, "layer": layer, "lights": lights, "drifting": adrift,
 		"glow": float(fx["glow"]), "away": float(fx["away"]), "under": stage.get("occluders", []),
 		"clear": LIT_CLEAR if bool(fx["light"]) else CLEAR, "floor": floor_y,
 		"wind": wind if Winds.blows(wind) else {}, "felt": {}}
@@ -1132,6 +1159,9 @@ class Air:
 		for d in drifts:
 			Drifts.tick(d, t)
 		for pop in motes:
+			if bool(pop.get("drifting", false)):
+				((pop["layer"] as Dictionary)["mat"] as ShaderMaterial).set_shader_parameter("show_time", t)
+				continue
 			var mm: MultiMesh = (pop["layer"] as Dictionary)["mm"]
 			var each: Array = pop["each"]
 			var speck := String((pop["look"] as Dictionary)["shape"]) == "speck"

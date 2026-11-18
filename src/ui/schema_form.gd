@@ -24,8 +24,9 @@ class_name SchemaForm
 ##
 ## A bounded number is a slider beside its box (next/editing.md step 5): dragged, it is one edit,
 ## written as the drag ends, and unset, it stands at the default, dimmed, and sets the value only once
-## moved. `color` is a picker, written `#rrggbb`; `ref` a choice among the names the context lists under
-## the field's `of` (an actor, a thing, a point), "" unsetting it.
+## moved. `color` is a picker, written `#rrggbb` once it closes; `ref` a choice among the names the context lists under
+## the field's `of` (an actor, a thing, a point), "" unsetting it. An `enum`'s `labels` name its options where they say more than
+## the key.
 
 ## A row was moved: the field's key and its new value; null unsets the key.
 signal edited(key: String, value: Variant)
@@ -217,7 +218,8 @@ func _add_row(key: String, raw: Dictionary, values: Dictionary, context: Diction
 	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	control.tooltip_text = String(field.get("blurb", ""))
 	if not has:
-		control.modulate = DIM
+		# a color dimmed by fading would show the picker's checkerboard through it: darkened instead
+		control.modulate = DIM if String(field.get("type", "")) != "color" else Color(0.6, 0.6, 0.6)
 	row.add_child(control)
 	var reset := Button.new()
 	reset.text = "↺"
@@ -240,7 +242,7 @@ func _control(key: String, field: Dictionary, value: Variant, has: bool, context
 			box.toggled.connect(func(on: bool) -> void: _emit(key, on))
 			return box
 		"enum":
-			return _choice(key, field.get("options", []) as Array, String(value) if value != null else "")
+			return _choice(key, field.get("options", []) as Array, String(value) if value != null else "", field.get("labels", {}) as Dictionary)
 		"scene":
 			return _choice(key, context.get("scenes", []) as Array, String(value) if value != null else "")
 		"actor":
@@ -272,8 +274,11 @@ func _control(key: String, field: Dictionary, value: Variant, has: bool, context
 			pick.color = Color.from_string(String(value if has and value != null else field.get("default", "#ffffff")), Color.WHITE)
 			pick.edit_alpha = false
 			pick.disabled = read_only
-			pick.modulate.a = 1.0 if has else 0.6
-			pick.color_changed.connect(func(c: Color) -> void: _emit(key, "#" + c.to_html(false)))
+			# one edit as the picker closes, as a slider's is as its drag ends: never one for every color dragged through
+			var was := pick.color
+			pick.popup_closed.connect(func() -> void:
+				if not pick.color.is_equal_approx(was):
+					_emit(key, "#" + pick.color.to_html(false)))
 			return pick
 		"ref":
 			return _choice(key, [""] + (context.get(String(field.get("of", "")), []) as Array), String(value) if value != null else "")
@@ -324,8 +329,8 @@ func _emit(key: String, value: Variant) -> void:
 		edited.emit(key, value)
 
 
-## One of [param options]; "" among them reads "(unset)" and unsets the key.
-func _choice(key: String, options: Array, current: String) -> OptionButton:
+## One of [param options], each read as [param labels] names it where it does; "" among them reads "(unset)" and unsets the key.
+func _choice(key: String, options: Array, current: String, labels := {}) -> OptionButton:
 	var pick := OptionButton.new()
 	# sized by the row, not by its longest item (see SidePanel._check_width)
 	pick.fit_to_longest_item = false
@@ -336,7 +341,7 @@ func _choice(key: String, options: Array, current: String) -> OptionButton:
 	if not current.is_empty() and not opts.has(current):
 		opts.append(current)               # a value the table does not list is still shown
 	for o in opts:
-		pick.add_item(String(o).replace("_", " ") if not String(o).is_empty() else "(unset)")
+		pick.add_item(String(labels.get(o, String(o).replace("_", " "))) if not String(o).is_empty() else "(unset)")
 		pick.set_item_metadata(pick.item_count - 1, String(o))
 		if String(o) == current:
 			pick.select(pick.item_count - 1)

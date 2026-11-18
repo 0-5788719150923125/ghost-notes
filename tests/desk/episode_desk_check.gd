@@ -260,18 +260,18 @@ func _played() -> void:
 	# the Desk's rows: its number, chosen; its light the Environment's (a `mood` on the rows is no longer read)
 	var own_desk := m._seed
 	var hand_was: Dictionary = (m._strokes as Dictionary).duplicate(true)
-	m.set_environment(Surroundings.sanitize({"light": "dusk"}))
+	m.set_environment(Surroundings.sanitize({"elements": [{"kind": "light", "preset": "dusk"}]}))
 	m.load_episode({"dir": DIR, "seed": 3, "plan": {}}, script, {"seed": 77, "mood": "candlelight"})
 	_ok(own_desk == 3 and m._seed == 77 and String(m.look["mood"]) == "dusk" and m._strokes == hand_was,
 		"the rows' number is the desk's and its light the Environment's, never the rows' own `mood`; the hand is still the episode's (desk %d, then %d)" % [own_desk, m._seed])
 	# ...chosen while it plays: the desk dressed again, the episode as it was
 	var subs := Words.new()
-	subs.document = {"source": script, "table": {"dir": DIR, "seed": 3, "plan": {}}, "medium": {"seed": 77}, "environment": {"light": "dusk"}}
+	subs.document = {"source": script, "table": {"dir": DIR, "seed": 3, "plan": {}}, "medium": {"seed": 77}, "environment": {"elements": [{"kind": "light", "preset": "dusk"}]}}
 	m._subs = subs
 	m._title = TitleCard.new()
 	m._ensure_doc()
 	var laid: Array = m._actions
-	(subs.document["environment"] as Dictionary)["light"] = "candlelight"
+	(subs.document["environment"] as Dictionary)["elements"] = [{"kind": "light", "preset": "candlelight"}]
 	(subs.document["medium"] as Dictionary)["seed"] = 0
 	m._ensure_doc()
 	_ok(String(m.look["mood"]) == "candlelight" and is_same(m._actions, laid),

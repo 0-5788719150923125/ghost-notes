@@ -9,7 +9,8 @@ class_name PropMakes
 ##
 ## A role's own make is a recipe drawn from the scene's number (`recipe`, [method DeskLook.spec_of]) or a prop shipped with the app
 ## (`own`, a `.prop.json` as Export writes one). A choice is `{}` (the role's own), `{recipe, seed}` (its recipe drawn from another
-## number) or `{kept}` (a prop kept in the library by that name, [ThingLibrary]). A make missing a face the scene fills (`faces`) cannot
+## number), `{kept}` (a prop kept in the library by that name, [ThingLibrary]) or `{aside: true}` (taken off: a scene that lets the
+## role go sets nothing out for it, and its picture is its own make's). A make missing a face the scene fills (`faces`) cannot
 ## play the role: the role's own plays it. The Dex offers makes ([MakeShelf]); the scene keeps the choice in its note.
 
 ## The roles: `recipe` the [constant DeskLook.THINGS] kind that draws one, or `own` the prop it is shipped as; `find` the words the
@@ -201,13 +202,15 @@ static func valid_for(role: String, choice: Variant) -> bool:
 	return ROLES.has(role) and valid(choice) and (not (choice as Dictionary).has("recipe") or drawn(role))
 
 
-## Whether [param choice] is one a role can be handed: none, a draw of its recipe, or a kept prop by name.
+## Whether [param choice] is one a role can be handed: none, a draw of its recipe, a kept prop by name, or taken off.
 static func valid(choice: Variant) -> bool:
 	if not (choice is Dictionary):
 		return false
 	var c: Dictionary = choice
 	if c.is_empty():
 		return true
+	if c.has("aside"):
+		return c.size() == 1 and c["aside"] == true
 	if c.has("kept"):
 		return c["kept"] is String and not String(c["kept"]).strip_edges().is_empty()
 	return c.has("recipe") and (c.get("seed") is float or c.get("seed") is int)

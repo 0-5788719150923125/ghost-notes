@@ -9,6 +9,8 @@ class_name EpisodeProps
 ##              ([method EpisodeCard._hand_write]). Keep puts the thing in the library ([ThingLibrary]); Select picks it on the stage.
 ##   Set aside  the `aside` list, each unticked: ticked, it is used again.
 ##
+## An entry's × takes the thing off the table for good, from either list, as a hand's version too.
+##
 ## Its shelves on the Dex are the library's ([LibraryProps]: kept and seen props), each offered to Use on this episode's table. A
 ## prop's picture is taken once and kept by its hash ([PropStudio]); a row's when it first shows.
 
@@ -64,7 +66,8 @@ func rows() -> Array:
 				verbs.append({"key": "select", "label": "Select", "tip": "Select it on the stage: its rows open in the timeline's inspector."})
 			out.append({"key": ("thing:" if list == "things" else "aside:") + name, "name": name, "line": " - ".join(line),
 				"tip": String(thing.get("why", name)), "group": "table" if list == "things" else "aside",
-				"picture": pics.of(h, thing, mats), "on": list == "things", "on_tip": ON_TIP, "verbs": verbs})
+				"picture": pics.of(h, thing, mats), "on": list == "things", "on_tip": ON_TIP, "verbs": verbs,
+				"remove_tip": "Take it off this episode's table for good: the table is then yours, as unticking it makes it."})
 	return out
 
 
@@ -77,7 +80,15 @@ func set_on(key: String, on: bool) -> String:
 	return err
 
 
-## Thing [param name] moved from the table's [param from] list to its [param to] list ("things" stands, "aside" does not), as a hand
+func remove(key: String) -> String:
+	var from := "aside" if key.begins_with("aside:") else "things"
+	var name := key.substr(key.find(":") + 1)
+	var err := card._hand_write("table", func() -> String: return move_thing(name, from, ""))
+	card._after_hand("table", err)
+	return err
+
+
+## Thing [param name] moved from the table's [param from] list to its [param to] list (none: off the table for good) ("things" stands, "aside" does not), as a hand
 ## writes it. "" written, else why not.
 func move_thing(name: String, from: String, to: String) -> String:
 	var ep := card._episode
@@ -91,10 +102,11 @@ func move_thing(name: String, from: String, to: String) -> String:
 	var dst: Array = t.get(to, []) if t.get(to) is Array else []
 	for i in src.size():
 		if src[i] is Dictionary and String((src[i] as Dictionary).get("name", "")) == name:
-			dst.append(src[i])
+			if not to.is_empty():
+				dst.append(src[i])
+				t[to] = dst
 			src.remove_at(i)
 			t[from] = src
-			t[to] = dst
 			if (t.get("aside", []) as Array).is_empty():
 				t.erase("aside")
 			return ep.write_json("table", t)

@@ -38,6 +38,7 @@ var _rested := 0.0
 var _seed_box: SpinBox
 var _about: Label
 var _wants := {}                 # what the script last read asks the desk to build only for it ([method wants])
+var _works := {}                 # the spare things the script last read works ([method works])
 
 
 static func for_note(ctx: Dictionary) -> DispatchFormat:
@@ -163,6 +164,11 @@ func wants() -> Dictionary:
 	return _wants
 
 
+## The spare things the script works, which cannot be taken off ([method DispatchMedium.works_of]).
+func works() -> Dictionary:
+	return _works
+
+
 func _body() -> String:
 	var doc := _panel.doc_source() if _panel != null else null
 	if _panel != null and _panel.source_box() != null:
@@ -226,6 +232,7 @@ func _say_about(body: String) -> void:
 		return
 	var p := DispatchScript.parse(body)
 	_wants = DispatchMedium.wants_of(p, body)
+	_works = DispatchMedium.works_of(p)
 	var phones: PackedStringArray = p["phones"]
 	var n := (p["actions"] as Array).size()
 	var line := "%d phones (%s); %d things the desk does." % [phones.size(), ", ".join(phones), n]

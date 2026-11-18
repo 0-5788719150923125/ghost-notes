@@ -556,7 +556,7 @@ static func _tablet_glass() -> Shader:
 func _dress_environment() -> void:
 	if _env == null:
 		return
-	var own := String(_surround["light"]).is_empty()
+	var own := Surroundings.preset_of(_surround).is_empty()
 	var row := Surroundings.light_of(_surround)
 	var key := Color.html(String(row["key_color"]))
 	_env.ambient_light_color = AMBIENT if own else Color.html(String(row["ambient"]))
@@ -567,17 +567,17 @@ func _dress_environment() -> void:
 	var candles := not own and int((row["candles"] as Array)[1]) > 0 and float(row["lamp"]) <= 0.0
 	_candles.visible = candles
 	_candles.light_energy = CANDLES_ENERGY if candles else 0.0
-	Tonemaps.dress(_env, EXPOSURE * float(_surround["brightness"]))
-	var n := int(_surround["rays"])
-	_crack.visible = n < 0
+	Tonemaps.dress(_env, EXPOSURE * Surroundings.brightness(_surround))
+	var shafts := Surroundings.has_shafts(_surround)
+	_crack.visible = not shafts
 	_crack.light_color = CRACK_COLOR if own else key
 	_crack.light_energy = CRACK_ENERGY * (1.0 if own else float(row["key_strength"]))
 	if _rays != null:
 		_rays.queue_free()
 		_rays = null
-	if n > 0:
-		_rays = Surroundings.rays(n, float(_surround["ray_strength"]), CRACK_COLOR if own else key, CRACK_AT - CRACK_AIM, RAYS_ROUND,
-			_seed, CRACK_AT.y - (RAYS_ROUND[0] as AABB).end.y)
+	if shafts:
+		_rays = Surroundings.rays(_surround, CRACK_COLOR if own else key, CRACK_AT - CRACK_AIM, RAYS_ROUND,
+			CRACK_AT.y - (RAYS_ROUND[0] as AABB).end.y)
 		_root3.add_child(_rays)
 	if not own:
 		_env.volumetric_fog_albedo = Color.html(String(row["fog"])).lerp(Color(0.75, 0.76, 0.8), 0.5)
@@ -813,6 +813,16 @@ func _ensure_doc() -> void:
 	_doc_key = key
 	_doc_seed = seed
 	load_note(src, dispatch, start, int(d.get("start_index", -1)), float(d.get("start_time", 0.0)))
+
+
+## The spare things on the desk ([constant DispatchSet.SPARE]) the script [param parsed] works, which cannot be taken off: `switch`
+## where it throws the switch.
+static func works_of(parsed: Dictionary) -> Dictionary:
+	var out := {}
+	for a in parsed.get("actions", []):
+		if String((a as Dictionary)["kind"]) == "switch":
+			out["switch"] = true
+	return out
 
 
 ## What the desk builds only where the script uses it, for the script [param parsed] read from [param source]: `clock` (its

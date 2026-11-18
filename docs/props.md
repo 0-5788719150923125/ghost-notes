@@ -33,7 +33,7 @@ Source: [src/voice/voice_library.gd](../src/voice/voice_library.gd)
 
 ## The Dex
 
-DexWindow - the Dex: what the library keeps and what scenes build, a shelf at a time, a tile an entry. Its sections (`ShelfSection`) are props, voices and what scenes build when it is opened on its own (the bottom-right row's button), or the one section a card hands it ("+ Add a prop" on the Props card, or a row's Choose…, whose section adds what is picked: Use). Each tile shows an entry's picture, its name (renamed in place where it can be), its line and its verbs - Use, Hear for a voice, Export… to hand it on in a file, and what its section offers besides; Import… takes such a file in. A filter by words narrows the shelf, opened with the words a section asks for (`ShelfSection.find`). Pictures are asked for in view and near it first (`ShelfSection.want_pictures`), every other on the shelf behind them (`ShelfSection.prepare_pictures`), and each is shown as it arrives; a click on a prop's opens it whole, in 3D (`PropViewer`). It opens centered in the room beside the side panel, never under it (`Shell.center_beside`). Escape or the window's close hides it.
+DexWindow - the Dex: what the library keeps and what scenes build, a shelf at a time, a tile an entry. Its sections (`ShelfSection`) are props, voices, what can be round a scene and what scenes build when it is opened on its own (the bottom-right row's button), or the one section a card hands it ("+ Add a prop" on the Props card, a row's Choose…, "+ Add to the environment", whose section adds what is picked: Use). Its shelves are listed down its left side under the kind of thing each holds (Props, Voices, Environment: `ShelfSection.category`), each with how many it has. Each tile shows an entry's picture, its name (renamed in place where it can be), its line and its verbs - Use, Hear for a voice, Export… to hand it on in a file, and what its section offers besides; Import… takes such a file in. A filter by words narrows the shelf, opened with the words a section asks for (`ShelfSection.find`). Pictures are asked for in view and near it first (`ShelfSection.want_pictures`), every other on the shelf behind them (`ShelfSection.prepare_pictures`), and each is shown as it arrives; a click on a prop's opens it whole, in 3D (`PropViewer`). It opens centered in the room beside the side panel, never under it (`Shell.center_beside`). Escape or the window's close hides it.
 
 Source: [src/ui/dex_window.gd](../src/ui/dex_window.gd)
 
@@ -49,6 +49,7 @@ Every shelf a section puts on the Dex: the section, the shelf, and what it holds
 
 | Section | Shelf | What it holds |
 | --- | --- | --- |
+| [DeskProps](../src/desk/desk_props.gd) | A desk's things | What a desk can hold and this one does not, each as the desk's number draws it. |
 | [DeskRecipes](../src/desk/desk_recipes.gd) | Desk things | What a desk sets out - mugs, pencils, books, candles - as the first desk draws each. Keep one to use it anywhere. |
 | [MakeShelf](../src/desk/make_shelf.gd) | Its own | The part's own make: its recipe drawn from many numbers, or the one the scene comes with. |
 | [MakeShelf](../src/desk/make_shelf.gd) | Kept props | The props in your library: any can play the part, made the size it wants. |
@@ -60,7 +61,7 @@ Every shelf a section puts on the Dex: the section, the shelf, and what it holds
 
 ## The Props card
 
-PropsCard - the panel's Props card: what the note's presentation sets down, one row a prop - its picture, its name and size, a Used tick, and its verbs - under the groups its sections give (`PropSection`, handed by whatever shows props), and "+ Add a prop", which opens the Dex on the section's shelves (`DexWindow`). A click on a picture opens the prop whole, in 3D, to be turned (`PropViewer`). Shown only while some section has a row or something to add. Looked at again every second (what a section has follows what is shown and made), and drawn again only when that changed.
+PropsCard - the panel's Props card: what the note's presentation sets down, one entry a prop (`EntryCard`) - its picture, its name and size, and a × that takes it off - under the groups its sections give (`PropSection`, handed by whatever shows props), and "+ Add a prop", which opens the Dex on the section's shelves (`DexWindow`). A click on an entry opens it: its Used tick, its verbs and its properties (`PropSection`'s `fields`, `SchemaForm`), each change handed to its section. A click on a picture opens the prop whole, in 3D, to be turned (`PropViewer`). Shown only while some section has a row or something to add. Looked at again every second (what a section has follows what is shown and made), and drawn again only when that changed. The Environment card's list is one of these.
 
 Source: [src/ui/props_card.gd](../src/ui/props_card.gd)
 
@@ -76,7 +77,7 @@ Source: [src/ui/prop_viewer.gd](../src/ui/prop_viewer.gd)
 
 PropMakes - the parts a scene gives a prop to play (a role: the desk's mug, its terminal, a phone), and the make chosen to play one, built (next/working_props.md). What a role does is the scene's - a mug is lifted to the mouth, a terminal shows its program on its screen - and any make of it is built in the role's frame so that holds: its foot on y = 0, centered, its front toward +z, its height within the role's (`made`). A scene works a make through its rig (`PropRig`: its faces, lights and named parts), never by its shapes.
 
-A role's own make is a recipe drawn from the scene's number (`recipe`, `DeskLook.spec_of`) or a prop shipped with the app (`own`, a `.prop.json` as Export writes one). A choice is `{}` (the role's own), `{recipe, seed}` (its recipe drawn from another number) or `{kept}` (a prop kept in the library by that name, `ThingLibrary`). A make missing a face the scene fills (`faces`) cannot play the role: the role's own plays it. The Dex offers makes (`MakeShelf`); the scene keeps the choice in its note.
+A role's own make is a recipe drawn from the scene's number (`recipe`, `DeskLook.spec_of`) or a prop shipped with the app (`own`, a `.prop.json` as Export writes one). A choice is `{}` (the role's own), `{recipe, seed}` (its recipe drawn from another number), `{kept}` (a prop kept in the library by that name, `ThingLibrary`) or `{aside: true}` (taken off: a scene that lets the role go sets nothing out for it, and its picture is its own make's). A make missing a face the scene fills (`faces`) cannot play the role: the role's own plays it. The Dex offers makes (`MakeShelf`); the scene keeps the choice in its note.
 
 Source: [src/desk/prop_makes.gd](../src/desk/prop_makes.gd)
 

@@ -2,8 +2,10 @@ extends Window
 class_name DexWindow
 
 ## DexWindow - the Dex: what the library keeps and what scenes build, a shelf at a time, a tile an entry. Its sections
-## ([ShelfSection]) are props, voices and what scenes build when it is opened on its own (the bottom-right row's button), or the one
-## section a card hands it ("+ Add a prop" on the Props card, or a row's Choose…, whose section adds what is picked: Use). Each tile
+## ([ShelfSection]) are props, voices, what can be round a scene and what scenes build when it is opened on its own (the bottom-right
+## row's button), or the one section a card hands it ("+ Add a prop" on the Props card, a row's Choose…, "+ Add to the environment",
+## whose section adds what is picked: Use). Its shelves are listed down its left side under the kind of thing each holds (Props,
+## Voices, Environment: [method ShelfSection.category]), each with how many it has. Each tile
 ## shows an entry's picture, its name (renamed in place where it can be), its line and its verbs - Use, Hear for a voice, Export… to
 ## hand it on in a file, and what its section offers besides; Import… takes such a file in. A filter by words narrows the shelf,
 ## opened with the words a section asks for ([method ShelfSection.find]). Pictures are asked for in view and near it first ([method
@@ -13,7 +15,7 @@ class_name DexWindow
 
 ## Its size, at most, against the room beside the panel.
 const MOST := Vector2(0.86, 0.86)
-const SIZE := Vector2i(860, 640)
+const SIZE := Vector2i(980, 640)
 ## A tile's picture (pixels), how often the shelf looks for pictures that arrived and how often it reads what is offered again
 ## (seconds).
 const PICTURE := Vector2(176, 132)
@@ -21,12 +23,17 @@ const LOOK_EVERY := 0.1
 const FRESH_EVERY := 0.5
 ## How far past the view a picture is wanted ahead of the rest: views above it, and below.
 const NEAR := Vector2(1.0, 2.0)
+## How wide the list of shelves down the left side is (pixels).
+const SIDE := 190.0
+## How far outside its edge a press still takes hold of it to resize it (pixels): Godot's own grip is a band 4 wide, its corners
+## barely to be hit.
+const GRIP := 14
 
 var _sections: Array = []          # ShelfSection, in the order their shelves are shown
 var _told: Callable = Callable()   # (err: String) -> void: what a press answered
 var _tab := ""                     # "<section index>:<shelf key>"
 var _filter: LineEdit
-var _tabs: HFlowContainer
+var _side: VBoxContainer           # the shelves, under their categories
 var _import: Button
 var _scroll: ScrollContainer
 var _grid: HFlowContainer
@@ -44,6 +51,7 @@ var _playing := ""                 # the file being heard
 func _init() -> void:
 	visible = false
 	title = "Dex"
+	add_theme_constant_override("resize_margin", GRIP)
 	close_requested.connect(_close)
 	window_input.connect(func(e: InputEvent) -> void:
 		if e is InputEventKey and (e as InputEventKey).pressed and (e as InputEventKey).keycode == KEY_ESCAPE:
@@ -82,14 +90,24 @@ func _init() -> void:
 			return
 		_pick_file(FileDialog.FILE_MODE_OPEN_FILE, "", sec.file_kind(), func(path: String) -> void: _answer(sec.import_from(path), true)))
 	top.add_child(_import)
-	_tabs = HFlowContainer.new()
-	_tabs.add_theme_constant_override("h_separation", 4)
-	col.add_child(_tabs)
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 10)
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(body)
+	var side_scroll := ScrollContainer.new()
+	side_scroll.custom_minimum_size = Vector2(SIDE, 0)
+	side_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	body.add_child(side_scroll)
+	_side = VBoxContainer.new()
+	_side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_side.add_theme_constant_override("separation", 2)
+	side_scroll.add_child(_side)
 	_scroll = ScrollContainer.new()
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.get_v_scroll_bar().value_changed.connect(func(_v: float) -> void: _look_t = 0.0)
-	col.add_child(_scroll)
+	body.add_child(_scroll)
 	_grid = HFlowContainer.new()
 	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_grid.add_theme_constant_override("h_separation", 10)
@@ -155,9 +173,14 @@ func adds_label() -> String:
 	return String(sec.adds().get("verb", "")) if sec != null and not sec.adds().is_empty() else ""
 
 
-## The shelves' tabs as shown, each its label and count.
+## The shelves as listed, each its label and count.
 func shelf_labels() -> Array:
-	return _tabs.get_children().map(func(b: Node) -> String: return (b as Button).text)
+	return _side.get_children().filter(func(b: Node) -> bool: return b is Button).map(func(b: Node) -> String: return (b as Button).text)
+
+
+## The categories the shelves are listed under, in order.
+func category_labels() -> Array:
+	return _side.get_children().filter(func(b: Node) -> bool: return b is Label).map(func(b: Node) -> String: return (b as Label).text)
 
 
 ## The section of the shelf shown, or null.
@@ -189,29 +212,48 @@ func _offers() -> Array:
 	return sec.offers() if sec != null else []
 
 
-## Every tile of the shelf shown, as the filter leaves them.
+## Every tile of the shelf shown, as the filter leaves them; the shelves listed down the side, each section's under its category.
 func _fill() -> void:
-	for c in _tabs.get_children():
-		_tabs.remove_child(c)
+	for c in _side.get_children():
+		_side.remove_child(c)
 		c.queue_free()
-	for i in _sections.size():
-		var sec: ShelfSection = _sections[i]
-		var all := sec.offers()
-		for s in sec.shelves():
-			var sd: Dictionary = s
-			var key := "%d:%s" % [i, String(sd["key"])]
-			var n := all.filter(func(o: Dictionary) -> bool: return String(o.get("shelf", "")) == String(sd["key"])).size()
-			var b := Button.new()
-			b.text = "%s (%d)" % [String(sd["label"]), n]
-			b.tooltip_text = String(sd.get("tip", ""))
-			b.toggle_mode = true
-			b.button_pressed = key == _tab
-			b.focus_mode = Control.FOCUS_NONE
-			b.pressed.connect(func() -> void:
-				_tab = key
-				_scroll.scroll_vertical = 0
-				_fill())
-			_tabs.add_child(b)
+	var order: Array = []                  # categories, in the order their first section comes
+	for sec in _sections:
+		if not order.has((sec as ShelfSection).category()):
+			order.append((sec as ShelfSection).category())
+	for cat in order:
+		var head := Label.new()
+		head.text = String(cat)
+		head.add_theme_font_size_override("font_size", 12)
+		head.modulate = Color(1, 1, 1, 0.6)
+		if _side.get_child_count() > 0:
+			var gap := Control.new()
+			gap.custom_minimum_size = Vector2(0, 6)
+			_side.add_child(gap)
+		_side.add_child(head)
+		for i in _sections.size():
+			var sec: ShelfSection = _sections[i]
+			if sec.category() != String(cat):
+				continue
+			var all := sec.offers()
+			for s in sec.shelves():
+				var sd: Dictionary = s
+				var key := "%d:%s" % [i, String(sd["key"])]
+				var n := all.filter(func(o: Dictionary) -> bool: return String(o.get("shelf", "")) == String(sd["key"])).size()
+				var b := Button.new()
+				b.text = "%s (%d)" % [String(sd["label"]), n]
+				b.tooltip_text = String(sd.get("tip", ""))
+				b.toggle_mode = true
+				b.flat = key != _tab
+				b.button_pressed = key == _tab
+				b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+				b.clip_text = true
+				b.focus_mode = Control.FOCUS_NONE
+				b.pressed.connect(func() -> void:
+					_tab = key
+					_scroll.scroll_vertical = 0
+					_fill())
+				_side.add_child(b)
 	for c in _grid.get_children():
 		_grid.remove_child(c)
 		c.queue_free()

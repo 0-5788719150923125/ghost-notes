@@ -287,7 +287,7 @@ static func picks_of(letter: Dictionary, environment: Variant = {}) -> Dictionar
 	var out := {}
 	if letter.get("things") is Array:
 		out["things"] = (letter["things"] as Array).duplicate()
-	var light := String((environment as Dictionary).get("light", "")) if environment is Dictionary else ""
+	var light := Surroundings.preset_of(environment)
 	if Surroundings.LIGHTS.has(light):
 		out["mood"] = light
 	var card := String(letter.get("card_text", "")).strip_edges()

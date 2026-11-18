@@ -1,0 +1,85 @@
+extends RefCounted
+class_name Roll
+
+## Roll - a thing's properties as a person tunes them: each a field row (SchemaForm's shape - `label`, `blurb`, `type`, `default`,
+## `min`/`max`/`step` or `options`), and the ones a person never set drawn from the thing's own number inside the field's `roll`, so a
+## new number is another variant of the same thing, never a wild one. A field set is pinned and no roll moves it; unset, it is the
+## number's again ([SchemaForm] shows it dimmed). A field with no `roll` is its `default` until set.
+##
+## `roll` is `[least, most]` for a number, a list of the choices drawn among for an `enum` or a `color`, or a chance for a `bool`.
+## Pure: the same fields, set values and number give the same values on any machine.
+
+
+## A new number for a thing, to draw its unset fields from.
+static func fresh() -> int:
+	return randi() % 1000000
+
+
+## Every field of [param fields] for a thing of number [param seed] with [param set] pinned: what is set where it is, the rest drawn
+## ([method drawn]).
+static func values(fields: Dictionary, set: Dictionary, seed: int) -> Dictionary:
+	var out := {}
+	for k in fields:
+		out[k] = set[k] if set.has(k) else drawn(fields[k], String(k), seed)
+	return out
+
+
+## Field [param row] (named [param key]) as the number [param seed] draws it inside its `roll`, or its `default` where it has none.
+static func drawn(row: Dictionary, key: String, seed: int) -> Variant:
+	var roll: Variant = row.get("roll")
+	if roll == null:
+		return row.get("default")
+	var r := RandomNumberGenerator.new()
+	r.seed = hash([seed, key])
+	match String(row.get("type", "")):
+		"int":
+			if roll is Array and (roll as Array).size() == 2:
+				return r.randi_range(int(roll[0]), int(roll[1]))
+		"float":
+			if roll is Array and (roll as Array).size() == 2:
+				var v := r.randf_range(float(roll[0]), float(roll[1]))
+				return snappedf(v, float(row.get("step", 0.01)))
+		"enum", "color":
+			if roll is Array and not (roll as Array).is_empty():
+				return (roll as Array)[r.randi() % (roll as Array).size()]
+		"bool":
+			return r.randf() < float(roll)
+	return row.get("default")
+
+
+## [param fields] with each unset field's `default` what the number [param seed] draws it as: what [SchemaForm] shows, dimmed, for a
+## field [param set] does not pin.
+static func shown(fields: Dictionary, set: Dictionary, seed: int) -> Dictionary:
+	var out := {}
+	for k in fields:
+		var row: Dictionary = (fields[k] as Dictionary).duplicate()
+		if not set.has(k):
+			row["default"] = drawn(fields[k], String(k), seed)
+		out[k] = row
+	return out
+
+
+## What [param raw] sets of [param fields], made safe: a number held to its field's bounds (a whole one for `int`), a choice its field
+## offers, a color as `#rrggbb`, a switch a bool; anything else, and any key with no field, left out.
+static func clean(fields: Dictionary, raw: Dictionary) -> Dictionary:
+	var out := {}
+	for k in raw:
+		if not fields.has(k):
+			continue
+		var row: Dictionary = fields[k]
+		var v: Variant = raw[k]
+		match String(row.get("type", "")):
+			"int", "float":
+				if typeof(v) in [TYPE_INT, TYPE_FLOAT]:
+					var f := clampf(float(v), float(row.get("min", -INF)), float(row.get("max", INF)))
+					out[k] = int(roundf(f)) if String(row["type"]) == "int" else f
+			"enum":
+				if v is String and String(v) in (row.get("options", []) as Array):
+					out[k] = String(v)
+			"color":
+				if v is String and Color.html_is_valid(String(v)):
+					out[k] = "#" + Color.html(String(v)).to_html(false)
+			"bool":
+				if v is bool:
+					out[k] = v
+	return out

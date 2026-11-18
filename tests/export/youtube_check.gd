@@ -1408,10 +1408,12 @@ func _thumbnails() -> bool:
 	card._select(card._thumbnail, "painted")
 	# what the writer answers, landed
 	var pics := PackedStringArray(["/p/one.png", "/p/two.png", "/p/three.png"])
-	var got: Variant = Thumb.land(JSON.parse_string("{\"picture\": \"A lantern on a dark table.\", \"words\": \" \\\"THE LAST CARD\\\" \", \"after\": [2, \"1\", 2, 9, 0]}"), pics)
+	var got: Variant = Thumb.land(JSON.parse_string("{\"picture\": \"A lantern on a dark table.\", \"words\": \" \\\"THE LAST CARD\\\" \", \"lettering\": \" Cut from old paper, upper left. \", \"after\": [2, \"1\", 2, 9, 0]}"), pics)
 	_ok(got is Dictionary and got["picture"] == "A lantern on a dark table." and got["words"] == "THE LAST CARD"
-		and got["after"] == ["/p/two.png", "/p/one.png"],
-		"the writer's answer is kept: what to paint, the words trimmed, the pictures it named - each once, only those there (%s)" % str(got))
+		and got["lettering"] == "Cut from old paper, upper left." and got["after"] == ["/p/two.png", "/p/one.png"],
+		"the writer's answer is kept: what to paint, the words trimmed, how they are lettered, the pictures it named - each once, only those there (%s)" % str(got))
+	_ok((Thumb.land({"picture": "A lantern.", "words": "", "lettering": "Big and red."}, pics) as Dictionary)["lettering"] == "",
+		"the control: with no words, no lettering is kept")
 	_ok(Thumb.land({"picture": " ", "words": "x"}, pics) is String and Thumb.land(null, pics) is String
 		and (Thumb.land({"picture": "A lantern."}, pics) as Dictionary)["after"] == [],
 		"the controls: nothing to paint and no JSON are refused; naming no picture follows none")
@@ -1422,7 +1424,8 @@ func _thumbnails() -> bool:
 	var images: Array = p["images"]
 	_ok(Rules.missing.is_empty() and not text.contains("{{") and not String(p["system"]).is_empty()
 		and text.contains("The first card is the tower.") and text.contains("printed under the thumbnail: The Tower Falls")
-		and text.contains("numbered 1 to 3") and text.contains("\"after\"") and images.size() == 3
+		and text.contains("numbered 1 to 3") and text.contains("\"after\"") and text.contains("\"lettering\"")
+		and text.contains("never plain white block capitals") and text.contains("lower right corner") and images.size() == 3
 		and (images[1] as Dictionary)["path"] == "/p/two.png" and (images[1] as Dictionary)["label"] == "Picture 2:",
 		"the writer is told the episode and shown its pictures, numbered (%s)" % str(Rules.missing))
 	var none: Dictionary = Thumb.prompt("", "", "", "Words.", PackedStringArray())
@@ -1431,9 +1434,13 @@ func _thumbnails() -> bool:
 		"the control: an episode with no pictures and no name is told of neither")
 	# what the painter is told
 	var said: String = Thumb.painting(got, false)
-	_ok(Rules.missing.is_empty() and said.contains("A lantern on a dark table.") and said.contains("exactly these and no others: \"THE LAST CARD\"")
+	_ok(Rules.missing.is_empty() and said.contains("A lantern on a dark table.") and said.contains("exactly these and no others, every letter spelled as given: \"THE LAST CARD\"")
+		and said.contains("Letter them so: Cut from old paper, upper left.") and said.contains("clear of the lower right corner")
 		and said.contains("frames of the video itself") and ImageGen.Bedrock.ratio_in(said) == "16:9",
-		"the painter is told what to paint, the words exactly, the pictures' look, and 16:9 first")
+		"the painter is told what to paint, the words exactly, lettered as the writer designed, clear of the length's corner, the pictures' look, and 16:9 first")
+	var unlettered: String = Thumb.painting({"picture": "A lantern.", "words": "THE END", "lettering": "", "after": []}, false)
+	_ok(unlettered.contains("never plain white block capitals") and not unlettered.contains("Letter them so:"),
+		"the control: words with no lettering designed are lettered with character all the same, never plain block capitals")
 	var plain: String = Thumb.painting({"picture": "A lantern.", "words": "", "after": []}, true)
 	_ok(plain.contains("No text, letters or numbers") and not plain.contains("frames of the video") and ImageGen.Bedrock.ratio_in(plain) == "9:16",
 		"the control: no words is no text at all, no pictures no look to follow, and a portrait video's is 9:16")

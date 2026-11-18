@@ -116,6 +116,9 @@ const FLAT_MARGIN := 0.005
 const LOW_OVER := 0.02
 ## The desk's roles ([PropMakes]), each with the salt its own make is drawn with from the desk's number ([method _rig]):
 ## renaming one redraws every desk's.
+## The small things a desk can do without, taken off by a person ([PropMakes]' `{aside: true}`) as one with no room for it is left
+## off: nothing else stands on them.
+const SPARE := ["handbook", "switch", "stamp", "tracker", "chart", "pencil_cup"]
 const MAKE_SALTS := {"mug": "mug", "pencil_cup": "cup", "terminal": "terminal", "keyboard": "keyboard", "phone": "phone",
 	"radar": "radar", "receiver": "receiver", "printer": "printer", "feed": "feed", "satellite": "satellite", "tv": "tv",
 	"tv_stand": "tv_stand", "lamp": "lamp", "switch": "switch", "handbook": "handbook", "stamp": "stamp", "tracker": "tracker",
@@ -932,6 +935,11 @@ func _desk() -> void:
 ## Role [param role]'s make on this desk, built and rigged ([method PropMakes.made], [PropRig]): the one [member makes] chooses,
 ## else the role's own, drawn from the desk's number and the role's salt ([constant MAKE_SALTS]). Its node stands at the origin,
 ## its foot on y = 0, its front toward +z; its rods are thin ([constant THIN]). Touches no tree.
+## Whether role [param role] is taken off this desk: a spare thing ([constant SPARE]) a person took off.
+func aside(role: String) -> bool:
+	return role in SPARE and (makes.get(role, {}) as Dictionary).get("aside") == true
+
+
 func _rig(role: String) -> PropRig:
 	var choice: Variant = makes.get(role, {})
 	var b := PropMakes.made(role, choice if PropMakes.valid(choice) else {}, hash([_seed, String(MAKE_SALTS.get(role, role))]))
@@ -1517,10 +1525,13 @@ func _things_back() -> void:
 	_body("patch", panel)
 
 
-## The patch panel's cables ([method lay_cables]): each out of one of its sockets to the back of a thing on the desk that takes
-## a cable (in [constant CABLED]'s order, as many as there are), the rest over the desk's far edge and down out of sight -
-## laid on the desk and over any root lying in their way ([param lying]: [member DispatchRoots.lying]), so none ends on the
-## desk or goes through what it meets. Laid again whenever the roots are known.
+## The patch panel's cables ([method lay_cables]): each droops out of one of its sockets onto the desk and is laid along it as a hand
+## would lay it - round everything standing there ([method _desk_grid]), along the desk's back where it can, beside the cables
+## laid before it rather than through them - to a thing that takes a cable ([constant CABLED]), plugged into the part it stands on,
+## on the side that faces the panel ([method port_of]), coming at it straight and rising up it where the part stands higher; the
+## sockets go to the things in order from the left. The rest are laid round the panel to the desk's far edge and over it, curving
+## down out of sight. Over any root lying in their way ([param lying]: [member DispatchRoots.lying]), so none ends on the desk or
+## goes through what it meets. Laid again whenever the roots are known.
 func lay_cables(lying: Array = []) -> void:
 	for n in _cable_nodes:
 		if is_instance_valid(n):
@@ -1532,29 +1543,254 @@ func lay_cables(lying: Array = []) -> void:
 	var pp: Vector3 = _desk_pos(at_of("patch"))
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([_seed, "patch"])
-	var ports: Array = []
+	var ports: Array = []             # each thing's ports, the likeliest first
 	for k in CABLED:
-		if bodies.has(k):
-			var b: AABB = bodies[k]
-			ports.append(Vector3(b.get_center().x + r.randf_range(-0.25, 0.25) * b.size.x, b.position.y + minf(0.05, b.size.y * 0.25),
-				b.position.z + 0.015))
+		var some := ports_of(k, Vector2(pp.x, pp.z), r)
+		if not some.is_empty():
+			ports.append(some)
+	ports.sort_custom(func(a: Array, b: Array) -> bool: return ((a[0] as Dictionary)["at"] as Vector3).x < ((b[0] as Dictionary)["at"] as Vector3).x)
+	var grid := _desk_grid()
+	var low := DESK_Y + CABLE_R
+	var panel_front: float = pp.z + 0.025
 	for k in CABLES:
 		var a := pp + Vector3(-0.19 + float(k) * 0.034, 0.03, 0.026)
-		var path: PackedVector3Array
-		var port_i := k if k < ports.size() else -1
-		if port_i >= 0:
-			path = sag_path(a, ports[port_i], -0.02, DESK_Y + CABLE_R, 22)
-		else:
-			# over the far edge and down out of sight
-			var edge := Vector3(a.x + r.randf_range(-0.25, 0.25) * flip, DESK_Y + CABLE_R, FAR + 0.004)
-			path = sag_path(a, edge, -0.02, DESK_Y + CABLE_R, 12)
-			for i in range(1, 9):
-				var u := float(i) / 8.0
-				path.append(edge + Vector3(0.0, -0.32 * u * u, -0.035 * sin(u * PI * 0.5)))
+		var from := Vector2(a.x, panel_front + CABLE_ROOM + 0.006)
+		var pts: Array = [a, a + Vector3(0.0, -0.016, 0.008)]
+		var laid := false
+		for port in (ports[k] if k < ports.size() else []):
+			var at: Vector3 = (port as Dictionary)["at"]
+			var out: Vector3 = (port as Dictionary)["out"]
+			var near := Vector3(at.x, low, at.z) + out * 0.03
+			var way := _lay(grid, from, Vector2(near.x, near.z), maxf(near.z, from.y) + CABLE_AHEAD, true)
+			if way.is_empty():
+				continue
+			for q in way:
+				pts.append(Vector3((q as Vector2).x, low, (q as Vector2).y))
+			if at.y > low + 0.03:
+				# up the side of what it plugs into
+				pts.append(Vector3(at.x, low, at.z) + out * 0.012 + Vector3(0.0, 0.006, 0.0))
+				pts.append(at + out * 0.01 + Vector3(0.0, -0.02, 0.0))
+			pts.append(at)
+			laid = true
+			break
+		if not laid:
+			# round the panel to the desk's far edge beside it, and over the edge, down out of sight
+			var side := signf(a.x - pp.x + 0.001)
+			var edge_x := pp.x + side * (0.24 + 0.012 * float(maxi(k - ports.size(), 0)) + r.randf_range(0.0, 0.03))
+			var way := _lay(grid, from, Vector2(edge_x, FAR + 0.012))
+			for q in way:
+				pts.append(Vector3((q as Vector2).x, low, (q as Vector2).y))
+			var x := (way[way.size() - 1] as Vector2).x if not way.is_empty() else edge_x
+			pts.append(Vector3(x, low + 0.003, FAR - 0.004))
+			pts.append(Vector3(x, DESK_Y - 0.02, FAR - 0.014))
+			pts.append(Vector3(x + r.randf_range(-0.03, 0.03), DESK_Y - 0.34, FAR - 0.03))
+		# smoothed, unless the curve would cut into something it was laid round: then as it was laid
+		var path := _floored(curve(pts, 5), low)
+		if _cuts(grid, path, low):
+			path = _floored(curve(pts, 1), low)
 		path = _over_roots(path, lying)
 		cable_paths.append(path)
 		var mat: Material = _mats["cable_blue"] if k % 2 == 0 else _mats["cable_yellow"]
 		_cable_nodes.append(put(root, tube(path, CABLE_R, 6), mat, Vector3.ZERO))
+
+
+## The desk's top as a grid a cable is laid over ([constant CABLE_CELL] a cell): every cell under something standing on the desk
+## (a part whose foot is on it, a little round it) closed, and each cell dearer the nearer the desk's front it is, so a cable keeps
+## to the back where it can.
+func _desk_grid() -> AStarGrid2D:
+	var g := AStarGrid2D.new()
+	var cols := ceili(DESK_W / CABLE_CELL)
+	var rows := ceili((NEAR - FAR) / CABLE_CELL)
+	g.region = Rect2i(0, 0, cols, rows)
+	g.cell_size = Vector2.ONE
+	g.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+	g.default_compute_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+	g.default_estimate_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+	g.update()
+	for row in rows:
+		var w := 1.0 + CABLE_FRONT * float(row) / float(rows)
+		for col in cols:
+			g.set_point_weight_scale(Vector2i(col, row), w)
+	for k in _parts:
+		for part in _parts[k]:
+			var pd: Dictionary = part
+			if float(pd["lo"]) > DESK_Y + 0.05 or (pd["outline"] as PackedVector2Array).size() < 3:
+				continue
+			for poly in Geometry2D.offset_polygon(pd["outline"], CABLE_ROOM):
+				var outline: PackedVector2Array = poly
+				var bb := Rect2(outline[0], Vector2.ZERO)
+				for q in outline:
+					bb = bb.expand(q)
+				var c0 := _cell(bb.position)
+				var c1 := _cell(bb.end)
+				for row in range(maxi(c0.y, 0), mini(c1.y, rows - 1) + 1):
+					for col in range(maxi(c0.x, 0), mini(c1.x, cols - 1) + 1):
+						if Geometry2D.is_point_in_polygon(_at_cell(Vector2i(col, row)), outline):
+							g.set_point_solid(Vector2i(col, row), true)
+	return g
+
+
+## A cable laid over [param grid] from [param from] to [param to] (on the desk, x and z): the way round what stands there, its
+## corners cut where nothing is in the way, ending at [param to] - and the cells it lies on made dearer, so the next lies beside it.
+## [] where there is no way, or where the way comes further forward than [param ahead] (z): a cable is never laid round the front
+## of what stands before it; or, [param exact], where [param to] itself is closed (a side of a thing that faces into another).
+func _lay(grid: AStarGrid2D, from: Vector2, to: Vector2, ahead := INF, exact := false) -> Array:
+	if exact and (not grid.region.has_point(_cell(to)) or grid.is_point_solid(_cell(to))):
+		return []
+	var c0 := _free_near(grid, _cell(from))
+	var c1 := _free_near(grid, _cell(to))
+	if c0.x < 0 or c1.x < 0:
+		return []
+	var cells := grid.get_id_path(c0, c1)
+	if cells.is_empty() or cells.any(func(c: Vector2i) -> bool: return _at_cell(c).y > ahead):
+		return []
+	for c in cells:
+		grid.set_point_weight_scale(c, grid.get_point_weight_scale(c) + CABLE_BESIDE)
+	# its corners cut: from each point, on to the furthest it can see straight
+	var out: Array = [_at_cell(cells[0])]
+	var i := 0
+	while i < cells.size() - 1:
+		var j := cells.size() - 1
+		while j > i + 1 and not _clear(grid, cells[i], cells[j]):
+			j -= 1
+		out.append(_at_cell(cells[j]))
+		i = j
+	out[out.size() - 1] = to
+	return out
+
+
+## Whether [param path] (a cable) cuts into a closed cell of [param grid] while it lies on the desk (at [param low]), short of its
+## last few centimeters, where it plugs in.
+static func _cuts(grid: AStarGrid2D, path: PackedVector3Array, low: float) -> bool:
+	var end := path[path.size() - 1]
+	for p in path:
+		if p.z < FAR or p.y > low + 0.002 or p.distance_to(end) < 0.045:
+			continue
+		var c := _cell(Vector2(p.x, p.z))
+		if grid.region.has_point(c) and grid.is_point_solid(c):
+			return true
+	return false
+
+
+## Whether the cells between [param a] and [param b] (in a straight line) are all open on [param grid].
+static func _clear(grid: AStarGrid2D, a: Vector2i, b: Vector2i) -> bool:
+	var n := maxi(absi(b.x - a.x), absi(b.y - a.y))
+	for s in range(1, n):
+		var c := Vector2i(roundi(lerpf(a.x, b.x, float(s) / float(n))), roundi(lerpf(a.y, b.y, float(s) / float(n))))
+		if grid.is_point_solid(c):
+			return false
+	return true
+
+
+## The open cell of [param grid] nearest [param c] (within 6 cells), or (-1, -1).
+static func _free_near(grid: AStarGrid2D, c: Vector2i) -> Vector2i:
+	var region := grid.region
+	for ring in 7:
+		for dy in range(-ring, ring + 1):
+			for dx in range(-ring, ring + 1):
+				if maxi(absi(dx), absi(dy)) != ring:
+					continue
+				var q := c + Vector2i(dx, dy)
+				if region.has_point(q) and not grid.is_point_solid(q):
+					return q
+	return Vector2i(-1, -1)
+
+
+## The cell of [method _desk_grid] a place on the desk (x, z) falls in, and the middle of a cell.
+static func _cell(p: Vector2) -> Vector2i:
+	return Vector2i(floori((p.x + DESK_W * 0.5) / CABLE_CELL), floori((p.y - FAR) / CABLE_CELL))
+
+
+static func _at_cell(c: Vector2i) -> Vector2:
+	return Vector2((float(c.x) + 0.5) * CABLE_CELL - DESK_W * 0.5, (float(c.y) + 0.5) * CABLE_CELL + FAR)
+
+
+## Where a cable may plug into thing [param k] ([constant CABLED]), the likeliest first ([] where the desk has none): each `{at,
+## out}` - on the part it stands on (of its parts on the desk, one whose foot is lowest and which reaches nearest the panel at
+## [param panel]: the case of a terminal, the base of a lamp), on stretches of that part's outline facing other ways, the one facing
+## the panel most first (a long one before a short one), a little way along it ([param r]), half its height up (at most 3 cm) and
+## just inside it; `out` the way that stretch faces, along the desk.
+func ports_of(k: String, panel: Vector2, r: RandomNumberGenerator) -> Array:
+	var parts: Array = (_parts.get(k, []) as Array).filter(func(p: Dictionary) -> bool: return float(p["lo"]) >= DESK_Y - 0.02)
+	if parts.is_empty():
+		return []
+	var lowest := INF
+	for part in parts:
+		lowest = minf(lowest, float((part as Dictionary)["lo"]))
+	var best: Dictionary = {}
+	var nearest := INF
+	for part in parts:
+		var pd: Dictionary = part
+		if float(pd["lo"]) > lowest + 0.02 or float(pd["hi"]) - float(pd["lo"]) < 0.006 or (pd["outline"] as PackedVector2Array).size() < 3:
+			continue
+		var b: AABB = pd["box"]
+		var d := Vector2(clampf(panel.x, b.position.x, b.end.x), clampf(panel.y, b.position.z, b.end.z)).distance_to(panel)
+		if d < nearest:
+			nearest = d
+			best = pd
+	if best.is_empty():
+		return []
+	var hull: PackedVector2Array = best["outline"]
+	var mid := Vector2.ZERO
+	for q in hull:
+		mid += q
+	mid /= float(hull.size())
+	var toward := (panel - mid).normalized() if panel.distance_to(mid) > 1e-4 else Vector2(0.0, -1.0)
+	var edges: Array = []             # [score, p0, p1, out]
+	for i in hull.size():
+		var p0: Vector2 = hull[i]
+		var p1: Vector2 = hull[(i + 1) % hull.size()]
+		var along := p1 - p0
+		if along.length() < 0.001:
+			continue
+		var out := Vector2(along.y, -along.x).normalized()
+		if out.dot((p0 + p1) * 0.5 - mid) < 0.0:
+			out = -out
+		edges.append([out.dot(toward) + 0.2 * minf(along.length() / 0.1, 1.0), p0, p1, out])
+	edges.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) > float(b[0]))
+	var lo := float(best["lo"])
+	var y := lo + clampf((float(best["hi"]) - lo) * 0.5, 0.004, 0.03)
+	var out_ports: Array = []
+	var tried: Array = []             # the ways the sides chosen face: each next one faces another way
+	for e in edges:
+		if out_ports.size() >= PORT_TRIES:
+			break
+		var facing: Vector2 = e[3]
+		if tried.any(func(f: Vector2) -> bool: return f.angle_to(facing) < PORT_APART and f.angle_to(facing) > -PORT_APART):
+			continue
+		tried.append(facing)
+		var at: Vector2 = (e[1] as Vector2).lerp(e[2], r.randf_range(0.3, 0.7)) - facing * 0.004
+		out_ports.append({"at": Vector3(at.x, y, at.y), "out": Vector3(facing.x, 0.0, facing.y)})
+	return out_ports
+
+
+## A smooth path through [param pts] (a Catmull-Rom curve, [param per] points between each two), from the first to the last.
+static func curve(pts: Array, per := 6) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	if pts.size() < 2:
+		for p in pts:
+			out.append(p)
+		return out
+	for i in pts.size() - 1:
+		var p0: Vector3 = pts[maxi(i - 1, 0)]
+		var p1: Vector3 = pts[i]
+		var p2: Vector3 = pts[i + 1]
+		var p3: Vector3 = pts[mini(i + 2, pts.size() - 1)]
+		for j in per:
+			var t := float(j) / float(per)
+			var t2 := t * t
+			var t3 := t2 * t
+			out.append(0.5 * ((2.0 * p1) + (-p0 + p2) * t + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3))
+	out.append(pts[pts.size() - 1])
+	return out
+
+
+## [param path] kept off the desk's top: nowhere on the desk lower than [param low] (a curve may dip between its points).
+static func _floored(path: PackedVector3Array, low: float) -> PackedVector3Array:
+	for i in path.size():
+		if path[i].z >= FAR and path[i].y < low:
+			path[i].y = low
+	return path
 
 
 ## [param path] (a cable along the desk) raised over every root lying on it ([param lying]): where it would pass within a
@@ -1606,11 +1842,13 @@ static func _over_roots(path: PackedVector3Array, lying: Array) -> PackedVector3
 func _things() -> void:
 	var made := {}
 	for k in ["handbook", "switch", "stamp", "tracker", "chart"]:
+		if aside(k):
+			continue
 		var rig := _rig(k)
 		rigs[k] = rig
 		made[k] = rig.node
 		_faces[k] = _read(k)
-	var cf: MeshInstance3D = (rigs["chart"] as PropRig).face("chart")
+	var cf: MeshInstance3D = (rigs["chart"] as PropRig).face("chart") if rigs.has("chart") else null
 	if cf != null and _tex.has("chart"):
 		var cm := StandardMaterial3D.new()
 		cm.albedo_texture = _tex["chart"]
@@ -1625,10 +1863,11 @@ func _things() -> void:
 	mug_radius = mug_rad
 	made["mug"] = mug
 	_faces["mug"] = [mug]
-	var cup := _rig("pencil_cup")
-	rigs["pencil_cup"] = cup
-	cup.node.name = "PencilCup"
-	made["cup"] = cup.node
+	if not aside("pencil_cup"):
+		var cup := _rig("pencil_cup")
+		rigs["pencil_cup"] = cup
+		cup.node.name = "PencilCup"
+		made["cup"] = cup.node
 	if _wants.has("tablet"):
 		var tb := _rig("tablet")
 		rigs["tablet"] = tb
@@ -1666,6 +1905,8 @@ func _things() -> void:
 	ring.scale = Vector3.ONE * (mug_rad / 0.0375)
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(ring)
+	if not at.has("switch"):
+		return
 	var sw := at_of("switch")
 	var side := "wire right" if sw.x > 0.0 else "wire left"
 	var from := _point("switch", "wire", Vector3(sw.x - 0.02 * signf(sw.x), DESK_Y + 0.02, sw.y - 0.03))
@@ -1771,10 +2012,23 @@ func clear_over(from: Vector3, to: Vector3, radius: float, skip: Array) -> float
 
 
 ## The patch panel's cables ([method lay_cables]): how many, how thick (radius, m), how far over a root they go, and the things
-## on the desk they run to the back of, in turn.
+## on the desk they run to the back of.
 const CABLES := 12
 const CABLE_R := 0.0024
 const CABLE_CLEAR := 0.003
+## A cable laid over the desk ([method _desk_grid]): the grid's cell (m), how much dearer the desk's front edge is than its back,
+## and how much dearer a cell is once a cable lies on it.
+const CABLE_CELL := 0.01
+## How far from what stands on the desk a cable keeps (m).
+const CABLE_ROOM := 0.0065
+const CABLE_FRONT := 2.0
+const CABLE_BESIDE := 1.5
+## How far forward of where it comes at its port a cable may be laid (m): no further, or it would go round the front of something;
+## and how many of a thing's sides a cable tries, the one facing the panel first.
+const CABLE_AHEAD := 0.06
+const PORT_TRIES := 3
+## How far apart the ways the sides a cable tries face (radians): a round foot offers three ways, not three of one.
+const PORT_APART := 0.7
 const CABLED := ["terminal", "radar", "receiver", "printer", "feed", "satellite", "tv", "lamp"]
 
 

@@ -14,7 +14,7 @@ class_name Chrome
 ##                     what it is installing. Open until the user first closes it (`[deps] open`).
 ## - **graphics**    - the Graphics panel ([GraphicsPanel]) behind the row's picture: how finely the stage
 ##                     is drawn, live and in an export ([Graphics]).
-## - **dex**         - the Dex ([DexWindow]) behind the row's books: what the library keeps, props and voices
+## - **dex**         - the Dex ([DexWindow]) behind the row's books: what the library keeps, props, voices and environments
 ##                     ([LibraryProps], [LibraryVoices]), browsed from anywhere.
 ## - **exporter**    - the ⤓ render-to-video button and background pipeline (persistent: an in-flight
 ##                     export survives session churn).
@@ -225,7 +225,7 @@ func open_dex(on: bool) -> void:
 		dex = DexWindow.new()
 		add_child(dex)
 	if _dex_shelves.is_empty():
-		_dex_shelves = [LibraryProps.new(), LibraryVoices.new(), DeskRecipes.new(), DispatchProps.new()]
+		_dex_shelves = [LibraryProps.new(), LibraryVoices.new(), DeskRecipes.new(), DispatchProps.new(), EnvironmentSection.new()]
 	dex.open(_dex_shelves)
 
 

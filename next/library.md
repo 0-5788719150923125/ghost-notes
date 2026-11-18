@@ -23,7 +23,12 @@ The user judges: the names (Props, Dex, Used), the 3D view, the Dex, kept voices
   hash, with its size, lit by `StudioLook` (`render/`). On the Dex (`PropPictures`) those in view and near it come first - a
   kept one read on a worker - and every other on the shelf shown is taken behind them until the Dex closes.
 - **The Props card** (`PropsCard`, `PropSection` in `ui/`) stands on the panel while a section has rows; a table episode hands
-  `EpisodeProps`. Each row has a Used tick (unticked moves a thing to the table's `aside` list, which nothing stands and no
+  `EpisodeProps`. Each row is an entry (`EntryCard`, the look every card's list shares): its picture, name and line, and a ×
+  top-right taking it off (pressed twice; grayed saying why where it cannot: `remove_tip`, `remove_off`, `PropSection.remove`). A
+  click opens it to its tick, verbs and properties. The ×: a table episode's thing off its table for good (a hand's version); a
+  Letter desk's thing off the desk (its card lists only what is on it, "+ Add a prop" the rest); a Dispatch desk's spare thing
+  (`DispatchSet.SPARE`, the choice `{aside: true}`, "+ Add a prop" setting it out again; the switch stays while the script throws
+  it), every other part of that desk grayed (the desk works it). Each row has a Used tick (unticked moves a thing to the table's `aside` list, which nothing stands and no
   agent reads, and the table becomes a hand's version), Keep, and Select (picks it on the stage); groups Used and Set aside. A
   note pins no props: a prop goes on a table when the set dresser finds it in the library, or by hand from the Dex.
 - **A prop in 3D** (`PropViewer`, `ui/`): a click on any prop's picture, on the card or the Dex, builds it whole on a worker

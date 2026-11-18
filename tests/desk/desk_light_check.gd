@@ -300,7 +300,8 @@ func _environment() -> void:
 	m.load_lesson("", {"seed": seed})
 	var base := m._env.tonemap_exposure
 	var lamp := m._lamp.light_energy
-	m.set_environment(Surroundings.sanitize({"brightness": 2.0, "rays": 3, "air": ["pixies", "haze"], "lights": {"lamp": 0.5}}))
+	m.set_environment(Surroundings.sanitize({"elements": [{"kind": "light", "preset": "own", "brightness": 2.0}, {"kind": "shafts", "count": 3, "inner": 0},
+		{"kind": "pixies"}, {"kind": "haze"}], "lights": {"lamp": 0.5}}))
 	_check(is_equal_approx(m._env.tonemap_exposure, base * 2.0) and is_equal_approx(m._lamp.light_energy, lamp * 0.5)
 		and m._rays != null and m._rays.get_child_count() == 3 and m._env.volumetric_fog_enabled and m._air != null,
 		"a desk takes the Environment: twice as bright (%.2f of %.2f), its lamp at half (%.2f of %.2f), three shafts in its haze and the air"

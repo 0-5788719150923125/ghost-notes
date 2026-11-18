@@ -1,11 +1,11 @@
 extends VBoxContainer
 class_name EnvironmentCard
 
-## EnvironmentCard - the Environment: what is round the scene a note is shown in (next/environment.md; [Surroundings]). Its
-## light (a preset - lamplight, candlelight, daylight, dusk, moonlight, no light - and how bright), shafts of light through the
-## haze (how many, how strong), what drifts in the air and what is heard round it (each ticked together, with how much), a dial
-## for each thing in the scene that throws light - the lamp, a screen, a candle - and one for each that makes a sound of its own -
-## a receiver's hiss - from the Props card's sections ([method PropSection.lit], [method PropSection.heard]).
+## EnvironmentCard - the Environment: what is round the scene a note is shown in, as a list (next/environment.md; [Surroundings]).
+## Each element is a row of the card's list ([EnvironmentSection], drawn as the Props card draws props, [PropsCard]): the light, shafts
+## of light, what drifts in the air, what is heard - each with its properties, Roll for another of it, Keep, Remove, and Used to set
+## it aside. "+ Add to the environment" opens the Dex on what can be round a scene. Below them, a row for each thing on the Props card
+## that throws light or makes a sound of its own ([method PropSection.lit], [method PropSection.heard]), its share tuned.
 ##
 ## Its block in a document is `environment:` ([constant Surroundings.KNOBS]). It hands the reading its part of the document a
 ## medium is drawn from ([member ReadingPanel.document_parts]: `environment`), and the sound it chose as the bed under the voice
@@ -14,27 +14,12 @@ class_name EnvironmentCard
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "environment"
-## Light shafts, when first turned on: how many.
-const RAYS_FIRST := 3
-## How often the lit and sounding things the scene has are looked for again (seconds), while the card stands.
-const LIT_EVERY := 1.0
 
+## The list's rows, and the list drawing them.
+var section: EnvironmentSection
+var list: PropsCard
 var _panel: ReadingPanel = null
-var _spec := Surroundings.KNOBS.duplicate(true)
-var _syncing := false
-var _light: OptionButton
-var _bright: HSlider
-var _rays_on: CheckBox
-var _rays: HSlider
-var _ray_strength: HSlider
-var _air := {}                   # an air key -> its tick
-var _air_amount: HSlider
-var _sound := {}                 # a sound key -> its tick
-var _sound_level: HSlider
-var _lit_box: VBoxContainer
-var _heard_box: VBoxContainer
-var _lit_seen := ""
-var _lit_t := 0.0
+var _spec := Surroundings.sanitize({})
 
 
 ## This card for a note's panel, from what the panel says of itself ([method NoteCards.make]): its workspace, which is handed the
@@ -51,14 +36,9 @@ static func for_note(ctx: Dictionary) -> EnvironmentCard:
 
 func _init() -> void:
 	add_theme_constant_override("separation", 8)
-	_build()
-
-
-func _process(delta: float) -> void:
-	_lit_t -= delta
-	if _lit_t <= 0.0:
-		_lit_t = LIT_EVERY
-		_show_lit()
+	section = EnvironmentSection.new(self)
+	list = PropsCard.new(func() -> Array: return [section])
+	add_child(list)
 
 
 # --- the block ---------------------------------------------------------------------------------------------------------
@@ -69,168 +49,77 @@ func capture() -> Dictionary:
 
 func apply(block: Dictionary) -> void:
 	_spec = Surroundings.sanitize(block)
-	_show()
+	list.refresh(true)
 
 
-# --- what it hands the reading -----------------------------------------------------------------------------------------
+# --- what the list does ------------------------------------------------------------------------------------------------
 
-## The sound it chose, as the bed under the voice ([Soundscape]): none while nothing is ticked.
-class Bed extends ReadingBed:
-	var card: EnvironmentCard
-
-	func _init(c: EnvironmentCard) -> void:
-		card = c
-
-	func of(_export := false) -> Dictionary:
-		var sound := Surroundings.sound_of(card._spec)
-		var key := JSON.stringify(sound)
-		if sound.is_empty():
-			return {"key": key}
-		return {"key": key, "make": func(rate: int, t0: float) -> SoundBed: return Soundscape.new(sound, {}, hash(key), rate, t0)}
-
-	func level() -> float:
-		return float(card._spec.get("sound_level", 0.5))
-
-
-# --- the rows ----------------------------------------------------------------------------------------------------------
-
-func _build() -> void:
-	var lrow := HBoxContainer.new()
-	lrow.add_theme_constant_override("separation", 8)
-	add_child(lrow)
-	lrow.add_child(_label("Light"))
-	_light = OptionButton.new()
-	_light.fit_to_longest_item = false
-	_light.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_light.add_item("The scene's own")
-	_light.set_item_metadata(0, "")
-	_light.set_item_tooltip(0, "As the scene lights itself: a desk by its number, the Dispatch desk's hollow at night.")
-	var tips := PackedStringArray(["The light the scene is in."])
-	for k in Surroundings.LIGHTS:
-		_light.add_item(Registry.label(Surroundings.LIGHTS, k))
-		_light.set_item_metadata(_light.item_count - 1, k)
-		_light.set_item_tooltip(_light.item_count - 1, Registry.blurb(Surroundings.LIGHTS, k))
-		tips.append("%s: %s" % [Registry.label(Surroundings.LIGHTS, k), Registry.blurb(Surroundings.LIGHTS, k)])
-	_light.tooltip_text = "\n\n".join(tips)
-	_light.item_selected.connect(func(i: int) -> void: _put("light", String(_light.get_item_metadata(i))))
-	lrow.add_child(_light)
-	_bright = Card.slider_row(self, "Brightness", Surroundings.BRIGHTNESS.x, Surroundings.BRIGHTNESS.y, 0.05, 1.0,
-		"How bright the whole scene is, over its light's own: 1 as the light is.", func(v: float) -> void: _put("brightness", v))
-	_rays_on = CheckBox.new()
-	_rays_on.text = "Light shafts"
-	_rays_on.tooltip_text = "Shafts of light falling through the haze - through a window, a crack, the canopy. Unticked, the scene's own."
-	_rays_on.toggled.connect(func(on: bool) -> void:
-		if not _syncing:
-			_put("rays", RAYS_FIRST if on else -1))
-	add_child(_rays_on)
-	_rays = Card.slider_row(self, "Shafts", 1, Surroundings.RAYS_MOST, 1, RAYS_FIRST, "How many shafts of light fall.",
-		func(v: float) -> void: _put("rays", int(v)))
-	_ray_strength = Card.slider_row(self, "Strength", 0.0, 1.0, 0.05, 0.6, "How strongly they light the haze.",
-		func(v: float) -> void: _put("ray_strength", v))
-	add_child(_label("In the air"))
-	add_child(_ticks(Surroundings.AIR, _air, "air"))
-	_air_amount = Card.slider_row(self, "Amount", Surroundings.AIR_AMOUNT.x, Surroundings.AIR_AMOUNT.y, 0.05, 1.0,
-		"How much of what drifts: 1 as each is.", func(v: float) -> void: _put("air_amount", v))
-	add_child(_label("Heard"))
-	add_child(_ticks(Surroundings.SOUNDS, _sound, "sound"))
-	_sound_level = Card.slider_row(self, "Level", 0.0, 1.0, 0.05, 0.5, "How loud what is heard round the scene is, under the voice.",
-		func(v: float) -> void: _put("sound_level", v))
-	_heard_box = VBoxContainer.new()
-	_heard_box.add_theme_constant_override("separation", 6)
-	add_child(_heard_box)
-	_lit_box = VBoxContainer.new()
-	_lit_box.add_theme_constant_override("separation", 6)
-	add_child(_lit_box)
-	_show()
+## Element [param el] put round the scene: one of a kind a scene has once takes the place of the one there. "" done, else why not.
+func add(el: Dictionary) -> String:
+	var safe := Surroundings.element(el)
+	if safe.is_empty():
+		return "there is no such thing to add"
+	var els: Array = _spec["elements"]
+	if bool((Surroundings.KINDS[String(safe["kind"])] as Dictionary)["one"]):
+		for i in els.size():
+			if String((els[i] as Dictionary)["kind"]) == String(safe["kind"]):
+				els[i] = safe
+				return _changed()
+	if els.size() >= Surroundings.MOST:
+		return "a scene has at most %d things round it" % Surroundings.MOST
+	els.append(safe)
+	return _changed()
 
 
-## A tick for each row of [param table], into [param into] by key; each toggles its key in the block's [param field].
-func _ticks(table: Dictionary, into: Dictionary, field: String) -> HFlowContainer:
-	var flow := HFlowContainer.new()
-	flow.add_theme_constant_override("h_separation", 10)
-	for k in table:
-		var cb := CheckBox.new()
-		cb.text = Registry.label(table, k)
-		cb.tooltip_text = Registry.blurb(table, k)
-		cb.toggled.connect(func(on: bool) -> void:
-			if _syncing:
-				return
-			var list: Array = (_spec[field] as Array).duplicate()
-			if on and not list.has(k):
-				list.append(k)
-			elif not on:
-				list.erase(k)
-			_put(field, Surroundings._ticks(list, table)))
-		into[k] = cb
-		flow.add_child(cb)
-	return flow
+## Element [param i] taken away.
+func remove(i: int) -> String:
+	(_spec["elements"] as Array).remove_at(i)
+	return _changed()
 
 
-func _label(text: String) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.custom_minimum_size = Vector2(72, 0)
-	l.add_theme_font_size_override("font_size", 12)
-	return l
+## Element [param i] drawn again: a new number, every property not set drawn from it ([Roll]).
+func roll(i: int) -> String:
+	var el: Dictionary = (_spec["elements"] as Array)[i]
+	var was := int(el["seed"])
+	while int(el["seed"]) == was:
+		el["seed"] = Roll.fresh()
+	return _changed()
 
 
-## The rows as the block has them, telling no one.
-func _show() -> void:
-	if _light == null:
-		return
-	_syncing = true
-	for i in _light.item_count:
-		if String(_light.get_item_metadata(i)) == String(_spec["light"]):
-			_light.select(i)
-	_bright.set_value_no_signal(float(_spec["brightness"]))
-	var rays := int(_spec["rays"])
-	_rays_on.set_pressed_no_signal(rays >= 0)
-	_rays.set_value_no_signal(maxi(rays, 1))
-	_ray_strength.set_value_no_signal(float(_spec["ray_strength"]))
-	_rays.get_parent().visible = rays >= 0
-	_ray_strength.get_parent().visible = rays >= 0
-	for k in _air:
-		(_air[k] as CheckBox).set_pressed_no_signal(k in (_spec["air"] as Array))
-	_air_amount.set_value_no_signal(float(_spec["air_amount"]))
-	for k in _sound:
-		(_sound[k] as CheckBox).set_pressed_no_signal(k in (_spec["sound"] as Array))
-	_sound_level.set_value_no_signal(float(_spec["sound_level"]))
-	_syncing = false
-	_lit_seen = ""
-	_show_lit()
+## Element [param i] set aside ([param off]) or used again.
+func set_off(i: int, off: bool) -> String:
+	var el: Dictionary = (_spec["elements"] as Array)[i]
+	if off:
+		el["off"] = true
+	else:
+		el.erase("off")
+	return _changed()
 
 
-## A dial for each thing in the scene that throws light and each that makes a sound of its own ([method PropSection.lit], [method
-## PropSection.heard] of every section on the panel), built again only when the things change.
-func _show_lit() -> void:
-	if _lit_box == null:
-		return
-	var lit := _things("lit")
-	var heard := _things("heard")
-	var key := JSON.stringify([lit, heard])
-	if key == _lit_seen:
-		return
-	_lit_seen = key
-	for box in [_lit_box, _heard_box]:
-		for c in (box as Node).get_children():
-			c.queue_free()
-	if not lit.is_empty():
-		_lit_box.add_child(_label("Lights"))
-	for t in lit:
-		var name := String((t as Dictionary)["key"])
-		Card.slider_row(_lit_box, String((t as Dictionary)["name"]), Surroundings.LIGHT_SHARE.x, Surroundings.LIGHT_SHARE.y, 0.05,
-			Surroundings.share_of(_spec, name), "How strongly %s throws its light: 1 as it is made, 0 dark." % String((t as Dictionary)["name"]).to_lower(),
-			func(v: float) -> void: _set_share("lights", name, v))
-	for t in heard:
-		var name := String((t as Dictionary)["key"])
-		Card.slider_row(_heard_box, String((t as Dictionary)["name"]), Surroundings.HEARD_SHARE.x, Surroundings.HEARD_SHARE.y, 0.05,
-			Surroundings.heard_of(_spec, name), "How loud %s is in what it makes of its own: 1 as it is made, 0 silent." % String((t as Dictionary)["name"]).to_lower(),
-			func(v: float) -> void: _set_share("heard", name, v))
+## Property [param field] of element [param i] set to [param value], or unset (null): drawn by its number again.
+func set_field(i: int, field: String, value: Variant) -> String:
+	var el: Dictionary = (_spec["elements"] as Array)[i]
+	if value == null:
+		el.erase(field)
+	else:
+		el[field] = value
+	(_spec["elements"] as Array)[i] = Surroundings.element(el)
+	return _changed()
+
+
+## The share of thing [param name] in [param field] (`lights` or `heard`) set to [param value], or unset (null): as it is made.
+func set_share(field: String, name: String, value: Variant) -> String:
+	if value == null:
+		(_spec[field] as Dictionary).erase(name)
+	else:
+		(_spec[field] as Dictionary)[name] = value
+	_spec = Surroundings.sanitize(_spec)
+	return _changed()
 
 
 ## Every thing on the panel's Props card's sections that throws light ([param kind] "lit") or makes a sound of its own ("heard"):
 ## `[{key, name}]`, each once.
-func _things(kind: String) -> Array:
+func things(kind: String) -> Array:
 	var out: Array = []
 	var seen := {}
 	if _panel == null:
@@ -246,28 +135,32 @@ func _things(kind: String) -> Array:
 	return out
 
 
-func _put(field: String, v: Variant) -> void:
-	if _syncing:
-		return
-	_spec[field] = v
-	_spec = Surroundings.sanitize(_spec)
-	_changed()
-	if field == "rays":
-		_show()
+# --- what it hands the reading -----------------------------------------------------------------------------------------
+
+## The sound it chose, as the bed under the voice ([Soundscape]): none while nothing is heard.
+class Bed extends ReadingBed:
+	var card: EnvironmentCard
+
+	func _init(c: EnvironmentCard) -> void:
+		card = c
+
+	func of(_export := false) -> Dictionary:
+		var sound := Surroundings.sound_of(card._spec)
+		var key := JSON.stringify(sound)
+		if sound.is_empty():
+			return {"key": key}
+		return {"key": key, "make": func(rate: int, t0: float) -> SoundBed: return Soundscape.new(sound, {}, hash(key), rate, t0)}
+
+	func level() -> float:
+		return Surroundings.BED_LEVEL
 
 
-func _set_share(field: String, name: String, v: float) -> void:
-	if _syncing:
-		return
-	(_spec[field] as Dictionary)[name] = v
-	_changed()
-
-
-## The note touched, and a playing scene given the environment at once.
-func _changed() -> void:
+## The note touched, and a playing scene given the environment at once. "" (nothing went wrong), for the list to say.
+func _changed() -> String:
 	if _panel == null:
-		return
+		return ""
 	_panel.touch()
 	var subs: Node = _panel.subtitles if is_instance_valid(_panel) else null
 	if subs != null and is_instance_valid(subs) and subs.get("document") is Dictionary:
 		(subs.get("document") as Dictionary)[KEY] = capture()
+	return ""

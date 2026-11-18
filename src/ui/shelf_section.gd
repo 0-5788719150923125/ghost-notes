@@ -16,6 +16,12 @@ func title() -> String:
 	return ""
 
 
+## The kind of thing its shelves hold, the heading they stand under in the Dex's list ("Props", "Voices", "Environment"): sections of
+## one category stand together. Its title by default.
+func category() -> String:
+	return title()
+
+
 ## A number that moves whenever what it offers changes in a way the count of offers does not show (a voice's sample made): the Dex
 ## fills its shelf again when it moves. 0 for a section that never says.
 func version() -> int:

@@ -381,7 +381,7 @@ func _shine_lamp() -> void:
 func _dress_environment() -> void:
 	if _env == null or look.is_empty():
 		return
-	Tonemaps.dress(_env, 1.0 * float(environment["brightness"]))
+	Tonemaps.dress(_env, Surroundings.brightness(environment))
 	_shine_lamp()
 	_light.shares = environment["lights"]
 	var row := Surroundings.light_of(environment, String(look.get("mood", "lamplight")))
@@ -389,13 +389,12 @@ func _dress_environment() -> void:
 	if _rays != null:
 		_rays.queue_free()
 		_rays = null
-	var n := maxi(int(environment["rays"]), 0)
-	if n > 0:
+	if Surroundings.has_shafts(environment):
 		var sun: Dictionary = (look.get("light", {}) as Dictionary).get("sun", {}) if (look.get("light", {}) as Dictionary).get("sun") is Dictionary else {}
 		var from := float(sun.get("from", RAYS_FROM.x)) if sun.get("from") is float or sun.get("from") is int else RAYS_FROM.x
 		var toward := Surroundings.toward(from, float(sun.get("height", RAYS_FROM.y)))
-		_rays = Surroundings.rays(n, float(environment["ray_strength"]), Color.html(String(row["key_color"])), toward,
-			[AABB(Vector3(-0.32, LegalPad.DESK_Y, -0.26), Vector3(0.64, 0.0, 0.5))], _seed, RAYS_REACH)
+		_rays = Surroundings.rays(environment, Color.html(String(row["key_color"])), toward,
+			[AABB(Vector3(-0.32, LegalPad.DESK_Y, -0.26), Vector3(0.64, 0.0, 0.5))], RAYS_REACH)
 		_root3.add_child(_rays)
 	Surroundings.fog_for(_env, environment, 0.0)
 	_env.volumetric_fog_length = FOG_LENGTH

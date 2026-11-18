@@ -1196,7 +1196,8 @@ func _settling(md: DispatchMedium, radar: Dictionary) -> void:
 func _environment(md: DispatchMedium) -> void:
 	var exposure := md._env.tonemap_exposure
 	var own := md._env.ambient_light_color == DispatchMedium.AMBIENT and md._crack.visible and md._rays == null and is_equal_approx(md._lamp_share, 1.0)
-	md._surround = Surroundings.sanitize({"light": "moonlight", "brightness": 2.0, "rays": 4, "air": ["pixies"], "lights": {"terminal": 0.5}})
+	md._surround = Surroundings.sanitize({"elements": [{"kind": "light", "preset": "moonlight", "brightness": 2.0},
+		{"kind": "shafts", "count": 4, "inner": 0}, {"kind": "pixies"}], "lights": {"terminal": 0.5}})
 	md._dress_environment()
 	var moon: Dictionary = Surroundings.LIGHTS["moonlight"]
 	var term: PropRig = md._set.rigs.get("terminal")
@@ -1223,7 +1224,7 @@ func _environment(md: DispatchMedium) -> void:
 			piled = maxf(piled, ((mo as Dictionary)["home"] as Vector3).distance_to(DispatchMedium.AIR_NEAR.get_center()))
 	nowhere.release()
 	_ok(apart > 0.3 and piled < 0.01, "the motes are spread over the desk as the chair sees it (%.2f m apart at most) - the control, placed from a camera put nowhere yet, all in their region's middle (%.3f off it)" % [apart, piled])
-	md._surround = Surroundings.sanitize({"light": "candlelight"})
+	md._surround = Surroundings.sanitize({"elements": [{"kind": "light", "preset": "candlelight"}]})
 	md._dress_environment()
 	_ok(md._candles.visible and md._candles.light_energy > 0.0 and is_zero_approx(md._lamp_share) and md._rays == null and md._air == null,
 		"candlelit, candles burn out of the shot and the lamp is off")
@@ -1283,7 +1284,8 @@ func _ok(cond: bool, what: String) -> void:
 ## round the bases leaves the lids out). No root goes through the printer's paper or its heap (control: the same roots grown
 ## knowing nothing of them go through), nor lies across the chart taped to the desk (control: grown with it left out, they do).
 ## The chart lies a hair over the desk's top, never in its plane (control: its make seats its sheet on its own foot). The patch
-## panel's cables end in what they plug into or past the desk's edge, and go over the roots on the desk (control: laid blind).
+## panel's cables end in a part of what they plug into or past the desk's edge, go over the roots on the desk (control: laid
+## blind) and round what stands on it, through none of it (control: laid straight from socket to port).
 func _roots_clear() -> void:
 	var img := Image.create(8, 8, false, Image.FORMAT_RGBA8)
 	var t := ImageTexture.create_from_image(img)
@@ -1302,6 +1304,8 @@ func _roots_clear() -> void:
 	var loose_ends := []
 	var cable_through := []
 	var cable_blind := 0
+	var cable_in_things := []
+	var straight_in_things := 0
 	for sd in range(1, 9):
 		var ds := DispatchSet.new()
 		var node := ds.build(labels, sd, tex)
@@ -1322,9 +1326,23 @@ func _roots_clear() -> void:
 			var end: Vector3 = (path as PackedVector3Array)[(path as PackedVector3Array).size() - 1]
 			var plugged := end.y < DispatchSet.DESK_Y - 0.1
 			for k in DispatchSet.CABLED:
-				plugged = plugged or (ds.bodies.has(k) and (ds.bodies[k] as AABB).grow(0.005).has_point(end))
+				for part in ds._parts.get(k, []):
+					plugged = plugged or ((part as Dictionary)["box"] as AABB).grow(0.002).has_point(end)
 			if not plugged:
 				loose_ends.append(sd)
+		# laid round what stands on the desk: no cable lying on it goes through a thing standing there, short of its own port
+		# (the control: laid straight from socket to port, as they once were, they do)
+		if _cables_in_things(ds, ds.cable_paths, 0.03):
+			cable_in_things.append(sd)
+		var straight: Array = []
+		for path in ds.cable_paths:
+			var pp := path as PackedVector3Array
+			var line := DispatchSet.sag_path(pp[0], pp[pp.size() - 1], 0.0, DispatchSet.DESK_Y + DispatchSet.CABLE_R, 22)
+			for i in line.size():
+				if line[i].z >= DispatchSet.FAR:
+					line[i].y = DispatchSet.DESK_Y + DispatchSet.CABLE_R
+			straight.append(line)
+		straight_in_things += int(_cables_in_things(ds, straight, 0.03))
 		if _cables_through(ds.cable_paths, rr.lying):
 			cable_through.append(sd)
 		ds.lay_cables([])
@@ -1374,8 +1392,11 @@ func _roots_clear() -> void:
 	_ok(paper_through.is_empty() and paper_blind > 0,
 		"no root goes through the printer's paper or its heap (the control: grown knowing nothing of them, through on %d of 8; with them, on %s)" % [paper_blind, str(paper_through)])
 	_ok(loose_ends.is_empty() and cable_through.is_empty() and cable_blind > 0,
-		"the patch panel's cables end in what they plug into or past the desk's edge, never loose (%s), and go over the roots on the desk, through none (the control: laid knowing nothing of them, through on %d of 8; laid over them, on %s)"
+		"the patch panel's cables end in a part of what they plug into or past the desk's edge, never loose (%s), and go over the roots on the desk, through none (the control: laid knowing nothing of them, through on %d of 8; laid over them, on %s)"
 		% [str(loose_ends), cable_blind, str(cable_through)])
+	_ok(cable_in_things.is_empty() and straight_in_things > 0,
+		"they are laid round what stands on the desk, through none of it (%s) - the control: laid straight from socket to port, through it on %d of 8"
+		% [str(cable_in_things), straight_in_things])
 	_ok(chart_lift >= DispatchSet.FLAT_LIFT * 0.9 and chart_seat < 0.0002,
 		"the chart lies %.2f mm over the desk's top, never in its plane (the control: its make seats its sheet on its own foot, %.2f mm up)"
 		% [chart_lift * 1000.0, chart_seat * 1000.0])
@@ -1392,6 +1413,31 @@ static func _xf_in(n: Node3D, top: Node3D) -> Transform3D:
 			xf = (at as Node3D).transform * xf
 		at = at.get_parent()
 	return xf
+
+
+## Whether any of [param paths] (cables) passes through a thing standing on the desk of [param ds] while it lies on the desk's top -
+## inside a part's outline from above, between its foot and its top - short of the last [param spare] (m) of its way, where it
+## plugs in.
+static func _cables_in_things(ds: DispatchSet, paths: Array, spare: float) -> bool:
+	for path in paths:
+		var pp := path as PackedVector3Array
+		var end := pp[pp.size() - 1]
+		for i in range(2, pp.size()):
+			var p := pp[i]
+			if p.z < DispatchSet.FAR or p.y > DispatchSet.DESK_Y + 0.02 or p.y < DispatchSet.DESK_Y or p.distance_to(end) < spare:
+				continue
+			for k in ds._parts:
+				if k == "patch":
+					continue
+				for part in ds._parts[k]:
+					var pd: Dictionary = part
+					# (under a part raised on its feet is no way through it)
+					if float(pd["lo"]) > DispatchSet.DESK_Y + 0.05 or p.y > float(pd["hi"]) or p.y + DispatchSet.CABLE_R < float(pd["lo"]) \
+							or (pd["outline"] as PackedVector2Array).size() < 3:
+						continue
+					if Geometry2D.is_point_in_polygon(Vector2(p.x, p.z), pd["outline"]):
+						return true
+	return false
 
 
 ## Whether any of [param paths] (cables) passes inside a root of [param lying] on the desk's top - within its radius of its middle.

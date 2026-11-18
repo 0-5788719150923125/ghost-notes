@@ -74,4 +74,7 @@ note's pictures as its presentation shows them, a medium with none as the contro
   the Dispatch desk are its formats (next/notes.md, "The Medium card").
 - Built; the related gates pass (components, dispatch, doc_sync, letter_card, letter, notebook, notes_list, panel_fit,
   pictures_card, pictures_rows, pipeline, tablet, youtube).
+- Each picture is an entry (`EntryCard`, the look every card's list shares): its thumbnail, what it shows and its status, and a
+  × top-right deleting the picture shown (pressed twice; grayed with nothing painted). A click opens it: its versions, Regenerate,
+  Import…. What the episode's agents made (`MadePictures`) are entries too, their × grayed: a step is kept, never deleted.
 - Open: the author has not yet seen it in the app.

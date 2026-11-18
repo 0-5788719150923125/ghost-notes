@@ -23,7 +23,9 @@ extends SceneTree
 ## - Nothing flies through what stands: a mote over the table or a thing on it stays above its top - a lit one by LIT_CLEAR, where
 ##   its light at full glow burns no spot that blooms - and the floor lifting it over a thing never makes it jump. Two-sided: with
 ##   nothing under them motes go into the table.
-## - Built: a fog volume per fog, a sprite per mote, no more lights than the cap.
+## - Built: a fog volume per fog, a sprite per mote, no more lights than the cap. Motes that only drift (dust) are posed on the GPU, as
+##   many as MAX_ADRIFT and outside the all-motes cap, at their homes with their ways of wandering; the control, dust on visits, is
+##   posed on the CPU and held to MAX_MOTES.
 
 var _fails := 0
 
@@ -94,12 +96,21 @@ func _sanitize() -> bool:
 	_ok(fogs.size() == Effects.MAX_FOG, "%d fogs were kept, past the cap of %d" % [fogs.size(), Effects.MAX_FOG])
 	var crowd: Array = []
 	for i in 12:
-		crowd.append({"kind": "motes", "look": "dust", "where": "over the cloth", "count": 40})
+		crowd.append({"kind": "motes", "look": "ember", "where": "over the cloth", "count": 40})
 	var motes := 0
 	var kept := _clean(crowd)
 	for m in kept:
 		motes += int(m["count"])
 	_ok(kept.size() <= Effects.MAX_EFFECTS and motes <= Effects.MAX_MOTES_ALL, "%d effects with %d motes were kept" % [kept.size(), motes])
+	# motes that only drift are posed on the GPU: as many as MAX_ADRIFT in one population, none counted in all's cap
+	var dusty: Array = []
+	for i in 3:
+		dusty.append({"kind": "motes", "look": "dust", "where": "over the cloth", "count": 5000})
+	var dust := _clean(dusty)
+	_ok(dust.size() == 3 and dust.all(func(m: Dictionary) -> bool: return int(m["count"]) == Effects.MAX_ADRIFT)
+		and Effects.drifts(Effects.MOTES["dust"], false) and not Effects.drifts(Effects.MOTES["ember"], false)
+		and not Effects.drifts(Effects.MOTES["dust"], true) and not Effects.drifts(Effects.MOTES["pixie"], false),
+		"dust drifts, %d to a population and outside all's cap - the controls: embers rise, a lit mote and a pixie do not drift" % Effects.MAX_ADRIFT)
 	var sized := _clean([{"kind": "motes", "look": "pixie", "where": "over the cloth", "size": 300, "glow": -2, "colors": ["red", "#ff00ff"]},
 		{"kind": "burst", "look": "smoke", "on": "jumper", "size": 0.01}])
 	var pix: Dictionary = sized[0]
@@ -122,6 +133,23 @@ func _vocabulary() -> bool:
 func _motes() -> bool:
 	var stage := _stage()
 	var root := Node3D.new()
+	# drifting dust, built: posed on the GPU, each at its home with its ways of wandering, nothing posed each frame - the control: dust
+	# that goes away on visits is posed on the CPU, no more of it than MAX_MOTES
+	var still := Effects.build(_clean([{"kind": "motes", "look": "dust", "where": "over the cloth", "count": 300, "away": 0.0},
+		{"kind": "motes", "look": "dust", "where": "over the cloth", "count": 300, "away": 0.4}]), stage, 5)
+	var gpu: Dictionary = still.motes[0]
+	var cpu: Dictionary = still.motes[1]
+	var gm: MultiMesh = (gpu["layer"] as Dictionary)["mm"]
+	var gmat: ShaderMaterial = (gpu["layer"] as Dictionary)["mat"]
+	still.tick(12.5)
+	# (the dummy renderer keeps no instance's data, so where each is handed is not read back here)
+	_ok(bool(gpu["drifting"]) and gm.instance_count == 300 and bool(gmat.get_shader_parameter("drifting"))
+		and not bool(gmat.get_shader_parameter("posed")) and is_equal_approx(float(gmat.get_shader_parameter("show_time")), 12.5)
+		and is_equal_approx(float(gmat.get_shader_parameter("flicker")), float(Effects.MOTES["dust"]["flicker"])),
+		"drifting dust is posed on the GPU: all 300, its flicker its look's, only show time handed each frame")
+	_ok(not bool(cpu["drifting"]) and ((cpu["layer"] as Dictionary)["mm"] as MultiMesh).instance_count == Effects.MAX_MOTES,
+		"the control: dust on visits is posed on the CPU, no more of it than %d" % Effects.MAX_MOTES)
+	still.release()
 	var air := Effects.build(_clean([{"kind": "motes", "look": "pixie", "where": "beyond the table", "count": 12, "away": 0.5},
 		{"kind": "motes", "look": "firefly", "where": "over the cloth", "count": 6},
 		{"kind": "motes", "look": "ember", "where": "over the cloth", "count": 6}]), stage, 99)

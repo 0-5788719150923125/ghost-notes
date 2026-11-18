@@ -8,6 +8,7 @@ extends Node
 ## - The section's rows are the table's things, ticked; unticked, a thing moves to the table's `aside` (a hand's version, kept) and
 ##   the table stood from it stands it no more - the control, before, it does; ticked again it stands again. The card draws a row
 ##   for each.
+## - An entry's × takes a thing off the table for good, from Used or Set aside (the control: one not there cannot be).
 ## - The groups are Used and Set aside, and no row offers Always. Keep puts a thing in the library, and its row says Kept; only a used
 ##   thing offers Select. A row's prop whole is its table's thing and materials ([method EpisodeProps.prop_of]), built whole to be
 ##   turned ([method EpisodeProps.model_of]); the viewer holds it, a drag turns it and Set straight puts it back (the control: a
@@ -129,6 +130,7 @@ func _run() -> void:
 	viewer._close()
 	_ok(viewer.held() == null, "closed, it lets the prop go")
 
+
 	# Landing a table
 	var both := {"things": [{"name": "stand", "at": [0.0, -30.0], "parts": [{"shape": "box", "size": [5, 5, 5]}]},
 		{"name": "candle", "parts": [{"shape": "lathe", "profile": [[0, 0], [2, 0], [2, 12], [0, 12]], "material": "wax"}]}], "materials": {}}
@@ -212,6 +214,20 @@ func _run() -> void:
 	show._episode = null
 	_ok(sec.adds().is_empty() and not sec.add("kept:brass bell").is_empty(), "with no table yet there is nothing to add to")
 	show._episode = ep
+	# Taken off: an entry's × takes a thing off the table for good, from either list
+	var used: Array = sec.rows().filter(func(r: Dictionary) -> bool: return String(r["key"]).begins_with("thing:"))
+	_ok(used.size() >= 2 and sec.rows().all(func(r: Dictionary) -> bool: return r.has("remove_tip")), "every entry has its ×")
+	if used.size() >= 2:
+		var first := String(used[0]["name"])
+		var second := String(used[1]["name"])
+		var nowhere := func(n: String) -> bool:
+			var tab: Dictionary = ep.read_json("table")
+			return not ((tab.get("things", []) as Array) + (tab.get("aside", []) as Array)).any(func(x: Dictionary) -> bool: return String(x["name"]) == n)
+		_ok(sec.remove("thing:" + first).is_empty() and nowhere.call(first) and not sec.rows().any(func(r: Dictionary) -> bool: return String(r["name"]) == first),
+			"its × takes %s off the table for good - not set aside" % first)
+		sec.set_on("thing:" + second, false)
+		_ok(sec.remove("aside:" + second).is_empty() and nowhere.call(second), "and a thing set aside, off its list")
+	_ok(not sec.remove("thing:nothing").is_empty(), "the control: a thing not on the table cannot be taken off")
 	card.free()
 	_finish(ed, was_root, was_library)
 

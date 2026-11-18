@@ -1,42 +1,38 @@
-# A THUMBNAIL PAINTED FOR EACH EPISODE (the user, 2026-10-28: "an agentic workflow ... which would ask an
-# agent to produce a compelling and relevant thumbnail. This flow might benefit from both the writer and
-# the painter"). The YouTube card's Thumbnail, Painted, adds this step to the card that makes the episode
-# (YouTubeThumbnail, an EpisodeStep): the writer reads the episode and writes what the painter paints, the
-# painter paints it, and the code cuts it to YouTube's shape (1280x720).
+# A THUMBNAIL PAINTED FOR EACH EPISODE. The YouTube card's Thumbnail, Painted, adds this step to the card that makes the
+# episode (YouTubeThumbnail, an EpisodeStep): the writer reads the episode and designs the thumbnail - what is painted, the words on
+# it and how they are lettered - the painter paints it, and the code cuts it to YouTube's shape (1280x720).
 #
-# TRUE OF THE VIDEO: a thumbnail that promises what the video does not hold misleads the viewer who
-# clicks it - and YouTube counts it as misleading - so the writer shows something the video holds.
+# TRUE OF THE VIDEO: a thumbnail that promises what the video does not hold misleads the viewer who clicks it - and YouTube counts
+# it as misleading - so the writer shows something the video holds, and its words are a hook the video pays off.
 #
-# THE WORDS ON IT ARE THE WRITER'S CHOICE, few or none: a thumbnail is often seen no bigger than a stamp,
-# and the title is printed under it already. The painter writes them exactly as given and nothing more:
-# an image model left to itself letters in words of its own.
+# MADE TO BE CLICKED: a thumbnail is seen no bigger than a stamp among a dozen others, so it shows the moment that raises a question,
+# close and bold, and leaves room for its words. THE WORDS ARE DESIGNED, NOT JUST CHOSEN: left to itself an image model sets plain
+# white block capitals in the middle, too large, so the writer says how they are lettered and where they sit (`lettering`), and the
+# painter letters them so. The lower right is never used: YouTube prints the video's length there.
 #
-# THE EPISODE'S OWN PICTURES (a show's paintings, a letter's or a book's pictures), when it has any and the
-# card's "Match the video's pictures" is ticked, are shown to the writer, who names the ones the painter is
-# handed to paint after - and naming none, the code hands it a few spread through them. THE THUMBNAIL IS ONE
-# MORE OF THEM (the user, 2026-10-30: "the thumbnails generated are just random weird pictures, completely
-# different from the video"): the writer is told to design a picture of their world in their medium and
-# colors, and the painter to paint as they are painted.
+# THE EPISODE'S OWN PICTURES (a show's paintings, a letter's or a book's pictures), when it has any and the card's "Match the
+# video's pictures" is ticked, are shown to the writer, who names the ones the painter is handed to paint after - and naming none,
+# the code hands it a few spread through them. The thumbnail is one more of them: the writer designs a picture of their world in
+# their medium and colors, and the painter paints as they are painted.
 #
-# NO SAMPLE BRIEF: a sample in a prompt comes back word for word, every run, so the format is placeholders
-# only.
+# NO SAMPLE BRIEF, PHRASE OR TYPEFACE: a sample in a prompt comes back word for word, every run, so the format is placeholders only
+# and the lettering is described by what it does, never by a named face.
 #
-# ANOTHER IS ANOTHER (the user, 2026-10-30: "twice now, the thumbnail generated has essentially been exactly
-# the same thing, right down to the exact same text"): sent the same prompt, the writer came back with the
-# same design and the same four words. Every thumbnail painted is kept for the author to pick between, so
-# the writer is shown the ones already kept and told to make one unlike them.
+# ANOTHER IS ANOTHER: every thumbnail painted is kept for the author to pick between, so the writer is shown the ones already kept -
+# their briefs, words and lettering - and told to make one unlike them.
 #
-# The code gives: {{show}}, {{title}}, {{description}}, each maybe empty; {{words}}; {{pictures}} (how
-# many pictures the writer is shown, 0 for none); {{earlier}}, the thumbnails already kept for the video,
-# each its {{n}}, its {{brief}} and its {{lettering}} (maybe empty), none the first time. The painter's part: {{picture}}, {{words}} (maybe empty),
-# {{refs}} (whether it is handed pictures to follow) and {{portrait}} (a portrait video's thumbnail).
+# The code gives: {{show}}, {{title}}, {{description}}, each maybe empty; {{words}}; {{pictures}} (how many pictures the writer is
+# shown, 0 for none); {{earlier}}, the thumbnails already kept for the video, each its {{n}}, its {{brief}}, its {{said}} (its
+# words, maybe empty) and its {{look}} (how they were lettered, maybe empty), none the first time. The painter's part: {{picture}},
+# {{words}} (maybe empty), {{lettering}} (maybe empty), {{refs}} (whether it is handed pictures to follow) and {{portrait}} (a
+# portrait video's thumbnail).
 system: >-
-  You design the thumbnail a video goes up to YouTube with. Answer with the JSON asked for and nothing
-  else.
+  You design the thumbnail a video goes up to YouTube with: the picture, the words on it and how they are lettered. Answer with
+  the JSON asked for and nothing else.
 prompt:
   - >-
-      Design the thumbnail for one video: the picture a viewer sees before choosing to watch it, often
-      no bigger than a stamp in a list on a phone.
+      Design the thumbnail for one video: the picture a viewer sees before choosing to watch it, often no bigger than a stamp in
+      a list on a phone, among a dozen others. Its one job is to make that viewer stop and want to know more.
   - ""
   - when: show
     say: "THE SHOW: {{show}}"
@@ -57,36 +53,43 @@ prompt:
       design a picture of their world, the same kind of picture in their medium, their style and their
       colors, and name the ones whose look comes closest to what you design.
   - >-
-      Show one thing this video holds that would make a viewer want to see it: a moment, an object, a
-      figure or a place from it. One clear subject, large in the frame, on a ground plain enough to read
-      at a glance, with strong light and dark{{^pictures}} and colors that stand apart{{/pictures}}{{#pictures}},
-      in the pictures' own colors{{/pictures}}. Nothing the video does not hold: no scene, promise or
-      person that is not in it.
+      THE PICTURE: show the moment of this video that raises a question - something strange, tense, funny or at stake, caught at
+      its height - rather than a calm view of everything in it. One clear subject, close and large, cropped boldly, with strong
+      light and dark{{^pictures}} and colors that stand apart{{/pictures}}{{#pictures}}, in the pictures' own colors{{/pictures}},
+      on a ground plain enough to read at a glance. Set the subject to one side, leaving the other side free for the words if it has
+      any. Nothing the video does not hold: no scene, promise or person that is not in it.
   - >-
-      Words on it are your choice: none, or at most four that the title does not already say, large
-      enough to read at the size of a stamp. No logo, no watermark, no border, and no channel's name
-      unless the title says it.
+      THE WORDS are your choice: none, or two to four that the title does not already say - a hook the video pays off, never a
+      summary of the title and never a promise it does not keep. No logo, no watermark, no border, and no channel's name unless the
+      title says it.
+  - >-
+      THEIR LETTERING is yours to design, as a designer would for this one video - never plain white block capitals set in the
+      middle. Lettering with character that belongs to the video's world and mood; one word set apart from the rest, larger or in
+      another color; a color that stands out from what lies behind it and an edge that keeps it readable over anything - an outline,
+      a shadow or a band behind it. Its largest word about a fifth to a quarter of the frame's height, no larger unless the words
+      are the whole picture. Set in the part of the frame the subject leaves free, never over the subject's face, and never in the
+      lower right corner, where YouTube prints the video's length. Or let the words stand in the picture itself, written on
+      something in it, as they would be there.
   - >-
       Write for the painter everything it must paint: the subject, where it is, the light, the colors
       and how it is framed. The painter sees only what you write{{#pictures}} and the pictures you
-      hand it{{/pictures}}.
+      hand it{{/pictures}}. Say how the words are lettered and where they sit in `lettering`, apart from the picture.
   - ""
   - when: earlier
     say: >-
-      THUMBNAILS ALREADY PAINTED FOR THIS VIDEO, as their briefs were written. The author keeps every one
-      and has asked for another to choose from, so one like these is wasted: show another subject or
-      moment of the video, framed another way, in other colors, and with other words or none - never the
-      words of one of these.
+      THUMBNAILS ALREADY PAINTED FOR THIS VIDEO, as their briefs were written. The author keeps every one and has asked for
+      another to choose from, so one like these is wasted: show another subject or moment of the video, framed another way, in
+      other colors, with other words or none - never the words of one of these - lettered another way.
   - each: earlier
-    say: '{{n}}. {{brief}}{{#lettering}} Its words: "{{lettering}}".{{/lettering}}{{^lettering}} No words on it.{{/lettering}}'
+    say: '{{n}}. {{brief}}{{#said}} Its words: "{{said}}".{{/said}}{{^said}} No words on it.{{/said}}{{#look}} Lettered: {{look}}{{/look}}'
   - when: earlier
     say: ""
   - "Answer with ONE JSON object and nothing else:"
   - ""
   - when: pictures
-    say: '{"picture": "<what the painter paints>", "words": "<the words on it, or empty>", "after": [<the numbers of the pictures the painter is handed, or none>]}'
+    say: '{"picture": "<what the painter paints>", "words": "<the words on it, or empty>", "lettering": "<how they are lettered and where they sit, or empty>", "after": [<the numbers of the pictures the painter is handed, or none>]}'
   - when: "!pictures"
-    say: '{"picture": "<what the painter paints>", "words": "<the words on it, or empty>"}'
+    say: '{"picture": "<what the painter paints>", "words": "<the words on it, or empty>", "lettering": "<how they are lettered and where they sit, or empty>"}'
 painter:
   - "Paint the thumbnail of a YouTube video."
   - ""
@@ -94,8 +97,10 @@ painter:
   - ""
   - when: words
     say: >-
-      THE WORDS ON IT, exactly these and no others: "{{words}}" - large, bold and clean, in a typeface
-      that suits the picture, set where they cover nothing that matters.
+      THE WORDS ON IT, exactly these and no others, every letter spelled as given: "{{words}}".{{#lettering}} Letter them so:
+      {{lettering}}{{/lettering}}{{^lettering}} Letter them with character, in a style that belongs to the picture's world, one word
+      set apart, with an edge that keeps them readable over anything - never plain white block capitals in the middle.{{/lettering}}
+      Readable at the size of a stamp, over nothing that matters, and clear of the lower right corner.
   - when: "!words"
     say: "No text, letters or numbers anywhere in it."
   - when: refs

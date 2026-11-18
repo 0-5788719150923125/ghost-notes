@@ -2,10 +2,10 @@ extends VBoxContainer
 class_name MadePictures
 
 ## MadePictures - what a show's agents painted for its episode, seen: each picture the episode's maker
-## says its agents made ([method EpisodeFeed.made_pictures]) as a thumbnail and its row's name, one click
-## from full size ([PictureWindow]), stepped through in the order they were made. Making one again is its
-## row's, on the Pipeline card (docs.py "one pipeline"). It sits on the Pictures card ([PicturesCard])
-## and names no maker.
+## says its agents made ([method EpisodeFeed.made_pictures]) as an entry ([EntryCard]), its thumbnail and its
+## row's name, one click from full size ([PictureWindow]), stepped through in the order they were made. Its ×
+## stands grayed: a step is kept, never deleted, and making one again is its row's, on the Pipeline card
+## (docs.py "one pipeline"). It sits on the Pictures card ([PicturesCard]) and names no maker.
 
 ## A thumbnail's longest side (pixels).
 const THUMB := 96
@@ -13,7 +13,7 @@ const THUMB := 96
 var _feed_of := Callable()       # () -> EpisodeFeed or null
 var _shown: Array = []           # the records shown, `{path, label, row, group}`
 var _stamp := ""                 # what was shown, by path and change time: rebuilt only when that changes
-var _flow: HFlowContainer
+var _flow: VBoxContainer
 var _heading: Label
 var _window: PictureWindow = null
 
@@ -25,9 +25,8 @@ func _init() -> void:
 	_heading.add_theme_font_size_override("font_size", 12)
 	_heading.modulate = Color(1, 1, 1, 0.7)
 	add_child(_heading)
-	_flow = HFlowContainer.new()
-	_flow.add_theme_constant_override("h_separation", 6)
-	_flow.add_theme_constant_override("v_separation", 6)
+	_flow = VBoxContainer.new()
+	_flow.add_theme_constant_override("separation", 4)
 	add_child(_flow)
 	visible = false
 
@@ -65,8 +64,8 @@ func _build() -> void:
 		c.queue_free()
 	for i in _shown.size():
 		var r: Dictionary = _shown[i]
-		var cell := VBoxContainer.new()
-		cell.add_theme_constant_override("separation", 2)
+		var e := EntryCard.new(String(r["label"]), "", "%s - click its picture to see it full size" % String(r["label"]))
+		e.set_remove(Callable(), "", "Made by the episode's agents, and kept: a step is never deleted. To make it again, use its row on the Pipeline card.")
 		var b := TextureButton.new()
 		b.ignore_texture_size = true
 		b.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
@@ -78,15 +77,11 @@ func _build() -> void:
 			img.resize(maxi(int(img.get_width() * s), 1), maxi(int(img.get_height() * s), 1), Image.INTERPOLATE_BILINEAR)
 			b.texture_normal = ImageTexture.create_from_image(img)
 		b.pressed.connect(_open.bind(i))
-		cell.add_child(b)
-		var l := Label.new()
-		l.text = String(r["label"])
-		l.add_theme_font_size_override("font_size", 11)
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		l.custom_minimum_size = Vector2(THUMB, 0)
-		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		cell.add_child(l)
-		_flow.add_child(cell)
+		e.set_picture(b)
+		e.name_label.add_theme_font_size_override("font_size", 11)
+		e.name_label.clip_text = false
+		e.name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_flow.add_child(e)
 
 
 ## Picture [param i] full size, its neighbours a step away.

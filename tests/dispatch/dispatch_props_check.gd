@@ -13,6 +13,8 @@ extends Node
 ## - The Dex's choice for a part offers its recipe drawn from many numbers and every kept and seen prop, first filtered by the
 ##   part's words; the one chosen now says so; Use hands a draw, a kept prop, or a seen prop kept in the library first.
 ## - The format keeps a choice in its block and hands it to the desk's document; one for no part, or of no shape, is refused.
+## - A spare thing's × takes it off the desk (kept as `{aside: true}`, left off the desk built) and "+ Add a prop" sets it out
+##   again; the terminal's × stands grayed and refuses (the control), as the switch's does while the script throws it.
 ## - The card's rows: every thing the desk works, the mug and the cup of pencils first, each with Choose… (which opens the Dex
 ##   on its makes, Use choosing for the desk) and Keep, the clock and the tablet only where the script uses them; the Dex on its
 ##   own offers the desk's things and a desk's recipes to keep, never a desk's mat.
@@ -175,6 +177,24 @@ func _format_and_card() -> void:
 	_ok(choices.add("draw:9").is_empty() and fmt.things()["mug"] == {"recipe": "mug", "seed": 9}, "Use there chooses for the desk")
 	_ok(sec.act("role:mug", "own").is_empty() and fmt.things().is_empty(), "the desk's own takes it back")
 	_ok(sec.act("role:mug", "keep").is_empty() and not ThingLibrary.read("a mug").is_empty(), "Keep puts the mug on the desk in the library")
+	# taken off: a spare thing's × takes it off and "+ Add a prop" sets it out again; what the desk or its script works stays
+	var by_key := func(k: String) -> Dictionary:
+		for r in sec.rows():
+			if String((r as Dictionary)["key"]) == k:
+				return r
+		return {}
+	_ok((by_key.call("role:stamp") as Dictionary).has("remove_tip") and (by_key.call("role:terminal") as Dictionary).has("remove_off")
+		and sec.adds().is_empty(), "a spare thing's × takes it off; the terminal's stands grayed; nothing taken off, nothing to add")
+	_ok(sec.remove("role:stamp").is_empty() and fmt.things()["stamp"] == {"aside": true} and (by_key.call("role:stamp") as Dictionary).is_empty()
+		and not sec.adds().is_empty() and sec.offers().any(func(o: Dictionary) -> bool: return String(o["key"]) == "role:stamp" and String(o["shelf"]) == "taken_off"),
+		"taken off, it is gone from the card, kept so in the block, and offered on the Dex to set out again")
+	_ok(sec.add("role:stamp").is_empty() and not fmt.things().has("stamp") and not (by_key.call("role:stamp") as Dictionary).is_empty(),
+		"Use sets it out again")
+	_ok(not sec.remove("role:terminal").is_empty() and not fmt.things().has("terminal"), "the control: the terminal cannot be taken off")
+	fmt._works = {"switch": true}
+	_ok((by_key.call("role:switch") as Dictionary).has("remove_off") and not sec.remove("role:switch").is_empty() and not fmt.things().has("switch"),
+		"the switch stays while the script throws it")
+	fmt._works = {}
 	var card := PropsCard.new(func() -> Array: return [sec])
 	add_child(card)
 	card.refresh(true)
@@ -205,6 +225,17 @@ func _format_and_card() -> void:
 func _medium() -> void:
 	var makes := DispatchMedium.makes_of({"things": {"mug": {"recipe": "mug", "seed": 2}, "pencil_cup": {"kept": ""}}})
 	_ok(makes == {"mug": {"recipe": "mug", "seed": 2}}, "the medium reads a document's choices, dropping one of no shape (%s)" % str(makes))
+	var off := DispatchMedium.makes_of({"things": {"stamp": {"aside": true}, "terminal": {"aside": true}}})
+	var set := DispatchSet.new()
+	set.makes = off
+	var built := set.build(PackedStringArray(["AISLE"]), 7, {}, {})
+	var whole := DispatchSet.new()
+	var whole_node := whole.build(PackedStringArray(["AISLE"]), 7, {}, {})
+	_ok(off.has("stamp") and set.aside("stamp") and not set.aside("terminal") and not set.aside("tracker")
+		and not set.rigs.has("stamp") and set.rigs.has("terminal") and whole.rigs.has("stamp"),
+		"a spare thing taken off is left off the desk built; the terminal never is, and a desk with nothing taken off has its stamp (the controls)")
+	built.free()
+	whole_node.free()
 	var src := "---\ndesk:\n  clock: true\n---\nWords."
 	_ok(DispatchMedium.wants_of(DispatchScript.parse(src), src).has("clock") and DispatchMedium.wants_of(DispatchScript.parse("Words."), "Words.").is_empty(),
 		"it knows what the script asks the desk to build (the control: a script that asks nothing)")

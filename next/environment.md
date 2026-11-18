@@ -1,52 +1,75 @@
 # The Environment
 
-What is round the scene a note is shown in, as one card: its light, shafts of light through its haze, what drifts in its air,
-what is heard round it, and how strongly each thing in it that throws light throws it. A component (`environment`, a family and
-hue of its own, needing `places`), its block `environment:` ([docs/surroundings.md](../docs/surroundings.md) lists every row).
+What is round the scene a note is shown in, as one card: a list of elements - its light, shafts of light through its haze, what
+drifts in its air, what is heard round it - each with properties a person sets or a roll draws, and how strongly each thing in it
+that throws light throws it. A component (`environment`, a family and hue of its own, needing `places`), its block `environment:`
+([docs/surroundings.md](../docs/surroundings.md) lists every kind and property).
 
 ## Status
 
 Built:
 
-- **The card** (`EnvironmentCard`, `src/table/environment_card.gd`) on the reading's and the table's panels: a Light picker (the
-  scene's own, or a preset) and Brightness; Light shafts (ticked: how many, how strong); In the air (ticks, any together, and an
-  Amount); Heard (ticks, any together, and a Level); and a Lights section, a dial for each thing that throws light, from the
-  Props card's sections (`PropSection.lit`). A change reaches a playing scene at once (the live document's `environment`).
-- **The registry** (`Surroundings`, `src/table/surroundings.gd`): six lights - lamplight, candlelight, daylight, dusk (the
-  desk's old moods, drawn by its number as before), moonlight and no light (weight 0: only chosen, so no desk already made
-  changes) - each a row any host reads as it can; seven things in the air as `Effects` effects over `far`, `near` and `room`
-  regions each host names; six sounds as parts of a `Soundscape`'s sound, the bed under the voice where no other card hands
-  one (a table show's episode hands its own).
-- **Shafts** are drawn cones (`shaders/light_shaft.gdshader`), each with a narrow spot that lights where it lands and does not
-  fade along its length. The volumetric fog's grid blurs a shaft that narrow into a soft blob, so it is not used for them.
-- **The desk** (Letter, Desk, a table show at the desk): its mood is the Environment's light (the Medium card's Light row is
-  gone, and a `mood` in the Medium block is no longer read); brightness is its exposure; the lamp and each kind of candle at
-  their share (`lamp`, `taper`, `pillar`, `tealights`); shafts from the window's side; the air over the pad and the room.
-- **The Dispatch desk**: no light chosen is the hollow's own; a preset sets its ambient, fill, the shaft through the crack
-  (its color and strength), its lamp's share, and candles out of the shot where it burns candles and no lamp. Shafts chosen
-  stand in the crack's place, falling on the roots behind the desk. Each role that throws light (the lamp, the terminal, the
-  screens) has its dial, by role (`PropRig.set_light_scale`).
-- **The terminal's glow** follows how much of its screen is lit (`DispatchTerminal.lit_share`), never whether it is awake: a
-  screen with one character on it throws next to nothing. The hollow is seen a little brighter from the start
-  (`DispatchMedium.EXPOSURE`).
-- The ⚙ panel at the row's left is called **Setup**, and the Episode card's sound dial **Place**, so "Environment" names one
-  thing.
+- **A list, as the Props card is** (`EnvironmentCard`, `EnvironmentSection` in `src/table/`, drawn by `PropsCard`): an entry an
+  element (`EntryCard`) - its picture (drawn in boxes from its properties, `Surroundings.picture`), its name, a line, and its ×
+  (pressed twice); opened, Used, Roll, Keep and its fields (`SchemaForm`). Below them, a row for each thing on the Props card that throws light
+  or makes a sound of its own, its share tuned (`PropSection.lit`, `heard`). "+ Add to the environment" opens the Dex on the
+  Environment's shelves. A change reaches a playing scene at once (the live document's `environment`).
+- **Properties and Roll** (`Roll`, `src/data/`): a kind's fields are rows (SchemaForm's shape) with a `roll` - the bounds a draw
+  stays in. A property set is pinned; one unset is drawn from the element's own number, shown dimmed. Roll is a new number: another
+  variant of the same thing, what is set kept. The number also places what it lays out (where shafts land, where motes wander).
+  `PropsCard` shows any section's row `fields` the same way (`PropSection.set_field`), so any prop can expose properties.
+- **The registry** (`Surroundings`): `KINDS` (light, shafts, seven things in the air, six sounds), each with its fields
+  (`LIGHT_FIELDS`, `SHAFT_FIELDS`, `FOG_FIELDS`, `MOTE_FIELDS`, `SOUND_FIELDS`); six light presets (`LIGHTS`, the desk's moods drawn by
+  its number as before; moonlight and no light weigh 0); three looks of shafts the Dex offers (`SHAFT_LOOKS`: through leaves,
+  through a window, through a crack). A light and each sound are one to a scene: another added takes its place.
+- **The Dex** (`DexWindow`): its shelves listed down its left side under their category (`ShelfSection.category`: Props, Voices,
+  Environment). The Environment's shelves: Light (each preset, shafts and their looks), In the air, Heard, and Kept - elements a
+  person kept (`EnvironmentLibrary`, `user://library/environment/`), renamed in place, removed to the trash, used as kept.
+- **Light shafts** (`LightShafts`, `shaders/light_shaft.gdshader`): sunlight through a gap, never a spotlight. Up to 30 beams, their
+  way the scene's own light turned by Direction and tipped by Steepness (never below `LOWEST`), each beam strayed from it by up to
+  its Spread (0: all parallel, as through one window), a beam's shafts parallel; Variety from -1 to 1 strays their widths from the
+  Width one way (0 all alike, above 0 some up to 8 times fatter, below 0 as many times skinnier, `LightShafts.beam_radius`) and
+  their brightness as much; a column of one width its whole length, its edge blurring the further below the gap (the sun's 0.5°,
+  `PENUMBRA`), running down to what it lands on (and on past a box's top, fading, where the ground is lower). Beams with narrower
+  shafts inside, all added, so the light is about twice as bright where they cross. Worked out for each pixel from where the line of
+  sight passes the axis: as deep as the haze crossed (longer looking along it), cut exactly where a floor or a mug stands inside it,
+  faint streaks and drifting dust, the haze thick and thin along it, brighter looking toward the light (forward scattering), shimmering
+  by Flicker. Its patch is drawn by the same shader - what the screen shows there made `LANDS` times brighter, as squarely as it faces
+  the light, its edge the shaft's - because Godot's light grid drops a spot cone centimeters wide and a light's projector needs a
+  shadow map: no glint, no bounce, no shadow behind what it lands on.
+- **Dust** is posed on the GPU (`Effects.drifts`, `MAX_ADRIFT`): 160 at Amount 1 (on the Dispatch desk, whose air reaches round the
+  whole hollow, 2.2 times as many), each 2.2 mm, so a view holds more than a few and they read on screen.
+- **The desk** (Letter, Desk, a table show at the desk): its mood is the light element's preset; brightness its exposure; the lamp
+  and each kind of candle at their share (`lamp`, `taper`, `pillar`, `tealights`); shafts from the window's side over the pad
+  (`Desk.RAYS_REACH`); the air over the pad and the room.
+- **The Dispatch desk**: no light element is the hollow's own; a preset sets its ambient, fill, the crack's color and strength, its
+  lamp's share, and candles out of the shot where it burns candles and no lamp. Shafts stand in the crack's place, falling on the
+  roots round the chair. Each role that throws light (the lamp, the terminal, the screens) has its row, by role
+  (`PropRig.set_light_scale`).
+- The old flat block (`light`, `brightness`, `rays`, `ray_strength`, `air`, `air_amount`, `sound`, `sound_level`) is no longer read;
+  the two notes that had one in ~/repos/rift were moved to `elements`.
 
-Looked at (renders, Targeting Individuals at seed 91981 and Secular Hazing): the terminal waking no longer lifts the room;
-moonlight, candlelight, shafts with haze and pixies on the Dispatch desk; daylight with shafts and moonlight on a Letter desk.
+Gate: `tests/table/environment_check.gd` (Roll, the block, every kind's fields, air, sound, shafts' geometry, the card, Keep, the
+Dex's list). Look: `dispatch_look_probe.gd` and `letter_look_probe.gd` take `--light`, `--bright`, `--shafts k=v,...`, `--air`,
+`--heard` (`tests/table/environment_flags.gd`).
 
 For the user to judge:
 
-- Every preset's look on the Dispatch desk and a Letter desk, and the default brightness of the hollow.
-- The shafts: how many, how wide, how bright (`Surroundings.RAY_CONE`, `RAY_GLOW`, `RAY_THROUGH`).
-- Which things in the air and which sounds are worth keeping, and their amounts.
+- The shafts on the Dispatch desk and a Letter desk: how thin, how many inside each beam, the patches, the streaks, how bright
+  looking toward the light (`LightShafts.WIDTH`, `INNER`, `SHARE`, `GLOW`, `LANDS`; the shader's `streaks`, `clouds`, `forward`).
+- The list: rows and the Properties toggle, Roll, the drawn pictures; the Dex's left-side list.
+- Which properties each kind should show, and their roll bounds (a first, small set).
 
 ## Open
 
+- **Props' own properties**: a prop on the Props card exposing a scale, a material's color, a recipe's number - each section's rows
+  carrying `fields` as the Environment's do. The lit and heard shares belong there in the end, as a lamp's or a receiver's
+  properties, once a prop's properties have a home in its note.
+- **A roll constrained by the person**: a property set to a range (`0.3..0.6`, SchemaForm's `num`) drawn inside it by the number.
 - **A table show's set** reads none of it yet: its light is the set dresser's (`Lights`), its air the episode's `effects`, its
-  sound the table's. The card is offered on a table note, where the desk format reads it; the table format would read it as a
-  person's choice over the set dresser's (light preset over the plan's `light`, air added to the plan's `effects`).
+  sound the table's. The table format would read the elements as a person's choice over the set dresser's.
 - **The seeded show** (the storyboard's scenes) reads none of it: a scene's look is its own.
 - An agent cannot choose an environment yet: a plan's `environment` the producer writes from the brief, the card's a person's
   change over it.
+- Export and Import of a kept element (`.env.json`), as a prop and a voice are handed on.
 - Sounds a scene makes on its own (the Dispatch desk's) play beside the Environment's, never instead of them.

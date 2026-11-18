@@ -1,16 +1,18 @@
 extends PropSection
 class_name DeskProps
 
-## DeskProps - what is on a desk, on the Props card ([PropsCard]): a row for each thing a desk sets out ([constant DeskLook.THINGS]),
-## pictured as it is on this desk ([method DeskLook.of]; one not on it as the desk's number draws it, [method DeskLook.spec_of]) and
-## ticked while it is on the desk. A tick is the rows' own ([method DeskRows.set_thing]): until one changes, the desk's number chooses
-## what is on it, and the first change keeps it. Handed to the panel by the format the rows are on ([LetterFormat], [DeskFormat]).
+## DeskProps - what is on a desk, on the Props card ([PropsCard]): an entry for each thing on it ([constant DeskLook.THINGS]),
+## pictured as it is on this desk ([method DeskLook.of]), its × taking it off; "+ Add a prop" opens the Dex on the desk's things not on
+## it, each pictured as the desk's number draws it ([method DeskLook.spec_of]), Use setting it out. What is on it is the rows' own
+## ([method DeskRows.set_thing]): until one changes, the desk's number chooses what is on it, and the first change keeps it. Handed to
+## the panel by the format the rows are on ([LetterFormat], [DeskFormat]).
 ##
 ## A thing opened in 3D is refined into versions (next/working_props.md): kept in the library on its first refine, and played on the
 ## desk by the version used ([method refined], [method DeskRows.set_make]) - Desk's own puts the number's back.
 
-const GROUPS := [{"key": "desk", "label": "A desk's things",
-	"tip": "What a desk can hold, ticked where this one uses it. Until one is ticked or unticked the desk's number chooses them; the first change keeps them. Open one to turn it in 3D and refine it."}]
+const GROUPS := [{"key": "desk", "label": "On the desk",
+	"tip": "What is on this desk. Until one is taken off or added the desk's number chooses them; the first change keeps them. Open one's picture to turn it in 3D and refine it."}]
+const SHELVES := [{"key": "desk_things", "label": "A desk's things", "tip": "What a desk can hold and this one does not, each as the desk's number draws it."}]
 
 var desk: DeskRows
 ## Where kept props and their versions are, and every picture.
@@ -32,6 +34,8 @@ func rows() -> Array:
 	var on := desk.desk_things()
 	var makes := desk.desk_makes()
 	for k in DeskLook.THINGS:
+		if not String(k) in on:
+			continue
 		var row: Dictionary = DeskLook.THINGS[k]
 		var p := prop_of(String(k))
 		var h := String(p.get("hash", ""))
@@ -42,9 +46,46 @@ func rows() -> Array:
 		if makes.has(k):
 			verbs.append({"key": "own", "label": "Desk's own", "tip": "Back to the one the desk's number draws."})
 		out.append({"key": String(k), "name": String(p.get("name", DeskRows.thing_name(String(row["label"])))), "line": line, "tip": String(row["blurb"]),
-			"group": "desk", "picture": library.pictures.of(h, p["thing"], p["materials"]) if not p.is_empty() else null, "on": String(k) in on,
-			"on_tip": "Ticked, the desk uses it, placed and drawn by the desk's number; unticked, it does not.", "verbs": verbs})
+			"group": "desk", "picture": library.pictures.of(h, p["thing"], p["materials"]) if not p.is_empty() else null, "verbs": verbs,
+			"remove_tip": "Take it off the desk. \"+ Add a prop\" sets it out again."})
 	return out
+
+
+func remove(key: String) -> String:
+	if not DeskLook.THINGS.has(key):
+		return "a desk sets out no such thing"
+	desk.set_thing(key, false)
+	return ""
+
+
+func shelves() -> Array:
+	return SHELVES
+
+
+## The desk's things not on it, each as the desk's number draws it.
+func offers() -> Array:
+	var out: Array = []
+	var on := desk.desk_things()
+	for k in DeskLook.THINGS:
+		if String(k) in on:
+			continue
+		var p := prop_of(String(k))
+		var h := String(p.get("hash", ""))
+		out.append({"key": String(k), "name": String(p.get("name", DeskRows.thing_name(String((DeskLook.THINGS[k] as Dictionary)["label"])))),
+			"line": library.pictures.size_of(h), "shelf": "desk_things", "tip": String((DeskLook.THINGS[k] as Dictionary)["blurb"]),
+			"picture": library.pictures.image(h) if not h.is_empty() else null})
+	return out
+
+
+func adds() -> Dictionary:
+	return {"label": "+ Add a prop", "verb": "Use", "tip": "Set it out on the desk, placed by the desk's number."}
+
+
+func add(key: String) -> String:
+	if not DeskLook.THINGS.has(key):
+		return "a desk sets out no such thing"
+	desk.set_thing(key, true)
+	return ""
 
 
 func set_on(key: String, on: bool) -> String:

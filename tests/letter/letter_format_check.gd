@@ -14,9 +14,10 @@ extends SceneTree
 ##   tablet or a letter on a song alone: controls); their block round trips without a hand (the hand is the Medium card's
 ##   Handwriting; Random is drawn from the note's number; an unknown one is Kalam: control); the Medium's one block holds the format,
 ##   the hand and the rows' keys; the walk reads the letter as [method LetterScript.speakable] does, with no title announced.
-## - what is on the desk is chosen: with nothing chosen the desk is what its number drew, ticked on the Props card's row for every
-##   thing ([DeskProps]); another number keeps them (control: that number's own desk is another) and is the desk's alone, the letter
-##   said the same at either (control: the hand seeded by the number otherwise); ticks are kept in the block, carried by the document
+## - what is on the desk is chosen: with nothing chosen the desk is what its number drew, an entry on the Props card for each thing on
+##   it and the rest offered on the Dex ([DeskProps]); another number keeps them (control: that number's own desk is another) and is
+##   the desk's alone, the letter said the same at either (control: the hand seeded by the number otherwise); a thing added from the
+##   Dex and one taken off by its × are kept in the block, carried by the document
 ##   and round trip through the frontmatter (an empty desk too; unknown things are dropped). Its light is no row of the Medium's: a
 ##   `mood` in the block is dropped, the Environment card's. The index cards'
 ##   text box shows with the cards ticked and hides without them (control), is kept in the block and carried to the desk.
@@ -196,13 +197,12 @@ func _desk() -> void:
 	card.apply({"seed": 42})
 	var drawn := DeskLook.kinds(DeskLook.of(42))
 	var props: PropSection = _rows(card).call("props")
-	var listed: Array = props.rows()
-	var ticked := true
-	for r in listed:
-		ticked = ticked and bool((r as Dictionary)["on"]) == (String((r as Dictionary)["key"]) in drawn)
-	_check(_rows(card).call("desk_things") == drawn and not card.capture().has("things")
-		and listed.size() == DeskLook.THINGS.size() and ticked,
-		"with nothing chosen the desk is what its number drew, ticked so on the Props card's row for every thing (%s)" % ", ".join(drawn))
+	var listed: Array = props.rows().map(func(r: Dictionary) -> String: return String(r["key"]))
+	var offered: Array = props.offers().map(func(o: Dictionary) -> String: return String(o["key"]))
+	var rest := DeskLook.THINGS.keys().filter(func(k: String) -> bool: return not k in drawn)
+	_check(_rows(card).call("desk_things") == drawn and not card.capture().has("things") and listed == drawn and offered == rest
+		and props.rows().all(func(r: Dictionary) -> bool: return r.has("remove_tip")) and not props.adds().is_empty(),
+		"with nothing chosen the desk is what its number drew, an entry each on the Props card, its × taking it off, the rest offered on the Dex (%s)" % ", ".join(drawn))
 	# another number, whose own desk is not this one's
 	var other := 43
 	while DeskLook.kinds(DeskLook.of(other)) == drawn:
@@ -221,11 +221,15 @@ func _desk() -> void:
 	_check(int(doc_now["desk"]) == 777 and int(doc_now["seed"]) == int(card.call("hand_seed"))
 		and String(walk.spoken(long, "")["body"]) == at_other and LetterScript.speakable(long, 777) != LetterScript.speakable(long, other),
 		"the number is the desk's alone: the document's hand is the note's own, and the letter is said the same at either desk - the control, the hand seeded by the number, is said otherwise")
-	props.set_on("dog_tag", true)
+	var gone := String(drawn[0])
+	props.remove(gone)
+	_check(not (card.capture()["things"] as Array).has(gone) and props.offers().any(func(o: Dictionary) -> bool: return String(o["key"]) == gone),
+		"a thing's × takes it off the desk, and the Dex offers it again")
+	props.add("dog_tag")
 	block = card.capture()
 	var doc: Dictionary = card.call("document")
 	_check((block["things"] as Array).has("dog_tag") and doc["things"] == block["things"] and not doc.has("mood"),
-		"a thing ticked is kept in the block, and the document a render reads carries it")
+		"a thing added from the Dex is kept in the block, and the document a render reads carries it")
 	# the block as the note keeps it: written and read back
 	var again: Control = script.call("for_note", {})
 	again.apply(MiniYaml.parse(MiniYaml.emit({"letter": block}))["data"]["letter"])

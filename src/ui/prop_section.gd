@@ -5,15 +5,24 @@ class_name PropSection
 ## show hands the Pacing card a [TuneSection]: the card draws, the section does, and with no section there is no card. No component
 ## names the card and the card names no component. What can be added is its shelves on the Dex ([ShelfSection], [DexWindow]).
 ##
-## A row is a prop as it stands now: `{key, name, line, group, picture, on, verbs}` - `picture` an Image (null until it is taken),
-## `on` whether the scene uses it (null for a row with no tick; `on_tip` its tick's words on hover), `verbs` the buttons it has, each
+## A row is a prop as it stands now: `{key, name, line, group, picture, on, verbs}` - an entry on the card ([EntryCard]) - `picture`
+## an Image (null until it is taken), `on` whether the scene uses it (null for a row with no tick; `on_tip` its tick's words on hover),
+## `remove_tip` what its × does where it can be taken off ([method remove]) or `remove_off` why it cannot, `verbs` the buttons it has, each
 ## `{key, label, tip}` with `pressed` (a toggle's state) and `off` (grayed, `tip` saying why) where they apply, done by [method
 ## act] - or with `opens`, which opens the Dex on what may take the row's place ([method choices]). Rows are shown under their
-## group ([method groups]). A row's prop whole, to be looked at in 3D, is [method prop_of] and [method model_of]. These defaults
-## show nothing.
+## group ([method groups]). A row's prop whole, to be looked at in 3D, is [method prop_of] and [method model_of]; a section whose
+## props do not turn ([method ShelfSection.turns]) opens nothing, and a row with no `picture` key shows none.
+##
+## A row may carry the properties a person can tune on it ([Roll]): `fields` (key -> a field row, [SchemaForm]'s shape, each unset
+## field's `default` what it is now) and `values` (what is set), shown once its entry is opened - or always, with `open`, which has
+## no × - and each change done by [method set_field]. These defaults show nothing.
 
 
 func title() -> String:
+	return "Props"
+
+
+func category() -> String:
 	return "Props"
 
 
@@ -38,6 +47,16 @@ func rows() -> Array:
 ## Row [param key] used ([param on] true) or set aside. "" done, else why not.
 func set_on(_key: String, _on: bool) -> String:
 	return "nothing here sets props down"
+
+
+## Row [param key] taken off: its × pressed ([EntryCard]). "" done, else why not.
+func remove(_key: String) -> String:
+	return "nothing here takes it off"
+
+
+## Property [param field] of row [param key] set to [param value] (null: unset, back to what it would be). "" done, else why not.
+func set_field(_key: String, _field: String, _value: Variant) -> String:
+	return "nothing here is tuned"
 
 
 ## Row or offer [param key]'s prop whole, to be built and looked at ([PropViewer]): `{name, thing, materials, hash}` - a [Props] spec

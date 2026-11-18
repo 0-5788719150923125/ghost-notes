@@ -6,14 +6,15 @@ extends Node
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/desk/letter_look_probe.gd 400 \
 ##       --out <dir>/l --letter <a letter .md> [--svgs <key -> svg .json>] [--ink <typeset answer .json>] \
-##       [--picture <png>] [--seed N] [--hand kalam] [--things mug,dog_tag] [--light lamplight] [--rays N] [--air a,b] [--card 'a\nb'] \
+##       [--picture <png>] [--seed N] [--hand kalam] [--things mug,dog_tag] [--light lamplight] [--shafts k=v,...] [--air a,b] [--card 'a\nb'] \
 ##       --times 3,8,20 [--every S] [--page 1] [--words W]
 ##
 ## `--svgs` and `--ink` are what the Letter card would hand it (a sketch's drawing by its key, and hosts/math/typeset.py's
 ## answer for them); `--picture` stands in for every picture the letter shows. `--every S` photographs every S seconds to
 ## the end instead of `--times`; `--page 1` also writes the flat pad texture beside each frame. `--words W` reads at W
-## seconds a word (0.32 by default). `--things` is what the Props card chose for the desk and `--light` the Environment card's light ([method
-## DeskLook.picks_of]; none: the seed's), `--card` what is written on its index cards (`\n` a new line).
+## seconds a word (0.32 by default). `--things` is what the Props card chose for the desk; `--light`, `--bright`, `--shafts`, `--air` and
+## `--heard` the Environment card's (tests/table/environment_flags.gd; no light: the seed's); `--card` what is written on its index
+## cards (`\n` a new line).
 ## It asserts only that a frame is not uniform.
 
 const W := 1280
@@ -34,8 +35,9 @@ var _page := false
 var _word := 0.32
 var _flat := 0
 var _things: Variant = null
-var _light := ""
-var _environment := {}             # the rest of the Environment card's block ([Surroundings]): --rays, --air, --bright
+var _environment := {}             # the Environment card's block ([Surroundings]): --light, --bright, --shafts, --air, --heard
+
+const EnvFlags := preload("res://tests/table/environment_flags.gd")
 var _card := ""
 
 
@@ -60,10 +62,7 @@ func _run() -> void:
 			"--page": _page = args[i + 1] == "1"
 			"--words": _word = float(args[i + 1])
 			"--things": _things = Array(String(args[i + 1]).split(",", false))
-			"--light": _light = args[i + 1]
-			"--rays": _environment["rays"] = int(args[i + 1])
-			"--air": _environment["air"] = Array(String(args[i + 1]).split(","))
-			"--bright": _environment["brightness"] = float(args[i + 1])
+			"--light", "--bright", "--shafts", "--air", "--heard": EnvFlags.take(_environment, args[i], args[i + 1])
 			"--card": _card = String(args[i + 1]).c_unescape()
 			"--times":
 				_times = []
@@ -105,7 +104,7 @@ func _run() -> void:
 	Director.hold(true)
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	subs.words = words
-	subs.document = {"source": source, "letter": letter, "environment": _environment.merged({"light": _light}), "title": _field(source, "title"),
+	subs.document = {"source": source, "letter": letter, "environment": _environment, "title": _field(source, "title"),
 		"author": _field(source, "author")}
 	add_child(subs)
 	if medium.bind_captions(subs):

@@ -1515,8 +1515,8 @@ func _chosen_desk() -> void:
 	var lamp := DeskLook.kinds(DeskLook.of(11, {"things": ["mug"], "mood": "lamplight"}))
 	_check(dark == ["mug", "taper"] and own_candle == ["mug", "pillar"] and lamp == ["mug"],
 		"a desk lit by candles and given none has a taper set down - one given its own keeps it, and a lamplit desk has none (the control)")
-	_check(DeskLook.picks_of({"things": ["mug"], "mood": "candlelight", "seed": 3}, {"light": "dusk"}) == {"things": ["mug"], "mood": "dusk"}
-		and DeskLook.picks_of({"mood": "dusk"}).is_empty() and DeskLook.picks_of({}, {"light": "noon"}).is_empty(),
+	_check(DeskLook.picks_of({"things": ["mug"], "mood": "candlelight", "seed": 3}, {"elements": [{"kind": "light", "preset": "dusk"}]}) == {"things": ["mug"], "mood": "dusk"}
+		and DeskLook.picks_of({"mood": "dusk"}).is_empty() and DeskLook.picks_of({}, {"elements": [{"kind": "light", "preset": "own"}, {"kind": "noon"}]}).is_empty(),
 		"a document's letter hands its things, and its light is the Environment's - never the letter's own `mood`, nor a light there is not")
 	# Where the frame sees them: what lies flat and was chosen, beside the pad in the widest framing
 	var flat := ["pencil", "eraser", "clips", "dog_tag"]

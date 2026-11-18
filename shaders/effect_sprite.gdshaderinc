@@ -1,7 +1,11 @@
 // What every sprite of an effect shares (see src/table/effects.gd): a quad turned to the camera,
 // sized in meters, at a place that is a function of SHOW TIME. A mote is POSED (the CPU put it where
 // it is now: its place, its size in the custom data's w, its brightness in the color's alpha, and -
-// for a speck - its velocity in the transform's first column). A burst's particle FLIES: born at a
+// for a speck - its velocity in the transform's first column) - or, DRIFTING (a mote that only wanders,
+// as dust does), worked out here: round its home (the transform's place) along its three ways of
+// wandering (the transform's columns), each two waves of its own (their speeds and phases drawn from
+// the custom data's x, its speed in y) - the waves [method Effects.mote_at] wanders a posed one by -
+// flickering as its look says. A burst's particle FLIES: born at a
 // time and place with a velocity (the transform's first column - nothing else is in it), pulled by
 // gravity and slowed by the air in closed form, so any time can be asked for and none is stepped to -
 // and, in a wind, CARRIED by it: slowed toward the air's own speed as it is slowed, it has gone the air's
@@ -12,6 +16,8 @@
 
 uniform float show_time = 0.0;
 uniform bool posed = false;
+uniform bool drifting = false;
+uniform float flicker = 0.0;                   // a drifting mote's flicker, as its look's
 uniform vec3 gravity = vec3(0.0, -2.0, 0.0);   // m/s2
 uniform float drag = 1.0;                      // 1/s
 uniform float glow = 2.0;                      // brighter than white blooms
@@ -36,7 +42,23 @@ void vertex() {
 	float hide = 0.0;
 	float turn = 0.0;
 	fade = 1.0;
-	if (posed) {
+	if (drifting) {
+		float seed = INSTANCE_CUSTOM.x;
+		float speed = INSTANCE_CUSTOM.y;
+		vec3 home = MODEL_MATRIX[3].xyz;
+		float wv[6];
+		float ph[6];
+		for (int k = 0; k < 6; k++) {
+			wv[k] = mix(0.05, 0.3, fract(sin(seed * 12.9898 + float(k) * 78.233) * 43758.5453)) * speed * 6.2831853;
+			ph[k] = fract(sin(seed * 39.3468 + float(k) * 11.135) * 24634.6345) * 6.2831853;
+		}
+		float t = show_time;
+		pos = home + MODEL_MATRIX[0].xyz * (0.65 * sin(wv[0] * t + ph[0]) + 0.35 * sin(wv[1] * t + ph[1]))
+			+ MODEL_MATRIX[1].xyz * (0.65 * sin(wv[2] * t + ph[2]) + 0.35 * sin(wv[3] * t + ph[3]))
+			+ MODEL_MATRIX[2].xyz * (0.65 * sin(wv[4] * t + ph[4]) + 0.35 * sin(wv[5] * t + ph[5]));
+		size = INSTANCE_CUSTOM.w;
+		fade = COLOR.a * (1.0 - flicker * 0.5 * (0.5 + 0.5 * sin(t * 11.0 + seed)) * (0.5 + 0.5 * sin(t * 6.7 + seed * 2.3)));
+	} else if (posed) {
 		pos = MODEL_MATRIX[3].xyz;
 		vel = MODEL_MATRIX[0].xyz;
 		size = INSTANCE_CUSTOM.w;

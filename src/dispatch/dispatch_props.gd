@@ -1,11 +1,13 @@
 extends PropSection
 class_name DispatchProps
 
-## DispatchProps - the Dispatch desk's things as props ([DispatchSet], next/working_props.md): on a note's Props card, a row for
+## DispatchProps - the Dispatch desk's things as props ([DispatchSet], next/working_props.md): on a note's Props card, an entry for
 ## every thing the desk works - the terminal, the phones, the radar, the mug... - each a role any make can play ([PropMakes]):
 ## Choose… opens the Dex on its makes ([MakeShelf]), Desk's own puts the desk's back, Keep puts the one on the desk in the library,
-## and its picture opens it in 3D, where it is refined into versions the desk follows ([method refined]). Opened with no note (the
-## Dex on its own), it is a shelf of them all as the first desk draws them, to look at in 3D and keep.
+## and its picture opens it in 3D, where it is refined into versions the desk follows ([method refined]). A spare thing's × takes it
+## off the desk ([constant DispatchSet.SPARE], unless the script works it); "+ Add a prop" opens the Dex on what was taken off, Use
+## setting it out again. Every other thing's × stands grayed: the desk works it. Opened with no note (the Dex on its own), it is a
+## shelf of them all as the first desk draws them, to look at in 3D and keep.
 ##
 ## A row's make is pictured from what it is written as ([PropPictures], [ThingLibrary.hash_of]), on a worker, as every prop is:
 ## its faces show their own materials and words, never the program the desk runs on them.
@@ -14,6 +16,7 @@ const GROUPS := [
 	{"key": "desk", "label": "On the desk", "tip": "What the desk works. Choose… another make to play a part - the desk works it the same way - or open its picture to turn it and refine it."},
 ]
 const SHELVES := [{"key": "dispatch", "label": "Dispatch desk", "tip": "What the Dispatch desk works, each as the first desk draws it."}]
+const OFF_SHELF := [{"key": "taken_off", "label": "Taken off", "tip": "What was taken off this desk: Use sets it out again."}]
 
 ## Where the kept and seen props, and every picture, come from.
 var library := LibraryProps.new()
@@ -33,7 +36,7 @@ func groups() -> Array:
 
 
 func shelves() -> Array:
-	return SHELVES
+	return SHELVES if _format == null else OFF_SHELF
 
 
 func rows() -> Array:
@@ -44,6 +47,8 @@ func rows() -> Array:
 	var kept := library.kept_by_hash()
 	for role in _roles():
 		var choice := _choice(String(role))
+		if choice.has("aside"):
+			continue
 		var sp := _spec(String(role), choice, seed)
 		var h := String(sp[0])
 		var as_kept := String(kept.get(h, ""))
@@ -56,14 +61,53 @@ func rows() -> Array:
 			verbs.append({"key": "own", "label": "Desk's own", "tip": "Back to the desk's own."})
 		verbs.append({"key": "keep", "label": "Kept" if not as_kept.is_empty() else "Keep", "off": not as_kept.is_empty(),
 			"tip": ("In your library as %s." % as_kept) if not as_kept.is_empty() else "Keep it in your library, to use on any scene."})
-		out.append({"key": "role:" + String(role), "name": PropMakes.name_of(String(role), choice), "line": " - ".join(line),
+		var row := {"key": "role:" + String(role), "name": PropMakes.name_of(String(role), choice), "line": " - ".join(line),
 			"tip": String((PropMakes.ROLES[role] as Dictionary)["blurb"]), "group": "desk",
-			"picture": library.pictures.of(h, sp[1], sp[2]) if not h.is_empty() else null, "verbs": verbs})
+			"picture": library.pictures.of(h, sp[1], sp[2]) if not h.is_empty() else null, "verbs": verbs}
+		if not String(role) in DispatchSet.SPARE:
+			row["remove_off"] = "The desk works it: Choose… another make to play it."
+		elif _format.works().has(role):
+			row["remove_off"] = "The script works it: it stays on the desk while the script does."
+		else:
+			row["remove_tip"] = "Take it off the desk. \"+ Add a prop\" sets it out again."
+		out.append(row)
 	return out
+
+
+func remove(key: String) -> String:
+	var role := _role_of(key)
+	if _format == null or not role in DispatchSet.SPARE:
+		return "the desk works it: it cannot be taken off"
+	if _format.works().has(role):
+		return "the script works it: it stays on the desk while the script does"
+	return _format.choose(role, {"aside": true})
+
+
+func adds() -> Dictionary:
+	if _format == null or not _roles().any(func(r: String) -> bool: return _choice(r).has("aside")):
+		return {}
+	return {"label": "+ Add a prop", "verb": "Use", "tip": "Set it out on the desk again."}
+
+
+func add(key: String) -> String:
+	var role := _role_of(key)
+	if _format == null or role.is_empty():
+		return "nothing here takes it"
+	return _format.choose(role, {})
 
 
 func offers() -> Array:
 	var out: Array = []
+	if _format != null:
+		# what was taken off this desk, each as its own make
+		for role in _roles():
+			if not _choice(String(role)).has("aside"):
+				continue
+			var sp := _spec(String(role), {}, _desk_seed())
+			out.append({"key": "role:" + String(role), "name": String((PropMakes.ROLES[role] as Dictionary)["label"]),
+				"line": library.pictures.size_of(String(sp[0])), "shelf": "taken_off", "tip": String((PropMakes.ROLES[role] as Dictionary)["blurb"]),
+				"picture": library.pictures.image(String(sp[0]))})
+		return out
 	for role in _roles():
 		var sp := _spec(String(role), {}, _desk_seed())
 		out.append({"key": "role:" + String(role), "name": String((PropMakes.ROLES[role] as Dictionary)["label"]),
@@ -123,6 +167,8 @@ func lit() -> Array:
 		return _lit
 	var out: Array = []
 	for role in _roles():
+		if _choice(String(role)).has("aside"):
+			continue
 		var p := prop_of("role:" + String(role))
 		if not p.is_empty() and Props.has_light((p["thing"] as Dictionary).get("parts", [])):
 			out.append({"key": String(role), "name": String((PropMakes.ROLES[role] as Dictionary)["label"])})

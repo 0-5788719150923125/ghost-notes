@@ -9,8 +9,9 @@ extends Node
 ## `--picture` stands in for every picture the note shows. `--every S` photographs every S seconds to the end. `--live 1`
 ## hands the words a sentence at a time, a few seconds ahead, as a live reading does. `--sound <wav>` writes what the desk
 ## sounds like over the whole run to a file. `--opening title` opens on the channel's name over the blur, and `--lead S`
-## gives the voice's first word S seconds in, as the intro's hold does. `--light K`, `--bright X`, `--rays N`, `--ray-strength X`,
-## `--air a,b` and `--heard a,b` are the Environment card's ([Surroundings]). It prints where each action falls, and asserts only that a frame is not uniform.
+## gives the voice's first word S seconds in, as the intro's hold does. `--light K`, `--bright X`, `--shafts k=v,...`, `--air a,b`
+## and `--heard a,b` are the Environment card's (tests/table/environment_flags.gd). It prints where each action falls, and asserts
+## only that a frame is not uniform.
 
 const W := 1280
 const H := 720
@@ -28,7 +29,9 @@ var _sound := ""
 var _flat := 0
 var _opening := Openings.DEFAULT
 var _lead := 1.0
-var _environment := {}             # the Environment card's block ([Surroundings]): --light, --bright, --rays, --air, --heard
+var _environment := {}             # the Environment card's block ([Surroundings]): --light, --bright, --shafts, --air, --heard
+
+const EnvFlags := preload("res://tests/table/environment_flags.gd")
 
 
 func _ready() -> void:
@@ -51,12 +54,7 @@ func _run() -> void:
 			"--sound": _sound = args[i + 1]
 			"--opening": _opening = args[i + 1]
 			"--lead": _lead = float(args[i + 1])
-			"--light": _environment["light"] = args[i + 1]
-			"--bright": _environment["brightness"] = float(args[i + 1])
-			"--rays": _environment["rays"] = int(args[i + 1])
-			"--ray-strength": _environment["ray_strength"] = float(args[i + 1])
-			"--air": _environment["air"] = Array(String(args[i + 1]).split(","))
-			"--heard": _environment["sound"] = Array(String(args[i + 1]).split(","))
+			"--light", "--bright", "--shafts", "--air", "--heard": EnvFlags.take(_environment, args[i], args[i + 1])
 			"--times":
 				_times = []
 				for s in String(args[i + 1]).split(","):

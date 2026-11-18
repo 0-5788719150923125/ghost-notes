@@ -6,7 +6,8 @@ class_name IllustrationPanel
 ##
 ## Top to bottom: which painter, its model and effort ([AgentPick]); the style every picture shares; the
 ## reference images that show that style; Generate all (every picture with none yet); and the note's pictures,
-## one row each, with what exists and buttons to make or remake it or import a file instead (Import…). The same
+## an entry each ([EntryCard]): what exists, and a × deleting the picture shown; opened, its versions and buttons to make
+## or remake it or import a file instead (Import…). The same
 ## pictures are rows of the note's Pipeline card ([Section]; next/pipeline.md). A picture that stands for a clip (its
 ## row has `clip`, the video the script names) is painted as a short loop (Generate) or imported from a video (Import…),
 ## owed like any picture until it has one.
@@ -47,6 +48,7 @@ var _dialog: FileDialog = null
 var _thumbs := {}                  # path|mtime|px -> ImageTexture, so a rebuild does not re-decode
 var _seen := ""                    # what the list last drew, so it rebuilds only on change
 var _live := {}                    # key -> [its status label, the line under the status] while it paints
+var _open := {}                    # key -> true: a picture's entry opened
 
 
 func _ready() -> void:
@@ -261,10 +263,40 @@ func _show_kinds() -> void:
 	_kind_pick.visible = any or set or _style_kind == "sketch"
 
 
+## One picture's entry ([EntryCard]): its thumbnail (a click opens it full size), what it shows and its status, and a × that deletes
+## the picture shown (its file too: the one before it is shown instead, or none). Opened, its versions, Regenerate and Import….
 func _row(im: Dictionary) -> Control:
 	var key := String(im["key"])
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
+	var st := Illustrations.status(key)
+	var clip := im.has("clip")
+	var parts := PackedStringArray([_clip_label(im) if clip else _placement_label(im), String(im.get("side", "")), st])
+	parts = PackedStringArray(Array(parts).filter(func(p: String) -> bool: return not p.is_empty()))
+	var vs := Illustrations.versions(key)
+	if vs.size() > 1:
+		parts.append("v%d/%d" % [Illustrations.current_index(key) + 1, vs.size()])
+	if Illustrations.is_stale(key):
+		parts.append("stale")
+	if Illustrations.is_imported(key) and not clip:
+		parts.append("imported")
+	var e := EntryCard.new(String(im["prompt"]), "  ·  ".join(parts), String(im["prompt"]))
+	# what it shows, in two lines at most
+	var desc := e.name_label
+	desc.add_theme_font_size_override("font_size", 11)
+	desc.clip_text = false
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.max_lines_visible = 2
+	var meta := e.line_label
+	meta.add_theme_font_size_override("font_size", 10)
+	meta.modulate = Color(1, 1, 1, 0.6)
+	if st in ["queued", "running"]:
+		_live[key] = [meta, meta.text, "" if clip else "painter "]
+	# a clip that did not take says so beside the one kept: it was the author's own file
+	if st == "error" or (clip and st == "ready" and not Illustrations.error_of(key).is_empty()):
+		meta.text += "  -  " + Illustrations.error_of(key)
+		meta.tooltip_text = Illustrations.error_of(key)
+		meta.add_theme_color_override("font_color", Color(1.0, 0.6, 0.55))
+	elif Illustrations.is_stale(key):
+		meta.tooltip_text = "Made under a different style or reference set. Still used; regenerate to repaint it."
 	# The thumbnail is the preview button.
 	var thumb := Button.new()
 	thumb.flat = true
@@ -280,57 +312,25 @@ func _row(im: Dictionary) -> Control:
 	else:
 		thumb.text = "none"
 		thumb.disabled = true
-	row.add_child(thumb)
-
-	var col := VBoxContainer.new()
-	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.add_theme_constant_override("separation", 0)
-	row.add_child(col)
-	var desc := Label.new()
-	desc.text = String(im["prompt"])
-	desc.tooltip_text = String(im["prompt"])
-	desc.add_theme_font_size_override("font_size", 11)
-	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc.max_lines_visible = 2
-	desc.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	col.add_child(desc)
-	var st := Illustrations.status(key)
-	var clip := im.has("clip")
-	var meta := Label.new()
-	var parts := PackedStringArray([_clip_label(im) if clip else _placement_label(im), String(im.get("side", "")), st])
-	parts = PackedStringArray(Array(parts).filter(func(p: String) -> bool: return not p.is_empty()))
-	var vs := Illustrations.versions(key)
-	if vs.size() > 1:
-		parts.append("v%d/%d" % [Illustrations.current_index(key) + 1, vs.size()])
-	if Illustrations.is_stale(key):
-		parts.append("stale")
-	if Illustrations.is_imported(key) and not clip:
-		parts.append("imported")
-	meta.text = "  ·  ".join(parts)
-	if st in ["queued", "running"]:
-		_live[key] = [meta, meta.text, "" if clip else "painter "]
-	meta.add_theme_font_size_override("font_size", 10)
-	# Always wraps: a status line that does not wrap sets the whole panel's width.
-	meta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	meta.modulate = Color(1, 1, 1, 0.6)
-	# a clip that did not take says so beside the one kept: it was the author's own file
-	if st == "error" or (clip and st == "ready" and not Illustrations.error_of(key).is_empty()):
-		meta.text += "  -  " + Illustrations.error_of(key)
-		meta.tooltip_text = Illustrations.error_of(key)
-		meta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		meta.add_theme_color_override("font_color", Color(1.0, 0.6, 0.55))
-	elif Illustrations.is_stale(key):
-		meta.tooltip_text = "Made under a different style or reference set. Still used; regenerate to repaint it."
-	col.add_child(meta)
-	# The buttons are a line of their own under the text, and the line flows: as one row they set
-	# the panel's minimum width. A flow is as narrow as its widest button and wraps the rest.
+	e.set_picture(thumb)
+	var at := Illustrations.current_index(key)
+	if path.is_empty():
+		e.set_remove(Callable(), "", "Nothing painted yet, so nothing to delete.")
+	elif Illustrations.read_only():
+		e.set_remove(Callable(), "", "This session cannot change the note's pictures.")
+	else:
+		e.set_remove(func() -> void:
+			Illustrations.delete_version(key, at)
+			_thumbs.clear()
+			_seen = "",
+			"Delete this picture - the file too. The one before it is shown instead, or none. Later pictures stop being matched to it.",
+			"", "Delete?")
+	# The buttons flow: as one row they would set the panel's minimum width.
 	var acts := HFlowContainer.new()
 	acts.add_theme_constant_override("h_separation", 4)
 	acts.add_theme_constant_override("v_separation", 4)
-	col.add_child(acts)
-
+	e.options.add_child(acts)
 	if vs.size() > 1:
-		var at := Illustrations.current_index(key)
 		for step in [-1, 1]:
 			var b := Button.new()
 			b.text = "‹" if step < 0 else "›"
@@ -339,9 +339,6 @@ func _row(im: Dictionary) -> Control:
 			b.disabled = at + step < 0 or at + step >= vs.size()
 			b.pressed.connect(func() -> void: Illustrations.select_version(key, at + step))
 			acts.add_child(b)
-	if not path.is_empty():
-		var del := _delete_button("✕", key, Illustrations.current_index(key))
-		acts.add_child(del)
 	var go := Button.new()
 	go.focus_mode = Control.FOCUS_NONE
 	go.text = "Regenerate" if not path.is_empty() else "Generate"
@@ -356,7 +353,13 @@ func _row(im: Dictionary) -> Control:
 	go.pressed.connect(func() -> void: _ask(im))
 	acts.add_child(go)
 	acts.add_child(_import_button(im))
-	return row
+	e.open = _open.has(key)
+	e.toggled.connect(func(on: bool) -> void:
+		if on:
+			_open[key] = true
+		else:
+			_open.erase(key))
+	return e
 
 
 ## Import a picture from disk for [param im] instead of painting one: it lands as a new version, so it

@@ -1,11 +1,13 @@
 extends VBoxContainer
 class_name PropsCard
 
-## PropsCard - the panel's Props card: what the note's presentation sets down, one row a prop - its picture, its name and size, a
-## Used tick, and its verbs - under the groups its sections give ([PropSection], handed by whatever shows props), and "+ Add a
-## prop", which opens the Dex on the section's shelves ([DexWindow]). A click on a picture opens the prop whole, in 3D, to be turned
-## ([PropViewer]). Shown only while some section has a row or something to add. Looked at again every second (what a section has
-## follows what is shown and made), and drawn again only when that changed.
+## PropsCard - the panel's Props card: what the note's presentation sets down, one entry a prop ([EntryCard]) - its picture, its name
+## and size, and a × that takes it off - under the groups its sections give ([PropSection], handed by whatever shows props), and "+
+## Add a prop", which opens the Dex on the section's shelves ([DexWindow]). A click on an entry opens it: its Used tick, its verbs and
+## its properties ([PropSection]'s `fields`, [SchemaForm]), each change handed to its section. A click on a picture opens the prop
+## whole, in 3D, to be turned ([PropViewer]). Shown only while some section has a row or something to add. Looked at again every
+## second (what a section has follows what is shown and made), and drawn again only when that changed. The Environment card's list
+## is one of these.
 
 ## What the card is for, on its title bar and its chip ([member Card.blurb]).
 const BLURB := "What the scene uses: untick a prop to set it aside, Keep one to use it again, click a picture to turn it in 3D, and add props from your library."
@@ -20,6 +22,7 @@ var _shelf: DexWindow = null
 var _viewer: PropViewer = null
 var _seen := 0
 var _textures := {}           # Image instance id -> its ImageTexture, so a picture is uploaded once
+var _open := {}               # "<section id>:<row key>" -> true: an entry opened
 
 
 func _init(sections: Callable) -> void:
@@ -120,40 +123,33 @@ func _lay_out(drawn: Array) -> void:
 	_textures = live
 
 
-## One prop's row: its picture, name and line, its tick and its verbs.
+## One prop's entry ([EntryCard]): its picture, name and line and its × - and, opened, its tick, its verbs and its properties. A row
+## that is always open (`open`) has no ×; one with nothing to do never opens.
 func _row(sec: PropSection, r: Dictionary, live: Dictionary) -> Control:
 	var key := String(r["key"])
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	var pic := TextureRect.new()
-	pic.custom_minimum_size = PICTURE
-	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	pic.texture = _texture(r.get("picture"), live)
-	if pic.texture == null:
-		pic.modulate = Color(1, 1, 1, 0.3)
-	look_on_click(pic, sec, key, String(r.get("name", key)))
-	row.add_child(pic)
-	var words := VBoxContainer.new()
-	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	words.add_theme_constant_override("separation", 0)
-	row.add_child(words)
-	var name := Label.new()
-	name.text = String(r.get("name", key))
-	name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	name.clip_text = true
-	name.tooltip_text = String(r.get("tip", r.get("name", key)))
-	name.mouse_filter = Control.MOUSE_FILTER_PASS
-	words.add_child(name)
-	var line := Label.new()
-	line.text = String(r.get("line", ""))
-	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	line.add_theme_font_size_override("font_size", 11)
-	line.modulate = Color(1, 1, 1, 0.65)
-	words.add_child(line)
+	var id := "%d:%s" % [sec.get_instance_id(), key]
+	var e := EntryCard.new(String(r.get("name", key)), String(r.get("line", "")), String(r.get("tip", r.get("name", key))))
+	if r.has("picture"):
+		var pic := TextureRect.new()
+		pic.custom_minimum_size = PICTURE
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		pic.texture = _texture(r.get("picture"), live)
+		pic.mouse_filter = Control.MOUSE_FILTER_PASS
+		if pic.texture == null:
+			pic.modulate = Color(1, 1, 1, 0.3)
+		if sec.turns():
+			look_on_click(pic, sec, key, String(r.get("name", key)))
+		e.set_picture(pic)
+	var always := bool(r.get("open", false))
+	if not always:
+		if r.has("remove_tip"):
+			e.set_remove(func() -> void: _said(sec.remove(key)), String(r["remove_tip"]))
+		else:
+			e.set_remove(Callable(), "", String(r.get("remove_off", "It cannot be taken off here.")))
 	var verbs := HFlowContainer.new()
 	verbs.add_theme_constant_override("h_separation", 4)
-	words.add_child(verbs)
+	verbs.add_theme_constant_override("v_separation", 4)
 	if r.get("on") is bool:
 		var tick := CheckBox.new()
 		tick.text = "Used"
@@ -181,7 +177,22 @@ func _row(sec: PropSection, r: Dictionary, live: Dictionary) -> Control:
 		else:
 			b.pressed.connect(func() -> void: _said(sec.act(key, String(vd["key"]))))
 		verbs.add_child(b)
-	return row
+	if verbs.get_child_count() > 0:
+		e.options.add_child(verbs)
+	var fields: Dictionary = r.get("fields", {}) if r.get("fields") is Dictionary else {}
+	if not fields.is_empty():
+		var form := SchemaForm.new()
+		form.show_fields(fields, r.get("values", {}) if r.get("values") is Dictionary else {})
+		form.edited.connect(func(field: String, value: Variant) -> void: _said(sec.set_field(key, field, value)))
+		e.options.add_child(form)
+	e.fixed = always
+	e.open = _open.has(id)
+	e.toggled.connect(func(on: bool) -> void:
+		if on:
+			_open[id] = true
+		else:
+			_open.erase(id))
+	return e
 
 
 func _texture(img: Variant, live: Dictionary) -> Texture2D:

@@ -9,7 +9,7 @@ extends SceneTree
 ##     nothing), the box writes what is typed, and unset both stand at the default, dimmed;
 ##   - the box's edit is handed over after its press, so an owner that draws its form again never frees the box mid-press
 ##     (control: a slider's drag, handed over at once);
-##   - a color is a picker, written `#rrggbb`;
+##   - a color is a picker, written `#rrggbb` once, as it closes (control: a color dragged through writes nothing);
 ##   - a reference is a choice among the names the context lists under its `of`, "" first;
 ##   - one row shape ([method SchemaForm.normalize]): a layer's, a scene's, a tonemap adjustment's and a filter's row each drawn as
 ##     the form's own (control: a row already in that shape is left as it is).
@@ -65,8 +65,12 @@ func _run() -> void:
 	redraw.queue_free()
 	var pick: ColorPickerButton = _first(form, "ColorPickerButton")
 	_ok(pick != null and pick.color.is_equal_approx(Color("#00ff00")), "a color is a picker, showing what is written")
+	var before := edits.size()
+	pick.color = Color("#3366cc")
 	pick.color_changed.emit(Color("#3366cc"))
-	_ok(edits.back() == ["tint", "#3366cc"], "written #rrggbb: %s" % str(edits.back()))
+	_ok(edits.size() == before, "the control: a color dragged through writes nothing")
+	pick.popup_closed.emit()
+	_ok(edits.back() == ["tint", "#3366cc"], "written #rrggbb as the picker closes: %s" % str(edits.back()))
 	var ref: OptionButton = null
 	for o in form.find_children("*", "OptionButton", true, false):
 		if (o as OptionButton).item_count == 3:

@@ -111,7 +111,7 @@ func _run() -> void:
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	var opens := _sentence_starts(words)
 	subs.words = words if _live < 0.0 else _arrived(words, opens, 0.0)
-	subs.document = {"source": source, "table": pay, "medium": rows, "environment": {"light": _light}, "title": "Theorem-Grooving", "byline": "with Pen & Ink"}
+	subs.document = {"source": source, "table": pay, "medium": rows, "environment": {"elements": [{"kind": "light", "preset": _light}] if not _light.is_empty() else []}, "title": "Theorem-Grooving", "byline": "with Pen & Ink"}
 	add_child(subs)
 	if medium.bind_captions(subs):
 		subs.overlay_hidden = true

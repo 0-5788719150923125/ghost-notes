@@ -7,8 +7,9 @@ class_name YouTubeThumbnail
 ## YouTube.THUMBNAILS]): the note's Pipeline card lists it, Generate makes it once the words are written and its ⟳ paints it
 ## again; a note read as it is written is made by an export that goes up too ([NoteUpload]). Two agents, each picked on the
 ## card: the writer reads the episode (words, title, description, and its own pictures where it has any, [method
-## EpisodeFeed.pictures]) and writes what the painter paints, the words on it and which pictures the painter follows
-## (rules/youtube/thumbnail.yaml); the painter paints it ([method _after]); the code cuts it to YouTube's shape ([method fit]).
+## EpisodeFeed.pictures]) and writes what the painter paints, the words on it, how they are lettered and where they sit, and which
+## pictures the painter follows (rules/youtube/thumbnail.yaml); the painter paints it ([method _after]); the code cuts it to
+## YouTube's shape ([method fit]).
 ##
 ## Kept in the episode's folder, every one painted: `youtube_thumbnail.json` holds the versions, oldest first (each the
 ## writer's answer, the fingerprint of the words it was written from and its thumbnail) and the one chosen ([method choose]),
@@ -37,6 +38,8 @@ const REFS_MOST := 4
 const FILES := "youtube_thumbnail_%d"
 ## The most of the versions already kept the writer is shown, the latest.
 const EARLIER_MOST := 6
+## The most of the writer's lettering kept (characters).
+const LETTERING_MOST := 600
 ## The most of the painter's brief a row says.
 const SAID_MOST := 120
 
@@ -216,7 +219,7 @@ static func prompt(show: String, title: String, description: String, words: Stri
 	var made: Array = []
 	for v in earlier:
 		made.append({"n": made.size() + 1, "brief": String((v as Dictionary).get("picture", "")).strip_edges(),
-			"lettering": String((v as Dictionary).get("words", "")).strip_edges()})
+			"said": String((v as Dictionary).get("words", "")).strip_edges(), "look": String((v as Dictionary).get("lettering", "")).strip_edges()})
 	return {"system": Rules.say("youtube/thumbnail.system", {}),
 		"prompt": Rules.say("youtube/thumbnail.prompt", {"show": show.strip_edges(), "title": title.strip_edges(),
 			"description": description.strip_edges(), "words": words.strip_edges(), "pictures": pictures.size(),
@@ -228,9 +231,9 @@ func _land(text: String, feed: EpisodeFeed) -> Variant:
 	return land(TextGen.extract_json(text), _shown(feed))
 
 
-## The writer's answer [param d] as kept: `{picture, words, after}` - what the painter paints, the words on
-## it (maybe none) and the [param pictures] it follows, by the numbers the writer gave, each once - or why
-## it cannot be kept. Static and pure for the gate.
+## The writer's answer [param d] as kept: `{picture, words, lettering, after}` - what the painter paints, the words on it (maybe
+## none), how they are lettered and where they sit (none without words) and the [param pictures] it follows, by the numbers the
+## writer gave, each once - or why it cannot be kept. Static and pure for the gate.
 static func land(d: Variant, pictures: PackedStringArray) -> Variant:
 	if not (d is Dictionary):
 		return "the answer held no JSON object"
@@ -238,6 +241,7 @@ static func land(d: Variant, pictures: PackedStringArray) -> Variant:
 	if pic.is_empty():
 		return "the answer said nothing for the painter to paint"
 	var words := String((d as Dictionary).get("words", "")).strip_edges().trim_prefix("\"").trim_suffix("\"").strip_edges()
+	var lettering := String((d as Dictionary).get("lettering", "")).strip_edges().left(LETTERING_MOST) if not words.is_empty() else ""
 	var after: Array = []
 	var raw: Variant = (d as Dictionary).get("after", [])
 	for n in (raw if raw is Array else []):
@@ -245,7 +249,7 @@ static func land(d: Variant, pictures: PackedStringArray) -> Variant:
 		var i := (int(n) if n is float or n is int else String(n).strip_edges().to_int()) - 1
 		if i >= 0 and i < pictures.size() and not after.has(pictures[i]):
 			after.append(pictures[i])
-	return {"picture": pic, "words": words, "after": after}
+	return {"picture": pic, "words": words, "lettering": lettering, "after": after}
 
 
 ## The painter's job: the card's painter, painting what the writer wrote ([method painting]) into the episode's folder, after
@@ -267,7 +271,8 @@ func _after(got: Dictionary, feed: EpisodeFeed) -> Dictionary:
 ## [param portrait] video turned. Static and pure for the gate.
 static func painting(got: Dictionary, portrait: bool) -> String:
 	return Rules.say("youtube/thumbnail.painter", {"picture": String(got.get("picture", "")),
-		"words": String(got.get("words", "")), "refs": not (got.get("after", []) as Array).is_empty(),
+		"words": String(got.get("words", "")), "lettering": String(got.get("lettering", "")) if not String(got.get("words", "")).is_empty() else "",
+		"refs": not (got.get("after", []) as Array).is_empty(),
 		"portrait": portrait})
 
 

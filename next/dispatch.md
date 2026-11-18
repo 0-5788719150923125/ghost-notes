@@ -99,6 +99,12 @@ look at).
 
 **Built.** The author has not yet watched or heard it.
 
+The patch panel's cables are laid over the desk as a hand lays them (`DispatchSet.lay_cables`: a path round everything standing
+there on a 1 cm grid, the desk's back preferred, each beside the last; never round the front of what it plugs into), each plugged
+into the side of the part its thing stands on that faces the panel (`ports_of`, three sides tried) or laid round the panel and
+over the desk's far edge. Gate: `dispatch_check` (ends in a part, through nothing on the desk; controls: laid blind of the roots,
+laid straight).
+
 Looked at (rendered with `tests/dispatch/dispatch_look_probe.gd` on a steady rehearsed voice, frames read by eye): the
 home view from the chair, every camera spot settled, the record and the target's log on the terminal (legible close up),
 the council's typed question, a text on its phone, a phone dialing and one on hold, a ring, the radar's ping with the place
