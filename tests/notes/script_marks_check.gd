@@ -300,7 +300,7 @@ func _parsers_agree() -> void:
 				_letter_mark(k, ex)
 			"call", "hang_up", "ring", "text_msg", "ping", "desk_sound", "static", "print", "sleep", "screen_off", "look", "lift", \
 					"switch", "live", "image_screen", "video_screen", "terminal", "moving", "reply", "redact", "gain", "bell", "lamp", "fade", "tablet", \
-					"tablet_end", "page", "player", "replay":
+					"tablet_end", "page", "player", "replay", "power", "environment_switch", "play_screen":
 				_dispatch_mark(k, ex)
 			_:
 				_ok(false, "%s has no check in script_marks_check - prove it before shipping it" % k)
@@ -606,6 +606,31 @@ func _dispatch_mark(k: String, ex: String) -> void:
 		"lamp":
 			var a: Dictionary = DispatchScript.parse(head + ex + tail)["actions"][0]
 			_ok(String(a["kind"]) == "lamp" and not bool(a["on"]), "a lamp mark does not switch the lamp off (%s)" % str(a))
+		"power":
+			var d := DispatchScript.parse(head + ex + tail)
+			var a: Dictionary = d["actions"][0]
+			_ok(String(a["kind"]) == "power" and not bool(a["on"]) and is_equal_approx(float(a["rest"]), DispatchScript.POWER)
+				and not String(d["speakable"]).contains("power") and (d["warnings"] as PackedStringArray).is_empty(),
+				"a power mark does not take the grid down with the voice waiting, or is said (%s)" % str(a))
+		"environment_switch":
+			var d := DispatchScript.parse(head + ex + tail)
+			var a: Dictionary = d["actions"][0]
+			_ok(String(a["kind"]) == "environment" and (a["set"] as Dictionary) == {"shafts": false, "beams": true}
+				and is_equal_approx(float(a["secs"]), DispatchScript.ENVIRONMENT_FADE) and not String(d["speakable"]).contains("beams")
+				and (d["warnings"] as PackedStringArray).is_empty(),
+				"an environment mark does not switch each element it names, or is said (%s)" % str(a))
+		"play_screen":
+			# the film's seconds are what the parse is handed; the voice waits for the rest of it, and never says it
+			var fill := String(ScriptMarks.REGISTRY[k]["fill"])
+			var films := {fill: {"kind": "note", "ready": true, "secs": 30.0}}
+			var d := DispatchScript.parse(head + ex + tail, films)
+			var a: Dictionary = d["actions"][0]
+			var left := 30.0 - (DispatchScript.PLAY_LEAD + DispatchScript.REST_PAD)
+			var sp := String(d["speakable"])
+			_ok(String(a["kind"]) == "play" and String(a["screen"]) == "terminal" and String(a["what"]) == fill
+				and is_equal_approx(float(a["secs"]), 30.0) and sp.contains("action-hold: %s" % String.num(left, 2))
+				and not (d["spoken"] as PackedStringArray).has("error") and (d["warnings"] as PackedStringArray).is_empty(),
+				"a play mark does not put its film on the terminal with the voice waiting for it, or is said (%s; %s)" % [str(a), str(d["warnings"])])
 		"redact":
 			var d := DispatchScript.parse(head + "```terminal\nNAME ........ " + ex + "\n```" + tail)
 			var line := String((DispatchTerminal.up(DispatchTerminal.at(d["actions"][0]["glass"], d["actions"][0]["ops"], INF))["body"] as PackedStringArray)[0])
