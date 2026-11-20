@@ -3,9 +3,9 @@ class_name Surroundings
 
 ## Surroundings - what is round a scene (next/environment.md; [EnvironmentCard]): a list of elements, each a kind of thing
 ## ([constant KINDS]) - the light the scene is in, shafts of light through its haze, something drifting in its air, something heard
-## round it - with a number of its own and the properties a person set on it. A property never set is drawn from the element's number
+## round it, fog lying low or filling the air - with a number of its own and the properties a person set on it. A property never set is drawn from the element's number
 ## inside its field's bounds ([Roll]), so a new number is another variant of the same thing. The Dex offers every kind, each light
-## preset and a few looks of shafts ([method offers]), and what a person keeps ([EnvironmentLibrary]).
+## preset and a few looks of shafts, beams and fog ([method offers]), and what a person keeps ([EnvironmentLibrary]).
 ##
 ## The note's `environment:` block: `elements` (each `{kind, seed, name, off, <its fields>}` - `name` where it was kept under one,
 ## `off` while it is set aside), `lights` (how strongly each thing in the scene that throws light throws it, by the name its scene
@@ -26,8 +26,12 @@ const KINDS := {
 		"group": "light", "one": true},
 	"shafts": {"label": "Light shafts", "blurb": "Shafts of light through the haze - through a window, a crack, the leaves: each a column as wide as the gap it came through, landing in a bright patch its own size.",
 		"group": "light", "one": false},
+	"beams": {"label": "Colored beams", "blurb": "Beams of colored light from fixtures hung high over the scene, as a stage's or a club's: some hold still and some sweep, each keeps a color a while and moves on to another, some strobe.",
+		"group": "light", "one": false},
 	"haze": {"label": "Haze", "blurb": "A bank of haze far off, out of focus behind the work: the room's depth, and what light shafts fall through.",
 		"group": "air", "one": false, "effect": {"kind": "fog", "where": "far", "density": 0.45, "rolls": 0.4, "drift": 0.15, "height": 60.0, "grain": 40.0}},
+	"fog": {"label": "Fog", "blurb": "Fog through the scene - lying low on the ground or filling the air, one even sheet or patches with clear air between, still, carried on a wind or swaying to and fro.",
+		"group": "air", "one": false, "effect": {"kind": "fog", "where": "room", "density": 0.5, "rolls": 0.35, "drift": 0.0, "height": 40.0, "grain": 30.0}},
 	"dust": {"label": "Dust", "blurb": "Motes of dust drifting through the light, barely there.",
 		"group": "air", "one": false, "effect": {"kind": "motes", "look": "dust", "where": "near", "count": 160, "glow": 0.8, "speed": 0.3, "size": 2.2}},
 	"pixies": {"label": "Pixies", "blurb": "Tiny bright points of colored light that dart and drift, alone or in twos and threes: magic in the air.",
@@ -102,6 +106,49 @@ const LIGHT_FIELDS := {
 	"brightness": {"label": "Brightness", "blurb": "How bright the whole scene is, over its light's own: 1 as the light is.", "type": "float",
 		"min": 0.25, "max": 2.5, "step": 0.05, "default": 1.0, "roll": [0.85, 1.25]},
 }
+## Looks of colored beams the Dex offers beside the kind as it rolls ([constant BEAM_FIELDS]).
+const BEAM_LOOKS := {
+	"disco": {"label": "Disco", "blurb": "A dozen beams in the club's colors, most of them sweeping, changing color every second or two, a few strobing.",
+		"set": {"count": 12, "palette": "club", "moving": 0.75, "sweep": 32.0, "speed": 0.45, "hold": 1.6, "variety": 0.7, "strobe": 0.25, "width": 0.3}},
+	"stage": {"label": "Stage", "blurb": "Six broad, still beams, each holding its warm color a long while.",
+		"set": {"count": 6, "palette": "warm", "moving": 0.0, "hold": 9.0, "variety": 0.5, "strobe": 0.0, "width": 0.7, "spread": 9.0, "blend": 0.6}},
+	"lasers": {"label": "Lasers", "blurb": "Many thin beams that barely open, sweeping quickly, in every hue.",
+		"set": {"count": 20, "palette": "rainbow", "moving": 0.9, "sweep": 40.0, "speed": 0.75, "hold": 1.0, "variety": 0.4, "strobe": 0.1, "width": 0.0, "spread": 0.5, "blend": 0.0}},
+}
+
+## What colored beams can be told ([StageBeams]): how many, how wide at the lens and how much each opens, the colors they draw from (or
+## one color), how many sweep and how far and fast, how long each keeps a color and how much their holds differ, how quickly a color
+## changes, how many strobe and how fast, how strong, and where round the scene their fixtures hang.
+const BEAM_FIELDS := {
+	"count": {"label": "Beams", "blurb": "How many beams there are.", "type": "int", "min": 1, "max": 24, "step": 1, "default": 8, "roll": [5, 14]},
+	"width": {"label": "Width", "blurb": "How wide each beam is at its lens, from a laser's to a floodlight's.", "type": "float", "min": 0.0,
+		"max": 1.0, "step": 0.01, "default": 0.3, "roll": [0.15, 0.5]},
+	"spread": {"label": "Spread", "blurb": "How much each beam opens as it goes (degrees): 0 a column, more a cone.", "type": "float",
+		"min": 0.0, "max": 15.0, "step": 0.5, "default": 4.0, "roll": [1.5, 7.0]},
+	"palette": {"label": "Colors", "blurb": "The colors the beams draw from.", "type": "enum",
+		"options": ["club", "rainbow", "warm", "cool", "ice", "one"], "default": "club", "roll": ["club", "rainbow", "warm", "cool"]},
+	"color": {"label": "Color", "blurb": "One color for every beam; unset, the palette's.", "type": "color", "default": ""},
+	"moving": {"label": "Moving", "blurb": "How many of the beams sweep: 0 all hold still, 1 all move.", "type": "float", "min": 0.0,
+		"max": 1.0, "step": 0.05, "default": 0.6, "roll": [0.35, 0.85]},
+	"sweep": {"label": "Sweep", "blurb": "How far a moving beam swings (degrees).", "type": "float", "min": 0.0, "max": 70.0, "step": 1.0,
+		"default": 28.0, "roll": [14.0, 45.0]},
+	"speed": {"label": "Speed", "blurb": "How fast the moving beams swing: a slow sway to a quick sweep.", "type": "float", "min": 0.0,
+		"max": 1.0, "step": 0.05, "default": 0.35, "roll": [0.2, 0.6]},
+	"hold": {"label": "Hold", "blurb": "How long a beam keeps a color before it changes (seconds).", "type": "float", "min": 0.2,
+		"max": 20.0, "step": 0.1, "default": 2.5, "roll": [1.2, 5.0]},
+	"variety": {"label": "Variety", "blurb": "How much the beams' holds differ: 0 all change together; 1 some keep theirs four times as long, some change four times as often.",
+		"type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "default": 0.6, "roll": [0.3, 0.9]},
+	"blend": {"label": "Blend", "blurb": "How a color gives way to the next: 0 at once, 1 eased over the whole hold.", "type": "float",
+		"min": 0.0, "max": 1.0, "step": 0.05, "default": 0.15, "roll": [0.0, 0.4]},
+	"strobe": {"label": "Strobe", "blurb": "How many of the beams strobe, in bursts.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05,
+		"default": 0.15, "roll": [0.0, 0.3]},
+	"rate": {"label": "Strobe rate", "blurb": "How many times a second a strobing beam flashes.", "type": "float", "min": 1.0, "max": 15.0,
+		"step": 0.5, "default": 5.0, "roll": [3.0, 8.0]},
+	"strength": {"label": "Strength", "blurb": "How strongly they light the haze, and the patches where they land.", "type": "float",
+		"min": 0.0, "max": 1.0, "step": 0.05, "default": 0.6, "roll": [0.45, 0.8]},
+	"turn": {"label": "Direction", "blurb": "Where round the scene their fixtures hang, turned from where its own light comes from (degrees).",
+		"type": "float", "min": -180.0, "max": 180.0, "step": 1.0, "default": 0.0, "roll": [-40.0, 40.0]},
+}
 ## What light shafts can be told: how many beams, how wide (a share of what the scene allows: a pencil's width to a window's, [constant
 ## LightShafts.WIDTH]), how many narrower shafts inside each, which way they come from and how steeply (turned from the scene's own
 ## light), how far each beam's way strays from the rest, how strong, how much they differ, how much they shimmer, their color.
@@ -136,13 +183,72 @@ const MOTE_FIELDS := {
 	"color": {"label": "Color", "blurb": "Their color.", "type": "color"},
 }
 ## What haze can be told: how thick, how much it rolls, which way and how fast it drifts.
-const FOG_FIELDS := {
+const HAZE_FIELDS := {
 	"density": {"label": "Density", "blurb": "How thick the haze is.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "default": 0.45,
 		"roll": [0.3, 0.6]},
 	"rolls": {"label": "Rolls", "blurb": "How much it rolls and billows.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "default": 0.4,
 		"roll": [0.2, 0.6]},
 	"drift": {"label": "Drift", "blurb": "Which way it drifts, and how fast.", "type": "float", "min": -1.0, "max": 1.0, "step": 0.05, "default": 0.15,
 		"roll": [-0.3, 0.3]},
+}
+## What fog can be told ([method Effects.fog_run], `effect_fog.gdshader`): how thick and how high, how much it lies low (full to its
+## top, or thick on the ground and thin above), one sheet or patches, its swirls and the curve that turns them into fog and clear air
+## (`activation`, [constant Effects.FOG_SHAPES]), how irregular it all is (`chaos`), the wind that carries it and its gusts, a slow sway
+## to and fro along the wind's way and a slower breathing, its own glow and its color.
+const FOG_FIELDS := {
+	"density": {"label": "Density", "blurb": "How thick it is: a whisper of mist to fog nothing is seen through.", "type": "float", "min": 0.0,
+		"max": 1.0, "step": 0.05, "default": 0.5, "roll": [0.35, 0.7]},
+	"height": {"label": "Height", "blurb": "How high it reaches above the ground (cm).", "type": "float", "min": 5.0, "max": 300.0, "step": 5.0,
+		"default": 40.0, "roll": [20.0, 90.0]},
+	"settle": {"label": "Low lying", "blurb": "How it lies: 0 as thick at its top as on the ground, filling all it reaches; 1 thick on the ground and thinning fast above it.",
+		"type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "default": 0.8, "roll": [0.55, 0.95]},
+	"patches": {"label": "Patches", "blurb": "0 one even sheet; toward 1 patches of fog with clear air between them.", "type": "float", "min": 0.0,
+		"max": 1.0, "step": 0.05, "default": 0.3, "roll": [0.0, 0.6]},
+	"patch": {"label": "Patch size", "blurb": "How big each patch is (m).", "type": "float", "min": 0.2, "max": 8.0, "step": 0.1, "default": 1.5,
+		"roll": [0.8, 3.0]},
+	"grain": {"label": "Swirls", "blurb": "How big its swirls and billows are (cm).", "type": "float", "min": 3.0, "max": 200.0, "step": 1.0,
+		"default": 30.0, "roll": [15.0, 60.0]},
+	"activation": {"label": "Activation", "blurb": "The curve that turns its swirls into fog and clear air: smooth, billows with gaps, thin wisps, sharp-edged clumps, or folds like poured smoke.",
+		"type": "enum", "default": "smooth", "roll": ["smooth", "billows", "wisps"]},
+	"chaos": {"label": "Chaos", "blurb": "How irregular it all is: 0 even - its sway and gusts regular, its swirls as drawn; 1 wild - swings and gusts of every length, swirls folded into themselves, thick and thin from place to place.",
+		"type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "default": 0.25, "roll": [0.1, 0.45]},
+	"rolls": {"label": "Rolls", "blurb": "How much it rolls and turns over as it goes.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05,
+		"default": 0.35, "roll": [0.15, 0.6]},
+	"wind": {"label": "Wind", "blurb": "How fast a wind carries it: 0 still air, 1 a stiff breeze.", "type": "float", "min": 0.0, "max": 1.0,
+		"step": 0.05, "default": 0.2, "roll": [0.05, 0.35]},
+	"turn": {"label": "Wind direction", "blurb": "Which way it blows (degrees): 0 left to right as the scene is first seen, 90 toward the viewer, -90 away, 180 right to left.",
+		"type": "float", "min": -180.0, "max": 180.0, "step": 5.0, "default": 0.0, "roll": [-60.0, 60.0]},
+	"gusts": {"label": "Gusts", "blurb": "How much the wind comes and goes: 0 steady; 1 from a lull to gusts twice as strong.", "type": "float",
+		"min": 0.0, "max": 1.0, "step": 0.05, "default": 0.3, "roll": [0.1, 0.5]},
+	"stretch": {"label": "Streaks", "blurb": "How far its swirls are drawn out along the wind: 0 round, 1 long streaks.", "type": "float",
+		"min": 0.0, "max": 1.0, "step": 0.05, "default": 0.3, "roll": [0.1, 0.6]},
+	"sway": {"label": "Sway", "blurb": "How far it swings back and forth along the wind's way, in slow waves passing through it.", "type": "float",
+		"min": 0.0, "max": 1.0, "step": 0.05, "default": 0.2, "roll": [0.0, 0.4]},
+	"pace": {"label": "Sway pace", "blurb": "How long one swing takes (seconds); it breathes a little slower.", "type": "float", "min": 2.0,
+		"max": 60.0, "step": 0.5, "default": 14.0, "roll": [9.0, 22.0]},
+	"breathe": {"label": "Breathe", "blurb": "How much it rises and sinks, thinning as it rises and thickening as it sinks.", "type": "float",
+		"min": 0.0, "max": 1.0, "step": 0.05, "default": 0.15, "roll": [0.0, 0.35]},
+	"glow": {"label": "Glow", "blurb": "Light of its own, so it shows where no light falls on it.", "type": "float", "min": 0.0, "max": 1.0,
+		"step": 0.05, "default": 0.1, "roll": [0.0, 0.2]},
+	"color": {"label": "Color", "blurb": "Its color; unset, the light's fog.", "type": "color", "default": ""},
+}
+## A fog's color unset ([method fog_albedo]): this pale, tinted this much by the light's fog.
+const FOG_PALE := Color(0.82, 0.84, 0.87)
+const FOG_TINT := 0.3
+## Looks of fog the Dex offers beside the kind as it rolls ([constant FOG_FIELDS]).
+const FOG_LOOKS := {
+	"ground": {"label": "Ground fog", "blurb": "A low layer lying on the ground, thinning fast above it, carried gently on a breeze and swaying slowly.",
+		"set": {"density": 0.6, "height": 35.0, "settle": 0.9, "patches": 0.3, "patch": 2.0, "activation": "smooth", "wind": 0.15,
+			"gusts": 0.3, "stretch": 0.5, "sway": 0.25, "pace": 16.0, "breathe": 0.3, "chaos": 0.25}},
+	"thick": {"label": "Thick fog", "blurb": "Fog filling all the air, as thick high up as on the ground, barely moving.",
+		"set": {"density": 0.7, "height": 300.0, "settle": 0.1, "patches": 0.0, "activation": "smooth", "wind": 0.05, "sway": 0.0,
+			"breathe": 0.0, "chaos": 0.1}},
+	"patchy": {"label": "Patchy mist", "blurb": "Islands of mist with clear air between them, drifting slowly.",
+		"set": {"density": 0.55, "height": 80.0, "settle": 0.6, "patches": 0.75, "patch": 1.6, "activation": "billows", "wind": 0.12,
+			"sway": 0.1, "chaos": 0.35}},
+	"rolling": {"label": "Rolling bank", "blurb": "A bank rolling in on a gusting wind, billowing and turning over, drawn out in streaks.",
+		"set": {"density": 0.65, "height": 120.0, "settle": 0.5, "patches": 0.2, "activation": "billows", "rolls": 0.8, "wind": 0.5,
+			"gusts": 0.6, "stretch": 0.6, "chaos": 0.5}},
 }
 ## What each sound can be told, by its [Soundscape] part: how loud it is, and what it is like (a choice's options are the part's own,
 ## [method fields_of]).
@@ -177,8 +283,11 @@ const LIGHT_SHARE := Vector2(0.0, 3.0)
 const HEARD_SHARE := Vector2(0.0, 2.0)
 ## How loud what is heard is under the voice ([Soundscape]'s bed level).
 const BED_LEVEL := 0.5
-## An element's picture, on its row and the Dex (pixels).
+## An element's picture, on its row and the Dex (pixels); a fog's picture is a room this many centimeters tall, drawn in blocks this
+## many pixels square.
 const PICTURE := Vector2i(176, 132)
+const PICTURE_ROOM := 200.0
+const PICTURE_BLOCK := 4
 
 
 ## The block [param raw] made safe: its elements each a kind it knows with a number and the properties its fields allow, a kind there
@@ -227,8 +336,9 @@ static func set_of(el: Dictionary) -> Dictionary:
 	return out
 
 
-## The fields a kind [param kind] can be told ([Roll]'s rows): a light's, shafts', haze's, motes' (their own size, glow, speed and color
-## its defaults), or a sound's (its part's own choices). A shaft's color unset is [param color] ("" where it follows the scene's).
+## The fields a kind [param kind] can be told ([Roll]'s rows): a light's, shafts', haze's, fog's, motes' (their own size, glow, speed and
+## color its defaults), or a sound's (its part's own choices). A shaft's or a fog's color unset is [param color] ("" where it follows the
+## scene's).
 static func fields_of(kind: String, color := "") -> Dictionary:
 	var row: Dictionary = KINDS.get(kind, {})
 	if kind == "light":
@@ -242,10 +352,27 @@ static func fields_of(kind: String, color := "") -> Dictionary:
 		var out := SHAFT_FIELDS.duplicate(true)
 		(out["color"] as Dictionary)["default"] = color
 		return out
+	if kind == "beams":
+		var out := BEAM_FIELDS.duplicate(true)
+		var labels := {}
+		for k in StageBeams.PALETTES:
+			labels[k] = Registry.label(StageBeams.PALETTES, k)
+		(out["palette"] as Dictionary)["labels"] = labels
+		return out
 	if row.has("effect"):
 		var fx: Dictionary = row["effect"]
+		if kind == "fog":
+			var out := FOG_FIELDS.duplicate(true)
+			var shape: Dictionary = out["activation"]
+			shape["options"] = Effects.FOG_SHAPES.keys()
+			var labels := {}
+			for k in Effects.FOG_SHAPES:
+				labels[k] = Registry.label(Effects.FOG_SHAPES, k)
+			shape["labels"] = labels
+			(out["color"] as Dictionary)["default"] = color
+			return out
 		if String(fx["kind"]) == "fog":
-			return FOG_FIELDS.duplicate(true)
+			return HAZE_FIELDS.duplicate(true)
 		var base: Dictionary = Effects.MOTES[String(fx["look"])]
 		var out := MOTE_FIELDS.duplicate(true)
 		var sizes: Vector2 = base["sizes"]
@@ -337,29 +464,70 @@ static func has_shafts(spec: Dictionary) -> bool:
 	return in_use(spec, "light").any(func(el: Dictionary) -> bool: return String(el["kind"]) == "shafts")
 
 
-## Every shafts element in use in [param spec], built ([method LightShafts.build]): falling [param reach] (m) from [param toward] (the
-## way to their light) onto [param over] (boxes in the host's space, each's top where they land), [param color] where an element's is
-## unset. Null where there are none.
+## Every shafts and beams element in use in [param spec], built under one node ([method LightShafts.build], [method StageBeams.build]):
+## falling [param reach] (m) from [param toward] (the way to their light) onto [param over] (boxes in the host's space, each's top where
+## they land), a shaft [param color] where its own is unset. Its meta `levels`: each element's place in the spec's `elements` -> its
+## materials and strength, which [method tick_rays] scales. Null where there are none.
 static func rays(spec: Dictionary, color: Color, toward: Vector3, over: Array, reach: float) -> Node3D:
-	var els: Array = []
+	var shafts: Array = []
+	var beams: Array = []
+	var all: Array = spec.get("elements", [])
 	for el in in_use(spec, "light"):
-		if String((el as Dictionary)["kind"]) == "shafts":
-			var v := values_of(el)
-			v["seed"] = int((el as Dictionary)["seed"])
-			els.append(v)
-	return LightShafts.build(els, color, toward, over, reach) if not els.is_empty() else null
+		var kind := String((el as Dictionary)["kind"])
+		if kind != "shafts" and kind != "beams":
+			continue
+		var v := values_of(el)
+		v["seed"] = int((el as Dictionary)["seed"])
+		v["key"] = all.find(el)
+		(shafts if kind == "shafts" else beams).append(v)
+	if shafts.is_empty() and beams.is_empty():
+		return null
+	var root := LightShafts.build(shafts, color, toward, over, reach)
+	if not beams.is_empty():
+		StageBeams.build(beams, toward, over, reach, root)
+	return root
 
 
-## The shafts [param rays_root] ([method rays]) as they are at show time [param t].
-static func tick_rays(rays_root: Node3D, t: float) -> void:
+## The shafts and beams [param rays_root] ([method rays]) as they are at show time [param t]: each element at its share of itself in
+## [param levels] (its place in the spec's `elements` -> 0 to 1; one not there is whole), and hidden at none.
+static func tick_rays(rays_root: Node3D, t: float, levels := {}) -> void:
+	if rays_root == null:
+		return
 	LightShafts.tick(rays_root, t)
+	StageBeams.tick(rays_root, t)
+	var by: Dictionary = rays_root.get_meta("levels", {})
+	for key in by:
+		var lv := clampf(float(levels.get(key, 1.0)), 0.0, 1.0)
+		var row: Dictionary = by[key]
+		for m in (row["mats"] as Array):
+			(m as ShaderMaterial).set_shader_parameter("strength", float(row["strength"]) * lv)
+	if not by.is_empty():
+		for n in rays_root.get_children():
+			var mi := n as MeshInstance3D
+			if mi != null and mi.material_override != null:
+				mi.visible = float((mi.material_override as ShaderMaterial).get_shader_parameter("strength")) > 1e-5
+
+
+## The elements of [param spec] that [param name] names: those of that kind, or kept under that name (either in any case); for
+## a scene that switches them on and off as it plays ([DispatchScript]'s `environment:`). Their places in the spec's `elements`.
+static func named(spec: Dictionary, name: String) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var want := name.strip_edges().to_lower()
+	var all: Array = spec.get("elements", [])
+	for i in all.size():
+		var el: Dictionary = all[i]
+		if String(el.get("kind", "")) == want or String(el.get("name", "")).to_lower() == want:
+			out.append(i)
+	return out
 
 
 ## What drifts in the air ([param spec]'s air elements) as [Effects] effects over a host's regions `far`, `near` and `room`, each as
 ## many as its Amount says (those round the work [param near] times as many, for a host whose region round it is larger), its fog the
-## color of [param fog]: made safe by [method Effects.sanitize]. A mote never goes away on a visit: its exit is out of the picture the
-## air was built for, and a host's camera moves on to another, where the motes leaving and waiting there would stand in a line. Each
-## element's number places its own motes.
+## color of [param fog] (a fog's own Color where it has one): made safe by [method Effects.sanitize]. A mote never goes away on a visit:
+## its exit is out of the picture the air was built for, and a host's camera moves on to another, where the motes leaving and waiting
+## there would stand in a line. Each element's number places its own motes and its own fog's gusts. A fog lies on the floor of the room
+## round the scene, as thick as its Density says looked down through it (`sight`: its height and a half again, a line of sight's slant),
+## pale where its Color is unset ([method fog_albedo]).
 static func effects_of(spec: Dictionary, fog: Color, near := 1.0) -> Array:
 	var raw: Array = []
 	for e in in_use(spec, "air"):
@@ -374,6 +542,13 @@ static func effects_of(spec: Dictionary, fog: Color, near := 1.0) -> Array:
 			fx["speed"] = v["speed"]
 			fx["color"] = v["color"]
 			fx["away"] = 0.0
+		elif String(el["kind"]) == "fog":
+			for k in ["density", "rolls", "height", "grain", "settle", "patches", "patch", "chaos", "wind", "turn", "gusts", "stretch",
+					"sway", "pace", "breathe", "glow"]:
+				fx[k] = v[k]
+			fx["shape"] = v["activation"]
+			fx["sight"] = float(v["height"]) * 0.025
+			fx["color"] = String(v["color"]) if Color.html_is_valid(String(v["color"])) else "#" + fog_albedo(fog).to_html(false)
 		else:
 			fx["density"] = v["density"]
 			fx["rolls"] = v["rolls"]
@@ -401,13 +576,20 @@ static func _heard_key(k: String) -> String:
 	return "kind" if k == "sort" else k
 
 
-## Whether a bank of haze is in use in [param spec].
+## A fog's color where its own is unset: pale, as fog is (the light on it is what colors it), tinted by the light's fog [param fog] -
+## never that color itself, the dark a scene fades into far off, which a fog of would only darken the room.
+static func fog_albedo(fog: Color) -> Color:
+	return FOG_PALE.lerp(fog, FOG_TINT)
+
+
+## Whether fog of any kind is in use in [param spec]: a bank of haze, or a fog.
 static func hazy(spec: Dictionary) -> bool:
-	return in_use(spec, "air").any(func(el: Dictionary) -> bool: return String(el["kind"]) == "haze")
+	return in_use(spec, "air").any(func(el: Dictionary) -> bool:
+		return String(((KINDS[String(el["kind"])] as Dictionary)["effect"] as Dictionary)["kind"]) == "fog")
 
 
-## The volumetric fog a scene's environment [param env] wants for what [param spec] chooses: on where a bank of haze lies (a fog volume
-## needs it), at the scene's own density [param own] (0 a scene with none, whose fog is then off), colored as the light's fog.
+## The volumetric fog a scene's environment [param env] wants for what [param spec] chooses: on where a bank of haze or a fog lies (a
+## fog volume needs it), at the scene's own density [param own] (0 a scene with none, whose fog is then off), colored as the light's fog.
 static func fog_for(env: Environment, spec: Dictionary, own: float) -> void:
 	var row := light_of(spec)
 	env.volumetric_fog_enabled = own > 0.0 or hazy(spec)
@@ -425,9 +607,9 @@ static func toward(from: float, height: float) -> Vector3:
 
 # --- what the Dex offers -------------------------------------------------------------------------------------------------
 
-## Every element offered built in, by its key on the Dex: each light preset (`preset:<key>`), light shafts as they roll
-## (`kind:shafts`) and in each of their looks (`look:<key>`), and every other kind (`kind:<key>`) - each `{label, blurb, group, element}`,
-## its element with a fixed number (a new one is drawn when it is added).
+## Every element offered built in, by its key on the Dex: each light preset (`preset:<key>`), light shafts, colored beams and fog as
+## they roll (`kind:shafts`, `kind:beams`, `kind:fog`) and in each of their looks (`look:<key>`, on their kind's shelf), and every other
+## kind (`kind:<key>`) - each `{label, blurb, group, element}`, its element with a fixed number (a new one is drawn when it is added).
 static func offers() -> Dictionary:
 	var out := {}
 	for k in LIGHTS:
@@ -438,12 +620,12 @@ static func offers() -> Dictionary:
 			continue
 		out["kind:" + k] = {"label": Registry.label(KINDS, k), "blurb": Registry.blurb(KINDS, k), "group": String((KINDS[k] as Dictionary)["group"]),
 			"element": {"kind": k, "seed": absi(hash(k)) % 1000000}}
-		if k == "shafts":
-			for look in SHAFT_LOOKS:
-				var el := {"kind": "shafts", "seed": absi(hash(look)) % 1000000}
-				el.merge((SHAFT_LOOKS[look] as Dictionary)["set"])
-				out["look:" + look] = {"label": Registry.label(SHAFT_LOOKS, look), "blurb": Registry.blurb(SHAFT_LOOKS, look), "group": "light",
-					"element": el}
+		var looks: Dictionary = {"shafts": SHAFT_LOOKS, "beams": BEAM_LOOKS, "fog": FOG_LOOKS}.get(k, {})
+		for look in looks:
+			var el := {"kind": k, "seed": absi(hash(look)) % 1000000}
+			el.merge((looks[look] as Dictionary)["set"])
+			out["look:" + look] = {"label": Registry.label(looks, look), "blurb": Registry.blurb(looks, look),
+				"group": String((KINDS[k] as Dictionary)["group"]), "element": el}
 	return out
 
 
@@ -461,6 +643,25 @@ static func line_of(el: Dictionary) -> String:
 				parts.append("%d inside each" % int(v["inner"]))
 			if float(v["flicker"]) >= 0.1:
 				parts.append("flickering")
+			return ", ".join(parts)
+		"beams":
+			var parts := PackedStringArray(["%d beam%s" % [int(v["count"]), "" if int(v["count"]) == 1 else "s"]])
+			var colors := String(v["color"])
+			parts.append("one color" if Color.html_is_valid(colors) and not colors.is_empty() else Registry.label(StageBeams.PALETTES, String(v["palette"])).to_lower())
+			parts.append("%d%% moving" % roundi(float(v["moving"]) * 100.0))
+			parts.append("a color %ss" % str(snappedf(float(v["hold"]), 0.1)))
+			if float(v["strobe"]) >= 0.05:
+				parts.append("strobing")
+			return ", ".join(parts)
+		"fog":
+			var parts := PackedStringArray(["%s%% thick" % str(roundi(float(v["density"]) * 100.0))])
+			parts.append(("low, %d cm" if float(v["settle"]) >= 0.5 else "%d cm deep") % roundi(float(v["height"])))
+			if float(v["patches"]) >= 0.4:
+				parts.append("in patches")
+			if float(v["wind"]) >= 0.05:
+				parts.append("drifting")
+			if float(v["sway"]) >= 0.1:
+				parts.append("swaying")
 			return ", ".join(parts)
 	var kind_row: Dictionary = KINDS.get(String(el.get("kind", "")), {})
 	if kind_row.has("effect"):
@@ -489,11 +690,16 @@ static func picture(el: Dictionary, spec: Dictionary, size := PICTURE) -> Image:
 		"light":
 			if kind == "light":
 				_sky(img, v)
+			elif kind == "beams":
+				_fixtures(img, v, r)
 			else:
 				_beams(img, v, Color.html(String(v["color"])) if Color.html_is_valid(String(v["color"])) else Color.html(String(row["key_color"])), r)
 		"air":
 			var fx: Dictionary = (KINDS[kind] as Dictionary)["effect"]
-			if String(fx["kind"]) == "fog":
+			if kind == "fog":
+				var own := Color.html(String(v["color"])) if Color.html_is_valid(String(v["color"])) else fog_albedo(Color.html(String(row["fog"])))
+				_fog_picture(img, v, dark, own, r)
+			elif String(fx["kind"]) == "fog":
 				var fog := Color.html(String(row["fog"])).lerp(Color(0.75, 0.76, 0.8), 0.5)
 				for y in size.y:
 					var a := float(v["density"]) * (0.25 + 0.75 * float(y) / float(size.y)) * (0.85 + 0.15 * sin(float(y) * 0.21 + r.randf()))
@@ -547,6 +753,72 @@ static func _beams(img: Image, v: Dictionary, color: Color, r: RandomNumberGener
 		var l := light[x]
 		img.fill_rect(Rect2i(x, 0, 1, floor), base.lerp(color, clampf(l * s * 0.55, 0.0, 1.0)))
 		img.fill_rect(Rect2i(x, floor, 1, h - floor), base.lightened(0.08).lerp(color, clampf(l * s * 1.4, 0.0, 1.0)))
+
+
+## Colored beams' picture: each a line of its color fanning down from a lens along the top, wider as it opens, a still one straight,
+## a moving one leaning as far as it sweeps.
+static func _fixtures(img: Image, v: Dictionary, r: RandomNumberGenerator) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	var colors := StageBeams.colors_of(v)
+	var n := int(v["count"])
+	var base := img.get_pixel(0, 0)
+	var s := clampf(float(v["strength"]), 0.1, 1.0)
+	for i in n:
+		var x0 := (float(i) + 0.5) / float(n) * float(w)
+		var lean := 0.0
+		if r.randf() < float(v["moving"]):
+			lean = r.randf_range(-1.0, 1.0) * float(v["sweep"]) / 70.0
+		var c: Color = colors[r.randi() % colors.size()]
+		var x1 := x0 + lean * float(h) + r.randf_range(-0.15, 0.15) * float(w) / float(n) * 4.0
+		var rad0 := lerpf(0.5, 2.5, float(v["width"]))
+		var rad1 := rad0 + float(v["spread"]) * 0.5
+		for y in h:
+			var u := float(y) / float(h - 1)
+			var cx := lerpf(x0, x1, u)
+			var rad := lerpf(rad0, rad1, u)
+			for x in range(maxi(0, floori(cx - rad - 1.0)), mini(w, ceili(cx + rad + 1.0))):
+				var d := absf(float(x) - cx) / maxf(rad, 0.5)
+				if d < 1.0:
+					var was := img.get_pixel(x, y)
+					var a := clampf((1.0 - d * d) * s * (1.0 - 0.45 * u), 0.0, 1.0)
+					img.set_pixel(x, y, Color(minf(was.r + c.r * a, 1.0), minf(was.g + c.g * a, 1.0), minf(was.b + c.b * a, 1.0)))
+	for i in n:
+		img.fill_rect(Rect2i(roundi((float(i) + 0.5) / float(n) * float(w)) - 2, 0, 4, 3), base.lightened(0.5))
+
+
+## A fog's picture: the ground along its bottom, the fog over it as high as its Height says of a room [constant PICTURE_ROOM] cm tall,
+## as low lying as it is, broken into patches and swirls shaped by its Activation, drawn out by its Streaks - in blocks of
+## [constant PICTURE_BLOCK] pixels.
+static func _fog_picture(img: Image, v: Dictionary, dark: Color, fog: Color, r: RandomNumberGenerator) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	var ground := h - 10
+	img.fill_rect(Rect2i(0, ground, w, h - ground), dark.lightened(0.12))
+	var noise := FastNoiseLite.new()
+	noise.seed = r.randi()
+	noise.frequency = 1.0
+	var top := clampf(float(v["height"]) / PICTURE_ROOM, 0.04, 1.0) * float(ground)
+	var settle := float(v["settle"])
+	var swirl := maxf(float(v["grain"]) / PICTURE_ROOM * float(ground), 3.0)
+	var patch := maxf(float(v["patch"]) * 100.0 / PICTURE_ROOM * float(ground), 6.0)
+	var long := 1.0 + 3.0 * float(v["stretch"])
+	var shape := String(v["activation"])
+	var b := PICTURE_BLOCK
+	for y in range(0, ground, b):
+		var layer := Effects.fog_layer(settle, float(ground - y) / maxf(top, 1.0))
+		if layer <= 0.001:
+			continue
+		var up := minf(float(ground - y) / maxf(top, 1.0), 1.0)
+		for x in range(0, w, b):
+			var n := 0.5 + 0.5 * noise.get_noise_2d(float(x) / swirl / long, float(y) / swirl)
+			var a := Effects.fog_activation(shape, n + 0.15 * (1.0 - up), n)
+			if float(v["patches"]) > 0.0:
+				var pn := 0.5 + 0.5 * noise.get_noise_2d(float(x) / patch + 40.0, float(y) / patch * 0.3 + 40.0)
+				var cut := lerpf(0.22, 0.68, float(v["patches"]))
+				a *= smoothstep(cut - 0.1, cut + 0.1, pn)
+			var d := clampf(float(v["density"]) * 1.4 * layer * a, 0.0, 1.0)
+			img.fill_rect(Rect2i(x, y, b, b), dark.lerp(fog, d))
 
 
 static func _band(light: PackedFloat32Array, mid: float, rad: float, bright: float) -> void:

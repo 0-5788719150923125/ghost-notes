@@ -118,6 +118,18 @@ const CHAIR_GAIN := 9
 const CHAIR_AT := Vector2(0.0, 0.04)
 ## The lamp going out: the filament's glow dies over this long (seconds), and comes up over the first part of it.
 const LAMP_FADE := 0.18
+## The grid going down ([method power_at]): this far into its rest the breaker goes (its thunk), every glow gone over POWER_FADE,
+## flickering as it goes (a tube's picture collapsing to its dot inside it); back up as quickly.
+const POWER_AT := 0.25
+const POWER_FADE := 0.45
+## A film on a screen ([method film_at]): its glass waking from a dot over FILM_WAKE before its first frame moves; its last frame held
+## FILM_HOLD after it ends, then the glass going down as it came up.
+const FILM_WAKE := 0.6
+const FILM_HOLD := 0.8
+## What on the desk runs on its own batteries, and so stays lit when the grid goes down.
+const BATTERY := ["tablet"]
+## A note played inside the desk ([NestedShow]), by path: it compiles a Director, which a desk that plays no note never needs.
+const NESTED := "res://src/show/nested_show.gd"
 ## The camera on the radar as the target sets off (seconds, at least): it stays while he walks, to the ping where he
 ## arrives, [constant MOVING_HOLD_MOST] at most, so a drive is a glance, never a stare.
 const MOVING_LOOK := 3.0
@@ -335,6 +347,16 @@ var _rays: Node3D = null                # the shafts the Environment chooses in 
 var _candles: OmniLight3D = null        # candles out of the shot, where the light chosen burns them and no lamp
 var _air = null                         # what drifts in the air ([Effects]' Air), or null
 var _lamp_share := 1.0
+var _crack_energy := 0.0                # the hollow's own shaft as dressed, before an `environment:` mark dims it
+var _films := {}                        # what each `play` plays -> what it is ([method ScreenPlays.record_of])
+var _players := {}                      # ...a video file's [ScreenFilm], made when first shown
+var _shows := {}                        # ...a note's [NestedShow], made when it comes up and let go when it goes
+var _loads := {}                        # ...a note's song and bake being read on a worker: {task, box}
+var _dt := 0.0                          # this frame's step, for a note played inside the desk
+var _power_now := 1.0                   # how much power the desk has this frame ([method power_at])
+var _of_kind := {}                      # `play`, `power`, `environment` -> the actions of that kind, in order
+var _cut_by := {}                       # a `play` -> the next action that puts something else on its screen (-1 none)
+var _film_now := {}                     # each screen -> the film on it this frame ([method film_at])
 var _waiting := false                   # the show held for it
 
 var _placeholder: GhostScene
@@ -630,6 +652,7 @@ func _dress_environment() -> void:
 	_crack.visible = not shafts
 	_crack.light_color = CRACK_COLOR if own else key
 	_crack.light_energy = CRACK_ENERGY * (1.0 if own else float(row["key_strength"]))
+	_crack_energy = _crack.light_energy
 	if _rays != null:
 		_rays.queue_free()
 		_rays = null
@@ -700,6 +723,16 @@ func begin_session() -> void:
 func release() -> void:
 	_subs = null
 	_doc_key = ""
+	_hush_films()
+
+
+## Every note played inside the desk let go and every film's sound stopped: the session ended under them (Stop), or the desk left.
+func _hush_films() -> void:
+	for f in _players.values():
+		(f as ScreenFilm).stop()
+	_players = {}
+	for what in _shows.keys():
+		_let_go(String(what))
 
 
 func _exit_tree() -> void:
@@ -718,6 +751,11 @@ func _exit_tree() -> void:
 		feed.wait_for(WAIT_FOR, false)
 	if _sounds != null:
 		_sounds.stop()
+	_hush_films()
+	for l in _loads.values():
+		if int((l as Dictionary)["task"]) >= 0:
+			WorkerThreadPool.wait_for_task_completion(int((l as Dictionary)["task"]))
+	_loads = {}
 	if stage != null and is_instance_valid(stage) and not _stage_was.is_empty():
 		for key in _stage_was:
 			stage.set(key, _stage_was[key])
@@ -769,6 +807,7 @@ func _captioned(w0: int, w1: int, _t: float) -> bool:
 
 func advance(_features, delta: float, _bookend: float) -> void:
 	var t := maxf(feed.show_time(), 0.0)
+	_dt = delta
 	_ensure_doc()
 	if _build_task >= 0 and WorkerThreadPool.is_task_completed(_build_task):
 		WorkerThreadPool.wait_for_task_completion(_build_task)
@@ -856,8 +895,9 @@ func _ensure_doc() -> void:
 	var start: PackedStringArray = d.get("start_words", PackedStringArray()) \
 		if d.get("start_words") is PackedStringArray else PackedStringArray()
 	var seed := int(dispatch.get("seed", 0))
-	var key := "%d|%d|%d|%d|%s" % [src.hash(), String(dispatch.get("head", "")).hash(),
-		hash(dispatch.get("pictures", {})), hash(dispatch.get("clips", {})), " ".join(start)]
+	var key := "%d|%d|%d|%d|%d|%s" % [src.hash(), String(dispatch.get("head", "")).hash(),
+		hash(dispatch.get("pictures", {})), hash(dispatch.get("clips", {})), hash(DispatchScript.lengths_of(dispatch.get("films", {})
+		if dispatch.get("films") is Dictionary else {})), " ".join(start)]
 	if key == _doc_key:
 		if seed != _doc_seed:
 			_doc_seed = seed
@@ -940,7 +980,7 @@ func reseed(seed: int) -> void:
 	_build_set(_labels, _seed)
 
 
-## Load a note: [param source] (its text, its marks in it) and [param dispatch] (`{seed, pictures, clips, head}`, any missing:
+## Load a note: [param source] (its text, its marks in it) and [param dispatch] (`{seed, pictures, clips, films, head}`, any missing:
 ## `head` the note's frontmatter, put on words that come without it); for a reading started mid-way its first words
 ## [param start] (normalized), [param near] the index they are about, [param since] how far into the reading it starts
 ## (seconds; 0 when not known). Public for a gate, which hands it one by hand.
@@ -951,13 +991,17 @@ func load_note(text: String, dispatch: Dictionary, start := PackedStringArray(),
 	_clutter = clutter_of(seed)
 	# The note read once: a seek starts the reading again part way and hands the same words over, and reading them (every
 	# mark, every sentence's end, each glass's words) is a quarter of a second of this thread for a long note.
-	var read := _parsed.is_empty() or source != _parsed_of
+	var films: Dictionary = dispatch.get("films", {}) if dispatch.get("films") is Dictionary else {}
+	var heard := source + "\n" + JSON.stringify(DispatchScript.lengths_of(films))
+	var read := _parsed.is_empty() or heard != _parsed_of
+	_take_films(films)
 	if read:
-		_parsed_of = source
-		_parsed = DispatchScript.parse(source)
+		_parsed_of = heard
+		_parsed = DispatchScript.parse(source, films)
 		_ends = DispatchScript.sentence_ends(_parsed)
 		_est = PackedFloat32Array()
 	_actions = _parsed["actions"]
+	_index_kinds()
 	_spans = _parsed["spans"]
 	_moves = LetterMedium.moves_of(_spans, _seed)
 	for i in _spans.size():
@@ -1505,8 +1549,12 @@ func _build_attention() -> void:
 				_attn.append({"t0": t, "t1": INF, "spot": _spot("radar"), "sticky": true})
 			"bell":
 				_attn.append({"t0": t, "t1": _bell_at(i) + 1.5, "spot": _spot("terminal")})
-			"lamp":
+			"lamp", "power":
 				_attn.append({"t0": t, "t1": e + 2.5, "spot": _spot("home")})
+			"play":
+				if bool(a.get(DispatchScript.UNWATCHED, false)) or not SPOTS.has(String(a["screen"])):
+					continue
+				_attn.append({"t0": t, "t1": e + FILM_WAKE + FILM_HOLD, "spot": _spot(String(a["screen"]))})
 			"fade":
 				# up from the black on the clock: the camera is there in the dark, holds while its cards turn and a beat,
 				# then eases to the desk
@@ -1621,8 +1669,10 @@ static func _look_key(a: Dictionary) -> String:
 			return "phone"
 		"hang_up":
 			return "phones"
-		"text", "reply", "lift", "lamp":
+		"text", "reply", "lift", "lamp", "power":
 			return "home"
+		"play":
+			return "" if bool(a.get(DispatchScript.UNWATCHED, false)) else String(a["screen"])
 		"fade":
 			return "clock" if not bool(a["to"]) and int(a.get("clock", -1)) >= 0 else ""
 		"tablet":
@@ -1841,6 +1891,20 @@ func _build_sound() -> void:
 				out.append({"t": rung, "t1": rung + DispatchSounds.BELL_LEN, "kind": "bell", "ears": DispatchSounds.ears_of(term_at)})
 			"lamp":
 				out.append({"t": t + DispatchScript.LAMP_AT / _sp[i], "what": "lamp", "at": _set.desk_at("lamp")})
+			"power":
+				var at := t + POWER_AT / _sp[i]
+				out.append({"t": at, "what": "power_on" if bool(a["on"]) else "breaker", "at": term_at})
+				if not bool(a["on"]):
+					# the receiver dead until the power comes back: no hiss, no storm
+					var back := INF
+					for k in range(i + 1, _actions.size()):
+						var b: Dictionary = _actions[k]
+						if String(b["kind"]) == "power" and bool(b["on"]):
+							back = _t0[k] + POWER_AT / _sp[k] if _t0[k] < INF else INF
+							break
+					out.append({"t": at, "t1": back if back < INF else at + 1e6, "kind": "unpowered"})
+			"play":
+				out.append({"t": t + 0.05, "what": "crt", "at": term_at if String(a["screen"]) == "terminal" else _set.desk_at(String(a["screen"]))})
 
 			"tablet":
 				# lifted as the hand takes it; heard on the desk as it is laid there
@@ -1906,6 +1970,270 @@ func sound_rev() -> int:
 	return _sound_rev
 
 
+# --- the power, the environment, the films ----------------------------------------------------------------------------
+
+## How much of its power the desk has at [param t] (0 to 1): whole until a `power: off`, every glow dying over [constant
+## POWER_FADE] from its thunk ([constant POWER_AT] into its rest), flickering as it goes; a `power: on` brings it back as quickly.
+func power_at(t: float) -> float:
+	var lit := 1.0
+	for i in _of_kind.get("power", PackedInt32Array()):
+		var a: Dictionary = _actions[i]
+		if _t0[i] == INF:
+			continue
+		var at := _t0[i] + POWER_AT / _sp[i]
+		if at > t:
+			continue
+		var u := clampf((t - at) / POWER_FADE, 0.0, 1.0)
+		lit = lerpf(lit, 1.0 if bool(a["on"]) else 0.0, u)
+		if u < 1.0 and not bool(a["on"]):
+			lit *= 0.5 + 0.5 * float(fposmod((t - at) * 23.0, 1.0) < 0.65)
+	return lit
+
+
+## Each Environment element's share of itself at [param t]: its place in the block's `elements` -> 0 to 1 (-1 the hollow's own
+## shaft, where the block chooses no shafts and a mark names them), as each `environment:` mark switched it, eased over its seconds;
+## before the first mark that names it, the other way. An element no mark names is not in it (whole).
+func env_levels(t: float) -> Dictionary:
+	var out := {}
+	for i in _of_kind.get("environment", PackedInt32Array()):
+		var a: Dictionary = _actions[i]
+		var begun := _t0[i] < INF and _t0[i] <= t
+		var u := clampf((t - _t0[i]) / maxf(float(a["secs"]), 1e-3), 0.0, 1.0) if begun else 0.0
+		for name in (a["set"] as Dictionary):
+			var to := 1.0 if bool((a["set"] as Dictionary)[name]) else 0.0
+			for e in _env_named(String(name)):
+				if not out.has(e):
+					out[e] = 1.0 - to
+				if begun:
+					out[e] = lerpf(float(out[e]), to, u)
+	return out
+
+
+## The elements [param name] names in what is round the desk ([method Surroundings.named]); `shafts` with none chosen, the hollow's
+## own (-1).
+func _env_named(name: String) -> Array:
+	var out := Array(Surroundings.named(_surround, name))
+	if out.is_empty() and name.strip_edges().to_lower() == "shafts" and not Surroundings.has_shafts(_surround):
+		out.append(-1)
+	return out
+
+
+## The films handed in ([param films]: what each `play` plays -> its film): a player kept for each that is the same film, the rest let go.
+func _take_films(films: Dictionary) -> void:
+	for what in _players.keys():
+		var was: Dictionary = _films.get(what, {})
+		var now: Dictionary = films.get(what, {})
+		if String(was.get("video", "")) != String(now.get("video", "")) or float(was.get("secs", 0.0)) != float(now.get("secs", 0.0)):
+			(_players[what] as ScreenFilm).stop()
+			_players.erase(what)
+	for what in _shows.keys():
+		var was: Dictionary = _films.get(what, {})
+		var now: Dictionary = films.get(what, {})
+		if String(was.get("song", "")) != String(now.get("song", "")) or String(was.get("medium", "")) != String(now.get("medium", "")) \
+				or String(was.get("reveal", "")) != String(now.get("reveal", "")) \
+				or JSON.stringify(was.get("storyboard", {})) != JSON.stringify(now.get("storyboard", {})):
+			_let_go(String(what))
+	_films = films.duplicate(true)
+	for what in _films:
+		var f: Dictionary = _films[what]
+		if String(f.get("kind", "")) == "note" and bool(f.get("ready", false)) and not _loads.has(what) and not f.has("stream"):
+			_load_note(String(what))
+
+
+## A note's song and its bake read ([method NestedShow.prepared]) on a worker live, here in a render; kept on its record once read.
+func _load_note(what: String) -> void:
+	var note: Dictionary = (_films[what] as Dictionary).duplicate()
+	var box := {}
+	if TablePhysics.render_waits():
+		box["note"] = (load(NESTED) as GDScript).call("prepared", note)
+		_loads[what] = {"task": -1, "box": box}
+	else:
+		var nested: GDScript = load(NESTED)
+		_loads[what] = {"task": WorkerThreadPool.add_task(func() -> void: box["note"] = nested.call("prepared", note)), "box": box}
+
+
+## The notes whose song and bake are read by now, landed on their records.
+func _land_notes() -> void:
+	for what in _loads.keys():
+		var l: Dictionary = _loads[what]
+		var task := int(l["task"])
+		if task >= 0:
+			if not WorkerThreadPool.is_task_completed(task):
+				continue
+			WorkerThreadPool.wait_for_task_completion(task)
+		_loads.erase(what)
+		var got: Dictionary = (l["box"] as Dictionary).get("note", {})
+		if _films.has(what) and got.get("stream") != null:
+			_films[what] = got
+
+
+## A note's show let go.
+func _let_go(what: String) -> void:
+	if _shows.has(what):
+		var show: Node = _shows[what]
+		show.call("stop")
+		show.queue_free()
+		_shows.erase(what)
+
+
+## The film up on screen [param key] at [param t]: `{i, what, at (seconds into it), power (its glass: waking, then going down), mono,
+## playing, note}`, {} for none - from a `play` on it to its last frame and a beat, unless something else is put on that screen first.
+## What is not ready is the screen's static (`snow`) from its `play` on.
+func film_at(key: String, t: float) -> Dictionary:
+	var out := {}
+	for i in _of_kind.get("play", PackedInt32Array()):
+		var a: Dictionary = _actions[i]
+		if _t0[i] == INF or _t0[i] > t or String(a["screen"]) != key:
+			continue
+		var cut := int(_cut_by.get(i, -1))
+		var film: Dictionary = _films.get(String(a["what"]), {})
+		var secs := float(film.get("secs", 0.0))
+		var since := t - _t0[i]
+		var at := since - FILM_WAKE
+		var gone := secs + FILM_HOLD
+		if cut >= 0 and _t0[cut] <= t:
+			out = {}
+			continue
+		if not bool(film.get("ready", false)) or (String(film.get("kind", "")) == "note" and film.get("stream") == null):
+			# not ready (a note's song not heard yet, a file not read, nothing by that name): the glass wakes on its static, as a
+			# clip not imported does, until something else is put on it
+			out = {"i": i, "what": String(a["what"]), "at": 0.0, "mono": false, "snow": true, "playing": false,
+				"power": clampf(since / FILM_WAKE, 0.0, 1.0)}
+			continue
+		if at > gone + FILM_WAKE:
+			out = {}
+			continue
+		out = {"i": i, "what": String(a["what"]), "note": String(film.get("kind", "")) == "note",
+			"at": clampf(at, 0.0, maxf(secs - 0.001, 0.0)), "mono": bool(a.get(DispatchScript.MONO, false)),
+			"power": clampf(since / FILM_WAKE, 0.0, 1.0) * clampf((gone + FILM_WAKE - at) / FILM_WAKE, 0.0, 1.0),
+			"playing": at >= 0.0 and at < secs}
+	return out
+
+
+## The actions of the kinds the power, the Environment and the films are read from, each list in order, and what cuts each film
+## short: the next action that puts anything else on its screen (a picture, a live picture, `off`; on the terminal, its program).
+func _index_kinds() -> void:
+	var by := {"play": PackedInt32Array(), "power": PackedInt32Array(), "environment": PackedInt32Array()}
+	_cut_by = {}
+	for i in _actions.size():
+		var kind := String((_actions[i] as Dictionary)["kind"])
+		if by.has(kind):
+			var list: PackedInt32Array = by[kind]
+			list.append(i)
+			by[kind] = list
+	_of_kind = by
+	for i in _of_kind["play"]:
+		var key := String((_actions[i] as Dictionary)["screen"])
+		_cut_by[i] = -1
+		for k in range(i + 1, _actions.size()):
+			var b: Dictionary = _actions[k]
+			var kind := String(b["kind"])
+			if (kind in ["picture", "live", "off", "play"] and String(b.get("screen", "")) == key) \
+					or (key == "terminal" and kind in ["session", "type", "strike", "sleep"]):
+				_cut_by[i] = k
+				break
+
+
+## The player of film [param what], made the first time it is shown.
+func _player_of(what: String) -> ScreenFilm:
+	if not _players.has(what):
+		_players[what] = ScreenFilm.new(_films.get(what, {}))
+	return _players[what]
+
+
+## Glass [param m] showing [param film] ([method film_at]): the frame due (waited for in a render), its glass waking and going down;
+## in the screen's own phosphor where it is told `mono`.
+func _show_film(m: ShaderMaterial, film: Dictionary) -> void:
+	if bool(film.get("snow", false)):
+		m.set_shader_parameter("has_face", false)
+		m.set_shader_parameter("snow", 0.85)
+		m.set_shader_parameter("mono", 0.0)
+		m.set_shader_parameter("frame", floor(_now * 24.0))
+		m.set_shader_parameter("power", float(film["power"]))
+		return
+	var tex: Texture2D = null
+	if bool(film.get("note", false)):
+		var show: Node = _shows.get(String(film["what"]))
+		tex = show.call("texture") if show != null else null
+	else:
+		tex = _player_of(String(film["what"])).frame_at(float(film["at"]), TablePhysics.render_waits())
+	m.set_shader_parameter("has_face", tex != null)
+	if tex != null:
+		m.set_shader_parameter("face", tex)
+	m.set_shader_parameter("snow", 0.0)
+	m.set_shader_parameter("mono", 1.0 if bool(film["mono"]) else 0.0)
+	m.set_shader_parameter("power", float(film["power"]))
+
+
+## The terminal's glass: a film on it ([param film]) shows in place of its program; else its program's face, as lit as the desk has
+## power.
+func _pose_terminal(film: Dictionary) -> void:
+	var m: ShaderMaterial = _mats.get("terminal")
+	if m == null:
+		return
+	if not film.is_empty():
+		_show_film(m, film)
+		return
+	m.set_shader_parameter("has_face", true)
+	m.set_shader_parameter("face", _screens.terminal.get_texture())
+	m.set_shader_parameter("mono", 0.0)
+	m.set_shader_parameter("snow", 0.0)
+	m.set_shader_parameter("power", _power_now)
+
+
+## Everything on the desk that runs on the grid at the power it has ([method PropRig.set_power]): its lights and its glowing parts,
+## the radar's and the oscilloscope's glass, the receiver's dial lamp. What runs on its batteries ([constant BATTERY]) and a screen a
+## film plays on ([param on_glass] the terminal's) stay lit.
+func _pose_power(on_glass: Dictionary) -> void:
+	for k in _set.rigs:
+		if String(k) in BATTERY:
+			continue
+		var p := _power_now
+		if String(k) == "terminal":
+			p = maxf(p, float(on_glass.get("power", 0.0)))
+		elif _film_now.has(String(k)):
+			p = maxf(p, float((_film_now[String(k)] as Dictionary)["power"]))
+		(_set.rigs[k] as PropRig).set_power(p)
+	for key in ["radar", "scope"]:
+		if _mats.has(key):
+			(_mats[key] as ShaderMaterial).set_shader_parameter("power", _power_now)
+	if _set.dial != null and _set.dial.material_override is StandardMaterial3D:
+		(_set.dial.material_override as StandardMaterial3D).emission_energy_multiplier = DispatchSet.DIAL_GLOW * _power_now
+
+
+## Each note up on a screen played inside the desk at its moment ([NestedShow]: its scenes stepped, its song heard while it plays,
+## held while the show is); a note gone from every screen let go.
+func _play_notes() -> void:
+	var up := {}
+	for key in _film_now:
+		var f: Dictionary = _film_now[key]
+		if not bool(f.get("note", false)) or bool(f.get("snow", false)):
+			continue
+		var what := String(f["what"])
+		up[what] = true
+		if not _shows.has(what):
+			var show: Node = (load(NESTED) as GDScript).new(_films[what])
+			add_child(show)
+			_shows[what] = show
+		(_shows[what] as Node).call("play_at", float(f["at"]), _dt, true, bool(f["playing"]), feed.paused())
+	for what in _shows.keys():
+		if not up.has(what):
+			_let_go(String(what))
+
+
+## Each video file's sound in the room while its picture plays ([method ScreenFilm.hear]), held while the show is.
+func _hear_films(_t: float) -> void:
+	var playing := {}
+	for key in _film_now:
+		var f: Dictionary = _film_now[key]
+		if bool(f["playing"]) and not bool(f.get("note", false)):
+			playing[String(f["what"])] = float(f["at"])
+	for what in _films:
+		if String((_films[what] as Dictionary).get("kind", "")) != "file" or (not _players.has(what) and not playing.has(what)):
+			continue
+		_player_of(String(what)).hear(float(playing.get(what, -1.0)), self, playing.has(what), feed.paused(), TablePhysics.render_waits())
+
+
 # --- the desk at a moment ---------------------------------------------------------------------------------------------
 
 ## Everything on the desk at [param t]: the phones, the terminal, the radar, the receiver, the printer, the screens, the
@@ -1914,17 +2242,29 @@ func sound_rev() -> int:
 ## ([method DispatchSet.pose]).
 func _pose(t: float) -> void:
 	_feeds = {}
+	_power_now = power_at(t)
+	_land_notes()
+	_film_now = {}
+	if not (_of_kind.get("play", PackedInt32Array()) as PackedInt32Array).is_empty():
+		for key in DispatchScript.FILM_SCREENS:
+			var f := film_at(String(key), t)
+			if not f.is_empty():
+				_film_now[String(key)] = f
 	_pose_phones(t)
 	_screens.show_terminal(terminal_at(t))
+	_play_notes()
+	var on_glass: Dictionary = _film_now.get("terminal", {})
+	_pose_terminal(on_glass)
 	_screens.show_radar(radar_at(t))
 	var st := storm_at(t)
 	var voice := float(st.get("voice", 0.0))
 	_screens.show_scope({"t": snappedf(t, 1.0 / 30.0), "level": float(st.get("level", 0.0)), "storm": String(st.get("storm", "")),
 		"voice": voice})
 	# what the receiver hears: the storm, swelling in a word said over it, never quite still
-	_feeds["receiver"] = {"signal": clampf(0.08 + float(st.get("level", 0.0)) * 0.85 + voice * 0.45 + 0.03 * sin(t * 1.3), 0.0, 1.0)}
-	# what the screen throws on the desk: as much as its glass is lit, never a whole screen's worth for a cursor alone
-	_feeds["terminal"] = {"lit": DispatchTerminal.lit_share(terminal_at(t))}
+	_feeds["receiver"] = {"signal": clampf(0.08 + float(st.get("level", 0.0)) * 0.85 + voice * 0.45 + 0.03 * sin(t * 1.3), 0.0, 1.0) * _power_now}
+	# what the screen throws on the desk: as much as its glass is lit, never a whole screen's worth for a cursor alone; a film's
+	# picture, a screenful
+	_feeds["terminal"] = {"lit": maxf(DispatchTerminal.lit_share(terminal_at(t)) * _power_now, 0.6 * float(on_glass.get("power", 0.0)))}
 	_pose_printer(t)
 	_pose_screens(t)
 	_pose_clock(t)
@@ -1932,12 +2272,17 @@ func _pose(t: float) -> void:
 	_pose_switch(t)
 	_pose_mug(t)
 	_feeds["radar"] = {"gain": gain_at(t)}
-	_feeds["lamp"] = {"lit": lamp_at(t) * _lamp_share}
+	_feeds["lamp"] = {"lit": lamp_at(t) * _lamp_share * _power_now}
+	_pose_power(on_glass)
 	_set.pose(t, _feeds)
 	_roots.grow(t)
 	if _air != null:
 		_air.tick(t)
-	Surroundings.tick_rays(_rays, t)
+	var levels := env_levels(t)
+	Surroundings.tick_rays(_rays, t, levels)
+	if _crack != null:
+		_crack.light_energy = _crack_energy * float(levels.get(-1, 1.0))
+	_hear_films(t)
 
 
 ## Where each phone is at [param t], its lid, and what its screens show: in its row, rising to the ear, at the ear, laid open
@@ -2726,6 +3071,11 @@ func _pose_screens(t: float) -> void:
 	var live := false
 	for k in _set.screens:
 		var key := String(k)
+		var film: Dictionary = _film_now.get(key, {})
+		if not film.is_empty() and _mats.has(key):
+			_show_film(_mats[key] as ShaderMaterial, film)
+			_feeds[key] = {"glow": 0.35 * float(film["power"])}
+			continue
 		var shown := ""
 		var since := INF
 		for i in _actions.size():
@@ -2764,7 +3114,7 @@ func _pose_screens(t: float) -> void:
 			# a clip not imported yet: the screen's static, never a still where a moving picture belongs
 			m.set_shader_parameter("snow", 0.85)
 			m.set_shader_parameter("has_face", false)
-			m.set_shader_parameter("power", power)
+			m.set_shader_parameter("power", power * _power_now)
 			m.set_shader_parameter("frame", floor(t * 24.0))
 			_feeds[key] = {"glow": (0.3 + 0.025 * sin(t * 17.0) * sin(t * 5.3)) * power}
 			continue
@@ -2774,7 +3124,7 @@ func _pose_screens(t: float) -> void:
 		if key == "feed" and tex == null:
 			m.set_shader_parameter("snow", 0.85)
 			m.set_shader_parameter("has_face", false)
-			m.set_shader_parameter("power", 1.0)
+			m.set_shader_parameter("power", _power_now)
 			m.set_shader_parameter("brightness", 0.5)
 			m.set_shader_parameter("frame", floor(t * 24.0))
 			_feeds[key] = {"glow": 0.32 + 0.03 * sin(t * 17.0) * sin(t * 5.3)}
@@ -2786,7 +3136,7 @@ func _pose_screens(t: float) -> void:
 		m.set_shader_parameter("has_face", tex != null)
 		if tex != null:
 			m.set_shader_parameter("face", tex)
-		m.set_shader_parameter("power", power if (tex != null or since < 0.0) else 0.0)
+		m.set_shader_parameter("power", (power if (tex != null or since < 0.0) else 0.0) * _power_now)
 		_feeds[key] = {"glow": 0.35 * power if tex != null else 0.0}
 	_live_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if live else SubViewport.UPDATE_DISABLED
 	if live and _live_cam != null:

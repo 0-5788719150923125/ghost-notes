@@ -47,11 +47,13 @@ const LOWEST := 12.0
 ## The shafts of [param elements] (each a shafts element's properties with its `seed`), each beam landing on its own place in one of
 ## [param over] (boxes in the host's space, each's top where they land - shared out by each box's size), falling from [param reach] (m)
 ## up its way - [param toward] (the way to the scene's light) turned as the element says ([method way_of]), strayed by its Spread -
-## [param color] where an element's color is unset: under one node, out of any tree.
+## [param color] where an element's color is unset: under one node, out of any tree. Its meta `levels`: each element's `key` (its place
+## among the scene's elements) -> its material and strength, which [method Surroundings.tick_rays] scales.
 static func build(elements: Array, color: Color, toward: Vector3, over: Array, reach: float) -> Node3D:
 	var root := Node3D.new()
 	root.name = "Rays"
 	var mats: Array = []
+	var levels := {}
 	for e in elements:
 		var v: Dictionary = e
 		var r := RandomNumberGenerator.new()
@@ -69,6 +71,7 @@ static func build(elements: Array, color: Color, toward: Vector3, over: Array, r
 		mat.set_shader_parameter("soft", SOFT)
 		mat.set_shader_parameter("flicker", float(v["flicker"]))
 		mats.append(mat)
+		levels[int(v.get("key", -1))] = {"mats": [mat], "strength": GLOW * float(v["strength"])}
 		var count := int(v["count"])
 		var inner := int(v["inner"])
 		var variety := float(v["variety"])
@@ -96,6 +99,7 @@ static func build(elements: Array, color: Color, toward: Vector3, over: Array, r
 				ray.name = "Ray %d" % root.get_child_count()
 				root.add_child(ray)
 	root.set_meta("shafts", mats)
+	root.set_meta("levels", levels)
 	return root
 
 

@@ -15,7 +15,7 @@ Source: [src/table/environment_card.gd](../src/table/environment_card.gd)
 
 ## What can be round a scene
 
-Surroundings - what is round a scene (next/environment.md; `EnvironmentCard`): a list of elements, each a kind of thing (`KINDS`) - the light the scene is in, shafts of light through its haze, something drifting in its air, something heard round it - with a number of its own and the properties a person set on it. A property never set is drawn from the element's number inside its field's bounds (`Roll`), so a new number is another variant of the same thing. The Dex offers every kind, each light preset and a few looks of shafts (`offers`), and what a person keeps (`EnvironmentLibrary`).
+Surroundings - what is round a scene (next/environment.md; `EnvironmentCard`): a list of elements, each a kind of thing (`KINDS`) - the light the scene is in, shafts of light through its haze, something drifting in its air, something heard round it, fog lying low or filling the air - with a number of its own and the properties a person set on it. A property never set is drawn from the element's number inside its field's bounds (`Roll`), so a new number is another variant of the same thing. The Dex offers every kind, each light preset and a few looks of shafts, beams and fog (`offers`), and what a person keeps (`EnvironmentLibrary`).
 
 The note's `environment:` block: `elements` (each `{kind, seed, name, off, <its fields>}` - `name` where it was kept under one, `off` while it is set aside), `lights` (how strongly each thing in the scene that throws light throws it, by the name its scene gives it: a share) and `heard` (how loud each thing that makes a sound of its own is). `sanitize` makes it safe; a host reads it through `light_of`, `brightness`, `rays`, `effects_of`, `sound_of` and `fog_for`. A scene with no element of a kind keeps its own (its own light, its own shaft, no air, silence).
 
@@ -23,7 +23,7 @@ Every light preset is a row of numbers each host reads as it can: a desk its lam
 
 Source: [src/table/surroundings.gd](../src/table/surroundings.gd)
 
-### Kinds (15)
+### Kinds (17)
 
 Each kind of element (`Surroundings.KINDS`): the Dex's shelf it stands on, and whether a scene has at most one.
 
@@ -31,7 +31,9 @@ Each kind of element (`Surroundings.KINDS`): the Dex's shelf it stands on, and w
 | --- | --- | --- | --- |
 | `light` Light | `light` | yes | The light the scene is in - lamplight, candlelight, daylight, dusk, moonlight or none - and how bright. |
 | `shafts` Light shafts | `light` |  | Shafts of light through the haze - through a window, a crack, the leaves: each a column as wide as the gap it came through, landing in a bright patch its own size. |
+| `beams` Colored beams | `light` |  | Beams of colored light from fixtures hung high over the scene, as a stage's or a club's: some hold still and some sweep, each keeps a color a while and moves on to another, some strobe. |
 | `haze` Haze | `air` |  | A bank of haze far off, out of focus behind the work: the room's depth, and what light shafts fall through. |
+| `fog` Fog | `air` |  | Fog through the scene - lying low on the ground or filling the air, one even sheet or patches with clear air between, still, carried on a wind or swaying to and fro. |
 | `dust` Dust | `air` |  | Motes of dust drifting through the light, barely there. |
 | `pixies` Pixies | `air` |  | Tiny bright points of colored light that dart and drift, alone or in twos and threes: magic in the air. |
 | `fireflies` Fireflies | `air` |  | Slow, low sparks that blink on for a moment and off for longer. |
@@ -68,6 +70,27 @@ Shafts offered on the Dex beside the kind as it rolls (`Surroundings.SHAFT_LOOKS
 | `window` Through a window | Two broad, still beams, a few narrower shafts bright inside each. | `count` 2, `width` 0.65, `inner` 3, `variety` 0.25, `flicker` 0, `spread` 0 |
 | `crack` Through a crack | One narrow shaft from high up, a thinner, brighter one down its middle. | `count` 1, `width` 0.18, `inner` 1, `variety` 0, `flicker` 0, `spread` 0 |
 
+### Looks of colored beams (3)
+
+Beams offered on the Dex beside the kind as it rolls (`Surroundings.BEAM_LOOKS`), each with some properties set.
+
+| Look | What it is | Set |
+| --- | --- | --- |
+| `disco` Disco | A dozen beams in the club's colors, most of them sweeping, changing color every second or two, a few strobing. | `count` 12, `palette` club, `moving` 0.75, `sweep` 32, `speed` 0.45, `hold` 1.6, `variety` 0.7, `strobe` 0.25, `width` 0.3 |
+| `stage` Stage | Six broad, still beams, each holding its warm color a long while. | `count` 6, `palette` warm, `moving` 0, `hold` 9, `variety` 0.5, `strobe` 0, `width` 0.7, `spread` 9, `blend` 0.6 |
+| `lasers` Lasers | Many thin beams that barely open, sweeping quickly, in every hue. | `count` 20, `palette` rainbow, `moving` 0.9, `sweep` 40, `speed` 0.75, `hold` 1, `variety` 0.4, `strobe` 0.1, `width` 0, `spread` 0.5, `blend` 0 |
+
+### Looks of fog (4)
+
+Fog offered on the Dex beside the kind as it rolls (`Surroundings.FOG_LOOKS`), each with some properties set.
+
+| Look | What it is | Set |
+| --- | --- | --- |
+| `ground` Ground fog | A low layer lying on the ground, thinning fast above it, carried gently on a breeze and swaying slowly. | `density` 0.6, `height` 35, `settle` 0.9, `patches` 0.3, `patch` 2, `activation` smooth, `wind` 0.15, `gusts` 0.3, `stretch` 0.5, `sway` 0.25, `pace` 16, `breathe` 0.3, `chaos` 0.25 |
+| `thick` Thick fog | Fog filling all the air, as thick high up as on the ground, barely moving. | `density` 0.7, `height` 300, `settle` 0.1, `patches` 0, `activation` smooth, `wind` 0.05, `sway` 0, `breathe` 0, `chaos` 0.1 |
+| `patchy` Patchy mist | Islands of mist with clear air between them, drifting slowly. | `density` 0.55, `height` 80, `settle` 0.6, `patches` 0.75, `patch` 1.6, `activation` billows, `wind` 0.12, `sway` 0.1, `chaos` 0.35 |
+| `rolling` Rolling bank | A bank rolling in on a gusting wind, billowing and turning over, drawn out in streaks. | `density` 0.65, `height` 120, `settle` 0.5, `patches` 0.2, `activation` billows, `rolls` 0.8, `wind` 0.5, `gusts` 0.6, `stretch` 0.6, `chaos` 0.5 |
+
 ## What each can be told
 
 A property set stays; one left unset is drawn from the element's own number inside the bounds it is rolled in (`Roll`), so Roll gives another of the same thing.
@@ -94,13 +117,60 @@ A property set stays; one left unset is drawn from the element's own number insi
 | `flicker` Flicker | How much they shimmer, as light through moving leaves does. | `float` | 0 to 1 | 0 to 0.3 |
 | `color` Color | Their color; unset, the light's own. | `color` |  | never: its default until set |
 
-### Haze (`FOG_FIELDS`)
+### Colored beams (`BEAM_FIELDS`)
+
+Its Colors' choices are the beams' palettes (`StageBeams.PALETTES`).
+
+| Property | What it is | Type | Bounds | Rolled in |
+| --- | --- | --- | --- | --- |
+| `count` Beams | How many beams there are. | `int` | 1 to 24 | 5 to 14 |
+| `width` Width | How wide each beam is at its lens, from a laser's to a floodlight's. | `float` | 0 to 1 | 0.15 to 0.5 |
+| `spread` Spread | How much each beam opens as it goes (degrees): 0 a column, more a cone. | `float` | 0 to 15 | 1.5 to 7 |
+| `palette` Colors | The colors the beams draw from. | `enum` | `club`, `rainbow`, `warm`, `cool`, `ice`, `one` | `club`, `rainbow`, `warm`, `cool` |
+| `color` Color | One color for every beam; unset, the palette's. | `color` |  | never: its default until set |
+| `moving` Moving | How many of the beams sweep: 0 all hold still, 1 all move. | `float` | 0 to 1 | 0.35 to 0.85 |
+| `sweep` Sweep | How far a moving beam swings (degrees). | `float` | 0 to 70 | 14 to 45 |
+| `speed` Speed | How fast the moving beams swing: a slow sway to a quick sweep. | `float` | 0 to 1 | 0.2 to 0.6 |
+| `hold` Hold | How long a beam keeps a color before it changes (seconds). | `float` | 0.2 to 20 | 1.2 to 5 |
+| `variety` Variety | How much the beams' holds differ: 0 all change together; 1 some keep theirs four times as long, some change four times as often. | `float` | 0 to 1 | 0.3 to 0.9 |
+| `blend` Blend | How a color gives way to the next: 0 at once, 1 eased over the whole hold. | `float` | 0 to 1 | 0 to 0.4 |
+| `strobe` Strobe | How many of the beams strobe, in bursts. | `float` | 0 to 1 | 0 to 0.3 |
+| `rate` Strobe rate | How many times a second a strobing beam flashes. | `float` | 1 to 15 | 3 to 8 |
+| `strength` Strength | How strongly they light the haze, and the patches where they land. | `float` | 0 to 1 | 0.45 to 0.8 |
+| `turn` Direction | Where round the scene their fixtures hang, turned from where its own light comes from (degrees). | `float` | -180 to 180 | -40 to 40 |
+
+### Haze (`HAZE_FIELDS`)
 
 | Property | What it is | Type | Bounds | Rolled in |
 | --- | --- | --- | --- | --- |
 | `density` Density | How thick the haze is. | `float` | 0 to 1 | 0.3 to 0.6 |
 | `rolls` Rolls | How much it rolls and billows. | `float` | 0 to 1 | 0.2 to 0.6 |
 | `drift` Drift | Which way it drifts, and how fast. | `float` | -1 to 1 | -0.3 to 0.3 |
+
+### Fog (`FOG_FIELDS`)
+
+Its Activation's choices are the fog's curves (`Effects.FOG_SHAPES`).
+
+| Property | What it is | Type | Bounds | Rolled in |
+| --- | --- | --- | --- | --- |
+| `density` Density | How thick it is: a whisper of mist to fog nothing is seen through. | `float` | 0 to 1 | 0.35 to 0.7 |
+| `height` Height | How high it reaches above the ground (cm). | `float` | 5 to 300 | 20 to 90 |
+| `settle` Low lying | How it lies: 0 as thick at its top as on the ground, filling all it reaches; 1 thick on the ground and thinning fast above it. | `float` | 0 to 1 | 0.55 to 0.95 |
+| `patches` Patches | 0 one even sheet; toward 1 patches of fog with clear air between them. | `float` | 0 to 1 | 0 to 0.6 |
+| `patch` Patch size | How big each patch is (m). | `float` | 0.2 to 8 | 0.8 to 3 |
+| `grain` Swirls | How big its swirls and billows are (cm). | `float` | 3 to 200 | 15 to 60 |
+| `activation` Activation | The curve that turns its swirls into fog and clear air: smooth, billows with gaps, thin wisps, sharp-edged clumps, or folds like poured smoke. | `enum` |  | `smooth`, `billows`, `wisps` |
+| `chaos` Chaos | How irregular it all is: 0 even - its sway and gusts regular, its swirls as drawn; 1 wild - swings and gusts of every length, swirls folded into themselves, thick and thin from place to place. | `float` | 0 to 1 | 0.1 to 0.45 |
+| `rolls` Rolls | How much it rolls and turns over as it goes. | `float` | 0 to 1 | 0.15 to 0.6 |
+| `wind` Wind | How fast a wind carries it: 0 still air, 1 a stiff breeze. | `float` | 0 to 1 | 0.05 to 0.35 |
+| `turn` Wind direction | Which way it blows (degrees): 0 left to right as the scene is first seen, 90 toward the viewer, -90 away, 180 right to left. | `float` | -180 to 180 | -60 to 60 |
+| `gusts` Gusts | How much the wind comes and goes: 0 steady; 1 from a lull to gusts twice as strong. | `float` | 0 to 1 | 0.1 to 0.5 |
+| `stretch` Streaks | How far its swirls are drawn out along the wind: 0 round, 1 long streaks. | `float` | 0 to 1 | 0.1 to 0.6 |
+| `sway` Sway | How far it swings back and forth along the wind's way, in slow waves passing through it. | `float` | 0 to 1 | 0 to 0.4 |
+| `pace` Sway pace | How long one swing takes (seconds); it breathes a little slower. | `float` | 2 to 60 | 9 to 22 |
+| `breathe` Breathe | How much it rises and sinks, thinning as it rises and thickening as it sinks. | `float` | 0 to 1 | 0 to 0.35 |
+| `glow` Glow | Light of its own, so it shows where no light falls on it. | `float` | 0 to 1 | 0 to 0.2 |
+| `color` Color | Its color; unset, the light's fog. | `color` |  | never: its default until set |
 
 ### What drifts (`MOTE_FIELDS`)
 

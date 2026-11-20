@@ -48,6 +48,11 @@ const PORTRAIT_QUALITIES := [
 	{"label": "720 x 1280 · 30 fps  (portrait: Shorts, Reels, TikTok)", "w": 720, "h": 1280, "fps": 30, "tag": "720p-portrait", "ss": 1.5},
 	{"label": "1080 x 1920 · 60 fps  (portrait, Full HD)", "w": 1080, "h": 1920, "fps": 60, "tag": "1080p-portrait", "ss": 1.5},
 ]
+## The standard (4:3) presets, an old screen's shape: a terminal's, a television's.
+const STANDARD_QUALITIES := [
+	{"label": "960 x 720 · 30 fps  (4:3, smaller file)", "w": 960, "h": 720, "fps": 30, "tag": "720p-standard", "ss": 1.5},
+	{"label": "1440 x 1080 · 60 fps  (4:3, Full HD)", "w": 1440, "h": 1080, "fps": 60, "tag": "1080p-standard", "ss": 1.5},
+]
 ## A portrait video longer than this is not a Short (seconds).
 const SHORT_MAX := 180.0
 
@@ -1187,6 +1192,11 @@ static func _wav_rate(path: String) -> int:
 	return rate if rate > 0 else Voice.SR
 
 
+## How long the PCM WAV at [param path] plays (seconds; 0 when unreadable) - [method _wav_seconds], for whoever else makes one.
+static func wav_seconds(path: String) -> float:
+	return _wav_seconds(path)
+
+
 ## How long a PCM WAV plays: its `data` chunk over the byte rate its `fmt ` chunk gives (rate x channels x bytes a sample),
 ## the chunks walked in case others come between; 0 when unreadable. Never from an assumed format: a neural voice renders at
 ## its model's rate (Piper's 22050), and a take is stereo when a voice leans ([VoiceFX]).
@@ -1244,11 +1254,14 @@ static func _even(v: float) -> int:
 
 ## The presets a show in [param frame] is exported at.
 static func qualities_for(frame: String) -> Array:
-	return PORTRAIT_QUALITIES if frame == "portrait" else QUALITIES
+	match frame:
+		"portrait": return PORTRAIT_QUALITIES
+		"standard": return STANDARD_QUALITIES
+	return QUALITIES
 
 
-## The quality items as the show's frame has them: a portrait show's two presets in the first two places, the 4K one grayed
-## with why. The items keep their ids.
+## The quality items as the show's frame has them: a portrait or standard show's two presets in the first two places, the
+## 4K one grayed with why. The items keep their ids.
 func _label_qualities() -> void:
 	var list := qualities_for(Director.resolved_frame())
 	for i in QUALITIES.size():
@@ -1258,18 +1271,21 @@ func _label_qualities() -> void:
 		var have := i < list.size()
 		_quality_menu.set_item_text(at, String(list[i].label) if have else String(QUALITIES[i].label) + "  - landscape only")
 		_quality_menu.set_item_disabled(at, not have)
-		_quality_menu.set_item_tooltip(at, "" if have else "No 4K portrait: Shorts stop at 1080p and Instagram at 1920 pixels wide.")
+		_quality_menu.set_item_tooltip(at, "" if have else ("No 4K portrait: Shorts stop at 1080p and Instagram at 1920 pixels wide."
+			if Director.resolved_frame() == "portrait" else "No 4K in 4:3: an old screen's shape stops at 1080 lines."))
 
 
 ## The OS window an export records in, and the override's stretch: a window shaped like the frame. Under the project's
 ## `expand` aspect Godot widens the viewport to the window's shape, so a 1080x1920 render in a 480x270 window would lose the
-## edges of the picture (next/notes.md, "the trap"). A portrait override shapes the window like the frame and says
-## `aspect="keep"`; a landscape one is written plainly.
+## edges of the picture (next/notes.md, "the trap"). A portrait or standard override shapes the window like the frame and
+## says `aspect="keep"`; a landscape one is written plainly.
 static func override_text(w: int, h: int) -> String:
-	var portrait := h > w
-	var win := Vector2i(270, 480) if portrait else Vector2i(480, 270)
+	var wide := w * 9 == h * 16
+	var win := Vector2i(480, 270)
+	if not wide:
+		win = Vector2i(270, _even(270.0 * float(h) / float(maxi(w, 1)))) if h > w else Vector2i(_even(270.0 * float(w) / float(maxi(h, 1))), 270)
 	var t := "[display]\n\nwindow/size/viewport_width=%d\nwindow/size/viewport_height=%d\nwindow/size/window_width_override=%d\nwindow/size/window_height_override=%d\nwindow/stretch/mode=\"viewport\"\n" % [w, h, win.x, win.y]
-	if portrait:
+	if not wide:
 		t += "window/stretch/aspect=\"keep\"\n"
 	return t + "\n[editor]\n\nmovie_writer/video_quality=1.0\n"
 

@@ -389,6 +389,10 @@ TikTok, YouTube Shorts and Reels want 9:16. Two standards, no more, and export i
 portrait` (1080x1920), kept beside `medium` in the note's picture block. The Director keeps it as it
 keeps `medium`, and `--frame` overrides it for one run.
 
+**A third frame, standard 4:3** (`standard`, 1440x1080; exported at 960x720 and 1440x1080): an old screen's shape, a terminal's
+or a television's. Offered by every format but Likeness: a set seen through a camera keeps its height and loses its sides. A note played on
+the Dispatch desk's terminal is drawn at 4:3 (`NestedShow`).
+
 **Each presentation declares the frames it supports**, in a `Medium.FRAMES` table beside `Medium.USES`.
 The pickers offer only what fits, and a note that asks for a frame its presentation lacks falls back to
 landscape and says so on its card.

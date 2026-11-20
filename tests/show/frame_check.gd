@@ -1,6 +1,6 @@
 extends Node
 
-## frame_check - two frames, landscape and portrait (next/notes.md): the exporter, the stage and the
+## frame_check - three frames, landscape, standard 4:3 and portrait (next/notes.md): the exporter, the stage and the
 ## subtitles, measured.
 ##
 ##   tests/run_boot_probe.sh tests/show/frame_check.gd 120
@@ -8,10 +8,11 @@ extends Node
 ## The exporter: a landscape override written byte for byte as it always was; a portrait one shapes its
 ## window like the frame (270x480) and says `aspect="keep"` (a portrait render in a landscape window is
 ## widened by the project's `expand` aspect); every preset's render size even (yuv420p refuses odd); the
-## portrait presets the landscape ones turned, with no 4K; the thumbnail cut at the frame's shape.
+## portrait presets the landscape ones turned, with no 4K; a standard override's window 4:3, its presets 4:3; the
+## thumbnail cut at the frame's shape.
 ##
-## The frame: portrait only where the medium has one (full frame); a medium without one plays landscape
-## whatever was asked.
+## The frame: portrait only where the medium has one (full frame), standard where it has one (most); a medium
+## without one plays landscape whatever was asked.
 ##
 ## The stage is the frame: through the real main scene, a song note's stage (a note of the gate's own,
 ## with a Medium, opened from the list) is the frame's shape (16:9, or 9:16 in portrait), as large as the
@@ -64,7 +65,12 @@ func _exporter() -> void:
 	_ok(p.contains("window_width_override=270") and p.contains("window_height_override=480"),
 		"...in a window shaped like the frame")
 	_ok(p.contains("window/stretch/aspect=\"keep\""), "...and keeps its aspect")
-	for list in [Exporter.QUALITIES, Exporter.PORTRAIT_QUALITIES]:
+	var std := Exporter.override_text(2160, 1620)
+	_ok(std.contains("window_width_override=360") and std.contains("window_height_override=270") and std.contains("window/stretch/aspect=\"keep\""),
+		"a standard (4:3) override shapes its window 4:3 and keeps its aspect")
+	_ok(Exporter.qualities_for("standard") == Exporter.STANDARD_QUALITIES and Exporter.STANDARD_QUALITIES.all(
+		func(q: Dictionary) -> bool: return int(q.w) * 3 == int(q.h) * 4), "a standard show's presets are 4:3")
+	for list in [Exporter.QUALITIES, Exporter.PORTRAIT_QUALITIES, Exporter.STANDARD_QUALITIES]:
 		for q in list:
 			var w := int(int(q.w) * float(q.get("ss", 1.0)))
 			var h := int(int(q.h) * float(q.get("ss", 1.0)))
@@ -94,6 +100,11 @@ func _frames() -> void:
 	_ok(Director.frame == "portrait", "...and the asking is kept for a medium that has one")
 	for key in Medium.REGISTRY:
 		_ok(Medium.supports(String(key), "landscape"), "%s shows in landscape" % key)
+	Director.set_medium("dispatch")
+	Director.set_frame("standard")
+	_ok(Director.resolved_frame() == "standard", "the Dispatch desk shows in standard 4:3")
+	Director.set_medium("full")
+	_ok(Director.resolved_frame() == "standard", "...and so does full frame")
 	Director.set_medium(keep_m)
 	Director.set_frame(keep_f)
 

@@ -18,6 +18,8 @@ var _faces := {}                 # a face's name -> its record ([method Props.bu
 var _lights: Array = []          # each {name, node, energy}
 var _now := {}                   # "<work index>:<channel>" -> its value as last posed
 var _light_scale := 1.0          # how strongly its lights throw their light, over what its parts say ([method set_light_scale])
+var _power := 1.0                # how much of its power it has: its lights and its glowing parts at that share ([method set_power])
+var _glows := {}                 # a glowing material no part works -> its glow as built, found the first time the power changes
 
 
 ## The rig of thing [param b], as [method Props.build] (or [method PropMakes.made]) handed it back.
@@ -88,8 +90,36 @@ func set_light_scale(k: float) -> void:
 	for l in _lights:
 		if not under.has(l):
 			var ln: Light3D = (l as Dictionary)["node"]
-			ln.light_energy = float((l as Dictionary)["energy"]) * _light_scale
-			ln.visible = _light_scale > 0.001
+			ln.light_energy = float((l as Dictionary)["energy"]) * _light_scale * _power
+			ln.visible = _light_scale * _power > 0.001
+
+
+## This make with [param k] of its power (0 off, 1 on): every light it has and every part that glows of itself (a power light, a lit
+## face its scene hands nothing) at that share of what its parts and its build say - a thing unplugged, or the grid gone down. Kept
+## through every pose after.
+func set_power(k: float) -> void:
+	k = clampf(k, 0.0, 1.0)
+	if is_equal_approx(k, _power):
+		return
+	if _glows.is_empty():
+		var worked := {}
+		for wk in _works:
+			for m in (wk as Dictionary)["mats"]:
+				worked[m] = true
+		for mi in node.find_children("*", "MeshInstance3D", true, false):
+			var mat := (mi as MeshInstance3D).material_override as ShaderMaterial
+			if mat == null or worked.has(mat) or _glows.has(mat):
+				continue
+			var g: Variant = mat.get_shader_parameter("glow")
+			if (g is float or g is int) and float(g) > 0.0:
+				_glows[mat] = float(g)
+	_power = k
+	for mat in _glows:
+		(mat as ShaderMaterial).set_shader_parameter("glow", float(_glows[mat]) * k)
+	for wi in _works.size():
+		if _now.has("%d:glow" % wi):
+			_apply(wi, "glow", float(_now["%d:glow" % wi]))
+	set_light_scale(_light_scale)
 
 
 ## The names of the faces this make has.
@@ -263,14 +293,14 @@ func _apply(wi: int, ch: String, v: float) -> void:
 			wn.transform = _joint(wi) * _scale(wi)
 		"glow":
 			for m in wk["mats"]:
-				(m as ShaderMaterial).set_shader_parameter("glow", v)
+				(m as ShaderMaterial).set_shader_parameter("glow", v * _power)
 		"shown":
 			wn.visible = v > 0.5
 		"light":
 			for l in wk["lights"]:
 				var ln: Light3D = (l as Dictionary)["node"]
-				ln.light_energy = float((l as Dictionary)["energy"]) * maxf(v, 0.0) * _light_scale
-				ln.visible = v * _light_scale > 0.001
+				ln.light_energy = float((l as Dictionary)["energy"]) * maxf(v, 0.0) * _light_scale * _power
+				ln.visible = v * _light_scale * _power > 0.001
 
 
 ## Part [param wi]'s joint as it is posed now ([method Motions]: a hinge turned about its pivot, a slide moved along its axis, each

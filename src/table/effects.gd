@@ -11,7 +11,10 @@ class_name Effects
 ## Everything is a function of show time ([method Air.tick]): a mote's place, a spark's flight and the fog's roll are computed from the
 ## time and the seed, never stepped frame by frame, so a render and a scrub see the same picture. The fog is Godot's own volumetric fog
 ## (a FogVolume per stretch, [constant FOG_SHADER]): lights in it light it, so candles glow through it, and a mote that carries a light
-## makes a colored glow in the fog around it. Sparks fly on the GPU from where and when they were born ([constant SPRITE_SHADER]); motes
+## makes a colored glow in the fog around it. A fog can be told more than a bank is ([constant FOG_MORE]): how low it lies, patches of
+## it, its own gusting wind ([method fog_run]) and a slow sway and breathing, how irregular it all is, and the curve its noise becomes fog
+## through ([constant FOG_SHAPES]) - the Environment's fog tells it all ([Surroundings]); a fog that says none of it is a bank as it
+## always was. Sparks fly on the GPU from where and when they were born ([constant SPRITE_SHADER]); motes
 ## are placed on the CPU, which also moves their lights - but motes that only drift (dust: no light, no visits, no wind, [method
 ## drifts]) wander on the GPU too, from their homes and ways of wandering, so there can be hundreds of them for nothing.
 ##
@@ -66,6 +69,33 @@ const MOTES := {
 		"size": 5.0, "sizes": Vector2(1.5, 9.0), "glows": Vector2(0.8, 1.0), "speed": 1.0, "wander": 1.0, "blink": 0.0,
 		"flicker": 0.0, "rise": 0.0, "light": false, "flight": "zigzag", "hover": 0.2, "drift": 0.08, "airspeed": 1.8, "back": 1.2, "color": "#16130f"},
 }
+
+## How a fog's swirls become fog and clear air - the curve its noise passes through (`effect_fog.gdshader`'s `shape`, numbered in this
+## order; [method fog_activation] is the same curve): `fill` the share of a fog's space it leaves thick, which its density is made up
+## for. Billows is a bank's own.
+const FOG_SHAPES := {
+	"billows": {"label": "Billows", "blurb": "Billows with clear gaps between them.", "fill": 0.45},
+	"smooth": {"label": "Smooth", "blurb": "Soft and nearly even, thicker and thinner but never clear.", "fill": 0.75},
+	"wisps": {"label": "Wisps", "blurb": "Thin strands and veils, clear air round them.", "fill": 0.3},
+	"sharp": {"label": "Sharp-edged", "blurb": "Clumps with hard edges, clear air between.", "fill": 0.45},
+	"folds": {"label": "Folds", "blurb": "Bands folded over one another, as poured smoke lies.", "fill": 0.35},
+}
+## What a fog can be told past a bank's, each `Vector3(default, least, most)`: how low it lies (`settle`: 0.7 thick to a quarter of
+## its height, a bank's), patches and their size (m), how irregular (`chaos`), its own wind (a share of [constant FOG_WIND]), which way
+## (degrees round from left to right, 90 toward the viewer), its gusts, how far its swirls are drawn out along it, its sway (a share of
+## [constant FOG_SWAY]) and how long a swing takes (s), how much it breathes, and how far a line of sight crosses it (m; 0 its region's
+## own depth). Kept only where written: a fog that says none of them is a bank as it always was.
+const FOG_MORE := {"settle": Vector3(0.7, 0.0, 1.0), "patches": Vector3(0.0, 0.0, 1.0), "patch": Vector3(1.5, 0.1, 20.0),
+	"chaos": Vector3(0.0, 0.0, 1.0), "wind": Vector3(0.0, 0.0, 1.0), "turn": Vector3(0.0, -180.0, 180.0), "gusts": Vector3(0.0, 0.0, 1.0),
+	"stretch": Vector3(0.0, 0.0, 1.0), "sway": Vector3(0.0, 0.0, 1.0), "pace": Vector3(14.0, 1.0, 120.0), "breathe": Vector3(0.0, 0.0, 1.0),
+	"sight": Vector3(0.0, 0.0, 20.0)}
+## A fog's fastest wind (m/s) and farthest sway (m, to either side); how much slower than a swing it breathes; the wind's gusts, each
+## `[period s, share]` (the last a share of its chaos), so the wind never runs backward.
+const FOG_WIND := 0.5
+const FOG_SWAY := 0.6
+const FOG_BREATH := 1.618
+const FOG_GUSTS := [[9.0, 0.6], [23.0, 0.4], [3.7, 0.5]]
+const FOG_PROFILE_STEPS := 32
 
 ## What a burst can be: its sprite's shape, how many, how fast they leave (m/s), how widely (the
 ## cone's half-angle, degrees), what pulls on them (m/s2: below 0 they fall, above 0 they rise), how
@@ -232,6 +262,12 @@ static func sanitize(raw: Variant, palette: Array, regions: Array, moments: Arra
 				fx["height"] = Props._num(d.get("height"), 25.0, 1.0, 200.0)
 				fx["grain"] = Props._num(d.get("grain"), 25.0, 3.0, 200.0)
 				fx["glow"] = Props._num(d.get("glow"), 0.0, 0.0, 1.0)
+				for k in FOG_MORE:
+					if d.has(k):
+						var r: Vector3 = FOG_MORE[k]
+						fx[k] = Props._num(d[k], r.x, r.y, r.z)
+				if FOG_SHAPES.has(String(d.get("shape", ""))):
+					fx["shape"] = String(d["shape"])
 			"motes":
 				var look := String(d.get("look", "")).strip_edges().to_lower()
 				var where := _pick(d.get("where", ""), regions)
@@ -401,7 +437,7 @@ static func build(effects: Array, stage: Dictionary, seed: int) -> Air:
 		var salt := hash([seed, i, String(fx.get("name", ""))])
 		match String(fx["kind"]):
 			"fog":
-				air.fogs.append(_fog(fx, stage, air.root))
+				air.fogs.append(_fog(fx, stage, air.root, salt))
 			"motes":
 				var m := _motes(fx, stage, salt, air.root, MAX_LIGHTS - lights)
 				lights += (m["lights"] as Array).size()
@@ -432,7 +468,7 @@ static func _region(stage: Dictionary, name: String) -> AABB:
 	return _info(stage, name)["box"]
 
 
-static func _fog(fx: Dictionary, stage: Dictionary, root: Node3D) -> Dictionary:
+static func _fog(fx: Dictionary, stage: Dictionary, root: Node3D, salt: int) -> Dictionary:
 	var info := _info(stage, String(fx["where"]))
 	var box: AABB = info["box"]
 	var vol := FogVolume.new()
@@ -448,11 +484,35 @@ static func _fog(fx: Dictionary, stage: Dictionary, root: Node3D) -> Dictionary:
 		# `sight`), so a layer two centimeters thick and a bank three meters deep at one density look as thick as each other. The fog's
 		# swirls fill about half of it.
 	var hides := 0.9 * float(fx["density"])
-	mat.set_shader_parameter("density", -log(1.0 - hides) / maxf(float(info["sight"]), 0.02) / 0.45)
+	var more := func(k: String) -> float: return float(fx.get(k, (FOG_MORE[k] as Vector3).x))
+	var shape := String(fx.get("shape", "billows"))
+	var settle := float(more.call("settle"))
+	var through := float(more.call("sight"))
+	if through > 0.0:
+		# Looked through its own depth (a low layer looked down through), as thick as its profile and its shape leave it
+		mat.set_shader_parameter("density", -log(1.0 - hides) / maxf(minf(through, float(info["sight"])), 0.02)
+			/ fog_profile(settle) / float((FOG_SHAPES[shape] as Dictionary)["fill"]))
+	else:
+		mat.set_shader_parameter("density", -log(1.0 - hides) / maxf(float(info["sight"]), 0.02) / 0.45)
 	mat.set_shader_parameter("rolls", float(fx["rolls"]))
 	# Its own slow drift in still air; in a wind it goes with the wind ([member Air.wind]), rising as slowly
-	mat.set_shader_parameter("wind", Vector3(0.0, 0.012, 0.0) if Winds.blows(stage.get("wind", {})) \
+	var blown := Winds.blows(stage.get("wind", {}))
+	mat.set_shader_parameter("wind", Vector3(0.0, 0.012, 0.0) if blown \
 		else Vector3(float(fx["drift"]) * 0.12, 0.012, -0.02 * absf(float(fx["drift"]))))
+	var a := deg_to_rad(float(more.call("turn")))
+	var way := Vector3(cos(a), 0.0, sin(a))
+	var pace := maxf(float(more.call("pace")), 1.0)
+	mat.set_shader_parameter("settle", settle)
+	mat.set_shader_parameter("shape", FOG_SHAPES.keys().find(shape))
+	mat.set_shader_parameter("patches", float(more.call("patches")))
+	mat.set_shader_parameter("patch_size", float(more.call("patch")))
+	mat.set_shader_parameter("way", Vector2(way.x, way.z))
+	mat.set_shader_parameter("stretch", float(more.call("stretch")))
+	mat.set_shader_parameter("sway", float(more.call("sway")) * FOG_SWAY)
+	mat.set_shader_parameter("sway_rate", TAU / pace)
+	mat.set_shader_parameter("breathe", float(more.call("breathe")))
+	mat.set_shader_parameter("breath_rate", TAU / (pace * FOG_BREATH))
+	mat.set_shader_parameter("chaos", float(more.call("chaos")))
 	mat.set_shader_parameter("grain", float(fx["grain"]) * 0.01)
 	mat.set_shader_parameter("floor_y", float(info["floor"]))
 	# a layer thinner than the fog's own grain cannot be seen: a few centimeters at least
@@ -461,7 +521,67 @@ static func _fog(fx: Dictionary, stage: Dictionary, root: Node3D) -> Dictionary:
 	mat.set_shader_parameter("edge", clampf(minf(box.size.x, box.size.z) * 0.25, 0.04, 0.4))
 	vol.material = mat
 	root.add_child(vol)
-	return {"fx": fx, "node": vol, "mat": mat}
+	# its own wind, gusting (none where the light's wind carries it): each gust's phase its number's
+	var r := RandomNumberGenerator.new()
+	r.seed = hash([salt, "fog gusts"])
+	var gusts: Array = []
+	for i in FOG_GUSTS.size():
+		var g: Array = FOG_GUSTS[i]
+		var share := float(g[1]) * (float(more.call("chaos")) if i == FOG_GUSTS.size() - 1 else 1.0)
+		gusts.append([TAU / float(g[0]), share, r.randf() * TAU])
+	var run := {"way": way, "speed": 0.0 if blown else float(more.call("wind")) * FOG_WIND, "gusts": float(more.call("gusts")), "waves": gusts}
+	return {"fx": fx, "node": vol, "mat": mat, "run": run}
+
+
+## How far a fog's own wind ([param run], as [method _fog] keeps it) has carried it by show time [param t] (m): its speed, coming and
+## going by its gusts - a sum of waves whose shares add to one, so at the lull it is still, never blown back - in closed form, so a
+## scrub and a render see it where it is.
+static func fog_run(run: Dictionary, t: float) -> Vector3:
+	var speed := float(run.get("speed", 0.0))
+	if speed <= 0.0:
+		return Vector3.ZERO
+	var waves: Array = run["waves"]
+	var total := 0.0
+	for w in waves:
+		total += float(w[1])
+	var gone := t
+	var g := float(run["gusts"]) / maxf(total, 1e-6)
+	for w in waves:
+		var om := float(w[0])
+		var ph := float(w[2])
+		gone += g * float(w[1]) * (cos(ph) - cos(om * t + ph)) / om
+	return (run["way"] as Vector3) * speed * gone
+
+
+## A fog's share of its thickness at [param up] of its height, as low lying as [param settle] says (`effect_fog.gdshader`'s profile):
+## 0 even to near its top, 0.7 thick to a quarter of it and thinning to its top (a bank's), 1 thinning fast from the ground.
+static func fog_layer(settle: float, up: float) -> float:
+	var h := clampf(up, 0.0, 2.0)
+	return (1.0 - smoothstep((1.0 - settle) / 1.2, 1.0, h)) * exp(-5.0 * maxf(settle - 0.7, 0.0) / 0.3 * h)
+
+
+## The share of a fog's height its profile fills ([method fog_layer] over it, in [constant FOG_PROFILE_STEPS]), so a low lying fog's
+## density is made up for its thinning.
+static func fog_profile(settle: float) -> float:
+	var s := 0.0
+	for i in FOG_PROFILE_STEPS:
+		s += fog_layer(settle, (float(i) + 0.5) / float(FOG_PROFILE_STEPS))
+	return maxf(s / float(FOG_PROFILE_STEPS), 0.02)
+
+
+## How thick a fog of shape [param shape] ([constant FOG_SHAPES]) is where its noise is [param n] (`v` in the shader: the noise and its
+## lift toward the floor) and its bare noise [param bare] (the wisps' ridge): 0 clear to 1 thick. The shader's curves, for its picture.
+static func fog_activation(shape: String, n: float, bare: float) -> float:
+	match shape:
+		"smooth":
+			return lerpf(0.35, 1.0, smoothstep(0.25, 0.8, n))
+		"wisps":
+			return smoothstep(0.72, 0.96, 1.0 - absf(2.0 * bare - 1.0) + (n - bare) * 0.5)
+		"sharp":
+			return smoothstep(0.5, 0.53, n)
+		"folds":
+			return smoothstep(0.3, 0.55, n) * (0.5 + 0.5 * cos(n * 30.0))
+	return smoothstep(0.44, 0.72, n)
 
 
 ## A sprite layer: [param count] quads in one MultiMesh, drawn by [param shader], never culled (its
@@ -1150,7 +1270,7 @@ class Air:
 			vel = Vector3(v.x, 0.0, v.y)
 		for f in fogs:
 			(f["mat"] as ShaderMaterial).set_shader_parameter("show_time", t)
-			(f["mat"] as ShaderMaterial).set_shader_parameter("carried", run)
+			(f["mat"] as ShaderMaterial).set_shader_parameter("carried", run + Effects.fog_run(f["run"], t))
 		for b in bursts:
 			var bm: ShaderMaterial = (b["layer"] as Dictionary)["mat"]
 			bm.set_shader_parameter("show_time", t)

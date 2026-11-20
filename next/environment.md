@@ -1,7 +1,7 @@
 # The Environment
 
-What is round the scene a note is shown in, as one card: a list of elements - its light, shafts of light through its haze, what
-drifts in its air, what is heard round it - each with properties a person sets or a roll draws, and how strongly each thing in it
+What is round the scene a note is shown in, as one card: a list of elements - its light, shafts of light through its haze, fog,
+what drifts in its air, what is heard round it - each with properties a person sets or a roll draws, and how strongly each thing in it
 that throws light throws it. A component (`environment`, a family and hue of its own, needing `places`), its block `environment:`
 ([docs/surroundings.md](../docs/surroundings.md) lists every kind and property).
 
@@ -18,8 +18,8 @@ Built:
   stays in. A property set is pinned; one unset is drawn from the element's own number, shown dimmed. Roll is a new number: another
   variant of the same thing, what is set kept. The number also places what it lays out (where shafts land, where motes wander).
   `PropsCard` shows any section's row `fields` the same way (`PropSection.set_field`), so any prop can expose properties.
-- **The registry** (`Surroundings`): `KINDS` (light, shafts, seven things in the air, six sounds), each with its fields
-  (`LIGHT_FIELDS`, `SHAFT_FIELDS`, `FOG_FIELDS`, `MOTE_FIELDS`, `SOUND_FIELDS`); six light presets (`LIGHTS`, the desk's moods drawn by
+- **The registry** (`Surroundings`): `KINDS` (light, shafts, colored beams, eight things in the air, six sounds), each with its
+  fields (`LIGHT_FIELDS`, `SHAFT_FIELDS`, `BEAM_FIELDS`, `HAZE_FIELDS`, `FOG_FIELDS`, `MOTE_FIELDS`, `SOUND_FIELDS`); six light presets (`LIGHTS`, the desk's moods drawn by
   its number as before; moonlight and no light weigh 0); three looks of shafts the Dex offers (`SHAFT_LOOKS`: through leaves,
   through a window, through a crack). A light and each sound are one to a scene: another added takes its place.
 - **The Dex** (`DexWindow`): its shelves listed down its left side under their category (`ShelfSection.category`: Props, Voices,
@@ -37,6 +37,13 @@ Built:
   by Flicker. Its patch is drawn by the same shader - what the screen shows there made `LANDS` times brighter, as squarely as it faces
   the light, its edge the shaft's - because Godot's light grid drops a spot cone centimeters wide and a light's projector needs a
   shadow map: no glint, no bounce, no shadow behind what it lands on.
+- **Colored beams** (`StageBeams`, `BEAM_FIELDS`, `BEAM_LOOKS`: disco, stage, lasers): a stage's or a club's moving heads, from
+  fixtures on a truss over the scene, drawn by the shafts' shader as a cone opening by its Spread and faded in under its lens (no light:
+  its patch drawn). How many, how wide, the palette (club, rainbow, warm, cool, ice, one color) or one Color, how many sweep and how far
+  and fast (a pan and a tilt, each a swing of its own), how long each keeps a color (Hold) and how much the holds differ (Variety, a
+  quarter to four times), how a color gives way (Blend), how many strobe in bursts and how fast, how strong, where the fixtures hang.
+  A pure function of show time. A host that builds shafts builds beams with them (`Surroundings.rays`); each element's level is its own
+  (`tick_rays`' levels), which a Dispatch script's `environment:` mark switches.
 - **What is heard** (`SOUND_FIELDS`, `Soundscape`): each sound element's properties reach its part of the sound. A sound's own choice
   of what it is (the insects' crickets or cicadas, the sea's shore or dock) is the field `sort`, labeled Kind, handed to the sound as
   its `kind` (`Surroundings._heard_key`): an element's own keys (`OWN_KEYS`) are no property, and a change that would unmake an
@@ -48,6 +55,17 @@ Built:
   can use it (a key and a maker of a `SoundBed`).
 - **Dust** is posed on the GPU (`Effects.drifts`, `MAX_ADRIFT`): 160 at Amount 1 (on the Dispatch desk, whose air reaches round the
   whole hollow, 2.2 times as many), each 2.2 mm, so a view holds more than a few and they read on screen.
+- **Fog** (`FOG_FIELDS`, `FOG_LOOKS`: ground fog, thick fog, patchy mist, rolling bank): Godot's volumetric fog in a FogVolume over
+  the room round the scene, lying on its floor (the Dispatch hollow's ground, a desk's top), drawn by the haze's shader told more
+  (`Effects.FOG_MORE`; a fog that says none of it is a bank as it always was, line for line). How thick, how high (cm), how low
+  it lies (Low lying: 0 as thick at its top as on the ground, 1 thinning fast above it, `Effects.fog_layer`), one sheet or
+  patches with clear air between (and their size), its swirls' size, and its ACTIVATION - the curve its noise becomes fog through
+  (`Effects.FOG_SHAPES`: smooth, billows, wisps, sharp-edged, folds). CHAOS runs randomness through the rest: the noise warped by
+  noise, thick and thin from place to place, patch edges warped, the sway's swings and the gusts of every length. Its own wind
+  (speed, direction, gusts from a lull to twice as strong, never blown back: `Effects.fog_run`, closed form), Streaks drawing its
+  swirls out along the wind, a Sway in slow waves along the wind's way and its pace, a Breathe rising thinner and sinking
+  thicker, a glow of its own, its color (unset, the light's fog). Its density is calibrated looked down through it (`sight`, its
+  height and a half again), made up for its profile's thinning and its curve's gaps.
 - **The desk** (Letter, Desk, a table show at the desk): its mood is the light element's preset; brightness its exposure; the lamp
   and each kind of candle at their share (`lamp`, `taper`, `pillar`, `tealights`); shafts from the window's side over the pad
   (`Desk.RAYS_REACH`); the air over the pad and the room.
@@ -63,6 +81,13 @@ Dex's list). Look: `dispatch_look_probe.gd` and `letter_look_probe.gd` take `--l
 `--heard` (`tests/table/environment_flags.gd`).
 
 For the user to judge:
+
+- The fog on the Dispatch desk and a desk: the Ground fog look first (low, a gentle wind, swaying); each activation; how
+  strong Chaos should be at its default; whether Sway reads as waves or as the whole fog sliding; Glow at night, where no light
+  falls on the floor. The froxel grid is coarse at the floor (`volumetric_fog_length`), so a layer under 15 cm is soft.
+
+- The colored beams on the Dispatch desk's ending (Targeting Individuals): how many, how they move, how long they keep their colors,
+  the strobe (bursts at 5 a second by default - mind photosensitive viewers), and the looks.
 
 - The shafts on the Dispatch desk and a Letter desk: how thin, how many inside each beam, the patches, the streaks, how bright
   looking toward the light (`LightShafts.WIDTH`, `INNER`, `SHARE`, `GLOW`, `LANDS`; the shader's `streaks`, `clouds`, `forward`).

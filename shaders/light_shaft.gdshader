@@ -2,7 +2,8 @@
 // bright as the haze it crosses inside the shaft is deep - most through the middle, soft at the edges, whose blur (the penumbra, the
 // sun's own width) grows the further below the gap it came through - and only as deep as the haze before whatever stands inside it, so
 // a floor or a mug cuts it where it stands. Fading in below the gap and on past where it lands. Faint streaks run down it, dust drifts
-// in it, it is brighter looking toward its light than away (haze throws light forward), and it may shimmer.
+// in it, it is brighter looking toward its light than away (haze throws light forward), and it may shimmer. A colored beam
+// from a fixture ([StageBeams]) is the same column opening as it goes (its `penumbra` its spread), fading in at its lens.
 //
 // Where what is seen stands inside the shaft, it is lit: what the screen shows there made `lands` times brighter, as squarely as the
 // surface faces the light, its edge the shaft's own - so a dark thing stays darker than a pale one. Drawn, not lit: no glint, no
@@ -23,6 +24,8 @@ uniform float t = 0.0;
 // -(reach + sink)/2
 uniform float reach = 3.0;
 uniform float sink = 0.75;
+// how far below the gap (a share of the reach) it fades in: a shaft out of the dark under a ceiling, a beam out of its lens
+uniform float fade_in = 0.18;
 // how much its edge blurs a meter below the gap (radians: the sun's width), and its own softness at the gap (a share of its radius)
 uniform float penumbra = 0.0093;
 uniform float soft = 0.2;
@@ -38,10 +41,12 @@ uniform float along_most = 3.0;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
 uniform sampler2D screen_tex : hint_screen_texture, filter_nearest;
 
-// each shaft's own: its radius at the gap (m), its share of the brightness, and its phase
+// each shaft's own: its radius at the gap (m), its share of the brightness, its phase, and its color over the material's
+// (a beam's own, changing as it plays)
 instance uniform float radius = 0.02;
 instance uniform float glow = 1.0;
 instance uniform float phase = 0.0;
+instance uniform vec3 tint : source_color = vec3(1.0);
 
 // the shaft's axis in view space: its middle, and the way to the gap
 varying vec3 axis_at;
@@ -102,7 +107,7 @@ void fragment() {
 	float half_in = sqrt(max(outer * outer - near * near, 0.0)) / sin_t;
 	float enter = max(s - half_in, 0.0);
 	float meets = clamp((length(behind.xyz) - enter) / max(s + half_in - enter, 1e-4), 0.0, 1.0);
-	float ends = smoothstep(0.0, 0.18, along) * (1.0 - smoothstep(1.0, 1.0 + sink / reach, along));
+	float ends = smoothstep(0.0, fade_in, along) * (1.0 - smoothstep(1.0, 1.0 + sink / reach, along));
 	// streaks down its length across it as seen, barely changing along it; dust drifting down it; the haze thick and thin along it
 	float across = dot(off, normalize(cross(ray, a))) / outer;
 	float streak = mix(1.0, 0.45 + 1.1 * noise(vec2(across * 2.6 + phase * 3.0, along * 0.35)), streaks);
@@ -114,7 +119,7 @@ void fragment() {
 	float g2 = forward * forward;
 	float scatter = min(pow(1.0 + g2, 1.5) / pow(max(1.0 + g2 - 2.0 * forward * c, 1e-4), 1.5), 3.0);
 	float shimmer = 1.0 - flicker * waver(t, phase);
-	vec3 haze = color * strength * glow * lit(near, below) * chord * deep * meets * ends * streak * dust * cloud * scatter;
+	vec3 haze = color * tint * strength * glow * lit(near, below) * chord * deep * meets * ends * streak * dust * cloud * scatter;
 	// what is seen there, where it stands inside the shaft: lit as squarely as it faces the light
 	vec3 pa = behind.xyz - axis_at;
 	float pu = dot(pa, a);
@@ -124,6 +129,6 @@ void fragment() {
 	n = normalize(dot(n, behind.xyz) > 0.0 ? -n : n);
 	float facing = max(dot(n, a), 0.0);
 	vec3 seen = texture(screen_tex, SCREEN_UV).rgb + vec3(lands_least);
-	vec3 landed = seen * color * lands * strength * glow * lit(length(pa - pu * a), p_below) * facing * p_ends;
+	vec3 landed = seen * color * tint * lands * strength * glow * lit(length(pa - pu * a), p_below) * facing * p_ends;
 	ALBEDO = (haze + landed) * shimmer;
 }

@@ -6,6 +6,8 @@ class_name DispatchSounds
 ## click, the mug set down, the receiver's hiss and the storms it opens up on, the gain knob's clicks, the lamp's switch,
 ## and the one jet that passes over while the man sleeps.
 ##
+## While the grid is down (`unpowered`) the receiver is dead: no hiss, no storm.
+##
 ## Played from the desk's own schedule ([method DispatchMedium.sound_plan]): a list of what sounds when (a one-shot at a
 ## moment, or something that goes on from one moment to another), remade when the plan is. The medium plays it as its
 ## picture is drawn (live a frame at a time; in a render, the frames Movie Maker records, which records the sound too). A
@@ -267,12 +269,17 @@ func _run(out: PackedVector2Array, i: int, m: int, t0: float) -> void:
 		_next += 1
 	var going := _going(t0)
 	var hiss := HISS
+	var dead := false
 	for g in going:
 		var gd: Dictionary = g[0]
 		if String(gd["kind"]) == "static":
 			var lv := receiver_level(gd, float(g[1]))
 			g.append(lv)
 			hiss = HISS_OPEN * lv * 0.6 + HISS
+		elif String(gd["kind"]) == "unpowered":
+			dead = true
+	if dead:
+		hiss = 0.0
 	var f_hs := 2.0 * sin(PI * 2400.0 / float(RATE))
 	var f_ss := 2.0 * sin(PI * 900.0 / float(RATE))
 	var si := 0
@@ -319,6 +326,8 @@ func _run(out: PackedVector2Array, i: int, m: int, t0: float) -> void:
 			var u := float(g[1]) + float(k) * dt
 			match String(d["kind"]):
 				"static":
+					if dead:
+						continue
 					var s := _storm(d, u, f_ss, float(g[2])) * receiver_share
 					l += s * rx.x
 					r += s * rx.y
@@ -417,6 +426,17 @@ func _begin(d: Dictionary) -> void:
 		"crt":
 			_sine(70.0, 0.12, 0.02, ears)
 			_burst(6000.0, 0.9, 0.04, 0.004, ears)
+		"breaker":
+			# the grid going: a breaker's thunk in the wall, the tubes' high whine falling away, a last tick of each glass
+			_burst(420.0, 1.3, 0.06, 0.05, ears)
+			_sine(52.0, 0.4, 0.05, ears)
+			_sine(7600.0, 0.7, 0.004, ears, pow(0.25, 1.0 / (0.7 * float(RATE))))
+			_burst(5200.0, 0.9, 0.03, 0.006, ears)
+		"power_on":
+			# the grid back: the breaker thrown, a tube's degauss thrum
+			_burst(2400.0, 0.9, 0.006, 0.03, ears)
+			_sine(50.0, 0.6, 0.035, ears)
+			_burst(160.0, 1.6, 0.35, 0.02, ears)
 		"click":
 			_burst(3000.0, 1.0, 0.004, 0.02, ears)
 		"detent":

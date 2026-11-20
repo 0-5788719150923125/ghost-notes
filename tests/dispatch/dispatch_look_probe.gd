@@ -9,11 +9,13 @@ extends Node
 ## `--picture` stands in for every picture the note shows. `--every S` photographs every S seconds to the end. `--live 1`
 ## hands the words a sentence at a time, a few seconds ahead, as a live reading does. `--sound <wav>` writes what the desk
 ## sounds like over the whole run to a file. `--opening title` opens on the channel's name over the blur, and `--lead S`
-## gives the voice's first word S seconds in, as the intro's hold does. `--light K`, `--bright X`, `--shafts k=v,...`, `--air a,b`
+## gives the voice's first word S seconds in, as the intro's hold does. `--light K`, `--bright X`, `--shafts k=v,...`, `--fog k=v,...`, `--air a,b`
 ## and `--heard a,b` are the Environment card's (tests/table/environment_flags.gd); `--terminal`, `--radar`, `--scope` and `--dial`
 ## (each `#rrggbb`) the Props card's colors for the terminal's text, the radar's glow, the receiver's oscilloscope and its dial lamp.
 ## `--eye x,y,z --aim x,y,z` photographs from there instead of where the desk's camera is (the set's space, m), to see what no
-## shot holds - the printer's paper falling past the desk's end, say.
+## shot holds - the printer's paper falling past the desk's end, say. With no Environment flag the note's own `environment:` block is
+## used. Each `play` mark plays what [method ScreenPlays.record_of] finds (a note played live, a video file), or `--film WHAT=PATH=SECS`
+## (a video by hand, each `=`-parted).
 ## It prints where each action falls, and asserts
 ## only that a frame is not uniform.
 
@@ -37,6 +39,7 @@ var _environment := {}             # the Environment card's block ([Surroundings
 var _glass := {}                   # the screens' colors, as the Props card keeps them: --terminal, --radar, --scope, --dial
 var _eye: Variant = null           # --eye and --aim: where every photograph is taken from instead
 var _aim := Vector3.ZERO
+var _films := {}                   # what each `play` plays -> what it is ([ScreenPlays]), or --film WHAT=PATH=SECS
 
 const EnvFlags := preload("res://tests/table/environment_flags.gd")
 
@@ -61,7 +64,7 @@ func _run() -> void:
 			"--sound": _sound = args[i + 1]
 			"--opening": _opening = args[i + 1]
 			"--lead": _lead = float(args[i + 1])
-			"--light", "--bright", "--shafts", "--air", "--heard": EnvFlags.take(_environment, args[i], args[i + 1])
+			"--light", "--bright", "--shafts", "--fog", "--air", "--heard": EnvFlags.take(_environment, args[i], args[i + 1])
 			"--terminal": _glass["terminal_screen"] = {"text": args[i + 1]}
 			"--radar": _glass["radar_screen"] = {"glow": args[i + 1]}
 			"--scope", "--dial":
@@ -75,6 +78,10 @@ func _run() -> void:
 						_eye = Vector3(v[0], v[1], v[2])
 					else:
 						_aim = Vector3(v[0], v[1], v[2])
+			"--film":
+				var f := String(args[i + 1]).split("=")
+				if f.size() == 3:
+					_films[f[0]] = {"kind": "file", "ready": true, "video": f[1], "secs": float(f[2]), "size": Vector2i(960, 720), "fps": 30.0, "sound": ""}
 			"--times":
 				_times = []
 				for s in String(args[i + 1]).split(","):
@@ -84,7 +91,16 @@ func _run() -> void:
 		print("dispatch_look_probe: no note at '%s'" % _note)
 		get_tree().quit(2)
 		return
-	var parsed := DispatchScript.parse(source)
+	for what in DispatchScript.films_in(source):
+		if not _films.has(what):
+			var made := ScreenPlays.record_of(what)
+			_films[what] = made
+			print("dispatch_look_probe: play %s - %s" % [what, "ready, %.1fs" % float(made.get("secs", 0.0)) if bool(made["ready"]) else String(made["why"])])
+	if _environment.is_empty():
+		var head := FrontMatter.read_block(source)
+		if head.ok and head.data is Dictionary and (head.data as Dictionary).get("environment") is Dictionary:
+			_environment = (head.data as Dictionary)["environment"]
+	var parsed := DispatchScript.parse(source, _films)
 	var pictures := {}
 	if not _picture.is_empty():
 		for s in parsed["spans"]:
@@ -107,7 +123,7 @@ func _run() -> void:
 	medium.feed.opening = _opening
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	subs.words = [] if _live else words
-	var dispatch := {"seed": _seed, "pictures": pictures}
+	var dispatch := {"seed": _seed, "pictures": pictures, "films": _films}
 	dispatch.merge(_glass)
 	subs.document = {"source": source, "dispatch": dispatch, "environment": _environment,
 		"title": "Targeted Individuality", "author": "Pen & Ink"}

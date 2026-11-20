@@ -79,6 +79,21 @@ class_name DispatchScript
 ##                                     from 9, one more on the desk itself, the chair's.
 ##     <!-- bell -->                   the terminal's bell, one short beep as the block after it goes up.
 ##     <!-- lamp: off -->, <!-- lamp: on -->   the gooseneck lamp is switched off (or on), with a click.
+##     <!-- power: off -->, <!-- power: on -->   the grid goes down (or comes back): every thing on the desk that runs on it
+##                                     goes dark at once - the lamp, the terminal and every screen (a tube collapsing to its
+##                                     dot), the radar, the receiver and its glows, every little light - with a thunk; the
+##                                     phones and the tablet run on their batteries. A film played after it lights its screen
+##                                     all the same.
+##     <!-- environment: shafts off, beams on -->   the Environment's elements, each named by its kind or the name it was
+##                                     kept under, switched on or off there (a bare number: the seconds it takes, 0.4 bare).
+##                                     An element a mark names is, before its first mark, the other way: `beams on` keeps the
+##                                     beams off until then. `shafts` with no shafts on the Environment is the hollow's own.
+##     <!-- play (terminal): ERROR ME FOUND -->   a film on that screen (terminal, feed, satellite, tv): a note's own show by
+##                                     its title, made once at the screen's shape (the Pipeline card), or a video file by its
+##                                     path - its picture on the glass and its sound in the room. Marks written after it in
+##                                     the same silence happen while it plays; the voice waits for the rest of it where the
+##                                     silence ends. `(terminal, mono)` shows it in the screen's own phosphor; `unwatched`
+##                                     leaves the camera where it is.
 ##     <!-- fade: to-black, 4 -->      the picture goes down to black over that many seconds (2 bare), the voice waiting.
 ##                                     In the black the desk is still heard; what is marked there happens unseen and at
 ##                                     once (a hesitation holds the black, a sound plays in it, a voice may speak in it).
@@ -126,9 +141,13 @@ class_name DispatchScript
 ## out here from the calls.
 
 ## Own-line desk marks: group 1 the verb, 2 its argument.
-const MARK := "^\\s*<!--\\s*(call|/\\s*call|ring|text|reply|ping|moving|sound|static|print|sleep|off|look|lift|switch|live|strike|gain|bell|lamp|fade|tablet|/\\s*tablet|back|new\\s+tab|replay|/\\s*image)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
+const MARK := "^\\s*<!--\\s*(call|/\\s*call|ring|text|reply|ping|moving|sound|static|print|sleep|off|look|lift|switch|live|strike|gain|bell|lamp|power|environment|fade|tablet|/\\s*tablet|back|new\\s+tab|replay|/\\s*image)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
 ## A moving picture: group 1 its screen and what it is told ([method _pinned]), 2 the clip's file name, 3 its words.
 const VIDEO := "^\\s*<!--\\s*video\\s*\\(\\s*([a-z]+(?:\\s*,\\s*[a-z]+)*)\\s*\\)\\s*:\\s*([^|]*?)\\s*\\|\\s*([\\s\\S]*?)\\s*-->\\s*$"
+## A film on a screen: group 1 its screen and what it is told ([method _pinned]), 2 what plays - a note's title, or a video file.
+const PLAY := "^\\s*<!--\\s*play\\s*\\(\\s*([a-z]+(?:\\s*,\\s*[a-z]+)*)\\s*\\)\\s*:\\s*([\\s\\S]*?)\\s*-->\\s*$"
+## What a film is told, after its screen and a comma (`play (terminal, mono)`): shown in the screen's own phosphor, not its colors.
+const MONO := "mono"
 ## A picture: group 1 where (full, feed, satellite, tv; none is full) and what it is told ([method _pinned]), 2 its words.
 const IMAGE := "^\\s*<!--\\s*image\\s*(?:\\(\\s*([a-z]+(?:\\s*,\\s*[a-z]+)*)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->\\s*$"
 ## What a picture pinned to a screen is told, after the screen and a comma (`image (feed, unwatched)`): it lands with the
@@ -151,8 +170,9 @@ const IS_DISPATCH := "(?m)^\\s*(?:<!--\\s*(?:call|ring|ping)\\s*:|```\\s*termina
 ## What a turn is heard through, said outright on the line after its cue: group 1 the band ([constant VoiceFX.HEARD]).
 const HEARD_LINE := "^\\s*<!--\\s*heard\\s*:\\s*([A-Za-z_]+)\\s*-->\\s*$"
 
-## The screens a picture may be pinned to, each a thing on the desk ([DispatchSet]).
+## The screens a picture may be pinned to, each a thing on the desk ([DispatchSet]); a film plays on them or on the terminal.
 const SCREENS := ["feed", "satellite", "tv"]
+const FILM_SCREENS := ["terminal", "feed", "satellite", "tv"]
 ## What a voice with no phone of its own is heard through when the room types its words: the receiver
 ## ([constant VoiceFX.HEARD]).
 const RECEIVER := "receiver"
@@ -317,6 +337,15 @@ const BELL := 0.35
 ## The lamp: the hand reaching its switch (the click), and the voice's rest.
 const LAMP_AT := 0.3
 const LAMP := 0.8
+## The power going off (or coming back): the voice's rest - the breaker's thunk, every glass collapsing to its dot and gone.
+const POWER := 1.6
+## An Environment element switched on or off (`environment: beams on`): the voice's rest, and how long it takes to come up or go
+## down when the mark says no seconds.
+const ENVIRONMENT := 0.3
+const ENVIRONMENT_FADE := 0.4
+## A film coming up on its screen (`play (terminal): ...`): the glass waking (its dot opening to a line, then the picture), the
+## voice's rest before the next mark; the voice waits for the rest of the film where its silence ends ([method _hold_films]).
+const PLAY_LEAD := 1.2
 ## A sound with no row of its own: a rest this long, and nothing heard.
 const SOUND_BARE := 3.0
 ## A hesitation that names no length, as the voice's Hesitate dial has it by default ([constant
@@ -342,8 +371,28 @@ static func is_dispatch(body: String) -> bool:
 
 
 ## [param body] as the voice should read it (see the class note).
-static func speakable(body: String) -> String:
-	return String(parse(body)["speakable"])
+static func speakable(body: String, films := {}) -> String:
+	return String(parse(body, films)["speakable"])
+
+
+## How long each thing played runs, as [param films] has them (`what` -> [method ScreenPlays.record_of]): what the voice waits for,
+## 0 for one whose length is not known.
+static func lengths_of(films: Dictionary) -> Dictionary:
+	var out := {}
+	for k in films:
+		out[k] = float((films[k] as Dictionary).get("secs", 0.0))
+	return out
+
+
+## What each `play` mark of [param body] plays (a note's title, a video file's path), once each, in order.
+static func films_in(body: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	for b in blocks(body):
+		if String((b as Dictionary)["kind"]) == "play":
+			var what := String((b as Dictionary)["what"])
+			if not what.is_empty() and not out.has(what):
+				out.append(what)
+	return out
 
 
 ## The pictures of [param body] as the painter is handed them: every image mark pinned to the screen (painted wide;
@@ -478,6 +527,10 @@ static func _classify(s: String) -> Dictionary:
 	var m := _rx(MARK).search(s)
 	if m != null:
 		return {"kind": "mark", "verb": m.get_string(1).replace(" ", "").to_lower(), "arg": m.get_string(2).strip_edges()}
+	var pl := _rx(PLAY).search(s)
+	if pl != null:
+		var on := _pinned(pl.get_string(1))
+		return {"kind": "play", "where": on["where"], "told": on["told"], "what": pl.get_string(2).strip_edges()}
 	var vd := _rx(VIDEO).search(s)
 	if vd != null:
 		var on := _pinned(vd.get_string(1))
@@ -805,7 +858,7 @@ static func label_of(s: String) -> String:
 ## spoken words and `spans` where each is on the screen ([method typed_spans]); every action at the terminal carries the
 ## `glass` it starts from. `spans` are the pictures over the whole
 ## screen: `{key, prompt, from, to, blend}` in spoken words.
-static func parse(body: String) -> Dictionary:
+static func parse(body: String, films := {}) -> Dictionary:
 	var phones := phones_of(body)
 	var spoken := PackedStringArray()
 	var speak := PackedStringArray()      # the voice's text, a block a line apart
@@ -895,6 +948,30 @@ static func parse(body: String) -> Dictionary:
 				var prompt := String(blk["prompt"])
 				_act(actions, gap, pending, spoken.size(), _tell({"kind": "picture", "screen": where, "key": Manuscript.image_key(prompt),
 					"prompt": prompt, "clip": String(blk["file"])}, blk["told"], "video (%s" % where, warnings), PICTURE, PICTURE)
+			"play":
+				var where := String(blk["where"])
+				var what := String(blk["what"])
+				if not where in FILM_SCREENS:
+					warnings.append("play (%s): a film plays on a screen of the desk (%s)" % [where, ", ".join(PackedStringArray(FILM_SCREENS))])
+					continue
+				if what.is_empty():
+					warnings.append("play (%s): a note's title or a video file to play" % where)
+					continue
+				var film: Dictionary = films.get(what, {})
+				var secs := float(film.get("secs", 0.0))
+				if not bool(film.get("ready", false)):
+					var why := String(film.get("why", ""))
+					warnings.append("play (%s): %s - %s%s" % [where, what, why if not why.is_empty() else "nothing found by that name",
+						"" if secs > 0.0 else ", so the voice does not wait for it"])
+				var playing := {"kind": "play", "screen": where, "what": what, "secs": secs}
+				for w in blk["told"]:
+					if String(w) == MONO:
+						playing[MONO] = true
+					elif String(w) == UNWATCHED:
+						playing[UNWATCHED] = true
+					else:
+						warnings.append("play (%s, %s): a film is told %s or %s, or nothing" % [where, w, MONO, UNWATCHED])
+				_act(actions, gap, pending, spoken.size(), playing, PLAY_LEAD, maxf(secs, PLAY_LEAD))
 			"page":
 				var pg := page_of(String(blk["text"]))
 				if String(pg["url"]).is_empty():
@@ -973,6 +1050,7 @@ static func parse(body: String) -> Dictionary:
 					crashed.merge({"heard": RECEIVER, "storm": storm, "from": spoken.size(), "to": spoken.size() + words.size()})
 				_act(actions, gap, pending, spoken.size(), crashed, float(run["rest"]), float(run["len"]))
 				glass = run["glass"]
+				_hold_films(actions, gap, pending)
 				_flush(speak, pending, who, heard, said_as, heard_as)
 				said_as = who
 				heard_as = heard
@@ -992,6 +1070,7 @@ static func parse(body: String) -> Dictionary:
 				if not voice.is_empty() and voice != room:
 					who = voice
 					heard = RECEIVER if on_receiver(voice, room, phones) else _heard(voice, room, in_hand, held)
+				_hold_films(actions, gap, pending)
 				_flush(speak, pending, who, heard, said_as, heard_as)
 				said_as = who
 				heard_as = heard
@@ -1010,6 +1089,7 @@ static func parse(body: String) -> Dictionary:
 				var chose := DispatchTerminal.choice_row(glass, shown) >= 0
 				glass = _typed_theirs(glass, shown) if theirs else DispatchTerminal.typed(glass, shown, shown.length())
 				var i := _act(actions, gap, pending, from, typed_as, ahead, ahead)
+				_hold_films(actions, gap, pending)
 				_flush(speak, pending, who, heard, said_as, heard_as)
 				speak.append(voice_text)
 				spoken.append_array(words)
@@ -1060,6 +1140,7 @@ static func parse(body: String) -> Dictionary:
 						"to": spoken.size() + wn, "spans": typed_spans(shown)}, REPLY_LEAD + typing, REPLY_LEAD + typing)
 					replied[reply_to] = true
 					reply_to = ""
+				_hold_films(actions, gap, pending)
 				_flush(speak, pending, who, heard, said_as, heard_as)
 				said_as = who
 				heard_as = heard
@@ -1289,6 +1370,7 @@ static func parse(body: String) -> Dictionary:
 							warnings.append("replay: \"%s\" was not said before it" % said)
 						var who := room if not room.is_empty() else speaker
 						_act(actions, gap, pending, at, {"kind": "replay", "from": spoken.size(), "to": spoken.size() + words.size()}, 0.0, 0.0)
+						_hold_films(actions, gap, pending)
 						_flush(speak, pending, who, "tablet", said_as, heard_as)
 						said_as = who
 						heard_as = "tablet"
@@ -1322,6 +1404,21 @@ static func parse(body: String) -> Dictionary:
 							warnings.append("lamp: %s - the lamp is on or off" % said)
 							continue
 						_act(actions, gap, pending, at, {"kind": "lamp", "on": said == "on"}, LAMP, LAMP)
+					"power":
+						var said := arg.strip_edges().to_lower()
+						if not said in ["on", "off"]:
+							warnings.append("power: %s - the power is on or off" % said)
+							continue
+						_act(actions, gap, pending, at, {"kind": "power", "on": said == "on"}, POWER, POWER)
+					"environment":
+						var env := environment_of(arg)
+						if (env["set"] as Dictionary).is_empty():
+							warnings.append("environment: %s - elements to switch, each on or off (beams on, shafts off), and seconds" % arg)
+							continue
+						for bad in env["bad"]:
+							warnings.append("environment: %s - an element's kind or name, then on or off" % bad)
+						_act(actions, gap, pending, at, {"kind": "environment", "set": env["set"], "secs": env["secs"]}, ENVIRONMENT,
+							maxf(ENVIRONMENT, float(env["secs"])))
 					"/image":
 						if open_image >= 0:
 							(spans[open_image] as Dictionary)["to"] = at
@@ -1337,6 +1434,7 @@ static func parse(body: String) -> Dictionary:
 		(spans[open_image] as Dictionary)["to"] = spoken.size()
 	if in_hand != "" or not held.is_empty():
 		warnings.append("left open at the end: %s" % ", ".join(PackedStringArray(([in_hand] if not in_hand.is_empty() else []) + held)))
+	_hold_films(actions, gap, pending)
 	if not pending.is_empty():
 		if speak.is_empty() or not said_any:
 			speak.append(" ".join(pending))
@@ -1702,6 +1800,46 @@ static func _act(actions: Array, gap: Array, pending: PackedStringArray, at: int
 	if rest > 0.0:
 		pending.append("<!-- action-hold: %s -->" % String.num(rest + REST_PAD, 2))
 	return i
+
+
+## A film still playing as its silence ends: the voice waits for the rest of it - each `play` in [param gap] whose film runs past
+## what is written after it in that silence (its own rest, the marks and hesitations after it) has the rest of its seconds written
+## in as a rest of the voice's, once. Marks written after a `play` in the same silence so happen while it plays.
+static func _hold_films(actions: Array, gap: Array, pending: PackedStringArray) -> void:
+	for k in gap.size():
+		var i := int((gap[k] as Array)[1])
+		if i < 0:
+			continue
+		var a: Dictionary = actions[i]
+		if String(a["kind"]) != "play" or a.has("held") or float(a["secs"]) <= 0.0:
+			continue
+		a["held"] = true
+		var after := float(a["rest"]) + REST_PAD
+		for j in range(k + 1, gap.size()):
+			after += float((gap[j] as Array)[0]) + (REST_PAD if int((gap[j] as Array)[1]) >= 0 else 0.0)
+		var left := float(a["secs"]) - after
+		if left > 0.05:
+			gap.append([left, -1])
+			pending.append("<!-- action-hold: %s -->" % String.num(left, 2))
+
+
+## An `environment:` mark's words: `{set: {name: on}, secs, bad}` - each part `NAME on` or `NAME off` (an element's kind or the name
+## it was kept under, lowered), a bare number the seconds it takes (else [constant ENVIRONMENT_FADE]), and the parts that are neither.
+static func environment_of(arg: String) -> Dictionary:
+	var set := {}
+	var bad := PackedStringArray()
+	var secs := ENVIRONMENT_FADE
+	for part in arg.split(",", false):
+		var p := String(part).strip_edges().to_lower()
+		if p.is_valid_float():
+			secs = clampf(float(p), 0.0, 30.0)
+			continue
+		var m := _rx("^(.+?)\\s+(on|off)$").search(p)
+		if m == null:
+			bad.append(p)
+			continue
+		set[m.get_string(1).strip_edges()] = m.get_string(2) == "on"
+	return {"set": set, "secs": secs, "bad": bad}
 
 
 ## Each action's `fwd` and `back`: the seconds of its silence written before and after it - its hesitations and the rests

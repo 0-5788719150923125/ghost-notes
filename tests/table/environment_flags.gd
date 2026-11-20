@@ -2,10 +2,11 @@ extends RefCounted
 
 ## Not a gate. The Environment's block ([Surroundings]) from a look probe's command line: `--light K` (a preset, or `own`),
 ## `--bright X`, `--shafts k=v,...` (light shafts, each `k` one of their fields - `--shafts count=3,width=0.4,inner=2`; `--shafts -`
-## every field drawn by its number; given again, another set of shafts), `--air a,b` and `--heard a,b` (kinds, each as its number
-## draws it). A probe hands it each flag it does not read itself.
+## every field drawn by its number; given again, another set of shafts), `--fog k=v,...` (a fog, the same way: `--fog
+## height=30,settle=0.9,wind=0.2`), `--air a,b` and `--heard a,b` (kinds, each as its number draws it). A probe hands it each flag it
+## does not read itself.
 
-const FLAGS := ["--light", "--bright", "--shafts", "--air", "--heard"]
+const FLAGS := ["--light", "--bright", "--shafts", "--fog", "--air", "--heard"]
 
 
 ## Whether [param flag] is one of the Environment's.
@@ -31,8 +32,8 @@ static func take(block: Dictionary, flag: String, value: String) -> void:
 				light["preset"] = value
 			else:
 				light["brightness"] = float(value)
-		"--shafts":
-			var el := {"kind": "shafts"}
+		"--shafts", "--fog":
+			var el := {"kind": flag.trim_prefix("--")}
 			for kv in value.split(",", false):
 				var v := kv.get_slice("=", 1)
 				if kv.contains("="):

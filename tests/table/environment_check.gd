@@ -22,6 +22,14 @@ extends SceneTree
 ##   blur; its edge blurring the further below its gap (the control: at the gap, past its edge is dark); its patch drawn, no light;
 ##   narrower shafts inside their beam, about doubling the light where they cross; landing apart inside the boxes,
 ##   shared out round the viewer; at most MOST; the dust and the shimmer by show time.
+## - Colored beams: from fixtures high over the scene, opening by their spread, some still and some sweeping, each keeping a color of
+##   its palette for its hold, some strobing; built with the shafts, each element's level its own ([method _beams]).
+## - Fog: a fog that says nothing past a bank's is the bank as it was (its profile line for line, no new key kept); low lying thins
+##   fast above the ground (the control: full coverage is even to near its top), its density made up for its thinning; its own wind
+##   carries it along its way, coming and going by its gusts and never blown back (the control: no gusts, a steady pace), each
+##   element's number its own gusts; still air carries it nowhere; its activation curves (wisps thin, smooth never clear, billows a
+##   bank's); built, its volume told every setting and ticked where its wind has carried it; the Dex offers it and its looks on the
+##   air's shelf, its picture thicker on the ground than above ([method _fog]).
 ## - The card: a row an element and a row for each lit and heard thing the panel's Props sections name; Use from the Dex adds one (a
 ##   light takes the light's place), Roll draws another keeping what is set, a property set and unset, Used, its ×; the live document
 ##   and the note touched; its part of the document and its bed (the control: a panel whose bed is another card's keeps it); Keep puts
@@ -85,6 +93,8 @@ func _run() -> void:
 	_air()
 	_sound()
 	_shafts()
+	_beams()
+	_fog()
 	await _card(trashed)
 	await _dex()
 	_rmrf(ProjectSettings.globalize_path(ROOT))
@@ -405,6 +415,155 @@ func _shafts() -> void:
 		built.free()
 
 
+## Colored beams ([StageBeams]): one from each fixture on a truss over the scene, as many as Beams says, opening by their Spread (the
+## control: no spread, a column); a still one never moves (the control: a moving one sweeps, as far as its Sweep); each keeps a color of
+## its palette for its hold and changes to another, never the same twice running (the control: one Color, always it); a strobing one
+## flashes through a burst (the control: none strobe, always whole); built with shafts under one node, each element's level scaled and
+## hidden at none; the Dex offers its looks.
+func _beams() -> void:
+	var over := AABB(Vector3(-1.0, 0.0, -1.0), Vector3(2.0, 0.0, 2.0))
+	var v := Surroundings.values_of({"kind": "beams", "seed": 4, "count": 10, "moving": 0.5, "strobe": 1.0, "hold": 1.0, "variety": 0.0,
+		"blend": 0.0, "spread": 6.0, "sweep": 40.0, "palette": "club"})
+	v["seed"] = 4
+	v["key"] = 0
+	var root := StageBeams.build([v], Vector3.UP, [over], 3.0)
+	var beams: Array = root.get_meta("beams")
+	_ok(root.get_child_count() == 10 and beams.size() == 10 and beams.all(func(b: Dictionary) -> bool: return (b["from"] as Vector3).y > 2.5),
+		"ten beams, each from a fixture hung high over the scene")
+	var mesh := ((beams[0] as Dictionary)["node"] as MeshInstance3D).mesh as CylinderMesh
+	var column := StageBeams.build([v.merged({"spread": 0.0}, true)], Vector3.UP, [over], 3.0)
+	var cmesh := (((column.get_meta("beams") as Array)[0] as Dictionary)["node"] as MeshInstance3D).mesh as CylinderMesh
+	_ok(mesh.bottom_radius > mesh.top_radius * 3.0 and cmesh.bottom_radius < cmesh.top_radius * 1.5,
+		"a beam opens by its Spread (the control: no spread, a column) (%.3f/%.3f, %.3f/%.3f)" % [mesh.top_radius, mesh.bottom_radius, cmesh.top_radius, cmesh.bottom_radius])
+	column.free()
+	var still: Dictionary = beams.filter(func(b: Dictionary) -> bool: return not bool(b["moving"]))[0]
+	var moving: Dictionary = beams.filter(func(b: Dictionary) -> bool: return bool(b["moving"]))[0]
+	var swung := 0.0
+	for k in 40:
+		swung = maxf(swung, rad_to_deg(StageBeams.way_at(moving, float(k) * 0.37).angle_to(moving["aim"])))
+	_ok(StageBeams.way_at(still, 7.3) == still["aim"] and swung > 8.0 and swung <= 40.0 * 1.2,
+		"a still beam never moves (the control: a moving one sweeps, %.1f degrees, within its Sweep)" % swung)
+	var b0: Dictionary = beams[0]
+	var colors: Array = []
+	for k in 12:
+		colors.append(StageBeams.color_at(b0, float(k) * float(b0["hold"]) + 0.01))
+	var repeats := 0
+	for k in range(1, colors.size()):
+		if colors[k] == colors[k - 1]:
+			repeats += 1
+	var palette := StageBeams.colors_of(v)
+	var one := StageBeams.build([v.merged({"color": "#ff0000"}, true)], Vector3.UP, [over], 3.0)
+	var ob: Dictionary = (one.get_meta("beams") as Array)[0]
+	_ok(repeats == 0 and colors.all(func(c: Color) -> bool: return palette.has(c)) and StageBeams.color_at(ob, 3.3) == Color(1, 0, 0)
+		and StageBeams.color_at(ob, 9.1) == Color(1, 0, 0), "each hold a color of its palette, never the same twice running (the control: one Color, always it)")
+	one.free()
+	var flashes := 0
+	var dark := 0
+	for k in 400:
+		var g := StageBeams.glow_at(b0, float(k) * 0.013)
+		flashes += 1 if g > 0.5 else 0
+		dark += 1 if g < 0.5 else 0
+	var calm := StageBeams.build([v.merged({"strobe": 0.0}, true)], Vector3.UP, [over], 3.0)
+	var cb: Dictionary = (calm.get_meta("beams") as Array)[0]
+	var whole := range(100).all(func(k: int) -> bool: return is_equal_approx(StageBeams.glow_at(cb, float(k) * 0.05), 1.0))
+	calm.free()
+	_ok(flashes > 0 and dark > 0 and whole, "a strobing beam flashes through its bursts (the control: none strobe, always whole) (%d lit, %d dark)" % [flashes, dark])
+	StageBeams.tick(root, 2.0)
+	_ok((root.get_child(0) as MeshInstance3D).transform.origin.distance_to((beams[0] as Dictionary)["from"]) > 0.1, "ticked, each is placed down its way from its lens")
+	root.free()
+	# under one node with shafts, each element's level its own
+	var block := Surroundings.sanitize({"elements": [{"kind": "shafts", "count": 2, "inner": 0}, {"kind": "beams", "count": 3}]})
+	var both := Surroundings.rays(block, Color.WHITE, Vector3.UP, [over], 3.0)
+	var levels: Dictionary = both.get_meta("levels")
+	Surroundings.tick_rays(both, 1.0, {1: 0.0})
+	var beam_hidden := both.get_children().filter(func(n: Node) -> bool: return String(n.name).begins_with("Beam")).all(func(n: Node) -> bool: return not (n as Node3D).visible)
+	var shaft_shown := both.get_children().filter(func(n: Node) -> bool: return String(n.name).begins_with("Ray")).all(func(n: Node) -> bool: return (n as Node3D).visible)
+	_ok(both.get_child_count() == 5 and levels.has(0) and levels.has(1) and beam_hidden and shaft_shown,
+		"shafts and beams under one node, each element's level its own: the beams at none hidden, the shafts kept")
+	both.free()
+	var offered := Surroundings.offers()
+	_ok(offered.has("kind:beams") and offered.has("look:disco") and offered.has("look:lasers") and String(offered["look:disco"]["group"]) == "light"
+		and Surroundings.line_of({"kind": "beams", "seed": 1}).contains("beams") and Surroundings.picture({"kind": "beams", "seed": 2}, {}).get_width() > 0,
+		"the Dex offers the beams as they roll and their looks; each says itself in a line and a picture")
+
+
+func _fog() -> void:
+	var bank := (Effects.sanitize([{"kind": "fog", "where": "room", "density": 0.4}], [], ["room"], [])[0] as Dictionary)
+	var old_profile := [0.0, 0.2, 0.4, 0.6, 0.9, 1.2].all(func(h: float) -> bool:
+		return is_equal_approx(Effects.fog_layer(0.7, h), 1.0 - smoothstep(0.25, 1.0, h)))
+	_ok(old_profile and not Effects.FOG_MORE.keys().any(func(k: String) -> bool: return bank.has(k)) and not bank.has("shape"),
+		"a fog that says nothing past a bank's is the bank as it was: its profile line for line, no new key kept")
+	_ok(Effects.fog_layer(1.0, 0.5) < 0.1 * Effects.fog_layer(1.0, 0.0) and is_equal_approx(Effects.fog_layer(0.0, 0.5), 1.0)
+		and Effects.fog_layer(0.0, 0.0) > 0.99, "low lying thins fast above the ground (the control: full coverage even to near its top) (%.3f, %.3f)"
+		% [Effects.fog_layer(1.0, 0.5), Effects.fog_layer(0.0, 0.5)])
+	_ok(Effects.fog_profile(1.0) < 0.5 * Effects.fog_profile(0.0), "its density is made up for its thinning (%.2f of its height filled, %.2f full)"
+		% [Effects.fog_profile(1.0), Effects.fog_profile(0.0)])
+	var light := Color(0.2, 0.3, 0.4)
+	var fx := Surroundings.effects_of(Surroundings.sanitize({"elements": [{"kind": "fog", "seed": 3, "settle": 0.9, "activation": "wisps", "height": 40.0}]}), light)
+	var f: Dictionary = fx[0]
+	_ok(fx.size() == 1 and String(f["kind"]) == "fog" and String(f["where"]) == "room" and String(f["shape"]) == "wisps"
+		and is_equal_approx(float(f["settle"]), 0.9) and is_equal_approx(float(f["sight"]), 1.0) and is_equal_approx(float(f["height"]), 40.0)
+		and String(f["color"]).trim_prefix("#") == Surroundings.fog_albedo(light).to_html(false) and Surroundings.fog_albedo(light).v > 0.6,
+		"a fog element is a fog on the room's floor told all it is, pale and tinted by the light's fog unless it has its own")
+	var red := Surroundings.effects_of(Surroundings.sanitize({"elements": [{"kind": "fog", "color": "#ff0000"}]}), light)
+	_ok(String((red[0] as Dictionary)["color"]) == "#ff0000", "the control: its own Color is kept")
+	_ok(Surroundings.hazy(Surroundings.sanitize({"elements": [{"kind": "fog"}]})) and not Surroundings.hazy(Surroundings.sanitize({"elements": [{"kind": "dust"}]})),
+		"a fog turns the scene's volumetric fog on (the control: dust does not)")
+	# its own wind
+	var stage := {"regions": {"room": AABB(Vector3(-2, 0, -2), Vector3(4, 2, 4))}}
+	var gusty := Effects.build(Effects.sanitize([{"kind": "fog", "where": "room", "wind": 0.6, "gusts": 1.0, "turn": 90.0, "chaos": 0.5,
+		"sway": 0.5, "shape": "folds", "patches": 0.4}], [], ["room"], []), stage, 11)
+	var run: Dictionary = (gusty.fogs[0] as Dictionary)["run"]
+	var back := false
+	var least := INF
+	var most := 0.0
+	var was := Effects.fog_run(run, 0.0)
+	for k in range(1, 1200):
+		var now := Effects.fog_run(run, float(k) * 0.1)
+		var step := (now - was).dot(Vector3(0, 0, 1)) / 0.1
+		back = back or step < -1e-5
+		least = minf(least, step)
+		most = maxf(most, step)
+		was = now
+	var speed := 0.6 * Effects.FOG_WIND
+	_ok(not back and least < speed * 0.4 and most > speed * 1.5 and absf(Effects.fog_run(run, 50.0).x) < 1e-4,
+		"its wind carries it along its way (90: toward the viewer), from a lull to gusts twice as strong, never blown back (%.3f to %.3f m/s)" % [least, most])
+	var steady := Effects.build(Effects.sanitize([{"kind": "fog", "where": "room", "wind": 0.6}], [], ["room"], []), stage, 11)
+	var sr: Dictionary = (steady.fogs[0] as Dictionary)["run"]
+	_ok(is_equal_approx(Effects.fog_run(sr, 10.0).x, 10.0 * speed) and is_equal_approx(Effects.fog_run(sr, 37.0).x, 37.0 * speed),
+		"the control: no gusts, a steady pace")
+	var other := Effects.build(Effects.sanitize([{"kind": "fog", "where": "room", "wind": 0.6, "gusts": 1.0, "turn": 90.0}], [], ["room"], []), stage, 12)
+	_ok(not Effects.fog_run((other.fogs[0] as Dictionary)["run"], 30.0).is_equal_approx(Effects.fog_run(run, 30.0)), "each number its own gusts")
+	var still := Effects.build(Effects.sanitize([{"kind": "fog", "where": "room"}], [], ["room"], []), stage, 11)
+	_ok(Effects.fog_run((still.fogs[0] as Dictionary)["run"], 30.0) == Vector3.ZERO, "still air carries it nowhere")
+	var mat: ShaderMaterial = (gusty.fogs[0] as Dictionary)["mat"]
+	var way: Vector2 = mat.get_shader_parameter("way")
+	_ok(int(mat.get_shader_parameter("shape")) == Effects.FOG_SHAPES.keys().find("folds") and way.is_equal_approx(Vector2(0, 1))
+		and is_equal_approx(float(mat.get_shader_parameter("sway")), 0.5 * Effects.FOG_SWAY) and is_equal_approx(float(mat.get_shader_parameter("patches")), 0.4)
+		and is_equal_approx(float(mat.get_shader_parameter("chaos")), 0.5), "built, its volume is told its shape, its way, its sway, its patches and its chaos")
+	gusty.tick(20.0)
+	_ok((mat.get_shader_parameter("carried") as Vector3).is_equal_approx(Effects.fog_run(run, 20.0)), "ticked, it is where its wind has carried it")
+	for air in [gusty, steady, other, still]:
+		(air as Effects.Air).root.free()
+	# the curves
+	_ok(Effects.fog_activation("wisps", 0.5, 0.5) > 0.9 and Effects.fog_activation("wisps", 0.85, 0.85) < 0.01
+		and Effects.fog_activation("smooth", 0.0, 0.0) >= 0.35 and is_equal_approx(Effects.fog_activation("billows", 0.6, 0.6), smoothstep(0.44, 0.72, 0.6))
+		and Effects.fog_activation("sharp", 0.6, 0.6) > 0.99 and Effects.fog_activation("sharp", 0.45, 0.45) < 0.01,
+		"its curves: wisps a thin ridge, smooth never clear, sharp a hard edge, billows a bank's")
+	# the Dex
+	var offered := Surroundings.offers()
+	var low := Surroundings.picture({"kind": "fog", "seed": 5, "settle": 1.0, "height": 120.0, "patches": 0.0, "activation": "smooth", "density": 0.8}, {})
+	var row_light := func(y: int) -> float:
+		var sum := 0.0
+		for x in low.get_width():
+			sum += low.get_pixel(x, y).get_luminance()
+		return sum / float(low.get_width())
+	_ok(offered.has("kind:fog") and offered.has("look:ground") and String(offered["look:ground"]["group"]) == "air"
+		and String(offered["look:window"]["group"]) == "light" and Surroundings.line_of({"kind": "fog", "seed": 1, "settle": 0.9}).contains("low")
+		and float(row_light.call(low.get_height() - 14)) > float(row_light.call(low.get_height() / 3)) + 0.05,
+		"the Dex offers fog and its looks on the air's shelf (the control: shafts' on the light's); its line, and its picture thicker on the ground than above")
+
+
 func _card(trashed: Array) -> void:
 	var panel_script: GDScript = load(PANEL)
 	var card_script: GDScript = load(CARD)
@@ -532,7 +691,7 @@ func _dex() -> void:
 	await process_frame
 	_ok(dex.category_labels() == ["Environment", "Voices"], "the Dex lists its shelves under their categories, in order (%s)" % str(dex.category_labels()))
 	var labels := dex.shelf_labels()
-	var lights := 1 + Surroundings.SHAFT_LOOKS.size() + Surroundings.LIGHTS.size()
+	var lights := 2 + Surroundings.SHAFT_LOOKS.size() + Surroundings.BEAM_LOOKS.size() + Surroundings.LIGHTS.size()
 	_ok(labels.size() == 5 and String(labels[0]) == "Light (%d)" % lights, "each shelf with how many it has (%s)" % str(labels))
 	_ok(dex.adds_label().is_empty(), "opened on its own, it adds nothing")
 	dex.queue_free()

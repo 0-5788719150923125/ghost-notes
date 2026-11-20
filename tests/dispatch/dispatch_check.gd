@@ -37,6 +37,7 @@ extends SceneTree
 ##   the bar); a reply typed into the page's message box as it is said, clear of the keyboard, and sent (the control: a page
 ##   that takes none has no box); the page loaded again where it was left, its box kept;
 ## - a clip: the screen's static until it is imported, then its frames looping;
+## - the grid down, the Environment switched and a film on the terminal ([method _grid_and_film]);
 ## - a picture told `unwatched` lands on its screen with the camera left on what it was on (the control: the same picture
 ##   untold turns the camera to its screen); a static told `unwatched` is heard with the camera left on the terminal (the
 ##   control: untold, it turns to the receiver);
@@ -477,6 +478,7 @@ func _run() -> void:
 	small.queue_free()
 	_clock_skip(st, md.feed)
 	_receiver(st, md.feed)
+	_grid_and_film(st, md.feed)
 	_browsing(st, md.feed)
 	_glass_hold(st, md.feed)
 	_opens_black(st)
@@ -708,6 +710,78 @@ func _receiver(st: SubViewport, feed: ShowFeed) -> void:
 	var room_mid := md._word_t0(int(acts[r_i]["from"])) + 0.05
 	_ok(not (acts[r_i] as Dictionary).has("heard") and md.storm_at(room_mid).is_empty(),
 		"the control: the room's own typed line opens nothing on the receiver")
+
+
+## The grid down, the Environment switched and a film on the terminal, on a note of the gate's own: the power whole until a beat into
+## its rest, then gone, every rig's lights out with it but the tablet's (the control: before the mark, whole); a film's terminal lit
+## all the same; the beams off until their mark and on after it, the shafts the other way (the control: an element no mark names is
+## not listed); the film up on the glass from a moment after its mark, as far into it as the show is past that, until its last frame
+## and a beat; its frames decoded from a video FFmpeg makes here, a later one not the first, a moment sought back to found again; its
+## sound heard while it plays.
+func _grid_and_film(st: SubViewport, feed: ShowFeed) -> void:
+	var ffmpeg := Deps.resolve("ffmpeg")
+	if ffmpeg.is_empty():
+		_ok(false, "FFmpeg is needed to make the film fixture")
+		return
+	var dir := OS.get_temp_dir().path_join("ghost_dispatch_film_%d" % OS.get_process_id())
+	DirAccess.make_dir_recursive_absolute(dir)
+	var video := dir.path_join("fixture.mp4")
+	var wav := dir.path_join("fixture.wav")
+	OS.execute(ffmpeg, ["-y", "-nostdin", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=160x120:rate=10", "-t", "3",
+		"-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "10", video])
+	OS.execute(ffmpeg, ["-y", "-nostdin", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100", "-t", "3",
+		"-c:a", "pcm_s16le", wav])
+	var films := {"fixture.mp4": {"kind": "file", "ready": true, "video": video, "sound": wav, "secs": 3.0, "size": Vector2i(160, 120), "fps": 10.0}}
+	var body := ("---\ndesk:\n  phones: [VAN]\n---\n\n<!-- speaker: Control -->\n\nListen.\n\n<!-- power: off -->\n\n"
+		+ "<!-- play (terminal): fixture.mp4 -->\n\n<!-- hesitation: 1 -->\n\n<!-- environment: shafts off, beams on, 0 -->\n")
+	var md := DispatchMedium.new()
+	md.feed = feed
+	md.mount(st)
+	md.load_note(body, {"seed": 3, "films": films})
+	md._now = 0.0
+	md.take_words(DispatchScript.rehearsal(DispatchScript.parse(body, films), 0.32))
+	var acts: Array = md._actions
+	var t0 := md.starts()
+	var p_i := _first(acts, "power")
+	var f_i := _first(acts, "play")
+	var e_i := _first(acts, "environment")
+	var gone := t0[p_i] + DispatchMedium.POWER_AT + DispatchMedium.POWER_FADE + 0.05
+	md._pose(t0[p_i] - 0.05)
+	var lit_before := (md._set.rigs["radar"] as PropRig).lights().all(func(l: Light3D) -> bool: return l.visible)
+	md._pose(gone)
+	var dark := (md._set.rigs["radar"] as PropRig).lights().all(func(l: Light3D) -> bool: return not l.visible)
+	var lamp_dark := (md._set.rigs["lamp"] as PropRig).lights().all(func(l: Light3D) -> bool: return not l.visible) if md._set.rigs.has("lamp") else true
+	_ok(is_equal_approx(md.power_at(t0[p_i] - 0.05), 1.0) and is_equal_approx(md.power_at(gone), 0.0) and lit_before and dark and lamp_dark,
+		"the grid goes down a beat into its rest, the radar's and the lamp's lights with it (the control: before it, whole)")
+	md._surround = Surroundings.sanitize({"elements": [{"kind": "shafts"}, {"kind": "beams"}, {"kind": "dust"}]})
+	var before := md.env_levels(t0[e_i] - 0.05)
+	var after := md.env_levels(t0[e_i] + 0.05)
+	_ok(is_equal_approx(float(before.get(0, -1.0)), 1.0) and is_equal_approx(float(before.get(1, -1.0)), 0.0)
+		and is_equal_approx(float(after.get(0, -1.0)), 0.0) and is_equal_approx(float(after.get(1, -1.0)), 1.0) and not after.has(2),
+		"the beams are off until their mark and on after it, the shafts the other way (the control: the dust, never named, is not listed) (%s %s)" % [before, after])
+	var mid := t0[f_i] + DispatchMedium.FILM_WAKE + 1.5
+	var up := md.film_at("terminal", mid)
+	_ok(md.film_at("terminal", t0[f_i] - 0.05).is_empty() and absf(float(up.get("at", -1.0)) - 1.5) < 0.01 and bool(up.get("playing", false))
+		and md.film_at("terminal", t0[f_i] + DispatchMedium.FILM_WAKE * 2.0 + 3.0 + DispatchMedium.FILM_HOLD + 0.1).is_empty(),
+		"the film is up on the glass after its mark, as far into it as the show is past that, and gone after its last frame and a beat (%s)" % up)
+	md._pose(mid)
+	var term_lit := (md._set.rigs["terminal"] as PropRig).lights().any(func(l: Light3D) -> bool: return l.visible)
+	md._hear_films(mid)
+	var player: ScreenFilm = md._players.get("fixture.mp4")
+	_ok(term_lit and player != null and player._player != null and player._player.playing,
+		"with the grid down the terminal a film plays on is lit, and the film is heard")
+	var sf := ScreenFilm.new(films["fixture.mp4"])
+	var a := sf.image_at(0.0, true)
+	var b := sf.image_at(2.0, true)
+	var c := sf.image_at(0.05, true)
+	_ok(a != null and b != null and c != null and a.get_size() == Vector2i(160, 120) and a.get_data() != b.get_data() and c.get_data() == a.get_data(),
+		"the film's frames are decoded by its time: a later one not the first, a moment sought back to found again")
+	sf.stop()
+	md._exit_tree()
+	md.queue_free()
+	for f in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(f))
+	DirAccess.remove_absolute(dir)
 
 
 ## The tablet browsed, on the browsing note: what its screen shows as each page is reached.

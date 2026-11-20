@@ -33,7 +33,31 @@ const FADE := 0.3
 const REVEALS := {
 	"karaoke": "the whole line shown, each word lit as it is spoken",
 	"glitch": "the words appear as they are spoken, a few scrambled glyphs running just ahead of the voice - reaching on, falling back, reaching again",
+	"credits": "every line rolling slowly up the whole frame as a film's end credits do, the line being said near the middle, lit as it is spoken",
 }
+## The credits ([constant REVEALS] `credits`): every line of the words, each centered and wrapped, rolling up the frame at ONE SPEED
+## all the way, as a film's end credits do - the speed the lines need to stand apart where they come closest ([method credits_pace]),
+## each line set down the roll where that speed has it when it is said, so its middle crosses CREDITS_AT of the frame's height at
+## the middle of its saying and a long pause between lines (a song's break) is empty roll, never a slower one; a line said too soon
+## after another for that speed is set just below it ([method credits_places]). The line being said is lit as the karaoke lights it;
+## the lines said dim above it, those to come wait below, and every line fades out toward the frame's top and bottom (CREDITS_EDGE of
+## its height). Type CREDITS_FS at 1080 lines, rows CREDITS_ROW of it apart and lines at least CREDITS_GAP of a row more; up from
+## CREDITS_LEAD seconds before the first word to CREDITS_HANG after the last. A pure function of the clock: a render and a scrub see
+## the same roll.
+const CREDITS_AT := 0.5
+const CREDITS_FS := 40
+const CREDITS_ROW := 1.45
+const CREDITS_GAP := 0.55
+const CREDITS_EDGE := 0.24
+const CREDITS_WIDE := 0.78
+const CREDITS_LEAD := 4.0
+const CREDITS_HANG := 5.0
+const CREDITS_SAID := 0.5
+const CREDITS_COMING := 0.34
+## The speed is the one that keeps this share of the lines apart at their own times (the closest few are set below their neighbor
+## instead of speeding the whole roll); a roll of one line goes at CREDITS_PACE rows a second.
+const CREDITS_KEEP := 0.9
+const CREDITS_PACE := 0.6
 ## The glitch ([constant REVEALS] `glitch`, after the vortex chat's GlitchedLabel): the line is written as
 ## it is spoken, in one steady sweep ([method glitch_front]) that has every word written within
 ## GLITCH_SETTLE seconds of its start (from GLITCH_EARLY before it), so the word being said is never the
@@ -176,6 +200,12 @@ var captions: Callable = Callable()
 ## frame, not the window; an empty rect means the whole viewport (an export). A portrait frame keeps its
 ## safe area clear ([constant SAFE]).
 var frame_rect := Rect2()
+## The words' clock, `() -> float`, where they are not the session's (a note played inside another, [NestedShow]); unset, the session's.
+var clock := Callable()
+## The song the colors listen to (a [member Spectrum.nested] one, its harmony and bands); null for the session's.
+var song: Node = null
+## How the words are revealed here, a key of [constant REVEALS]; "" for the show's own choice ([member Director.subtitle_reveal]).
+var reveal := ""
 ## The safe area of a portrait frame, as shares of it: what every platform draws its buttons and captions
 ## over (Google's safe zones for 1080x1920 keep the top 288, the bottom 672 and the right 192 pixels
 ## clear; the left keeps a small margin of its own).
@@ -290,10 +320,42 @@ func cursor() -> float:
 
 
 func _now() -> float:
-	var t: float = Spectrum.current.time - time_base
+	var t: float = (float(clock.call()) if clock.is_valid() else Spectrum.current.time) - time_base
 	if loop_length > 0.0:
 		t = fmod(maxf(t, 0.0), loop_length)
 	return t
+
+
+## How the words are revealed now: this overlay's own choice, else the show's ([member Director.subtitle_reveal]).
+func reveal_now() -> String:
+	return reveal if REVEALS.has(reveal) else Director.subtitle_reveal
+
+
+## The credits' one speed (rows a second) for lines said at [param times] (each line's middle) that must stand [param needs] rows apart
+## (each from the next): fast enough for CREDITS_KEEP of the pairs to stand apart at their own times (all of them, in a roll of fewer
+## than five).
+static func credits_pace(times: PackedFloat32Array, needs: PackedFloat32Array) -> float:
+	var r := PackedFloat32Array()
+	for i in range(times.size() - 1):
+		r.append(needs[i] / maxf(times[i + 1] - times[i], 0.05))
+	if r.is_empty():
+		return CREDITS_PACE
+	r.sort()
+	if r.size() < 5:
+		return r[r.size() - 1]
+	return r[clampi(int(floor(float(r.size()) * CREDITS_KEEP)) - 1, 0, r.size() - 1)]
+
+
+## Where each line's middle lies down the roll (rows) at speed [param pace]: where the roll is when it is said, or just below the line
+## before it ([param needs] rows on) where that is further down.
+static func credits_places(times: PackedFloat32Array, needs: PackedFloat32Array, pace: float) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for i in times.size():
+		var y := times[i] * pace
+		if i > 0:
+			y = maxf(y, out[i - 1] + needs[i - 1])
+		out.append(y)
+	return out
 
 
 ## The true position as global word progress: word index + fraction within it. Between words (a pause, a
@@ -374,6 +436,9 @@ func span_at(t: float) -> int:
 ## [method span_at] and the medium captions it ([member captions]), else 0: the question the draw asks, so
 ## the plate and the text cannot disagree about whether there is anything to read.
 func _presence_target(t: float) -> float:
+	if reveal_now() == "credits":
+		var spans := _spans_now()
+		return 1.0 if not spans.is_empty() and t >= float(spans[0].lo) - CREDITS_LEAD and t <= float(spans.back().hi) + CREDITS_HANG else 0.0
 	var i := span_at(t)
 	if i < 0:
 		return 0.0
@@ -404,7 +469,7 @@ func _process(delta: float) -> void:
 		var rate := 3.0 + 7.0 * clampf(absf(gap) - 0.15, 0.0, 1.5)
 		_cursor = lerpf(_cursor, target, 1.0 - exp(-rate * delta))
 	# the sea runs on through a hidden line, as the eye does, so a line shown again is not calm
-	sea.hear(Spectrum.current.bands, now)
+	sea.hear((song.get("current") as AudioFeatures).bands if song != null else Spectrum.current.bands, now)
 	sea.emit(now, _eye_letter())
 	if overlay_hidden:
 		if _overlay.visible:
@@ -477,6 +542,9 @@ class Overlay:
 		var vis: float = owner_node.presence
 		if vis <= 0.01:
 			return
+		if owner_node.reveal_now() == "credits":
+			_draw_credits(vis)
+			return
 		var t: float = owner_node._now()
 		var line_words: Array = _current_sentence(t)
 		if line_words.is_empty():
@@ -510,7 +578,7 @@ class Overlay:
 		var last_item: Dictionary = line_words[line_words.size() - 1]
 		var sea: PackedFloat32Array = owner_node.sea.line(float(owner_node.letter_of(int(line_words[0].idx))),
 			int(last_item.cstart) + String(last_item.word.text).length(), now)
-		var glitch := Director.subtitle_reveal == "glitch"
+		var glitch := owner_node.reveal_now() == "glitch"
 		var base_y: float = box["base_y"]
 		var y: float = base_y - (lines.size() - 1) * lh
 	# The plate: scenes range from black voids to white-hot fields, so color alone cannot keep text
@@ -606,6 +674,118 @@ class Overlay:
 					x += cw
 				x += gap
 			y += lh
+
+	var _roll_of := ""               # the words the credits were laid out for, their size and width...
+	var _roll := {}                  # ...and how they lie: {rows: [[items]], line_of: [row's line], mids, times, lines: [{si, r0, r1}]}
+
+	## The credits ([constant Subtitles.REVEALS] `credits`): every line laid out down the frame, rolled to where the clock has them
+	## at its one speed ([method Subtitles.credits_pace]), the line being said lit as the karaoke lights it, the rest dimmed, all fading toward the
+	## frame's top and bottom.
+	func _draw_credits(vis: float) -> void:
+		var font := get_theme_default_font()
+		var frame: Rect2 = owner_node.frame_rect if owner_node.frame_rect.has_area() else get_viewport_rect()
+		var k := minf(frame.size.x, frame.size.y) / REF_H
+		var fs := int(round(Subtitles.CREDITS_FS * k))
+		var lh := float(fs) * Subtitles.CREDITS_ROW
+		var lay := _credits_layout(font, fs, frame.size.x * Subtitles.CREDITS_WIDE)
+		var rows: Array = lay["rows"]
+		if rows.is_empty():
+			return
+		var now := owner_node._now()
+		var roll := float(lay["pace"]) * now
+		var mid_y := frame.position.y + frame.size.y * Subtitles.CREDITS_AT + float(fs) * 0.35
+		var edge := frame.size.y * Subtitles.CREDITS_EDGE
+		var cx := frame.position.x + frame.size.x * 0.5
+		var gap := 14.0 * k
+		var pos: int = owner_node.span_at(now)
+		var lit_si := int(owner_node._spans_now()[pos].si) if pos >= 0 else -1
+		var base_hue := _harmonic_hue()
+		var line_of: Array = lay["line_of"]
+		var tops: PackedFloat32Array = lay["tops"]
+		for ri in rows.size():
+			var y := mid_y + (tops[ri] - roll) * lh
+			if y < frame.position.y - lh or y > frame.end.y + lh:
+				continue
+			var fade := clampf((y - frame.position.y) / edge, 0.0, 1.0) * clampf((frame.end.y - y) / edge, 0.0, 1.0)
+			fade = fade * fade * (3.0 - 2.0 * fade)
+			if fade <= 0.01:
+				continue
+			var row: Array = rows[ri]
+			var line: Dictionary = (lay["lines"] as Array)[int(line_of[ri])]
+			var si := int(line["si"])
+			var total := -gap
+			for item in row:
+				total += float(item.w) + gap
+			var x := cx - total * 0.5
+			var sea := PackedFloat32Array()
+			var ccur := 0.0
+			if si == lit_si:
+				ccur = _char_cursor(line["items"])
+				var last: Dictionary = (line["items"] as Array).back()
+				sea = owner_node.sea.line(float(owner_node.letter_of(int((line["items"] as Array)[0].idx))),
+					int(last.cstart) + String(last.word.text).length(), now)
+			var said := lit_si < 0 or si < lit_si
+			for item in row:
+				var text: String = item.word.text
+				var face := _face(font, int(item.word.get("emph", 0)))
+				var order := owner_node.voice_order(String(item.word.get("speaker", "")))
+				for ch in text.length():
+					var glyph := text.substr(ch, 1)
+					var cw := face.get_string_size(glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+					var col: Color
+					if si == lit_si:
+						col = _glyph_color(base_hue, int(item.cstart) + ch, ccur, sea, order)
+					else:
+						col = Color.from_hsv(Scheme.voice_hue(base_hue + float(int(item.cstart) + ch) * HUE_SPAN, order), 0.16,
+							0.86, Subtitles.CREDITS_SAID if said else Subtitles.CREDITS_COMING)
+					col.a *= vis * fade
+					draw_string(face, Vector2(x, y) + Vector2(2.0 * k, 2.0 * k), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, fs,
+						Color(0, 0, 0, 0.8 * col.a))
+					draw_string(face, Vector2(x, y), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+					x += cw
+				x += gap
+
+	## How the credits lie for the words as they stand at size [param fs], [param wide] across: each line (a sentence) wrapped into rows,
+	## the roll's one speed ([method Subtitles.credits_pace]), each line's middle down the roll ([method Subtitles.credits_places]) and
+	## each row's place from it. Laid out again only when the words, the size or the width change.
+	func _credits_layout(font: Font, fs: int, wide: float) -> Dictionary:
+		var all: Array = owner_node.words
+		var key := "%d|%d|%d|%s" % [all.size(), fs, int(wide), str(float(all.back().t1)) if not all.is_empty() else ""]
+		if key == _roll_of:
+			return _roll
+		var lines: Array = []
+		var by := {}
+		for k in all.size():
+			var si := int(all[k].sentence)
+			if not by.has(si):
+				by[si] = lines.size()
+				lines.append({"si": si, "items": [], "c": 0})
+			var line: Dictionary = lines[int(by[si])]
+			(line["items"] as Array).append({"idx": k, "word": all[k], "w": 0.0, "cstart": int(line["c"])})
+			line["c"] = int(line["c"]) + String(all[k].text).length() + 1
+		var wrapped: Array = []
+		var times := PackedFloat32Array()
+		for li in lines.size():
+			var items: Array = (lines[li] as Dictionary)["items"]
+			wrapped.append(_wrap(items, font, fs, wide))
+			times.append((float(items[0].word.t0) + float(items.back().word.t1)) * 0.5)
+		var needs := PackedFloat32Array()
+		for li in range(lines.size() - 1):
+			needs.append(float((wrapped[li] as Array).size() + (wrapped[li + 1] as Array).size()) * 0.5 + Subtitles.CREDITS_GAP)
+		var pace := Subtitles.credits_pace(times, needs)
+		var places := Subtitles.credits_places(times, needs, pace)
+		var rows: Array = []
+		var line_of: Array = []
+		var tops := PackedFloat32Array()
+		for li in lines.size():
+			var n := (wrapped[li] as Array).size()
+			for r in n:
+				rows.append((wrapped[li] as Array)[r])
+				line_of.append(li)
+				tops.append(places[li] - float(n - 1) * 0.5 + float(r))
+		_roll_of = key
+		_roll = {"rows": rows, "line_of": line_of, "tops": tops, "pace": pace, "lines": lines}
+		return _roll
 
 	## Where row [param row] starts, the glitch's sweep at letter [param sweep]: centered on [param cx] by what is
 	## written of it and [constant Subtitles.GLITCH_CENTERED] letters of noise.
@@ -726,7 +906,7 @@ class Overlay:
 		return lines
 
 	func _harmonic_hue() -> float:
-		var sig := Spectrum.harmonic_signature()
+		var sig: PackedFloat32Array = owner_node.song.call("harmonic_signature") if owner_node.song != null else Spectrum.harmonic_signature()
 		if sig.size() >= 12:
 			var best := 0
 			for i in 12:

@@ -49,13 +49,15 @@ var _about: Label
 var _wants := {}                 # what the script last read asks the desk to build only for it ([method wants])
 var _works := {}                 # the spare things the script last read works ([method works])
 var _phones := PackedStringArray()  # the phones' labels, as the script last read names them ([method phones])
+var _films := {}                 # what each `play` mark plays -> what it is now ([method ScreenPlays.record_of])
+var _films_t := 0.0
 
 
 static func for_note(ctx: Dictionary) -> DispatchFormat:
 	var card := DispatchFormat.new()
 	card._panel = ctx.get("workspace") as ReadingPanel
 	if card._panel != null:
-		card._panel.walk = DispatchWalk.new()
+		card._panel.walk = DispatchWalk.new(card.films)
 		card._panel.publish = Publish.new(card)
 		# what is on the desk, on the Props card ([DispatchProps])
 		card._panel.prop_sections.append(DispatchProps.new(card))
@@ -68,6 +70,11 @@ const SETTLE := 1.0
 
 
 func _process(delta: float) -> void:
+	ScreenPlays.pump()
+	_films_t -= delta
+	if _films_t <= 0.0:
+		_films_t = 1.0
+		_read_films()
 	_row_t -= delta
 	if _row_t > 0.0:
 		return
@@ -131,8 +138,8 @@ func desk_seed() -> int:
 	return 1 if path.is_empty() else 1 + absi(hash(path)) % 99999
 
 
-## The document's `dispatch`: the desk's seed, each picture's file, each clip's frames ([method Illustrations.clip_of]) and
-## the note's frontmatter (`head`, its `desk:` and `terminal:` blocks; the words a synced note is read with have none) -
+## The document's `dispatch`: the desk's seed, each picture's file, each clip's frames ([method Illustrations.clip_of]), each
+## film a `play` mark plays ([method films]) and the note's frontmatter (`head`, its `desk:` and `terminal:` blocks; the words a synced note is read with have none) -
 ## what [DispatchMedium] reads.
 func document() -> Dictionary:
 	var pictures := {}
@@ -147,10 +154,32 @@ func document() -> Dictionary:
 		var path := Illustrations.path_for(key)
 		if not path.is_empty():
 			pictures[key] = ProjectSettings.globalize_path(path)
-	var out := {"seed": desk_seed(), "things": things().duplicate(true), "pictures": pictures, "clips": clips, "head": _head()}
+	var out := {"seed": desk_seed(), "things": things().duplicate(true), "pictures": pictures, "clips": clips, "head": _head(),
+		"films": films().duplicate(true)}
 	for p in PARTS:
 		out[p] = part(p)
 	return out
+
+
+## What each thing the script plays is now: `what` -> [method ScreenPlays.record_of] (a note to play live, or a video file), read
+## again once a second.
+func films() -> Dictionary:
+	if _films.is_empty() and _films_t <= 0.0:
+		_read_films()
+	return _films
+
+
+## The films the script plays, read again: one that came in or changed is handed to the playing desk at once.
+func _read_films() -> void:
+	var was := DispatchScript.lengths_of(_films)
+	var now := {}
+	for what in DispatchScript.films_in(_body()):
+		now[what] = ScreenPlays.record_of(what)
+	var states := func(d: Dictionary) -> String: return JSON.stringify(d.keys().map(func(k: String) -> String: return k + str((d[k] as Dictionary)["ready"])))
+	var changed: bool = DispatchScript.lengths_of(now) != was or states.call(now) != states.call(_films)
+	_films = now
+	if changed:
+		_redress_live()
 
 
 ## The makes chosen for the desk's parts: `{role: choice}` ([PropMakes]), a part not in it the desk's own.
@@ -271,7 +300,7 @@ func _build() -> void:
 func _say_about(body: String) -> void:
 	if _about == null:
 		return
-	var p := DispatchScript.parse(body)
+	var p := DispatchScript.parse(body, films())
 	_wants = DispatchMedium.wants_of(p, body)
 	_works = DispatchMedium.works_of(p)
 	var phones: PackedStringArray = p["phones"]
@@ -311,5 +340,7 @@ func _redress_live() -> void:
 	if doc.get("dispatch") is Dictionary:
 		(doc["dispatch"] as Dictionary)["seed"] = desk_seed()
 		(doc["dispatch"] as Dictionary)["things"] = things().duplicate(true)
+		(doc["dispatch"] as Dictionary)["films"] = _films.duplicate(true)
 		for p in PARTS:
 			(doc["dispatch"] as Dictionary)[p] = part(p)
+

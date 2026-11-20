@@ -20,6 +20,15 @@ signal frame_changed                  # the frame (or what the medium allows of 
 const SEED_SALT := 3141592653589793
 
 
+const _Song := preload("res://src/audio/spectrum.gd")
+## A show inside the show ([NestedShow]: another note played on a screen): it hears [member song], never the session's,
+## reads no command line, keeps no settings, and is stepped by its host ([method step]) rather than processed.
+var nested := false
+## The song a nested show hears (a [member Spectrum.nested] one); null for the session's.
+var song: _Song = null
+## How long a nested show takes to come up from black and go down at its end, at most (s): a screen showing it is already lit.
+const NESTED_FADE := 1.2
+
 enum Style { CUT, DIP, FADE, LAYER }
 enum Trigger { BEAT, MOVEMENT, LULL }
 
@@ -75,8 +84,9 @@ var medium := "full"
 ## takes it back ([method unpin_medium]).
 var medium_override := ""
 var _pinned_by := 0            # the instance that pinned [member medium_override] ([method pin_medium]), 0 for none
-## The frame a show is made in - "landscape" (1920x1080) or "portrait" (1080x1920) - kept beside the
-## medium in the note's picture block (next/notes.md). A run uses [method resolved_frame].
+## The frame a show is made in - a key of [constant Medium.FRAME_SIZES]: "landscape" (1920x1080), "standard"
+## (1440x1080) or "portrait" (1080x1920) - kept beside the medium in the note's picture block (next/notes.md). A run
+## uses [method resolved_frame].
 var frame := "landscape"
 ## The look: a post-process over the whole picture as `{filter key: amount}` with only the live
 ## ones present (see [Filters]); filters combine. Held here for the same reason as `medium` (the
@@ -231,9 +241,26 @@ const OUTRO_MAX := 60.0
 
 
 # The Director is an autoload, so this runs before attach() builds the first scene: the first hold of
-# a session already uses the remembered pacing.
+# a session already uses the remembered pacing. A nested one keeps the defaults its host sets.
 func _ready() -> void:
-	_load_pacing()
+	if not nested:
+		_load_pacing()
+
+
+## The song the show hears: the session's ([Spectrum]), or a nested one's own ([member song]).
+func _song() -> _Song:
+	return song if song != null else Spectrum
+
+
+## The command line's words, which a nested show never reads (they are the session's: its seed, its medium, its frame).
+func _cli() -> PackedStringArray:
+	return PackedStringArray() if nested else OS.get_cmdline_user_args()
+
+
+## A nested show's step: what the autoload does each frame of its own, driven by its host after its song has heard the
+## frame ([NestedShow]).
+func step(delta: float) -> void:
+	_process(delta)
 
 
 ## Set the scene-transition pacing multiplier (see [member pacing]) and remember it. Safe on every
@@ -351,7 +378,7 @@ func set_medium(key: String) -> void:
 	frame_changed.emit()
 
 
-## Show the next show in [param f] ("landscape" or "portrait").
+## Show the next show in [param f] (a key of [constant Medium.FRAME_SIZES]).
 func set_frame(f: String) -> void:
 	if not Medium.FRAME_SIZES.has(f) or f == frame:
 		return
@@ -364,7 +391,7 @@ func set_frame(f: String) -> void:
 ## whenever the medium cannot be shown in it ([method Medium.frames]).
 func resolved_frame() -> String:
 	var want := frame
-	var args := OS.get_cmdline_user_args()
+	var args := _cli()
 	var i := args.find("--frame")
 	if i >= 0 and i + 1 < args.size() and Medium.FRAME_SIZES.has(String(args[i + 1])):
 		want = String(args[i + 1])
@@ -462,7 +489,7 @@ func filter_amount(key: String) -> float:
 ## The look this run actually uses: `--filter ...` if given, else the remembered set. Read by
 ## [main] when it builds the stage and whenever the set changes.
 func resolved_filters(turned := true) -> Dictionary:
-	var over: Variant = Filters.from_args(OS.get_cmdline_user_args())
+	var over: Variant = Filters.from_args(_cli())
 	var out: Dictionary = (over as Dictionary).duplicate() if over is Dictionary else Filters.sanitize(filters)
 	# what a part of the show turns of it now ([method turn_look]: a stage's flags), live or in a render
 	if turned:
@@ -512,7 +539,7 @@ func unpin_medium(by: Object) -> void:
 ## The medium this run uses: `--medium NAME` if given and known, else the remembered setting. Read by
 ## [main] when it builds the stage.
 func resolved_medium() -> String:
-	var args := OS.get_cmdline_user_args()
+	var args := _cli()
 	var i := args.find("--medium")
 	if i >= 0 and i + 1 < args.size():
 		var k := String(args[i + 1])
@@ -551,6 +578,8 @@ func _load_pacing() -> void:
 ## Hand the current values to [Settings], which owns the file and the flushing; writing an unchanged
 ## value is a no-op.
 func _save_pacing() -> void:
+	if nested:
+		return
 	Settings.write("director", "pacing", pacing)
 	Settings.write("director", "flourish", flourish)
 	Settings.write("director", "camera", camera)
@@ -610,6 +639,8 @@ func attach(host: Node, medium: Medium = null) -> void:
 	# A start/end fade sampled per song into [3, 10] s from a hash of the seed (not a draw off _rng, which
 	# would perturb the deterministic scene sequence).
 	_bookend_time = 3.0 + 7.0 * (float(hash([_session_seed, "bookend"]) & 0xFFFF) / 65535.0)
+	if nested:
+		_bookend_time = minf(_bookend_time, NESTED_FADE)
 	_locked = _locked_scene_arg()
 	_load_storyboard_arg()
 	# A storyboard's opening is authored (the-point's eye flies in over the first second), so manual
@@ -674,35 +705,35 @@ func session_seed() -> int:
 # The show's time is the session clock ([ShowFeed]): what the parts this mounts are handed.
 
 func show_time() -> float:
-	return Spectrum.current.time
+	return _song().current.time
 
 
 func show_length() -> float:
-	return Spectrum.song_length()
+	return _song().song_length()
 
 
 func lead() -> float:
-	return Spectrum.lead_in if Spectrum.bookend_baked else intro_hold
+	return _song().lead_in if _song().bookend_baked else intro_hold
 
 
 func tail() -> float:
-	return Spectrum.tail if Spectrum.bookend_baked else outro_hold
+	return _song().tail if _song().bookend_baked else outro_hold
 
 
 func signature() -> PackedFloat32Array:
-	return Spectrum.harmonic_signature()
+	return _song().harmonic_signature()
 
 
 func wait_for(who: String, on: bool) -> void:
-	Spectrum.set_waiting(who, on)
+	_song().set_waiting(who, on)
 
 
 func paused() -> bool:
-	return Spectrum.paused
+	return _song().paused
 
 
 func ready_ahead(who: String, seconds: float) -> void:
-	Spectrum.set_ready(who, seconds)
+	_song().set_ready(who, seconds)
 
 
 # The session seed, by priority:
@@ -712,12 +743,12 @@ func ready_ahead(who: String, seconds: float) -> void:
 #      always yield the same show;
 #   3. random, only when no audio is loaded (idle preview).
 func _resolve_seed() -> int:
-	var args := OS.get_cmdline_user_args()
+	var args := _cli()
 	for i in args.size():
 		if args[i] == "--seed" and i + 1 < args.size() and args[i + 1].is_valid_int():
 			return int(args[i + 1])
-	if Spectrum.song_hash != 0:
-		return _salt_seed(Spectrum.song_hash)
+	if _song().song_hash != 0:
+		return _salt_seed(_song().song_hash)
 	var r := RandomNumberGenerator.new()
 	r.randomize()
 	return r.randi()
@@ -731,10 +762,10 @@ func _salt_seed(fingerprint: int) -> int:
 
 # Where the session seed came from, for the log line.
 func _seed_source() -> String:
-	for a in OS.get_cmdline_user_args():
+	for a in _cli():
 		if a == "--seed":
 			return "--seed override"
-	if Spectrum.song_hash != 0:
+	if _song().song_hash != 0:
 		return "audio fingerprint + salt %d" % SEED_SALT
 	return "random (no audio)"
 
@@ -913,7 +944,7 @@ func goto_entry(i: int, into := 0.0) -> void:
 		_elapsed = left
 		while left > 1e-4:
 			var dt := minf(left, SIM_STEP)
-			_current.update(Spectrum.current, dt)
+			_current.update(_song().current, dt)
 			_current.view.commit(dt)
 			left -= dt
 
@@ -949,7 +980,7 @@ func _schedule_starts() -> Array:
 
 # `--storyboard <name|path>` selects manual mode at launch.
 func _load_storyboard_arg() -> void:
-	var args := OS.get_cmdline_user_args()
+	var args := _cli()
 	for i in args.size():
 		if args[i] == "--storyboard" and i + 1 < args.size():
 			load_storyboard(args[i + 1])
@@ -967,7 +998,7 @@ func _biased(n: int) -> int:
 func _arm() -> void:
 	_elapsed = 0.0
 	_cue_prev = 0.0
-	_beat_prev = Spectrum.current.beat
+	_beat_prev = _song().current.beat
 	if _flurry_cd > 0:
 		_flurry_cd -= 1            # count down the spacing between flurries of each kind
 	if _burst_cd > 0:
@@ -992,7 +1023,7 @@ func _lean() -> float:
 # The shared flurry drive, 0..1, on the spike curve (sharp onset, quick saturation). `movement` is
 # content-relative (short-term flux over the passage's own baseline); `lean` is the loudness half.
 func _flurry_drive(lean: float) -> float:
-	return Nonlinear.apply("spike", clampf(Spectrum.current.movement + 0.5 * lean, 0.0, 1.0), 2.5)
+	return Nonlinear.apply("spike", clampf(_song().current.movement + 0.5 * lean, 0.0, 1.0), 2.5)
 
 
 # A sparse, non-linear chance to start a rapid-fire CUT burst: only in the auto show, only with
@@ -1023,7 +1054,7 @@ func _flurry_spacing() -> int:
 
 # `--scene N` (or `--scene name`) pins a single scene for authoring - no changes.
 func _locked_scene_arg() -> int:
-	var args := OS.get_cmdline_user_args()
+	var args := _cli()
 	for i in args.size():
 		if args[i] == "--scene" and i + 1 < args.size():
 			var v := args[i + 1]
@@ -1040,10 +1071,10 @@ func _locked_scene_arg() -> int:
 # the scene transitions use. Runs whenever a song is loaded (live and export). Returns 1.0 (no fade)
 # only when idle. Audio is never touched.
 func _bookend_fade() -> float:
-	var slen := Spectrum.song_length()
+	var slen := _song().song_length()
 	if slen <= 0.0:
 		return live_fade                              # idle / no song: no bookend
-	var t := Spectrum.current.time
+	var t := _song().current.time
 	# Past the end is not black: a stream's length is an estimate while its playback position runs on, so
 	# an overrun means the length is stale, not that the show is over.
 	if t > slen + 0.5:
@@ -1051,9 +1082,9 @@ func _bookend_fade() -> float:
 	# The fade windows follow the bookend when there is one, so the picture arrives before the held
 	# silence ends, with a settle to be looked at before the first sound ([method Openings.settle]).
 	# Without a bookend they use the per-song sampled length.
-	var lead := Spectrum.lead_in
+	var lead := _song().lead_in
 	var fade_in := maxf(0.5, lead - Openings.settle(lead) if lead > 0.001 else _bookend_time)
-	var fade_out := maxf(0.5, Spectrum.tail if Spectrum.tail > 0.001 else _bookend_time)
+	var fade_out := maxf(0.5, _song().tail if _song().tail > 0.001 else _bookend_time)
 	var a_in := clampf(t / fade_in, 0.0, 1.0)           # 0 at the very start -> 1 after fade_in
 	var a_out := clampf((slen - t) / fade_out, 0.0, 1.0)  # 1 -> 0 over the final fade_out seconds
 	return minf(minf(a_in, a_out), live_fade)
@@ -1087,9 +1118,9 @@ func _process(delta: float) -> void:
 	# (first frame, a loop or a seek).
 	var raw := clampf(delta, 0.0, 0.12)
 	if _prev_time >= 0.0:
-		var d := Spectrum.current.time - _prev_time
+		var d := _song().current.time - _prev_time
 		raw = d if (d >= 0.0 and d <= 2.0) else clampf(delta, 0.0, 0.1)  # d<0 loop / d>2 seek -> fallback
-	_prev_time = Spectrum.current.time
+	_prev_time = _song().current.time
 	# Smooth the animation step: bank the raw advance as debt and spend at most STEP_CAP per drawn
 	# frame, so a scene build or an FPS hitch eases in instead of jerking the camera.
 	_time_debt = minf(_time_debt + raw, DEBT_CAP)
@@ -1102,7 +1133,7 @@ func _process(delta: float) -> void:
 	_tick_animation(anim)
 	if _medium != null and is_instance_valid(_medium):
 		# the capped animation step: the medium's camera is picture, not schedule
-		_medium.advance(Spectrum.current, anim, _bookend_fade())
+		_medium.advance(_song().current, anim, _bookend_fade())
 
 
 # The schedule, advanced by the real music-clock step: the hold clock, transition progress and alphas,
@@ -1134,7 +1165,7 @@ func _tick_schedule(dt: float) -> void:
 	_elapsed += dt
 	# Smoothed audio level: rises fast, falls slowly, so a gap between beats is not silence but a dead
 	# track (or its silent tail) is.
-	var e: float = Spectrum.current.energy
+	var e: float = _song().current.energy
 	_audio_ema = lerpf(_audio_ema, e, 1.0 - exp(-(8.0 if e > _audio_ema else 0.6) * dt))
 	# ...and the slow reference it is judged against (see _audio_ref): much slower than the level, so a
 	# surge stands out.
@@ -1144,11 +1175,11 @@ func _tick_schedule(dt: float) -> void:
 	_audio_ref = _ref_acc / maxf(_ref_w, 1e-4)
 	_drive_stinger(dt, bf)                          # rapid-fire beat-synced modulation of THIS scene
 	if _listen_echo(dt):
-		_beat_prev = Spectrum.current.beat
+		_beat_prev = _song().current.beat
 		return                                      # re-localized: the cut is already underway
 	if _should_change():
 		_begin_transition()
-	_beat_prev = Spectrum.current.beat
+	_beat_prev = _song().current.beat
 
 
 # The animation, advanced by the smoothed step in fixed sub-steps and drawn once (queue_redraw is
@@ -1158,10 +1189,10 @@ func _tick_animation(anim: float) -> void:
 	var steps := 0
 	while remaining > 1e-5 and steps < MAX_SIM_STEPS:
 		var dt := minf(remaining, SIM_STEP)
-		_current.update(Spectrum.current, dt)
+		_current.update(_song().current, dt)
 		_current.view.commit(dt)
 		if _transitioning and _next != null:
-			_next.update(Spectrum.current, dt)
+			_next.update(_song().current, dt)
 			_next.view.commit(dt)
 		remaining -= dt
 		steps += 1
@@ -1171,7 +1202,7 @@ func _tick_animation(anim: float) -> void:
 # zooms, rolls, skews and brightens the current scene, decaying before the next. Rides the view pulse
 # and node tint, so it works on any scene.
 func _drive_stinger(delta: float, bf: float) -> void:
-	var f := Spectrum.current
+	var f := _song().current
 	var beat_edge: bool = f.beat > 0.55 and _beat_prev <= 0.55
 	if beat_edge:
 		if _sting_left > 0:                          # land the next punch on this beat
@@ -1228,7 +1259,7 @@ func _drive_stinger(delta: float, bf: float) -> void:
 ## and false for a song loaded from a file: the one signal that separates "the picture is the content"
 ## from "the picture is the background".
 func _reading() -> bool:
-	return Spectrum.is_streaming()
+	return _song().is_streaming()
 
 
 # The punch envelope, 0 -> 1 -> 0 across `_sting_span`. A step on the beat edge (`pulse_zoom` 1.00 ->
@@ -1262,7 +1293,7 @@ func _listen_echo(dt: float) -> bool:
 	# Content-anchoring belongs to boards that follow the song (loop: false); a `loop: true` board
 	# cycles by its own clock and re-localizing it would fight the author every wrap.
 	if _echo == null or _storyboard_seq.is_empty() or _storyboard_loop \
-			or Spectrum.song_length() <= 0.0:
+			or _song().song_length() <= 0.0:
 		return false
 	_heard_t += dt
 	_cursor_t += dt
@@ -1270,7 +1301,7 @@ func _listen_echo(dt: float) -> bool:
 	# has heard everything. A looping session's next content is the top, so the arc rolls over now,
 	# aligned, with no recognition latency. Echo's vote matcher below remains the backstop for trimmed,
 	# doubled or cut-up audio and drift.
-	if _cursor_t >= Spectrum.song_length() and _step >= _storyboard_seq.size():
+	if _cursor_t >= _song().song_length() and _step >= _storyboard_seq.size():
 		print("ghost: echo - the song's map is exhausted, rolling the arc to the top")
 		_step = 0
 		_begin_transition()
@@ -1280,11 +1311,11 @@ func _listen_echo(dt: float) -> bool:
 		return false                   # true silence: nothing to record, nothing to recognize
 	# The fast descriptor (~0.7 s of context): recognition must notice the content moving within a
 	# couple of seconds.
-	var sig := Spectrum.harmonic_signature_fast()
+	var sig := _song().harmonic_signature_fast()
 	# Write-once: only the frontier extends the map. The tail records too (the outro must own its cells
 	# or its resemblance to earlier sections yanks the show backward). The map covers one hearing: past
 	# one song's schedule the cursor's claim is stale and recording would poison it.
-	if _cursor_t <= Spectrum.song_length():
+	if _cursor_t <= _song().song_length():
 		_echo.record(_cursor_t, sig)
 	var to := _echo.listen(_heard_t, _cursor_t, sig, dt)
 	if to < 0.0:
@@ -1329,7 +1360,7 @@ func _listen_echo(dt: float) -> bool:
 		var remaining := into
 		while remaining > 1e-4:
 			var dt2 := minf(remaining, SIM_STEP)
-			incoming.update(Spectrum.current, dt2)
+			incoming.update(_song().current, dt2)
 			incoming.view.commit(dt2)
 			remaining -= dt2
 	_cursor_t = to
@@ -1359,8 +1390,8 @@ func _should_change() -> bool:
 	# fading tail does not read as a glitch. A fixed `end_hold` window off the known song length, not
 	# drive-scaled: the live analyzer and the export's baked FFT read the audio slightly differently, and
 	# a drive-scaled gate would cross at different moments in each and land on different last scenes.
-	var slen := Spectrum.song_length()
-	if slen > 0.0 and Spectrum.current.time >= slen - end_hold:
+	var slen := _song().song_length()
+	if slen > 0.0 and _song().current.time >= slen - end_hold:
 		return false
 	# During a burst the backstop shrinks to a few seconds so quick scenes never linger.
 	var hi: float = _burst_max if _burst_left > 0 else _scaled_bound(ex, "max", max_hold)
@@ -1432,7 +1463,7 @@ func _cue_taken(lo: float, hi: float) -> bool:
 # spectral flux push it further. Returns a multiplier from `pace_drive_scale` (full drive) up to
 # `pace_calm_scale`.
 func _pacing_scale() -> float:
-	var f := Spectrum.current
+	var f := _song().current
 	var fast := clampf((0.58 - f.beat_period) / 0.24, 0.0, 1.0)      # 1 when the pulse is quick
 	var drive := clampf(pace_energy_gain * _audio_ema + 0.45 * fast + 3.0 * f.flux, 0.0, 1.0)
 	return lerpf(pace_calm_scale, pace_drive_scale, drive)
@@ -1458,7 +1489,7 @@ func _ready_to_exit(ex: Dictionary) -> bool:
 # randomly armed trigger (auto mode).
 func _trigger_fires(ex: Dictionary) -> bool:
 	var trig: int = int(ex.get("trigger", _trigger))
-	var f := Spectrum.current
+	var f := _song().current
 	match trig:
 		Trigger.BEAT:
 			return f.beat > 0.5 and _beat_prev <= 0.5    # rising edge of a beat
@@ -1489,7 +1520,7 @@ func hold(on: bool) -> void:
 func current_descriptor() -> Dictionary:
 	if _current == null:
 		return {}
-	var f := Spectrum.current
+	var f := _song().current
 	var d := {
 		"scene": _current.scene_name,
 		"render_kind": _current.render_kind,
@@ -1499,7 +1530,7 @@ func current_descriptor() -> Dictionary:
 		"lifecycle": _current.lifecycle,
 		"seed": _current.seed_value,
 		"session_seed": _session_seed,
-		"song_hash": Spectrum.song_hash,
+		"song_hash": _song().song_hash,
 		"params": _current.params,
 		"audio": {
 			"time": f.time,
@@ -1884,9 +1915,9 @@ func _make_scene() -> GhostScene:
 	# Telemetry only: the live harmonic bucket at the cut, not folded into the scene seed (see
 	# next/harmonic_seeding.md). Stamped with the song position, so a finished render's cut list can
 	# answer "what was on screen at 8:23?".
-	var _t := maxf(Spectrum.current.time, 0.0)
+	var _t := maxf(_song().current.time, 0.0)
 	print("ghost: cut -> %s  at %d:%05.2f  harmonic bucket %d"
-		% [scene.scene_name, int(_t / 60.0), fmod(_t, 60.0), Spectrum.harmonic_bucket(12)])
+		% [scene.scene_name, int(_t / 60.0), fmod(_t, 60.0), _song().harmonic_bucket(12)])
 	if not _quiet_mint:
 		scene_cut.emit()              # the stage governor re-measures per scene
 	# Narrative tempo: higher sensitivity shrinks the hold (and any explicit min/max bounds); the scene
@@ -1931,7 +1962,7 @@ func _make_scene() -> GhostScene:
 	# Pre-warm stateful motion (growth envelopes, scroll phase, tumbling angles) and ease the camera to
 	# its shot framing, so the first shown frame is settled.
 	for w in 12:
-		scene.update(Spectrum.current, 0.05)
+		scene.update(_song().current, 0.05)
 		scene.view.commit(0.05)
 	scene.view.snap()        # finish the ease EXACTLY, so the first shown frame doesn't slide into place
 	# NB: this build burns real wall time (pre-warm + the first heavy draw) while the music clock keeps

@@ -254,10 +254,10 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
      "a long export is reproduced without paying for the whole export.", False),
     ("--storyboard", "<path>", "Play the storyboard file at this path (`.json` or `.yaml`), as a render of a note's does.",
      False),
-    ("--frame", "landscape|portrait",
-     "The show's frame for this run - 16:9 or 9:16 - over the remembered one, as `--medium` overrides the medium. A "
-     "medium without a portrait frame plays landscape. Passed to an export's render, so it renders the frame the "
-     "session showed.", False),
+    ("--frame", "landscape|standard|portrait",
+     "The show's frame for this run - 16:9, 4:3 or 9:16 - over the remembered one, as `--medium` overrides the medium. "
+     "A medium without that frame plays landscape. Passed to an export's render, so it renders the frame the session "
+     "showed.", False),
     ("--handheld", "",
      "Run the phone shell on the desktop: the notes list and the editor, full screen in a phone's shape, no stage, no "
      "transport, nothing downloaded (`GHOST_HANDHELD=1` does the same). A phone runs it always.", False),
@@ -1230,11 +1230,18 @@ def props_page(classes: Dict[str, Script]) -> str:
 
 def surroundings_page(card: Script, sur: Script) -> str:
     """docs/surroundings.md: the Environment card (`EnvironmentCard`) and what can be round a scene (`Surroundings`' KINDS, the
-    light presets, the looks of shafts) with every property each kind can be told and the bounds Roll draws it in."""
+    light presets, the looks of shafts, beams and fog) with every property each kind can be told and the bounds Roll draws it in."""
     kinds, lights, looks = sur.const("KINDS", {}), sur.const("LIGHTS", {}), sur.const("SHAFT_LOOKS", {})
-    for name, reg in (("KINDS", kinds), ("LIGHTS", lights), ("SHAFT_LOOKS", looks)):
+    beam_looks, fog_looks = sur.const("BEAM_LOOKS", {}), sur.const("FOG_LOOKS", {})
+    for name, reg in (("KINDS", kinds), ("LIGHTS", lights), ("SHAFT_LOOKS", looks), ("BEAM_LOOKS", beam_looks), ("FOG_LOOKS", fog_looks)):
         if not reg:
             warn(f"could not parse Surroundings.{name}")
+
+    def looks_table(rows: Dict[str, Any]) -> List[str]:
+        return table(["Look", "What it is", "Set"],
+                     ([f"`{k}` {text(r, 'label')}", md(text(r, "blurb")),
+                       ", ".join(f"`{a}` {b:g}" if type(b) in (int, float) else f"`{a}` {b}" for a, b in pairs(r, "set").items())]
+                      for k, r in rows.items()))
 
     def bounds(f: Dict[str, Any]) -> str:
         if "options" in f and isinstance(f["options"], list):
@@ -1274,16 +1281,25 @@ def surroundings_page(card: Script, sur: Script) -> str:
               ([f"`{k}` {text(r, 'label')}", f"{float(r.get('weight', 0)):g}", md(text(r, "blurb"))] for k, r in lights.items())),
         f"### Looks of light shafts ({len(looks)})",
         "Shafts offered on the Dex beside the kind as it rolls (`Surroundings.SHAFT_LOOKS`), each with some properties set.",
-        table(["Look", "What it is", "Set"],
-              ([f"`{k}` {text(r, 'label')}", md(text(r, "blurb")),
-                ", ".join(f"`{a}` {b:g}" if type(b) in (int, float) else f"`{a}` {b}" for a, b in pairs(r, "set").items())]
-               for k, r in looks.items())),
+        looks_table(looks),
+        f"### Looks of colored beams ({len(beam_looks)})",
+        "Beams offered on the Dex beside the kind as it rolls (`Surroundings.BEAM_LOOKS`), each with some properties set.",
+        looks_table(beam_looks),
+        f"### Looks of fog ({len(fog_looks)})",
+        "Fog offered on the Dex beside the kind as it rolls (`Surroundings.FOG_LOOKS`), each with some properties set.",
+        looks_table(fog_looks),
         "## What each can be told",
         "A property set stays; one left unset is drawn from the element's own number inside the bounds it is rolled in (`Roll`), "
         "so Roll gives another of the same thing.",
         "### A light (`LIGHT_FIELDS`)", fields_table(sur.const("LIGHT_FIELDS", {})),
         "### Light shafts (`SHAFT_FIELDS`)", fields_table(sur.const("SHAFT_FIELDS", {})),
-        "### Haze (`FOG_FIELDS`)", fields_table(sur.const("FOG_FIELDS", {})),
+        "### Colored beams (`BEAM_FIELDS`)",
+        "Its Colors' choices are the beams' palettes (`StageBeams.PALETTES`).",
+        fields_table(sur.const("BEAM_FIELDS", {})),
+        "### Haze (`HAZE_FIELDS`)", fields_table(sur.const("HAZE_FIELDS", {})),
+        "### Fog (`FOG_FIELDS`)",
+        "Its Activation's choices are the fog's curves (`Effects.FOG_SHAPES`).",
+        fields_table(sur.const("FOG_FIELDS", {})),
         "### What drifts (`MOTE_FIELDS`)",
         "Size, glow, speed and color default to each kind's own (the table's `Effects.MOTES`), and are rolled near them.",
         fields_table(sur.const("MOTE_FIELDS", {})),

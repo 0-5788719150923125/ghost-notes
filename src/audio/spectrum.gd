@@ -9,6 +9,10 @@ extends Node
 ##
 ## Two backends: the live analyzer (default) and a baked timeline ([SpectrumBake], `--use-bake`) read
 ## from pre-computed frames for deterministic Movie Maker exports.
+##
+## A second one can hear a song inside the show ([member nested]: another note played on a screen,
+## [NestedShow]): its song's baked frames read on a clock its host sets ([member virtual_clock]), its own
+## player kept at that time ([method follow]) - never the Master bus's analyzer, gain or the command line.
 
 ## Number of log-spaced bands in [member AudioFeatures.bands].
 const BAND_COUNT := AudioFeatures.BAND_COUNT
@@ -33,6 +37,9 @@ const NAMED := {
 
 ## The latest frame. Read this from anywhere; it is replaced every frame.
 var current: AudioFeatures = AudioFeatures.new()
+## A song heard inside the show rather than the session's: set before it enters the tree, it leaves the Master
+## bus alone (no analyzer, no bookend gain) and hears only what [method hear_baked] hands it.
+var nested := false
 
 ## A stable hash of the loaded audio's path - scenes seed from this so the same
 ## song always renders the same video. 0 when nothing is loaded.
@@ -153,11 +160,13 @@ var _band_hi := PackedFloat32Array()
 
 
 func _ready() -> void:
-	_setup_analyzer()
+	if not nested:
+		_setup_analyzer()
 	_precompute_bands()
 	_player = AudioStreamPlayer.new()
 	_player.bus = "Master"
-	_player.finished.connect(_on_player_finished)
+	if not nested:
+		_player.finished.connect(_on_player_finished)
 	add_child(_player)
 	#Audio is loaded in begin(), when main decides (a direct boot, or a note with a song opens).
 
@@ -198,6 +207,48 @@ func begin(path := "") -> void:
 		_held = lead_in > 0.001 and not bookend_baked
 		if not _held:
 			_player.play()
+
+
+## A nested song ([member nested]): [param stream] (the song, its file at [param path]) heard through [param frames] (its
+## bake, [SpectrumBake]) on [member virtual_clock], its grid and seed from the file's sidecar as a session's are. No
+## lead-in or tail: its clock's 0 is its first sample.
+func hear_baked(path: String, stream: AudioStream, frames: Array) -> void:
+	fade_audio = false
+	_player.stream = stream
+	_has_audio = stream != null
+	_loaded_path = path
+	song_hash = _fingerprint(path)
+	_baked_frames = frames
+	_baked = not frames.is_empty()
+	lead_in = 0.0
+	tail = 0.0
+	bookend_baked = false
+	_held = false
+	_tailing = false
+	paused = false
+	_adopt_song()
+	if virtual_clock < 0.0:
+		virtual_clock = 0.0
+
+
+## A nested song's sound at [param t] seconds into it while [param on], held while [param held]: its player started
+## there, sought where it strays more than [param drift] seconds.
+func follow(t: float, on: bool, held: bool, drift := 0.12) -> void:
+	if _player == null or _player.stream == null:
+		return
+	var inside := on and t >= 0.0 and t < _player.stream.get_length()
+	if not inside:
+		if _player.playing:
+			_player.stop()
+		return
+	_player.stream_paused = held
+	if held:
+		return
+	if not _player.playing:
+		_player.play(t)
+		return
+	if absf(_player.get_playback_position() + AudioServer.get_time_since_last_mix() - t) > drift:
+		_player.seek(t)
 
 
 # Pre-analyze the loaded song into a spectrum timeline (export render only). Blocks until done; Movie

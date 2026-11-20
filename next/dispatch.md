@@ -66,7 +66,8 @@ bearing, range`, `sound:`, `static:`, `print`, `sleep`, `off:`, `look:`, `lift:`
 before it in that silence, a block's typing among them - `DispatchMedium._picture_in`), `/image`, `video
 (feed|satellite|tv): file | words` (a screen's picture may be told `, unwatched`), ` ```terminal ` blocks (one program,
 `DispatchTerminal`'s line kinds), `strike` after a typed line, `<!-- redact: words -->` on a line of a terminal block,
-`gain: N`, `bell`, `lamp: off|on`, `fade: to-black|from-black, HH:MM, secs`, `tablet` / `/tablet` with ` ```page ` fences,
+`gain: N`, `bell`, `lamp: off|on`, `power: off|on`, `environment: shafts off, beams on[, secs]`, `play
+(terminal|feed|satellite|tv): NOTE TITLE | video path` (told `mono` or `unwatched`), `fade: to-black|from-black, HH:MM, secs`, `tablet` / `/tablet` with ` ```page ` fences,
 `back`, `new tab` and `<!-- player -->`, `reply: tablet`, `replay: tablet | words`, and the voice's own (`speaker`, `heard:`, `hesitation`, `delivery`). `act:`
 stays a note. The ScriptMarks registry has a row for each (docs/script.md).
 
@@ -84,6 +85,7 @@ stays a note. The ScriptMarks registry has a row for each (docs/script.md).
 | `dispatch_censor.gd` | `DispatchCensor`: redacted words hidden over the finished frame - a tracked box cracked into flat shards (`shaders/dispatch_redact.gdshader`) |
 | `dispatch_sounds.gd` | `DispatchSounds`: every sound of the desk, a function of show time |
 | `dispatch_props.gd` | `DispatchProps`: the desk's things on the note's Props card and the Dex - the mug and the cup of pencils as roles any make can play (Choose…, kept in the Medium block's `things`; next/library.md, "Roles"), the desk and the roots as parts with properties and a Roll (kept in the Medium block's `desk` and `roots`; the desk's Choose… offers desks drawn by other numbers), and every thing the desk builds, pictured alone |
+| `screen_plays.gd` | `ScreenPlays`: what a `play` mark plays, found by what it names - another note by its title (its made song, that song's bake taken once by the bake runner, its medium, its storyboard, how its Look shows its words), or a video file by its path (its size and rate probed and its sound taken out once, under `user://screen_films/`) |
 | `dispatch_format.gd`, `dispatch_walk.gd` | its own rows on the Medium card (the desk's number) and what they hand the reading; the pictures are the note's Pictures card's (next/pictures.md), `DispatchMedium.pictures_in` saying which marks they are |
 
 And in the voice: `Manuscript.HEARD`, a passage's `heard` through [ReadingPlan], a mark in [ReadingJoin], applied by the
@@ -94,7 +96,10 @@ stream and the export, the band in [VoiceFX].
 `tests/dispatch/dispatch_script_check.gd` (the parser on a fixture with every mark: the phones' state, the voice's text,
 the actions, the glass panel by panel, pings, fades, the tablet's pages), `tests/dispatch/dispatch_check.gd` (the medium
 built headless and played through on rehearsed words: what is in hand, on the terminal and on the radar at moments, the
-camera's target and its hold on the glass, the black and the clock, the tablet, a clip's frames), `tests/dispatch/dispatch_sounds_check.gd` (the
+camera's target and its hold on the glass, the black and the clock, the tablet, a clip's frames, the grid down, the
+Environment switched and a video decoded onto the terminal), `tests/show/nested_show_check.gd` (a note played inside another:
+its own Director, song and viewport, the session's untouched, its clock, its song silent once nobody asks, its words; the
+credits' roll), `tests/dispatch/dispatch_sounds_check.gd` (the
 jet's pitch falls, nothing is louder than the voice, the two storms differ, the same twice), `tests/voice/heard_check.gd`
 (the band, the plan, the join's marks), `tests/dispatch/dispatch_redact_check.gd` (GPU: the terminal on a bulged quad
 through a camera, the censor over it - no letter of the hidden words outside a box, every shard one color and the average
@@ -102,6 +107,25 @@ of the frame under it, the tracker never short of the words); probe `tests/dispa
 look at).
 
 ## Status
+
+**The grid, notes inside notes, and videos** (built; the user has watched the first pass): `power: off` takes every thing that runs on the grid dark at once
+(`PropRig.set_power`: each make's lights and glowing parts; the radar's, the oscilloscope's and every screen's glass collapsing to
+its dot; the receiver's dial lamp, its needle and its hiss), with a breaker's thunk; the phones and the tablet run on batteries.
+`environment:` switches the Environment's elements by kind or kept name (`DispatchMedium.env_levels`, eased over its seconds; an
+element a mark names is the other way before it; `shafts` with none chosen is the hollow's own crack). `play (terminal): NOTE`
+plays ANOTHER NOTE LIVE on a screen ([NestedShow] in `show/`, loaded by path: its own Director, [member Director.nested], walking
+that note's seed's scenes or its storyboard in its medium, drawn into a 4:3 viewport with a world of its own as the comic's
+panels are, hearing its own song through a [member Spectrum.nested] reading that song's bake on the desk's clock; its words
+over the whole frame in its Look's reveal, the credits where it names none). Never rendered ahead. Only a note shown in scenes
+(Auto, Full frame, Comic) with its song made. `play (terminal): /a/video.mp4` plays a video ([ScreenFilm] in `media/`: FFmpeg
+piping raw frames to a thread of its own by the film's time, its sound a WAV taken out once). The glass wakes from its dot,
+plays, holds its last frame and goes down; what is not ready is the screen's static; a screen something plays on is lit with
+the grid down. The voice waits for the rest of what plays where its silence ends (`DispatchScript._hold_films`), so marks after
+a `play` in the same silence happen while it plays. The session ending under it (Stop) lets every inner show go
+(`DispatchMedium.release`), and an inner song falls silent once the desk stops asking for it. The Targeting Individuals ending
+uses all of it: the crash held, the grid down, ERROR ME FOUND on the terminal, its lyrics rolling as credits, the shafts giving
+way to colored beams. For the user: the beams' looks and timing, `mono` or color on the green glass, where the camera should be
+while the song plays, the credits' legibility over the desk.
 
 **Built.** The author has not yet watched or heard it.
 

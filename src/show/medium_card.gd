@@ -383,10 +383,10 @@ func _frame_option() -> OptionButton:
 	opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	opt.fit_to_longest_item = false      # the panel's width is fixed; the platforms are in the tooltip
 	opt.clip_text = true
-	opt.add_item("Landscape  16:9")
-	opt.add_item("Portrait  9:16")
+	for k in Medium.FRAME_SIZES:
+		opt.add_item(String(Medium.FRAME_LABELS[k]))
 	opt.item_selected.connect(func(i: int) -> void:
-		Director.set_frame("portrait" if i == 1 else "landscape"))
+		Director.set_frame(String(Medium.FRAME_SIZES.keys()[i])))
 	row.add_child(opt)
 	return opt
 
@@ -394,12 +394,20 @@ func _frame_option() -> OptionButton:
 func _sync_frames() -> void:
 	if _frame_pick == null:
 		return
-	var ok := Medium.supports(Director.resolved_medium(), "portrait")
-	_frame_pick.set_item_disabled(1, not ok)
-	_frame_pick.select(1 if Director.resolved_frame() == "portrait" else 0)
-	_frame_pick.tooltip_text = ("What the show is framed as - and exported at. Portrait is for Shorts, Reels and TikTok."
-		if ok else "%s has no portrait frame yet - it frames a spread or a desk a 9:16 view cannot hold - so the show is landscape."
-			% Registry.label(Medium.REGISTRY, Director.resolved_medium()))
+	var med := Director.resolved_medium()
+	var keys := Medium.FRAME_SIZES.keys()
+	var missing := PackedStringArray()
+	for i in keys.size():
+		var ok := Medium.supports(med, String(keys[i]))
+		_frame_pick.set_item_disabled(i, not ok)
+		if not ok:
+			missing.append(String(Medium.FRAME_LABELS[keys[i]]).get_slice(" ", 0).to_lower())
+	_frame_pick.select(maxi(0, keys.find(Director.resolved_frame())))
+	var tip := "What the show is framed as - and exported at. Standard is an old screen's 4:3; portrait is for Shorts, Reels and TikTok."
+	if not missing.is_empty():
+		tip += "\n%s has no %s frame - it frames a spread or a desk such a view cannot hold." % [
+			Registry.label(Medium.REGISTRY, med), " or ".join(missing)]
+	_frame_pick.tooltip_text = tip
 
 
 ## The handwriting, the Notebook's and the Letter's (the Letter is written in the Notebook's hands,

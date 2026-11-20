@@ -56,6 +56,7 @@ extends SceneTree
 ## - controls: a call to a phone not on the desk, and a call left open, are each said;
 ## - a text answering the room's reply comes no sooner than the other end could type it (the control: a text answering nothing),
 ##   and the room's reply waits for its own typing on the keypad;
+## - the grid down, the Environment switched and a film on the terminal ([method _grid_down]);
 ## - the flip clock's cards fall as a flap let go, slap down within a fifth of a second and bounce (the control: an even turn
 ##   is half way at half its time), the rightmost changed digit first; a digit that stays never flaps.
 ##
@@ -532,6 +533,7 @@ func _init() -> void:
 	_ok(twice_pages.size() == 3 and String(twice_pages[1]["how"]) == "again" and str(twice["warnings"]).contains("tablet down"),
 		"a page come back to is reloaded, and a page with the tablet down is warned of (%s)" % str(twice["warnings"]))
 	_browsing()
+	_grid_down()
 	var replayed := sp.find("<!-- speaker: Control -->\n<!-- heard: tablet -->")
 	_ok(replayed > 0 and sp.find("He is in the hall.", replayed) - replayed < 120 and spoken.count("hall") == 3, "a replay says the room's own words again through the tablet's speaker")
 	var unsaid := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n<!-- tablet -->\n\n<!-- replay: tablet | Never said. -->\n\n<!-- /tablet -->\n")
@@ -666,6 +668,41 @@ func _init() -> void:
 
 
 ## The tablet browsed: how each page of the browsing note is reached, and the marks that do nothing said so.
+## The grid down, the Environment switched, a film on the terminal: `power:` and `environment:` are actions the voice waits for and
+## never says; `play` takes the film's seconds from what it is handed, and the voice waits for the rest of the film where its silence
+## ends, so what is written after it happens while it plays (controls: a film handed no seconds is warned of and not waited for; one
+## shorter than what follows it adds nothing; a mark it cannot read is warned of and does nothing).
+func _grid_down() -> void:
+	var note := "<!-- speaker: Control -->\n\nHi.\n\n<!-- power: off -->\n\n<!-- play (terminal): ERROR ME FOUND -->\n\n<!-- hesitation: 8 -->\n\n<!-- environment: Shafts off, beams ON, 2 -->\n"
+	var films := {"ERROR ME FOUND": {"kind": "note", "ready": true, "secs": 30.0}}
+	var d := DispatchScript.parse(note, films)
+	var acts: Array = d["actions"]
+	var kinds := acts.map(func(a: Dictionary) -> String: return String(a["kind"]))
+	var sp := String(d["speakable"])
+	_ok(kinds == ["power", "play", "environment"] and not bool(acts[0]["on"]) and is_equal_approx(float(acts[0]["rest"]), DispatchScript.POWER)
+		and String(acts[1]["screen"]) == "terminal" and is_equal_approx(float(acts[1]["secs"]), 30.0)
+		and (acts[2]["set"] as Dictionary) == {"shafts": false, "beams": true} and is_equal_approx(float(acts[2]["secs"]), 2.0)
+		and (d["warnings"] as PackedStringArray).is_empty(),
+		"the grid goes down, a film plays on the terminal, the Environment is switched (%s; %s)" % [str(kinds), str(d["warnings"])])
+	var left := 30.0 - (DispatchScript.PLAY_LEAD + DispatchScript.REST_PAD) - 8.0 - (DispatchScript.ENVIRONMENT + DispatchScript.REST_PAD)
+	_ok(sp.contains("action-hold: %s" % String.num(left, 2)) and not sp.contains("power") and not sp.contains("ERROR")
+		and not sp.contains("environment"), "the voice waits for the rest of the film after what follows it, and says none of it (%s)" % sp)
+	_ok(DispatchScript.films_in(note) == PackedStringArray(["ERROR ME FOUND"]), "what the script plays is listed once")
+	var blind := DispatchScript.parse(note)
+	_ok(str(blind["warnings"]).contains("play (terminal): ERROR ME FOUND - nothing found") and not String(blind["speakable"]).contains(String.num(left, 2))
+		and is_equal_approx(float((blind["actions"] as Array)[1]["secs"]), 0.0),
+		"the control: what is found by no name is warned of and not waited for (%s)" % str(blind["warnings"]))
+	var short := DispatchScript.parse(note, {"ERROR ME FOUND": {"kind": "note", "ready": true, "secs": 5.0}})
+	_ok(String(short["speakable"]).count("action-hold") == String(d["speakable"]).count("action-hold") - 1,
+		"the control: a film shorter than what follows it adds no rest")
+	var odd := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n<!-- power: dim -->\n\n<!-- environment: beams sideways -->\n\n<!-- play (phone): x.mp4 -->\n\n<!-- play (tv, mono): x.mp4 -->\n\nThere.\n")
+	var oa: Array = odd["actions"]
+	var ow := str(odd["warnings"])
+	_ok(oa.size() == 1 and String(oa[0]["kind"]) == "play" and bool(oa[0].get("mono", false)) and ow.contains("power: dim")
+		and ow.contains("environment: beams sideways") and ow.contains("play (phone)"),
+		"the controls: a power neither on nor off, an element neither on nor off and a film on no screen are warned of and do nothing (%s)" % ow)
+
+
 func _browsing() -> void:
 	var br := DispatchScript.parse(FileAccess.get_file_as_string(BROWSING))
 	var acts: Array = br["actions"]

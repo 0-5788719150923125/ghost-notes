@@ -62,7 +62,7 @@ func _run() -> void:
 			"--page": _page = args[i + 1] == "1"
 			"--words": _word = float(args[i + 1])
 			"--things": _things = Array(String(args[i + 1]).split(",", false))
-			"--light", "--bright", "--shafts", "--air", "--heard": EnvFlags.take(_environment, args[i], args[i + 1])
+			"--light", "--bright", "--shafts", "--fog", "--air", "--heard": EnvFlags.take(_environment, args[i], args[i + 1])
 			"--card": _card = String(args[i + 1]).c_unescape()
 			"--times":
 				_times = []
