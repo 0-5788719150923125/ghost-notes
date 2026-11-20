@@ -146,6 +146,12 @@ FOLDERS: List[Tuple[str, str, str]] = [
     ("timeline", "The storyboard's editor",
      "What keeps a note's storyboard in its folder and the dock it opens beside Play: a strip of entries, a stage "
      "entry's lanes, and the ruler."),
+    ("music", "Music",
+     "A note that makes its own sound (next/music.md): the theory and the banks a song is composed from (scales, chords, "
+     "parts, patterns, instruments, kinds of section, all rows), the lyrics read from a note's words, the composer (a "
+     "pure function from the `sound:` block, the words and a reference to a score), the bake that sings each line "
+     "through the voice host and renders the parts through the music host (hosts/music/), the score on the one "
+     "Timeline, and the Sound card - a file, or a song composed for the note."),
     ("export", "Export",
      "Rendering a session to video (bake + Movie Maker, background processes) and uploading it to YouTube. Under the "
      "workspaces: a reading and a show of cards export a take and fill in an upload, and the exporter names neither."),

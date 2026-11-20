@@ -3,20 +3,23 @@ class_name NotePanel
 
 ## NotePanel - a note's own panel: where every new note opens, and what runs every note whose components
 ## need no editor of their own ([method Components.workspace_of]) - a note of words alone, and a note with
-## a song.
+## a sound.
 ##
 ## Its cards are the note's components, read off the note's blocks: the Script (the words, always), the
-## Song, and whatever else is attached, built the one way every panel builds them ([method
+## Sound, and whatever else is attached, built the one way every panel builds them ([method
 ## NoteCards.build]). Each keeps its block in the note through the autosave every panel's frontmatter goes
-## through ([DocSource]); the song's block is written only when another song is chosen.
+## through ([DocSource]). What a card makes is one list on the Pipeline card ([PipelineCard]), there while
+## any card offers a section (a composed Sound's: its reference read, its lines sung, its mix).
 ##
 ## "+" offers what the note could have next ([method Components.attach_menu]), each grayed with its reason
 ## when it cannot be had yet. Attaching writes the component's block into the note and opens the note again
 ## as whatever its blocks now say ([method NoteCards.attach]); a card's × takes it off the same way
 ## ([method NoteCards.detach]).
 ##
-## The song is the note's clock, and main runs it ([member begin_song]): loaded as the panel comes up,
-## after the cards have applied the note's medium, holds and look, and waiting at its start. With no Medium
+## The sound is the note's clock, and main runs it ([member begin_song]): the file the Sound card plays
+## ([method SoundCard.playable]: a chosen file, or the composed song's mix) loaded as the panel comes up,
+## after the cards have applied the note's medium, holds and look, and waiting at its start. A new mix made
+## opens the note again around it ([method _sound_made]). With no Medium
 ## there is no stage; with one, the Director cuts scenes on the song in the format the Medium card names
 ## (the seed's choice, or the note's storyboard - [NoteStoryboard], [method show_plan]), and a format picked
 ## while the note is up is shown at once ([member restage]).
@@ -42,7 +45,8 @@ var _status: Label
 var _blocks := {}             # the note's blocks, as it opened
 var _attached: Array = []     # the components it has (Components.attached_of)
 var _cards := {}              # block key -> a card with capture() / apply()
-var _song: SongCard
+var _sound: SoundCard
+var _pipeline: PipelineCard
 var _medium: MediumCard
 var _story: NoteStoryboard
 var _youtube: YouTubeCard
@@ -52,7 +56,7 @@ func _ready() -> void:
 	layer = 10
 	_blocks = NoteStore.blocks_of(path) if not path.is_empty() else {}
 	_attached = Components.attached_of(_blocks)
-	var has_song := _attached.has("song")
+	var has_song := _attached.has("sound")
 	#Nothing to render without a show: a plain note, or a song with no medium yet, has no ⤓ (released on the
 	#way out, keyed - see Chrome._export_claims)
 	var ch := Chrome.of(self)
@@ -83,11 +87,8 @@ func _ready() -> void:
 	kept.cache_dir = func() -> String: return NoteUpload.folder_of(path)
 	kept.history_dir = func() -> String: return NoteUpload.folder_of(path).path_join("history") if not path.is_empty() else ""
 	script_card.add_child(kept)
-	if has_song:
-		_song = SongCard.new(_song_path())
-		_song.chosen.connect(_choose_song)
-		_panel.add_card("song", "Song", &"sound", "song").add_child(_song)
-	_cards = NoteCards.build(_panel, _attached, {"blocks": _blocks, "reshape": _reshape,
+	_cards = NoteCards.build(_panel, _attached, {"blocks": _blocks, "reshape": _reshape, "path": path,
+		"folder": NoteUpload.folder_of(path) if not path.is_empty() else "", "video": _attached.has("medium"),
 		"intro_tip": "Seconds held before the song starts, the picture fading up through them and up a few seconds before it.",
 		"outro_tip": "Seconds held after the song ends, picture and sound fading out together."})
 	#...the timeline open, as a list ([TimelineList]): a card shown only while a timeline editor is open
@@ -104,6 +105,19 @@ func _ready() -> void:
 	_youtube = _cards.get("youtube") as YouTubeCard
 	if _youtube != null:
 		_youtube.name_from(_writer)
+	_sound = _cards.get("sound") as SoundCard
+	if _sound != null:
+		_sound.chosen.connect(_choose_song)
+		_sound.baked.connect(_sound_made)
+	#...and everything the cards make, one list, last in the deck: there while a card has something to make
+	for key in _cards:
+		if (_cards[key] as Object).has_method("pipeline"):
+			if _pipeline == null:
+				_pipeline = PipelineCard.new(SECTION)
+				_pipeline.put_on(_panel)
+			var section: PipelineSection = (_cards[key] as Object).call("pipeline")
+			if section != null:
+				_pipeline.add(section)
 	for key in _cards:
 		if (_cards[key] as Object).has_signal("noted"):
 			(_cards[key] as Object).connect("noted", _note)
@@ -119,8 +133,8 @@ func _ready() -> void:
 	_writer.doc.bind_text(_writer.text_edit)
 	if _medium != null:
 		Director.medium_changed.connect(_on_medium)
-	if has_song and _song.ready_to_play() and begin_song.is_valid():
-		begin_song.call(_song.path(), show_plan())
+	if has_song and _sound != null and _sound.ready_to_play() and begin_song.is_valid():
+		begin_song.call(_sound.playable(), show_plan())
 
 
 func _exit_tree() -> void:
@@ -187,23 +201,31 @@ func _on_note_moved(from: String, to: String) -> void:
 	_writer.doc.tell("✓  This note is %s now - every change is saved there. %s" % [to.get_file(), said])
 
 
-func _song_path() -> String:
-	var song: Variant = _blocks.get("song", {})
-	return String((song as Dictionary).get("path", "")) if song is Dictionary else ""
-
-
 ## The Medium's format changed: shown at once while a song is loaded (a reading's waits for the next reading).
 func _on_medium() -> void:
 	if restage.is_valid():
 		restage.call(show_plan())
 
 
-## Another song for the note: its block written, and the note opened again around it.
+## Another song file for the note: its block written, and the note opened again around it.
 func _choose_song(song: String) -> void:
 	_rewrite(func(held: Dictionary) -> String:
 		var ghost := NoteStore.blocks_of(path)
 		ghost.merge(held, true)
-		ghost["song"] = {"path": song}
+		var sound: Dictionary = (held.get("sound", {}) as Dictionary).duplicate()
+		sound["source"] = "file"
+		sound["path"] = song
+		ghost["sound"] = sound
+		ghost.erase("song")
+		return FrontMatter.write_block(path, ghost))
+
+
+## The composed song was made: the note opened again, its new mix the song it plays.
+func _sound_made(_mix: String) -> void:
+	_rewrite(func(held: Dictionary) -> String:
+		var ghost := NoteStore.blocks_of(path)
+		ghost.merge(held, true)
+		ghost.erase("song")
 		return FrontMatter.write_block(path, ghost))
 
 

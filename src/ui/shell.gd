@@ -22,9 +22,10 @@ const ROW_MARGIN := 28.0
 const ROW_GAP := 4.0
 ## The bottom-right row, left to right (next/notes.md, "The Environment button"). A piece of furniture
 ## hands its button to the row, which keeps this order, closes up around a hidden one, and is lifted
-## as one by [method claim_bottom]. Masking's own export takes the export slot while it suppresses the
-## shared one.
-const ROW_ORDER := [&"home", &"dex", &"environment", &"graphics", &"console", &"mask_export", &"export", &"assistant"]
+## as one by [method claim_bottom]. A mode's own export takes the export slot while the shared one is off
+## screen: Masking's, and a composed Sound's on a note with no video.
+const ROW_ORDER := [&"home", &"dex", &"environment", &"graphics", &"console", &"mask_export", &"sound_export", &"export",
+	&"assistant"]
 ## The layer the row draws on: above the home screen (200) and every panel that opens above it.
 const ROW_LAYER := 253
 

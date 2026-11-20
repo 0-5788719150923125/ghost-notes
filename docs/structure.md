@@ -5,13 +5,13 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 691 references inside a folder, 1279 down the stack, 0 up it.
+Between scripts today: 708 references inside a folder, 1311 down the stack, 0 up it.
 
 ## The stack, top first
 
 | folder | what it is | scripts | names |
 | --- | --- | --- | --- |
-| `app/` | The shell | 14 | `reading`, `export`, `timeline`, `show`, `media`, `ui`, `notes`, `agents`, `stage`, `render`, `audio`, `platform`, `data` |
+| `app/` | The shell | 14 | `reading`, `export`, `music`, `timeline`, `show`, `media`, `ui`, `notes`, `agents`, `stage`, `render`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 14 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `likeness/` | Likeness | 15 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
 | `dispatch/` | Dispatch desk | 12 | `desk`, `table_show`, `table`, `reading`, `media`, `voice`, `ui`, `scene_kit`, `geometry`, `render`, `audio`, `data` |
@@ -21,11 +21,12 @@ Between scripts today: 691 references inside a folder, 1279 down the stack, 0 up
 | `table/` | The set | 74 | `reading`, `media`, `ui`, `agents`, `scene_kit`, `geometry`, `render`, `audio`, `platform`, `data` |
 | `reading/` | The voice's workspaces | 17 | `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
 | `export/` | Export | 6 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
+| `music/` | Music | 8 | `timeline`, `show`, `voice`, `ui`, `notes`, `scene_kit`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 9 | `show`, `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
-| `show/` | The show | 11 | `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
+| `show/` | The show | 10 | `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `media/` | Media | 21 | `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `voice/` | Synthesis (voice) | 18 | `ui`, `audio`, `platform`, `data` |
-| `ui/` | The panel kit | 36 | `notes`, `agents`, `render`, `platform`, `data` |
+| `ui/` | The panel kit | 37 | `notes`, `agents`, `render`, `platform`, `data` |
 | `notes/` | Notes | 13 | `agents`, `platform`, `data` |
 | `agents/` | Agents | 7 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
@@ -108,7 +109,7 @@ The note as a file: where notes live, a document kept in step with its file, the
 
 What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow the window and its "+", a component's card in its family's color and the chips over the cards, the cards a note's components bring (built from the registry's rows, attached and detached), the one list of what is made for a note (`PipelineCard`), the Script card every note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` - the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a kit for a note's components.
 
-[`agent_pick`](../src/ui/agent_pick.gd), [`armed_delete`](../src/ui/armed_delete.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`dex_window`](../src/ui/dex_window.gd), [`direction_card`](../src/ui/direction_card.gd), [`entry_card`](../src/ui/entry_card.gd), [`graphics_panel`](../src/ui/graphics_panel.gd), [`icons`](../src/ui/icons.gd), [`note_cards`](../src/ui/note_cards.gd), [`note_editor`](../src/ui/note_editor.gd), [`note_grid`](../src/ui/note_grid.gd), [`note_kept`](../src/ui/note_kept.gd), [`note_tile`](../src/ui/note_tile.gd), [`pacing_card`](../src/ui/pacing_card.gd), [`panel_deck`](../src/ui/panel_deck.gd), [`picture_window`](../src/ui/picture_window.gd), [`pipeline_card`](../src/ui/pipeline_card.gd), [`prop_refine`](../src/ui/prop_refine.gd), [`prop_section`](../src/ui/prop_section.gd), [`prop_versions`](../src/ui/prop_versions.gd), [`prop_viewer`](../src/ui/prop_viewer.gd), [`props_card`](../src/ui/props_card.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shelf_section`](../src/ui/shelf_section.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`source_window`](../src/ui/source_window.gd), [`status_log`](../src/ui/status_log.gd), [`tag_field`](../src/ui/tag_field.gd), [`text_field`](../src/ui/text_field.gd), [`touch_text`](../src/ui/touch_text.gd), [`tune_section`](../src/ui/tune_section.gd), [`volume_knob`](../src/ui/volume_knob.gd)
+[`agent_pick`](../src/ui/agent_pick.gd), [`armed_delete`](../src/ui/armed_delete.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`dex_window`](../src/ui/dex_window.gd), [`direction_card`](../src/ui/direction_card.gd), [`entry_card`](../src/ui/entry_card.gd), [`graphics_panel`](../src/ui/graphics_panel.gd), [`icons`](../src/ui/icons.gd), [`note_cards`](../src/ui/note_cards.gd), [`note_editor`](../src/ui/note_editor.gd), [`note_grid`](../src/ui/note_grid.gd), [`note_kept`](../src/ui/note_kept.gd), [`note_tile`](../src/ui/note_tile.gd), [`pacing_card`](../src/ui/pacing_card.gd), [`panel_deck`](../src/ui/panel_deck.gd), [`picture_window`](../src/ui/picture_window.gd), [`pipeline_card`](../src/ui/pipeline_card.gd), [`prop_refine`](../src/ui/prop_refine.gd), [`prop_section`](../src/ui/prop_section.gd), [`prop_versions`](../src/ui/prop_versions.gd), [`prop_viewer`](../src/ui/prop_viewer.gd), [`props_card`](../src/ui/props_card.gd), [`row_status`](../src/ui/row_status.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shelf_section`](../src/ui/shelf_section.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`source_window`](../src/ui/source_window.gd), [`status_log`](../src/ui/status_log.gd), [`tag_field`](../src/ui/tag_field.gd), [`text_field`](../src/ui/text_field.gd), [`touch_text`](../src/ui/touch_text.gd), [`tune_section`](../src/ui/tune_section.gd), [`volume_knob`](../src/ui/volume_knob.gd)
 
 ### `voice/` - Synthesis (voice)
 
@@ -126,13 +127,19 @@ What the show is carried on: the `Medium` base and its registry, each medium ([m
 
 The player: the Director's schedule and transitions, the one transport, karaoke subtitles, the Look over the whole picture, and the cards of the show's own settings.
 
-[`bookends_card`](../src/show/bookends_card.gd), [`director`](../src/show/director.gd), [`filters`](../src/show/filters.gd), [`look_card`](../src/show/look_card.gd), [`made_pictures`](../src/show/made_pictures.gd), [`medium_card`](../src/show/medium_card.gd), [`pictures_card`](../src/show/pictures_card.gd), [`song_card`](../src/show/song_card.gd), [`subtitle_sea`](../src/show/subtitle_sea.gd), [`subtitles`](../src/show/subtitles.gd), [`transport`](../src/show/transport.gd)
+[`bookends_card`](../src/show/bookends_card.gd), [`director`](../src/show/director.gd), [`filters`](../src/show/filters.gd), [`look_card`](../src/show/look_card.gd), [`made_pictures`](../src/show/made_pictures.gd), [`medium_card`](../src/show/medium_card.gd), [`pictures_card`](../src/show/pictures_card.gd), [`subtitle_sea`](../src/show/subtitle_sea.gd), [`subtitles`](../src/show/subtitles.gd), [`transport`](../src/show/transport.gd)
 
 ### `timeline/` - The storyboard's editor
 
 What keeps a note's storyboard in its folder and the dock it opens beside Play: a strip of entries, a stage entry's lanes, and the ruler.
 
 [`flag_strip`](../src/timeline/flag_strip.gd), [`note_storyboard`](../src/timeline/note_storyboard.gd), [`storyboard_editor`](../src/timeline/storyboard_editor.gd), [`storyboard_strip`](../src/timeline/storyboard_strip.gd), [`timeline_dock`](../src/timeline/timeline_dock.gd), [`timeline_lanes`](../src/timeline/timeline_lanes.gd), [`timeline_list`](../src/timeline/timeline_list.gd), [`timeline_view`](../src/timeline/timeline_view.gd), [`track_lane`](../src/timeline/track_lane.gd)
+
+### `music/` - Music
+
+A note that makes its own sound (next/music.md): the theory and the banks a song is composed from (scales, chords, parts, patterns, instruments, kinds of section, all rows), the lyrics read from a note's words, the composer (a pure function from the `sound:` block, the words and a reference to a score), the bake that sings each line through the voice host and renders the parts through the music host (hosts/music/), the score on the one Timeline, and the Sound card - a file, or a song composed for the note.
+
+[`composer`](../src/music/composer.gd), [`instruments`](../src/music/instruments.gd), [`lyrics`](../src/music/lyrics.gd), [`music_theory`](../src/music/music_theory.gd), [`song_bake`](../src/music/song_bake.gd), [`song_parts`](../src/music/song_parts.gd), [`sound_card`](../src/music/sound_card.gd), [`sound_timeline`](../src/music/sound_timeline.gd)
 
 ### `export/` - Export
 
@@ -204,5 +211,5 @@ Godot compiles a script with every script it names by class or preload, wherever
 
 | launch | builds | scripts | lines | budget |
 | --- | --- | --- | --- | --- |
-| the phone shell | `app/main`, `app/phone_shell` | 74 | 29,778 | 40,000 |
-| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 111 | 47,754 | 65,000 |
+| the phone shell | `app/main`, `app/phone_shell` | 74 | 29,810 | 40,000 |
+| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 111 | 47,786 | 65,000 |

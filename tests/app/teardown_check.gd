@@ -40,10 +40,10 @@ const MODES := ["note", "auto", "manual", "story", "generative", "narrated", "ta
 	"likeness", "masking"]
 const BLOCKS := {
 	"note": {},
-	"auto": {"song": {"path": "SONG"}, "medium": {"format": "auto"}},
+	"auto": {"sound": {"source": "file", "path": "SONG"}, "medium": {"format": "auto"}},
 	"manual": {"song": {"path": "SONG"}, "medium": {"format": "full"}},
 	# a storyboard of the note's own, with the editor opened over the show before each leaving
-	"story": {"song": {"path": "SONG"}, "medium": {"format": "full"}},
+	"story": {"sound": {"source": "file", "path": "SONG"}, "medium": {"format": "full"}},
 	"generative": {"voice": {}},
 	# a voice with a Medium and a storyboard: a pairing no template had
 	"narrated": {"voice": {}, "medium": {"format": "full"}},
@@ -155,6 +155,8 @@ func _blocks(mode: String, song: String) -> Dictionary:
 	var blocks: Dictionary = (BLOCKS[mode] as Dictionary).duplicate(true)
 	if blocks.has("song"):
 		blocks["song"] = {"path": song}
+	if blocks.has("sound"):
+		blocks["sound"] = {"source": "file", "path": song}
 	return blocks
 
 

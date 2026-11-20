@@ -681,10 +681,13 @@ alone in 54 of 74 and 40 of 50, shorter by more where a hold is cut (18 and 10),
 plan but the pitch arc's playback rate (piper.py `_nominal`), measured over the whole take, and a take read alone
 holds the silence its last sound was planned with. In Aisle's and Van's voices (Puck and Michael mixed with Nicole; 24 sentences
 each, left to their own plan) the last word's median goes from -2.5 to -0.6 dB and from -1.0 to +0.4, and nothing
-is read on. Whisper medium.en hears the same words either way in all but the 50 ms words under "Open", so it
-counts only a word wholly gone: the sentence above, alone; and "his" in "It's his mother." at Pace 1.3, left to
-its own plan. Whisper base.en hears the 51 word for word in 44 read alone, 42 left to their own plan, 45 as
-built; and the 90 in 72 read alone and 72 as built.
+is read on. Whisper medium.en misses as many words either way, but not the same ones: 28 in 15 of the 90 read
+alone, 30 in 15 left to their own plan, 29 in 15 as built; 14 in 6 of the 51 alone, 16 in 10 and 11 in 4. Most
+are the same in all three (numbers, "isle", "Mazda"); the rest are the 50 ms words under "Open" ("at" in "Every
+night at this hour" as built, "he" in "...somebody he isn't." alone). Its commas are no measure of the holds: it
+writes about as many where the text has none either way (3, 1 and 2 in the 90; 2 in each of the 51). Whisper
+base.en hears the 51 word for word in 44 read alone, 42 left to their own plan, 45 as built; and the 90 in 72
+read alone and 72 as built.
 
 The stream's window follows what a take costs (`ReadingStream.depth`). Listening: `dist/voice_ab/last_word/`
 (`turn_it_kept.wav`, a take read alone; `turn_it_after.wav`, as built) and `last_word/his/` (`mother_kept.wav` and
@@ -702,8 +705,52 @@ sentence of one word, one ending on no full stop, a graph that takes no plan, a 
 last sound).
 
 **Open:** the ear, on the last words, the pace, the holds and the shorter rest between sentences. A word of one frame a sound
-inside a sentence ("to", "he" at Pace 1.2; "his" from Pace 1.35, where Nicole plans its vowel at one frame alone
-too) is heard or not from one render to the next, with or without a word after: the pace's, not the call's end.
+inside a sentence ("to", "he", "at" at Pace 1.2; "his" from Pace 1.35, where Nicole plans its vowel at one frame alone
+too) is heard or not from one render to the next, with or without a word after: the pace's, not the call's end
+("Every night at this hour" keeps "at" with `HOLD_OVER` at 0 or 2 and loses it at 1, every frame of the word
+the same). At Pace 1.2 Nicole plans 203 of her 718 vowels one frame long, most of them a schwa; a floor of two
+frames would add about 2% to a reading and is not built.
+
+### The sentence before it
+
+A sentence read in a paragraph comes in after the sentence before it; read alone, it comes in as a call starts.
+So the reading hands each sentence the last words of the one before it in its paragraph, and the take is cut in the
+rest the model makes after them, as the end is cut before the word after.
+
+**Built** (`ReadingPlan.lead_ins`, `BEFORE_WORDS` 3; the chunk's `before`, sent by `ReadingPanel._request_args` only to a
+voice whose backend says `before`, `ReadingCast.offer_before`; `_before_ids`, `led`, `_cut_before` in backends/kokoro.py):
+a chunk after one in its paragraph that ends on a full stop, an exclamation or a question mark carries that one's last
+three tokens, how each is said (`BEFORE_KEYS`: no lean, no rest). The host reads them first, a word-space after them
+and untold; the sentence is told what it is told without them (its plan alone up to its last sound, read alone or
+followed), so its pace is unchanged; the take is cut `SEAM_LEAD` before the end of the last rest of `BEFORE_REST` (90
+ms) or more between their last sound and the sentence's first, and faded in over `BEFORE_FADE` (the cut lands on a
+sample that is not zero). Where there is no such rest the call is made again without them: the take as it was. A take
+is keyed by its words before, so a sentence edited makes the next one again; a Piper or formant voice is never sent
+them.
+
+**Measured** on 8 paragraphs of the note in Control's voice (42 sentences after the first):
+
+- One word before reads on into the sentence in 5 of 7 (as after a one-word sentence). Three words: cut in 34 of
+  42; the whole sentence: 36. Short sentences after short ones ("You." "The new one." "Whoever you are.") read on
+  whatever is before them, and are read without.
+- What changes is the first word. With three words before, its level against its sentence goes a median +0.8 dB
+  (-4.2 to +9.9; "We" in "We line them up by year..." is voiced whole where read alone it fades in), its pitch
+  +0.4 semitones (over 2 in 4 of 24; "He thinks it's a planet." starts high), and an unstressed first word is
+  weaker ("He didn't invent...", "A question mark..."). The words move a median 15 ms (at most 57).
+- Whisper medium.en misses 21 words in 8 of the 50 read without, 19 in 7 of the 34 cut with three words before, 19
+  in 8 of the 36 with the whole sentence: "ahead" heard where without it is "a herd", "A" of "A question mark" lost.
+- The host as built gives the trial's takes sample for sample in 10 of 11 sentences; the eleventh's words before are
+  the request's tokens ("thirty-three" one), where the trial cut them from the phonemes.
+
+**Heard:** the three words marginally better than none: softer coming in, and some words clearer. Listening:
+`dist/voice_ab/front/` (`paragraph_NNNN_built.wav`, `_front3.wav`, `_whole.wav`, joined by the gap the reading puts
+after each sentence; a sentence's own as `NNNN_K_*.wav`; `front.json`, `front_trial.py`).
+
+Gate: `hosts/voice/test_kokoro.py` (13: the call's ids and feeds, the take's words and head; controls: words the model
+reads on from, a comma, a graph that takes no plan, a rest too short or among the words before) and
+`tests/reading/reading_plan_check.gd` (the words before each chunk; controls: a paragraph's and a turn's first).
+
+**Open:** the ear, on whole readings.
 
 ### It comes out hot
 

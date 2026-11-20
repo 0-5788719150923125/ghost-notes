@@ -30,6 +30,7 @@ const TABLE := {
 	"python:voice_train": {"label": "the voice-training environment", "where": "desktop", "dep": "voice_train_venv"},
 	"tex": {"label": "TeX", "where": "desktop", "dep": "tex"},
 	"python:math": {"label": "the math environment", "where": "desktop", "dep": "math_venv"},
+	"python:music": {"label": "the music environment", "where": "desktop", "dep": "music_venv"},
 	"agent:writer": {"label": "an AI writer", "where": "desktop", "role": "writer"},
 	"agent:painter": {"label": "an AI painter", "where": "desktop", "role": "painter"},
 	"movie_export": {"label": "rendering a video", "where": "desktop"},

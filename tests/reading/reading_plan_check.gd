@@ -24,8 +24,12 @@ extends SceneTree
 ##   IPA between slashes after the phonemes goes beside them (`say`, what a neural voice says), and IPA alone pins the word
 ##   to its own reading with the IPA beside it;
 ##
+## - a chunk carries the last words of the sentence before it in its paragraph (`before`, at most `BEFORE_WORDS`), how
+##   each is said and nothing of how it is delivered;
+##
 ## Controls: a word no mark tells goes to the host to say as it would; a mark with phonemes alone sends no IPA; Hesitate off rests nowhere and tells the voice of nothing; a reader asked by another name gets the
-## cue; a second piece planned from sentence 0 collides with the first.
+## cue; a second piece planned from sentence 0 collides with the first; the first chunk of a paragraph or a turn
+## carries no words before; the word leaned on carries its lean in its own sentence.
 ##
 ## Loaded by path after the tree is up: named here, the plan would compile with this gate before the autoloads
 ## its libraries read exist.
@@ -51,6 +55,7 @@ func _run() -> void:
 	_check_fade(ask)
 	_check_grows(ask)
 	_check_said()
+	_check_before(ask)
 	for f in _fails:
 		printerr("FAIL: ", f)
 	print("reading_plan_check: %s" % ("ALL OK" if _fails.is_empty() else "%d FAILED" % _fails.size()))
@@ -146,6 +151,26 @@ func _check_grows(ask: Dictionary) -> void:
 	_ok(at.size() == 3 and is_equal_approx(all[2], at[2]), "the second piece does not start where the first's estimate ends")
 	var clash: Dictionary = _plan.make(two, "", ask)
 	_ok(_said(clash["chunks"])[0][0] == 0, "control: a piece planned from sentence 0 numbered its first sentence %s" % _said(clash["chunks"])[0][0])
+
+
+func _check_before(ask: Dictionary) -> void:
+	var text := "We waited so *very* long. Then it came! Did it?\n\nA new one.\n\n<!-- speaker: Judge -->\nThe judge."
+	var chunks: Array = _plan.make(text, "", ask)["chunks"]
+	var before: Array = []
+	for c in chunks:
+		var words: PackedStringArray = []
+		for t in (c as Dictionary).get("before", []):
+			words.append(String((t as Dictionary)["text"]).to_lower() + String((t as Dictionary).get("punct", "")))
+		before.append(" ".join(words))
+	_ok(before == ["", "so very long.", "then it came!", "", ""],
+		"the words before each chunk are %s (its paragraph's sentence before, its last %d words)" % [str(before), _plan.BEFORE_WORDS])
+	if before.size() != 5:
+		return
+	var leaned: Dictionary = ((chunks[0] as Dictionary)["tokens"] as Array)[3]
+	var carried: Dictionary = ((chunks[1] as Dictionary)["before"] as Array)[1]
+	_ok(leaned.has("emph"), "control: the leaned-on word is not leaned on in its own sentence")
+	_ok(not carried.has("emph") and carried.has("fallback"),
+		"the words before carry how they are delivered, or lack how they are said: %s" % str(carried.keys()))
 
 
 ## Every word of [param chunks] as [sentence, text].

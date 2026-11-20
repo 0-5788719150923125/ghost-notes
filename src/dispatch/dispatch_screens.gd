@@ -235,10 +235,11 @@ const CRASH_GROUND := 0.5
 const CRASH_FONT := 2
 
 
-## A call's time as a phone shows it: minutes and seconds, and the hours before them once it has run one.
+## A call's time as a phone shows it: minutes and seconds padded to two digits, and once it has run an hour, the
+## [Clock]'s h:mm:ss.
 static func call_time(secs: int) -> String:
 	if secs >= 3600:
-		return "%d:%02d:%02d" % [secs / 3600, secs / 60 % 60, secs % 60]
+		return Clock.text(float(secs))
 	return "%02d:%02d" % [secs / 60, secs % 60]
 
 

@@ -1,0 +1,435 @@
+extends Node
+class_name SongBake
+
+## SongBake - a composed Sound made into a file, and a song file read for its patterns, off the app's thread
+## (next/music.md, "Rendering"). One job at a time, each ending on [signal done]:
+##
+## - [method bake]: each sung phrase of the score sung by the voice host ([method VoiceHost.sing]), kept in
+##   `<folder>/takes/` under a hash of what made it (the singer, the style, the words and their notes), so a phrase not
+##   changed is never sung again (a take no line names any more is removed); then the score rendered by the music
+##   host (hosts/music/render.py, which keeps each part's stem under a hash of its own) into `<folder>/mix.wav`.
+## - [method analyze]: hosts/music/analyze.py reads a song into `<folder>/reference.json` - its grid, key, chords,
+##   form, drums and melody; never its sound.
+##
+## The hosts run as child programs (Subprocess, polled a frame at a time); the voice host is this node's own child,
+## started the first time a phrase is sung. What it is doing is said on [signal said], a line at a time.
+
+## What the job is doing, a line for a card's status.
+signal said(text: String)
+## A job ended: [param job] "bake", "analyze" or "save", [param path] the mix, the reference or the file saved,
+## [param why] when it failed.
+signal done(job: String, ok: bool, path: String, why: String)
+## A mix being saved as another format ([method save_as]) is [param fraction] of the way (0-1).
+signal saving(fraction: float)
+
+const ENV := "music_venv"
+const VENV := "user://music_venv"
+const RENDER := "res://hosts/music/render.py"
+const ANALYZE := "res://hosts/music/analyze.py"
+const MIX := "mix.wav"
+const REFERENCE := "reference.json"
+## What the mix was made from (`{hash, at}`), beside it: never named after the mix, whose own name with `.json` is its
+## subtitles' (the words sung and when, [method Subtitles.sidecar_for]).
+const MADE := "made.json"
+## Raised when a phrase kept would be sung differently from the same notes: every kept take is sung again.
+const TAKES := 2
+## Seconds between looks at a running host's log for a line to say.
+const LOOK := 0.5
+
+var _job := ""              # "", "sing", "render", "analyze"
+var _score := {}
+var _folder := ""           # absolute
+var _queue: Array = []      # phrases still to sing: [{i, words, out, meta}]
+var _takes: Array = []      # each phrase's take {wav, at}, or null until sung
+var _asking := -1           # the request being sung
+var _asking_i := -1
+var _host: VoiceHost = null
+var _host_up := false
+var _pid := -1
+var _run := {}              # the host program running: {job, out, log, path}
+var _env_wait := ""         # the job waiting for the music environment ("render" / "analyze"), and its spec
+var _spec := {}
+var _look := 0.0
+var _said := ""
+var _singer := {}         # who sings this bake ({voice, speaker, blend})
+var _listing := -1        # the voices asked of the host, for the singers ([method list_singers])
+var _listed := Callable()
+var _save := {}           # a mix being saved as another format: {pid, dest, log, progress, seconds}
+
+
+func _ready() -> void:
+	set_process(false)
+
+
+func _exit_tree() -> void:
+	stop()
+
+
+## Whether a job is under way.
+func busy() -> bool:
+	return not _job.is_empty()
+
+
+## The job under way: "analyze" (a song read), "sing" (lines sung), "render" (the parts made and mixed), or "".
+func job() -> String:
+	return _job
+
+
+## The job under way stopped: its host program ended, nothing written further.
+func stop() -> void:
+	if _pid > 0:
+		Subprocess.stop(_pid)
+	_pid = -1
+	if _host != null and _asking >= 0:
+		_host.cancel([_asking])
+	_asking = -1
+	_queue.clear()
+	_job = ""
+	_env_wait = ""
+	set_process(false)
+
+
+## [param score] ([method Composer.score]) made into `<folder>/mix.wav`: its phrases sung (those not kept), then
+## rendered. Ends on [signal done] `bake`.
+func bake(score: Dictionary, folder: String) -> void:
+	stop()
+	_score = score
+	_folder = ProjectSettings.globalize_path(folder)
+	DirAccess.make_dir_recursive_absolute(_folder.path_join("takes"))
+	_takes.clear()
+	_queue.clear()
+	var vocal: Dictionary = score.get("vocal", {})
+	var singer := _singer_of(vocal.get("singer", {}))
+	var phrases: Array = vocal.get("phrases", []) if not bool(vocal.get("mute", false)) else []
+	for i in phrases.size():
+		var p: Dictionary = phrases[i]
+		var h := _take_hash(singer, vocal.get("style", {}), p["words"])
+		var out := _folder.path_join("takes").path_join(h + ".wav")
+		var meta := _folder.path_join("takes").path_join(h + ".json")
+		var kept: Variant = JSON.parse_string(FileAccess.get_file_as_string(meta)) if FileAccess.file_exists(meta) else null
+		if FileAccess.file_exists(out) and kept is Dictionary:
+			_takes.append({"wav": out, "at": float(p["at"]) + float((kept as Dictionary).get("start", 0.0))})
+		else:
+			_takes.append(null)
+			_queue.append({"i": i, "words": p["words"], "out": out, "meta": meta})
+	_job = "sing"
+	set_process(true)
+	if _queue.is_empty():
+		_render()
+		return
+	_say("singing %d of %d lines" % [_queue.size(), phrases.size()])
+	_singer = singer
+	_voice_host()
+	if _host_up:
+		_sing_next()
+
+
+## Kokoro's readers listed by the voice host (started if it is not) into [VoiceReaders], then [param then] called: who
+## may sing.
+func list_singers(then: Callable) -> void:
+	_listed = then
+	_voice_host()
+	if _host_up and _listing < 0:
+		_listing = _host.list_voices()
+
+
+## The mix at [param src] saved at [param dest] as its extension says: WAV copied, FLAC, MP3 and OGG encoded by FFmpeg on
+## its own, how far along on [signal saving] (FFmpeg's own progress, against the mix's length). Ends on [signal done]
+## `save`. Returns "" once started, else why it could not be.
+func save_as(src: String, dest: String) -> String:
+	var ext := dest.get_extension().to_lower()
+	if ext == "wav" or ext.is_empty():
+		var to := dest if not ext.is_empty() else dest + ".wav"
+		var ok := DirAccess.copy_absolute(src, to) == OK
+		done.emit("save", ok, to, "" if ok else "could not write " + to)
+		return ""
+	var ff := Provision.tool_path("ffmpeg", "ffmpeg")
+	if ff.is_empty():
+		Provision.ensure("ffmpeg")
+		return "FFmpeg is being installed, to write %s: export again in a moment." % ext.to_upper()
+	var codec := {"flac": ["-c:a", "flac"], "mp3": ["-c:a", "libmp3lame", "-q:a", "2"], "ogg": ["-c:a", "libvorbis", "-q:a", "6"]}
+	var base := ProjectSettings.globalize_path(src).get_base_dir()
+	var progress := base.path_join("save_progress.txt")
+	DirAccess.remove_absolute(progress)
+	var args := PackedStringArray(["-y", "-v", "error", "-progress", progress, "-nostats", "-i", src])
+	args.append_array(PackedStringArray(codec.get(ext, [])))
+	args.append(dest)
+	var log := base.path_join("save.log")
+	var pid := Subprocess.start_logged(ff, args, log, "music save")
+	if pid <= 0:
+		return "FFmpeg could not start"
+	# the mix's length from its size: 16-bit stereo at 44.1 kHz after a 44-byte header (render.py writes it so)
+	var f := FileAccess.open(src, FileAccess.READ)
+	var seconds := float(f.get_length() - 44) / (44100.0 * 4.0) if f != null else 0.0
+	_save = {"pid": pid, "dest": dest, "log": log, "progress": progress, "seconds": seconds}
+	set_process(true)
+	return ""
+
+
+## How far a save is, 0-1, from FFmpeg's progress file.
+func _saved_fraction() -> float:
+	var text := FileAccess.get_file_as_string(String(_save["progress"]))
+	var best := 0.0
+	for line in text.split("\n"):
+		if line.begins_with("out_time_us=") or line.begins_with("out_time_ms="):
+			best = maxf(best, line.substr(12).to_float() / 1_000_000.0)
+	return clampf(best / maxf(float(_save["seconds"]), 0.01), 0.0, 1.0)
+
+
+## The voice host, this node's own child, started the first time it is wanted.
+func _voice_host() -> void:
+	if _host == null:
+		_host = VoiceHost.new()
+		add_child(_host)
+		_host.host_ready.connect(func(_b: PackedStringArray) -> void:
+			_host_up = true
+			if _listed.is_valid() and _listing < 0:
+				_listing = _host.list_voices()
+			_sing_next())
+		_host.synthesized.connect(_on_sung)
+		_host.failed.connect(_on_host_failed)
+		_host.progress.connect(func(_stage: String, msg: String) -> void: _say(msg))
+	if not _host_up:
+		_host.start()
+
+
+
+## A song file read for its patterns into `<folder>/reference.json`; [param lines] the lyrics' lines (`{text}` each) so
+## the reference says where each is sung. Ends on [signal done] `analyze`.
+func analyze(song: String, lines: Array, folder: String) -> void:
+	stop()
+	_folder = ProjectSettings.globalize_path(folder)
+	DirAccess.make_dir_recursive_absolute(_folder)
+	_job = "analyze"
+	_spec = {"song": ProjectSettings.globalize_path(song), "out": _folder, "lines": lines}
+	set_process(true)
+	_start_host("analyze")
+
+
+func _process(delta: float) -> void:
+	if not _save.is_empty():
+		if Subprocess.alive(int(_save["pid"])):
+			saving.emit(_saved_fraction())
+		else:
+			var dest := String(_save["dest"])
+			var ok := FileAccess.file_exists(dest)
+			var why := "" if ok else FileAccess.get_file_as_string(String(_save["log"])).strip_edges().right(200)
+			_save = {}
+			set_process(not _job.is_empty())
+			done.emit("save", ok, dest, why)
+	if not _env_wait.is_empty():
+		_start_host(_env_wait)
+		return
+	if _pid <= 0:
+		return
+	_look += delta
+	if _look >= LOOK:
+		_look = 0.0
+		var tail := FileAccess.get_file_as_string(String(_run["log"])).strip_edges()
+		var last := tail.substr(tail.rfind("\n") + 1) if not tail.is_empty() else ""
+		if not last.is_empty() and not last.begins_with("Traceback") and not last.begins_with(" "):
+			_say(last)
+	if Subprocess.alive(_pid):
+		return
+	_pid = -1
+	_land()
+
+
+func _sing_next() -> void:
+	if _job != "sing" or _asking >= 0:
+		return
+	if _queue.is_empty():
+		_render()
+		return
+	var q: Dictionary = _queue[0]
+	_asking_i = int(q["i"])
+	var left := 0
+	for t in _takes:
+		if t == null:
+			left += 1
+	_say("singing: \"%s\" (%d left)" % [String((_score["vocal"]["phrases"][_asking_i] as Dictionary)["text"]), left])
+	var params := {"speaker": int(_singer.get("speaker", 0))}
+	if not String(_singer.get("blend", "")).is_empty():
+		params["blend"] = String(_singer["blend"])
+	var style: Dictionary = (_score["vocal"] as Dictionary).get("style", {})
+	_asking = _host.sing(q["words"], String(_singer.get("voice", "kokoro")), String(q["out"]), params, style)
+
+
+func _on_sung(id: int, msg: Dictionary) -> void:
+	if id == _listing:
+		_listing = -1
+		for v in msg.get("voices", []):
+			if v is Dictionary and String((v as Dictionary).get("backend", "")) == "kokoro" and (v as Dictionary).get("readers") is Array:
+				VoiceReaders.offer(String(v["id"]), v["readers"], String(v.get("readers_about", "")))
+		if _listed.is_valid():
+			_listed.call()
+		_listed = Callable()
+		return
+	if id != _asking or _job != "sing":
+		return
+	var q: Dictionary = _queue.pop_front()
+	var f := FileAccess.open(String(q["meta"]), FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify({"start": float(msg.get("start", 0.0)), "duration": float(msg.get("duration", 0.0))}))
+		f.close()
+	var p: Dictionary = _score["vocal"]["phrases"][int(q["i"])]
+	_takes[int(q["i"])] = {"wav": String(q["out"]), "at": float(p["at"]) + float(msg.get("start", 0.0))}
+	_asking = -1
+	_sing_next()
+
+
+func _on_host_failed(stage: String, why: String) -> void:
+	if _job != "sing" or not (stage in ["sing", "deps", "host"]):
+		return
+	var job := _job
+	stop()
+	done.emit("bake" if job == "sing" else job, false, "", "the voice could not sing: " + why)
+
+
+func _render() -> void:
+	# takes no line of this score names any more go: every change to a line leaves its last take behind otherwise
+	var named := {}
+	for t in _takes:
+		if t != null:
+			named[String((t as Dictionary)["wav"]).get_file().get_basename()] = true
+	var dir := _folder.path_join("takes")
+	for f in DirAccess.get_files_at(dir):
+		if not named.has(f.get_basename()):
+			DirAccess.remove_absolute(dir.path_join(f))
+	_job = "render"
+	var takes: Array = _takes.filter(func(t: Variant) -> bool: return t != null)
+	_spec = Composer.render_spec(_score, takes, _folder, MIX)
+	_start_host("render")
+
+
+## The music host for [param job], once its environment is installed (asked again each frame until it is).
+func _start_host(job: String) -> void:
+	_env_wait = ""
+	if not Provision.unsupported(ENV).is_empty():
+		_fail(job, "the music environment cannot be installed here: " + Provision.unsupported(ENV))
+		return
+	if not Provision.ensure(ENV):
+		_env_wait = job
+		var st := Provision.state(ENV)
+		_say("installing the music environment (%s)%s" % [String(Deps.entry(ENV).get("size", "")),
+			(": " + String(st.get("phase", ""))) if not String(st.get("phase", "")).is_empty() else ""])
+		return
+	if job == "analyze":
+		var ff := Provision.tool_path("ffmpeg", "ffmpeg")
+		if ff.is_empty():
+			if not Provision.ensure("ffmpeg"):
+				_env_wait = job
+				_say("installing FFmpeg, to read the song")
+				return
+			ff = Provision.tool_path("ffmpeg", "ffmpeg")
+		_spec["ffmpeg"] = ff
+	var py := Deps.venv_bin(VENV, "python")
+	var host := BundledHosts.path(RENDER if job == "render" else ANALYZE)
+	if not FileAccess.file_exists(py) or host.is_empty():
+		_fail(job, "the music environment is not installed")
+		return
+	var spec_path := _folder.path_join(job + ".json")
+	var f := FileAccess.open(spec_path, FileAccess.WRITE)
+	if f == null:
+		_fail(job, "could not write " + spec_path)
+		return
+	f.store_string(JSON.stringify(_spec))
+	f.close()
+	DirAccess.remove_absolute(_folder.path_join("done.json"))
+	var log := _folder.path_join(job + ".log")
+	_pid = Subprocess.start_logged(py, PackedStringArray(["-I", host, spec_path]), log, "music " + job)
+	if _pid <= 0:
+		_fail(job, "the music host could not start")
+		return
+	_run = {"job": job, "log": log}
+	_say("rendering the parts" if job == "render" else "listening to the song")
+
+
+func _land() -> void:
+	var job := String(_run.get("job", ""))
+	var done_path := _folder.path_join("done.json")
+	var res: Variant = JSON.parse_string(FileAccess.get_file_as_string(done_path)) if FileAccess.file_exists(done_path) else null
+	if not (res is Dictionary) or not bool((res as Dictionary).get("ok", false)):
+		var why := String((res as Dictionary).get("error", "")) if res is Dictionary else ""
+		if why.is_empty():
+			why = FileAccess.get_file_as_string(String(_run["log"])).strip_edges().right(300)
+		_fail(job, why)
+		return
+	_job = ""
+	set_process(false)
+	if job == "render":
+		_say("made in %.1f s" % float((res as Dictionary).get("took", 0.0)))
+		write_words(_score, String((res as Dictionary)["mix"]))
+		done.emit("bake", true, String((res as Dictionary)["mix"]), "")
+	else:
+		_say("read in %.1f s" % float((res as Dictionary).get("took", 0.0)))
+		done.emit("analyze", true, String((res as Dictionary)["reference"]), "")
+
+
+func _fail(job: String, why: String) -> void:
+	_job = ""
+	_env_wait = ""
+	set_process(false)
+	done.emit("bake" if job in ["render", "sing"] else job, false, "", why)
+
+
+func _say(text: String) -> void:
+	if text == _said:
+		return
+	_said = text
+	said.emit(text)
+
+
+## The words [param score] sings, as the subtitles read them beside [param mix] ([method Subtitles.sidecar_for]): each
+## word from its first note to the end of its last, in the mix's own seconds, each line a sentence.
+static func write_words(score: Dictionary, mix: String) -> void:
+	var words: Array = []
+	var line := 0
+	for p in (score.get("vocal", {}) as Dictionary).get("phrases", []):
+		for w in p["words"]:
+			var notes: Array = w["notes"]
+			if notes.is_empty():
+				continue
+			var last: Dictionary = notes[notes.size() - 1]
+			words.append({"text": String(w["text"]), "t0": float(p["at"]) + float(notes[0]["t"]),
+				"t1": float(p["at"]) + float(last["t"]) + float(last["len"]), "sentence": line})
+		line += 1
+	var f := FileAccess.open(mix.get_basename() + ".json", FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify({"words": words}))
+		f.close()
+
+
+## Where the take of [param phrase] of [param vocal] (a score's) is kept in [param folder]'s takes, whether or not it is
+## there yet: a hash of who sings, how, and the phrase's words and notes.
+static func take_of(folder: String, vocal: Dictionary, phrase: Dictionary) -> String:
+	var h := _take_hash(_singer_of(vocal.get("singer", {})), vocal.get("style", {}), phrase["words"])
+	return ProjectSettings.globalize_path(folder).path_join("takes").path_join(h + ".wav")
+
+
+## Who sings: the score's singer, a voice kept in the library read by its name (`kept`).
+static func _singer_of(singer: Variant) -> Dictionary:
+	var s: Dictionary = singer if singer is Dictionary else {}
+	if not String(s.get("kept", "")).is_empty():
+		var kept := VoiceLibrary.read(String(s["kept"]))
+		var v: Dictionary = kept.get("voice", {}) if kept.get("voice") is Dictionary else {}
+		if String(v.get("voice", "")).begins_with("kokoro"):
+			return {"voice": String(v["voice"]), "speaker": int(v.get("speaker", 0)), "blend": String(v.get("blend", ""))}
+	return {"voice": String(s.get("voice", Composer.SINGER["voice"])), "speaker": int(s.get("speaker", Composer.SINGER["speaker"])),
+		"blend": String(s.get("blend", ""))}
+
+
+static func _take_hash(singer: Dictionary, style: Variant, words: Array) -> String:
+	return JSON.stringify({"singer": singer, "style": style, "words": words, "v": TAKES}).sha1_text().substr(0, 16)
+
+
+## The mix a bake leaves in [param folder].
+static func mix_of(folder: String) -> String:
+	return ProjectSettings.globalize_path(folder).path_join(MIX)
+
+
+## The reference an analysis leaves in [param folder], {} where there is none.
+static func reference_of(folder: String) -> Dictionary:
+	var path := ProjectSettings.globalize_path(folder).path_join(REFERENCE)
+	var got: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
+	return got if got is Dictionary else {}

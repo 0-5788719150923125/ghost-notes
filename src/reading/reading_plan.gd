@@ -43,6 +43,11 @@ const SECTION_PARAS := 5
 ## so an unbroken block is an arc with no reset. Eight is a long paragraph; past that the text is not telling us
 ## where its paragraphs are (the same guard SECTION_PARAS is a level up).
 const PARA_CEILING := 8
+## How many of the last words of the sentence before a chunk it carries (`before`, [method lead_ins]): a voice that
+## reads them first comes into the sentence as one in a paragraph does. One is too few for Kokoro to rest after.
+const BEFORE_WORDS := 3
+## What of a token the words before carry: how it is said, never how it is delivered.
+const BEFORE_KEYS := ["text", "cased", "punct", "fallback", "arpa", "say", "rare"]
 ## The estimate the scrub bar is laid out by: a reading pace, plus every rest at its own length.
 const SCRUB_SECONDS_PER_WORD := 0.38
 const OUTRO_MIN_FADE := 0.5
@@ -75,6 +80,7 @@ static func make(body: String, title: String, ask: Dictionary, from_sentence := 
 				# Placement is per passage: a speaker's turn is its own piece of discourse, opening in its own register, so
 				# measuring it against the whole chapter would hand the second voice the contour of a paragraph it is not in.
 		place(chunks, text)
+		lead_ins(chunks)
 				# ...the turn comes in over the one before: its first sentence is that one's on the screen too, so they read as one line, each word lit in its own voice's color ([ReadingJoin])
 		if not out.is_empty() and (float((seg as Dictionary).get("over", -1.0)) >= 0.0 or bool((seg as Dictionary).get("together", false))):
 			var head: Dictionary = chunks[0]
@@ -467,6 +473,30 @@ static func place(out: Array, body: String) -> void:
 		var own := float(_words_in(out[i]))
 		out[i]["plan_span"] = [snappedf(at / total, 0.0001), snappedf((at + own) / total, 0.0001)]
 		before[p] = at + own
+
+
+## Each chunk of [param out] (one passage, placed) after another in its paragraph that ends on a full stop, an
+## exclamation or a question mark given that one's last [constant BEFORE_WORDS] tokens as `before`, each with only
+## its [constant BEFORE_KEYS]. The first of a paragraph or a turn has none.
+static func lead_ins(out: Array) -> void:
+	for i in range(1, out.size()):
+		var prev: Dictionary = out[i - 1]
+		if int(prev.get("plan_p", -1)) != int((out[i] as Dictionary).get("plan_p", -2)):
+			continue
+		var said: Array = []
+		for t in prev.get("tokens", []):
+			if t is Dictionary and not String((t as Dictionary).get("text", "")).strip_edges().is_empty():
+				said.append(t)
+		if said.is_empty() or not [".", "!", "?"].has(String((said.back() as Dictionary).get("punct", ""))):
+			continue
+		var before: Array = []
+		for t in said.slice(maxi(0, said.size() - BEFORE_WORDS)):
+			var kept := {}
+			for k in BEFORE_KEYS:
+				if (t as Dictionary).has(k):
+					kept[k] = (t as Dictionary)[k]
+			before.append(kept.duplicate(true))
+		(out[i] as Dictionary)["before"] = before
 
 
 ## The words chunk [param ch] says (at least one).

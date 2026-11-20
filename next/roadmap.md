@@ -82,6 +82,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **A desktop build that runs everything**
       An exported build cannot yet run the Python hosts, relaunch itself to render, or write into `res://`, and the Steam list is open: URL import left out of a store build, the export's excludes, a GPL FFmpeg on Linux, the Assistant stripped, third-party notices. See [binary_export_and_steam.md](binary_export_and_steam.md).
 
+- [ ] **A composed Sound, by ear, then a chorus**
+      Built: Song became Sound - a file, or a song composed from seeded parts with the note's words sung by Kokoro on a reference's tune or one made for them (next/music.md). Open: ERROR ME FOUND judged by ear; a chorus of voices; lyrics aligned to the reference by Whisper; notes edited on the Timeline; MIDI and stems out; a Sound played from another note.
+
 - [ ] **Bounce light, by eye**
       The Graphics panel's Bounce light (screen-space indirect light, `Graphics.dress`) is off until judged (true-tarot 279427: subtle at strength 1, 2.5 ms a frame). The tonemapper is a choice on the Look card since 2026-11-06 (`Tonemaps`: Filmic the default, AgX and ACES at the presets the user was shown, three adjustments kept for each); the user preferred AgX there, and its preset may want tuning per set once watched.
 

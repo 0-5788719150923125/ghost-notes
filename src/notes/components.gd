@@ -41,10 +41,10 @@ const FAMILIES := {
 	&"publish": {"label": "Publish", "hue": 2.0},
 }
 
-## The slots: where a note has room for exactly one. `label` reads in a sentence ("this note's clock is its Song").
+## The slots: where a note has room for exactly one. `label` reads in a sentence ("this note's clock is its Sound").
 const SLOTS := {
 	"clock": {"label": "clock",
-		"blurb": "What the show is timed by, and how long it is: a song, a voice reading the text, or a clip."},
+		"blurb": "What the show is timed by, and how long it is: a sound (a song from a file, or composed), a voice reading the text, or a clip."},
 	"presentation": {"label": "presentation",
 		"blurb": "What the show is seen in: the Medium and the format it names, a card table, an actor's room, or a clip's own frame."},
 }
@@ -79,10 +79,14 @@ const REGISTRY := {
 		"blurb": "The note's own words: what a voice reads, the brief agents work from, or just a note.",
 		"needs": [], "provides": ["text"], "requires": [], "slots": [], "workspace": "", "capabilities": [],
 		"marks": [], "block": "", "card": "body"},
-	"song": {"label": "Song", "family": &"sound",
-		"blurb": "A song the show is timed by: its beat and its spectrum drive the scenes.",
-		"needs": [], "provides": ["audio"], "requires": [], "slots": ["clock"], "workspace": "", "capabilities": ["stage"],
-		"marks": [], "block": "song", "card": "song"},
+	# The note's sound (next/music.md): a song from a file, or one composed for the note - its parts synthesized, its
+	# words sung - made on its card and played as the file a song is. A note written before keeps `song: {path}`,
+	# read as a file ([constant OLD_BLOCKS]).
+	"sound": {"label": "Sound", "family": &"sound",
+		"blurb": "What the show is timed by and heard with: a song from a file, or a song composed for the note - its parts synthesized from first principles, its words sung, a song file's patterns taken as its own.",
+		"needs": [], "provides": ["audio"], "requires": [], "slots": ["clock"], "workspace": "",
+		"capabilities": ["stage", "subprocess", "ffmpeg", "python:music", "python:voice"],
+		"marks": [], "block": "sound", "card": "sound", "script": "res://src/music/sound_card.gd"},
 	"scenes": {"label": "Scenes", "family": &"picture",
 		"blurb": "The visualizer scenes, cut to the sound: picked by the seed, or in the order the note's storyboard writes them (its timeline, beside Play).",
 		"needs": ["audio"], "provides": ["picture", "moments"], "requires": [], "slots": [], "workspace": "",
@@ -235,8 +239,9 @@ static func attach_blocks(key: String) -> Dictionary:
 			return {"actor": {}}
 		"voice_training":
 			return {"voice_training": {}}
-		"song":
-			return {"song": {"path": ""}}
+		# a new Sound is composed: the seeded song plays once Generate makes it, and its card offers a file instead
+		"sound":
+			return {"sound": {"source": "composed"}}
 		"clip":
 			return {"clip": {"path": ""}}
 		# A medium starts as the seeded show; its card picks another format.
@@ -254,10 +259,13 @@ static func attach_blocks(key: String) -> Dictionary:
 	return {}
 
 
-## The blocks that are [param key]'s in a note: its own, and those of what only comes with it (the Medium's
-## illustrations). What a panel showing the component keeps, and what the note loses when it is detached.
+## The blocks that are [param key]'s in a note: its own (and its old name's), and those of what only comes with it (the
+## Medium's illustrations). What a panel showing the component keeps, and what the note loses when it is detached.
 static func blocks_of(key: String) -> Array:
 	var out: Array = attach_blocks(key).keys()
+	var own := String((REGISTRY.get(key, {}) as Dictionary).get("block", ""))
+	if OLD_BLOCKS.has(own):
+		out.append(OLD_BLOCKS[own])
 	for k in REGISTRY:
 		var row: Dictionary = REGISTRY[k]
 		var b := String(row["block"])
@@ -287,7 +295,7 @@ static func attached_of(blocks: Dictionary) -> Array:
 	var out: Array = ["text"]
 	for k in REGISTRY:
 		var b := String((REGISTRY[k] as Dictionary)["block"])
-		if not b.is_empty() and blocks.get(b) is Dictionary:
+		if not b.is_empty() and (blocks.get(b) is Dictionary or _old_block_of(b, blocks)):
 			out.append(k)
 	for k in out.duplicate():
 		var hosts: Array = (REGISTRY.get(k, {}) as Dictionary).get("comes_with", [])
@@ -295,6 +303,15 @@ static func attached_of(blocks: Dictionary) -> Array:
 		if not hosts.is_empty() and not hosts.any(func(h: String) -> bool: return have.has(h)):
 			out.append(hosts[0])
 	return out
+
+
+## The blocks a component kept before its block was renamed: a Song's `song: {path}` is a Sound's file source.
+const OLD_BLOCKS := {"sound": "song"}
+
+
+## Whether [param blocks] keep [param block]'s old name ([constant OLD_BLOCKS]) and not its own.
+static func _old_block_of(block: String, blocks: Dictionary) -> bool:
+	return OLD_BLOCKS.has(block) and not blocks.has(block) and blocks.get(OLD_BLOCKS[block]) is Dictionary
 
 
 ## The Medium's one block from a note's blocks written before it (remove with [code]main._adopt_old_media[/code]): a
@@ -403,7 +420,7 @@ static func holder(slot: String, attached: Array) -> String:
 
 
 ## Why a slot [param key] takes is not free in a note with [param attached], as a sentence for the
-## "+" menu ("This note's clock is its Song - detach that first."), or "" when it has room.
+## "+" menu ("This note's clock is its Sound - detach that first."), or "" when it has room.
 static func slot_note(key: String, attached: Array) -> String:
 	for c in with_required([key]):
 		if with_required(attached).has(c):
@@ -495,8 +512,8 @@ static func _menu_item(menu: PopupMenu, k: String, attached: Array) -> void:
 
 
 ## What attaching each need's provider looks like, for [method needs_note].
-const NEED_HINTS := {"text": "text", "audio": "a song or a voice", "reading": "a voice",
-	"picture": "a Medium", "places": "a Medium", "moments": "a song or a voice"}
+const NEED_HINTS := {"text": "text", "audio": "a sound or a voice", "reading": "a voice",
+	"picture": "a Medium", "places": "a Medium", "moments": "a sound or a voice"}
 
 
 ## The needs [param key] brings that nothing in [param attached] provides, as a sentence for the "+"

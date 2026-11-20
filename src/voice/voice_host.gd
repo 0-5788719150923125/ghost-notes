@@ -100,6 +100,19 @@ func request(text: String, voice: String, out_path: String,
 	return id
 
 
+## A phrase sung on its notes (the host's `sing`; next/music.md, "Kokoro sings"): [param words] `[{text, notes: [{t,
+## len, midi}]}]`, times in seconds from the phrase's start; [param params] the reader (`speaker`) or `blend`;
+## [param style] how it is sung (`tune`, `vibrato`, ...). Returns the request id; the take arrives on `synthesized`
+## with `start`, where its first sample falls in the phrase's seconds. A failure is `failed("sing", why)`.
+func sing(words: Array, voice: String, out_path: String, params := {}, style := {}) -> int:
+	var id := _next_id
+	_next_id += 1
+	_pending[id] = {"op": "sing", "voice": voice}
+	_send({"id": id, "op": "sing", "voice": voice, "out": ProjectSettings.globalize_path(out_path), "words": words,
+		"params": params, "style": style})
+	return id
+
+
 func capabilities() -> int:
 	var id := _next_id
 	_next_id += 1

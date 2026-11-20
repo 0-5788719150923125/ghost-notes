@@ -188,7 +188,7 @@ static func make_demo_note(song_path := DEMO_SONG) -> String:
 	if not FileAccess.file_exists(song) and not bool((load(RECORDER) as GDScript).call("write_song", song)):
 		push_warning("ghost: could not write the demo note's song (%s)" % song)
 		return ""
-	var note := NoteStore.create(TITLE, BODY, {"song": {"path": song}, "medium": {"format": "full"},
+	var note := NoteStore.create(TITLE, BODY, {"sound": {"source": "file", "path": song}, "medium": {"format": "full"},
 		"bookends": {"intro": INTRO, "outro": OUTRO}})
 	if note.is_empty():
 		return ""

@@ -2,28 +2,78 @@
 
 ## Status
 
-**Not built, not decided.** This note looks at what music made in Ghost Notes could be: what the code already has, what
-the research says, a design, and the order to build it in. No code exists for it yet.
+**Built: the Sound component, a composed song that sings the note's words, and a song file read for its patterns.**
+First song: ERROR ME FOUND (Toehider), a note in the notes list with its reference and its lyrics, made and waiting for
+the ear. The design below is the plan; this says what of it stands.
 
-**Looked at:** the Song component and its card (`src/notes/components.gd`, `src/show/song_card.gd`,
-`src/app/note_panel.gd`); the Voice card's Ambience (the pad in `VoiceFX`, its row in `ReadingCast`); every synthesized
-sound (`Soundscape`, `WorkSounds`, `DispatchSounds`, `VoiceFX`); the contract for a sound laid under a voice (`SoundBed`);
-the formant voice's song mode (`Voice.Spec.song`); Kokoro taken apart for training (`hosts/voice_train/kokoro_model.py`);
-the one Timeline (`Timeline`); how the show's seed comes from a song (`Director._resolve_seed`); harmonic_seeding.md. A
-search found no prior work on making Kokoro sing by forcing its pitch and durations, so that part is untested.
+**What stands:**
 
-**First experiment, heard:** a scratch script (not in the repo) sang Twinkle, Twinkle on `af_heart`, with each phoneme's
-duration and the pitch curve taken from the score and decoded through `kokoro_model.py`. The pitch and timing controls
-work. Held vowels buzz. A line's first word is lost when its opening pad gets fewer frames than Kokoro plans for it (the
-trap `hosts/voice/backends/kokoro.py`'s header describes); the script gave it 3.
+- **Song became Sound** (`src/music/sound_card.gd`, `Components.REGISTRY` `sound`): one card, its Source a file (what
+  Song was) or Composed. An old `song: {path}` block is read as the file source (`Components.OLD_BLOCKS`), and taken off
+  with it. A new Sound starts composed.
+- **The composer** (`Composer.score`, a pure function like `TablePlan.make`): the `sound:` block, the note's words
+  (`Lyrics`: `Verse`, `[Chorus]`, `x2`, stanzas, syllables and stress from `Phonemes`) and a reference make the score -
+  form, one chord track every pitched part reads, eight parts (`SongParts.PARTS`: drums, bass, keys, pad, guitar,
+  lead, bells, voice) from their patterns (`SongParts.PATTERNS`) and instruments (`Instruments.ROWS`, each a `method`
+  and its settings, some drawn from the part's own seed). Rolling a part moves no other (`composer_check`).
+- **The voice sings.** Each lyric line is a phrase: its syllables placed on a melody - the reference's tune
+  (`_ref_line`: the line's syllables laid on where the reference's voice begins sounds, a dynamic program, then
+  `_tidy`: out-of-key notes to the chord, octave slips undone), a melody composed for the words (`_composed_line`:
+  textsetting, stressed syllables on strong beats, chord tones there, a contour a stanza line), or a psalm tone
+  (`recite`) - moved by octaves into the singer's range. Sung by the voice host's `sing` (hosts/voice/singing.py lays
+  the syllables on the notes; kokoro_sung.py makes Kokoro's graph take its pitch and energy curves; `VoiceHost.sing`).
+  Every Kokoro voice sings by that path, a kept voice of the library too. The Voice entry's Tune dial is the
+  "auto-tune": 0 a singer's damped glides, overshoot, vibrato and drift, 1 every note a hard step.
+- **The bake** (`SongBake`): every line not kept is sung (kept in the note's folder under a hash of singer, style and
+  notes), then hosts/music/render.py renders each part's stem (kept under its own hash) and mixes them in one room,
+  each stem brought to one loudness first so a part's level is its place in the mix. The mix is the note's song: the
+  panel reopens on it. Everything made is the Pipeline card's (the reference read, the lines sung, the mix; Generate).
+- **The importer** (hosts/music/analyze.py, listen.py; numpy and SciPy, `music_venv`): the beat grid (the onsets'
+  autocorrelation, Ellis's beats, one straight line through them), the key (Krumhansl-Kessler, the relative minor or
+  major chosen by which tonic chord is played), chords a beat (templates and a Viterbi pass, the root leaning on the
+  bass read by harmonic summation), sections, each section's drum bar, which bars are sung (what does not repeat
+  under REPET-SIM on the beat grid, a share of the bar, hissing as consonants do), and each sung bar's tune a
+  sixteenth at a time (harmonic-sum salience, bars singing the same line over the same chord averaged together).
+  Nothing of the song's sound is kept. `test_music.py` renders a known song and reads it back.
+- **The form on the Timeline** (`SoundTimeline`, read-only in the `TimelineDock`), opened from beside Play as every
+  note's timeline is (the clock's, under a show's storyboard): a group a section, a lane a part, chords as flags, each
+  sung word a span. The song is exported from the bottom-right row: a note with no video has the song's ⤓ where
+  the shared one would be (`sound_export`), as WAV, FLAC, MP3 or OGG, saying how far along on the row's progress
+  line as the video's export does (`RowStatus` in `ui/`; the video's and Masking's lines are each their own still);
+  a note with a Medium exports its video. Beside the mix are its subtitles: every word sung, when (`made.json` is
+  what the mix was made from).
+- **A section the author pins** (`place`, ‹ › on the card's form rows): where the reading laid a section of the words
+  wrong, the author moves it a bar at a time; the placement keeps the rest.
+
+**Measured:**
+
+- Kokoro follows a told pitch curve: held notes within about 10 cents (pYIN on af_heart and am_puck), vowel onsets
+  within 25 ms of the beat. Michael breaks into the octave below at A4; Puck holds it, so Puck is the default singer.
+- A vowel held past its spoken length dies: Kokoro plans its energy down as a pause would. Held at the vowel's peak,
+  and sung a second time with the energy raised where its middle still sags (`SUSTAIN_*`), a held "u" keeps its level.
+  Kokoro's decoder normalizes over the whole phrase, so a loud held vowel makes the rest of the phrase quieter.
+- ERROR ME FOUND: 95.000 BPM (a straight grid there scores 32.6 against about 5 at every tempo near it), C major,
+  the bass walking C F D F a bar each, the verses found at bars 12, 40 and 68. The breaks' lead reads as strongly
+  as the chorus's voice, so the choruses were laid four bars early: pinned at 32 and 60 in the note.
+- Rendering: about 5x real time (the 3:40 song's eight parts in 55-70 s; a part not changed is read back). Singing its
+  52 lines: about two minutes. Reading the reference: 13-25 s.
 
 **For the user to judge:**
 
-1. Whether to build it at all, and whether ambient comes first.
-2. The name: **Sound** (proposed below) or Audio.
-3. The first experiment, by ear: one Kokoro voice holding a sung vowel at a few pitches and lengths (step 5). It shows
-   whether singing is close or far off.
-4. The bet underneath all of it: that a song made by choosing among seeded parts feels like the author's own.
+1. ERROR ME FOUND by ear (open the note; the Pipeline card's Mix is made): whether the voice holds its melody, whether
+   the melody is the song's (the verses' read as narrow stepwise lines around C4-F4), the Tune dial, the parts.
+2. Whether the instruments are the right first set (every one synthesized; no samples).
+3. The bet: a song made by choosing among seeded parts feels like the author's own.
+
+**Open:** a chorus of voices (several singers on one line, each a little early, late, sharp or flat); lyrics aligned to
+the reference by a speech recognizer (it would settle where each section and syllable falls - `speech_venv` already
+has Whisper); the reference's melody judged by ear and improved; writing a part down note by note (a piano roll on the
+Timeline); MIDI and stem export; the show's seed kept off the mix's fingerprint (today a new mix re-rolls the scenes);
+a loop of the section being rolled heard at once; the bed under a reading; a Sound linked from another note (Targeting
+Individuality ends on this song).
+
+**A note on what is taken:** the importer reads a song's melody for the author's own use. A melody is what copyright
+protects most strongly, so a song published with another's tune is a cover, and needs its license.
 
 ## The idea
 
@@ -96,7 +146,7 @@ What Ghost Notes adds that neither side has:
 - **No wrong notes.** Every part is in key and on chord. The Ambience pad already works this way: a pentatonic in which
   no two degrees are a semitone apart, "so any combination is consonant".
 
-## The rename: Song becomes Sound
+## The rename: Song becomes Sound (done)
 
 The component only attaches a file, and the file can be anything, so "Song" promises too much. **Sound** fits: it is
 already the family's label (hue 212), and it reads well in a sentence ("this note's clock is its Sound").

@@ -25,7 +25,7 @@ Where a note has room for exactly one. Components that take the same slot are al
 
 | Slot | What it is | Taken by |
 | --- | --- | --- |
-| `clock` | What the show is timed by, and how long it is: a song, a voice reading the text, or a clip. | Song, Voice, Clip |
+| `clock` | What the show is timed by, and how long it is: a sound (a song from a file, or composed), a voice reading the text, or a clip. | Sound, Voice, Clip |
 | `presentation` | What the show is seen in: the Medium and the format it names, a card table, an actor's room, or a clip's own frame. | Medium, Actor, Clip |
 
 ## Workspaces
@@ -66,8 +66,8 @@ By family - the color a component's card, chip and marks are drawn in.
 
 ### Sound
 
-- **Song** (`song`) - A song the show is timed by: its beat and its spectrum drive the scenes.
-  - gives audio; takes the clock; asks for `stage`; kept in `song:`
+- **Sound** (`sound`) - What the show is timed by and heard with: a song from a file, or a song composed for the note - its parts synthesized from first principles, its words sung, a song file's patterns taken as its own.
+  - gives audio; takes the clock; asks for `stage`, `subprocess`, `ffmpeg`, `python:music`, `python:voice`; kept in `sound:`
 
 ### Picture
 
@@ -118,6 +118,7 @@ What a component may ask of the platform. Each is possible somewhere or not at a
 | `python:voice_train` | the voice-training environment | the desktop |
 | `tex` | TeX | the desktop |
 | `python:math` | the math environment | the desktop |
+| `python:music` | the music environment | the desktop |
 | `agent:writer` | an AI writer | the desktop |
 | `agent:painter` | an AI painter | the desktop |
 | `movie_export` | rendering a video | the desktop |

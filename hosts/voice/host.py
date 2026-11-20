@@ -28,6 +28,10 @@ of megabytes and Godot can load a WAV directly.
   <- {"id": 3, "ok": true, "wav": "...", "sample_rate": 22050, "duration": 4.2,
       "words": [{"text": "the", "t0": 0.0, "t1": 0.12}], "phones": [...]}
 
+  -> {"id": 6, "op": "sing", "voice": "kokoro", "out": "/path/to/phrase.wav", "params": {"speaker": 0},
+      "words": [{"text": "error", "notes": [{"t": 0.0, "len": 0.3, "midi": 64}, ...]}], "style": {"tune": 0.0}}
+  <- {"id": 6, "ok": true, "wav": "...", "sample_rate": 24000, "start": -0.31, "duration": 2.1, "sung": [...]}
+
   -> {"id": 4, "op": "cancel", "ids": [2, 3]}
   <- {"id": 3, "ok": false, "cancelled": true}
   <- {"id": 4, "ok": true, "dropped": 1}
@@ -238,6 +242,14 @@ class Host:
                 phonemes=req.get("phonemes"),
             )
             return result
+        if op == "sing":
+            # a phrase sung on its notes (a composed Sound's vocal part): the backend that owns the voice must sing
+            voice = req.get("voice") or ""
+            backend = self.backend(req.get("backend") or self.backend_for(voice))
+            if not hasattr(backend, "sing"):
+                raise BackendError(f"the {backend.name} voices cannot sing")
+            return backend.sing(voice=voice, words=req.get("words") or [], out_path=req["out"],
+                                params=req.get("params") or {}, style=req.get("style") or {})
         if op == "ensure":
             # download/prepare a voice without synthesizing, so a UI can show
             # progress before the user is waiting on audio

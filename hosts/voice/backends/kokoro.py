@@ -61,6 +61,12 @@ at the stop (AFTER_WORDS, `_after`, `_cut_after`). What is followed is planned f
 alone first, by the graph cut to its plan (`_planner`), and the call is told that plan (`_told`) - but not the
 holds mid-sentence a sentence has only alone (HOLD_OVER).
 
+The start: where the request says what was said before the sentence (`before`: the reading sends the last words of
+the sentence before it in its paragraph, in the same voice), they are read first and the take cut in the rest the
+model makes after them (`_before_ids`, `_cut_before`). The sentence is told its plan alone up to its last sound, so
+what they change is how it comes in - its first words' pitch and level, softer than the start of a call - never its
+pace. Where the model reads on into the sentence (after a word or two it does not rest), it is read without them.
+
 Not here: `noise_scale` and `noise_w` (the Tone's `noise` columns do nothing on these voices), F0 as an
 input (the arc and the Tone resample), Kokoro's own dwell at a mark (the pause figures are Piper's
 measurements), the vowel probe.
@@ -174,6 +180,21 @@ BLENDS_KEPT = 32
 MOVING = "model_moving.onnx"
 # A graph cut to its plan (`_plan_graph`), beside it: "model_plan.onnx".
 PLAN = "_plan.onnx"
+# The stock graph made to sing (`_sung_graphs`, kokoro_sung.py), and it cut to its planned curves, beside it.
+SUNG = "model_sung.onnx"
+SUNG_CURVES = "model_sung_curves.onnx"
+# A sung vowel's energy is held at its peak over its first HOLD_LOOK curve steps (12.5 ms each), and never more than
+# HOLD_UNDER (the curve's own log units) under the phrase's vowels' typical peak.
+HOLD_LOOK = 8
+HOLD_UNDER = 0.5
+# A vowel held SUSTAIN_FROM frames or more is sung a second time with its energy raised where its middle fell under its
+# onset (or SUSTAIN_UNDER dB under the phrase's vowels): SUSTAIN_SLOPE dB a unit of energy (measured on af_heart's
+# "user": 6.1 to 10 raised a held u 19 dB), at most SUSTAIN_MOST dB and never past ENERGY_MOST.
+SUSTAIN_FROM = 8
+SUSTAIN_UNDER = 4.0
+SUSTAIN_SLOPE = 5.0
+SUSTAIN_MOST = 18.0
+ENERGY_MOST = 10.5
 # Where the voices taught here are, under the voices' root (`_family`).
 TRAINED = "trained"
 
@@ -353,12 +374,16 @@ class KokoroBackend(PiperBackend):
                 "name": cls.name,
                 "phoneme_input": True,  # eSpeak's reading, in misaki's symbols
                 "duration_control": True,  # speed, and the patched plan
-                "pitch_control": False,  # the F0 curve is in the graph, not yet an input
+                "pitch_control": False,  # a reading's pitch is the plan's; a sung phrase's is told (`sing`)
+                "sings": True,  # `sing`: a phrase on its notes, through the graph made to sing (kokoro_sung.py)
                 "timings": True,  # the rounded plan, exact
                 # Its readers blend (blend.py): said of the backend, never on a voice's row, because every
                 # field of a row keys the takes kept in that voice (TakeCache) and one added would re-make
                 # every one of them.
                 "blend": True,
+                # A request's `before` (the words said before its sentence) is read first and cut away: said of the
+                # backend, so a reading sends them to no other voice and keys no other voice's takes by them.
+                "before": True,
             }
         )
         return d
@@ -403,6 +428,7 @@ class KokoroBackend(PiperBackend):
         self._moving: dict = {}  # checkpoint -> its graph that takes a style a token, or None (`_moving_graph`)
         self._paths: dict = {}  # id(a graph) -> its file
         self._plans: dict = {}  # id(a graph) -> the graph that makes its plan alone (`_planner`)
+        self._sung: dict = {}  # checkpoint -> (its graph that sings, its curve planner), or None (`_sung_graphs`)
 
     # -- storage -----------------------------------------------------------
 
@@ -821,6 +847,154 @@ class KokoroBackend(PiperBackend):
                 run = sess
         return self._synth_tokens(list(tokens), voice, out_path, self._leveled(voice, params, cfg, sess), cfg, run)
 
+    # -- singing -----------------------------------------------------------
+
+    def _sung_graphs(self, family: str):
+        """(the graph that sings, the graph that plans its curves) for a checkpoint, made from its patched graph the
+        first time (kokoro_sung.py) and again whenever that is newer - None where it cannot sing."""
+        if family not in self._sung:
+            import onnxruntime as ort
+
+            import kokoro_sung
+
+            self._graph(family)  # fetched and patched first
+            home = self._home(family)
+            stock, sung, plan = home / MODEL, home / SUNG, home / SUNG_CURVES
+            if not sung.exists() or sung.stat().st_mtime < stock.stat().st_mtime:
+                print("ghost/voice: making the Kokoro graph that sings, once", file=sys.stderr)
+                if not kokoro_sung.make(stock, sung):
+                    self._sung[family] = None
+                    return None
+            if not plan.exists() or plan.stat().st_mtime < sung.stat().st_mtime:
+                kokoro_sung.curves(sung, plan)
+            opts = self._options()
+            open_ = lambda p: ort.InferenceSession(str(p), sess_options=opts, providers=["CPUExecutionProvider"])  # noqa: E731
+            self._sung[family] = (open_(sung), open_(plan) if plan.exists() else None)
+        return self._sung[family]
+
+    def sing(self, voice: str, words: list, out_path: str, params: dict, style: dict) -> dict:
+        """A phrase sung (next/music.md, "Kokoro sings"; singing.py lays it): `words` [{text, notes: [{t, len, midi}]}],
+        times in seconds from the phrase's start. Three calls: the phrase planned as spoken (each consonant's length),
+        the curves Kokoro plans for the sung durations (where it voices), then the phrase sung on the notes' pitch with
+        its vowels' energy held. Returns {"wav", "sample_rate", "start" (where the take's first sample falls, in the
+        phrase's seconds), "duration", "sung": [{word, t}]}."""
+        import numpy as np
+
+        import singing
+
+        if not self.owns(voice):
+            raise BackendError(f"unknown Kokoro voice '{voice}'")
+        graphs = self._sung_graphs(voice)
+        if graphs is None:
+            raise BackendError("this Kokoro graph cannot be made to sing")
+        sung_sess, curve_sess = graphs
+        cfg = self._cfg_of(voice, params)
+        kk = cfg["kokoro"]
+        british = bool(kk["british"])
+        tokens = [{"text": str(w.get("text", ""))} for w in words]
+        if not tokens or not all(t["text"].strip() for t in tokens):
+            raise BackendError("a sung phrase needs words, each with its notes")
+        espeak = "en-gb" if british else "en-us"
+        self._homographs.annotate(tokens, espeak)
+        units = kokoro_symbols(self._symbols(tokens, "espeak", espeak, voice), british)
+        vocab = kk["vocab"]
+        per_word: list = [[] for _ in words]
+        for sym, src, _at in units:
+            if sym != " " and sym in vocab and 0 <= int(src) < len(words):
+                per_word[int(src)].append(sym)
+        if not all(per_word):
+            raise BackendError("a word of the phrase has no sound Kokoro knows")
+        space = int(vocab[" "])
+        body: list = []
+        for w, syms in enumerate(per_word):
+            if w:
+                body.append(space)
+            body.extend(int(vocab[s]) for s in syms)
+        ids = np.array([[PAD_ID, *body, PAD_ID]], dtype=np.int64)
+        pack = kk["pack"]
+        style_row = np.asarray(pack[min(len(body), pack.shape[0]) - 1], dtype=np.float32).reshape(1, STYLE)
+        base = {"input_ids": ids, "style": style_row, "speed": np.ones(1, np.float32)}
+        stock = self._graph(voice)
+        planner = self._planner(stock)
+        spoken = planner.run(None, base)
+        planned = np.asarray(spoken[-1] if len(spoken) == 1 else spoken[1], dtype=float).ravel()
+        frame_s = HOP / float(SR)
+        laid = singing.lay(per_word, [list(w.get("notes", [])) for w in words], planned.tolist(), frame_s)
+        frames = np.asarray(laid["frames"], dtype=np.float32).reshape(1, -1)
+        total = int(frames.sum())
+        feed = {**base, "dur_scale": np.zeros((1, ids.shape[1]), np.float32), "rest_floor": frames}
+        got = (curve_sess or sung_sess).run(None, feed)
+        names = [o.name for o in (curve_sess or sung_sess).get_outputs()]
+        f0p = np.asarray(got[names.index("f0_planned")], dtype=float).ravel()
+        n_p = np.asarray(got[names.index("n_planned")], dtype=float).ravel()
+        steps = len(f0p)
+        half = frame_s / 2.0
+        times = laid["origin"] + (np.arange(steps) + 0.5) * half
+        voices = laid["voices"]
+        midi = np.zeros(steps)
+        held = np.zeros(steps)
+        k = 0
+        for j, t in enumerate(times):
+            while k + 1 < len(voices) and voices[k + 1][0] <= t:
+                k += 1
+            midi[j] = voices[k][1] if voices else 60.0
+            held[j] = max(t - voices[k][0], 0.0) if voices else 0.0
+        curve = np.asarray(singing.ornament(midi.tolist(), half, held.tolist(), style or {},
+                                            seed=int((style or {}).get("seed", 0))))
+        f0 = 440.0 * 2.0 ** ((curve - 69.0) / 12.0)
+        # a consonant Kokoro plans unvoiced keeps its plan; a sung vowel is voiced however long it is held (the plan
+        # sags under VOICED on a vowel stretched past anything it was taught, and the decoder breathes it)
+        vowel = np.zeros(steps, dtype=bool)
+        for a, b in laid["vowels"]:
+            vowel[2 * a:2 * b] = True
+        keep = (f0p < singing.VOICED) & ~vowel
+        for a, b in laid["rests"]:
+            keep |= (times >= a) & (times < b)
+        first, last = int(frames[0, 0]) * 2, (total - int(frames[0, -1])) * 2
+        keep[:first] = True
+        keep[last:] = True
+        f0_set = np.where(keep, f0p, f0).astype(np.float32)
+        # each vowel's energy held at its own peak, and never under the phrase's vowels' (the plan lets a long vowel
+        # die away as a pause would): the decoder keeps a held vowel voiced only while it is told it is loud
+        peaks = [float(np.max(n_p[2 * a:min(2 * a + HOLD_LOOK, steps)])) for a, b in laid["vowels"] if 2 * a < steps]
+        floor = float(np.median(peaks)) - HOLD_UNDER if peaks else 0.0
+        n_set = n_p.copy()
+        for a, b in laid["vowels"]:
+            a2, b2 = 2 * a, min(2 * b, steps)
+            if b2 - a2 > 2:
+                target = max(float(np.max(n_p[a2:min(a2 + HOLD_LOOK, b2)])), floor)
+                n_set[a2:b2] = np.maximum(n_p[a2:b2], target)
+        wave_at = [o.name for o in sung_sess.get_outputs()].index("waveform")
+
+        def decode(energy):
+            feed.update({"f0_keep": np.zeros(1, np.float32), "f0_set": f0_set.reshape(1, -1),
+                         "n_keep": np.zeros(1, np.float32), "n_set": energy.astype(np.float32).reshape(1, -1)})
+            return np.asarray(sung_sess.run(None, feed)[wave_at], dtype=np.float64).ravel()
+
+        audio = decode(n_set)
+        # THE HELD VOWEL KEEPS ITS LEVEL: a vowel held past its spoken length settles quieter than it began, more so the
+        # longer it is held, so each vowel's middle is heard against its own onset (never under the phrase's vowels
+        # by more than SUSTAIN_UNDER dB) and its energy raised where it sags, then the phrase is sung again
+        rms = np.array([np.sqrt(np.mean(audio[i * HOP:(i + 1) * HOP] ** 2)) for i in range(audio.size // HOP)])
+        db = 20.0 * np.log10(np.maximum(rms, 1e-5))
+        onsets = [float(np.max(db[a:min(a + 4, b)])) for a, b in laid["vowels"] if b - a >= 4 and a < db.size]
+        if onsets:
+            floor_db = float(np.median(onsets)) - SUSTAIN_UNDER
+            raised = n_set.copy()
+            for a, b in laid["vowels"]:
+                if b - a < SUSTAIN_FROM or b > db.size:
+                    continue
+                want = max(float(np.max(db[a:a + 4])), floor_db)
+                short = np.clip(want - db[a:b], 0.0, SUSTAIN_MOST)
+                short[:3] = 0.0  # the onset as it was
+                lift = np.repeat(np.convolve(short, np.ones(3) / 3.0, mode="same"), 2) / SUSTAIN_SLOPE
+                raised[2 * a:2 * b] = np.minimum(raised[2 * a:2 * b] + lift[:2 * (b - a)], ENERGY_MOST)
+            if np.any(raised != n_set):
+                audio = decode(raised)
+        self._write_wav(out_path, audio, SR)
+        return {"wav": out_path, "sample_rate": SR, "start": laid["origin"] + PLAN_LEAD,
+                "duration": audio.size / float(SR), "sung": laid["sung"], "frames": total}
+
     def _level_files(self, voice: str, speaker: int) -> list:
         """The checkpoint's graph and the speaker's pack (level.py)."""
         packs = self._family(voice)["packs"]
@@ -852,6 +1026,27 @@ class KokoroBackend(PiperBackend):
             end -= 1
         return out[k:end]
 
+    def _before_ids(self, params: dict, kk: dict) -> list:
+        """The ids of what was said before the sentence (the request's `before`, as tokens), read as a sentence is
+        - [] where there is nothing, no sound, or no full stop at its end (a comma's phrase runs on into the next)."""
+        toks = [dict(t) for t in (params.get("before") or []) if isinstance(t, dict)]
+        if not toks or str(toks[-1].get("punct", "")) not in SENTENCE_END:
+            return []
+        british = bool(kk["british"])
+        espeak = "en-gb" if british else "en-us"
+        phonemizer = str(params.get("phonemizer", "espeak"))
+        vocab = kk["vocab"]
+        try:
+            if phonemizer == "espeak":
+                self._homographs.annotate(toks, espeak)
+            units = kokoro_symbols(self._symbols(toks, phonemizer, espeak, ""), british)
+        except Exception as exc:  # noqa: BLE001 - the words before are a nicety: the sentence is read without them
+            print(f"ghost/voice: the words before a sentence not read ({exc})", file=sys.stderr)
+            return []
+        out = [int(vocab[k]) for k, _src, _at in units if k in vocab]
+        quiet = {vocab.get(" ")} | {vocab[m] for m in _MARK_SYMBOLS if m in vocab}
+        return out if any(i not in quiet for i in out) else []
+
     def _render_symbols(
         self,
         symbols: list,
@@ -874,7 +1069,8 @@ class KokoroBackend(PiperBackend):
 
         A sentence that ends on a full stop is followed in its call by its own first word (AFTER_WORDS, or as
         many as the request's `after` says), told the plan it has alone, and cut before the word; what is handed
-        back is the sentence's alone.
+        back is the sentence's alone. So is a sentence read after what the request's `before` says was said: it is
+        said first and the take cut in the rest after it (`led`).
         """
         import numpy as np
 
@@ -967,16 +1163,20 @@ class KokoroBackend(PiperBackend):
         marks = {vocab[m] for m in _MARK_SYMBOLS if m in vocab}
 
         told_plan = REST_FLOOR_INPUT in takes and DUR_SCALE_INPUT in takes
+        # what was said before the sentence, read first and cut away (`before`)
+        before = self._before_ids(params, kk) if told_plan and space is not None else []
 
-        def feeds_of(a: int, b: int, more: list, told=None) -> dict:
-            """What a call of ids[a:b] is fed, `more` said after them. `told` is the frames of its first ids, a pad
-            first (None: the call's own plan): a told id's plan is scaled away and floored at them."""
+        def feeds_of(a: int, b: int, more: list, told=None, lead=()) -> dict:
+            """What a call of ids[a:b] is fed, `lead` said before them and `more` after. `told` is the frames of its
+            first ids, a pad first (None: the call's own plan): a told id's plan is scaled away and floored at them -
+            save the pad where words come before (theirs is the call's)."""
             body = ids[a:b]
             n = max(1, len(body))
             pack = kk["pack"]
+            front = [*lead, space] if lead else []
             rest = [space, *more] if more else []
             feeds = {
-                "input_ids": np.array([[PAD_ID, *body, *rest, PAD_ID]], dtype=np.int64),
+                "input_ids": np.array([[PAD_ID, *front, *body, *rest, PAD_ID]], dtype=np.int64),
                 "style": np.asarray(pack[min(n, pack.shape[0]) - 1], dtype=np.float32).reshape(1, STYLE),
                 "speed": np.array([speed], dtype=np.float32),
             }
@@ -987,27 +1187,47 @@ class KokoroBackend(PiperBackend):
                 u0, u1 = moving["span"]
                 total = float(max(1, len(ids)))
                 places = [u0 + (u1 - u0) * min(max(x / total, 0.0), 1.0)
-                          for x in (a, *[j + 0.5 for j in range(a, b)], *([b] * len(rest)), b)]
+                          for x in (a, *([a] * len(front)), *[j + 0.5 for j in range(a, b)], *([b] * len(rest)), b)]
                 rows = [p[min(n, p.shape[0]) - 1].reshape(STYLE) for p in moving["packs"]]
                 feeds["style"] = blend.rows_along(moving["blend"], rows, places, float(moving["pos"]))
-            floors = [0.0, *floor[a:b], *([0.0] * len(rest)), 0.0]
+            floors = [0.0, *([0.0] * len(front)), *floor[a:b], *([0.0] * len(rest)), 0.0]
             # the first pad undoes `speed`: it is planned as at speed 1.0, where the first word meets the voice waking
-            scales = [speed, *scale[a:b], *([1.0] * len(rest)), 1.0]
+            scales = [speed, *([1.0] * len(front)), *scale[a:b], *([1.0] * len(rest)), 1.0]
             for k, f in enumerate(told or []):
-                scales[k], floors[k] = 0.0, float(f)
+                if k == 0 and front:
+                    continue
+                at = k + len(front) if k else 0
+                scales[at], floors[at] = 0.0, float(f)
             if (fed_floor or told is not None) and REST_FLOOR_INPUT in takes:
                 feeds[REST_FLOOR_INPUT] = np.array(floors, dtype=np.float32)
             if (fed_scale or told is not None) and DUR_SCALE_INPUT in takes:
                 feeds[DUR_SCALE_INPUT] = np.array(scales, dtype=np.float32)
             return feeds
 
-        def read(a: int, b: int, more: list, told=None):
-            """ids[a:b] in one call, `more` said after them: (audio, the plan's frames an id, a pad at each end)."""
-            out = sess.run(None, feeds_of(a, b, more, told))
+        def read(a: int, b: int, more: list, told=None, lead=()):
+            """ids[a:b] in one call, `lead` said before them and `more` after: (audio, the plan's frames an id, a pad
+            at each end)."""
+            out = sess.run(None, feeds_of(a, b, more, told, lead))
             planned = np.asarray(out[1]).reshape(-1).astype(np.float64)
             # an unpatched graph hands back the plan before its Round and Clip: done here as there
             return (np.asarray(out[0]).reshape(-1).astype(np.float32),
                     planned if REST_FLOOR_INPUT in takes else np.maximum(np.round(planned), 1.0))
+
+        def led(a: int, b: int, more: list, told: list):
+            """ids[a:b] read with `before` said first and the take cut in the rest after it (`_cut_before`): (audio,
+            plan) as `read` hands them back without it, the first pad what is left before the sentence - None where
+            the model reads on into the sentence."""
+            audio, planned = read(a, b, more, told, before)
+            n = len(before) + 2  # the pad, the words before and the word-space after them
+            said = 1 + max(k for k, i in enumerate(before) if i != space and i not in marks)
+            first = n + next(k for k in range(b - a) if sound[a + k])
+            cut = _cut_before(audio, planned, said, first, frame_s)
+            if cut is None:
+                return None
+            audio = audio[cut:].copy()
+            fade = min(audio.size, int(round(BEFORE_FADE * SR)))
+            audio[:fade] *= (0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, fade))).astype(np.float32)
+            return audio, np.concatenate(([max(0.0, float(planned[:n].sum()) - cut / float(HOP))], planned[n:]))
 
         pieces = _pieces(ids, units, unit_of)
         for a, b in pieces:
@@ -1018,20 +1238,30 @@ class KokoroBackend(PiperBackend):
                 more = _after(ids, units, unit_of, sound, int(params.get("after", AFTER_WORDS)))
                 if b - a + 1 + len(more) > MAX_TOKENS:
                     more = []
-            if more:
-                # the sentence's plan made alone and followed, and the call told what it keeps of them (`_told`)
+            # ...nor its start, where the request says what was said before it
+            lead = (a, b) == pieces[0] and heard and before and b - a + len(before) + 2 + len(more) <= MAX_TOKENS
+            if more or lead:
                 planner = self._planner(sess)
                 alone = np.asarray(planner.run(None, feeds_of(a, b, []))[-1]).reshape(-1)
-                followed = np.asarray(planner.run(None, feeds_of(a, b, more))[-1]).reshape(-1)
                 last = 1 + heard[-1] - a  # the place in a call's plan (a pad first) of the sentence's last sound
+                own = [float(alone[k]) for k in range(last)]  # its plan alone up to it
+            if more:
+                # the sentence's plan made alone and followed, and the call told what it keeps of them (`_told`)
+                followed = np.asarray(planner.run(None, feeds_of(a, b, more))[-1]).reshape(-1)
                 # ...and where a mark follows (a pad first): its rest is the sentence's own
                 marked = [False, *[k + 1 < b and ids[k + 1] in marks for k in range(a, b)]]
-                take, planned = read(a, b, more, _told(alone, followed, last, marked))
+                told = _told(alone, followed, last, marked)
+                got = led(a, b, more, told) if lead else None
+                take, planned = got if got is not None else read(a, b, more, told)
                 cut = _cut_after(take, planned, last, 2 + b - a + sound[: len(more)].index(True), frame_s)
                 if cut is None:  # it read on: the sentence alone
-                    take, planned = read(a, b, [])
+                    got = led(a, b, [], own) if lead else None
+                    take, planned = got if got is not None else read(a, b, [])
                 else:
                     take, planned = take[:cut], _plan_to(planned[: 1 + b - a], cut / float(HOP))
+            elif lead:
+                got = led(a, b, [], own)
+                take, planned = got if got is not None else read(a, b, [])
             else:
                 take, planned = read(a, b, [])
             audio_parts.append(take)
@@ -1178,6 +1408,11 @@ ALONE_WORDS = 1
 # The rest at the stop: under this share of the peak, where nothing sounds at all (a faint last sound, a hum
 # or a soft hiss under SEAM_QUIET, is over it).
 AFTER_QUIET = 0.005
+# What is said before a sentence is cut away in the last rest after it at least this long (one word before is
+# followed by none in most calls, three by one in most: next/voice_engines.md, "The sentence before it")...
+BEFORE_REST = 0.09
+BEFORE_REACH = 0.03  # ...looked for this far past the sentence's first sound by the plan
+BEFORE_FADE = 0.01  # the take fades in over this from the cut, in the silence SEAM_LEAD before its first sound
 
 
 # Nothing hisses after a voice that ended voiced. On a sentence ending in a vowel Kokoro often renders a
@@ -1363,6 +1598,36 @@ def _cut_after(audio, frames, last: int, nxt: int, frame_s: float):
     if end - cut < int(round(SEAM_LEAD * sr / step)):
         return None
     return cut * step
+
+
+def _cut_before(audio, frames, said: int, first: int, frame_s: float):
+    """Where a call read with words before its sentence starts as the sentence's own take, in samples - or None
+    where the model did not rest after them. `frames` is the call's plan (a pad first), `said` the place in it of
+    the last sound before the sentence and `first` of the sentence's first sound. The rest is looked for from the
+    start of that sound to BEFORE_REACH past the start of the first (by the plan, PLAN_LEAD early): the last
+    stretch under AFTER_QUIET at least BEFORE_REST long. The cut is SEAM_LEAD before its end, where `_trim_ends`
+    leaves a take's head, and never before it starts."""
+    import numpy as np
+
+    sr = HOP / frame_s
+    step = max(1, int(0.005 * sr))
+    lo = int(max(0.0, float(frames[:said].sum()) * frame_s - PLAN_LEAD) * sr) // step
+    hi = min(audio.size // step,
+             int(max(0.0, float(frames[:first].sum()) * frame_s - PLAN_LEAD + BEFORE_REACH) * sr) // step)
+    if hi - lo < 2:
+        return None
+    peak = float(np.max(np.abs(audio)))
+    if peak <= 0.0:
+        return None
+    level = np.sqrt((audio[: hi * step].reshape(hi, step).astype(np.float64) ** 2).mean(axis=1))
+    rest = np.concatenate(([False], level[lo:] <= AFTER_QUIET * peak, [False]))
+    runs = np.flatnonzero(rest[1:] != rest[:-1]).reshape(-1, 2)
+    least = int(np.ceil(BEFORE_REST * sr / step - 1e-9))
+    long_enough = [(int(s), int(e)) for s, e in runs if e - s >= least]
+    if not long_enough:
+        return None
+    start, end = long_enough[-1]
+    return (lo + max(start, end - int(round(SEAM_LEAD * sr / step)))) * step
 
 
 def _plan_to(frames, total: float):

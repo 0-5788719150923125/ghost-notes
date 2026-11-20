@@ -39,7 +39,12 @@ Held, each with the case that must not change:
  SEAM_TAIL after its last sound - its times the ones it has read alone; a model that reads on at the stop is
  asked again for the sentence alone, and a sentence of one word, one ending on no full stop, or a graph that
  cannot be told a plan, is never followed; the cut is in the rest, never in a stop's closure or a faint last
- sound; the plan alone is the graph cut to its second output, kept beside it.
+ sound; the plan alone is the graph cut to its second output, kept beside it;
+ 13. what the request says was said before the sentence (`before`) is read first in its call and cut away in the
+ last rest after it, the sentence told what it is told without it (its plan alone, read alone): every word as long
+ and as far apart, the head SEAM_LEAD before its first sound; words the model reads on from leave the take as it is
+ without them, and words before ending on a comma, a graph that takes no plan, a rest too short or one among the
+ words before, are no cut.
 
 Synthesis runs against a fake session, as in test_expression.py: no model download, no eSpeak.
 """
@@ -1254,6 +1259,90 @@ def test_a_sentence_is_followed_in_its_call():
 
 
 @check
+def test_the_words_before_are_cut_away():
+    """What the request says was said before the sentence (`before`) is read first in its call, a word-space after
+    it, untold; the sentence is told what it is told without it (its plan alone up to its last sound) and the take
+    cut SEAM_LEAD before its first sound, in the rest after the words before, faded in from the cut - every word as
+    long and as far apart as without them, on a model that hurries what is followed. Read alone (no full stop), it is
+    told its plan alone. THE CONTROLS: words before that the model reads on from (no rest after "!" on this fake)
+    leave the take as it is without them; words before ending on a comma, and a graph that takes no plan, are never
+    sent."""
+    import numpy as np
+    from backends.kokoro import AFTER_WORDS, BEFORE_FADE, SEAM_LEAD
+
+    def body(fed):
+        return "".join(VOCAB[i] for i in fed["ids"][1:-1])
+
+    def render(params, sess):
+        k, cfg = _backend()
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "a.wav"
+            res = k._synth_tokens(list(SENTENCE), "kokoro", str(out),
+                                  {"phonemizer": "ghost", "pause_scale": 0.0, "trail": 0.0, **params}, cfg, sess)
+            with wave.open(str(out)) as w:
+                x = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float64) / 32768.0
+                rate = w.getframerate()
+        return res, x, rate
+
+    def shape(res):
+        """Every word's start and end from the first word's start, and the take's end."""
+        at = res["tokens"][0]["t0"]
+        return [round(v - at, 4) for r in res["tokens"] for v in (r["t0"], r["t1"])] + [round(res["duration"] - at, 3)]
+
+    rests = dict(lead=14.0, tail=10.0, quiet_marks=True, stop=12.0, hurry=True)
+    said = "ˈɪt, wʌz nˈɛvəɹ sˈO."
+    before = [_tok("we", "wˈi"), _tok("waited", "wˈeɪtɪd", ".")]
+    built, x0, rate = render({"after": AFTER_WORDS}, _Session(**rests))
+    b_sess = _Session(**rests)
+    render({"after": AFTER_WORDS}, b_sess)
+    sess = _Session(**rests)
+    res, x, _rate = render({"after": AFTER_WORDS, "before": before}, sess)
+    eq([body(f) for f in sess.fed], [said, said + " ˈɪt", "wˈi wˈAtɪd. " + said + " ˈɪt"],
+       "planned alone and followed without them, then one call: the words before, a word-space, the sentence, its word after")
+    call, as_built = sess.fed[-1], b_sess.fed[-1]
+    n = len("wˈi wˈAtɪd. ")
+    eq((call["scale"][1 : n + 1].tolist(), call["floor"][1 : n + 1].tolist()), ([1.0] * n, [0.0] * n),
+       "the words before are the call's own")
+    eq((call["scale"][n + 1 :].tolist(), call["floor"][n + 1 :].tolist()),
+       (as_built["scale"][1:].tolist(), as_built["floor"][1:].tolist()), "the sentence is told what it is told without them")
+    eq(float(call["style"].ravel()[0]), float(as_built["style"].ravel()[0]), "in the style of its own token count")
+    eq(shape(res), shape(built), "every word as long and as far apart as without them, the take ending where it does")
+    # Kokoro's voice runs PLAN_LEAD ahead of its plan and this fake's on it: a take read alone is trimmed to SEAM_LEAD
+    # before its first sound by the plan, the cut by the waveform
+    head, built_head = (float(np.flatnonzero(np.abs(v) > 0.05)[0]) / rate for v in (x, x0))
+    ok(SEAM_LEAD - 0.003 <= head <= built_head + 0.003,
+       "the take starts SEAM_LEAD before its first sound, never later than read without them",
+       "%.3f s, %.3f s without them" % (head, built_head))
+    ok(float(np.max(np.abs(x[: int(BEFORE_FADE * rate)]))) < 1e-3, "nothing before it but the fade's silence")
+    alone_ = [dict(t) for t in SENTENCE]
+    alone_[-1]["punct"] = ","
+    k, cfg = _backend()
+    sess = _Session(**rests)
+    with tempfile.TemporaryDirectory() as td:
+        k._synth_tokens(alone_, "kokoro", str(Path(td) / "a.wav"),
+                        {"phonemizer": "ghost", "pause_scale": 0.0, "trail": 0.0, "before": before}, cfg, sess)
+    plan, call = sess.fed
+    last = len(said) - 1
+    eq((body(plan), body(call)), (said[:-1] + ",", "wˈi wˈAtɪd. " + said[:-1] + ","),
+       "read alone (no full stop), planned alone, then read after the words before")
+    eq((call["scale"][n + 1 : n + last].tolist(), call["floor"][n + 1 : n + last].tolist()),
+       ([0.0] * (last - 1), [float(f) for f in plan["frames"][1:last]]),
+       "...told its plan alone up to its last sound")
+    eq(float(call["scale"][n + last]), 1.0, "...the last sound the call's")
+    sess = _Session(**rests)
+    on, _x, _rate = render({"after": AFTER_WORDS, "before": [*before[:-1], _tok("waited", "wˈeɪtɪd", "!")]}, sess)
+    eq([body(f) for f in sess.fed][-1], said + " ˈɪt",
+       "CONTROL: where the model reads on from the words before, the call is made again without them")
+    eq(on["tokens"], built["tokens"], "...and that is the take")
+    sess = _Session(**rests)
+    render({"after": AFTER_WORDS, "before": [*before[:-1], _tok("waited", "wˈeɪtɪd", ",")]}, sess)
+    eq([body(f) for f in sess.fed], [said, said + " ˈɪt", said + " ˈɪt"], "CONTROL: words before ending on a comma are not sent")
+    sess = _Session(takes=(), **rests)
+    render({"after": AFTER_WORDS, "before": before}, sess)
+    eq([body(f) for f in sess.fed], [said], "CONTROL: nor to a graph that cannot be told a plan")
+
+
+@check
 def test_the_plan_alone():
     """`_plan_graph` cuts a graph to its second output, the plan: the same frames for the same feeds and no audio,
     kept beside the graph and made again only when the graph is newer; `_planner` opens it for a graph whose file
@@ -1300,7 +1389,7 @@ def test_the_cut_is_in_the_rest():
     (never before the rest starts). THE CONTROL: a rest too short to hold the seam's ends is no cut. `_plan_to`
     takes what the plan holds past the cut off its end, or gives the pad what the take holds past the plan."""
     import numpy as np
-    from backends.kokoro import HOP, SEAM_LEAD, SEAM_TAIL, SR, _cut_after, _plan_to
+    from backends.kokoro import BEFORE_REST, HOP, SEAM_LEAD, SEAM_TAIL, SR, _cut_after, _cut_before, _plan_to
 
     frame_s = HOP / float(SR)
 
@@ -1327,6 +1416,23 @@ def test_the_cut_is_in_the_rest():
        "CONTROL: a rest shorter than the seam's ends is no cut")
     eq(_cut_after(call([(1.2, 0.5)]), np.array([4.0, 12.0, 6.0, 1.0, 12.0, 4.0]), 1, 4, frame_s), None,
        "CONTROL: nor is a voice that never rests")
+    # the words before, the rest after their stop, the sentence - its voice PLAN_LEAD ahead of its plan, as Kokoro's
+    frames = np.array([4.0, 12.0, 16.0, 1.0, 12.0, 4.0])  # pad, word (its rest on it), mark, space, sentence, pad
+    led = call([(0.1, 0.0), (0.3, 0.5), (0.375, 0.0), (0.3, 0.5), (0.1, 0.0)])
+    cut = _cut_before(led, frames, 1, 4, frame_s)
+    ok(cut is not None and abs(cut / SR - (0.775 - SEAM_LEAD)) < 0.006, "the words before cut SEAM_LEAD before the sentence",
+       "%s" % (None if cut is None else round(cut / SR, 3)))
+    breath = call([(0.1, 0.0), (0.3, 0.5), (0.15, 0.0), (0.06, 0.02), (0.165, 0.0), (0.3, 0.5), (0.1, 0.0)])
+    cut = _cut_before(breath, frames, 1, 4, frame_s)
+    ok(cut is not None and abs(cut / SR - (0.775 - SEAM_LEAD)) < 0.006, "...after a breath in the rest, not before it",
+       "%s" % (None if cut is None else round(cut / SR, 3)))
+    eq(_cut_before(call([(0.1, 0.0), (0.3, 0.5), (BEFORE_REST - 0.03, 0.0), (0.7, 0.5)]), frames, 1, 4, frame_s), None,
+       "CONTROL: a rest shorter than BEFORE_REST is no cut")
+    eq(_cut_before(call([(1.2, 0.5)]), frames, 1, 4, frame_s), None, "CONTROL: nor is a voice that never rests")
+    # pad, a word, a comma's rest, the last word before, a stop too short to rest at, the sentence, pad
+    inner = call([(0.1, 0.0), (0.3, 0.5), (0.2, 0.0), (0.3, 0.5), (0.05, 0.0), (0.3, 0.5), (0.1, 0.0)])
+    eq(_cut_before(inner, np.array([4.0, 12.0, 8.0, 12.0, 2.0, 12.0, 4.0]), 3, 5, frame_s), None,
+       "CONTROL: a rest among the words before is no cut: the last of them would be left before the sentence")
     got = _plan_to(np.array([4.0, 12.0, 22.0, 2.0]), 30.5)
     eq([float(f) for f in got], [4.0, 12.0, 14.5, 0.0, 0.0], "past the cut, the plan is taken off its end")
     got = _plan_to(np.array([4.0, 12.0, 6.0, 2.0]), 27.25)

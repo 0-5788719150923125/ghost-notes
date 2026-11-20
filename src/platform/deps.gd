@@ -328,6 +328,19 @@ const MANAGED := [
 			+ "table show paints its layers.",
 	},
 	{
+		"key": "music_venv",
+		"name": "Music environment",
+		"kind": KIND_MANAGED,
+		"path": "user://music_venv",
+		"requirements": "res://hosts/music/requirements.txt",
+		"imports": "numpy, scipy",
+		"size": "~170 MB",
+		"used_for": "numpy and SciPy, for a composed Sound (hosts/music/render.py, next/music.md): every part "
+			+ "synthesized from oscillators, noise and filters and mixed in one room - and a song file read for its "
+			+ "patterns (analyze.py): its tempo, key, chords, form, drums and sung melody, never its sound. Built the "
+			+ "first time a composed Sound is made.",
+	},
+	{
 		"key": "compute_venv",
 		"name": "Compute environment",
 		"kind": KIND_MANAGED,

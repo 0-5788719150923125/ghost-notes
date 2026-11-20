@@ -1084,7 +1084,7 @@ A round of revisions to the first build. **Status: done.**
   note opens (`Director.reset_show`) for the note's blocks to set, and a song note opens loaded and stopped at
   its start. A reading's Stop hides the stage too.
 - **A song is a note's component, and Auto is a medium.** Song notes are `NotePanel` - the panel never hides -
-  with the note's components as cards: the Script, the Song (`src/show/song_card.gd`), the Picture, the Look,
+  with the note's components as cards: the Script, the Sound (`src/music/sound_card.gd`), the Picture, the Look,
   the Intro & outro, the Storyboards. Without a Picture the song plays to an empty frame; "+" offers a Picture
   for it (and grays the Look and storyboards, "Needs a Picture"). The Picture's media are what a song can carry
   (`Medium.offered`: not the novel, notebook or tablet, which print a reading) with Auto first

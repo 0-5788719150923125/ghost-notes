@@ -132,7 +132,7 @@ func _registry() -> void:
 		for written in Components.attach_blocks(k):
 			_ok(written == b, "%s: attaching it writes its own block ('%s', not '%s')" % [k, b, written])
 	# the blocks the panels keep are the components' blocks
-	for b in ["voice", "medium", "illustrations", "look", "bookends", "table", "song", "clip", "youtube"]:
+	for b in ["voice", "medium", "illustrations", "look", "bookends", "table", "sound", "clip", "youtube"]:
 		_ok(blocks.has(b), "the document block '%s' belongs to a component" % b)
 	_ok(not blocks.has("synthesis"), "no component keeps a synthesis: block - the formant voice is a Voice's")
 	_ok(not blocks.has("scenes"), "the control: no component keeps a scenes: block (a storyboard is kept in the note's folder)")
@@ -167,9 +167,10 @@ func _composition() -> void:
 	_ok(Components.attached_of({}) == ["text"], "a new note is its text and nothing else")
 	_ok(Components.workspace_of(["text"]) == "note", "...and opens in the note's own panel")
 	var cases := [
-		[{"song": {"path": ""}}, "note", "a song"],
-		[{"song": {"path": ""}, "medium": {"format": "auto"}}, "note", "a song and a Medium"],
-		[{"song": {"path": ""}, "medium": {}, "look": {}}, "note", "a song, a Medium and a Look"],
+		[{"sound": {"source": "composed"}}, "note", "a sound"],
+		[{"song": {"path": ""}}, "note", "a song written before Sound (its old block)"],
+		[{"sound": {"source": "file", "path": ""}, "medium": {"format": "auto"}}, "note", "a sound and a Medium"],
+		[{"sound": {}, "medium": {}, "look": {}}, "note", "a sound, a Medium and a Look"],
 		[{"voice": {}}, "reading", "a voice"],
 		[{"voice": {}, "medium": {}, "look": {}}, "reading", "a voice with a medium and a look"],
 		[{"synthesis": {}}, "note", "a block no component keeps (the old voice lab's): words alone"],
@@ -205,23 +206,23 @@ func _composition() -> void:
 
 func _slots() -> void:
 	print("-- one clock, one presentation")
-	_ok(Components.holder("clock", ["text", "song"]) == "song" and Components.holder("clock", ["text"]).is_empty(),
-		"a song holds the clock; a plain note's is free")
-	var why := Components.cannot_attach("voice", ["text", "song"])
-	_ok(why.contains("clock") and why.contains("Song") and why.contains("detach"),
-		"a Voice on a note with a Song is refused, naming what is in the way (%s)" % why)
+	_ok(Components.holder("clock", ["text", "sound"]) == "sound" and Components.holder("clock", ["text"]).is_empty(),
+		"a sound holds the clock; a plain note's is free")
+	var why := Components.cannot_attach("voice", ["text", "sound"])
+	_ok(why.contains("clock") and why.contains("Sound") and why.contains("detach"),
+		"a Voice on a note with a Sound is refused, naming what is in the way (%s)" % why)
 	_ok(Components.cannot_attach("voice", ["text"]).is_empty() or not Components.not_ready("voice").is_empty(),
 		"...and has room on a note with no clock")
-	_ok(Components.slot_note("song", ["text", "voice"]).contains("Voice"), "a Song on a reading is refused the same way")
-	_ok(Components.slot_note("clip", ["text", "song"]).contains("Song"), "a clip is a clock too")
+	_ok(Components.slot_note("sound", ["text", "voice"]).contains("Voice"), "a Sound on a reading is refused the same way")
+	_ok(Components.slot_note("clip", ["text", "sound"]).contains("Sound"), "a clip is a clock too")
 	_ok(Components.with_required(["table"]).has("medium") and Components.slot_note("medium", ["text", "table"]).is_empty(),
 		"a show at a table brings its Medium (its formats are Table's), so it is never refused one")
 	_ok(Components.slot_note("table", ["text", "voice"]).is_empty(), "Table on a reading with no Medium has room")
 	_ok(Components.slot_note("table", ["text", "voice", "medium"]).is_empty(), "...and on one with a Medium: it brings the one the note has")
 	why = Components.slot_note("table", ["text", "voice", "actor"])
 	_ok(why.contains("presentation") and why.contains("Actor"), "CONTROL: ...but not beside an Actor, whose room its Medium would take (%s)" % why)
-	_ok(Components.slot_note("table", ["text", "song"]).contains("Song"), "Table brings a voice, so a song's clock is in its way too")
-	_ok(Components.slot_note("look", ["text", "song", "voice"]).is_empty(), "a component with no slot is never refused for one")
+	_ok(Components.slot_note("table", ["text", "sound"]).contains("Sound"), "Table brings a voice, so a sound's clock is in its way too")
+	_ok(Components.slot_note("look", ["text", "sound", "voice"]).is_empty(), "a component with no slot is never refused for one")
 
 
 func _detach() -> void:
@@ -244,9 +245,12 @@ func _detach() -> void:
 	var why := Components.detach_blocker("voice", ["text", "table", "voice"])
 	_ok(why.contains("Table"), "a Voice stays while the Table that brings it does (%s)" % why)
 	_ok(Components.detach_blocker("table", ["text", "table", "voice"]).is_empty(), "...and Cards itself comes off")
-	_ok(Components.detach_blocker("medium", ["text", "song", "medium", "look"]).is_empty(),
+	_ok(Components.detach_blocker("medium", ["text", "sound", "medium", "look"]).is_empty(),
 		"a Medium a Look depends on still comes off: the Look then says what it is waiting for")
-	_ok(not Components.needs_note("look", ["text", "song", "look"]).is_empty(), "...which it does")
+	_ok(not Components.needs_note("look", ["text", "sound", "look"]).is_empty(), "...which it does")
+	_ok(Components.blocks_of("sound").has("song") and Components.attached_of({"song": {"path": "x"}}).has("sound")
+		and Components.attached_of({"sound": {}, "song": {}}).count("sound") == 1,
+		"a Song's old block is a Sound's: read as one, and taken off with it")
 
 
 ## The Medium's block, moved once ([method Components.adopted_medium]): a Picture's, a Letter's and a Dispatch desk's
@@ -319,15 +323,15 @@ func _menu() -> void:
 	_ok(_item(menu, "scenes") < 0 and _item(menu, "masks") < 0 and _item(menu, "illustrations") < 0,
 		"what only comes with another component is not offered by itself")
 	# a plain note is offered everything that can be attached, with no list of what "decides" it
-	for k in ["song", "voice", "clip", "table", "medium", "look", "bookends", "youtube"]:
+	for k in ["sound", "voice", "clip", "table", "medium", "look", "bookends", "youtube"]:
 		_ok(_item(menu, k) >= 0, "a plain note's \"+\" offers %s" % k)
 	_ok(_item(menu, "voice_lab") < 0, "...and no voice lab: the formant voice is one the Voice card picks")
 	var look := _item(menu, "look")
 	_ok(look >= 0 and menu.is_item_disabled(look) and menu.get_item_tooltip(look).contains("Medium"),
 		"a Look on a note with no medium is grayed, and says to attach a Medium (%s)" % (menu.get_item_tooltip(look).get_slice("\n\n", 1) if look >= 0 else ""))
-	var song := _item(menu, "song")
-	_ok(song >= 0 and not menu.is_item_disabled(song), "a Song is lit on a plain note")
-	Components.attach_menu(menu, ["text", "song", "medium"])
+	var song := _item(menu, "sound")
+	_ok(song >= 0 and not menu.is_item_disabled(song), "a Sound is lit on a plain note")
+	Components.attach_menu(menu, ["text", "sound", "medium"])
 	look = _item(menu, "look")
 	_ok(look >= 0 and not menu.is_item_disabled(look), "...and the Look lit once the note has a song and a Medium")
 	_ok(_item(menu, "medium") < 0, "a Medium already attached is not offered again")
@@ -336,7 +340,7 @@ func _menu() -> void:
 	var voice := _item(menu, "voice")
 	_ok(voice >= 0 and menu.is_item_disabled(voice) and menu.get_item_tooltip(voice).contains("clock"),
 		"a second clock is grayed in the menu, with the reason")
-	Components.attach_menu(menu, ["text", "song"])
+	Components.attach_menu(menu, ["text", "sound"])
 	yt = _item(menu, "youtube")
 	_ok(yt >= 0 and menu.is_item_disabled(yt) and menu.get_item_tooltip(yt).contains("Medium"),
 		"...and YouTube grayed on a song with none, saying to attach a Medium (%s)" % (menu.get_item_tooltip(yt).get_slice("\n\n", 1) if yt >= 0 else ""))

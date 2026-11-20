@@ -1,0 +1,5 @@
+# ghost's music environment (user://music_venv): a composed Sound rendered from its score, and a song file read for its
+# patterns (hosts/music/render.py, analyze.py; next/music.md). Arrays, filters and FFTs - every sound is made from
+# oscillators, noise and filters, and a song is read by classic signal processing, with no model and no sample.
+numpy>=2.3
+scipy>=1.16

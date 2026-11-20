@@ -20,12 +20,13 @@ extends Node
 ## - A note goes when asked: the list's × asks first ([DeleteDialog]) - canceled, the note stays; confirmed,
 ##   it goes to the trash (the gate's seam, `NoteStore.discard`) and out of the list. A note's own "⋯" does
 ##   the same and the list comes back.
-## - The round trip: New, then "+" Song (a Song card asking for one, nothing timed, no stage, a Medium no
-##   longer grayed), "+" Medium (Auto: the seeded show); choosing a song writes it into the note and opens it
+## - The round trip: New, then "+" Sound (a Sound card, composed with nothing made yet, and the Pipeline card it
+##   makes on; nothing timed, no stage, a Medium no longer grayed), "+" Medium (Auto: the seeded show); choosing a
+##   song file writes it into the note as the Sound's file and opens it
 ##   again loaded and waiting at its start; it plays through the transport; a note with a Medium holds its
 ##   storyboard with nothing attached, and the seed chooses until something is written. A second clock is refused with the reason (a Voice
-##   on a note with a song), and a component comes off again: the Song card's ×, once asked, takes the
-##   `song:` block out and leaves the other blocks and words. The ⌂ leaves it; New then "+" Voice reopens a
+##   on a note with a sound), and a component comes off again: the Sound card's ×, once asked, takes the
+##   `sound:` block out and leaves the other blocks and words. The ⌂ leaves it; New then "+" Voice reopens a
 ##   plain note as a reading; back on the list nothing is left behind (claims, row, conductor, stage,
 ##   background programs, mode node).
 ## - A show of cards starts with a brief: attaching Cards to a note with no words fills it with the bundled
@@ -328,7 +329,7 @@ func _dialog_in(n: Node) -> DeleteDialog:
 # --- the round trip ------------------------------------------------------------------------------
 
 func _check_round_trip() -> void:
-	print("-- New, + Song, + Medium, a song, play, its storyboard, detach, leave")
+	print("-- New, + Sound, + Medium, a song, play, its storyboard, detach, leave")
 	var ch: Chrome = _main._chrome
 	var home := _measure()
 	var list: NotesList = _main._list
@@ -340,18 +341,19 @@ func _check_round_trip() -> void:
 	if panel == null:
 		return
 	var note: String = panel.path
-	_ok(_offer(panel, "medium") == "grayed" and _offer(panel, "song") == "lit" and _offer(panel, "voice") == "lit",
-		"a plain note's \"+\": a Song and a Voice are lit, a Medium waits for a sound (medium %s, song %s, voice %s)"
-		% [_offer(panel, "medium"), _offer(panel, "song"), _offer(panel, "voice")])
-	panel = await _attach(panel, "song")
-	_ok(panel != null and _main._note == note and panel._song != null and not panel._song.ready_to_play(),
-		"+ Song: the same note, opened again with a Song card asking for a song")
+	_ok(_offer(panel, "medium") == "grayed" and _offer(panel, "sound") == "lit" and _offer(panel, "voice") == "lit",
+		"a plain note's \"+\": a Sound and a Voice are lit, a Medium waits for a sound (medium %s, sound %s, voice %s)"
+		% [_offer(panel, "medium"), _offer(panel, "sound"), _offer(panel, "voice")])
+	panel = await _attach(panel, "sound")
+	_ok(panel != null and _main._note == note and panel._sound != null and not panel._sound.ready_to_play(),
+		"+ Sound: the same note, opened again with a Sound card, composed and nothing made yet")
+	_ok(panel != null and panel._pipeline != null, "...and its Pipeline card, where the song is made")
 	if panel == null:
 		return
 	_ok(not Spectrum.timed() and not _stage_up(), "...nothing timed and no stage until there is a song")
-	_ok(_offer(panel, "voice") == "grayed" and _tip(panel, "voice").contains("clock") and _tip(panel, "voice").contains("Song"),
+	_ok(_offer(panel, "voice") == "grayed" and _tip(panel, "voice").contains("clock") and _tip(panel, "voice").contains("Sound"),
 		"a second clock is refused, and \"+\" says which to detach (%s)" % _tip(panel, "voice").get_slice("\n\n", 1))
-	_ok(_offer(panel, "song") == "", "what is attached is not offered again")
+	_ok(_offer(panel, "sound") == "", "what is attached is not offered again")
 	panel = await _attach(panel, "medium")
 	_ok(panel != null and panel._medium != null and Director.medium == "auto",
 		"+ Medium: a Medium card, in the Auto format (%s)" % Director.medium)
@@ -360,12 +362,13 @@ func _check_round_trip() -> void:
 	#twenty seconds, as teardown_check's: the eight-second silence opens on spires, whose worker-thread builds
 	#trip Godot's own teardown fault after the verdict (tests/run_scene_smoke.sh)
 	var song := FixtureAudio.silence(20.0)
-	panel._song.chosen.emit(song)
+	panel._sound.chosen.emit(song)
 	await _frames(20)
 	panel = _main._note_panel
-	var song_block: Variant = NoteStore.blocks_of(note).get("song", {})
-	_ok(song_block is Dictionary and String((song_block as Dictionary).get("path", "")) == song,
-		"choosing a song writes it into the note")
+	var song_block: Variant = NoteStore.blocks_of(note).get("sound", {})
+	_ok(song_block is Dictionary and String((song_block as Dictionary).get("path", "")) == song
+		and String((song_block as Dictionary).get("source", "")) == "file",
+		"choosing a song file writes it into the note as the Sound's file")
 	_ok(_main._note == note and Spectrum.has_audio(), "...and the note opens again around it, loaded")
 	_ok(not Spectrum.transport_playing(), "...WAITING at its start: a note opens stopped")
 	_ok(Director.is_attached() and _main._medium != null and _main._medium.key == "auto" and _stage_up(),
@@ -382,8 +385,8 @@ func _check_round_trip() -> void:
 	# ...and a component comes off again
 	if panel != null:
 		var words := String(FrontMatter.split(FileAccess.get_file_as_string(note)).body)
-		var x := _detach_button(panel, "Song")
-		_ok(x != null and not x.disabled, "the Song card has an ×")
+		var x := _detach_button(panel, "Sound")
+		_ok(x != null and not x.disabled, "the Sound card has an ×")
 		_ok(_detach_button(panel, "Body") == null, "...and the Body has none: the words are the note")
 		if x != null:
 			x.pressed.emit()
@@ -392,16 +395,16 @@ func _check_round_trip() -> void:
 			for d in panel.find_children("*", "ConfirmationDialog", true, false):
 				if (d as ConfirmationDialog).title.begins_with("Detach"):
 					ask = d
-			_ok(ask != null and NoteStore.blocks_of(note).has("song"), "the × asks first, and nothing is detached until it is answered")
+			_ok(ask != null and NoteStore.blocks_of(note).has("sound"), "the × asks first, and nothing is detached until it is answered")
 			if ask != null:
 				ask.confirmed.emit()
 		await _frames(20)
 		panel = _main._note_panel
 		var left := NoteStore.blocks_of(note)
-		_ok(not left.has("song") and left.has("medium") and left.keys() == ["medium"],
-			"detaching the Song takes its block out and leaves the others (%s)" % str(left.keys()))
+		_ok(not left.has("sound") and left.has("medium") and left.keys() == ["medium"],
+			"detaching the Sound takes its block out and leaves the others (%s)" % str(left.keys()))
 		_ok(String(FrontMatter.split(FileAccess.get_file_as_string(note)).body) == words, "...and the note's words as they were")
-		_ok(panel != null and panel._song == null and not Spectrum.timed() and not _stage_up(),
+		_ok(panel != null and panel._sound == null and not Spectrum.timed() and not _stage_up(),
 			"...the note opens again without it: no clock, no stage")
 		_ok(panel != null and panel._medium != null and _waiting(panel).contains("song or a voice"),
 			"...and the Medium left on it says what it is waiting for (%s)" % _waiting(panel))

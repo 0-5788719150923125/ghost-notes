@@ -80,6 +80,7 @@ var _lab: ReaderBrowser          # the Voice row's Lab… (ReaderBrowser)
 ## voice whose readers blend; another voice ends it.
 var _blend := ""
 var _blending := {}              # the backends whose readers blend, as the host said ([method offer_blends])
+var _leading := {}               # the backends that read a sentence's words before ([method offer_before])
 ## Ghost Notes' own voice as the tab on screen has it ([FormantVoice], the row's `formant:`): bred in the Lab's
 ## fishing game, read where the tab's voice is the formant one.
 var _formant := {}
@@ -1422,6 +1423,20 @@ func blend_now() -> String:
 ## keys the takes kept in it ([TakeCache]).
 func offer_blends(backend: String) -> void:
 	_blending[backend] = true
+
+
+## The host says backend [param backend] reads the words said before a sentence (a chunk's `before`) first and
+## cuts them away: sent to its voices alone, so no other voice's takes are keyed by them.
+func offer_before(backend: String) -> void:
+	_leading[backend] = true
+
+
+## Whether voice [param id] is sent the words said before its sentence ([method offer_before]).
+func reads_before(id: String) -> bool:
+	for v in voice_meta:
+		if String((v as Dictionary).get("id", "")) == id:
+			return _leading.has(String((v as Dictionary).get("backend", "")))
+	return false
 
 
 ## Whether voice [param id]'s readers blend: its backend's do ([method offer_blends]) and it has more than one.
