@@ -67,6 +67,7 @@ var _label: Label
 var _play: Button
 var _stop: Button
 var _painter: Control
+var _tip: Control                   # the time under the pointer, on a layer above the bottom-right row
 var _stale_tip := false
 var _claimed := false               # holds a claim on Chrome's bottom edge now
 var _holding := false               # holds the furniture up now (the pointer on the rail)
@@ -106,6 +107,16 @@ func _ready() -> void:
 	painter.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(painter)
 	_painter = painter
+	# The hover pill can reach over the bottom-right row (Shell.ROW_LAYER), so it draws above it.
+	var tip_layer := CanvasLayer.new()
+	tip_layer.layer = Shell.ROW_LAYER + 1
+	add_child(tip_layer)
+	var tip := HoverTip.new()
+	tip.owner_node = self
+	tip.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tip_layer.add_child(tip)
+	_tip = tip
 	# a pointer that leaves the window from the rail sends no motion off it
 	get_window().mouse_entered.connect(func() -> void: _mouse_in = true)
 	get_window().mouse_exited.connect(func() -> void:
@@ -204,6 +215,7 @@ func _process(delta: float) -> void:
 	# the timeline's button stands whenever the note offers one, played or not
 	var offer := offered()
 	_root.visible = _shown > 0.0 or not offer.is_empty()
+	_tip.visible = _root.visible
 	if not _root.visible:
 		return
 	_tl.visible = not offer.is_empty()
@@ -244,6 +256,7 @@ func _process(delta: float) -> void:
 	_label.position = Vector2(r.position.x, r.position.y - 20.0)
 	_label.modulate.a = _shown
 	_painter.queue_redraw()
+	_tip.queue_redraw()
 
 
 func _input(event: InputEvent) -> void:
@@ -371,15 +384,29 @@ class Painter:
 		draw_rect(Rect2(Vector2(px - 1.5, r.position.y - 4.0), Vector2(3.0, r.size.y + 8.0)),
 			Color(1, 1, 1, 0.95 * a), true)
 		if hx >= 0.0:
-			_draw_hover(r, hx, total, a)
+			var x := r.position.x + r.size.x * clampf((hx - r.position.x) / maxf(1.0, r.size.x), 0.0, 1.0)
+			draw_rect(Rect2(Vector2(x - 0.5, r.position.y - 3.0), Vector2(1.0, r.size.y + 6.0)),
+				Color(1, 1, 1, 0.7 * a), true)
 
-	## The time under the pointer: a hairline on the rail and a pill above it, kept inside the
-	## window and clear of the position label at the rail's left end.
-	func _draw_hover(r: Rect2, hx: float, total: float, a: float) -> void:
+
+## The time under the pointer: a dark pill above the rail, kept inside the window and clear of the
+## position label at the rail's left end. Its layer is above the bottom-right row, which it may cover.
+class HoverTip:
+	extends Control
+	var owner_node: Transport
+
+	func _draw() -> void:
+		if owner_node == null:
+			return
+		var a: float = owner_node._shown
+		var hx: float = owner_node._hover_x if Spectrum.seekable() else -1.0
+		if a <= 0.0 or hx < 0.0 or owner_node.editing():
+			return
+		var r: Rect2 = owner_node._rail()
+		var total: float = Spectrum.scrub_length()
 		var hf := clampf((hx - r.position.x) / maxf(1.0, r.size.x), 0.0, 1.0)
 		var x := r.position.x + r.size.x * hf
-		draw_rect(Rect2(Vector2(x - 0.5, r.position.y - 3.0), Vector2(1.0, r.size.y + 6.0)),
-			Color(1, 1, 1, 0.7 * a), true)
+		r.position.y -= (Transport.BAR_H_ACTIVE - Transport.BAR_H) * 0.5
 		var font := get_theme_default_font()
 		const FS := 13
 		var text := Clock.text(hf * total)

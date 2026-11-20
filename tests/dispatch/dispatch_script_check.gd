@@ -343,6 +343,29 @@ func _init() -> void:
 	_ok(digest >= DispatchTerminal.READ_LEAST + DispatchTerminal.READ_DRAWN * 20.0 and digest <= DispatchTerminal.READ_DRAWN_MOST + 0.5
 		and held_1 < DispatchTerminal.READ_LEAST + 0.5,
 		"an answer drawn onto a panel already up is read before it is answered (%.1f s; the control, wait: 1, %.1f s)" % [digest, held_1])
+	# crash: the program dies on its words - the glass nothing else, the screen's whole light; in a voice, said over it on
+	# the receiver (the controls: a panel drawn after it brings the program back, and so does the screen waking)
+	var crash_doc := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```terminal\n> m\npanel: MIRROR | SIGN OFF\nOPERATORS ON DUTY ........ 0\n"
+		+ "```\n\nThere.\n\n```terminal\ncrash (Council): ERROR: ME FOUND\n```\n\nAfter.\n\n```terminal\n> m\npanel: MIRROR | BACK\n```\n")
+	var cacts: Array = crash_doc["actions"]
+	var crashed: Dictionary = cacts[_nth(cacts, "session", 1)]
+	var crash_g := DispatchTerminal.at(crashed["glass"], crashed["ops"], INF)
+	var crash_rows := DispatchTerminal.rows_of(crash_g, crash_doc["terminal"])
+	var back_s: Dictionary = cacts[_nth(cacts, "session", 2)]
+	var back_g := DispatchTerminal.at(back_s["glass"], back_s["ops"], INF)
+	var woke := DispatchTerminal.at(crash_g, [{"op": "wake", "t": 0.0}], INF)
+	_ok(String(crash_rows["crash"]) == "ERROR: ME FOUND" and DispatchTerminal.lit_share({"asleep": false, "crash": crash_rows["crash"]}) == 1.0
+		and String(crashed.get("heard", "")) == DispatchScript.RECEIVER and String(crash_doc["speakable"]).contains("Error: Me found")
+		and float(crashed["rest"]) >= DispatchTerminal.CRASH_HOLD and (crash_g.get("alert", PackedStringArray()) as PackedStringArray).is_empty(),
+		"a crash in a voice: the glass its words alone, the screen's whole light, said over it on the receiver (%s, %s)"
+			% [str(crash_rows["crash"]), str(crashed.get("heard", ""))])
+	_ok(String(back_g.get("crash", "")).is_empty() and String(DispatchTerminal.up(back_g)["left"]) == "BACK" and not woke.has("crash"),
+		"the controls: a panel drawn after a crash brings the program back, and so does the screen waking")
+	var st_told := DispatchScript.static_of("3, surf, unwatched")
+	var st_bare := DispatchScript.static_of("3, surf")
+	_ok(bool(st_told[DispatchScript.UNWATCHED]) and String(st_told["kind"]) == "surf" and float(st_told["secs"]) == 3.0
+		and not bool(st_bare[DispatchScript.UNWATCHED]),
+		"a static told unwatched says so, its storm and length kept (the control: untold, it is watched)")
 	# a clause the voice puts in, or a word it leaves out, still says the line
 	var clause := DispatchScript.said_after(PackedStringArray("we line them up by year and put ourselves at the end".split(" ")),
 		PackedStringArray("we line them up by year the way his class did this afternoon and we put ourselves at the end with the machines".split(" ")))

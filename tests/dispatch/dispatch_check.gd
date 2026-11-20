@@ -38,7 +38,8 @@ extends SceneTree
 ##   that takes none has no box); the page loaded again where it was left, its box kept;
 ## - a clip: the screen's static until it is imported, then its frames looping;
 ## - a picture told `unwatched` lands on its screen with the camera left on what it was on (the control: the same picture
-##   untold turns the camera to its screen);
+##   untold turns the camera to its screen); a static told `unwatched` is heard with the camera left on the terminal (the
+##   control: untold, it turns to the receiver);
 ## - a picture over the whole screen written after a block comes in once the block's typing is done, never over it (the
 ##   control: written before the block, it comes in just after the word before);
 ## - a said passage is typed at an even pace ahead of its voice: every word whole before it is said, never more than three
@@ -49,6 +50,8 @@ extends SceneTree
 ##   first word is said seconds before the whole line is typed);
 ## - a call's timer after a reading started mid-way: counted from where the call fell on the reading, as a whole reading
 ##   counts it (the control: from the far past the call is placed in, it is hours);
+## - a call held across a black has been on the hours the clock jumped, past midnight too, shown with its hours (the control:
+##   counted in the show's own time, it is a minute or two);
 ## - the camera turns to what is active (terminal typing, receiver in a storm, ringing phone) and a look holds while nothing else
 ##   is; it goes to the radar only at its sounds; the radar target moves in small steps under the voice, never a jump, with its
 ##   old place written beside it until it arrives; the receiver is open only in its storm;
@@ -469,6 +472,7 @@ func _run() -> void:
 	_picture_after_block(small)
 	_typing_cadence(small)
 	_said_keys_typing(small)
+	_call_across_black(small)
 	_timer_mid_way(small)
 	small.queue_free()
 	_clock_skip(st, md.feed)
@@ -1069,6 +1073,19 @@ func _unwatched(md: DispatchMedium) -> void:
 	_ok(looked[", unwatched"] == [true, "feed", "home", ""] and looked[""] == [true, "feed", "feed", "feed"],
 		"an unwatched picture lands on its screen with the camera left where it is; untold, the camera turns to it (%s, %s)"
 			% [looked[", unwatched"], looked[""]])
+	# a static told unwatched is heard with the camera left on the terminal; untold, the camera turns to the receiver
+	var heard := {}
+	for told in [", unwatched", ""]:
+		var body := ("<!-- speaker: Control -->\n\nOne two three four.\n\n```terminal\n> m\npanel: MIRROR\nONE ROW\n```\n\n"
+			+ "<!-- static: 3, surf%s -->\n\nFive six seven eight.\n") % told
+		md.load_note(body, {"seed": 3})
+		md._now = 0.0
+		md.take_words(DispatchScript.rehearsal(DispatchScript.parse(body), 0.32))
+		var st_i := _first(md._actions, "static")
+		heard[told] = [md.looking_at(md.starts()[st_i] + 1.5), md.storm_at(md.starts()[st_i] + 1.5).is_empty()]
+	_ok(heard[", unwatched"] == ["terminal", false] and heard[""] == ["receiver", false],
+		"an unwatched static is heard with the camera left on the terminal; untold, the camera turns to the receiver (%s, %s)"
+			% [heard[", unwatched"], heard[""]])
 
 
 ## A picture over the whole screen written after a block comes in once the block's typing is done (the control: written
@@ -1177,6 +1194,26 @@ func _said_keys_typing(md: DispatchMedium) -> void:
 		and tail_done - first_said > 2.0,
 		"a key: line the paragraph after says is typed ahead of its words (%d late of %d), after the panel is up, its unsaid end on after the last (%.1f s after it); the control: its first word said %.1f s before the line is typed whole"
 			% [late, spans.size(), tail_done - last_said, tail_done - first_said])
+
+
+## A call held across a black has been on the hours the clock jumped, past midnight, shown with its hours (the control: in
+## the show's own time, a minute or two).
+func _call_across_black(md: DispatchMedium) -> void:
+	var body := "<!-- fade: from-black, 22:40 -->\n\n<!-- speaker: Control -->\n\nOne two three four five six.\n\n<!-- call: VAN -->\n\n" \
+		+ "<!-- speaker: Van -->\n\nVan here, on the corner.\n\n<!-- speaker: Control -->\n\nStay on the line all night.\n\n" \
+		+ "<!-- fade: to-black -->\n\n<!-- fade: from-black, 06:41 -->\n\nMorning now and he is still there with me.\n"
+	md.load_note(body, {"seed": 3})
+	md._now = 0.0
+	md.take_words(DispatchScript.rehearsal(DispatchScript.parse(body), 0.32))
+	var spoken: PackedStringArray = md._parsed["spoken"]
+	var late := md._word_t0(spoken.find("morning")) + 1.0
+	var secs := md._call_secs("VAN", late)
+	var show_secs := late - md._call_began("VAN", late)
+	var want := float((6 * 60 + 41 + 24 * 60) - (22 * 60 + 40)) * 60.0
+	_ok(secs > want - 120.0 and secs < want + 120.0 and show_secs < 300.0 and DispatchScreens.call_time(int(secs)).count(":") == 2
+		and DispatchScreens.call_time(2209) == "36:49",
+		"a call held across a black has been on the hours the clock jumped (%s; the control, in the show's own time, %.0f s)"
+			% [DispatchScreens.call_time(int(secs)), show_secs])
 
 
 ## A call's timer after a reading started mid-way, past where the call began: counted from where the call fell on the reading, as a

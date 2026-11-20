@@ -34,6 +34,7 @@ class_name DispatchScript
 ##                                     place on the way: `driving south`) with no alarm.
 ##     <!-- sound: jet, ... -->        a sound of [constant DispatchSounds.SOUNDS], named by its key among the words.
 ##     <!-- static: 5 -->, <!-- static: 5, surf -->   the receiver opens up for that many seconds: Io-B's crackle, or surf.
+##                                     `<!-- static: 5, surf, unwatched -->`: heard with the camera left where it is.
 ##     <!-- print -->                  the printer prints what was typed since it last printed (struck blocks aside).
 ##     <!-- sleep -->                  the terminal's screen goes dark.
 ##     <!-- off: tv -->                a screen goes dark (tv, feed, satellite).
@@ -746,18 +747,22 @@ static func decide_of(arg: String) -> float:
 	return clampf(float(a), 0.0, DECIDE_MOST) if a.is_valid_float() else DECIDE
 
 
-## How long the voice waits for a static of [param arg] (`5`, `5, surf`) and which storm it is.
+## How long the voice waits for a static of [param arg] (`5`, `5, surf`, `5, surf, unwatched`), which storm it is, and
+## whether it is [constant UNWATCHED]: heard with the camera left where it is.
 static func static_of(arg: String) -> Dictionary:
 	var parts := arg.split(",", false)
 	var secs := STATIC_BARE
 	var kind := "popcorn"
+	var unwatched := false
 	for p in parts:
 		var s := String(p).strip_edges().to_lower()
 		if s.is_valid_float():
 			secs = clampf(float(s), 0.5, 60.0)
 		elif DispatchSounds.STORMS.has(s):
 			kind = s
-	return {"secs": secs, "kind": kind}
+		elif s == UNWATCHED:
+			unwatched = true
+	return {"secs": secs, "kind": kind, UNWATCHED: unwatched}
 
 
 ## Where a `gain:` mark turns the knob: its number, held to [constant GAIN_LEAST]-[constant GAIN_MOST]; -1 for no number.
@@ -951,6 +956,31 @@ static func parse(body: String) -> Dictionary:
 						"spans": kspans, "glass": glass, "theirs": true}, lead, lead)
 					glass = _typed_theirs(glass, shown)
 					ringing = ""
+			"crash":
+				# the program dies on its words (silently as a step of a block; here in a voice that says them over it)
+				var text := String(blk["text"])
+				var run := DispatchTerminal.compile(PackedStringArray(["crash: " + text]), glass, term, warnings)
+				var voice := String(blk["voice"])
+				var who := voice if voice != room and not room.is_empty() else (room if not room.is_empty() else speaker)
+				var heard := ""
+				if who != room:
+					heard = RECEIVER if on_receiver(voice, room, phones) else _heard(voice, room, in_hand, held)
+				var said := said_of(shown_of(text))
+				var words := words_of(said)
+				var crashed := {"kind": "session", "ops": run["ops"], "glass": glass}
+				if heard == RECEIVER:
+					# the receiver opens under the words, the camera kept on the glass
+					crashed.merge({"heard": RECEIVER, "storm": storm, "from": spoken.size(), "to": spoken.size() + words.size()})
+				_act(actions, gap, pending, spoken.size(), crashed, float(run["rest"]), float(run["len"]))
+				glass = run["glass"]
+				_flush(speak, pending, who, heard, said_as, heard_as)
+				said_as = who
+				heard_as = heard
+				speak.append(said)
+				spoken.append_array(words)
+				said_any = said_any or not words.is_empty()
+				gap = []
+				ringing = ""
 			"type":
 				var raw := String(blk["text"])
 				var voice := String(blk.get("voice", ""))
@@ -1148,7 +1178,8 @@ static func parse(body: String) -> Dictionary:
 					"static":
 						var st := static_of(arg)
 						storm = String(st["kind"])
-						_act(actions, gap, pending, at, {"kind": "static", "storm": st["kind"]}, float(st["secs"]), float(st["secs"]))
+						_act(actions, gap, pending, at, {"kind": "static", "storm": st["kind"], UNWATCHED: bool(st[UNWATCHED])},
+							float(st["secs"]), float(st["secs"]))
 					"print":
 						var text := PackedStringArray()
 						for k in typed:

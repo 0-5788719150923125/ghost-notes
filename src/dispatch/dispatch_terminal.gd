@@ -41,6 +41,9 @@ class_name DispatchTerminal
 ##                                the panel written on the next line (none: the bar stays where it stopped, no Enter)
 ##     wait: 2                    two seconds on what is up, in place of the read
 ##     alert: line | line         a box over the panel, with the terminal's beep; gone at the next command or panel
+##     crash: words               the program dies: the whole glass the screen's color, the words in black at its middle,
+##                                every panel gone, until a panel is drawn again or the screen wakes from sleep.
+##                                `crash (Name): words` - that voice says them over it
 ##     print, strike, clear       the printer; the last typed line backspaced away; the body emptied
 ##     <!-- static: 4 -->         any desk mark, at that point of the block
 ##     # words                    a note
@@ -107,11 +110,13 @@ const SELECT_EACH := 0.32
 const SELECT_HOLD := 0.7
 ## The voice comes back this long after a block's last step.
 const AFTER := 0.2
+## A crash is seen this long before what comes after it.
+const CRASH_HOLD := 1.2
 ## What an alert says when a command opens nothing.
 const INVALID := "INVALID OPTION"
 
 ## A block's line kinds: group 1 the kind, group 2 a voice (`type (Name):`, `read (Name):`), group 3 the rest.
-const LINE_KIND := "^(panel|keys|type|read|key|show|select|set|wait|alert)\\s*(?:\\(\\s*([^)]*?)\\s*\\))?\\s*:\\s?(.*)$"
+const LINE_KIND := "^(panel|keys|type|read|key|show|select|set|wait|alert|crash)\\s*(?:\\(\\s*([^)]*?)\\s*\\))?\\s*:\\s?(.*)$"
 const BARE_KIND := "^(print|clear|strike)\\b\\s*(?::\\s*(.*))?$"
 ## A pause inside a body line: `{2}`, a space before it taken with it.
 const PAUSE := " ?\\{\\s*([0-9]+(?:\\.[0-9]+)?)\\s*\\}"
@@ -206,6 +211,10 @@ static func split(text: String) -> Array:
 			joins = true
 			continue
 		joins = false
+		if m != null and m.get_string(1) == "crash" and not m.get_string(2).strip_edges().is_empty():
+			_end_run(out, run)
+			out.append({"kind": "crash", "text": m.get_string(3).strip_edges(), "voice": m.get_string(2).strip_edges()})
+			continue
 		var bare := _rx(BARE_KIND).search(s)
 		if bare != null and bare.get_string(1) != "clear":
 			_end_run(out, run)
@@ -427,6 +436,10 @@ static func compile(lines: PackedStringArray, glass: Dictionary, cfg: Dictionary
 					said.append(String(part).strip_edges())
 				_step(g, ops, {"op": "alert", "t": t, "lines": said}, t)
 				t += ALERT_LEAST + ALERT_WORD * float(_words(" ".join(said)))
+			"crash":
+				reading = -1.0
+				drawn = 0
+				t = _step(g, ops, {"op": "crash", "t": t, "text": DispatchScript.redacted(m.get_string(3).strip_edges())}, t) + CRASH_HOLD
 			"clear":
 				_step(g, ops, {"op": "clear", "t": t}, t)
 			_:
@@ -522,6 +535,7 @@ static func at(glass: Dictionary, ops: Array, r: float, whole := false) -> Dicti
 		match String(op["op"]):
 			"wake":
 				g["awake"] = true
+				g.erase("crash")
 			"command":
 				var text := String(op["text"])
 				var n := _typed_n(op["keys"], r, text, whole)
@@ -531,6 +545,7 @@ static func at(glass: Dictionary, ops: Array, r: float, whole := false) -> Dicti
 			"open":
 				g["alert"] = PackedStringArray()
 				g["cursor"] = "command"
+				g.erase("crash")
 				var id := String(op["id"])
 				if op.has("def"):
 					var p: Dictionary = (op["def"] as Dictionary).duplicate(true)
@@ -608,6 +623,10 @@ static func at(glass: Dictionary, ops: Array, r: float, whole := false) -> Dicti
 				g["cursor"] = "command"
 			"alert":
 				g["alert"] = op["lines"]
+			"crash":
+				g["crash"] = String(op["text"])
+				g["alert"] = PackedStringArray()
+				g["command"] = ""
 			"clear":
 				_own_up(g)["body"] = PackedStringArray()
 	return g
@@ -688,6 +707,8 @@ static func struck(glass: Dictionary, u: float) -> Dictionary:
 static func lit_share(st: Dictionary) -> float:
 	if bool(st.get("asleep", true)):
 		return 0.0
+	if not String(st.get("crash", "")).is_empty():
+		return 1.0
 	var lit := 0.0
 	for line in (st.get("lines", PackedStringArray()) as PackedStringArray):
 		lit += float(String(line).replace(" ", "").length()) * LIT_GLYPH
@@ -756,7 +777,8 @@ static func item_of(body: PackedStringArray, items: Array, label: String) -> int
 	return -1
 
 
-## The glass [param g] as its rows: `{lines (ROWS of them, the panel set in the middle), bar: Vector2i (row 1's columns,
+## The glass [param g] as its rows: `{lines (ROWS of them, the panel set in the middle), crash (the words of a crash, the
+## glass nothing else; "" for none), bar: Vector2i (row 1's columns,
 ## inverse), chosen: Vector3i (a chosen option's row, or the cell a `select:` bar is on, and its first and last columns,
 ## inverse; row -1 none), cursor: Vector2i
 ## (column, row), alert: PackedStringArray}`.
@@ -794,7 +816,8 @@ static func rows_of(g: Dictionary, cfg: Dictionary) -> Dictionary:
 	var cursor := Vector2i(pad + PROMPT.length() + String(g.get("command", "")).length(), COMMAND_ROW)
 	if String(g.get("cursor", "command")) == "body":
 		cursor = Vector2i(pad + last_row.length(), maxi(body_end - 1, BODY_TOP))
-	return {"lines": lines, "bar": bar, "chosen": chosen, "cursor": cursor, "alert": g.get("alert", PackedStringArray())}
+	return {"lines": lines, "bar": bar, "chosen": chosen, "cursor": cursor, "alert": g.get("alert", PackedStringArray()),
+		"crash": String(g.get("crash", ""))}
 
 
 ## How long the operator reads panel [param p] before going on: [constant READ_LEAST] and [constant READ_WORD] a word on it,

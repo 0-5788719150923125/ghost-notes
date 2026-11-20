@@ -229,6 +229,19 @@ func show_tablet(st: Dictionary) -> void:
 	_show(tablet, _tablet, st)
 
 
+## A crash's glass: its ground the text's color at this share (the screen's glow and gain bring it up to the color, where a
+## full one blows out to white and floods the letters), and its words this many times the terminal's font.
+const CRASH_GROUND := 0.5
+const CRASH_FONT := 2
+
+
+## A call's time as a phone shows it: minutes and seconds, and the hours before them once it has run one.
+static func call_time(secs: int) -> String:
+	if secs >= 3600:
+		return "%d:%02d:%02d" % [secs / 3600, secs / 60 % 60, secs % 60]
+	return "%02d:%02d" % [secs / 60, secs % 60]
+
+
 ## Phone screen [param k]: `{mode: call | hold | calling | text | ring | idle, label, words, secs}`.
 func show_phone(k: int, st: Dictionary) -> void:
 	_show(faces[k], _faces[k], st)
@@ -273,11 +286,23 @@ class Face extends Node2D:
 ## The terminal ([method DispatchTerminal.rows_of]): its rows from the top (redacted words as themselves; [DispatchCensor]
 ## hides them over the picture), the title row in inverse across the panel (`bar`, its columns), a chosen option's row in inverse
 ## across its words (`chosen`: row, first and last column), a block cursor at
-## `cursor_at` (column, row) when `cursor` is on, and an `alert` boxed over the middle of the panel; dark when asleep.
+## `cursor_at` (column, row) when `cursor` is on, and an `alert` boxed over the middle of the panel; dark when asleep. A
+## crash is the glass in the screen's color edge to edge, its words in black at the middle, a line each part of them.
 func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(TERM_SIZE)
 	c.draw_rect(Rect2(Vector2.ZERO, size), _term_dark)
 	if bool(st.get("asleep", true)):
+		return
+	var crash := String(st.get("crash", ""))
+	if not crash.is_empty():
+		c.draw_rect(Rect2(Vector2.ZERO, size), Color(_term_ink.r * CRASH_GROUND, _term_ink.g * CRASH_GROUND, _term_ink.b * CRASH_GROUND))
+		var big := TERM_FONT * CRASH_FONT
+		var parts := DispatchTerminal.wrapped(String(DispatchScript.unredacted(crash)["text"]), DispatchTerminal.COLUMNS / CRASH_FONT - 6)
+		var step := TERM_LINE * float(CRASH_FONT)
+		var top := size.y * 0.5 - step * (float(parts.size()) * 0.5 - 0.75)
+		for k in parts.size():
+			c.draw_string(_mono, Vector2(0.0, top + step * float(k)), String(parts[k]), HORIZONTAL_ALIGNMENT_CENTER, size.x, big,
+				Color.BLACK)
 		return
 	var lines: PackedStringArray = st.get("lines", PackedStringArray())
 	var cw := _mono.get_string_size("M", HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT).x
@@ -477,7 +502,7 @@ func _draw_phone(c: CanvasItem, st: Dictionary) -> void:
 	var ink := Color(0.04, 0.06, 0.03)
 	var label := String(st.get("label", ""))
 	var secs := int(float(st.get("secs", 0.0)))
-	var clock := "%02d:%02d" % [secs / 60, secs % 60]
+	var clock := call_time(secs)
 	for b in 4:
 		c.draw_rect(Rect2(10 + b * 9, 30 - b * 5, 6, 6 + b * 5), ink)
 	c.draw_rect(Rect2(w - 44, 14, 32, 16), ink, false, 2.0)

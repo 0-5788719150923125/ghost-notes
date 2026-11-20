@@ -1473,6 +1473,8 @@ func _build_attention() -> void:
 				_attn.append({"t0": t, "t1": e + 1.5, "hold": _glass_hold(i, t + float(a["rest"]) / _sp[i]), "linger": GLASS_LINGER,
 					"spot": _spot("terminal")})
 			"static":
+				if bool(a.get(DispatchScript.UNWATCHED, false)):
+					continue
 				_attn.append({"t0": t, "t1": e + 0.8, "spot": _spot("receiver")})
 			"print":
 				_attn.append({"t0": t, "t1": e + 0.8, "spot": _spot("printer")})
@@ -1606,7 +1608,7 @@ static func _look_key(a: Dictionary) -> String:
 		"moving":
 			return "" if bool(a.get("passing", false)) else "radar"
 		"static", "receiver":
-			return "receiver"
+			return "" if bool(a.get(DispatchScript.UNWATCHED, false)) else "receiver"
 		"print":
 			return "printer"
 		"switch":
@@ -1973,12 +1975,12 @@ func _pose_phones(t: float) -> void:
 				var pressed := t >= float(mv.get("dialed", INF)) + DispatchScript.SPEED_PRESS / _sp_of(mv)
 				lit.append([i, "inner", {"mode": "dial", "label": label, "digits": "1" if pressed else ""}])
 			elif place == "ear" or (place == "moving" and String(mv["to"]) == "ear") or dialing:
-				var secs := t - _call_began(label, t)
-				lit.append([i, "inner", {"mode": "calling" if dialing else "call", "label": label, "secs": snappedf(maxf(secs, 0.0), 1.0)}])
+				var secs := _call_secs(label, t)
+				lit.append([i, "inner", {"mode": "calling" if dialing else "call", "label": label, "secs": secs}])
 			elif place == "read" or (place == "moving" and (String(mv["to"]) == "read" or String(mv["from"]) == "read")):
 				lit.append([i, "inner", _reading(label, t)])
 			elif place == "desk" or (place == "moving" and String(mv["to"]) == "desk"):
-				lit.append([i, "inner", {"mode": "hold", "label": label, "secs": snappedf(maxf(t - _call_began(label, t), 0.0), 1.0)}])
+				lit.append([i, "inner", {"mode": "hold", "label": label, "secs": _call_secs(label, t)}])
 		# Ringing: rattling in the row, its little screen saying who; a text: its little screen with the words
 		for k in _actions.size():
 			var a: Dictionary = _actions[k]
@@ -2024,6 +2026,40 @@ func _pose_phones(t: float) -> void:
 
 static func _rank(mode: String) -> int:
 	return {"call": 0, "calling": 0, "dial": 0, "read": 0, "hold": 1, "ring": 2, "text": 2}.get(mode, 3)
+
+
+## How long the call phone [param label] is on at [param t] has been on, in the night's own time ([method _night_at]): a call
+## held across a black has been on the hours the clock jumped.
+func _call_secs(label: String, t: float) -> float:
+	return snappedf(maxf(_night_at(t) - _night_at(_call_began(label, t)), 0.0), 1.0)
+
+
+## The night's own time at [param t] (seconds since its midnight before): the time the last fade up set the clock to and how
+## long since, as the clock shows it ([method clock_at]) - so a black jumps it the hours the story does. A set earlier in the
+## day than the one before it is the next day. Before the first set, counted back from it; with none, the show's own time.
+func _night_at(t: float) -> float:
+	var first := Vector2(INF, 0.0)
+	var at := -INF
+	var night := 0.0
+	var prev := -1.0
+	for i in _actions.size():
+		var a: Dictionary = _actions[i]
+		if String(a["kind"]) != "fade" or int(a.get("clock", -1)) < 0 or _t0[i] == INF:
+			continue
+		var mins := float(int(a["clock"]))
+		while prev >= 0.0 and mins < prev:
+			mins += 24.0 * 60.0
+		prev = mins
+		var turn := _on_reading(i, _t0[i] + float(a["secs"]) / _sp[i])
+		if first.x == INF:
+			first = Vector2(turn, mins * 60.0)
+		if _t0[i] > t:
+			break
+		at = turn
+		night = mins * 60.0
+	if at > -INF:
+		return night + (t - at)
+	return first.y - (first.x - t) if first.x < INF else t
 
 
 ## When the call phone [param label] is on at [param t] began: its call's first move up out of its row, whether it has been laid
@@ -2173,7 +2209,7 @@ func terminal_at(t: float, whole := false) -> Dictionary:
 	if not asleep:
 		var rows := DispatchTerminal.rows_of(g, _term)
 		out = {"lines": rows["lines"], "asleep": false, "cursor": fposmod(t, BLINK * 2.0) < BLINK, "cursor_at": rows["cursor"],
-			"bar": rows["bar"], "chosen": rows["chosen"], "alert": rows["alert"]}
+			"bar": rows["bar"], "chosen": rows["chosen"], "alert": rows["alert"], "crash": rows["crash"]}
 	_term_key = key
 	_term_at = out
 	return out
@@ -2604,7 +2640,7 @@ func _build_receiver() -> void:
 			continue
 		if String(a["kind"]) == "static":
 			parts.append({"t": _t0[i], "t1": _end_of(i), "storm": String(a["storm"]), "seed": hash([_seed, i]), "words": []})
-		elif String(a["kind"]) in ["type", "receiver"] and String(a.get("heard", "")) == DispatchScript.RECEIVER:
+		elif String(a["kind"]) in ["type", "receiver", "session"] and String(a.get("heard", "")) == DispatchScript.RECEIVER:
 			var words: Array = []
 			for n in range(int(a["from"]), int(a["to"])):
 				var w0 := _word_t0(n) if n < _spoken_n else INF

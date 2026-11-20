@@ -29,8 +29,8 @@ block (the author's, never ghost's `ghost:` block).
   in about 4 s, nearly all of it in 8): nothing jumps, whips or lurches. Two looks at the same thing are one, held between
   (`SAME_BRIDGE`); in a live reading the camera holds on for a next look that comes soon, before its words are heard
   (`_said_by`), rather than pull back to the whole desk for nothing. What happens in the black turns it to nothing, and so
-  does a picture told `unwatched` (`image (feed, unwatched)`): it lands on its screen with the camera left on what it was
-  on. With nothing new for a while it eases back to the whole desk, with a breath of
+  does a picture told `unwatched` (`image (feed, unwatched)`), which lands on its screen with the camera left on what it was
+  on, and a static told so (`static: 3, surf, unwatched`), heard on the receiver with the camera kept where it is. With nothing new for a while it eases back to the whole desk, with a breath of
   slow wander under it.
 - **A phone in hand is held to the ear**: it floats up beside the camera on the right, open and tilted, in the corner of
   the frame. A phone on hold lies open on the desk in front of the rows, its screen as a call's: the name and the clock.
@@ -361,7 +361,9 @@ The revised night (rift's `MEDIUM.md`, its design and what differs from it) is t
   keys (`type (Name):` in that voice), `read:` lines the other side types (the target on the mirror) read aloud the same
   way and never printed or struck, `key:` lines typed and never said, `show:`, `set:` (a row changed in place, what
   differs backspaced and typed - or, written straight after the panel is come back to, there as the panel is drawn: it
-  comes back as it now stands), `wait:`, `alert:` (its beep), `print`, `strike`, `clear`, `{N}` holding a line part-drawn,
+  comes back as it now stands), `wait:`, `alert:` (its beep), `crash:` (the program dies: the glass the screen's color edge to
+  edge, its words in black at the middle, until a panel is drawn or the screen wakes; `crash (Name):` that voice says them
+  over it, the receiver opened under them with the camera kept on the glass), `print`, `strike`, `clear`, `{N}` holding a line part-drawn,
   any desk mark at its point. The note's `terminal:` block holds the title, the width and the keys every panel shares. The
   parse simulates the glass through the whole note, so every action at the terminal carries the glass it starts from and
   the medium plays its own steps at a moment (`DispatchMedium.terminal_at`). A panel is read before the next step - a new
@@ -393,7 +395,8 @@ The revised night (rift's `MEDIUM.md`, its design and what differs from it) is t
   (`DispatchScreens` cuts each card's halves from one digit atlas), held a beat, then the camera eases to the desk; the clock
   runs a minute a minute. The camera is on the clock in the black. A note may open on a fade up: its title stands over the blurred desk as any show's does, the picture goes down to black as the title goes, and the night comes up on the clock. The first
   ping after it has no track across the black. A typed line opening on a time far off the clock (by a steady voice) is
-  warned of.
+  warned of. A call's timer counts the night's own time (`_night_at`): a call held across a black has been on the hours the
+  clock jumped, past midnight too, and a phone shows its hours once it has run one (`DispatchScreens.call_time`).
 - **A reading started mid-way** places what came before it far in the past: what counts time from one of those - the
   clock from a fade, a call's timer from its first move, the tablet's lock from when it was laid down - counts from where it
   fell on the reading (`_on_reading`), so a scrub shows what a whole reading would.

@@ -498,7 +498,7 @@ const REGISTRY := {
 	"static": {
 		"label": "Static",
 		"group": "dispatch",
-		"blurb": "Dispatch desk: the receiver opens up for that many seconds, its needle swinging and the scope's trace jumping - Jupiter's crackle; static: 5, surf is its sea. The voice waits.",
+		"blurb": "Dispatch desk: the receiver opens up for that many seconds, its needle swinging and the scope's trace jumping - Jupiter's crackle; static: 5, surf is its sea; static: 5, surf, unwatched is heard with the camera left where it is. The voice waits.",
 		"before": "<!-- static: ", "fill": "5", "after": " -->", "line": "own",
 		"modes": ["generative"],
 		"pattern": "<!--\\s*static\\s*(?::[^>]*)?-->",
@@ -602,7 +602,7 @@ const REGISTRY := {
 	"terminal": {
 		"label": "Terminal",
 		"group": "dispatch",
-		"blurb": "Dispatch desk: the terminal's one program on a fixed screen, worked line by line, silent with the voice waiting: > a command typed on the command line (it opens the panel written next, else its key's); panel: id = NAME | LEFT | RIGHT a panel kept by its id and opened again as it last stood; keys:, type: (typed and said behind the keys; type (Name): in that voice; lines in a row one passage), read: (the other side's typing, read aloud behind the keys, never printed), key: (typed, never said; the block's last ones, where the paragraph after says them, typed ahead of its words), show:, set: (a row changed in place; straight after its panel is come back to, there as it is drawn), wait:, alert:, print, strike, clear, any desk mark; any other line a body line, {2} holding it part-drawn. The note's terminal: block gives its title, width and keys.",
+		"blurb": "Dispatch desk: the terminal's one program on a fixed screen, worked line by line, silent with the voice waiting: > a command typed on the command line (it opens the panel written next, else its key's); panel: id = NAME | LEFT | RIGHT a panel kept by its id and opened again as it last stood; keys:, type: (typed and said behind the keys; type (Name): in that voice; lines in a row one passage), read: (the other side's typing, read aloud behind the keys, never printed), key: (typed, never said; the block's last ones, where the paragraph after says them, typed ahead of its words), show:, set: (a row changed in place; straight after its panel is come back to, there as it is drawn), wait:, alert:, crash: (the program dies: the glass its color edge to edge, the words black at its middle; crash (Name): said over it), print, strike, clear, any desk mark; any other line a body line, {2} holding it part-drawn. The note's terminal: block gives its title, width and keys.",
 		"before": "```terminal\n", "fill": "> 3\npanel: assets = ASSETS | 12 ON THE BOOKS\nAISLE ...... AISLE SEVEN\nkeys: X MENU\ntype: 22:54. Watcher in place.", "after": "\n```", "line": "own",
 		"modes": ["generative"],
 		"pattern": "(?m)^[ \\t]*```[ \\t]*terminal[ \\t]*\\n[\\s\\S]*?\\n[ \\t]*```[ \\t]*$",
