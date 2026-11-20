@@ -21,8 +21,10 @@ extends SceneTree
 ##
 ## - a `say:` mark tells the voice how a word is said: that word goes to the host pinned to the mark's phonemes (`arpa`, which
 ##   always wins) and is shown as written; the mark itself is never said; a bracketed spelling keeps its stressed phonemes;
+##   IPA between slashes after the phonemes goes beside them (`say`, what a neural voice says), and IPA alone pins the word
+##   to its own reading with the IPA beside it;
 ##
-## Controls: a word no mark tells goes to the host to say as it would; Hesitate off rests nowhere and tells the voice of nothing; a reader asked by another name gets the
+## Controls: a word no mark tells goes to the host to say as it would; a mark with phonemes alone sends no IPA; Hesitate off rests nowhere and tells the voice of nothing; a reader asked by another name gets the
 ## cue; a second piece planned from sentence 0 collides with the first.
 ##
 ## Loaded by path after the tree is up: named here, the plan would compile with this gate before the autoloads
@@ -178,6 +180,21 @@ func _check_said() -> void:
 		"a word a `say:` mark tells goes to the voice pinned to its phonemes, and is shown as written (%s; shown %s)" % [str(told.get("io-a")), str(said_words)])
 	_ok((told.get("io-c", []) as Array).is_empty() and told.has("io-c"), "the control: a word no mark tells goes to the voice to say as it would")
 	_ok(not said_words.has("say") and not said_words.has("say:"), "the mark itself is never said (%s)" % " ".join(PackedStringArray(said_words)))
+	# IPA between slashes goes beside the phonemes, for a neural voice to say; IPA alone beside the word's own reading (the
+	# control: a mark with phonemes alone sends none)
+	var ipa_src := "<!-- say: Gödel = G ER1 D AH0 L /ɡˈøːdəl/; Escher = /ˈɛʃɚ/ -->\n\nGödel, Escher and Io-A. "
+	var ipa_plan: Dictionary = _plan.call("make", ipa_src + src, "", {"reader": "Ryan", "said": _plan.call("said_in", ipa_src + src)})
+	var toks := {}
+	for c in ipa_plan["chunks"]:
+		for t in (c as Dictionary).get("tokens", []):
+			toks[String((t as Dictionary).get("text", ""))] = t
+	var godel: Dictionary = toks.get("gödel", {})
+	var escher: Dictionary = toks.get("escher", {})
+	_ok(String(godel.get("say", "")) == "ɡˈøːdəl" and (godel.get("arpa", []) as Array).size() == 5 and String(godel["arpa"][1]) == "ER1"
+		and String(escher.get("say", "")) == "ˈɛʃɚ" and not (escher.get("arpa", []) as Array).is_empty()
+		and not (toks.get("io-a", {}) as Dictionary).has("say"),
+		"a mark's IPA goes beside its phonemes, IPA alone beside the word's own reading; the control: phonemes alone send none (%s; %s; %s)"
+			% [str(godel), str(escher), str(toks.get("io-a"))])
 	var spelled: Array = told.get("ay1 ow0 ey1", told.get("[ay1 ow0 ey1]", []))
 	_ok(spelled == ["AY1", "OW0", "EY1"] and not said_words.has("zero"),
 		"a bracketed spelling keeps its stressed phonemes, its digits never read as numbers (%s; shown %s)" % [str(spelled), str(bracket)])

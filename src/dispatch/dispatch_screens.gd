@@ -19,7 +19,10 @@ const SCOPE_SIZE := Vector2i(256, 200)
 const PHONE_SIZE := Vector2i(300, 368)
 ## A phone's keypad, drawn once for every phone: its size (px).
 const KEYPAD_SIZE := Vector2i(262, 400)
-const PAPER_SIZE := Vector2i(768, 3072)
+const PAPER_SIZE := Vector2i(768, 3584)
+## A printed line's height in the paper's picture (px), and the lines to a panel of it: a perforation every so many.
+const PAPER_LINE := 15.0
+const PAPER_FOLD := 38
 const GAIN_SIZE := Vector2i(256, 256)
 ## The flip clock's face and the digits its cards are cut from (one atlas, drawn once: a card's halves are its regions);
 ## the tablet's screen, landscape, and its browser bar's height (px).
@@ -207,7 +210,7 @@ func show_scope(st: Dictionary) -> void:
 
 
 ## The paper: `{lines: PackedStringArray (newest last), feed (0-1 of the line being fed), partial (characters of the line
-## being printed)}`.
+## being printed), fed (all of it fed, in lines: where its holes and perforations are)}`.
 func show_paper(st: Dictionary) -> void:
 	_show(paper, _paper, st)
 
@@ -425,42 +428,42 @@ func _draw_scope(c: CanvasItem, st: Dictionary) -> void:
 	c.draw_polyline(pts, Color(_scope_ink.lightened(0.2), 0.9), 2.0, true)
 
 
-## The paper: continuous paper, sprocket holes down both edges and a perforation every eleven inches; the lines printed,
-## newest nearest the slot (its top), each older line further along as the paper fed.
+## The paper as it lies from the slot (the picture's foot) back along itself: continuous paper, sprocket holes down both edges
+## and a perforation every panel ([constant PAPER_FOLD] lines), each where `fed` lines of feeding have brought it; the lines
+## printed, the newest nearest the slot, each older line further along as the paper fed.
 func _draw_paper(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(PAPER_SIZE)
 	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.93, 0.92, 0.87))
-	var line_h := 15.0
-	var shift := float(st.get("feed", 0.0)) * line_h
-	var hole := 21.0
-	var off := fposmod(shift, hole)
-	var y := off - hole
-	while y < size.y:
+	var shift := float(st.get("feed", 0.0)) * PAPER_LINE
+	var fed := float(st.get("fed", 0.0)) * PAPER_LINE
+	var fold := PAPER_LINE * float(PAPER_FOLD)
+	var hole := fold / 22.0
+	var y := size.y - fposmod(fed, hole)
+	while y > 8.0:
 		for x in [16.0, size.x - 16.0]:
 			c.draw_circle(Vector2(x, y), 5.5, Color(0.18, 0.17, 0.15))
-		y += hole
+		y -= hole
 	c.draw_line(Vector2(32, 0), Vector2(32, size.y), Color(0.75, 0.74, 0.7), 1.0)
 	c.draw_line(Vector2(size.x - 32, 0), Vector2(size.x - 32, size.y), Color(0.75, 0.74, 0.7), 1.0)
-	var fold := line_h * 66.0
-	var fy := fposmod(shift + float(st.get("total", 0)) * line_h, fold)
-	while fy < size.y:
+	var fy := size.y - fposmod(fed, fold)
+	while fy > 0.0:
 		c.draw_dashed_line(Vector2(0, fy), Vector2(size.x, fy), Color(0.7, 0.69, 0.65), 1.0, 4.0)
-		fy += fold
+		fy -= fold
 	var lines: PackedStringArray = st.get("lines", PackedStringArray())
 	var ink := Color(0.12, 0.13, 0.2, 0.88)
 	var partial := String(st.get("partial", ""))
-	var yy := 22.0 + shift
+	var yy := size.y - 10.0 - shift
 	if not partial.is_empty():
 		c.draw_string(_mono, Vector2(44, yy), partial, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, ink)
 	for k in range(lines.size() - 1, -1, -1):
-		yy += line_h
-		if yy > size.y:
+		yy -= PAPER_LINE
+		if yy < 24.0:
 			break
 		c.draw_string(_mono, Vector2(44, yy), String(lines[k]), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, ink)
 
 
-## A phone's screen: amber-lit monochrome - the one in hand its caller's name and the call's clock, one on hold the same
-## and ON HOLD, one dialing CALLING; the little one outside a text's sender and words, or a ring's caller.
+## A phone's screen: amber-lit monochrome - the one in hand, or one laid open on the desk mid-call (`hold`), its caller's
+## name and the call's clock, one dialing CALLING; the little one outside a text's sender and words, or a ring's caller.
 func _draw_phone(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(PHONE_SIZE)
 	var mode := String(st.get("mode", "idle"))
@@ -482,10 +485,8 @@ func _draw_phone(c: CanvasItem, st: Dictionary) -> void:
 	match mode:
 		"call", "hold", "calling":
 			c.draw_string(_mono, Vector2(0, 98), label, HORIZONTAL_ALIGNMENT_CENTER, w, 30, ink)
-			var under := String({"call": clock, "hold": "ON HOLD", "calling": "CALLING"}[mode])
+			var under := "CALLING" if mode == "calling" else clock
 			c.draw_string(_mono, Vector2(0, 150), under, HORIZONTAL_ALIGNMENT_CENTER, w, 26, ink)
-			if mode == "hold":
-				c.draw_string(_mono, Vector2(0, 196), clock, HORIZONTAL_ALIGNMENT_CENTER, w, 22, ink)
 		"dial":
 			var digits := String(st.get("digits", ""))
 			c.draw_string(_mono, Vector2(0, 118), digits, HORIZONTAL_ALIGNMENT_CENTER, w, 64, ink)

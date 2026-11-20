@@ -22,7 +22,9 @@ extends SceneTree
 ##   title goes, its blur never lifting on the desk (controls: no title, black from the start; the usual pull lifting by then);
 ## - two looks at the same thing are one, the camera held between them; in a live reading the camera holds on the glass for a
 ##   next look before its words are heard, a long talk away too (controls: a look at something else between; a look home);
-## - the tablet: picked up and held low over the desk, the camera on it, and laid back in its place, its screen left lit as
+## - the tablet: picked up and held low over the desk, the camera on it, and laid back in its place, the camera leaving it a
+##   second into the laying down for the whole desk or what begins at once (the control: an ordinary look is held on to what
+##   comes), its screen left lit as
 ##   it was, dimmed for the last seconds and locked dark half a minute on (the control: before it is woken it is dark); on
 ##   every desk it is carried clear of what stands under its way by each thing's outline, on most no higher than the hand
 ##   holds it (the control: straight and at its least height, something is in its way on some desk); an address typed into its bar, a
@@ -37,6 +39,14 @@ extends SceneTree
 ## - a clip: the screen's static until it is imported, then its frames looping;
 ## - a picture told `unwatched` lands on its screen with the camera left on what it was on (the control: the same picture
 ##   untold turns the camera to its screen);
+## - a picture over the whole screen written after a block comes in once the block's typing is done, never over it (the
+##   control: written before the block, it comes in just after the word before);
+## - a said passage is typed at an even pace ahead of its voice: every word whole before it is said, never more than three
+##   words ahead, its pace from word to word swinging less than half as much (the control: each word typed in the time of the
+##   word two before it), on a voice whose words take as long as their letters and that rests at each sentence's end;
+## - a block's last key: line that the paragraph after it says is typed ahead of those words: each word it says typed before
+##   it is said, the first keys after the panel is up, the line's unsaid end typed on after (the control: the paragraph's
+##   first word is said seconds before the whole line is typed);
 ## - a call's timer after a reading started mid-way: counted from where the call fell on the reading, as a whole reading
 ##   counts it (the control: from the far past the call is placed in, it is hours);
 ## - the camera turns to what is active (terminal typing, receiver in a storm, ringing phone) and a look holds while nothing else
@@ -456,6 +466,9 @@ func _run() -> void:
 	small.feed = md.feed
 	small.mount(st)
 	_unwatched(small)
+	_picture_after_block(small)
+	_typing_cadence(small)
+	_said_keys_typing(small)
 	_timer_mid_way(small)
 	small.queue_free()
 	_clock_skip(st, md.feed)
@@ -931,6 +944,18 @@ func _black_tablet_clip(md: DispatchMedium, actions: Array, t0: PackedFloat32Arr
 	var home := md._set.tablet.global_transform.origin.distance_to(md._set.tablet_home.origin) < 0.001
 	_ok(in_hand and home and float(md.tablet_at(t0[tab_up] - 0.1)["face"]["power"]) == 0.0 and md.looking_at(held + 2.0) == "tablet",
 		"the tablet is picked up and held low over the desk, the camera on it, its screen woken, and laid back in its place")
+	# laid down, the camera leaves where it was held a second on: for the whole desk, or straight on to what begins within
+	# another second (the control: an ordinary look is held on through to what comes within its linger)
+	var tab_spot: Dictionary = md._spot("tablet")
+	var term_spot: Dictionary = md._spot("terminal")
+	var laid_look := {"t0": 0.0, "t1": 20.0, "spot": tab_spot, "kind": "tablet", "linger": 0.0, "leaves": true}
+	var left: Array = md._settled([laid_look.duplicate(), {"t0": 25.0, "t1": 30.0, "spot": term_spot, "kind": "session"}])
+	var at_once: Array = md._settled([laid_look.duplicate(), {"t0": 20.0 + DispatchMedium.TABLET_LEAVE * 0.5, "t1": 30.0, "spot": term_spot, "kind": "session"}])
+	var held_on: Array = md._settled([{"t0": 0.0, "t1": 20.0, "spot": tab_spot, "kind": "tablet"}, {"t0": 25.0, "t1": 30.0, "spot": term_spot, "kind": "session"}])
+	_ok(float(left[0]["t1"]) == 20.0 and is_equal_approx(float(at_once[0]["t1"]), float(at_once[1]["t0"])) and float(held_on[0]["t1"]) == 25.0
+		and md.looking_at(t0[tab_down] + DispatchMedium.TABLET_LEAVE * 0.5) == "tablet" and md.looking_at(laid + 0.5) != "tablet",
+		"laid down, the camera leaves the tablet %.1f s on, for the whole desk or straight on to what begins at once - the control: an ordinary look held on to what comes (%.1f, %.1f, %.1f)"
+			% [DispatchMedium.TABLET_LEAVE, float(left[0]["t1"]), float(at_once[0]["t1"]), float(held_on[0]["t1"])])
 	# laid down, its screen is left lit on the page it was left on and locks itself: dimmed for the last seconds, then dark
 	var lock := DispatchMedium.TABLET_LOCK
 	var lain: Dictionary = md.tablet_at(laid + 0.2)["face"]
@@ -1044,6 +1069,114 @@ func _unwatched(md: DispatchMedium) -> void:
 	_ok(looked[", unwatched"] == [true, "feed", "home", ""] and looked[""] == [true, "feed", "feed", "feed"],
 		"an unwatched picture lands on its screen with the camera left where it is; untold, the camera turns to it (%s, %s)"
 			% [looked[", unwatched"], looked[""]])
+
+
+## A picture over the whole screen written after a block comes in once the block's typing is done (the control: written
+## before the block, it comes in just after the word before, over the typing).
+func _picture_after_block(md: DispatchMedium) -> void:
+	var block := "```terminal\nkey: from ten thousand feet, it's all the same problems.\nkey: a roof. food. a ride. a doctor.\n```\n\n"
+	var picture := "<!-- image (full): a small town seen from the air before dawn -->\n\n"
+	var got := {}
+	for order in ["after", "before"]:
+		var body := "<!-- speaker: Control -->\n\nOne two three four.\n\n" + (block + picture if order == "after" else picture + block) \
+			+ "Five six seven eight.\n"
+		md.load_note(body, {"seed": 3})
+		md._now = 0.0
+		md.take_words(DispatchScript.rehearsal(DispatchScript.parse(body), 0.32))
+		var sess := _first(md._actions, "session")
+		var keys: Array = (md._actions[sess]["ops"] as Array).filter(func(o: Dictionary) -> bool: return String(o["op"]) == "key")
+		var last_key: Dictionary = keys.back()
+		var typed_by := md._t0[sess] + float((last_key["times"] as PackedFloat32Array)[-1]) / md._sp[sess]
+		var sp: Dictionary = md._spans[0]
+		got[order] = [md._picture_in(sp), typed_by, md._word_t1(int(sp["from"]) - 1) + 0.1]
+	var a: Array = got["after"]
+	var b: Array = got["before"]
+	_ok(float(a[0]) < INF and float(a[0]) > float(a[1]) and float(b[0]) < float(b[1]) and is_equal_approx(float(b[0]), float(b[2])),
+		"a picture written after a block comes in once its typing is done (%.1f s, typed by %.1f s); the control: written before it, just after the word before (%.1f s, typed by %.1f s)"
+			% [float(a[0]), float(a[1]), float(b[0]), float(b[1])])
+
+
+## A said passage is typed at an even pace ahead of its voice (the control: each word typed in the time of the word two
+## before it, as the keys once were), on a voice whose words take as long as their letters and that rests at sentence ends.
+func _typing_cadence(md: DispatchMedium) -> void:
+	var body := "<!-- speaker: Control -->\n\nOne two three four.\n\n```terminal\n> m\npanel: MIRROR\n" \
+		+ "read: they say he was ahead of his time. he wasn't ahead of anything.\n" \
+		+ "read: we line them up by year, and put ourselves at the end.\n" \
+		+ "read: that's how we live it. it isn't how they did.\n```\n\nFive six seven eight.\n"
+	var parsed := DispatchScript.parse(body)
+	var ti := _first(parsed["actions"], "type")
+	var ty: Dictionary = (parsed["actions"] as Array)[ti]
+	var text := String(ty["text"])
+	var spans: Array = ty["spans"]
+	var from := int(ty["from"])
+	var words := DispatchScript.rehearsal(parsed, 0.32)
+	var shift := 0.0
+	for k in words.size():
+		var w: Dictionary = words[k]
+		w["t0"] = float(w["t0"]) + shift
+		var long := 0.32
+		var piece := ""
+		if k >= from and k < from + spans.size():
+			var sp: Dictionary = spans[k - from]
+			piece = text.substr(int(sp["c0"]), int(sp["c1"]) - int(sp["c0"])).strip_edges()
+			long = 0.1 + 0.045 * float(piece.length())
+		w["t1"] = float(w["t0"]) + long * 0.9
+		shift += long - 0.32 + (0.6 if piece.ends_with(".") or piece.ends_with("?") else 0.0)
+	md.load_note(body, {"seed": 3})
+	md._now = 0.0
+	md.take_words(words)
+	var keys: PackedFloat32Array = md._chars.get(ti, PackedFloat32Array())
+	var n := spans.size()
+	var said := func(k: int) -> float: return md._word_t0(from + k)
+	var c0 := func(k: int) -> int: return int((spans[k] as Dictionary)["c0"])
+	var c1 := func(k: int) -> int: return int((spans[k] as Dictionary)["c1"])
+	var behind := 0
+	var too_far := 0
+	for k in n:
+		if keys.is_empty() or keys[c1.call(k) - 1] >= said.call(k):
+			behind += 1
+		if k + DispatchScript.AHEAD_MOST + 1 < n and not keys.is_empty() and keys[c0.call(k + DispatchScript.AHEAD_MOST + 1)] < said.call(k) - 0.001:
+			too_far += 1
+	var paces := PackedFloat32Array()
+	var olds := PackedFloat32Array()
+	for k in range(DispatchScript.AHEAD_WORDS, n - 1):
+		var chars := float(c0.call(k + 1) - c0.call(k))
+		if not keys.is_empty():
+			paces.append((keys[c0.call(k + 1)] - keys[c0.call(k)]) / chars)
+		olds.append((float(said.call(k - 1)) - float(said.call(k - 2))) / chars)
+	var swing: float = (float(Array(paces).max()) / maxf(float(Array(paces).min()), 1e-6)) if not paces.is_empty() else INF
+	var old_swing: float = float(Array(olds).max()) / maxf(float(Array(olds).min()), 1e-6)
+	_ok(behind == 0 and too_far == 0 and swing < old_swing * 0.5,
+		"a said passage typed evenly ahead of its voice: %d words behind, %d more than %d ahead, its pace swinging %.1fx (the control, a word in the time of the word two before: %.1fx)"
+			% [behind, too_far, DispatchScript.AHEAD_MOST, swing, old_swing])
+
+
+## A block's last key: line that the paragraph after it says is typed ahead of its words, its unsaid end typed on after.
+func _said_keys_typing(md: DispatchMedium) -> void:
+	var body := "<!-- speaker: Control -->\n\nOne two three four.\n\n```terminal\n> m\npanel: MIRROR | HIS SCREEN\n" \
+		+ "key: HIM: there was a man in a bathrobe at the end of the aisle again tonight. I used to get so angry at them. I don't anymore. if you can understand the rot of the whole, you can understand the struggle.\n" \
+		+ "```\n\nThere was a man in a bathrobe at the end of the aisle again tonight. I used to get so angry at them. I don't anymore.\n\nFive six seven eight nine ten.\n"
+	md.load_note(body, {"seed": 3})
+	md._now = 0.0
+	md.take_words(DispatchScript.rehearsal(DispatchScript.parse(body), 0.32))
+	var ti := _first(md._actions, "type")
+	var si := _first(md._actions, "session")
+	var a: Dictionary = md._actions[ti] if ti >= 0 else {}
+	var keys: PackedFloat32Array = md._chars.get(ti, PackedFloat32Array())
+	var spans: Array = a.get("spans", [])
+	var late := 0
+	for k in spans.size():
+		if keys.is_empty() or keys[int((spans[k] as Dictionary)["c1"]) - 1] >= md._word_t0(int((spans[k] as Dictionary)["word"])):
+			late += 1
+	var last_said := md._word_t0(int((spans.back() as Dictionary)["word"])) if not spans.is_empty() else INF
+	var text_n := String(a.get("text", "")).length()
+	var tail_done := keys[text_n - 1] if not keys.is_empty() else INF
+	var panel_up := md._t0[si] + float(md._actions[si]["rest"]) / md._sp[si]
+	var first_said := md._word_t0(int(a.get("from", 0)))
+	_ok(ti > si and late == 0 and not keys.is_empty() and keys[0] >= panel_up - 0.001 and tail_done < INF and tail_done > last_said
+		and tail_done - first_said > 2.0,
+		"a key: line the paragraph after says is typed ahead of its words (%d late of %d), after the panel is up, its unsaid end on after the last (%.1f s after it); the control: its first word said %.1f s before the line is typed whole"
+			% [late, spans.size(), tail_done - last_said, tail_done - first_said])
 
 
 ## A call's timer after a reading started mid-way, past where the call began: counted from where the call fell on the reading, as a

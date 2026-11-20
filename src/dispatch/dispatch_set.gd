@@ -79,8 +79,16 @@ const ARM_Z := [-0.52, -0.47, -0.42]
 const ARM_H := [0.34, 0.38, 0.42, 0.46]
 ## The stage's width for its height ([method in_frame]).
 const FRAME_ASPECT := 16.0 / 9.0
-## The heap of printed paper on the floor beside the desk's left end, and how high it is (knee-high).
-const HEAP_AT := Vector2(-1.42, -0.30)
+## The printer's paper ([Fanfold]): the ways it may leave the slot (degrees back from straight up, toward the desk's end), tried
+## in turn until one lays its folds on the heap; the links a panel is cut in; how far past the desk's end the heap's near edge
+## is (m); and the step the desk's end is told to the nearest of where the paper is settled (m), so desks alike share it.
+const PAPER_LEANS := [15.0, 22.0, 8.0, 30.0, 45.0]
+const PAPER_LINKS := 10
+const HEAP_GAP := 0.02
+const PAPER_END_STEP := 0.005
+## How near the desk's end the paper may come down over it (m), draping from the rest to the floor: what is over the desk nearer
+## its end than this is the paper that hangs, and the rest of what is over the desk stays high over it.
+const PAPER_DRAPE := 0.03
 ## How far each end of the desk's things may stand off its authored place (m, outward, and back or forward), and each big
 ## thing turn off its own (degrees), desk by desk.
 const JITTER := 0.025
@@ -180,7 +188,10 @@ const THIN := &"thin"
 const TABLET_HELD := Vector3(0.0, 0.11, 0.36)
 const TABLET_TILT := 50.0
 
+## The heap of printed paper on the floor past the desk's end, under where the paper hangs: how high it is (knee-high) and how
+## thick each of its layers; a panel of the paper, across and along (m).
 const HEAP_H := 0.44
+const HEAP_LAYER := 0.012
 const SHEET := Vector2(0.38, 0.28)
 ## The room: the hollow's floor, ceiling and walls.
 const CEILING := 3.4
@@ -194,7 +205,9 @@ var terminal_screen: MeshInstance3D   # the faces the medium hands pictures ([Pr
 var radar_screen: MeshInstance3D
 var scope_screen: MeshInstance3D
 var dial: MeshInstance3D
-var paper: MeshInstance3D         # the sheet coming up out of the printer, printed
+var paper: MeshInstance3D         # the paper coming up out of the printer, over its rest and down to the heap ([method feed_paper])
+var paper_print: Material         # what its printed side wears (the medium's picture of it); its back is the heap's paper
+var paper_from := 0.0             # how much of it this desk begins with fed (m): where along a fold it starts
 var heap: Node3D                  # the printed paper's heap on the floor
 var heap_top: MeshInstance3D
 var screens := {}                 # feed / satellite / tv -> {mesh, rig, node}
@@ -240,6 +253,8 @@ var _tex := {}
 var _mats := {}
 var _sat_panel := SAT_PANEL       # the satellite's make: its panel's size and its glass's, which the arm is reckoned by
 var _sat_glass := Vector2(0.33, 0.206)
+var _paper_baked := {}            # what the paper does as it feeds ([method Fanfold.baked])
+var _paper_at := -1.0             # the length fed its mesh is made for
 
 
 ## Build the desk for phones [param labels] (their names, in order) and desk number [param seed], out of the tree (on a worker,
@@ -303,10 +318,10 @@ func _lay_out() -> void:
 	turn = {"case": 0.0, "keyboard": 0.0}
 	var base := {"radar": [RADAR_AT, -14.0], "receiver": [RECEIVER_AT, -30.0], "printer": [PRINTER_AT, 90.0],
 		"feed": [FEED_AT, 12.0], "tv": [TV_AT, -18.0], "lamp": [LAMP_AT, 0.0],
-		"phones": [PHONE_AT, 0.0], "held": [HELD_AT, 0.0], "heap": [HEAP_AT, 0.0], "patch": [Vector2(0.02, -0.515), 0.0]}
+		"phones": [PHONE_AT, 0.0], "held": [HELD_AT, 0.0], "patch": [Vector2(0.02, -0.515), 0.0]}
 	# each end of the desk moves as one, outward and back or forward a little, so what stands close together stays close;
 	# the screens along the back move only back and forth
-	var groups := {"radio": ["radar", "receiver", "tv"], "phones": ["phones", "printer", "feed", "lamp", "held", "heap"],
+	var groups := {"radio": ["radar", "receiver", "tv"], "phones": ["phones", "printer", "feed", "lamp", "held"],
 		"back": ["patch"]}
 	var shifts := {}
 	for g in groups:
@@ -321,7 +336,7 @@ func _lay_out() -> void:
 				shift = shifts[g]
 		var placed := Vector2(p.x * flip, p.y)
 		at[k] = placed + Vector2(signf(placed.x) * shift.x, shift.y)
-		turn[k] = float(b[1]) * flip + (r.randf_range(-JITTER_TURN, JITTER_TURN) if k not in ["printer", "phones", "held", "heap"] else 0.0)
+		turn[k] = float(b[1]) * flip + (r.randf_range(-JITTER_TURN, JITTER_TURN) if k not in ["printer", "phones", "held"] else 0.0)
 	turn["printer"] = 90.0 * flip
 
 
@@ -1256,91 +1271,152 @@ func _receiver() -> void:
 
 # --- the printer ------------------------------------------------------------------------------------------------------
 
-## The printer's make ([PropMakes] `printer`) at the desk's left end, turned so its paper comes up out of its `slot` toward the
-## end and falls off it; its head runs across as the medium feeds it (`head`). The continuous paper with its sprocket holes
-## ([member paper], the medium's texture) folds down over the desk's end into a knee-high heap of fanfold on the floor ([member
-## heap]).
+## The printer's make ([PropMakes] `printer`) at the phones' end of the desk, its back to the end; its head runs across as the
+## medium feeds it (`head`). Its continuous paper ([member paper], [method feed_paper]) comes up out of its `slot`, lies back on
+## whatever of the make is behind the slot, hangs past the desk's end and folds panel over panel onto a knee-high heap on the
+## floor ([member heap]), which stands under where it hangs.
 func _printer() -> void:
 	var t := _place("printer", desk_at("printer"), turn["printer"])
-	# The paper: up out of the slot, leaning back, then over and down the desk's end (in the printer's own frame its back is
-	# -z, which faces the desk's end)
-	paper = MeshInstance3D.new()
-	paper.name = "Paper"
-	paper.mesh = _paper_strip()
-	var slot: Variant = t.point("slot")
-	paper.position = slot if slot is Vector3 else Vector3(0, 0.125, -0.06)
-	t.node.add_child(paper)
-	heap = Node3D.new()
-	heap.name = "Heap"
-	heap.position = Vector3(at_of("heap").x, 0.0, at_of("heap").y)
-	root.add_child(heap)
+	var named: Variant = t.point("slot")
+	var slot: Vector3 = named if named is Vector3 else Vector3(0, 0.125, -0.06)
+	var xf := bounds_xf(t.node)
+	var out := xf * slot
+	var end := ceilf((DESK_W * 0.5 - absf(out.x)) / PAPER_END_STEP) * PAPER_END_STEP
+	# (where no way lays its folds, the first)
+	_paper_baked = {}
+	for lean in PAPER_LEANS:
+		var baked := Fanfold.baked(paper_scene(t.node, slot, out.y, end, float(lean)))
+		if _paper_baked.is_empty() or bool(baked["laid"]):
+			_paper_baked = baked
+		if bool(baked["laid"]):
+			break
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([_seed, "heap"])
-	var layers := int(HEAP_H / 0.012)
+	paper_from = snappedf(r.randf() * 2.0 * SHEET.y, 0.001)
+	paper = MeshInstance3D.new()
+	paper.name = "Paper"
+	var strip := ArrayMesh.new()
+	strip.set_meta(THIN, true)
+	paper.mesh = strip
+	paper.position = slot
+	t.node.add_child(paper)
+	feed_paper(0.0)
+	heap = Node3D.new()
+	heap.name = "Heap"
+	var under := xf * (slot + Vector3(0.0, 0.0, -(end + HEAP_GAP + SHEET.y * 0.5)))
+	heap.position = Vector3(under.x, 0.0, under.z)
+	root.add_child(heap)
+	var layers := int(HEAP_H / HEAP_LAYER)
 	for k in layers:
-		var y := float(k) * 0.012
-		var m := put(heap, box(Vector3(SHEET.x, 0.012, SHEET.y)), _mats["paper"], Vector3(r.randf_range(-0.015, 0.015), y + 0.006, r.randf_range(-0.012, 0.012)),
+		var y := float(k) * HEAP_LAYER
+		var m := put(heap, box(Vector3(SHEET.x, HEAP_LAYER, SHEET.y)), _mats["paper"], Vector3(r.randf_range(-0.015, 0.015), y + HEAP_LAYER * 0.5, r.randf_range(-0.012, 0.012)),
 			Vector3(0, 90 + r.randf_range(-4.0, 4.0), 0))
 		m.name = "Layer %d" % k
-	heap_top = put(heap, box(Vector3(SHEET.x, 0.012, SHEET.y)), _mats["paper"], Vector3(0, HEAP_H + 0.006, 0), Vector3(0, 90, 0))
+	heap_top = put(heap, box(Vector3(SHEET.x, HEAP_LAYER, SHEET.y)), _mats["paper"], Vector3(0, HEAP_H + HEAP_LAYER * 0.5, 0), Vector3(0, 90, 0))
 	_body("printer", t.node)
-	# what no root grows through ([DispatchRoots]): the paper over the desk, the paper falling past its end, and the heap
+	# everywhere the paper goes as it feeds is the printer's too: over the desk a part of it (high over the desk, so a cable
+	# goes under it), what hangs past the desk's end and drapes over it another ([constant PAPER_DRAPE]), and with the heap what
+	# no root grows through ([DispatchRoots])
 	var over := PackedVector3Array()
 	var past := PackedVector3Array()
-	for q in _gather(paper, bounds_xf(paper)):
-		if absf(q.x) <= DESK_W * 0.5:
-			over.append(q)
-		else:
-			past.append(q)
+	for q in Fanfold.swept(_paper_baked):
+		for x in [-SHEET.x * 0.5, SHEET.x * 0.5]:
+			var w := xf * (slot + Vector3(float(x), q.y, -q.x))
+			if q.x < end - PAPER_DRAPE:
+				over.append(w)
+			else:
+				past.append(w)
 	for pts in [over, past]:
-		if not (pts as PackedVector3Array).is_empty():
-			var b := AABB((pts as PackedVector3Array)[0], Vector3.ZERO)
-			for q in (pts as PackedVector3Array):
-				b = b.expand(q)
-			clear.append(b)
+		if (pts as PackedVector3Array).size() >= 3:
+			var part := _part_of(pts)
+			(_parts["printer"] as Array).append(part)
+			(_blocks["printer"] as Array).append(_block(part["box"], Transform3D.IDENTITY))
+			bodies["printer"] = (bodies["printer"] as AABB).merge(part["box"])
+			clear.append(part["box"])
 	clear.append(bounds(heap))
 
 
-## The paper's strip, in the printer's frame from the slot: up and leaning back, then over the desk's end and down to the
-## heap - a mesh whose UV runs along it (0 at the slot) so its printed lines move along it as it feeds.
-func _paper_strip() -> ArrayMesh:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var path := PackedVector3Array()
-	var drop := DESK_Y + 0.12 - HEAP_H
-	for i in 40:
-		var u := float(i) / 39.0
-		var p: Vector3
-		if u < 0.35:
-			var v := u / 0.35
-			p = Vector3(0, v * 0.17, -v * 0.07)
-		elif u < 0.55:
-			var v := (u - 0.35) / 0.2
-			var a := v * PI * 0.5
-			p = Vector3(0, 0.17 + sin(a) * 0.05, -0.07 - (1.0 - cos(a)) * 0.05 - v * 0.28)
-		else:
-			var v := (u - 0.55) / 0.45
-			var to := -absf(at_of("printer").x - at_of("heap").x)
-			p = Vector3(0, 0.22 - v * (drop + 0.22), lerpf(-0.40, to, v) - sin(v * PI) * 0.05)
-		path.append(p)
-	var len := 0.0
-	var lens := PackedFloat32Array([0.0])
-	for i in range(1, path.size()):
-		len += path[i].distance_to(path[i - 1])
-		lens.append(len)
-	var hw := SHEET.x * 0.5
-	for i in path.size() - 1:
-		var a := path[i]
-		var b := path[i + 1]
-		var ua := lens[i] / len
-		var ub := lens[i + 1] / len
-		var t := (b - a).normalized()
-		var nrm := t.cross(Vector3.RIGHT).normalized()
-		for q in [[a, -hw, ua], [b, -hw, ub], [b, hw, ub], [a, -hw, ua], [b, hw, ub], [a, hw, ua]]:
-			st.set_normal(nrm)
-			st.set_uv(Vector2(0.5 + float(q[1]) / SHEET.x, float(q[2])))
-			st.add_vertex((q[0] as Vector3) + Vector3(float(q[1]), 0, 0))
-	return st.commit()
+## The paper with [param fed] meters of it printed since the desk was built ([Fanfold]): its strip made again where that has
+## changed, each crease further along it and the panel coming down on the heap further over. Returns all of it fed, with what
+## the desk began with ([member paper_from]): a picture of the paper has its perforations a panel apart from there.
+func feed_paper(fed: float) -> float:
+	var at := snappedf(paper_from + fed, 0.0002)
+	if paper == null or _paper_baked.is_empty() or is_equal_approx(at, _paper_at):
+		return at
+	_paper_at = at
+	var strip := paper.mesh as ArrayMesh
+	var front: Array = Fanfold.arrays(Fanfold.profile(_paper_baked, at), SHEET.x, 1.0 / paper_length())
+	strip.clear_surfaces()
+	strip.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, front)
+	strip.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, Fanfold.turned(front))
+	strip.surface_set_material(0, paper_print if paper_print != null else _mats["paper"])
+	strip.surface_set_material(1, _mats["paper"])
+	return at
+
+
+## How much of the paper its picture shows ([constant DispatchScreens.PAPER_SIZE]), from the slot back (m).
+static func paper_length() -> float:
+	return float(DispatchScreens.PAPER_SIZE.y) / (DispatchScreens.PAPER_LINE * float(DispatchScreens.PAPER_FOLD)) * SHEET.y
+
+
+## The printer's paper's scene ([method Fanfold.bake]) in its own plane (x out behind the slot, toward the desk's end; y up from it):
+## make [param node] with its `slot` at [param slot] (its own space), standing with the slot [param high] over the floor and
+## [param end] short of the desk's end (m), the paper leaving it [param lean] degrees back from straight up - what of the make it
+## lies on, the desk, the heap past the desk's end and the floor.
+static func paper_scene(node: Node3D, slot: Vector3, high: float, end: float, lean: float) -> Dictionary:
+	var solids := []
+	_side_outlines(node, Transform3D.IDENTITY, slot, solids)
+	var floor_y := snappedf(-high, 0.001)
+	var desk_y := snappedf(DESK_Y - high, 0.001)
+	solids.append(PackedVector2Array([Vector2(-2.0, floor_y), Vector2(end, floor_y), Vector2(end, desk_y), Vector2(-2.0, desk_y)]))
+	var top := snappedf(HEAP_H + HEAP_LAYER - high, 0.001)
+	var exit := Vector2(sin(deg_to_rad(lean)), cos(deg_to_rad(lean))).snappedf(0.0001)
+	return {"exit": exit, "solids": solids, "heap": Vector2(end + HEAP_GAP, top), "floor": floor_y, "panel": SHEET.y,
+		"links": PAPER_LINKS}
+
+
+## What of [param n]'s meshes the paper lies on, in the paper's own plane ([Fanfold]: x out behind [param slot], y up from it):
+## each mesh the strip passes over, its outline from the side, placed by [param xf] in the printer's own space.
+static func _side_outlines(n: Node3D, xf: Transform3D, slot: Vector3, out: Array) -> void:
+	var mi := n as MeshInstance3D
+	if mi != null and mi.mesh != null and not mi.mesh.has_meta(THIN) and not _flat(mi):
+		var side := PackedVector2Array()
+		var lo := INF
+		var hi := -INF
+		for q in xf * mi.mesh.get_faces():
+			lo = minf(lo, q.x)
+			hi = maxf(hi, q.x)
+			side.append(Vector2(slot.z - q.z, q.y - slot.y))
+		if side.size() >= 3 and lo < SHEET.x * 0.5 - 0.01 and hi > -SHEET.x * 0.5 + 0.01:
+			var hull := _thinned(Geometry2D.convex_hull(side))
+			if hull.size() >= 3:
+				out.append(hull)
+	for c in n.get_children():
+		var c3 := c as Node3D
+		if c3 != null:
+			_side_outlines(c3, xf * c3.transform, slot, out)
+
+
+## Outline [param hull] with the points that turn it less than 2 mm left out, each told to the millimeter.
+static func _thinned(hull: PackedVector2Array) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for q in hull:
+		var s := q.snappedf(0.001)
+		if pts.is_empty() or not s.is_equal_approx(pts[pts.size() - 1]):
+			pts.append(s)
+	if pts.size() > 1 and pts[0].is_equal_approx(pts[pts.size() - 1]):
+		pts.remove_at(pts.size() - 1)
+	var cut := true
+	while cut and pts.size() > 3:
+		cut = false
+		for i in pts.size():
+			var a := pts[(i - 1 + pts.size()) % pts.size()]
+			var c := pts[(i + 1) % pts.size()]
+			if absf((c - a).cross(pts[i] - a)) < 0.002 * maxf((c - a).length(), 1.0e-6):
+				pts.remove_at(i)
+				cut = true
+				break
+	return pts
 
 
 # --- the small screens ------------------------------------------------------------------------------------------------

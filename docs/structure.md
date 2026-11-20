@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 691 references inside a folder, 1277 down the stack, 0 up it.
+Between scripts today: 691 references inside a folder, 1279 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -31,7 +31,7 @@ Between scripts today: 691 references inside a folder, 1277 down the stack, 0 up
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
 | `stage/` | Storyboards & stage | 5 | `scene_kit`, `geometry`, `render`, `audio`, `data` |
 | `scene_kit/` | Scene substrate | 9 | `geometry`, `motion`, `render`, `audio`, `data` |
-| `geometry/` | Generative form | 13 | `motion`, `render` |
+| `geometry/` | Generative form | 14 | `motion`, `render` |
 | `motion/` | Motion & simulation | 13 | `render`, `audio` |
 | `render/` | Drawing | 13 | `data` |
 | `audio/` | Audio & analysis | 9 | `platform` |
@@ -74,7 +74,7 @@ How things move: seeded oscillators, sparse response gating, the nonlinear kit a
 
 Self-contained generators a scene composes rather than hand-models - each one samples a space of shapes from a seed and hands back plain geometry - with the procedural fields, terrain heightfields and shadowing of the 3D world, and the composed bodies. The `cattle, not pets` discipline, made into parts.
 
-[`branch3d`](../src/geometry/branch3d.gd), [`contour`](../src/geometry/contour.gd), [`crystal`](../src/geometry/crystal.gd), [`eye_body`](../src/geometry/eye_body.gd), [`field`](../src/geometry/field.gd), [`filament`](../src/geometry/filament.gd), [`geometry`](../src/geometry/geometry.gd), [`glyphs`](../src/geometry/glyphs.gd), [`prism_body`](../src/geometry/prism_body.gd), [`rope`](../src/geometry/rope.gd), [`shadow_field`](../src/geometry/shadow_field.gd), [`terrain`](../src/geometry/terrain.gd), [`wallpaper_group`](../src/geometry/wallpaper_group.gd)
+[`branch3d`](../src/geometry/branch3d.gd), [`contour`](../src/geometry/contour.gd), [`crystal`](../src/geometry/crystal.gd), [`eye_body`](../src/geometry/eye_body.gd), [`fanfold`](../src/geometry/fanfold.gd), [`field`](../src/geometry/field.gd), [`filament`](../src/geometry/filament.gd), [`geometry`](../src/geometry/geometry.gd), [`glyphs`](../src/geometry/glyphs.gd), [`prism_body`](../src/geometry/prism_body.gd), [`rope`](../src/geometry/rope.gd), [`shadow_field`](../src/geometry/shadow_field.gd), [`terrain`](../src/geometry/terrain.gd), [`wallpaper_group`](../src/geometry/wallpaper_group.gd)
 
 ### `scene_kit/` - Scene substrate
 
@@ -205,4 +205,4 @@ Godot compiles a script with every script it names by class or preload, wherever
 | launch | builds | scripts | lines | budget |
 | --- | --- | --- | --- | --- |
 | the phone shell | `app/main`, `app/phone_shell` | 74 | 29,778 | 40,000 |
-| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 111 | 47,710 | 65,000 |
+| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 111 | 47,727 | 65,000 |

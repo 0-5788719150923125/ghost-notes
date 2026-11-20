@@ -33,9 +33,13 @@ Held, each with the case that must not change:
  `blend` made of the checkpoint's packs once and fed to the graph (a reader it does not hold left out, fewer
  than two the speaker's own pack, a voice taught here never blended);
  12. a sentence's end is not the call's: one ending on a full stop is sent with its own first word after it,
- in the style of its own count, and the take cut SEAM_TAIL after its last sound - its times the ones it has
- read alone; a model that reads on at the stop is asked again for the sentence alone, and a sentence ending
- on no full stop is never followed; the cut is in the rest, never in a stop's closure or a faint last sound.
+ in the style of its own count and told its own plan up to its last sound (made alone first: a model that
+ hurries what is followed is the fake here; the last sound and the stop are the call's; a hold it has only alone
+ is cut to HOLD_OVER past its plan followed, save before a mark), and the take cut
+ SEAM_TAIL after its last sound - its times the ones it has read alone; a model that reads on at the stop is
+ asked again for the sentence alone, and a sentence of one word, one ending on no full stop, or a graph that
+ cannot be told a plan, is never followed; the cut is in the rest, never in a stop's closure or a faint last
+ sound; the plan alone is the graph cut to its second output, kept beside it.
 
 Synthesis runs against a fake session, as in test_expression.py: no model download, no eSpeak.
 """
@@ -82,7 +86,8 @@ class _Session:
     puts them. 600 samples a frame. Records what it was fed. Without the two inputs it hands back
     the plan before the Round, as the stock export does."""
 
-    def __init__(self, takes=("rest_floor", "dur_scale"), lead=1.0, tail=1.0, quiet_marks=False, stop=0.0) -> None:
+    def __init__(self, takes=("rest_floor", "dur_scale"), lead=1.0, tail=1.0, quiet_marks=False, stop=0.0,
+                 hurry=False, held=None) -> None:
         self.takes = tuple(takes)
         self.fed: list = []
         # Kokoro's own ends: its first pad's frames, and whether a mark, a word-space and a pad are
@@ -91,6 +96,11 @@ class _Session:
         self.tail = tail
         # ...and the frames it rests on a full stop (its plan's own where 0)
         self.stop = stop
+        # ...and whether it hurries a sentence that is followed in its call, as Kokoro does: every id before its
+        # last sound planned a frame shorter (never under two), the stop's own rest half as long again
+        self.hurry = hurry
+        # ...and the sounds it holds mid-sentence read alone ({symbol: frames}), as Kokoro does
+        self.held = dict(held or {})
         self.quiet = {0} | ({VOCAB.index(c) for c in ".,; "} if quiet_marks else set())
 
     def get_overridable_initializers(self):
@@ -114,8 +124,18 @@ class _Session:
             }
         )
         plan = np.array([1.0 if i in (0, SPACE) else 2.0 + (i % 3) for i in ids]) / speed
+        stops = [k for k, i in enumerate(ids) if i == VOCAB.index(".")]
         if self.stop:
-            plan[[k for k, i in enumerate(ids) if i == VOCAB.index(".")]] = self.stop
+            plan[stops] = self.stop
+        followed = bool(stops) and any(i not in self.quiet for i in ids[stops[0] + 1 :])
+        if self.hurry and followed:
+            end = stops[0] - 1
+            plan[:end] = np.maximum(plan[:end] - 1.0, np.minimum(plan[:end], 2.0))
+            plan[stops[0]] *= 1.5
+        if not followed:
+            for k, i in enumerate(ids):
+                if VOCAB[i] in self.held:
+                    plan[k] = self.held[VOCAB[i]] / speed
         plan[0] = self.lead / speed
         plan[-1] = self.tail / speed
         if "dur_scale" not in self.takes:
@@ -1158,24 +1178,44 @@ def test_a_request_reads_in_its_blend():
 
 @check
 def test_a_sentence_is_followed_in_its_call():
-    """A sentence ending on a full stop is sent with a word-space and its own first word after it, in the style
-    of its own count, and where the model rests at the stop the take is the sentence's: cut SEAM_TAIL after its
-    last sound, every time what it is read alone. THE CONTROLS: a model that reads on at the stop (the plain fake,
-    which sounds through its marks) is asked again for the sentence alone; a sentence ending on no full stop, and
-    `after` 0, are sent alone."""
+    """A sentence ending on a full stop is planned alone, then sent with a word-space and its own first word after
+    it, in the style of its own count and told that plan up to its last sound: every id before it its frames, the
+    last sound and the stop the call's own. Where the model rests at the stop the take is the sentence's: cut
+    SEAM_TAIL after its last sound, every time what it is read alone - on a model that hurries what is followed.
+    THE CONTROLS: the fake does hurry a followed sentence left to its own plan; a model that reads on at the stop
+    (the plain fake, which sounds through its marks) is asked again for the sentence alone; a sentence of one word,
+    one ending on no full stop, a graph that takes no plan, and `after` 0, are sent alone."""
     import numpy as np
-    from backends.kokoro import AFTER_WORDS
+    from backends.kokoro import AFTER_WORDS, HOLD_OVER
 
     def body(fed):
         return "".join(VOCAB[i] for i in fed["ids"][1:-1])
 
-    rests = dict(lead=14.0, tail=10.0, quiet_marks=True, stop=12.0)
+    rests = dict(lead=14.0, tail=10.0, quiet_marks=True, stop=12.0, hurry=True)
+    said = "ˈɪt, wʌz nˈɛvəɹ sˈO."
     alone, a_sess, _rate, a_n = _render(SENTENCE, sess=_Session(**rests))
     res, sess, _rate, n = _render(SENTENCE, {"after": AFTER_WORDS}, sess=_Session(**rests))
-    eq(len(sess.fed), 1, "one call")
-    eq(body(sess.fed[0]), "ˈɪt, wʌz nˈɛvəɹ sˈO. ˈɪt", "the sentence, a word-space and its own first word")
-    eq(float(np.asarray(sess.fed[0]["style"]).ravel()[0]), float(len(a_sess.fed[0]["ids"]) - 3),
+    eq([body(f) for f in sess.fed], [said, said + " ˈɪt", said + " ˈɪt"],
+       "the sentence planned alone and followed, then one call: the sentence, a word-space and its own first word")
+    plan, followed, call = sess.fed
+    eq(float(np.asarray(call["style"]).ravel()[0]), float(len(a_sess.fed[0]["ids"]) - 3),
        "in the style of the sentence's own token count")
+    last = len(said) - 1  # the place in a call (a pad first) of the sentence's last sound, the stop after it
+    eq(plan["frames"].tolist(), a_sess.fed[0]["frames"].tolist(), "the plan is the one it has read alone")
+    eq((call["scale"][:last].tolist(), call["floor"][:last].tolist()),
+       ([0.0] * last, [float(f) for f in plan["frames"][:last]]),
+       "every id before its last sound is told its frames: its own plan scaled away, floored at them")
+    eq((call["scale"][last:].tolist(), call["floor"][last:].tolist()),
+       ([1.0] * (len(call["ids"]) - last), [0.0] * (len(call["ids"]) - last)),
+       "the last sound, the stop, the word after and the pad are the call's own")
+    hurried = _Session(**rests)
+    hurried.run(None, {"input_ids": np.array([call["ids"]]), "style": call["style"], "speed": np.ones(1, np.float32)})
+    ok(int(hurried.fed[0]["frames"][1:last].sum()) < int(plan["frames"][1:last].sum())
+       and int(hurried.fed[0]["frames"][last + 1]) > int(plan["frames"][last + 1]),
+       "CONTROL: left to its own plan the followed sentence is hurried, and rests longer at its stop",
+       "%d frames against %d" % (hurried.fed[0]["frames"][1:last].sum(), plan["frames"][1:last].sum()))
+    eq(call["frames"][: last + 2].tolist(), [*plan["frames"][: last + 1].tolist(), 18],
+       "told, it is read in its own frames, the stop's rest the call's")
     ok(abs(n - a_n) <= 1 and abs(res["duration"] - alone["duration"]) < 1e-3,
        "the take is cut SEAM_TAIL after the sentence's last sound, as it is trimmed read alone",
        "%.3f s against %.3f" % (res["duration"], alone["duration"]))
@@ -1184,20 +1224,73 @@ def test_a_sentence_is_followed_in_its_call():
     eq([(p["p"], p["t0"], p["t1"]) for p in res["phones"]], [(p["p"], p["t0"], p["t1"]) for p in alone["phones"]],
        "and every phone")
     _res, sess, _rate, _n = _render(SENTENCE, {"after": 3}, sess=_Session(**rests))
-    eq(body(sess.fed[0]), "ˈɪt, wʌz nˈɛvəɹ sˈO. ˈɪt, wʌz nˈɛvəɹ", "asked for three, its first three, the mark between them kept")
-    _res, sess, _rate, _n = _render([_tok("so", "sˈoʊ", ".")], {"after": 3}, sess=_Session(**rests))
-    eq(body(sess.fed[0]), "sˈO. sˈO", "a sentence of fewer words is followed by them all, never its stop")
+    eq(body(sess.fed[-1]), said + " ˈɪt, wʌz nˈɛvəɹ", "asked for three, its first three, the mark between them kept")
+    two = [_tok("was", "wʌz"), _tok("so", "sˈoʊ", ".")]
+    _res, sess, _rate, _n = _render(two, {"after": 3}, sess=_Session(**rests))
+    eq(body(sess.fed[-1]), "wʌz sˈO. wʌz sˈO", "a sentence of fewer words is followed by them all, never its stop")
     res, sess, _rate, n = _render(SENTENCE, {"after": AFTER_WORDS})
-    eq([body(f) for f in sess.fed], ["ˈɪt, wʌz nˈɛvəɹ sˈO. ˈɪt", "ˈɪt, wʌz nˈɛvəɹ sˈO."],
+    eq([body(f) for f in sess.fed], [said, said + " ˈɪt", said + " ˈɪt", said],
        "CONTROL: a model that reads on at the stop is asked again for the sentence alone")
+    eq(sess.fed[-1]["scale"], None, "...in its own plan, told nothing")
     plain, _sess, _rate, p_n = _render(SENTENCE)
     ok(n == p_n and res["tokens"] == plain["tokens"], "...and that is the take")
+    _res, sess, _rate, _n = _render(SENTENCE, {"after": AFTER_WORDS}, sess=_Session(**rests, held={"z": 9, "t": 9}))
+    plan, followed, call = sess.fed
+    z, t = call["ids"].index(VOCAB.index("z")), call["ids"].index(VOCAB.index("t"))
+    eq((int(plan["frames"][z]), int(plan["frames"][t])), (9, 9), "read alone, the fake holds a sound mid-sentence")
+    eq(float(call["floor"][z]), float(followed["frames"][z] + HOLD_OVER),
+       "a hold the sentence has only alone is told HOLD_OVER past its plan followed")
+    eq(float(call["floor"][t]), 9.0, "CONTROL: a sound before a mark keeps its hold: the rest there is the sentence's")
+    _res, sess, _rate, _n = _render([_tok("so", "sˈoʊ", ".")], {"after": 3}, sess=_Session(**rests))
+    eq([body(f) for f in sess.fed], ["sˈO."], "CONTROL: a sentence of one word is sent alone")
     open_end = [dict(t) for t in SENTENCE]
     open_end[-1]["punct"] = ","
     _res, sess, _rate, _n = _render(open_end, {"after": AFTER_WORDS}, sess=_Session(**rests))
-    eq([body(f) for f in sess.fed], ["ˈɪt, wʌz nˈɛvəɹ sˈO,"], "CONTROL: a sentence ending on no full stop is sent alone")
+    eq([body(f) for f in sess.fed], [said[:-1] + ","], "CONTROL: a sentence ending on no full stop is sent alone")
+    _res, sess, _rate, _n = _render(SENTENCE, {"after": AFTER_WORDS}, sess=_Session(takes=(), **rests))
+    eq([body(f) for f in sess.fed], [said], "CONTROL: a graph that cannot be told a plan is sent the sentence alone")
     _res, sess, _rate, _n = _render(SENTENCE, {"after": 0}, sess=_Session(**rests))
-    eq([body(f) for f in sess.fed], ["ˈɪt, wʌz nˈɛvəɹ sˈO."], "CONTROL: asked for no words after, the sentence alone")
+    eq([body(f) for f in sess.fed], [said], "CONTROL: asked for no words after, the sentence alone")
+
+
+@check
+def test_the_plan_alone():
+    """`_plan_graph` cuts a graph to its second output, the plan: the same frames for the same feeds and no audio,
+    kept beside the graph and made again only when the graph is newer; `_planner` opens it for a graph whose file
+    it knows. THE CONTROLS: a file that is no graph has none, and a graph with none plans by itself."""
+    import os
+
+    import numpy as np
+    import onnxruntime as ort
+    from backends.kokoro import PLAN, KokoroBackend
+
+    feeds = {"x": np.array([1.4, 0.3, 2.6], np.float32), "speed": np.ones(1, np.float32),
+             "dur_scale": np.array([1.5, 0.0, 1.0], np.float32), "rest_floor": np.array([0.0, 4.0, 0.0], np.float32)}
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "toy.onnx"
+        _toy_graph(path)
+        ok(KokoroBackend._patch(path), "a patched graph")
+        full = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+        plan = KokoroBackend._plan_graph(path, KokoroBackend._options())
+        kept = path.with_name("toy" + PLAN)
+        ok(plan is not None and kept.is_file(), "cut to its plan, kept beside it", kept.name)
+        eq([o.name for o in plan.get_outputs()], ["durations"], "the plan is all it makes")
+        eq(plan.run(None, feeds)[-1].tolist(), full.run(None, feeds)[1].tolist(), "the same frames for the same feeds")
+        eq(plan.run(None, feeds)[-1].tolist(), [2.0, 4.0, 3.0], "scaled, and an id scaled away floored at what it is told")
+        made = kept.stat().st_mtime_ns
+        KokoroBackend._plan_graph(path, KokoroBackend._options())
+        eq(kept.stat().st_mtime_ns, made, "made once")
+        os.utime(path, ns=(made + 10**9, made + 10**9))
+        KokoroBackend._plan_graph(path, KokoroBackend._options())
+        ok(kept.stat().st_mtime_ns > made, "and again when the graph is newer")
+        k = KokoroBackend()
+        k._paths[id(full)] = path
+        eq([o.name for o in k._planner(full).get_outputs()], ["durations"], "a graph whose file is known plans by its cut")
+        junk = Path(td) / "junk.onnx"
+        junk.write_bytes(b"not a graph")
+        eq(KokoroBackend._plan_graph(junk, KokoroBackend._options()), None, "CONTROL: a file that is no graph has none")
+        other = _Session()
+        ok(k._planner(other) is other, "CONTROL: a graph with no cut plans by itself")
 
 
 @check

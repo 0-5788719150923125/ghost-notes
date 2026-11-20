@@ -170,6 +170,7 @@ Self-contained generators a scene composes rather than hand-models - each one sa
 - [`contour.gd`](../src/geometry/contour.gd) **Contour** - isolines out of a sampled field, and the vocabulary a technical sheet is annotated with.
 - [`crystal.gd`](../src/geometry/crystal.gd) **Crystal** - a bank of snow crystals, generated once from sampled morphology.
 - [`eye_body.gd`](../src/geometry/eye_body.gd) **EyeBody** - a real-3D human eyeball, drawn through a `Lens3D` with a real light.
+- [`fanfold.gd`](../src/geometry/fanfold.gd) **Fanfold** - continuous paper as it leaves a printer and folds itself onto its heap: a chain of points in the plane the paper travels in (x out from the slot, y up, meters), stiff along each panel and soft at the perforation between two panels, where it was folded and still leans to fold - one way, then the ...
 - [`field.gd`](../src/geometry/field.gd) **Field** - a composable procedural scalar field; the universal "texture / modulation".
 - [`filament.gd`](../src/geometry/filament.gd) **Filament** - an organic growing path: root, tendril, lightning, or thread.
 - [`geometry.gd`](../src/geometry/geometry.gd) **Geo** - small reusable polygon helpers (area, centroid, convex split, fracture, footprints).

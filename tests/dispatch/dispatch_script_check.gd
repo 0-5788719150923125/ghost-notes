@@ -10,8 +10,9 @@ extends SceneTree
 ##   none open while a phone is at the ear through it (somebody in the caller's room); a voice with no phone on the desk,
 ##   with none at the ear, on the receiver; `heard:` after a cue says outright (controls: the cashier at Aisle's ear is not
 ##   on the receiver; a voice with a phone not open is warned of and heard in the room);
-## - what is said: typed words are said, panels and pages and texts never; a line in capitals is said in sentence case
-##   (control: small letters keep their capitals); sentences end at `.`, `!`, `?`, never at a comma; no fence or desk mark
+## - what is said: typed words are said, panels and pages and texts never; a line in capitals is said in sentence case, a
+##   block with no capital its sentences raised (controls: a block of both keeps its capitals; as typed, a small block is one
+##   sentence); sentences end at `.`, `!`, `?`, never at a comma; no fence or desk mark
 ##   reaches the voice, and the planned words are the desk's spoken words ([ReadingPlan]);
 ## - rests: every action that takes time leaves the voice a rest, the voice opens on a breath, two pings a hesitation apart
 ##   keep it between them; a walk is a moving and a ping, a beat each; a reply is the next words typed into the phone that
@@ -23,7 +24,9 @@ extends SceneTree
 ##   with none, the panel is read), `clear`, the body scrolling past sixteen rows, a command that opens nothing an INVALID
 ##   OPTION and a warning, a strike taking the typed line off the glass, a print of what was typed (with none, the panel up); a
 ##   typed line naming an option chooses it - typed at the prompt, that row in inverse, read and thought over first, the camera
-##   held on it after (the control: a line naming none is typed into the body);
+##   held on it after (the control: a line naming none is typed into the body); `select:` moves a bar in inverse over the
+##   panel's cells with the arrow keys, down the first column then the second, Enter opening the panel written next, the bar
+##   kept where it stopped on a kept panel (the control: a label naming no cell is warned of and does nothing);
 ## - redacted words on the glass are themselves in the private plane, each character one, drawn back with their columns; a
 ##   command types them a key each; a run wraps whole (control: plain words wrap between them); on a said line they are
 ##   warned of and neither shown nor said;
@@ -107,6 +110,14 @@ func _init() -> void:
 	var kept := DispatchScript.said_of("22:51. Target left, IT watching")
 	_ok(cased == "[A] Prevent this. [B] Contain it. [D]" and kept == "22:51. Target left, IT watching",
 		"a block in capitals said in sentence case, its named letters kept (the control: a block with small letters keeps its capitals: %s / %s)" % [cased, kept])
+	# a block with no capital has its sentences raised, so the voice and the captions part it into its sentences (the control:
+	# as typed, a small letter after a full stop runs on, the whole block one sentence)
+	var typed_small := "they say he was ahead of his time. he wasn't ahead of anything.\nnobody is behind? i'm not. i know."
+	var raised := DispatchScript.said_of(typed_small)
+	var raised_parts := Phonemes.parse(raised).size()
+	var run_on := Phonemes.parse(" ".join(typed_small.split("\n"))).size()
+	_ok(raised == "They say he was ahead of his time. He wasn't ahead of anything. Nobody is behind? I'm not. I know." and raised_parts == 5 and run_on == 1,
+		"a block with no capital is said with its sentences raised, five sentences (the control: as typed, %d) - %s" % [run_on, raised])
 	# where a sentence ends, though the spoken words have lost their punctuation (a ping holds the radar to one): at `.`, `!` or `?`
 	# (a quote after it kept) and at a paragraph's end, never at a comma (control)
 	var ends := DispatchScript.sentence_ends({"spoken": PackedStringArray(["one", "two", "three", "four", "five", "six", "seven"]),
@@ -245,6 +256,127 @@ func _init() -> void:
 		and DispatchTerminal.choice_row(pty["glass"], "ONE.") < 0,
 		"a typed [D] under its option chooses it - typed at the prompt, that row in inverse, read and thought over first (%.1f s), held after - the control: ONE. is typed into the body (%s)"
 		% [float(psess["rest"]), str(prows["chosen"])])
+	# said lines one straight after another in one voice are one passage: one action typed on over its line breaks, one
+	# paragraph read through, one rest before its first words (the controls: a line after a mark, a line in another voice
+	# and a line naming an option each stand alone; a strike takes the passage's last line off alone)
+	var page := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```terminal\n> m\npanel: MIRROR\n"
+		+ "type: they say he was ahead of his time.\ntype: we line them up by year.\ntype: nobody is first.\n<!-- static: 1 -->\n"
+		+ "type: nobody is behind.\ntype (Council): FIRST.\n```\n\nSaid.\n\n```terminal\n> f\npanel: form = FORM 7\n"
+		+ "    [A] DID NOT NOTICE\n    [D] ALL OF THE ABOVE\ntype: ONE MORE.\ntype: [D]\n```\n\nThen.\n\n"
+		+ "```terminal\ntype: kept line.\ntype: taken back.\nstrike\n```\n\nEnd.\n")
+	var gacts: Array = page["actions"]
+	var typed_texts: Array = gacts.filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "type").map(
+		func(a: Dictionary) -> String: return String(a["text"]))
+	var passage: Dictionary = gacts[_nth(gacts, "type", 0)]
+	var speakable := String(page["speakable"])
+	var g_strike: Array = gacts.filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "strike")
+	_ok(String(passage["text"]) == "they say he was ahead of his time.\nwe line them up by year.\nnobody is first."
+		and int(passage["to"]) - int(passage["from"]) == 17 and (passage["spans"] as Array).size() == 17
+		and speakable.contains("They say he was ahead of his time. We line them up by year. Nobody is first.\n\n")
+		and float(passage["rest"]) < DispatchScript.TYPE_LEAD + 2.0,
+		"three said lines in a row are one passage, typed on and read through, one rest before it (%s; %.1f s)"
+			% [str(typed_texts), float(passage["rest"])])
+	_ok(typed_texts.size() == 7 and typed_texts[1] == "nobody is behind." and typed_texts[2] == "FIRST." and typed_texts[3] == "ONE MORE."
+		and typed_texts[4] == "[D]" and typed_texts[5] == "kept line." and typed_texts[6] == "taken back."
+		and g_strike.size() == 1 and String(gacts[int(g_strike[0]["block"])]["text"]) == "taken back.",
+		"the controls: a line after a mark, one in another voice and one naming an option stand alone, a strike takes the last line alone (%s)"
+			% str(typed_texts))
+	# read: the other side's typing, read aloud behind the keys as one passage, never printed or struck (the control: a type:
+	# line beside it is printed; read and type lines in a row stay two passages)
+	var mirror := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```terminal\n> m\npanel: MIRROR\n"
+		+ "read: nobody is first.\nread: nobody is behind?\ntype: logged.\nprint\nread: one more.\nstrike\n```\n\nEnd.\n")
+	var macts: Array = mirror["actions"]
+	var mread: Dictionary = macts[_nth(macts, "type", 0)]
+	var mprint: Dictionary = macts[_nth(macts, "print", 0)] if _nth(macts, "print", 0) >= 0 else {}
+	var mstrike: Dictionary = macts[_nth(macts, "strike", 0)] if _nth(macts, "strike", 0) >= 0 else {}
+	var mprinted := str(mprint.get("lines", ""))
+	_ok(String(mread["text"]) == "nobody is first.\nnobody is behind?" and bool(mread.get("theirs", false))
+		and String(mirror["speakable"]).contains("Nobody is first. Nobody is behind?") and int(mread["to"]) - int(mread["from"]) == 6
+		and mprinted.contains("logged.") and not mprinted.contains("nobody") and String(macts[int(mstrike.get("block", 0))]["text"]) == "logged.",
+		"read: lines are read aloud as one passage, never printed or struck; the control: the type: line beside them is (%s; %s)"
+			% [mprinted, str(mirror["warnings"])])
+	# a block's last key: lines that the paragraph straight after it says are typed ahead of its words: out of the silent
+	# block, each word said anchored to its place in the paragraph, what is typed before or past them carried along (the
+	# controls: a picture between, or a paragraph saying something else, leaves the line in the block, typed before the voice)
+	var key_line := "key: HIM: there was a man in a bathrobe at the end of the aisle. I used to get angry. if you can see the rot, you can see it.\n"
+	var said_para := "There was a man in a bathrobe at the end of the aisle. I used to get angry.\n"
+	var keyed_doc := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```terminal\n> m\npanel: MIRROR | HIS SCREEN\n" + key_line
+		+ "```\n\n" + said_para)
+	var kacts: Array = keyed_doc["actions"]
+	var ksess: Dictionary = kacts[_nth(kacts, "session", 0)]
+	var kty: Dictionary = kacts[_nth(kacts, "type", 0)] if _nth(kacts, "type", 0) >= 0 else {}
+	var kspans: Array = kty.get("spans", [])
+	var kspoken: PackedStringArray = keyed_doc["spoken"]
+	var keyed_ops := (ksess["ops"] as Array).filter(func(o: Dictionary) -> bool: return String(o["op"]) == "key").size()
+	_ok(keyed_ops == 0 and bool(kty.get("theirs", false)) and kspans.size() == 18 and kspoken[int(kspans[0]["word"])] == "there"
+		and int(kspans[0]["c0"]) == 0 and kspoken[int(kspans.back()["word"])] == "angry" and int(kty["to"]) == kspoken.size()
+		and int(kspans.back()["c1"]) < String(kty["text"]).length() and String(keyed_doc["speakable"]).count("bathrobe") == 1,
+		"a key: line the paragraph after it says is typed ahead of those words, its prefix and its unsaid end carried along (%d key steps left, %d words anchored)"
+			% [keyed_ops, kspans.size()])
+	var pictured := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```terminal\n> m\npanel: MIRROR | HIS SCREEN\n" + key_line
+		+ "```\n\n<!-- image (full): an aisle -->\n\n" + said_para)
+	var other := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```terminal\n> m\npanel: MIRROR | HIS SCREEN\n" + key_line
+		+ "```\n\nHe has never written that down before tonight.\n")
+	var stays := func(d: Dictionary) -> bool:
+		var acts: Array = d["actions"]
+		return _nth(acts, "type", 0) < 0 and (acts[_nth(acts, "session", 0)]["ops"] as Array).filter(
+			func(o: Dictionary) -> bool: return String(o["op"]) == "key").size() == 1
+	_ok(stays.call(pictured) and stays.call(other),
+		"the controls: a picture between the block and the paragraph, or a paragraph saying something else, leaves the key: line in the block")
+	# lines drawn onto a panel already up are read before the next key, silently (the controls: a wait: says how long instead;
+	# with nothing drawn the key follows at once)
+	var answer := "show: MACHINE: That's a generous way to see them. Most of the people around you tonight were buying groceries. Get some sleep."
+	var up_glass: Dictionary = DispatchTerminal.compile(PackedStringArray(["panel: MIRROR | HIS SCREEN"]), DispatchTerminal.blank(),
+		DispatchTerminal.config_of(""), PackedStringArray())["glass"]
+	var key_at := func(block: Array) -> float:
+		var r := DispatchTerminal.compile(PackedStringArray(block), up_glass, DispatchTerminal.config_of(""), PackedStringArray())
+		var shown_by := 0.0
+		var key_t := -1.0
+		for o in r["ops"]:
+			if String(o["op"]) == "key":
+				key_t = float(o["t"])
+			elif key_t < 0.0:
+				shown_by = float(o["t"])
+		return key_t - shown_by
+	var digest: float = key_at.call([answer, "HOW DID IT DO?    1 BAD    2 FINE    3 GOOD", "key: HIM: 3"])
+	var held_1: float = key_at.call([answer, "wait: 1", "key: HIM: 3"])
+	_ok(digest >= DispatchTerminal.READ_LEAST + DispatchTerminal.READ_DRAWN * 20.0 and digest <= DispatchTerminal.READ_DRAWN_MOST + 0.5
+		and held_1 < DispatchTerminal.READ_LEAST + 0.5,
+		"an answer drawn onto a panel already up is read before it is answered (%.1f s; the control, wait: 1, %.1f s)" % [digest, held_1])
+	# a clause the voice puts in, or a word it leaves out, still says the line
+	var clause := DispatchScript.said_after(PackedStringArray("we line them up by year and put ourselves at the end".split(" ")),
+		PackedStringArray("we line them up by year the way his class did this afternoon and we put ourselves at the end with the machines".split(" ")))
+	_ok(clause.size() == 12 and (clause[6] as Vector2i) == Vector2i(6, 13) and (clause.back() as Vector2i) == Vector2i(11, 19),
+		"a clause the voice puts in still says the typed line, every typed word matched where it is said (%s)" % str(clause))
+	# select: the arrow keys move a bar over the cells, down the first column and then the second, a press an item, the cell
+	# in inverse; Enter opens the panel written next; on a kept panel the bar is left where it stopped and starts there again,
+	# and with no panel after it there is no Enter (the control: a label naming no item is warned of and does nothing)
+	var sel := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```terminal\n> m\npanel: list = LIST\n"
+		+ "agent 1 .. working     agent 4 .. done\nagent 2 .. done        agent 5 .. working\nagent 3 .. working\n```\n\nThere.\n\n"
+		+ "```terminal\nselect: agent 4\npanel: AGENT 4\nDONE.\n```\n\nNow.\n\n```terminal\npanel: list\nselect: agent 2\n```\n\nThen.\n\n"
+		+ "```terminal\nselect: agent 9\n```\n\nEnd.\n")
+	var sacts: Array = sel["actions"]
+	var s_open: Dictionary = sacts[_nth(sacts, "session", 1)]
+	var s_back: Dictionary = sacts[_nth(sacts, "session", 2)]
+	var s_op: Dictionary = (s_open["ops"] as Array).filter(func(o: Dictionary) -> bool: return String(o["op"]) == "select")[0]
+	var s_opened: Dictionary = (s_open["ops"] as Array).filter(func(o: Dictionary) -> bool: return String(o["op"]) == "open")[0]
+	var s_presses: PackedFloat32Array = s_op["presses"]
+	var s_pad := (DispatchTerminal.COLUMNS - DispatchTerminal.WIDTH) / 2
+	var s_first := DispatchTerminal.rows_of(DispatchTerminal.at(s_open["glass"], s_open["ops"], s_presses[0] + 0.01), sel["terminal"])
+	var s_on := DispatchTerminal.rows_of(DispatchTerminal.at(s_open["glass"], s_open["ops"], float(s_op["enter"]) - 0.01), sel["terminal"])
+	var s_up := DispatchTerminal.at(s_open["glass"], s_open["ops"], INF)
+	var s_op2: Dictionary = (s_back["ops"] as Array).filter(func(o: Dictionary) -> bool: return String(o["op"]) == "select")[0]
+	var s_left := DispatchTerminal.rows_of(DispatchTerminal.at(s_back["glass"], s_back["ops"], INF), sel["terminal"])
+	_ok(s_presses.size() == 3 and Array(s_op["path"]) == [0, 1, 2, 3] and float(s_op["enter"]) > s_presses[2]
+		and float(s_opened["t"]) > float(s_op["enter"]) and (s_first["chosen"] as Vector3i) == Vector3i(DispatchTerminal.BODY_TOP + 1, s_pad, s_pad + 15)
+		and (s_on["chosen"] as Vector3i) == Vector3i(DispatchTerminal.BODY_TOP, s_pad + 23, s_pad + 38)
+		and String(DispatchTerminal.up(s_up)["name"]) == "AGENT 4",
+		"select: a press an item down the first column then the second, the cell in inverse, Enter opening the panel written next (%s, %s)"
+			% [str(s_op["path"]), str(s_on["chosen"])])
+	_ok(Array(s_op2["path"]) == [3, 2, 1] and float(s_op2["enter"]) < 0.0 and (s_left["chosen"] as Vector3i) == Vector3i(DispatchTerminal.BODY_TOP + 1, s_pad, s_pad + 15)
+		and _nth(sacts, "session", 3) < 0 and str(sel["warnings"]).contains("select: no item begins agent 9"),
+		"select: on a kept panel the bar starts where it was left, no Enter with no panel after it; the control: agent 9 is warned of and does nothing (%s, %s)"
+			% [str(s_op2["path"]), str(sel["warnings"])])
 	# a series key; set: straight after the panel is come back to, the row is there as the panel is drawn, never typed again
 	# (the control: on a panel that has been up a while, it is changed in place); {N}: a line part-drawn
 	var again: Dictionary = actions[_nth(actions, "session", 2)]

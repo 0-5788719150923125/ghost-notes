@@ -1,6 +1,6 @@
 {
 	"name": "the printer",
-	"line": "A beige dot-matrix printer, its platen knob, its head on its rail.",
+	"line": "A beige dot-matrix printer, its platen knob, its head on its rail, a dark paper rest leaning back off its top.",
 	"thing": {
 		"name": "the printer",
 		"parts": [
@@ -40,6 +40,27 @@
 					-3.0
 				],
 				"material": "smoked"
+			},
+			{
+				"shape": "box",
+				"size": [
+					38.0,
+					0.5,
+					18.0
+				],
+				"round": 0.2,
+				"at": [
+					0.0,
+					16.9,
+					-16.1
+				],
+				"turn": [
+					36.0,
+					0.0,
+					0.0
+				],
+				"material": "dark",
+				"name": "paper rest"
 			},
 			{
 				"shape": "lathe",

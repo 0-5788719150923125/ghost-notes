@@ -426,7 +426,8 @@ static func _away(p: Vector3) -> Vector3:
 
 ## A root under the desk's end at [param side] (-1 left, 1 right): down from the ceiling beside the end, along under its
 ## edge toward the chair, down its front corner to the floor and out across it a way. Just outside the top's own edge, so
-## it clings to the desk and never goes into it.
+## it clings to the desk and never goes into it; where what fills the air by the desk stands against that end (the printer's
+## paper hanging down it), it comes down in front of that and clings from there ([method _in_front]).
 func _under_root(r: RandomNumberGenerator, side: float, out: Array) -> void:
 	var y := DispatchSet.DESK_Y
 	var x := side * (DispatchSet.DESK_W * 0.5 + 0.035)
@@ -434,6 +435,10 @@ func _under_root(r: RandomNumberGenerator, side: float, out: Array) -> void:
 	var pts := PackedVector3Array()
 	var top := Vector3(side * r.randf_range(1.4, 1.9), DispatchSet.CEILING, r.randf_range(-0.9, -0.35))
 	var a := Vector3(x, y - 0.055, r.randf_range(-0.5, -0.25))
+	var front := _in_front(Vector2(a.x, a.y), r0)
+	if front > a.z:
+		a.z = front
+		top.z = maxf(top.z, front - 0.1)
 	for i in 26:
 		var u := float(i) / 25.0
 		var p := top.lerp(a, u)
@@ -464,6 +469,17 @@ func _under_root(r: RandomNumberGenerator, side: float, out: Array) -> void:
 	for i in pts.size():
 		rad.append(lerpf(r0, TIP, pow(float(i) / float(pts.size() - 1), 0.85)))
 	out.append({"points": pts, "radii": rad})
+
+
+## How far toward the chair (z) a root [param r] thick running along z at [param at] (x, y) keeps clear of what fills the air by
+## the desk ([member _clear]); -INF where none of it is there.
+func _in_front(at: Vector2, r: float) -> float:
+	var most := -INF
+	for b in _clear:
+		var box := (b as AABB).grow(r + CLEAR_GAP)
+		if at.x >= box.position.x and at.x <= box.end.x and at.y >= box.position.y and at.y <= box.end.y:
+			most = maxf(most, box.end.z)
+	return most
 
 
 ## The [param k]th root on the desk: down from the ceiling behind the desk to its far edge (or an end) at a gap between

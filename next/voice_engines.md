@@ -613,62 +613,97 @@ across them, and the whispering pack's goes under hearing. It is the call's end.
 paragraph a call ("Rests and fades", above), so a sentence's end is seldom the end of what it was taught; the
 reading sends a sentence a call, and every sentence ends as a call does.
 
-**Built** (`AFTER_WORDS`, `_after`, `_cut_after`, `_plan_to` in backends/kokoro.py): a sentence ending on a
-full stop, an exclamation or a question mark is followed in its call by a word-space and its own first word, in
-the style of its own token count, and the take is cut in the rest the model makes at the stop.
+**Built** (`AFTER_WORDS`, `_after`, `_told`, `_cut_after`, `_plan_to` in backends/kokoro.py): a sentence ending
+on a full stop, an exclamation or a question mark is followed in its call by a word-space and its own first word,
+in the style of its own token count and told the plan it has alone, and the take is cut in the rest the model
+makes at the stop.
 
+- **Its pace is the one it has alone.** Kokoro plans a sentence that is followed faster: left to its own plan,
+  Nicole's words before the last are a median 0.89 of their time alone (0.64 to 1.01; "Nothing doesn't wear a red
+  jacket." 1.42 s to 0.91), worst at four to eight words, and a short vowel loses a frame ("It's his mother." at
+  Pace 1.3: "his" ɪ2 to ɪ1, heard "It's a mother."). So the sentence is planned alone first, by the graph cut to
+  its plan (`_planner`, `_plan_graph`: `model_plan.onnx` beside the graph, a sixth of its size, 2% of a call's time,
+  the same frames), and the call is told it: every id before the last sound its frames (scaled away, floored at
+  them). The last sound and the stop are the call's own: it plans the stop's rest on them, and frames forced on
+  them are voiced (held to their frames alone, "Patient." is followed by 0.3 s of a whispered vowel 14 to 25 dB
+  under its peak, and "There." holds its r: heard "Patient-ah", "There-ah").
+- **But not its holds.** Read alone, a sentence is held mid-way where followed it is not: "The subject means that's
+  only how it looks from here." holds subject's t 8 frames, means' z 9 and that's s 7, heard as hesitations;
+  followed, 4, 5 and 3. In 86 of Nicole's sentences there are 38 such holds alone (a sound before the last word,
+  6 frames or more, no mark after it), in 31 sentences, and 14 in 13 followed. So the sentence is planned followed
+  too, and no sound before the last is told more than `HOLD_OVER` (a frame) past its plan followed: a frame's
+  difference, the pace or a short vowel, is the sentence's own, and a hold before a mark keeps its length (the rest
+  there is the Pause dial's). By the plan: 22 holds in 16 sentences, the words before the last 0.99 of their time
+  alone (0.84 to 1.00), where left to the followed plan they are 0.83 (0.61 to 1.00).
 - **The rest is found in the waveform.** The plan gives a stop's rest to the sound before it (a last "m" of 30
   frames is the m and 0.6 s of silence), so the cut is looked for from the start of the last sound to the start of
   the word after: the longest stretch under `AFTER_QUIET` (-46 dB re the peak), which a stop's closure is never.
   The cut is `SEAM_TAIL` past the last moment over `SEAM_QUIET`, never before the rest starts (a faint last hum or
   hiss is whole), and the rest must run `SEAM_LEAD` past it. The plan is cut with the take (`_plan_to`).
-- **Where the model reads on, the sentence is read alone.** After a sentence of a word or two it rests 40 to 75
-  ms at the stop, the length of a closure, and no cut is safe: that call is thrown away and the sentence read as
-  before (14 of 90: every one-word sentence, 8 of 10 of two words, 2 of 10 of three, none longer). Flooring the
-  word-space after the stop makes a rest in some and holds the last vowel through it in others.
+- **Where the model reads on, the sentence is read alone.** After a sentence of a word or two Nicole rests 40 to 75
+  ms at the stop, the length of a closure: where no rest holds the seam's ends, that call is thrown away and the
+  sentence read alone (14 of 90: every one-word sentence, 8 of 10 of two words, 2 of 10 of three, none longer). A
+  sentence of one word is read alone from the start (`ALONE_WORDS`). Flooring the word-space after the stop makes
+  a rest in some and holds the last vowel through it in others.
 - **One word after.** With two, more sentences are read on (18 of 90) at more cost; with four, more again. The
   last word is as loud with one as with two.
 - **What trails off or breaks off is read to the call's end**: a sentence ending on an ellipsis, a dash, a colon
   or no mark is sent alone.
 - **A take ends `SEAM_TAIL` after its last sound.** Read alone, a last sound that fades under hearing still holds
   its planned frames, and `_trim_ends` cuts only past the plan: Nicole's takes ran a median 0.43 s (0.20 to 0.75)
-  past the last moment over `SEAM_QUIET`. Cut in the rest, a take ends where the seam assumes, and the rest
-  between two sentences is the Pause dial's.
+  past the last moment over `SEAM_QUIET`. Cut in the rest, a take ends where the seam assumes (a median 0.24 s
+  shorter), and the rest between two sentences is the Pause dial's.
 - **Takes kept before are said again** (`READS` on every Kokoro row, which keys `TakeCache` and a take's `sig`).
 
 **Measured, 90 sentences of the note in Control's voice** (each read alone and as built, the take as the app
 gets it; a word's level is its loudest 10 ms against the median of its sentence's other words):
 
-| | alone | a word after |
-|---|---|---|
-| last word under -10 dB | 12 | 4 |
-| under -15 dB | 3 | 0 |
-| the model's time | 203 s | 255 s (25% more, a third of it on sentences read on) |
+| | alone | a word after, its own plan | as built |
+|---|---|---|---|
+| last word under -10 dB | 12 | 4 | 6 |
+| under -15 dB | 3 | 0 | 1 |
+| read on | | 14 | 14 (4 of them one word, read alone) |
+| words before the last, against alone | | 0.89 (0.64 to 1.01) | 1.00 (0.87 to 1.04) |
 
 **And 51 of its 102 sentences that end on "it", "him", "them", "me" or "you"**, the same way:
 
-| | alone | a word after |
-|---|---|---|
-| last word, median | -12.0 dB | -7.6 dB |
-| under -10 dB | 34 | 14 |
-| under -15 dB | 11 | 2 |
-| under -20 dB | 5 | 1 |
+| | alone | a word after, its own plan | as built |
+|---|---|---|---|
+| last word, median | -12.0 dB | -7.6 dB | -7.7 dB |
+| under -10 dB | 34 | 14 | 13 |
+| under -15 dB | 11 | 2 | 4 |
+| under -20 dB | 5 | 1 | 0 |
+| words before the last, against alone | | 0.93 (0.73 to 1.00) | 1.00 (0.91 to 1.03) |
 
-Louder by 3 dB or more in 33, quieter by as much in 2 (both still over -12). In Aisle's and Van's voices (Puck and
-Michael mixed with Nicole; 24 sentences each) the last word's median goes from -2.5 to -0.6 dB and from -1.0 to
-+0.4, nothing is read on, and the model's time is 13 to 20% more. Whisper medium.en hears the same words either
-way in all but the 50 ms words under "Open", so it counts only a word wholly gone: the sentence above, alone.
+The model's time: a plan alone is 2% of a call, and a sentence read on is read twice; with a word after and its
+own plan Nicole's 90 took 25% more than alone. As built, the words before the last are within 3% of their time
+alone in 54 of 74 and 40 of 50, shorter by more where a hold is cut (18 and 10), and 3 to 4% longer in 2: not the
+plan but the pitch arc's playback rate (piper.py `_nominal`), measured over the whole take, and a take read alone
+holds the silence its last sound was planned with. In Aisle's and Van's voices (Puck and Michael mixed with Nicole; 24 sentences
+each, left to their own plan) the last word's median goes from -2.5 to -0.6 dB and from -1.0 to +0.4, and nothing
+is read on. Whisper medium.en hears the same words either way in all but the 50 ms words under "Open", so it
+counts only a word wholly gone: the sentence above, alone; and "his" in "It's his mother." at Pace 1.3, left to
+its own plan. Whisper base.en hears the 51 word for word in 44 read alone, 42 left to their own plan, 45 as
+built; and the 90 in 72 read alone and 72 as built.
 
 The stream's window follows what a take costs (`ReadingStream.depth`). Listening: `dist/voice_ab/last_word/`
-(`turn_it_kept.wav`, the take as it was kept; `turn_it_after.wav`, as built).
+(`turn_it_kept.wav`, a take read alone; `turn_it_after.wav`, as built) and `last_word/his/` (`mother_kept.wav` and
+`mother_own_plan_pace13.wav`, followed and left to its own plan; `mother_built_pace13.wav` and `mother_built.wav`,
+as built at Pace 1.3 and 1.2), `last_word/one/` (`patient_ah.wav`, `there_ah.wav`, `delivered_ah.wav`, their
+last sound and stop held to their frames alone; `*_built.wav`, as built) and `last_word/gaps/`
+(`subject_alone.wav`, read alone, its holds whole; `subject_first_fix.wav`, followed and left to its own plan;
+`subject_built.wav`, as built).
 
-Gate: `hosts/voice/test_kokoro.py` (12: the ids sent, the style, the take and every time equal to the sentence
-read alone; controls: a model that reads on, a sentence ending on no full stop, a rest too short, a closure, a
-faint last sound).
+Gate: `hosts/voice/test_kokoro.py` (12: the plan made alone and followed and told up to the last sound, a hold
+only alone cut to `HOLD_OVER` past the plan followed, the last sound and the stop the call's, the ids sent, the
+style, the take and every time equal to the sentence read alone on a fake that hurries what is followed; the plan
+graph's frames the graph's; controls: the fake does hurry, a hold before a mark kept, a model that reads on, a
+sentence of one word, one ending on no full stop, a graph that takes no plan, a rest too short, a closure, a faint
+last sound).
 
-**Open:** the ear, on the last words and on the shorter rest between sentences. A word of one frame a sound
-inside a sentence ("to", "he" at Pace 1.2) is heard or not from one render to the next, with or without a word
-after: the pace's, not the call's end.
+**Open:** the ear, on the last words, the pace, the holds and the shorter rest between sentences. A word of one frame a sound
+inside a sentence ("to", "he" at Pace 1.2; "his" from Pace 1.35, where Nicole plans its vowel at one frame alone
+too) is heard or not from one render to the next, with or without a word after: the pace's, not the call's end.
 
 ### It comes out hot
 

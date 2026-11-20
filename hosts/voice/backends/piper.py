@@ -2290,6 +2290,10 @@ class PiperBackend(Backend):
         below `arpa` - the author still outranks it - and above the word-by-word
         transcription it exists to correct.
 
+        A script's `say:` mark may give IPA too, for a sound ARPAbet cannot spell
+        (a German ö): it arrives as `say` and outranks even `arpa`, which stays on
+        the token for ghost's own voice. It is said as written, in eSpeak's IPA.
+
         Whichever of the three a reading comes from, it is written out in the spelling
         THIS checkpoint was measured to render correctly before it leaves here (see
         vowel_probe.py). That applies to the authored override too, and deliberately:
@@ -2310,7 +2314,7 @@ class PiperBackend(Backend):
         need = [
             i
             for i, t in enumerate(tokens)
-            if not t.get("arpa") and not t.get("ipa") and str(t.get("text", "")).strip()
+            if not t.get("say") and not t.get("arpa") and not t.get("ipa") and str(t.get("text", "")).strip()
         ]
         espoke: dict[int, str] = {}
         if need and phonemizer == "espeak":
@@ -2337,7 +2341,10 @@ class PiperBackend(Backend):
         # Cost: a few tens of ms of silence at the head, which the chunk seam provides anyway.
         out: list = [(" ", 0)] * LEAD_IN_SPACES
         for i, t in enumerate(tokens):
-            if t.get("arpa"):
+            if t.get("say"):
+                for ch in written(str(t["say"])):
+                    out.append((ch, i))
+            elif t.get("arpa"):
                 got = "".join(
                     ch for ch, _ in arpabet.to_symbols([str(x) for x in t["arpa"]])
                 )

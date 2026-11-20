@@ -92,6 +92,11 @@ class_name DispatchScript
 ## kind): commands typed on the command line, panels kept by id that come back as they last stood, lines typed into
 ## them, rows changed in place, waits and alerts, the desk's marks at their points. A block is silent and the voice waits
 ## for it, except a `type:` line, typed and said behind the keys as the room's words; `type (Name):` says it in that voice.
+## A block's last `key:` lines that the paragraph straight after it opens by saying are typed ahead of its words the same
+## way ([method said_keys]): the typing is never all done before the voice that reads it begins. A `read:` line is typed
+## by the other side of the glass (the target, live on the mirror) and read aloud by the room the same way; it is not the room's typing, so a print or a strike passes it over. Said lines of one kind one straight after
+## another in one voice are one passage: the keys run on over each line's end, one to three words ahead of the voice at an
+## even pace ([constant AHEAD_MOST]), and the voice reads it through as a page is read, never stopping for a line.
 ## The glass is simulated through the whole note, so each action at the terminal carries the glass it starts from.
 ##
 ## A voice with no phone on the desk comes in on the receiver ([constant RECEIVER]): its paragraphs (unless a phone is at
@@ -243,14 +248,23 @@ const PRINT_COLUMNS := 80
 ## The terminal: before a said line, the camera there and the cursor waiting; the screen saver coming on.
 const TYPE_LEAD := 1.0
 const SLEEP := 1.2
-## A said line is typed behind its keys, as a letter is read behind its pen ([constant LetterScript.AHEAD_WORDS]): a
-## word is typed while the voice says the one this many before it, so the voice reads what is already on the screen and
-## goes on unbroken. The first words are typed at a typist's pace ([constant DispatchTerminal.KEY_EACH]) in the rest
-## before them, each after at most this quick a key, never still being typed when it is said. A reply on a phone is typed
-## as it is said, its keys this long before each word.
+## A said line is typed ahead of its voice, as a letter is written ahead of its reading: its first AHEAD_WORDS words in
+## the rest before the voice at a typist's pace ([constant DispatchTerminal.KEY_EACH]); then the keys at least
+## AHEAD_LEAST and at most AHEAD_MOST words ahead of the word being said, at the evenest pace that band allows
+## ([method PenPace.taut]), so the voice reads what is already on the glass and the keys neither rush a short word nor
+## crawl through a pause. A reply on a phone is typed as it is said, its keys this long before each word.
 const AHEAD_WORDS := 2
-const KEY_QUICK := 0.035
+const AHEAD_LEAST := 1
+const AHEAD_MOST := 3
 const REPLY_AHEAD := 0.35
+## A block's last `key:` lines that the paragraph straight after it says are typed ahead of its words ([method said_keys]):
+## said where at least SAID_LEAST of their words are, in order, the first within SAID_OPENS words of the line's start and the
+## paragraph's, no more than SAID_GAP words parting two on either side (a word left out, a clause put in).
+const SAID_LEAST := 3
+const SAID_OPENS := 3
+const SAID_GAP := 8
+## What such a line types past the words said is typed on at the pace it was typed at, no quicker than this a key (s).
+const KEY_LEAST := 0.04
 ## A strike: the writer decides (the letter's), then backspaces at this many characters a second, held to at most.
 const DECIDE := 3.0
 const DECIDE_MOST := 30.0
@@ -397,8 +411,8 @@ static func _logical_lines(src: String) -> PackedStringArray:
 
 ## The note as blocks, in order: `{kind: "para", text}`, `{kind: "speaker", name}`, `{kind: "heard", band}`, `{kind:
 ## "voice", text}` (an own-line hesitation or delivery), `{kind: "mark", verb, arg}`, `{kind: "image", where, prompt}`; and
-## from a terminal block `{kind: "run", lines}` (its silent steps) and `{kind: "type", text, voice}` (a said line), its
-## marks as marks. Notes are dropped.
+## from a terminal block `{kind: "run", lines}` (its silent steps) and `{kind: "type", text, voice, theirs}` (a said
+## passage, `theirs` a `read:` one), its marks as marks. Notes are dropped.
 static func blocks(body: String) -> Array:
 	var src := Manuscript.strip_frontmatter(body)
 	var out: Array = []
@@ -564,28 +578,133 @@ static func unredacted(line: String) -> Dictionary:
 	return {"text": out, "spans": spans}
 
 
-## What the voice says of a typed block [param shown]: its lines run together, and a block set all in capitals said in
-## sentence case (every word of two capitals or more lowered, a sentence's first raised again), because the voice reads
-## a short word in capitals as an initialism ([constant TextNorm.INITIALISMS]). A block with any small letter is said as
-## written, its capitals kept (an initialism in a log line is one); a named letter, `[D]`, stays the letter.
+## What the voice says of a typed block [param shown], and so what its captions show: its lines run together, and a block
+## set all in capitals said in sentence case (every word of two capitals or more lowered, a sentence's first raised again),
+## because the voice reads a short word in capitals as an initialism ([constant TextNorm.INITIALISMS]). A block with no
+## capital at all (typed as a person types to themselves) has each sentence's first letter raised and `i` made `I`: a
+## small letter after a full stop continues the sentence ([method Phonemes._ends_sentence]), so as typed it would be one
+## sentence to the voice and one caption too long to show. A block of both is said as written, its capitals kept (an
+## initialism in a log line is one); a named letter, `[D]`, stays the letter.
 static func said_of(shown: String) -> String:
 	var text := " ".join(shown.split("\n", false))
-	if text != text.to_upper():
+	var small := text == text.to_lower()
+	if not small and text != text.to_upper():
 		return text
 	var out := PackedStringArray()
 	var opens := true
 	for tok in text.split(" ", false):
 		var t := String(tok)
-		var letters := _rx("[A-Z]").search_all(t).size()
-		if letters >= 2 and not t.begins_with("["):
+		if small:
+			if _rx("^i(?:'[a-z]+)?[.,!?;:]*$").search(t) != null:
+				t = "I" + t.substr(1)
+			if opens:
+				t = _raised(t)
+		elif _rx("[A-Z]").search_all(t).size() >= 2 and not t.begins_with("["):
 			t = t.to_lower()
 			if opens:
-				var first := _rx("[a-z]").search(t)
-				if first != null:
-					t = t.substr(0, first.get_start()) + t[first.get_start()].to_upper() + t.substr(first.get_start() + 1)
+				t = _raised(t)
 		out.append(t)
 		opens = t.ends_with(".") or t.ends_with("!") or t.ends_with("?") or t.ends_with("]") or t.ends_with(":")
 	return " ".join(out)
+
+
+## [param t] with its first letter raised.
+static func _raised(t: String) -> String:
+	var first := _rx("[A-Za-z]").search(t)
+	if first == null:
+		return t
+	return t.substr(0, first.get_start()) + t[first.get_start()].to_upper() + t.substr(first.get_start() + 1)
+
+
+## [param glass] with the other side's typing [param shown] added under the panel up: never the room's line a strike takes off.
+static func _typed_theirs(glass: Dictionary, shown: String) -> Dictionary:
+	var kept: Variant = glass.get("last_typed", {})
+	var g := DispatchTerminal.typed(glass, shown, shown.length())
+	g["last_typed"] = kept
+	return g
+
+
+## A block's last `key:` lines (from [param lines], run [param bi] of [param all]) that the paragraph straight after it -
+## past a voice's cue - opens by saying ([method said_after]): `{at, text, spans, said}`, the line they begin on, the text as
+## the glass types it (each line wrapped at [param width], parted by line breaks), each word said with its characters
+## (`{c0, c1, word}`, `word` its place in the paragraph, the first from the text's start, a word's spaces after it with it),
+## and how many of the paragraph's words that runs through. {} where it says none of them or anything else comes between
+## (a picture: the typing stays where it is written, before it).
+static func said_keys(lines: PackedStringArray, all: Array, bi: int, width: int) -> Dictionary:
+	var at := lines.size()
+	while at > 0:
+		var m := _rx(DispatchTerminal.LINE_KIND).search(String(lines[at - 1]))
+		if m == null or m.get_string(1) != "key" or not m.get_string(2).is_empty():
+			break
+		at -= 1
+	if at == lines.size():
+		return {}
+	var j := bi + 1
+	while j < all.size() and String((all[j] as Dictionary)["kind"]) in ["speaker", "heard"]:
+		j += 1
+	if j >= all.size() or String((all[j] as Dictionary)["kind"]) != "para":
+		return {}
+	var typed := PackedStringArray()
+	for k in range(at, lines.size()):
+		var said := redacted(String(_rx(DispatchTerminal.LINE_KIND).search(String(lines[k])).get_string(3)).strip_edges())
+		typed.append("\n".join(DispatchTerminal.wrapped(said, width)))
+	var shown := "\n".join(typed)
+	var spans := typed_spans(shown)
+	var tokens := PackedStringArray()
+	for sp in spans:
+		tokens.append(TabletScript.norm(shown.substr(int(sp["c0"]), int(sp["c1"]) - int(sp["c0"])).strip_edges()))
+	var pairs := said_after(tokens, words_of(String((all[j] as Dictionary)["text"])))
+	if pairs.is_empty():
+		return {}
+	var out: Array = []
+	var c0 := 0
+	for pr in pairs:
+		var c1 := int((spans[(pr as Vector2i).x] as Dictionary)["c1"])
+		out.append({"c0": c0, "c1": c1, "word": (pr as Vector2i).y})
+		c0 = c1
+	return {"at": at, "text": shown, "spans": out, "said": (pairs.back() as Vector2i).y + 1}
+
+
+## Where typed words [param tokens] (normalized, [method TabletScript.norm]) are said in [param words] as they open:
+## `[Vector2i(token, word)]`, the longest match in order, kept from its start while no more than [constant SAID_GAP] words
+## part two matches on either side, and opening within [constant SAID_OPENS] words of both. [] for fewer than
+## [constant SAID_LEAST]: the words say something else.
+static func said_after(tokens: PackedStringArray, words: PackedStringArray) -> Array:
+	var n := tokens.size()
+	var m := mini(words.size(), n * 2 + SAID_GAP * 2)
+	if n == 0 or m == 0:
+		return []
+	var dp := PackedInt32Array()
+	dp.resize((n + 1) * (m + 1))
+	for i in range(n - 1, -1, -1):
+		for k in range(m - 1, -1, -1):
+			var here := i * (m + 1) + k
+			if tokens[i] == words[k]:
+				dp[here] = dp[(i + 1) * (m + 1) + k + 1] + 1
+			else:
+				dp[here] = maxi(dp[(i + 1) * (m + 1) + k], dp[i * (m + 1) + k + 1])
+	var pairs: Array = []
+	var i := 0
+	var k := 0
+	while i < n and k < m:
+		if tokens[i] == words[k] and dp[i * (m + 1) + k] == dp[(i + 1) * (m + 1) + k + 1] + 1:
+			pairs.append(Vector2i(i, k))
+			i += 1
+			k += 1
+		elif dp[(i + 1) * (m + 1) + k] >= dp[i * (m + 1) + k + 1]:
+			i += 1
+		else:
+			k += 1
+	if pairs.is_empty() or (pairs[0] as Vector2i).x > SAID_OPENS or (pairs[0] as Vector2i).y > SAID_OPENS:
+		return []
+	var kept: Array = [pairs[0]]
+	for q in range(1, pairs.size()):
+		var a: Vector2i = kept.back()
+		var b: Vector2i = pairs[q]
+		if b.x - a.x - 1 > SAID_GAP or b.y - a.y - 1 > SAID_GAP:
+			break
+		kept.append(b)
+	return kept if kept.size() >= SAID_LEAST else []
 
 
 ## Where each spoken word of a typed block is on the screen: `[{c0, c1}]`, one a word the voice says, the characters of
@@ -758,7 +877,7 @@ static func parse(body: String) -> Dictionary:
 					if open_image >= 0:
 						(spans[open_image] as Dictionary)["to"] = spoken.size()
 					spans.append({"kind": "image", "key": Manuscript.image_key(prompt), "prompt": prompt,
-						"from": spoken.size(), "to": -1, "blend": blend or _ends_at(spans, spoken.size())})
+						"from": spoken.size(), "to": -1, "blend": blend or _ends_at(spans, spoken.size()), "acts": actions.size()})
 					open_image = spans.size() - 1
 				else:
 					_act(actions, gap, pending, spoken.size(), _tell({"kind": "picture", "screen": where,
@@ -803,19 +922,35 @@ static func parse(body: String) -> Dictionary:
 				on_page = p
 				pages.append(pg)
 			"run":
-				var run := DispatchTerminal.compile(blk["lines"], glass, term, warnings)
-				if (run["ops"] as Array).is_empty():
-					continue
-				# a line typed straight after it is typed once the panel is read: the voice waits for the read too, and for a while
-				# longer where that line chooses one of the panel's options - it is thought over
-				var then_typed := bi + 1 < all.size() and String((all[bi + 1] as Dictionary).get("kind", "")) == "type"
-				var waits := float(run["len"]) if then_typed else float(run["rest"])
-				if then_typed and DispatchTerminal.choice_row(run["glass"], shown_of(String((all[bi + 1] as Dictionary)["text"]))) >= 0:
-					waits += DispatchTerminal.CHOICE_THINK
-				_act(actions, gap, pending, spoken.size(), {"kind": "session", "ops": run["ops"], "glass": glass}, waits,
-					maxf(float(run["len"]), waits))
-				glass = run["glass"]
-				ringing = ""
+				# its last key: lines, where the paragraph straight after says them, are typed ahead of those words instead
+				var keys := said_keys(blk["lines"], all, bi, int(term["width"]))
+				var lines: PackedStringArray = blk["lines"]
+				if not keys.is_empty():
+					lines = lines.slice(0, int(keys["at"]))
+				var run := DispatchTerminal.compile(lines, glass, term, warnings)
+				if not (run["ops"] as Array).is_empty():
+					# a line typed straight after it is typed once the panel is read: the voice waits for the read too, and for a
+					# while longer where that line chooses one of the panel's options - it is thought over
+					var then_typed := not keys.is_empty() or (bi + 1 < all.size() and String((all[bi + 1] as Dictionary).get("kind", "")) == "type")
+					var waits := float(run["len"]) if then_typed else float(run["rest"])
+					if keys.is_empty() and then_typed and DispatchTerminal.choice_row(run["glass"], shown_of(String((all[bi + 1] as Dictionary)["text"]))) >= 0:
+						waits += DispatchTerminal.CHOICE_THINK
+					_act(actions, gap, pending, spoken.size(), {"kind": "session", "ops": run["ops"], "glass": glass}, waits,
+						maxf(float(run["len"]), waits))
+					glass = run["glass"]
+					ringing = ""
+				if not keys.is_empty():
+					var shown := String(keys["text"])
+					var from := spoken.size()
+					var kspans: Array = keys["spans"]
+					for sp in kspans:
+						(sp as Dictionary)["word"] = from + int((sp as Dictionary)["word"])
+					var lead_c := int((kspans[mini(AHEAD_WORDS, kspans.size()) - 1] as Dictionary)["c1"])
+					var lead := TYPE_LEAD + DispatchTerminal.KEY_EACH * float(lead_c)
+					_act(actions, gap, pending, from, {"kind": "type", "text": shown, "from": from, "to": from + int(keys["said"]),
+						"spans": kspans, "glass": glass, "theirs": true}, lead, lead)
+					glass = _typed_theirs(glass, shown)
+					ringing = ""
 			"type":
 				var raw := String(blk["text"])
 				var voice := String(blk.get("voice", ""))
@@ -836,20 +971,24 @@ static func parse(body: String) -> Dictionary:
 				var from := spoken.size()
 				var ahead := TYPE_LEAD + DispatchTerminal.KEY_EACH * float(int((keyed[mini(AHEAD_WORDS, keyed.size()) - 1] as Dictionary)["c1"])) \
 					if not keyed.is_empty() else TYPE_LEAD
-				var typed_as := {"kind": "type", "text": shown, "from": from, "to": from + words.size(), "spans": keyed, "glass": glass}
+				var theirs := bool(blk.get("theirs", false))
+				var typed_as := {"kind": "type", "text": shown, "from": from, "to": from + words.size(), "spans": keyed, "glass": glass,
+					"theirs": theirs}
 				if heard == RECEIVER:
 					typed_as["heard"] = RECEIVER
 					typed_as["storm"] = storm
 				var chose := DispatchTerminal.choice_row(glass, shown) >= 0
-				glass = DispatchTerminal.typed(glass, shown, shown.length())
+				glass = _typed_theirs(glass, shown) if theirs else DispatchTerminal.typed(glass, shown, shown.length())
 				var i := _act(actions, gap, pending, from, typed_as, ahead, ahead)
 				_flush(speak, pending, who, heard, said_as, heard_as)
 				speak.append(voice_text)
 				spoken.append_array(words)
 				said_any = said_any or not words.is_empty()
 				gap = []
-				typed.append(i)
-				last_typed = i
+				# a read line is the other side's typing: the printer and a strike are the room's own
+				if not theirs:
+					typed.append(i)
+					last_typed = i
 				ringing = ""
 				# a choice stays in sight a while once it is made: the camera holds on the terminal before what follows
 				if chose:
@@ -1391,6 +1530,30 @@ static func key_times(text: String) -> PackedFloat32Array:
 	for c in text.length():
 		out[c] = (run + w[c] * 0.5) / maxf(total, 1e-6)
 		run += w[c]
+	return out
+
+
+## Where each key of [param text]'s characters [param c0] to [param c1] (a said word, [method typed_spans]) is struck in
+## the word's time, 0 to 1 of the way through (the middle of its key): each with a hand's give ([constant
+## DispatchTerminal.KEY_JITTER]), a space or line break [constant DispatchTerminal.SPACE_MORE] longer - drawn from the
+## text, so the same line is typed the same way.
+static func hand_times(text: String, c0: int, c1: int) -> PackedFloat32Array:
+	var n := maxi(c1 - c0, 0)
+	var w := PackedFloat32Array()
+	w.resize(n)
+	var total := 0.0
+	var seed := hash(text)
+	for k in n:
+		var ch := text[c0 + k]
+		w[k] = (1.0 + DispatchTerminal.KEY_JITTER * (DispatchSounds.hash01(seed, c0 + k) * 2.0 - 1.0)) \
+			* (DispatchTerminal.SPACE_MORE if ch == " " or ch == "\n" else 1.0)
+		total += w[k]
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var run := 0.0
+	for k in n:
+		out[k] = (run + w[k] * 0.5) / maxf(total, 1e-6)
+		run += w[k]
 	return out
 
 

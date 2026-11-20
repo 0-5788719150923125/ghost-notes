@@ -57,7 +57,9 @@ stands.
 
 The end: a sentence's end is not the call's. At the end of a call Kokoro lets the last word go, so a sentence
 that ends on a full stop is read with its own first word after it and the take cut in the rest the model makes
-at the stop (AFTER_WORDS, `_after`, `_cut_after`).
+at the stop (AFTER_WORDS, `_after`, `_cut_after`). What is followed is planned faster, so the sentence is planned
+alone first, by the graph cut to its plan (`_planner`), and the call is told that plan (`_told`) - but not the
+holds mid-sentence a sentence has only alone (HOLD_OVER).
 
 Not here: `noise_scale` and `noise_w` (the Tone's `noise` columns do nothing on these voices), F0 as an
 input (the arc and the Tone resample), Kokoro's own dwell at a mark (the pause figures are Piper's
@@ -124,7 +126,7 @@ PAD_ID = 0
 # How this backend reads a request, said on every voice's row (`voices`): a row keys the takes kept in its voice
 # (TakeCache), so raising it has every sentence kept before said again. Raised when the same request comes out
 # another take.
-READS = 2
+READS = 5
 
 LICENSE = (
     "Apache-2.0 (hexgrad/Kokoro-82M). Its training data includes synthetic audio from closed "
@@ -170,6 +172,8 @@ ACCENTS = {"US": "American", "GB": "British"}
 BLENDS_KEPT = 32
 # The stock graph made to take a style a token (`_moving_graph`), beside it: as big again.
 MOVING = "model_moving.onnx"
+# A graph cut to its plan (`_plan_graph`), beside it: "model_plan.onnx".
+PLAN = "_plan.onnx"
 # Where the voices taught here are, under the voices' root (`_family`).
 TRAINED = "trained"
 
@@ -397,6 +401,8 @@ class KokoroBackend(PiperBackend):
         self._speakers: dict = {}  # (checkpoint, pack index) -> its cfg (`_speaker`)
         self._blends: dict = {}  # (checkpoint, the blend read) -> its cfg (`_blended`), the latest BLENDS_KEPT
         self._moving: dict = {}  # checkpoint -> its graph that takes a style a token, or None (`_moving_graph`)
+        self._paths: dict = {}  # id(a graph) -> its file
+        self._plans: dict = {}  # id(a graph) -> the graph that makes its plan alone (`_planner`)
 
     # -- storage -----------------------------------------------------------
 
@@ -486,6 +492,7 @@ class KokoroBackend(PiperBackend):
             self._download(family)
             home = self._home(family)
             self._models[family] = self._open(home / MODEL)
+            self._paths[id(self._models[family])] = home / MODEL
             tok = json.loads((home / TOKENIZER).read_text(encoding="utf-8"))
             self._vocabs[family] = {str(k): int(v) for k, v in tok["model"]["vocab"].items()}
         return self._models[family]
@@ -621,7 +628,40 @@ class KokoroBackend(PiperBackend):
             self._moving[family] = (ort.InferenceSession(str(path), sess_options=self._options(),
                                                          providers=["CPUExecutionProvider"])
                                     if path.exists() else None)
+            if self._moving[family] is not None:
+                self._paths[id(self._moving[family])] = path
         return self._moving[family]
+
+    def _planner(self, sess):
+        """The graph that makes `sess`'s plan alone (`_plan_graph`), opened the first time it is asked for - `sess`
+        itself where there is none, a whole call for a plan."""
+        key = id(sess)
+        if key not in self._plans:
+            path = self._paths.get(key)
+            self._plans[key] = (self._plan_graph(path, self._options()) if path is not None else None) or sess
+        return self._plans[key]
+
+    @staticmethod
+    def _plan_graph(path: Path, opts):
+        """The graph at `path` cut to its plan (its second output alone: the tokens' encoders and the duration
+        predictor, a sixth of the file and 2% of a call's time, the same frames), made beside it the first time and
+        again whenever `path` is newer - None where it cannot be cut."""
+        dst = path.with_name(path.stem + PLAN)
+        try:
+            import onnx
+            import onnxruntime as ort
+
+            if not dst.exists() or dst.stat().st_mtime < path.stat().st_mtime:
+                model = onnx.load(str(path))
+                cut = onnx.utils.Extractor(model).extract_model(
+                    [i.name for i in model.graph.input], [model.graph.output[1].name])
+                tmp = dst.with_name(dst.name + ".making")
+                onnx.save(cut, str(tmp))
+                tmp.replace(dst)
+            return ort.InferenceSession(str(dst), sess_options=opts, providers=["CPUExecutionProvider"])
+        except Exception as exc:  # noqa: BLE001 - the graph itself plans
+            print(f"ghost/voice: no plan graph for {path.name} ({exc})", file=sys.stderr)
+            return None
 
     def _leveled(self, voice: str, params: dict, cfg: dict, sess) -> dict:
         """A blend at its readers' level (blend.py `gain`: each reader measured once, as any voice is); a reader at
@@ -833,7 +873,8 @@ class KokoroBackend(PiperBackend):
         is in reach - each with its own pads and its own style, the pieces' plans laid end to end.
 
         A sentence that ends on a full stop is followed in its call by its own first word (AFTER_WORDS, or as
-        many as the request's `after` says) and cut before it; what is handed back is the sentence's alone.
+        many as the request's `after` says), told the plan it has alone, and cut before the word; what is handed
+        back is the sentence's alone.
         """
         import numpy as np
 
@@ -923,9 +964,13 @@ class KokoroBackend(PiperBackend):
         lay_floor: list[float] = []
         moving = kk.get("moving")
         space = vocab.get(" ")
+        marks = {vocab[m] for m in _MARK_SYMBOLS if m in vocab}
 
-        def read(a: int, b: int, more: list):
-            """ids[a:b] in one call, `more` said after them: (audio, the plan's frames an id, a pad at each end)."""
+        told_plan = REST_FLOOR_INPUT in takes and DUR_SCALE_INPUT in takes
+
+        def feeds_of(a: int, b: int, more: list, told=None) -> dict:
+            """What a call of ids[a:b] is fed, `more` said after them. `told` is the frames of its first ids, a pad
+            first (None: the call's own plan): a told id's plan is scaled away and floored at them."""
             body = ids[a:b]
             n = max(1, len(body))
             pack = kk["pack"]
@@ -945,12 +990,20 @@ class KokoroBackend(PiperBackend):
                           for x in (a, *[j + 0.5 for j in range(a, b)], *([b] * len(rest)), b)]
                 rows = [p[min(n, p.shape[0]) - 1].reshape(STYLE) for p in moving["packs"]]
                 feeds["style"] = blend.rows_along(moving["blend"], rows, places, float(moving["pos"]))
-            if fed_floor and REST_FLOOR_INPUT in takes:
-                feeds[REST_FLOOR_INPUT] = np.array([0.0, *floor[a:b], *([0.0] * len(rest)), 0.0], dtype=np.float32)
+            floors = [0.0, *floor[a:b], *([0.0] * len(rest)), 0.0]
             # the first pad undoes `speed`: it is planned as at speed 1.0, where the first word meets the voice waking
-            if fed_scale and DUR_SCALE_INPUT in takes:
-                feeds[DUR_SCALE_INPUT] = np.array([speed, *scale[a:b], *([1.0] * len(rest)), 1.0], dtype=np.float32)
-            out = sess.run(None, feeds)
+            scales = [speed, *scale[a:b], *([1.0] * len(rest)), 1.0]
+            for k, f in enumerate(told or []):
+                scales[k], floors[k] = 0.0, float(f)
+            if (fed_floor or told is not None) and REST_FLOOR_INPUT in takes:
+                feeds[REST_FLOOR_INPUT] = np.array(floors, dtype=np.float32)
+            if (fed_scale or told is not None) and DUR_SCALE_INPUT in takes:
+                feeds[DUR_SCALE_INPUT] = np.array(scales, dtype=np.float32)
+            return feeds
+
+        def read(a: int, b: int, more: list, told=None):
+            """ids[a:b] in one call, `more` said after them: (audio, the plan's frames an id, a pad at each end)."""
+            out = sess.run(None, feeds_of(a, b, more, told))
             planned = np.asarray(out[1]).reshape(-1).astype(np.float64)
             # an unpatched graph hands back the plan before its Round and Clip: done here as there
             return (np.asarray(out[0]).reshape(-1).astype(np.float32),
@@ -960,20 +1013,27 @@ class KokoroBackend(PiperBackend):
         for a, b in pieces:
             # the sentence's end is not the call's (AFTER_WORDS): words after it, and the take cut before them
             more = []
-            if (a, b) == pieces[-1] and space is not None:
+            heard = [k for k in range(a, b) if sound[k]]
+            if (a, b) == pieces[-1] and space is not None and told_plan and heard:
                 more = _after(ids, units, unit_of, sound, int(params.get("after", AFTER_WORDS)))
                 if b - a + 1 + len(more) > MAX_TOKENS:
                     more = []
-            take, planned = read(a, b, more)
             if more:
-                heard = [k for k in range(a, b) if sound[k]]
-                # the places in the call's plan (a pad first) of the sentence's last sound and the first one after
-                cut = _cut_after(take, planned, 1 + heard[-1] - a, 2 + b - a + sound[: len(more)].index(True),
-                                 frame_s) if heard else None
+                # the sentence's plan made alone and followed, and the call told what it keeps of them (`_told`)
+                planner = self._planner(sess)
+                alone = np.asarray(planner.run(None, feeds_of(a, b, []))[-1]).reshape(-1)
+                followed = np.asarray(planner.run(None, feeds_of(a, b, more))[-1]).reshape(-1)
+                last = 1 + heard[-1] - a  # the place in a call's plan (a pad first) of the sentence's last sound
+                # ...and where a mark follows (a pad first): its rest is the sentence's own
+                marked = [False, *[k + 1 < b and ids[k + 1] in marks for k in range(a, b)]]
+                take, planned = read(a, b, more, _told(alone, followed, last, marked))
+                cut = _cut_after(take, planned, last, 2 + b - a + sound[: len(more)].index(True), frame_s)
                 if cut is None:  # it read on: the sentence alone
                     take, planned = read(a, b, [])
                 else:
                     take, planned = take[:cut], _plan_to(planned[: 1 + b - a], cut / float(HOP))
+            else:
+                take, planned = read(a, b, [])
             audio_parts.append(take)
             frames_parts.append(planned)
             lay_owner += [-1, *owner[a:b], -1]
@@ -1103,7 +1163,18 @@ SEAM_QUIET = 0.02
 # sentence that ends on a full stop is followed in its call by a word-space and its own first AFTER_WORDS
 # words (`_after`), and the take is cut in the rest the model makes at the stop (`_cut_after`); where it
 # makes none, the sentence is read alone.
+# What is followed is planned faster too (in Nicole's voice the words before the last a median 11% shorter, some
+# a third; a short word's vowel a frame less, and "his" heard as "a"), so the sentence's plan is made alone
+# first and the call told it (`_told`): its pace is the one it has alone.
 AFTER_WORDS = 1
+# Read alone, a sentence is held mid-way where read in a paragraph it is not ("The subject means that's..." holds
+# subject's t 8 frames, means' z 9 and that's s 7, followed 4, 5 and 3: heard as hesitations; 38 such holds in
+# 86 of Nicole's sentences alone, 14 followed). So no sound before the last is told more than this many frames
+# past its plan followed: a frame's difference (the pace, a short vowel) is the sentence's own, a hold is not.
+HOLD_OVER = 1
+# A sentence of this many words or fewer is read alone: told its plan, Nicole reads on at the stop after every
+# one of them, so the call would be thrown away.
+ALONE_WORDS = 1
 # The rest at the stop: under this share of the peak, where nothing sounds at all (a faint last sound, a hum
 # or a soft hiss under SEAM_QUIET, is over it).
 AFTER_QUIET = 0.005
@@ -1225,8 +1296,9 @@ def _trim_ends(audio, frames, sound: list, frame_s: float):
 def _after(ids: list, units: list, unit_of: list, sound: list, words: int) -> list:
     """The ids said after a sentence so that its end is not the call's (AFTER_WORDS): its own first `words`
     words, up to the mark or word-space that ends the last of them - [] where it does not end on a full stop
-    (SENTENCE_END: what trails off or breaks off is read to the call's end) or has no word."""
-    if words <= 0 or not ids or units[unit_of[-1]][0] not in SENTENCE_END:
+    (SENTENCE_END: what trails off or breaks off is read to the call's end) or is of ALONE_WORDS words or fewer."""
+    own = sum(1 for k in range(len(sound)) if sound[k] and (k == 0 or not sound[k - 1]))
+    if words <= 0 or own <= ALONE_WORDS or units[unit_of[-1]][0] not in SENTENCE_END:
         return []
     out: list = []
     said = 0
@@ -1243,6 +1315,18 @@ def _after(ids: list, units: list, unit_of: list, sound: list, words: int) -> li
     while out and not sound[len(out) - 1]:
         out.pop()
     return out
+
+
+def _told(alone, followed, last: int, marked: list) -> list:
+    """What a call with words after its sentence is told of the sentence's plan: the frames of every id before its
+    last sound. `alone` and `followed` are the sentence's plan read alone and followed by the words (a pad first),
+    `last` the place of its last sound, `marked` whether a mark follows each place. Each id is told its frames
+    alone, but never more than HOLD_OVER past its frames followed - save before a mark, whose rest is the
+    sentence's. The last sound and the stop are the call's: it plans the stop's rest on them, and frames forced
+    on them are voiced (held to the frames the sentence has alone, "Patient." is followed by 0.3 s of a whispered
+    vowel 14 to 25 dB under its peak, heard as "Patient-ah")."""
+    return [float(alone[k]) if k == 0 or marked[k] else float(min(alone[k], followed[k] + HOLD_OVER))
+            for k in range(last)]
 
 
 def _cut_after(audio, frames, last: int, nxt: int, frame_s: float):

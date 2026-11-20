@@ -20,15 +20,25 @@ class_name DispatchTerminal
 ##                                body; with an id it is kept, and comes back as it last stood. `NAME`, `NAME | L` too
 ##     panel: id                  a kept panel opened again, its body drawn down the glass
 ##     keys: N NEXT > id, X MENU  the panel's keys, on its keys row; `> id` binds the key to a kept panel
-##     type: words                typed into the body and said behind the keys ([DispatchScript]), wrapped at the width; one that
-##                                names an option on the panel (`type: [D]` under `[D] ALL OF THE ABOVE`) chooses it: typed on
-##                                the command line and entered, that row shown in inverse - thought over first, kept in sight after
+##     type: words                typed into the body and said behind the keys ([DispatchScript]), wrapped at the width; lines
+##                                of it one straight after another, in one voice, are one passage typed on and read through.
+##                                One that names an option on the panel (`type: [D]` under `[D] ALL OF THE ABOVE`) chooses it:
+##                                typed on the command line and entered, that row shown in inverse - thought over first, kept
+##                                in sight after
 ##     type (Name): words         ...said in that voice
-##     key: words                 typed into the body quickly and never said
+##     read: words                typed into the body by the other side of the glass (the target on the mirror) and read
+##                                aloud by the room behind the keys, as `type:` is said; never the room's typing, so never
+##                                printed or struck. `read (Name):` read in that voice
+##     key: words                 typed into the body quickly and never said; a block's last ones that the paragraph
+##                                straight after it says are typed ahead of those words instead ([method
+##                                DispatchScript.said_keys]), the voice reading behind the keys
 ##     show: words                drawn down the body, wrapped at the width
 ##     set: LABEL ... VALUE       the body row beginning LABEL becomes this line: what differs backspaced, typed again.
 ##                                Straight after the panel is come back to (`> 3`, then its `set:` lines) the row is
 ##                                there as the panel is drawn, never typed again: it comes back as it now stands
+##     select: LABEL              the arrow keys move a bar in inverse over the panel's items ([method items_of]) from where
+##                                it was left (else the first) to the one beginning LABEL, a press an item; Enter then opens
+##                                the panel written on the next line (none: the bar stays where it stopped, no Enter)
 ##     wait: 2                    two seconds on what is up, in place of the read
 ##     alert: line | line         a box over the panel, with the terminal's beep; gone at the next command or panel
 ##     print, strike, clear       the printer; the last typed line backspaced away; the body emptied
@@ -37,7 +47,8 @@ class_name DispatchTerminal
 ##     anything else              a body line as written; `{2}` in it stops the drawing there for two seconds
 ##
 ## After a panel is drawn the operator reads it before the next step ([method read_of]: a new one by its words, one come back
-## to a glance), unless a `wait:` says how long. The voice waits for a block's steps and comes back at its end, the last
+## to a glance), unless a `wait:` says how long; lines drawn onto a panel already up are read the same way, silently, at a
+## reader's pace ([constant READ_DRAWN]) - an answer is taken in before it is answered. The voice waits for a block's steps and comes back at its end, the last
 ## panel still being read.
 ##
 ## The glass is simulated through the whole note as it is parsed ([method compile], [method typed], [method struck]), so each
@@ -81,22 +92,33 @@ const READ_LEAST := 1.0
 const READ_WORD := 0.1
 const READ_MOST := 5.0
 const KNOWN_LOOK := 0.8
+## Lines drawn onto a panel already up (`show:`, a body line) are read before the next key or command, silently: READ_LEAST
+## and READ_DRAWN a word, at most READ_DRAWN_MOST - long enough to take in an answer before it is answered.
+const READ_DRAWN := 0.2
+const READ_DRAWN_MOST := 9.0
 const ALERT_LEAST := 1.2
 const ALERT_WORD := 0.15
 ## A `set:` backspaces this many characters a second.
 const BACKSPACE := 28.0
+## A `select:` (s): the bar up on the item it starts from this long before the first arrow key; an arrow key a press, give or
+## take KEY_JITTER of it (each item glanced at as it passes); the item chosen looked at this long before Enter.
+const SELECT_FIRST := 0.5
+const SELECT_EACH := 0.32
+const SELECT_HOLD := 0.7
 ## The voice comes back this long after a block's last step.
 const AFTER := 0.2
 ## What an alert says when a command opens nothing.
 const INVALID := "INVALID OPTION"
 
-## A block's line kinds: group 1 the kind, group 2 a voice (`type (Name):`), group 3 the rest.
-const LINE_KIND := "^(panel|keys|type|key|show|set|wait|alert)\\s*(?:\\(\\s*([^)]*?)\\s*\\))?\\s*:\\s?(.*)$"
+## A block's line kinds: group 1 the kind, group 2 a voice (`type (Name):`, `read (Name):`), group 3 the rest.
+const LINE_KIND := "^(panel|keys|type|read|key|show|select|set|wait|alert)\\s*(?:\\(\\s*([^)]*?)\\s*\\))?\\s*:\\s?(.*)$"
 const BARE_KIND := "^(print|clear|strike)\\b\\s*(?::\\s*(.*))?$"
 ## A pause inside a body line: `{2}`, a space before it taken with it.
 const PAUSE := " ?\\{\\s*([0-9]+(?:\\.[0-9]+)?)\\s*\\}"
 ## A kept panel's id, as `panel:` names one.
 const ID := "^[a-z0-9][a-z0-9_*-]*$"
+## A cell of a body row, as a `select:` reads one: words parted by one or two spaces (three or more part two cells).
+const CELL := "\\S+(?: {1,2}\\S+)*"
 
 static var _re := {}
 
@@ -155,21 +177,46 @@ static func _own_up(g: Dictionary) -> Dictionary:
 	return g["oneoff"]
 
 
-## A block's lines as `[{kind: run, lines} | {kind: type, text, voice} | {kind: line, text}]`: the steps between the said
-## lines and the desk marks gathered into runs; `line` a desk mark (or `print`, `strike`) for the script to read as its own.
+## A block's lines as `[{kind: run, lines} | {kind: type, text, voice, theirs} | {kind: line, text}]`: the steps between
+## the said lines and the desk marks gathered into runs; `theirs` a `read:` line; `line` a desk mark (or `print`, `strike`)
+## for the script to read as its own. Said lines of one kind one straight after another in one voice are one passage, its
+## lines parted by line breaks: typed on across each line's end and read straight through. A line naming an option
+## ([method option_label]) stands alone, and a strike takes the passage's last line off alone.
 static func split(text: String) -> Array:
 	var out: Array = []
 	var run := PackedStringArray()
+	var joins := false                   # the line before was a said line, nothing after it yet
 	for raw in text.split("\n"):
 		var s := String(raw).rstrip(" \t")
 		var m := _rx(LINE_KIND).search(s)
-		if m != null and m.get_string(1) == "type":
+		if m != null and m.get_string(1) in ["type", "read"]:
+			var said := m.get_string(3).strip_edges()
+			var voice := m.get_string(2).strip_edges()
+			var theirs := m.get_string(1) == "read"
+			var prev: Dictionary = out.back() if joins else {}
+			if not prev.is_empty() and String(prev["voice"]) == voice and bool(prev["theirs"]) == theirs and option_label(said).is_empty() \
+					and option_label((prev["lines"] as PackedStringArray)[0]).is_empty():
+				var joined: PackedStringArray = prev["lines"]
+				joined.append(said)
+				prev["lines"] = joined
+				prev["text"] = "\n".join(joined)
+				continue
 			_end_run(out, run)
-			out.append({"kind": "type", "text": m.get_string(3).strip_edges(), "voice": m.get_string(2).strip_edges()})
+			out.append({"kind": "type", "text": said, "voice": voice, "theirs": theirs, "lines": PackedStringArray([said])})
+			joins = true
 			continue
+		joins = false
 		var bare := _rx(BARE_KIND).search(s)
 		if bare != null and bare.get_string(1) != "clear":
 			_end_run(out, run)
+			var whole: Dictionary = out.back() if not out.is_empty() else {}
+			if bare.get_string(1) == "strike" and String(whole.get("kind", "")) == "type" and (whole["lines"] as PackedStringArray).size() > 1:
+				var lines: PackedStringArray = whole["lines"]
+				var last := lines[lines.size() - 1]
+				lines.remove_at(lines.size() - 1)
+				whole["lines"] = lines
+				whole["text"] = "\n".join(lines)
+				out.append({"kind": "type", "text": last, "voice": whole["voice"], "theirs": whole["theirs"], "lines": PackedStringArray([last])})
 			var arg := bare.get_string(2).strip_edges()
 			out.append({"kind": "line", "text": "<!-- %s%s -->" % [bare.get_string(1), (": " + arg) if not arg.is_empty() else ""]})
 			continue
@@ -204,6 +251,7 @@ static func compile(lines: PackedStringArray, glass: Dictionary, cfg: Dictionary
 	var reading := -1.0                  # a panel just drawn: how long it is read before the next step (-1 none)
 	var known := false                   # ...it was come back to
 	var came_back := -1                  # the step that brought a kept panel back, nothing done on it since (-1 none)
+	var drawn := 0                       # words drawn onto a panel already up, not read yet
 	var steps := 0
 	if not bool(g["awake"]):
 		t = _step(g, ops, {"op": "wake", "t": t}, t) + WAKE
@@ -225,6 +273,11 @@ static func compile(lines: PackedStringArray, glass: Dictionary, cfg: Dictionary
 		if reading >= 0.0 and not kind in ["", "keys", "show", "wait"] and not comes_changed:
 			t += KNOWN_LOOK if known else reading
 			reading = -1.0
+		# ...and lines drawn onto a panel already up are read before the next key or command
+		if drawn > 0 and not kind in ["", "keys", "show"]:
+			if kind != "wait":
+				t += minf(READ_LEAST + READ_DRAWN * float(drawn), READ_DRAWN_MOST)
+			drawn = 0
 		match kind:
 			"command":
 				# `{2}` after it: held that long, typed, before it is entered
@@ -308,6 +361,8 @@ static func compile(lines: PackedStringArray, glass: Dictionary, cfg: Dictionary
 					t = _line(g, ops, String(row), t, width, warnings)
 				if reading >= 0.0:
 					reading = read_of(up(g), cfg)
+				else:
+					drawn += _words(m.get_string(3))
 			"set":
 				var line := DispatchScript.redacted(m.get_string(3).rstrip(" "))
 				var p := up(g)
@@ -336,6 +391,28 @@ static func compile(lines: PackedStringArray, glass: Dictionary, cfg: Dictionary
 					t = _set_row(g, ops, row, old, line, t, k)
 				if line.length() > width:
 					warnings.append("terminal: a line wider than the panel (%d > %d): %s" % [line.length(), width, line.strip_edges()])
+			"select":
+				var label := m.get_string(3).strip_edges()
+				var body: PackedStringArray = up(g).get("body", PackedStringArray())
+				var items := items_of(body)
+				var to := item_of(body, items, label)
+				if to < 0:
+					warnings.append("terminal: select: no item begins %s on %s" % [label, String(up(g).get("name", "the glass"))])
+					continue
+				var from := maxi(items.find(up(g).get("chosen")), 0)
+				var path := PackedInt32Array([from])
+				var presses := PackedFloat32Array()
+				var tk := t + SELECT_FIRST
+				while path[path.size() - 1] != to:
+					path.append(path[path.size() - 1] + signi(to - from))
+					presses.append(tk)
+					tk += SELECT_EACH * (1.0 + KEY_JITTER * (DispatchSounds.hash01(hash([label, k]), presses.size()) * 2.0 - 1.0))
+				var last := presses[presses.size() - 1] if not presses.is_empty() else t + SELECT_FIRST
+				var opens := _next_is_panel(lines, k)
+				var enter := last + SELECT_HOLD if opens else -1.0
+				_step(g, ops, {"op": "select", "t": t, "items": items, "path": path, "presses": presses, "enter": enter}, t)
+				t = enter + ANSWER_AFTER if opens else last + LINE_EACH
+				steps += 1
 			"wait":
 				var secs := m.get_string(3).strip_edges()
 				if not secs.is_valid_float():
@@ -356,6 +433,8 @@ static func compile(lines: PackedStringArray, glass: Dictionary, cfg: Dictionary
 				t = _line(g, ops, DispatchScript.redacted(s), t, width, warnings)
 				if reading >= 0.0:
 					reading = read_of(up(g), cfg)
+				else:
+					drawn += _words(s)
 	var rest := t + AFTER
 	var last := read_of(up(g), cfg) if reading >= 0.0 else 0.0
 	return {"ops": ops, "rest": rest, "len": rest + last, "glass": g}
@@ -519,6 +598,14 @@ static func at(glass: Dictionary, ops: Array, r: float, whole := false) -> Dicti
 						body[row] = new
 					p["body"] = body
 					g["cursor"] = "command"
+			"select":
+				var presses: PackedFloat32Array = op["presses"]
+				var n := 0
+				while n < presses.size() and presses[n] <= r:
+					n += 1
+				_own_up(g)["chosen"] = (op["items"] as Array)[(op["path"] as PackedInt32Array)[n]]
+				g["alert"] = PackedStringArray()
+				g["cursor"] = "command"
 			"alert":
 				g["alert"] = op["lines"]
 			"clear":
@@ -551,7 +638,8 @@ static func typed(glass: Dictionary, text: String, n: int) -> Dictionary:
 			gc["command"] = text.substr(0, maxi(n, 0))
 		else:
 			gc["command"] = ""
-			pc["chosen"] = choice
+			var row := String((pc["body"] as PackedStringArray)[choice])
+			pc["chosen"] = Vector3i(choice, row.length() - row.lstrip(" ").length(), row.rstrip(" ").length())
 		return gc
 	var g := glass.duplicate()
 	var p := _own_up(g)
@@ -614,14 +702,20 @@ static func lit_share(st: Dictionary) -> float:
 	return clampf(lit / (float(COLUMNS * ROWS) * LIT_FULL), 0.0, 1.0)
 
 
+## The option a typed [param text] would name, bracketed (`[D]` for `[D]` or `d`), or "" for a line shaped like none.
+static func option_label(text: String) -> String:
+	var t := text.strip_edges().to_upper()
+	if t.is_empty() or t.contains("\n") or t.length() > 5:
+		return ""
+	var label := t if t.begins_with("[") else "[%s]" % t
+	return label if _rx("^\\[[^\\]\\s]{1,3}\\]$").search(label) != null else ""
+
+
 ## The body row of the panel up on [param glass] that a typed [param text] chooses - an option row beginning with its bracketed
 ## label (`[D] ALL OF THE ABOVE` for `[D]` or `D`), the last such - or -1 where it names none.
 static func choice_row(glass: Dictionary, text: String) -> int:
-	var t := text.strip_edges().to_upper()
-	if t.is_empty() or t.contains("\n") or t.length() > 5:
-		return -1
-	var label := t if t.begins_with("[") else "[%s]" % t
-	if _rx("^\\[[^\\]\\s]{1,3}\\]$").search(label) == null:
+	var label := option_label(text)
+	if label.is_empty():
 		return -1
 	var p := up(glass)
 	if p.is_empty():
@@ -634,8 +728,37 @@ static func choice_row(glass: Dictionary, text: String) -> int:
 	return -1
 
 
+## The items a `select:` moves its bar over on [param body]: each row cut into cells where three or more spaces part its words,
+## as `Vector3i(row, first column, last column)`, down the first cells of the rows, then down the second (a table of two
+## columns read as a list).
+static func items_of(body: PackedStringArray) -> Array:
+	var columns: Array = []
+	for row in body.size():
+		var c := 0
+		for m in _rx(CELL).search_all(String(body[row])):
+			if columns.size() <= c:
+				columns.append([])
+			(columns[c] as Array).append(Vector3i(row, m.get_start(), m.get_end()))
+			c += 1
+	var out: Array = []
+	for col in columns:
+		out.append_array(col)
+	return out
+
+
+## The item of [param items] on [param body] that begins with [param label] followed by a space, a dot or its end; -1 for none.
+static func item_of(body: PackedStringArray, items: Array, label: String) -> int:
+	for i in items.size():
+		var it: Vector3i = items[i]
+		var cell := String(body[it.x]).substr(it.y, it.z - it.y)
+		if not label.is_empty() and cell.begins_with(label) and (cell.length() == label.length() or cell[label.length()] in [" ", "."]):
+			return i
+	return -1
+
+
 ## The glass [param g] as its rows: `{lines (ROWS of them, the panel set in the middle), bar: Vector2i (row 1's columns,
-## inverse), chosen: Vector3i (a chosen option's row and its first and last columns, inverse; row -1 none), cursor: Vector2i
+## inverse), chosen: Vector3i (a chosen option's row, or the cell a `select:` bar is on, and its first and last columns,
+## inverse; row -1 none), cursor: Vector2i
 ## (column, row), alert: PackedStringArray}`.
 static func rows_of(g: Dictionary, cfg: Dictionary) -> Dictionary:
 	var width := int(cfg.get("width", WIDTH))
@@ -658,11 +781,9 @@ static func rows_of(g: Dictionary, cfg: Dictionary) -> Dictionary:
 		var from := maxi(0, shown.size() - BODY_ROWS)
 		for k in range(from, shown.size()):
 			lines[BODY_TOP + k - from] = shown[k]
-		var pick := int(p.get("chosen", -1))
-		if pick >= from and pick < shown.size():
-			var text := String(shown[pick])
-			var lead_in := text.length() - text.lstrip(" ").length()
-			chosen = Vector3i(BODY_TOP + pick - from, pad + lead_in, pad + text.rstrip(" ").length())
+		var pick: Variant = p.get("chosen")
+		if pick is Vector3i and (pick as Vector3i).x >= from and (pick as Vector3i).x < shown.size():
+			chosen = Vector3i(BODY_TOP + (pick as Vector3i).x - from, pad + (pick as Vector3i).y, pad + (pick as Vector3i).z)
 		body_end = BODY_TOP + shown.size() - from
 		last_row = String(shown[shown.size() - 1]) if not shown.is_empty() else ""
 		lines[KEYS_ROW] = spread(_labels(p["keys"] as Array), width)

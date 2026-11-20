@@ -33,7 +33,7 @@ block (the author's, never ghost's `ghost:` block).
   on. With nothing new for a while it eases back to the whole desk, with a breath of
   slow wander under it.
 - **A phone in hand is held to the ear**: it floats up beside the camera on the right, open and tilted, in the corner of
-  the frame. A phone on hold lies open on the desk in front of the rows.
+  the frame. A phone on hold lies open on the desk in front of the rows, its screen as a call's: the name and the clock.
 - **Voices through a phone are heard through one**, with a voice mark any script can use, `<!-- heard: phone -->` (also
   `desk`, `far`), on a speaker's turn: the earpiece's band (300-3400 Hz) and a little grit, quieter and further off for a
   phone lying on the desk, fainter still for a voice in the caller's room heard through their phone. The dispatch script
@@ -62,8 +62,9 @@ block (the author's, never ghost's `ghost:` block).
 
 As `MEDIUM.md` has them, with the changes above: `call:`, `/call`, `/call: X`, `ring:`, `text: X | words`, `ping: place |
 bearing, range`, `sound:`, `static:`, `print`, `sleep`, `off:`, `look:`, `lift:`, `switch:`, `live:` (a screen or the tablet),
-`image (feed|satellite|tv|full)`, `/image`, `video (feed|satellite|tv): file | words` (a screen's picture may be told
-`, unwatched`), ` ```terminal ` blocks (one program,
+`image (feed|satellite|tv|full)` (a picture over the whole screen comes in where it is written: after what the desk does
+before it in that silence, a block's typing among them - `DispatchMedium._picture_in`), `/image`, `video
+(feed|satellite|tv): file | words` (a screen's picture may be told `, unwatched`), ` ```terminal ` blocks (one program,
 `DispatchTerminal`'s line kinds), `strike` after a typed line, `<!-- redact: words -->` on a line of a terminal block,
 `gain: N`, `bell`, `lamp: off|on`, `fade: to-black|from-black, HH:MM, secs`, `tablet` / `/tablet` with ` ```page ` fences,
 `back`, `new tab` and `<!-- player -->`, `reply: tablet`, `replay: tablet | words`, and the voice's own (`speaker`, `heard:`, `hesitation`, `delivery`). `act:`
@@ -78,7 +79,7 @@ stays a note. The ScriptMarks registry has a row for each (docs/script.md).
 | `dispatch.gd` | `DispatchMedium`: the world, the schedule (a [ReadingFollower]), the state of every thing at a moment, the camera, the opening, the pictures, the captions |
 | `dispatch_set.gd` | `DispatchSet`: the desk and everything on it, built - terminal, keyboard, phones, radar, receiver and scope, printer and its heap, the three screens, the switch, the chart, the handbook, the things, the chair, the room |
 | `dispatch_desk.gd` | `DispatchDesk`: the desk itself - its wood, top, blotter and base - built from properties (`FIELDS`), each drawn by its number until set |
-| `dispatch_roots.gd` | `DispatchRoots`: the roots grown and meshed, how many hang, lie on the desk and stand beside it, how thick and how they wander (`FIELDS`); a hanging root kept clear of the printer's paper and heap along the very line its tube is drawn on (`_drawn_clear`: filled in, each run moved round the side that moves it least, smoothed and cleared again), and none comes down onto the desk where the paper falls |
+| `dispatch_roots.gd` | `DispatchRoots`: the roots grown and meshed, how many hang, lie on the desk and stand beside it, how thick and how they wander (`FIELDS`); a hanging root kept clear of the printer's paper and heap along the very line its tube is drawn on (`_drawn_clear`: filled in, each run moved round the side that moves it least, smoothed and cleared again), none comes down onto the desk where the paper falls, and the root clinging under the desk's end comes down in front of the paper hanging there (`_in_front`) |
 | `dispatch_screens.gd` | the 2D faces drawn into the screens: the terminal (its redacted words as written, and where they lie), the radar and its clutter, the scope, a phone's two screens and keypad, the receiver's dial, the gain knob's scale |
 | `dispatch_censor.gd` | `DispatchCensor`: redacted words hidden over the finished frame - a tracked box cracked into flat shards (`shaders/dispatch_redact.gdshader`) |
 | `dispatch_sounds.gd` | `DispatchSounds`: every sound of the desk, a function of show time |
@@ -116,6 +117,16 @@ and rests on the desk, out of every part by the part's own outline. Each is plug
 on that faces the panel (`ports_of`, three sides tried), or laid round the panel and over the far edge, beside the panel where no root climbs off it, held where it crosses the edge and where it hangs. Gate:
 `dispatch_check` (ends in a part, through nothing on the desk; controls: laid blind of the roots, laid straight).
 
+The printer's paper is fanfold (`Fanfold`, in `geometry/`): a strip stiff along each panel and soft at each perforation, where it
+leans to fold one way and then the other. It comes up out of the slot, lies back on the make's paper rest, hangs past the desk's
+end and folds panel over panel onto the heap, which stands under it. One fold out and back is baked once per desk (on the build's
+worker, shared by desks alike) and read at the length fed, so the creases travel along it as it prints and a panel comes down
+on the heap every 38 lines; a crease leaving the slot is held flat a few centimeters, as the printer's bail holds it. Where the
+paper will not lay its folds leaving the slot one way it is tried others (`PAPER_LEANS`). Each panel is one smooth surface,
+creased at its edges, printed on its front and plain on its back. Gate: `fanfold_check` (it folds, it bends at its creases, it
+never runs on, it shades smoothly; controls: a sheet with no creases, a back with the front's normals); look with
+`tests/dispatch/dispatch_paper_probe.gd` (side on) and `dispatch_look_probe.gd --eye --aim` (the fall is in no shot).
+
 A cable plugs into the back of what it plugs into (its own back first, then its sides, never its front nor a side the chair sees:
 `PORT_FRONT`), going round to it, under the printer's paper where it arches over the desk: each mesh's part is split at the desk's
 edge (`_mesh_parts`), so what hangs past the edge closes nothing on the desk under it. A port inside a root pressed against that side
@@ -151,7 +162,8 @@ Open:
   size, waver and shard darkness, and the gain, bell and lamp marks.
 - The intro's pace with the real voice, by ear and eye: the walks' length is the prose's.
 - A real voice and an export; the seven pictures painted from the Pictures card.
-- The paper heap on the floor reads only dimly; the printed lines on the paper are small.
+- The paper heap on the floor reads only dimly; the printed lines on the paper are small. The paper's fold and the heap are in
+  no shot the desk turns to.
 - Agents dressing the desk from the note's `desk:` block (phase two).
 - A live plan made again in about 20 ms a sentence could be made cheaper (the letter's indexing).
 - Ten camera looks are still seen for under 2.5 s, each cut by the next thing the script does a few seconds later (a ping,
@@ -346,16 +358,28 @@ The revised night (rift's `MEDIUM.md`, its design and what differs from it) is t
   its second line, sixteen rows of body that alone scroll, the keys spread across, the command line - never a scrolling
   shell. A ` ```terminal ` block is its lines in order: commands typed on the command line, panels kept by id (`panel: id =
   NAME | LEFT | RIGHT`) that a key or `> open id` brings back as they last stood, `type:` lines typed and said behind the
-  keys (`type (Name):` in that voice), `key:` lines typed and never said, `show:`, `set:` (a row changed in place, what
+  keys (`type (Name):` in that voice), `read:` lines the other side types (the target on the mirror) read aloud the same
+  way and never printed or struck, `key:` lines typed and never said, `show:`, `set:` (a row changed in place, what
   differs backspaced and typed - or, written straight after the panel is come back to, there as the panel is drawn: it
   comes back as it now stands), `wait:`, `alert:` (its beep), `print`, `strike`, `clear`, `{N}` holding a line part-drawn,
   any desk mark at its point. The note's `terminal:` block holds the title, the width and the keys every panel shares. The
   parse simulates the glass through the whole note, so every action at the terminal carries the glass it starts from and
   the medium plays its own steps at a moment (`DispatchMedium.terminal_at`). A panel is read before the next step - a new
   one by its words, one come back to a glance - unless a `wait:` says how long; a typed line straight after it waits for the
-  read too. A typed line naming an option on the panel (`type: [D]` under `[D] ALL OF THE ABOVE`) chooses it: thought over
+  read too. Lines drawn onto a panel already up (`show:`, a body line) are read the same way before the next key or command,
+  silently, at a reader's pace (`READ_DRAWN`, at most `READ_DRAWN_MOST`): an answer is taken in before it is answered. SAID LINES IN A ROW ARE ONE PASSAGE, AS A LETTER'S PEN WRITES ON: `type:` (or `read:`) lines one straight after
+  another in one voice are typed on over each line's end, the keys one to three words ahead of the voice at the evenest
+  pace that band allows (`PenPace.taut`, as the desk's pen), never rushing a short word or crawling through a pause, and
+  struck unevenly within a word as a hand strikes them (`DispatchScript.hand_times`); the voice reads them through; a page the voice reads is written this way, never
+  `key:` lines with the words said after the block - and where it is, the block's last `key:` lines that the paragraph
+  straight after opens by saying are typed ahead of those words all the same (`DispatchScript.said_keys`: matched in order,
+  a word left out or a clause put in allowed, what is typed past them carried on; a picture between leaves them where they
+  are written). A typed line naming an option on the panel (`type: [D]` under `[D] ALL OF THE ABOVE`) chooses it: thought over
   past the read (`CHOICE_THINK`), typed at the prompt, that row shown in inverse (never a new line), and the camera held on it
-  after (`CHOICE_HOLD`, a `look` at the terminal).
+  after (`CHOICE_HOLD`, a `look` at the terminal). `select: LABEL` moves a bar in the same inverse over the panel's cells
+  with the arrow keys (a row's cells parted by three spaces, read down each column), a press an item, and Enter opens the
+  panel written next: an item of a list is opened as a panel of its own (the agents on his screen, then agent 3's
+  conversation, its tail on the glass).
 - **The camera stays on the glass** after a block or a typed line while the voice talks of what is up
   (`DispatchMedium._glass_hold`: the panel's words read, `GLASS_LEAST` to `GLASS_MOST`, to the end of the sentence), and on
   however long the voice goes on, through to what comes next (`GLASS_LINGER` is unbounded): never pulled back to the whole
@@ -377,7 +401,8 @@ The revised night (rift's `MEDIUM.md`, its design and what differs from it) is t
   and glass (`TabletMedium.rounded_slab`, `SCREEN_SHADER`), portrait, its screen 1200 by 1600 - lying on the desk; it is
   lifted and held low over the desk's near edge, tipped toward the chair, the camera looking down into it
   (`DispatchSet.tablet_held_xf`), and laid back down unhurried, its screen left lit on the page it was left on until it
-  locks itself half a minute on (dimmed for the last seconds; `TABLET_LOCK`). It is carried as a hand would, never over
+  locks itself half a minute on (dimmed for the last seconds; `TABLET_LOCK`). The camera leaves where it was held a second
+  into the laying down (`TABLET_LEAVE`): for the whole desk, or straight on to what begins within another second. It is carried as a hand would, never over
   what it only passes beside (`DispatchMedium.tablet_route`: the straightest way that clears what stands under it, by each
   thing's own outline, no higher than the hand holds it; round by the desk's near side, or drawn out toward the chair
   first, before it is lifted any higher). Its screen is the tablet medium's: the pages `TabletScript` reads

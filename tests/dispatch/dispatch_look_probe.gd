@@ -12,6 +12,8 @@ extends Node
 ## gives the voice's first word S seconds in, as the intro's hold does. `--light K`, `--bright X`, `--shafts k=v,...`, `--air a,b`
 ## and `--heard a,b` are the Environment card's (tests/table/environment_flags.gd); `--terminal`, `--radar`, `--scope` and `--dial`
 ## (each `#rrggbb`) the Props card's colors for the terminal's text, the radar's glow, the receiver's oscilloscope and its dial lamp.
+## `--eye x,y,z --aim x,y,z` photographs from there instead of where the desk's camera is (the set's space, m), to see what no
+## shot holds - the printer's paper falling past the desk's end, say.
 ## It prints where each action falls, and asserts
 ## only that a frame is not uniform.
 
@@ -33,6 +35,8 @@ var _opening := Openings.DEFAULT
 var _lead := 1.0
 var _environment := {}             # the Environment card's block ([Surroundings]): --light, --bright, --shafts, --air, --heard
 var _glass := {}                   # the screens' colors, as the Props card keeps them: --terminal, --radar, --scope, --dial
+var _eye: Variant = null           # --eye and --aim: where every photograph is taken from instead
+var _aim := Vector3.ZERO
 
 const EnvFlags := preload("res://tests/table/environment_flags.gd")
 
@@ -64,6 +68,13 @@ func _run() -> void:
 				if not _glass.has("receiver_glow"):
 					_glass["receiver_glow"] = {}
 				_glass["receiver_glow"][args[i].substr(2)] = args[i + 1]
+			"--eye", "--aim":
+				var v := String(args[i + 1]).split_floats(",")
+				if v.size() == 3:
+					if args[i] == "--eye":
+						_eye = Vector3(v[0], v[1], v[2])
+					else:
+						_aim = Vector3(v[0], v[1], v[2])
 			"--times":
 				_times = []
 				for s in String(args[i + 1]).split(","):
@@ -138,7 +149,14 @@ func _run() -> void:
 				audio.append_array(heard.render(int(round(t * DispatchSounds.RATE)) - audio.size()))
 			if float(want) - t < 1.6 or int(round(t / DT)) % 300 == 0:
 				await get_tree().process_frame
+		# (set as each frame is drawn: the Director advances the desk every frame, which turns its camera back to its spot)
+		var put := func() -> void: desk._cam.look_at_from_position(_eye, _aim, Vector3.UP)
+		if _eye is Vector3:
+			RenderingServer.frame_pre_draw.connect(put)
+			await get_tree().process_frame
 		await get_tree().process_frame
+		if _eye is Vector3:
+			RenderingServer.frame_pre_draw.disconnect(put)
 		var img := stage.get_texture().get_image()
 		var path := "%s_t%06.1f.png" % [_out, float(want)]
 		img.save_png(path)

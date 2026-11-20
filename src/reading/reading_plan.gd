@@ -348,6 +348,9 @@ static func cut(body: String, sentence_no: int, holds: Array = [], said := {}) -
 				tok["rest_after"] = after
 			if bool(w.get("literal", false)):
 				tok["arpa"] = arpa
+						# A `say:` mark's IPA: what a neural voice says for the word, over even its `arpa` (piper.py `_symbols`)
+				if w.has("say"):
+					tok["say"] = String(w["say"])
 						# A word no dictionary holds (the audit's UNKNOWN), spelled as written: eSpeak would be guessing, so the
 						# host reads it as Wiktionary has it, its full vowels stressed (lexicon.py)
 			elif Phonemes.guessed(w):

@@ -68,6 +68,10 @@ const LEAD_TAU := 1.1
 ## How long after it turns to a thing the camera is on it, by those springs (seconds).
 const CAMERA_ARRIVES := 8.0
 const HOME_AFTER := 9.0
+## The tablet laid down leaves nothing where it was held: the camera stays there this long after the hand begins to lay it
+## down (seconds), then goes to the whole desk - or straight on to what is turned to next, where that begins within as long
+## again.
+const TABLET_LEAVE := 1.0
 ## Two looks at the same thing this close (seconds; words said at WORD_EST each, for one whose words are not heard yet) are
 ## one: the camera holds between them rather than ease away and straight back.
 const SAME_BRIDGE := 45.0
@@ -533,9 +537,10 @@ func _land_set() -> void:
 		_set.scope_screen.material_override = _screen_mat("scope", _screens.scope.get_texture(), Color.WHITE, _glass("receiver", "scope"))
 	var pm := StandardMaterial3D.new()
 	pm.albedo_texture = _screens.paper.get_texture()
-	pm.cull_mode = BaseMaterial3D.CULL_DISABLED
 	pm.roughness = 0.9
-	_set.paper.material_override = pm
+	_set.paper_print = pm
+	if _set.paper != null and _set.paper.mesh != null and _set.paper.mesh.get_surface_count() > 0:
+		_set.paper.mesh.surface_set_material(0, pm)
 	for k in _set.screens:
 		var sc: Dictionary = _set.screens[k]
 		if sc["mesh"] != null:
@@ -965,7 +970,8 @@ func load_note(text: String, dispatch: Dictionary, start := PackedStringArray(),
 	_typed_words.resize(_spoken_n)
 	for a in _actions:
 		if String((a as Dictionary)["kind"]) == "type":
-			for si in range(int(a["from"]), int(a["to"])):
+			for k in (a["spans"] as Array).size():
+				var si := _span_word(a, k)
 				if si < _spoken_n:
 					_typed_words[si] = 1
 	_term = _parsed.get("terminal", DispatchTerminal.config_of(""))
@@ -992,14 +998,8 @@ func load_note(text: String, dispatch: Dictionary, start := PackedStringArray(),
 			"type":
 				var after := DispatchTerminal.typed(act["glass"], String(act["text"]), String(act["text"]).length())
 				act["words"] = DispatchTerminal.words_on(DispatchTerminal.up(after), _term)
-	_labels = _parsed["phones"]
-	_build_set(_labels, _seed)
-	_load_pictures(dispatch.get("pictures", {}) if dispatch.get("pictures") is Dictionary else {})
-	var from := TabletScript.find_run(spoken, start, near) if not start.is_empty() else -1
-	var est := _estimate() if from > 0 else PackedFloat32Array()
-	_follower.reset(spoken, from, est)
-	_since = maxf(since, 0.0) if from > 0 else 0.0
-	_est_from = est[from] if from > 0 and from < est.size() else 0.0
+	# nothing placed yet, before the set is built: a set landing rebuilds what is placed, and the last note's times are
+	# not this one's (a note with more actions than the last would read past them)
 	_built_n = -1
 	_held = {}
 	_leg_known = {}
@@ -1010,6 +1010,14 @@ func load_note(text: String, dispatch: Dictionary, start := PackedStringArray(),
 	_sp.resize(_actions.size())
 	_sp.fill(1.0)
 	_chars = {}
+	_labels = _parsed["phones"]
+	_build_set(_labels, _seed)
+	_load_pictures(dispatch.get("pictures", {}) if dispatch.get("pictures") is Dictionary else {})
+	var from := TabletScript.find_run(spoken, start, near) if not start.is_empty() else -1
+	var est := _estimate() if from > 0 else PackedFloat32Array()
+	_follower.reset(spoken, from, est)
+	_since = maxf(since, 0.0) if from > 0 else 0.0
+	_est_from = est[from] if from > 0 and from < est.size() else 0.0
 	_snap = true
 
 
@@ -1118,12 +1126,13 @@ func _build_plan() -> void:
 		_sp[i] = got.y
 		if got.x <= _now and got.x < INF:
 			_held[i] = [got.x, got.y]
+	var was := _chars
 	_chars = {}
 	_term_key = Vector2(NAN, NAN)
 	_follow = {}
 	for i in _actions.size():
 		if String((_actions[i] as Dictionary)["kind"]) in ["type", "reply", "post"]:
-			_chars[i] = _char_times(i)
+			_chars[i] = _char_times(i, was.get(i, PackedFloat32Array()))
 	_build_receiver()
 	_build_phones()
 	_build_track()
@@ -1158,13 +1167,12 @@ func _end_of(i: int) -> float:
 	return _t0[i] + float((_actions[i] as Dictionary)["len"]) / _sp[i]
 
 
-## A typed block's characters, each's moment ([constant DispatchScript.AHEAD_WORDS]): the first words at a typist's pace
-## in the rest before the voice, done as it begins; each word after typed while the voice says the one that many before
-## it, through to the next one's start, at most [constant DispatchScript.KEY_QUICK] a key and always done before it is
-## itself said, so the voice reads behind the keys and is never waiting on them. A reply's keys on a phone's keypad, at
-## [constant DispatchScript.T9_RATE] a second on the whole, unevenly ([method DispatchScript.key_times]), in the rest before
-## it is said; one typed into the tablet's page, each word as it is said. INF for a word not heard yet.
-func _char_times(i: int) -> PackedFloat32Array:
+## A typed block's characters, each's moment: a said line's ahead of its voice ([method _typed_ahead]); a reply's keys on a
+## phone's keypad, at [constant DispatchScript.T9_RATE] a second on the whole, unevenly ([method DispatchScript.key_times]),
+## in the rest before it is said; one typed into the tablet's page, each word as it is said, a word's keys struck unevenly
+## as a hand does ([method DispatchScript.hand_times]). INF for a word not heard yet. [param was]: the keys as they last
+## stood.
+func _char_times(i: int, was := PackedFloat32Array()) -> PackedFloat32Array:
 	var a: Dictionary = _actions[i]
 	var text := String(a["text"])
 	var out := PackedFloat32Array()
@@ -1172,6 +1180,8 @@ func _char_times(i: int) -> PackedFloat32Array:
 	out.fill(INF)
 	if _t0[i] == INF:
 		return out
+	if String(a["kind"]) == "type":
+		return _typed_ahead(i, text, out, was)
 	if String(a["kind"]) == "reply":
 		# a reply: typed on the phone's keypad, every key in the rest before it is said, each as long as its presses and a hand's
 		# unevenness make it ([method DispatchScript.key_times])
@@ -1184,44 +1194,109 @@ func _char_times(i: int) -> PackedFloat32Array:
 	var spans: Array = a["spans"]
 	var from := int(a["from"])
 	var last := _t0[i] + DispatchScript.TYPE_LEAD * 0.6
-	var ahead := String(a["kind"]) == "type"
-	var n := DispatchScript.AHEAD_WORDS
-	var first := _word_t0(from)
 	for k in spans.size():
 		var span: Dictionary = spans[k]
 		var c0 := int(span["c0"])
 		var c1 := int(span["c1"])
-		var keys := float(maxi(c1 - c0, 1))
-		var s: float
-		var e: float
-		if ahead:
-			var said := _word_t0(from + k)
-			if k < n:
-				s = last
-				e = s + keys * DispatchTerminal.KEY_EACH
-				if first < INF:
-					e = minf(e, first - 0.05)
-			else:
-				var w0 := _word_t0(from + k - n)
-				var w1 := _word_t0(from + k - n + 1)
-				if w0 == INF or w1 == INF:
-					break
-				s = maxf(w0, last)
-				e = maxf(w1, s + keys * DispatchScript.KEY_QUICK)
-				if said < INF:
-					e = minf(e, said - 0.05)
-			e = maxf(e, s + 0.01)
-		else:
-			var w0 := _word_t0(from + k)
-			var w1 := _word_t1(from + k)
-			if w0 == INF or w1 == INF:
-				break
-			s = maxf(w0, last)
-			e = maxf(w1, s + 0.04 * float(c1 - c0))
+		var w0 := _word_t0(from + k)
+		var w1 := _word_t1(from + k)
+		if w0 == INF or w1 == INF:
+			break
+		var s := maxf(w0, last)
+		var e := maxf(w1, s + 0.04 * float(c1 - c0))
+		var hand := DispatchScript.hand_times(text, c0, c1)
 		for c in range(c0, c1):
-			out[c] = s + (float(c - c0) + 0.5) / keys * (e - s)
+			out[c] = s + hand[c - c0] * (e - s)
 		last = e
 	return out
+
+
+## A said line's keys: its first [constant DispatchScript.AHEAD_WORDS] words at a typist's pace in the rest before the voice,
+## done as it begins; then a way through the band - the keys at least [constant DispatchScript.AHEAD_LEAST] and at most
+## [constant DispatchScript.AHEAD_MOST] words ahead of the word being said - at its evenest pace ([method PenPace.taut]),
+## so a short word is not rushed nor a pause crawled through; each word's keys struck unevenly on it, as a hand does
+## ([method DispatchScript.hand_times]). The keys of a line under way already struck in [param was] stay as they were, the
+## way going on from the last of them. INF past the words heard yet.
+func _typed_ahead(i: int, text: String, out: PackedFloat32Array, was: PackedFloat32Array) -> PackedFloat32Array:
+	var a: Dictionary = _actions[i]
+	var spans: Array = a["spans"]
+	if spans.is_empty():
+		return out
+	var heard := 0
+	while heard < spans.size() and _word_t0(_span_word(a, heard)) < INF:
+		heard += 1
+	var start := _t0[i] + DispatchScript.TYPE_LEAD * 0.6
+	var lead := mini(DispatchScript.AHEAD_WORDS, spans.size())
+	var lead_c := float(int((spans[lead - 1] as Dictionary)["c1"]))
+	var lead_end := start + lead_c * DispatchTerminal.KEY_EACH
+	if heard > 0:
+		lead_end = minf(lead_end, _word_t0(_span_word(a, 0)) - 0.05)
+	var done := 0
+	var go := Vector2(start, 0.0)
+	if _held.has(i) and was.size() == text.length():
+		while done < text.length() and was[done] <= _now:
+			out[done] = was[done]
+			done += 1
+		if done > 0:
+			go = Vector2(was[done - 1], float(done))
+	var knots := PackedVector2Array([go])
+	if go.y < lead_c:
+		knots.append(Vector2(maxf(lead_end, go.x + 0.01), lead_c))
+	if heard > lead:
+		var lows := PackedVector2Array()
+		var highs := PackedVector2Array()
+		for k in heard:
+			var said := _word_t0(_span_word(a, k))
+			lows.append(Vector2(said - 0.05, float(int((spans[mini(k + DispatchScript.AHEAD_LEAST, heard - 1)] as Dictionary)["c1"]))))
+			if k + DispatchScript.AHEAD_MOST < spans.size():
+				highs.append(Vector2(said, float(int((spans[k + DispatchScript.AHEAD_MOST] as Dictionary)["c1"]))))
+		var end := Vector2(_word_t0(_span_word(a, heard - 1)) - 0.05, float(int((spans[heard - 1] as Dictionary)["c1"])))
+		var here := knots[knots.size() - 1]
+		if end.y > here.y:
+			end.x = maxf(end.x, here.x + 0.01)
+			var way := PenPace.taut(here, lows, highs, end)
+			for p in way.slice(1):
+				knots.append(p)
+	# what is typed past the last word said (a line said only in part): on at the pace it was typed at, once all are heard
+	var tail_from := knots[knots.size() - 1]
+	if heard == spans.size() and tail_from.y >= float(int((spans.back() as Dictionary)["c1"])) and tail_from.y < float(text.length()):
+		var pace := (tail_from.x - knots[0].x) / maxf(tail_from.y - knots[0].y, 1.0)
+		pace = clampf(pace, DispatchScript.KEY_LEAST, DispatchTerminal.KEY_EACH)
+		knots.append(Vector2(tail_from.x + pace * (float(text.length()) - tail_from.y), float(text.length())))
+	var reach := knots[knots.size() - 1].y
+	if reach >= float(text.length()) and float(int((spans.back() as Dictionary)["c1"])) < float(text.length()):
+		spans = spans.duplicate()
+		spans.append({"c0": int((spans.back() as Dictionary)["c1"]), "c1": text.length()})
+	for k in spans.size():
+		var c0 := int((spans[k] as Dictionary)["c0"])
+		var c1 := int((spans[k] as Dictionary)["c1"])
+		if float(c1) > reach + 0.001:
+			break
+		if c1 <= done:
+			continue
+		var s := _on_way(knots, float(c0))
+		var e := _on_way(knots, float(c1))
+		var hand := DispatchScript.hand_times(text, c0, c1)
+		for c in range(maxi(c0, done), c1):
+			out[c] = maxf(s + hand[c - c0] * (e - s), go.x)
+	return out
+
+
+## The spoken word span [param k] of typed action [param a] is typed ahead of: its `word` where the words said are not the
+## typed ones ([method DispatchScript.said_keys]), else the k-th from the action's first.
+static func _span_word(a: Dictionary, k: int) -> int:
+	return int(((a["spans"] as Array)[k] as Dictionary).get("word", int(a["from"]) + k))
+
+
+## When a way of keys ([method _typed_ahead]'s knots, `Vector2(time, keys struck)`) has struck [param keys]; INF past it.
+static func _on_way(knots: PackedVector2Array, keys: float) -> float:
+	if keys <= knots[0].y:
+		return knots[0].x
+	for k in range(1, knots.size()):
+		if keys <= knots[k].y:
+			var dy := knots[k].y - knots[k - 1].y
+			return knots[k].x if dy <= 1e-6 else lerpf(knots[k - 1].x, knots[k].x, (keys - knots[k - 1].y) / dy)
+	return INF
 
 
 ## The phones' moves from the calls, hang-ups, rings and texts: `{label, from, to, t0, dur, slot, how}` - from and to
@@ -1446,9 +1521,9 @@ func _build_attention() -> void:
 				for k in range(i + 1, _actions.size()):
 					var b: Dictionary = _actions[k]
 					if String(b["kind"]) == "tablet" and not bool(b["up"]):
-						down = _end_of(k) if _t0[k] < INF else INF
+						down = _t0[k] + TABLET_LEAVE / _sp[k] if _t0[k] < INF else INF
 						break
-				_attn.append({"t0": t, "t1": down, "spot": _spot("tablet"), "kind": "tablet"})
+				_attn.append({"t0": t, "t1": down, "spot": _spot("tablet"), "kind": "tablet", "linger": 0.0, "leaves": true})
 		if _attn.size() > n0:
 			(_attn.back() as Dictionary)["kind"] = String(a["kind"])
 			(_attn.back() as Dictionary)["i"] = i
@@ -1465,7 +1540,7 @@ func _build_attention() -> void:
 			var comes := _said_by(int((_actions[nk] as Dictionary)["after"]))
 			var same := key == _look_key(_actions[li]) and not key.is_empty()
 			var soon := comes - float(last["t1"]) <= (SAME_BRIDGE if same else float(last.get("linger", HOME_AFTER)) + AWAY_LEAST)
-			if soon and key != "home":
+			if soon and key != "home" and not bool(last.get("leaves", false)):
 				last["t1"] = INF
 
 
@@ -1482,11 +1557,17 @@ func _settled(attn: Array) -> Array:
 		var next0 := float((out[k + 1] as Dictionary)["t0"]) if k + 1 < out.size() else INF
 		if bool(w.get("sticky", false)):
 			w["t1"] = next0
-		w["t1"] = maxf(float(w["t1"]), minf(maxf(float(w["t0"]) + LOOK_LEAST, float(w.get("hold", 0.0))), next0))
+		if not bool(w.get("leaves", false)):
+			w["t1"] = maxf(float(w["t1"]), minf(maxf(float(w["t0"]) + LOOK_LEAST, float(w.get("hold", 0.0))), next0))
 	var home: Dictionary = _spot("home")
 	for k in range(out.size() - 1):
 		var w: Dictionary = out[k]
 		var nxt: Dictionary = out[k + 1]
+		# a look that leaves nothing behind (the tablet laid down) goes straight on only to what begins at once
+		if bool(w.get("leaves", false)):
+			if float(nxt["t0"]) - float(w["t1"]) <= TABLET_LEAVE:
+				w["t1"] = maxf(float(w["t1"]), float(nxt["t0"]))
+			continue
 		var near := float(nxt["t0"]) < float(w["t1"]) + float(w.get("linger", HOME_AFTER)) + AWAY_LEAST
 		# the same thing again before long is one look: held between them
 		var again: bool = nxt["spot"] == w["spot"] and float(nxt["t0"]) - float(w["t1"]) <= SAME_BRIDGE
@@ -1728,6 +1809,11 @@ func _build_sound() -> void:
 								out.append({"t": t + float(k) / _sp[i], "what": "key", "at": term_at})
 							for k in op["keys"]:
 								out.append({"t": t + float(k) / _sp[i], "what": "key", "at": term_at})
+						"select":
+							for k in op["presses"]:
+								out.append({"t": t + float(k) / _sp[i], "what": "key", "at": term_at})
+							if float(op["enter"]) >= 0.0:
+								out.append({"t": t + float(op["enter"]) / _sp[i], "what": "enter", "at": term_at})
 						"alert":
 							out.append({"t": at, "t1": at + DispatchSounds.BELL_LEN, "kind": "bell", "ears": DispatchSounds.ears_of(term_at)})
 			"sound":
@@ -2558,7 +2644,8 @@ func storm_at(t: float) -> Dictionary:
 
 
 ## The printer at [param t]: its head going across while it prints, the paper's lines - every print's lines so far, the one
-## printing a character at a time - and the paper fed.
+## printing a character at a time - and the paper fed a line at a time, and once more when a print is done ([method
+## DispatchSet.feed_paper]: its creases and its fold onto the heap go with it).
 func _pose_printer(t: float) -> void:
 	var lines := PackedStringArray()
 	var partial := ""
@@ -2570,9 +2657,13 @@ func _pose_printer(t: float) -> void:
 			continue
 		var pl: PackedStringArray = a["lines"]
 		var u := (t - _t0[i]) * _sp[i] - DispatchScript.PRINT_LEAD
-		if u >= float(pl.size()) * DispatchScript.PRINT_LINE:
+		var past := u - float(pl.size()) * DispatchScript.PRINT_LINE
+		if past >= 0.0:
 			lines.append_array(pl)
-			lines.append("")
+			if past >= DispatchScript.PRINT_FEED:
+				lines.append("")
+			else:
+				feed = past / DispatchScript.PRINT_FEED
 			continue
 		var k := int(floor(maxf(u, 0.0) / DispatchScript.PRINT_LINE))
 		var w := fposmod(maxf(u, 0.0), DispatchScript.PRINT_LINE) / DispatchScript.PRINT_LINE
@@ -2586,7 +2677,10 @@ func _pose_printer(t: float) -> void:
 				partial = " ".repeat(line.length() - partial.length()) + partial
 			head = (across if k % 2 == 0 else 1.0 - across) - 0.5
 			feed = clampf((w - 0.82) / 0.18, 0.0, 1.0)
-	_screens.show_paper({"lines": lines, "partial": partial, "feed": snappedf(feed, 0.05), "total": lines.size()})
+	feed = snappedf(feed, 0.05)
+	var line := DispatchSet.SHEET.y / float(DispatchScreens.PAPER_FOLD)
+	var fed := _set.feed_paper((float(lines.size()) + feed) * line)
+	_screens.show_paper({"lines": lines, "partial": partial, "feed": feed, "fed": fed / line})
 	_feeds["printer"] = {"head": head}
 
 
@@ -3622,8 +3716,22 @@ func _tick_camera(delta: float) -> void:
 
 # --- the pictures over the whole screen ---------------------------------------------------------------------------------
 
-## The pictures up now over the desk: each faded in after the word before its passage, dissolving into the next or out after
-## its passage's last word, moving its own way ([constant LetterMedium.MOVES]).
+## When a picture over the whole screen comes in: just after the word before its passage, and never before what the desk
+## does ahead of it in that silence is done (the actions written before it, a block's typing among them): the picture
+## comes where it is written. INF while one of those is not placed yet.
+func _picture_in(sp: Dictionary) -> float:
+	var from := int(sp["from"])
+	var t := (_word_t1(from - 1) + 0.1) if from > 0 else _word_t0(from) - IMAGE_FADE
+	for i in range(mini(int(sp.get("acts", 0)), _actions.size()) - 1, -1, -1):
+		var a: Dictionary = _actions[i]
+		if int(a["after"]) != from:
+			break
+		t = maxf(t, _t0[i] + float(a["rest"]) / _sp[i] + 0.1)
+	return t
+
+
+## The pictures up now over the desk: each faded in when it comes in ([method _picture_in]), dissolving into the next or out
+## after its passage's last word, moving its own way ([constant LetterMedium.MOVES]).
 func _show_pictures() -> void:
 	var layers: Array = []
 	var shown: Array = []
@@ -3637,8 +3745,8 @@ func _show_pictures() -> void:
 		var to := int(sp["to"])
 		var nxt: Dictionary = shown[i + 1] if i + 1 < shown.size() else {}
 		var under := not nxt.is_empty() and bool(nxt.get("blend", false)) and int(nxt["from"]) == to
-		var t0 := (_word_t1(from - 1) + 0.1) if from > 0 else _word_t0(from) - IMAGE_FADE
-		var t1 := ((_word_t1(int(nxt["from"]) - 1) + 0.1) if under else _word_t1(to - 1) + 0.1)
+		var t0 := _picture_in(sp)
+		var t1 := _picture_in(nxt) if under else _word_t1(to - 1) + 0.1
 		if t0 == INF or _now < t0 or (t1 < INF and _now > t1 + IMAGE_FADE):
 			continue
 		var a := clampf((_now - t0) / IMAGE_FADE, 0.0, 1.0)

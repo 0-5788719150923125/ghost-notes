@@ -14,7 +14,8 @@ Two halves, and the second is the one that matters.
 
   HOLDS - constructions it must NOT touch, which should always outnumber the
   switches. Every override replaces a reading eSpeak usually gets right, so the
-  safety property is the point: an authored [R EH1 D] still wins, a word eSpeak
+  safety property is the point: an authored [R EH1 D] still wins (and a `say:`
+  mark's IPA beside it wins over that), a word eSpeak
   reads one way in every frame is left alone, and an ordinary sentence of
   ordinary words comes out byte for byte what it was before.
 
@@ -356,6 +357,23 @@ def check_author_wins() -> None:
     print("    [R IY1 D] survived a VBD context")
 
 
+def check_said_ipa_wins() -> None:
+    """A `say:` mark's IPA (`say`) is what the voice says, over even the authored ARPAbet beside it (CONTROL: the
+    same token without it says its ARPAbet)."""
+    from backends.piper import PiperBackend
+
+    def said(tok: dict) -> str:
+        toks = [{"text": "kurt", "punct": "", "fallback": []}, tok]
+        return "".join(ch for ch, i in PiperBackend()._symbols(toks, "espeak", LANG, "") if i == 1).strip()
+
+    pinned = {"text": "gödel", "cased": "Gödel", "punct": ".", "fallback": [], "arpa": ["G", "ER1", "D", "AH0", "L"]}
+    told = said({**pinned, "say": "ɡˈøːdəl"})
+    plain = said(pinned)
+    assert told == "ɡˈøːdəl.", f"the mark's IPA was not said: {told!r}"
+    assert "ø" not in plain and plain, f"CONTROL: without `say` the ARPAbet should be said, got {plain!r}"
+    print(f"    say: {told}   CONTROL arpa: {plain}")
+
+
 def check_whole_sentence_untouched() -> None:
     """A sentence with no homograph in it must come back with NOTHING set.
 
@@ -443,6 +461,7 @@ CHECKS = [
     check_holds,
     check_soft_cases_stay_soft,
     check_author_wins,
+    check_said_ipa_wins,
     check_whole_sentence_untouched,
     check_degrades_without_tagger,
     check_probe_is_cached,

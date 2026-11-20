@@ -321,7 +321,7 @@ static func parse(text: String, said := {}) -> Array:
 		if bare.length() > 0:
 			# a word the script says how to say ([method said_as]): exactly so
 			var told: Dictionary = said.get(bare, {})
-			var got := told if not told.is_empty() else lookup(bare)
+			var got := told if not (told.get("phones", []) as Array).is_empty() else lookup(bare)
 			var phones: Array = got.phones
 			if phones.is_empty():
 				# nothing may leave the pipeline silently: a token that reaches here as digits (word_to_phones
@@ -364,10 +364,13 @@ static func parse(text: String, said := {}) -> Array:
 					entry["stress"] = [1]
 					entry["stressed"] = true
 					entry["literal"] = true
-				# said as the script says: pinned, so the voice host's own reading cannot replace it
+				# said as the script says: pinned, so the voice host's own reading cannot replace it; its IPA, where the
+				# mark gives one, is what a neural voice says
 				if not told.is_empty():
 					entry["stressed"] = true
 					entry["literal"] = true
+					if told.has("ipa"):
+						entry["say"] = String(told["ipa"])
 				words.append(entry)
 		if pause == "stop" and words.size() > 0 and _ends_sentence(toks, ti):
 			sentences.append(words)
@@ -483,8 +486,10 @@ static func arpabet(spelled: String) -> Dictionary:
 	return {"phones": phones, "stress": stress}
 
 
-## A `say:` mark's words ([ReadingPlan]: `<!-- say: Io-A = AY1 OW0 EY1; Io-B = AY1 OW0 B IY1 -->`): each word as the voice reads
-## it -> its `{phones, stress}`, said exactly so ([method parse]'s [param said]).
+## A `say:` mark's words ([ReadingPlan]: `<!-- say: Io-A = AY1 OW0 EY1; Gödel = G ER1 D AH0 L /ɡˈøːdəl/ -->`): each word as
+## the voice reads it -> its `{phones, stress}`, said exactly so ([method parse]'s [param said]), and `ipa`, eSpeak's IPA
+## between slashes: what a neural voice says in its place, for a sound ARPAbet cannot spell (a German ö). The ARPAbet is
+## still ghost's own voice's; with IPA alone the word's phones are its own reading.
 static func said_as(body: String) -> Dictionary:
 	var out := {}
 	for part in body.split(";", false):
@@ -492,10 +497,22 @@ static func said_as(body: String) -> Dictionary:
 		if kv.size() != 2:
 			continue
 		var word := TextNorm.normalize(String(kv[0]).strip_edges()).strip_edges().to_lower()
-		var st := arpabet(String(kv[1]).strip_edges())
-		if not word.is_empty() and not (st.phones as Array).is_empty():
-			out[word] = st
+		var spelled := String(kv[1])
+		var ipa := ""
+		var m := _said_ipa.search(spelled)
+		if m != null:
+			ipa = m.get_string(1).strip_edges()
+			spelled = spelled.substr(0, m.get_start()) + spelled.substr(m.get_end())
+		var st := arpabet(spelled.strip_edges())
+		if word.is_empty() or ((st.phones as Array).is_empty() and ipa.is_empty()):
+			continue
+		if not ipa.is_empty():
+			st["ipa"] = ipa
+		out[word] = st
 	return out
+
+
+static var _said_ipa := RegEx.create_from_string("/([^/]+)/")
 
 
 # ---- the external language data ---------------------------------------------
