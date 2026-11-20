@@ -21,6 +21,8 @@ signal said(text: String)
 signal done(job: String, ok: bool, path: String, why: String)
 ## A mix being saved as another format ([method save_as]) is [param fraction] of the way (0-1).
 signal saving(fraction: float)
+## A line sung for a bake: its take and where its voice starts in it (a stream hears it at once).
+signal take_sung(wav: String, start: float)
 
 const ENV := "music_venv"
 const VENV := "user://music_venv"
@@ -45,6 +47,7 @@ var _asking := -1           # the request being sung
 var _asking_i := -1
 var _host: VoiceHost = null
 var _host_up := false
+var _host_dead := false          # the voice host could not start or stopped
 var _pid := -1
 var _run := {}              # the host program running: {job, out, log, path}
 var _env_wait := ""         # the job waiting for the music environment ("render" / "analyze"), and its spec
@@ -99,7 +102,7 @@ func bake(score: Dictionary, folder: String) -> void:
 	_takes.clear()
 	_queue.clear()
 	var vocal: Dictionary = score.get("vocal", {})
-	var singer := _singer_of(vocal.get("singer", {}))
+	var singer := singer_of(vocal.get("singer", {}))
 	var phrases: Array = vocal.get("phrases", []) if not bool(vocal.get("mute", false)) else []
 	for i in phrases.size():
 		var p: Dictionary = phrases[i]
@@ -174,6 +177,23 @@ func _saved_fraction() -> float:
 		if line.begins_with("out_time_us=") or line.begins_with("out_time_ms="):
 			best = maxf(best, line.substr(12).to_float() / 1_000_000.0)
 	return clampf(best / maxf(float(_save["seconds"]), 0.01), 0.0, 1.0)
+
+
+## The voice host, this node's own, started the first time it is wanted: what a stream ([SongStream]) sings its lines
+## through too, one line at a time, as a bake does.
+func voice() -> VoiceHost:
+	_voice_host()
+	return _host
+
+
+## Whether the voice host is up to sing.
+func voice_up() -> bool:
+	return _host_up
+
+
+## Whether the voice host can still sing: up, starting, or not yet asked - not failed.
+func voice_alive() -> bool:
+	return not _host_dead
 
 
 ## The voice host, this node's own child, started the first time it is wanted.
@@ -275,10 +295,14 @@ func _on_sung(id: int, msg: Dictionary) -> void:
 	var p: Dictionary = _score["vocal"]["phrases"][int(q["i"])]
 	_takes[int(q["i"])] = {"wav": String(q["out"]), "at": float(p["at"]) + float(msg.get("start", 0.0))}
 	_asking = -1
+	take_sung.emit(String(q["out"]), float(msg.get("start", 0.0)))
 	_sing_next()
 
 
 func _on_host_failed(stage: String, why: String) -> void:
+	if stage in ["deps", "host"]:
+		_host_dead = true
+		_host_up = false
 	if _job != "sing" or not (stage in ["sing", "deps", "host"]):
 		return
 	var job := _job
@@ -359,7 +383,7 @@ func _land() -> void:
 	set_process(false)
 	if job == "render":
 		_say("made in %.1f s" % float((res as Dictionary).get("took", 0.0)))
-		write_words(_score, String((res as Dictionary)["mix"]))
+		write_sidecar(_score, String((res as Dictionary)["mix"]))
 		done.emit("bake", true, String((res as Dictionary)["mix"]), "")
 	else:
 		_say("read in %.1f s" % float((res as Dictionary).get("took", 0.0)))
@@ -380,12 +404,25 @@ func _say(text: String) -> void:
 	said.emit(text)
 
 
-## The words [param score] sings, as the subtitles read them beside [param mix] ([method Subtitles.sidecar_for]): each
-## word from its first note to the end of its last, in the mix's own seconds, each line a sentence.
-static func write_words(score: Dictionary, mix: String) -> void:
+## The sidecar beside a mix ([method Subtitles.sidecar_for]; read by [method Spectrum.begin]): the words sung, the song's
+## own grid and its seed - what a file of the song tells the show it plays under, live or in an export.
+static func write_sidecar(score: Dictionary, mix: String) -> void:
+	var grid := grid_of(score)
+	var f := FileAccess.open(mix.get_basename() + ".json", FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify({"words": words_of(score), "seed": seed_of(score), "grid": {
+			"beats": Array(grid["beats"]), "bar": grid["bar"], "beat": grid["beat"], "sections": Array(grid["sections"])}}))
+		f.close()
+
+
+## Every word sung in [param score], in the song's own seconds, each line a sentence: what the subtitles show.
+static func words_of(score: Dictionary) -> Array:
 	var words: Array = []
+	var v: Dictionary = score.get("vocal", {})
+	if bool(v.get("mute", false)):
+		return words
 	var line := 0
-	for p in (score.get("vocal", {}) as Dictionary).get("phrases", []):
+	for p in v.get("phrases", []):
 		for w in p["words"]:
 			var notes: Array = w["notes"]
 			if notes.is_empty():
@@ -394,21 +431,39 @@ static func write_words(score: Dictionary, mix: String) -> void:
 			words.append({"text": String(w["text"]), "t0": float(p["at"]) + float(notes[0]["t"]),
 				"t1": float(p["at"]) + float(last["t"]) + float(last["len"]), "sentence": line})
 		line += 1
-	var f := FileAccess.open(mix.get_basename() + ".json", FileAccess.WRITE)
-	if f != null:
-		f.store_string(JSON.stringify({"words": words}))
-		f.close()
+	return words
+
+
+## The song's own grid ([member Spectrum.known]): a beat a beat, the beats a bar, a section's start a section, in its own
+## seconds.
+static func grid_of(score: Dictionary) -> Dictionary:
+	var beats := PackedFloat32Array()
+	var beat := float(score.get("beat", 0.5))
+	var start := float(score.get("start", 0.0))
+	var meter := int(score.get("meter", Composer.METER))
+	for k in int(score.get("bars", 0)) * meter:
+		beats.append(start + k * beat)
+	var secs := PackedFloat32Array()
+	for sec in score.get("sections", []):
+		secs.append(float(sec["start"]))
+	return {"beats": beats, "bar": meter, "beat": beat, "sections": secs}
+
+
+## The song's seed for the show: its score's, so the same song is the same show heard as it is made or from its file,
+## and a song rolled is another. 52 bits, which a sidecar's JSON number holds exactly.
+static func seed_of(score: Dictionary) -> int:
+	return JSON.stringify(score).sha1_text().substr(0, 13).hex_to_int()
 
 
 ## Where the take of [param phrase] of [param vocal] (a score's) is kept in [param folder]'s takes, whether or not it is
 ## there yet: a hash of who sings, how, and the phrase's words and notes.
 static func take_of(folder: String, vocal: Dictionary, phrase: Dictionary) -> String:
-	var h := _take_hash(_singer_of(vocal.get("singer", {})), vocal.get("style", {}), phrase["words"])
+	var h := _take_hash(singer_of(vocal.get("singer", {})), vocal.get("style", {}), phrase["words"])
 	return ProjectSettings.globalize_path(folder).path_join("takes").path_join(h + ".wav")
 
 
 ## Who sings: the score's singer, a voice kept in the library read by its name (`kept`).
-static func _singer_of(singer: Variant) -> Dictionary:
+static func singer_of(singer: Variant) -> Dictionary:
 	var s: Dictionary = singer if singer is Dictionary else {}
 	if not String(s.get("kept", "")).is_empty():
 		var kept := VoiceLibrary.read(String(s["kept"]))

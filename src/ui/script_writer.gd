@@ -20,6 +20,11 @@ class_name ScriptWriter
 ## ticks when it is in the file, and Save..., which always asks for a file. Open... is the other
 ## direction (a note has it too): Save... puts what is here into a file, Open... takes what is in a
 ## file and writes nothing.
+##
+## Refine… in the editor's foot talks the words over with a writer ([TextRefine], [WriterChat]): it is told what they are for,
+## what the note is made of and every mark the palette offers, and changes them in the editor as the author asks, each change a
+## step Ctrl+Z takes back. The conversation is kept in the note's folder ([member refine_folder]) and goes on with the window
+## closed; the panel says what the note is made of ([member refine_parts]).
 
 ## The document's own metadata - top-level frontmatter keys, not ghost's block - edited on the card,
 ## never in the editor. Each is read by something: the label, its tooltip, the panels that use it. A row
@@ -84,6 +89,12 @@ var _in_note := false
 ## The card's own save mark (the editor window has another, on the same source).
 var save_mark: SaveMark
 var _mark_slot: Control
+## The note's folder, where the words' conversation is kept: `func() -> String`, set by the panel ("" or unset: no note).
+var refine_folder: Callable
+## What the note is made of, its components' keys: `func() -> Array`, set by the panel.
+var refine_parts: Callable
+var _chat: WriterChat = null
+var _refine: TextRefine = null
 
 
 func _wording(key: String, dflt: String) -> String:
@@ -335,6 +346,8 @@ func _refresh_handed() -> void:
 
 
 func _process(dt: float) -> void:
+	if _chat != null:
+		_chat.poll()
 	if _handed.is_empty():
 		return
 	_handed_t -= dt
@@ -349,6 +362,53 @@ func _recount_soon() -> void:
 		_timer.start()
 	else:
 		_refresh()
+
+
+## The conversation about the words, bound to this card's editor: the one live in the note's folder, or read from it.
+func chat() -> WriterChat:
+	if _chat == null:
+		var folder := String(refine_folder.call()) if refine_folder.is_valid() else ""
+		_chat = WriterChat.at(TextRefine.folder_for(folder, "body"))
+	_chat.read_text = _words
+	_chat.apply = _splice_words
+	_chat.about = about
+	return _chat
+
+
+func _words() -> String:
+	return text_edit.text
+
+
+func _splice_words(at: int, gone: int, put: String) -> void:
+	TextRefine.splice(text_edit, at, gone, put)
+
+
+## What the writer is told it works on ([method WriterChat.system_of]): what the words are for, the note's title, what it is
+## made of, and the marks this card's palette offers.
+func about() -> Dictionary:
+	var brief := _mode == "table"
+	return {"what": "the show's brief" if brief else "the note's words", "title": field_value("title"), "brief": brief,
+		"script": not brief, "parts": TextRefine.parts_of(refine_parts.call() if refine_parts.is_valid() else []),
+		"marks": TextRefine.marks_of(_mode)}
+
+
+## Refine…: the conversation, beside the editor.
+func open_refine() -> void:
+	if _refine == null or not is_instance_valid(_refine):
+		_refine = TextRefine.new(chat(), _wording("window", "Body"))
+		add_child(_refine)
+	_refine.open_beside(_window)
+
+
+## A conversation already live for these words (the panel built again mid-turn) is taken up at once, so its turn goes on.
+func _ready() -> void:
+	if refine_folder.is_valid() and WriterChat.live(TextRefine.folder_for(String(refine_folder.call()), "body")) != null:
+		chat()
+
+
+func _exit_tree() -> void:
+	if _chat != null:
+		_chat.let_go()
 
 
 ## Show the editor, centered and sized to the window it opens over.
@@ -420,6 +480,13 @@ func _build_window(section: String, blocks: PackedStringArray) -> void:
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.modulate = Color(1, 1, 1, 0.55)
 	foot.add_child(hint)
+	var refine := Button.new()
+	refine.text = "Refine…"
+	refine.tooltip_text = ("Talk the words over with a writer: say what to change, and it changes them here as you watch, knowing "
+		+ "what they are for, what the note is made of and every mark listed beside them. Each change is a step Ctrl+Z takes back, "
+		+ "and the conversation is kept with the note.")
+	refine.pressed.connect(open_refine)
+	foot.add_child(refine)
 	var close := Button.new()
 	close.text = "Done"
 	close.pressed.connect(_window.hide)

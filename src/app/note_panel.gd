@@ -38,6 +38,13 @@ var note_moved: Callable
 var begin_song: Callable
 ## Set by main: (show: Dictionary) -> void - put the picture up again in the format chosen now.
 var restage: Callable
+## Set by main: (fp, sr, words) -> {playback, subtitles} and () -> void - a composed song's stream opened with the show
+## on it, and closed ([SongStream]).
+var begin_stream: Callable
+var end_stream: Callable
+## Set by main: a session a person plays (a composed song is heard as it is made), not an export's render (which plays
+## the song's mix, made whole).
+var live := true
 
 var _panel: SidePanel
 var _writer: ScriptWriter
@@ -78,6 +85,8 @@ func _ready() -> void:
 	Settings.write(SECTION, "sync", not path.is_empty())
 	_writer = preload("res://src/ui/script_writer.gd").new()
 	_writer.setup(SECTION, PackedStringArray(_doc_blocks()), SECTION)
+	_writer.refine_folder = func() -> String: return NoteUpload.folder_of(path)
+	_writer.refine_parts = func() -> Array: return _attached
 	_writer.bind_note()
 	_writer.doc.moved.connect(_on_note_moved)
 	script_card.add_child(_writer)
@@ -89,6 +98,7 @@ func _ready() -> void:
 	script_card.add_child(kept)
 	_cards = NoteCards.build(_panel, _attached, {"blocks": _blocks, "reshape": _reshape, "path": path,
 		"folder": NoteUpload.folder_of(path) if not path.is_empty() else "", "video": _attached.has("medium"),
+		"begin_stream": begin_stream, "end_stream": end_stream, "live": live,
 		"intro_tip": "Seconds held before the song starts, the picture fading up through them and up a few seconds before it.",
 		"outro_tip": "Seconds held after the song ends, picture and sound fading out together."})
 	#...the timeline open, as a list ([TimelineList]): a card shown only while a timeline editor is open
@@ -133,7 +143,8 @@ func _ready() -> void:
 	_writer.doc.bind_text(_writer.text_edit)
 	if _medium != null:
 		Director.medium_changed.connect(_on_medium)
-	if has_song and _sound != null and _sound.ready_to_play() and begin_song.is_valid():
+	# a composed song conducts itself, heard as it is made ([SongStream]); a file, or a render's mix, plays as a song does
+	if has_song and _sound != null and not _sound.streams() and _sound.ready_to_play() and begin_song.is_valid():
 		begin_song.call(_sound.playable(), show_plan())
 
 
@@ -222,11 +233,29 @@ func _choose_song(song: String) -> void:
 
 ## The composed song was made: the note opened again, its new mix the song it plays.
 func _sound_made(_mix: String) -> void:
+	# a song heard as it is made has nothing to open again around: its stream reads the takes the bake sang
+	if _sound != null and _sound.streams():
+		return
 	_rewrite(func(held: Dictionary) -> String:
 		var ghost := NoteStore.blocks_of(path)
 		ghost.merge(held, true)
 		ghost.erase("song")
 		return FrontMatter.write_block(path, ghost))
+
+
+## The song this note's export renders, and whether there is one ([SoundCard.export_song]; [member
+## Exporter.take_provider]).
+func export_song() -> String:
+	return String(await _sound.export_song()) if _sound != null and is_instance_valid(_sound) else ""
+
+
+func can_export_song() -> bool:
+	return _sound != null and is_instance_valid(_sound) and _sound.can_export_song()
+
+
+## Whether the note has a Sound, whose song an export takes.
+func has_sound() -> bool:
+	return _sound != null
 
 
 ## What an upload of this note's export says (see [member Exporter.upload_provider]): the YouTube

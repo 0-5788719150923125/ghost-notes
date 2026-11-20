@@ -80,7 +80,7 @@ extends SceneTree
 ## - a seed changed while the note plays draws a new desk and keeps the reading's place (control: changed words load again);
 ## - built on a worker, as the app builds it: the show is held until it lands.
 ##
-## Run: godot --headless --path . --script tests/dispatch/dispatch_check.gd
+## Run: timeout 600 godot --headless --path . --script tests/dispatch/dispatch_check.gd (about 4 min: each of its 40-odd desks bakes its paper)
 
 const FIXTURE := "res://tests/fixtures/dispatch_note.md"
 const BROWSING := "res://tests/fixtures/dispatch_browsing.md"

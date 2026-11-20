@@ -391,7 +391,7 @@ func _row(field: String) -> String:
 func _note_cards(producers: bool) -> void:
 	var have := _voiced()
 	var with := {"reading": true, "workspace": self, "cast": _cast, "blocks": _blocks, "reshape": _reshape,
-		"provides": Components.provided(have)}
+		"provides": Components.provided(have), "path": note_path, "folder": NoteUpload.folder_of(note_path)}
 	var fmt: Variant = _blocks.get("medium")
 	var rows: Array = []
 	for key in have:
@@ -596,6 +596,8 @@ func _build_header(_box: VBoxContainer) -> void:
 func _build_source(box: VBoxContainer) -> void:
 	_writer = preload("res://src/ui/script_writer.gd").new()
 	_writer.setup(_section, _doc_blocks(), _mode)
+	_writer.refine_folder = func() -> String: return NoteUpload.folder_of(note_path)
+	_writer.refine_parts = func() -> Array: return _attached
 	if not note_path.is_empty():
 		_writer.bind_note()
 		_writer.doc.moved.connect(_on_note_moved)

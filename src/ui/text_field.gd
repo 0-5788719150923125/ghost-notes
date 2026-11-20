@@ -12,6 +12,9 @@ class_name TextField
 ##
 ## It answers as the box it took the place of: [member text], and [signal text_changed] for a hand's
 ## edit, as it is typed, never for a value arriving. A card asks [method editing] where it asked `has_focus()`.
+## A writer's change ([method splice]) is said too, since the card keeps it as it keeps a hand's.
+##
+## A field with no heading shows none on the card; its window is called [member window_title] then.
 
 ## The hand changed the words. Assigning [member text] does not say so.
 signal text_changed
@@ -28,6 +31,9 @@ var text := "":
 		if _edit != null and _edit.text != v:
 			_edit.text = v
 		_show()
+
+## What the window is called, where the heading is not (a field shown with none).
+var window_title := ""
 
 var _title := ""
 var _placeholder := ""
@@ -53,6 +59,7 @@ func _init(heading := "", placeholder := "", tip := "") -> void:
 	var head := Label.new()
 	head.text = heading
 	head.add_theme_font_size_override("font_size", 12)
+	head.visible = not heading.is_empty()
 	add_child(head)
 	_preview = preview_label(open)
 	_preview.tooltip_text = (tip + "\n\nClick to edit.") if not tip.is_empty() else "Click to edit."
@@ -107,9 +114,26 @@ func replace(v: String) -> void:
 	text = v
 
 
+## The window the words are written in, made if it is not yet.
+func window() -> Window:
+	if _window == null:
+		_build_window()
+	return _window
+
+
+## [param gone] characters from [param at] replaced by [param put] - a writer's change - as one step the window's undo
+## takes back, and said as an edit.
+func splice(at: int, gone: int, put: String) -> void:
+	if _edit != null:
+		TextRefine.splice(_edit, at, gone, put)
+		return                 # (the box's own text_changed says it)
+	text = text.substr(0, at) + put + text.substr(at + gone)
+	text_changed.emit()
+
+
 func _build_window() -> void:
 	_window = Window.new()
-	_window.title = _title
+	_window.title = window_title if not window_title.is_empty() else _title
 	_window.visible = false
 	_window.transient = true
 	_window.min_size = Vector2i(560, 320)

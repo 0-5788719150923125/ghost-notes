@@ -653,7 +653,7 @@ func draw(ci: CanvasItem, top: float, scroll: float, clip_y0: float, clip_y1: fl
 						HORIZONTAL_ALIGNMENT_CENTER, width, 34, ink.lerp(bg, 0.4))
 					ci.draw_string(f, c + Vector2(-width * 0.5, 56.0), String(d["url"]),
 						HORIZONTAL_ALIGNMENT_CENTER, width, 26, accent)
-					ci.draw_string(f, c + Vector2(-width * 0.5, 110.0), "Capture it, or import a screenshot, in the Illustrations panel.",
+					ci.draw_string(f, c + Vector2(-width * 0.5, 110.0), "Capture it, or import a screenshot, on the Pictures card.",
 						HORIZONTAL_ALIGNMENT_CENTER, width, 22, ink.lerp(bg, 0.55))
 			"foot":
 				ci.draw_rect(rr, ink.lerp(bg, 0.93))

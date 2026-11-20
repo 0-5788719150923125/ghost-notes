@@ -449,12 +449,19 @@ func _open_note_panel(path: String) -> void:
 	panel.note_moved = note_moved
 	panel.begin_song = _begin_song
 	panel.restage = _restage
+	panel.begin_stream = _begin_note_stream
+	panel.end_stream = _end_note_stream
+	panel.live = not _export_mode
 	_note_panel = panel
 	add_child(panel)
 	# a song note's export goes up as its YouTube card says (nothing without one)
 	if _chrome.exporter != null:
 		_chrome.exporter.upload_provider = panel.upload_meta
 		_chrome.exporter.show_provider = panel.show_plan
+		# a Sound's song is made for the export where no file plays (a composed one, heard live as it is made)
+		if panel.has_sound():
+			_chrome.exporter.take_provider = panel.export_song
+			_chrome.exporter.take_ready = panel.can_export_song
 	_feedback = _chrome.attach_feedback()
 	_entered_mode()
 
@@ -471,6 +478,36 @@ func _begin_song(path: String, show: Dictionary) -> void:
 	Spectrum.transport_stop()
 	_attach_show(show)
 	_attach_subtitles()
+
+
+## A composed song heard as it is made ([SongStream]): the session's one stream opened, the note's show put up on it
+## and its words as subtitles, read by reference - a reading's stream ([method _begin_generative_stream]) for a song.
+## Returns {playback, subtitles}.
+func _begin_note_stream(fp: int, sr: int, words: Array) -> Dictionary:
+	var held := Spectrum.paused
+	Director.detach()
+	Spectrum.stop()
+	Spectrum.set_paused(held)
+	var pb: AudioStreamGeneratorPlayback = Spectrum.begin_stream(fp, sr)
+	_attach_show(_note_panel.show_plan() if _note_panel != null and is_instance_valid(_note_panel) else {"picture": false})
+	if _subtitles != null and is_instance_valid(_subtitles):
+		_subtitles.queue_free()
+	var subs := preload("res://src/show/subtitles.gd").new()
+	subs.words = words
+	_subtitles = subs
+	add_child(subs)
+	_bind_captions(subs)
+	return {"playback": pb, "subtitles": subs}
+
+
+## The closing half of [method _begin_note_stream].
+func _end_note_stream() -> void:
+	Director.detach()
+	Spectrum.stop()
+	_hide_stage()
+	if _subtitles != null and is_instance_valid(_subtitles):
+		_subtitles.queue_free()
+	_subtitles = null
 
 
 ## Put a note's show up as its components describe it - one path for a song's and a reading's.
@@ -1014,6 +1051,9 @@ func _attach_subtitles() -> void:
 		return
 	var subs := preload("res://src/show/subtitles.gd").new()
 	if subs.load_sidecar(side):
+		# a sidecar times its words in its file's own seconds: where the intro is held before the file plays (a song's),
+		# the session clock runs that far ahead of them (a reading bakes its intro into its take, and has none)
+		subs.time_base = 0.0 if Spectrum.bookend_baked else Spectrum.lead_in
 		_subtitles = subs
 		add_child(subs)
 		_bind_captions(subs)

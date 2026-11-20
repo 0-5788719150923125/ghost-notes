@@ -14,13 +14,31 @@ extends Node
 ##   and its record, the mix is made - the control, the block changed after, is stale. Its ⤓ (the song exported, from the
 ##   bottom-right row where the note exports no video) stands grayed until there is a mix, and lit once there is; a note
 ##   with a Medium has none of its own (its video's ⤓ carries the song).
+## - Its song is what a video's export renders ([method SoundCard.export_song]): a mix made from the score as it stands is
+##   handed over as it is, its sidecar written with the song's grid; a file source hands its file, and a file missing
+##   none.
 ## - Its timeline is offered beside Play while it is composed ([method Transport.offer_timeline]), and taken back for a
 ##   file.
 ## - Its export says itself on the row's progress line ([RowStatus]), as the video's does: a WAV copied and an MP3
 ##   encoded by FFmpeg (where ghost has it) each end "Saved" there, the file written; the subtitles beside a mix are its
-##   words sung, each line a sentence (`SongBake.write_words`).
+##   words sung, each line a sentence (`SongBake.write_sidecar`).
 ## - A section of the words pinned (`place`) is where the score lays it, with a reference made for the gate.
+## - With a reference its Likeness shows (the control, none, hides it), and the card says what the roll drew and kept of
+##   it - at likeness 1 its tempo, key, form and chords, at 0 nothing; a part's pattern picked stays, and Auto lets
+##   the roll draw it again.
 ## - The score on the Timeline: a group a section, the voice's lane its words, and no problems (Timeline.check).
+## - A composed song is heard as it is made ([SongStream]) in a session a person plays; the controls, an export's render
+##   and a file, are not. Its mix's sidecar names its grid (a beat a beat, a section a section) and its seed, which a
+##   file loaded takes ([method Spectrum.begin]) - the control, a file with no sidecar, has no grid and its own
+##   fingerprint. The show's beat rises on the grid's beats through Spectrum's own frames - the control, no grid and
+##   nothing heard, never rises - and Stop lets the grid go.
+## - THE BAND WAITS FOR A LATE SINGER (the stream's choices driven by hand, nothing heard): its windows end at the bar the
+##   unsung line begins in; once due, the bar before it is asked again without the voice, holding the song there,
+##   VAMP_MOST times; then the line goes without and its words leave the subtitles - the control, the line's take there,
+##   is not waited for. A roll reaches the stream once the dials settle, and while the song streams its unmade mix is
+##   on demand, left out of the Pipeline's tally (an export makes it).
+## - Where the music environment is installed, the music host streams a short song: the first sound is heard once its
+##   preroll is made, a roll is taken while it plays, a seek starts it again there, Stop ends it.
 
 const ROOT := "user://sound_card_check"
 
@@ -40,6 +58,7 @@ func _ready() -> void:
 	await _export(note, folder)
 	_placed(note, folder)
 	_timeline(note, folder)
+	await _stream(note, folder)
 	DirAccess.remove_absolute(note)
 	if _fails == 0:
 		print("sound_card_check: ALL OK")
@@ -115,6 +134,18 @@ func _pipeline(note: String, folder: String) -> void:
 	_ok(String(_rows(c)["mix"]) == "made" and c.ready_to_play(), "given a mix and its record, the mix is made and plays")
 	c._show_save()
 	_ok(c._save.visible and not c._save.disabled, "...and its ⤓ is lit")
+	var mix := folder.path_join("sound").path_join(SongBake.MIX)
+	DirAccess.remove_absolute(mix.get_basename() + ".json")
+	var handed := String(await c.export_song())
+	var side: Variant = JSON.parse_string(FileAccess.get_file_as_string(mix.get_basename() + ".json"))
+	_ok(handed == mix and side is Dictionary and (side as Dictionary).get("grid") is Dictionary,
+		"a video's export is handed the mix made from this score, its sidecar written with the grid (%s)" % handed.get_file())
+	var file := SoundCard.for_note({"blocks": {"sound": {"source": "file", "path": mix}}, "path": note, "folder": folder})
+	var missing := SoundCard.for_note({"blocks": {"sound": {"source": "file", "path": "/nowhere.wav"}}, "path": note, "folder": folder})
+	_ok(String(await file.export_song()) == mix and String(await missing.export_song()).is_empty() and not missing.can_export_song(),
+		"a file source hands its file; the control, a file missing, none")
+	file.free()
+	missing.free()
 	c._set_part("bass", "seed", 9)
 	_ok(String(_rows(c)["mix"]) == "stale", "the control: a part rolled after, the mix is stale")
 	c.apply({"source": "file", "path": ""})
@@ -151,7 +182,7 @@ func _export(note: String, folder: String) -> void:
 	var score := {"vocal": {"phrases": [{"at": 2.0, "words": [{"text": "one", "notes": [{"t": 0.0, "len": 0.5, "midi": 60}]},
 		{"text": "two", "notes": [{"t": 0.5, "len": 0.25, "midi": 62}, {"t": 0.75, "len": 0.25, "midi": 64}]}]},
 		{"at": 5.0, "words": [{"text": "three", "notes": [{"t": 0.0, "len": 1.0, "midi": 60}]}]}]}}
-	SongBake.write_words(score, mix)
+	SongBake.write_sidecar(score, mix)
 	var side: Variant = JSON.parse_string(FileAccess.get_file_as_string(Subtitles.sidecar_for(mix)))
 	var words: Array = (side as Dictionary).get("words", []) if side is Dictionary else []
 	_ok(words.size() == 3 and is_equal_approx(float(words[1]["t0"]), 2.5) and is_equal_approx(float(words[1]["t1"]), 3.0)
@@ -201,13 +232,23 @@ func _placed(note: String, folder: String) -> void:
 	var w := FileAccess.open(dir.path_join(SongBake.REFERENCE), FileAccess.WRITE)
 	w.store_string(JSON.stringify(ref))
 	w.close()
-	var c := _card({"sound": {"source": "composed", "reference": {"path": "/nowhere.mp3"}}}, note, folder)
+	var c := _card({"sound": {"source": "composed", "likeness": 1.0, "reference": {"path": "/nowhere.mp3"}}}, note, folder)
 	var at := _section_bars(c.score())
 	_ok(int(at.get("Chorus", -1)) == 14, "the chorus lands where the reference sings (%s)" % str(at))
 	c._block["place"] = {"1": 18}
 	c._changed()
 	at = _section_bars(c.score())
 	_ok(int(at.get("Chorus", -1)) == 18, "pinned, it is where it was put (%s)" % str(at))
+	_ok(c._likeness.get_parent().visible and c._roll_info.text.contains("From the reference: tempo, key, form, chords"),
+		"with a reference its Likeness shows, and the card says what the roll kept: %s" % c._roll_info.text.replace("\n", " / "))
+	c._block["likeness"] = 0.0
+	c._changed()
+	_ok(c._roll_info.text.contains("From the reference: nothing"), "at likeness 0 it keeps nothing: %s" % c._roll_info.text.replace("\n", " / "))
+	c._set_part("drums", "pattern", "half_time")
+	var set := String((c._parts()["drums"] as Dictionary).get("pattern", ""))
+	c._set_part("drums", "pattern", "")
+	_ok(set == "half_time" and not (c._parts()["drums"] as Dictionary).has("pattern"),
+		"a part's pattern picked stays (%s), and Auto lets the roll draw it again" % set)
 	c.queue_free()
 	DirAccess.remove_absolute(dir.path_join(SongBake.REFERENCE))
 
@@ -223,6 +264,7 @@ func _timeline(note: String, folder: String) -> void:
 	var c := _card({"sound": {"source": "composed", "tempo": 100.0, "key": "C major",
 		"parts": {"drums": {}, "bass": {}, "vocal": {"pattern": "composed"}}}}, note, folder)
 	var score := c.score()
+	_ok(not c._likeness.get_parent().visible, "the control: with no reference, no Likeness")
 	var tl := SoundTimeline.of(score)
 	_ok(Timeline.check(tl).is_empty(), "the score on the Timeline has no problems: %s" % ", ".join(Timeline.check(tl)))
 	_ok((tl["groups"] as Array).size() == (score["sections"] as Array).size(), "a group a section")
@@ -233,6 +275,186 @@ func _timeline(note: String, folder: String) -> void:
 				words += (l["items"] as Array).size()
 	_ok(words == 10, "the voice's lane holds its words (%d of 10)" % words)
 	c.queue_free()
+
+
+const STREAM_BLOCK := {"sound": {"source": "composed", "tempo": 120.0, "key": "C major", "seed": 5,
+	"parts": {"drums": {}, "bass": {}, "keys": {}}}}
+
+
+func _stream(note: String, folder: String) -> void:
+	var opener := func(fp: int, sr: int, _words: Array) -> Dictionary:
+		return {"playback": Spectrum.begin_stream(fp, sr), "subtitles": null}
+	var closer := func() -> void: Spectrum.stop()
+	var live := SoundCard.for_note({"blocks": STREAM_BLOCK, "path": note, "folder": folder, "live": true,
+		"begin_stream": opener, "end_stream": closer})
+	var render := SoundCard.for_note({"blocks": STREAM_BLOCK, "path": note, "folder": folder, "live": false,
+		"begin_stream": opener, "end_stream": closer})
+	var file := SoundCard.for_note({"blocks": {"sound": {"source": "file", "path": "x.wav"}}, "path": note, "folder": folder,
+		"live": true, "begin_stream": opener, "end_stream": closer})
+	_ok(live.streams() and not render.streams() and not file.streams(),
+		"a composed song streams in a session a person plays; an export's render and a file do not")
+	var score := live.score()
+	var mix := ProjectSettings.globalize_path(ROOT).path_join("grid.wav")
+	_wav(mix, 2.0)
+	SongBake.write_sidecar(score, mix)
+	Spectrum.begin(mix)
+	var beats: PackedFloat32Array = Spectrum.known.get("beats", PackedFloat32Array())
+	var secs: PackedFloat32Array = Spectrum.known.get("sections", PackedFloat32Array())
+	_ok(beats.size() == int(score["bars"]) * int(score.get("meter", 4)) and secs.size() == (score["sections"] as Array).size()
+		and Spectrum.song_hash == SongBake.seed_of(score),
+		"a mix's sidecar hands the show its grid (%d beats, %d sections) and its seed" % [beats.size(), secs.size()])
+	var bare := ProjectSettings.globalize_path(ROOT).path_join("bare.wav")
+	_wav(bare, 2.0)
+	Spectrum.begin(bare)
+	_ok(Spectrum.known.is_empty() and Spectrum.song_hash != SongBake.seed_of(score),
+		"the control, a file with no sidecar: no grid, its own fingerprint")
+	Spectrum.stop()
+	Spectrum.known = SongBake.grid_of(score)
+	# the show's beat through Spectrum's own frames, the song's second 0 put a moment from now
+	Spectrum.known_origin = Spectrum.current.time + 0.2
+	var risen := await _rises(1.6)
+	Spectrum.stop()
+	_ok(Spectrum.known.is_empty(), "Stop lets the grid go")
+	var still := await _rises(1.6)
+	_ok(risen >= 2 and still == 0, "the show's beat rises on the grid's beats: %d times in 1.6 s; the control, no grid, %d" % [
+		risen, still])
+	render.free()
+	file.free()
+	for p in [mix, mix.get_basename() + ".json", bare]:
+		DirAccess.remove_absolute(p)
+	_waits(note, folder)
+	add_child(live)
+	var stream: SongStream = null
+	for c in live.get_children():
+		if c is SongStream:
+			stream = c
+	_ok(stream != null, "the card holds its stream")
+	if stream == null:
+		live.queue_free()
+		return
+	_ok(String(_rows(live).get("mix", "")) == "on_demand" and not PipelineRow.counted("on_demand"),
+		"heard as it is made, its unmade mix is on demand, left out of the tally (an export makes it)")
+	var was := int(stream._score.get("seed", 0))
+	live._block["seed"] = was + 4
+	live._changed()
+	await get_tree().create_timer(SoundCard.STREAM_SETTLE + 0.4).timeout
+	_ok(int(stream._score.get("seed", 0)) == was + 4, "a roll reaches its stream once the dials settle (%d, was %d)" % [
+		int(stream._score.get("seed", 0)), was])
+	if not FileAccess.file_exists(Deps.venv_bin(SongStream.VENV, "python")):
+		print("  --   the music environment is not installed: the music host's stream is not tried")
+		live.queue_free()
+		return
+	stream.play()
+	var heard := await _until(func() -> bool: return stream._pushed >= int(SongStream.PREROLL * SongStream.RATE), 90.0)
+	_ok(heard and Spectrum.is_streaming() and not Spectrum.paused,
+		"the stream is heard once its preroll is made (%d frames pushed)" % stream._pushed)
+	var epoch := stream._epoch
+	stream.update(SoundCard.for_note({"blocks": {"sound": STREAM_BLOCK["sound"].merged({"seed": 6}, true)}, "path": note,
+		"folder": folder}).score())
+	var rolled := await _until(func() -> bool: return stream._ready_load == stream._epoch and stream.landed >= 1, 60.0)
+	_ok(rolled and stream._epoch > epoch, "a roll is taken while it plays: the host loaded it and the stream goes on")
+	stream.seek(4.0)
+	_ok(absf(stream.position() - 4.0) < 0.05, "a seek starts the stream again there: %.2f s" % stream.position())
+	var again := await _until(func() -> bool: return stream._pushed >= int(SongStream.PREROLL * SongStream.RATE), 60.0)
+	_ok(again, "and it is heard from there")
+	stream.stop_song()
+	_ok(not Spectrum.is_streaming() and Spectrum.known.is_empty(), "Stop ends the stream")
+	live.queue_free()
+	await get_tree().process_frame
+
+
+class FakeSubtitles extends Node:
+	var words: Array = []
+	var time_base := 0.0
+
+
+## The stream's choices while its singer is late, driven by hand: what it asks of a host that never answers.
+func _waits(note: String, folder: String) -> void:
+	var block := {"sound": {"source": "composed", "tempo": 120.0, "key": "C major", "seed": 3,
+		"parts": {"drums": {}, "bass": {}, "vocal": {"pattern": "composed"}}}}
+	var score := SoundCard.for_note({"blocks": block, "path": note, "folder": folder}).score()
+	var phrases: Array = score["vocal"]["phrases"]
+	var made := func(taken: bool) -> SongStream:
+		var st := SongStream.new()
+		var bake := SongBake.new()
+		st.add_child(bake)
+		st.setup(score, folder, bake)
+		Spectrum.release_conductor(st)
+		st._host = "up"
+		st._ready_load = st._epoch
+		st._takes.clear()
+		if taken:
+			st._takes[0] = {"wav": "/nowhere.wav", "at": float(phrases[0]["at"])}
+		st._subtitles = FakeSubtitles.new()
+		st.add_child(st._subtitles)
+		st._show_words()
+		return st
+	var asked := func(st: SongStream) -> Array:
+		var out: Array = st._pending.values()
+		st._pending.clear()
+		st._asking = 0
+		st._inflight = 0.0
+		return out
+	var st: SongStream = made.call(false)
+	var line := st._bar_at(float(phrases[0]["at"]), false)
+	var first: Array = asked.call(st) if (func() -> bool: st._ask(); return true).call() else []
+	var reaches := 0.0
+	for w in first:
+		reaches = maxf(reaches, float(w["t1"]))
+	_ok(not first.is_empty() and absf(reaches - line) < 1e-3 and first.all(func(w: Dictionary) -> bool: return float(w["hold"]) < 0.0),
+		"a line not yet sung: the windows end at the bar it begins in (%.2f s, the line at %.2f s)" % [reaches, float(phrases[0]["at"])])
+	var vamps := 0
+	var held := true
+	for _k in 20:
+		st._ask()
+		for w in asked.call(st):
+			# the bars played again for this line (the next line's waits come after)
+			if float(w["hold"]) >= 0.0 and absf(float(w["hold"]) - line) < 1e-3:
+				vamps += 1
+				held = held and absf(float(w["t1"]) - line) < 1e-3
+		if st._missed.has(0):
+			break
+	var subs: Array = st._subtitles.words
+	_ok(vamps == SongStream.VAMP_MOST and held, "...once due, the bar before it again, holding the song there: %d times" % vamps)
+	_ok(st._missed.has(0) and not subs.any(func(w: Dictionary) -> bool: return int(w["sentence"]) == 0)
+		and subs.any(func(w: Dictionary) -> bool: return int(w["sentence"]) == 1),
+		"...then it goes without, and its words leave the subtitles (the next line's stay)")
+	st.free()
+	var ready: SongStream = made.call(true)
+	ready._ask()
+	var past := false
+	var waited := 0
+	for _k in 6:
+		for w in asked.call(ready):
+			past = past or float(w["t1"]) > line + 0.01
+			waited += 1 if float(w["hold"]) >= 0.0 and absf(float(w["hold"]) - line) < 1e-3 else 0
+		ready._ask()
+	_ok(past and waited == 0, "the control: with its take there, nothing waits at its bar and the windows go on past it")
+	ready.free()
+
+
+## How many times the show's beat rises past the Director's edge (0.5) in [param seconds] of frames.
+func _rises(seconds: float) -> int:
+	var n := 0
+	var prev := Spectrum.current.beat
+	var until := Time.get_ticks_msec() + int(seconds * 1000.0)
+	while Time.get_ticks_msec() < until:
+		await get_tree().process_frame
+		var b := Spectrum.current.beat
+		if b > 0.5 and prev <= 0.5:
+			n += 1
+		prev = b
+	return n
+
+
+## Frames until [param cond] holds or [param seconds] pass; whether it held.
+func _until(cond: Callable, seconds: float) -> bool:
+	var until := Time.get_ticks_msec() + int(seconds * 1000.0)
+	while Time.get_ticks_msec() < until:
+		if cond.call():
+			return true
+		await get_tree().process_frame
+	return bool(cond.call())
 
 
 func _ok(cond: bool, what: String) -> void:

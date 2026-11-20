@@ -244,9 +244,11 @@ static func attach_blocks(key: String) -> Dictionary:
 			return {"sound": {"source": "composed"}}
 		"clip":
 			return {"clip": {"path": ""}}
-		# A medium starts as the seeded show; its card picks another format.
+		# A medium starts as the seeded show; its card picks another format. Its pictures start with a look of their own -
+		# no style, no references (an empty block is that look, [method Illustrations.set_look]) - never the look of the
+		# note shown last, which the picture library still holds.
 		"medium":
-			return {"medium": {"format": "auto"}}
+			return {"medium": {"format": "auto"}, "illustrations": {}}
 		"look":
 			return {"look": {}}
 		"bookends":

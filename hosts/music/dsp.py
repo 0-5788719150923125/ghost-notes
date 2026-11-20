@@ -13,7 +13,7 @@ sample each. The pieces:
   before it, so a period is one vector step);
 - a reverb's impulse response (decaying noise, its highs dying first, two decorrelated channels) and the space it makes
   by FFT convolution; a tempo-synced delay as its echoes laid down one by one; chorus; drive; a compressor; a limiter;
-  the sidechain duck; equal-power pan.
+  the sidechain duck; equal-power pan; a channel vocoder (one sound's spectrum shaped by another's).
 
 TRAP: a moving cutoff is a mix of fixed filters, so a resonant sweep has two peaks a step apart as it passes between
 them; MORPH_STEP is narrow enough that it reads as one.
@@ -27,6 +27,8 @@ from scipy import ndimage, signal
 RATE = 44100
 # Octaves between the fixed filters a moving cutoff is mixed from (half that where the filter rings).
 MORPH_STEP = 1.0 / 6.0
+# The vocoder's spectrum: its window in samples (23 ms at 44.1 kHz), a quarter of it between frames.
+VOCODER_FFT = 1024
 
 
 def midi_hz(m):
@@ -346,6 +348,47 @@ def limit(x: np.ndarray, ceiling_db: float = -1.0, look_s: float = 0.004, rate: 
     g = np.minimum(g, signal.lfilter([0.002], [1.0, -0.998], g - 1.0) + 1.0)  # a slow recovery
     y = x * g
     return np.tanh(y / ceil) * ceil
+
+
+def vocoder(modulator: np.ndarray, carrier: np.ndarray, bands: int = 28, lo: float = 110.0, hi: float = 7600.0,
+            follow: float = 45.0, hiss: float = 0.5, rate: int = RATE) -> np.ndarray:
+    """A channel vocoder, in the short-time spectrum: the `carrier`'s spectrum given the `modulator`'s band by band
+    (`bands` log-spaced from `lo` to `hi` Hz) - each band's gain the modulator's energy there over the carrier's,
+    followed under `follow` Hz and laid smoothly across the band's bins - so the carrier's pitch speaks the modulator's
+    words; the modulator's hiss over 5 kHz rides through at `hiss`, its consonants. Mono in, mono out."""
+    n = len(carrier)
+    n_fft, hop = VOCODER_FFT, VOCODER_FFT // 4
+    f, _t, M = signal.stft(modulator, fs=rate, nperseg=n_fft, noverlap=n_fft - hop, boundary="even")
+    _f, _t2, C = signal.stft(carrier, fs=rate, nperseg=n_fft, noverlap=n_fft - hop, boundary="even")
+    frames = min(M.shape[1], C.shape[1])
+    M, C = M[:, :frames], C[:, :frames]
+    edges = np.geomspace(lo, hi, bands + 1)
+    centers = np.sqrt(edges[:-1] * edges[1:])
+    which = np.clip(np.digitize(f, edges) - 1, 0, bands - 1)
+    pm, pc = np.abs(M) ** 2, np.abs(C) ** 2
+    em = np.zeros((bands, frames))
+    ec = np.zeros((bands, frames))
+    for k in range(bands):
+        rows = which == k
+        em[k] = pm[rows].sum(axis=0)
+        ec[k] = pc[rows].sum(axis=0)
+    a = np.exp(-2.0 * np.pi * follow * hop / rate)
+    em = signal.lfilter([1.0 - a], [1.0, -a], em, axis=1)
+    ec = signal.lfilter([1.0 - a], [1.0, -a], ec, axis=1)
+    gain = np.sqrt(em / (ec + 1e-9 * (ec.max() + 1e-12)))
+    # each bin's gain from the bands either side of it, by log frequency: no step at a band's edge
+    lf = np.log(np.maximum(f, 1.0))
+    lc = np.log(centers)
+    per_bin = np.empty((len(f), frames))
+    for j in range(frames):
+        per_bin[:, j] = np.interp(lf, lc, gain[:, j])
+    per_bin[(f < lo * 0.7) | (f > hi * 1.3)] = 0.0
+    _tt, y = signal.istft(C * per_bin, fs=rate, nperseg=n_fft, noverlap=n_fft - hop, boundary=True)
+    out = np.zeros(n)
+    out[:min(n, len(y))] = y[:n]
+    if hiss > 0.0:
+        out += hiss * butter(modulator, "highpass", 5000.0, 4, rate)
+    return out
 
 
 def duck(n: int, times, depth: float, release_s: float, rate: int = RATE) -> np.ndarray:

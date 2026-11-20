@@ -28,9 +28,9 @@ _Anthropic's models through the Claude Code CLI, run with no tools and no projec
 
 Claude through the Claude Code CLI, as a bare writer.
 
-`--safe-mode` leaves out the author's CLAUDE.md, memory, skills, hooks, MCP servers, plugins and output styles, and `--system-prompt-file` replaces Claude Code's own agent prompt, so the model sees the two files and nothing else. `--tools ""` removes every tool. `--no-session-persistence`: nothing is resumed. The message goes in as stream-json (one user message on stdin), the only input that carries pictures; the reply is the stream's `result` event (`--verbose` is required with stream-json output). `--bare` is not used: it reads only ANTHROPIC_API_KEY, never the subscription login.
+`--safe-mode` leaves out the author's CLAUDE.md, memory, skills, hooks, MCP servers, plugins and output styles, and `--system-prompt-file` replaces Claude Code's own agent prompt, so the model sees the two files and nothing else. `--tools ""` removes every tool. `--no-session-persistence`: nothing is resumed - unless the job keeps a `session`, started under its id (`--session-id`) and resumed by it (`--resume`); the CLI then holds the system prompt as first sent for every later turn. The message goes in as stream-json (one user message on stdin), the only input that carries pictures; the reply is the stream's `result` event (`--verbose` is required with stream-json output). `--bare` is not used: it reads only ANTHROPIC_API_KEY, never the subscription login.
 
-Runs the Claude Code CLI. Source: [src/agents/text_gen.gd:299](../src/agents/text_gen.gd#L299)
+Runs the Claude Code CLI. Source: [src/agents/text_gen.gd:340](../src/agents/text_gen.gd#L340)
 
 ### `codex` - OpenAI (Codex CLI)
 
@@ -38,11 +38,11 @@ _OpenAI's models through the Codex CLI, run read-only in the job's own folder an
 
 OpenAI through the Codex CLI.
 
-`codex exec` has no system prompt to replace, so the system prompt leads the message, after `ONLY_THIS`. Read-only, in the job's own folder, `--ephemeral` so no session is kept, and `-o` names the file the final message is written to. Pictures go as `--image` files, prepared as Claude is sent them (`TextGen.picture`) and saved beside the prompt; the message says which is which. The tier is the reasoning effort; the model is the CLI's.
+`codex exec` has no system prompt to replace, so the system prompt leads the message, after `ONLY_THIS`. Read-only, in the job's own folder, `--ephemeral` so no session is kept, and `-o` names the file the final message is written to. A job keeping a `session` is not ephemeral: its first run names the thread (`thread.started`), and each later one is `exec resume <thread>`, told only the new message (the thread already holds what leads it), read-only by a config override since `resume` takes no `-s`. Pictures go as `--image` files, prepared as Claude is sent them (`TextGen.picture`) and saved beside the prompt; the message says which is which. The tier is the reasoning effort; the model is the CLI's.
 
 Ghost's tools (`AgentTools`) are its server `ghost`, named in `-c mcp_servers.ghost.*` overrides: the bare endpoint in argv and the job's token in an environment variable set for this run alone (`bearer_token_env_var`), so no argv holds it; calls approved (`default_tools_approval_mode = "approve"`, since `codex exec` never asks); and room for a slow one (`tool_timeout_sec`).
 
-Runs the OpenAI Codex CLI. Source: [src/agents/text_gen.gd:497](../src/agents/text_gen.gd#L497)
+Runs the OpenAI Codex CLI. Source: [src/agents/text_gen.gd:567](../src/agents/text_gen.gd#L567)
 
 ### `grok` - xAI (Grok Build CLI)
 
@@ -60,9 +60,9 @@ Ghost's tools (`AgentTools`): the server is named in the agent file (`mcpServers
 
 An agent file's body is a template (`${{ ... }}` is filled in), so a system prompt holding one leads the message instead, as Codex is sent its.
 
-No session is kept: Grok keeps every run and has no switch against it, so a finished run's sessions are deleted with `sessions delete` as the job's last steps (`forget`). The painter (`ImageGen.Grok`) shares all of this.
+No session is kept: Grok keeps every run and has no switch against it, so a finished run's sessions are deleted with `sessions delete` as the job's last steps (`forget`) - unless the job keeps a `session`, started under its id (`-s`) and resumed by it (`--resume`), and left for the next turn. The painter (`ImageGen.Grok`) shares all of this.
 
-Runs the Grok Build CLI (xAI). Source: [src/agents/text_gen.gd:667](../src/agents/text_gen.gd#L667)
+Runs the Grok Build CLI (xAI). Source: [src/agents/text_gen.gd:771](../src/agents/text_gen.gd#L771)
 
 ### `bedrock` - Amazon Bedrock (AWS CLI)
 
@@ -76,7 +76,7 @@ Which models, and where to call them, is the account's own answer: `BedrockCatal
 
 Converse evens out most differences between providers; the two that remain are retried as steps: a model that takes no system prompt is sent it at the head of the message, and one whose output limit is under `MAX_TOKENS` is asked again inside it.
 
-Runs the AWS CLI. Source: [src/agents/text_gen.gd:1061](../src/agents/text_gen.gd#L1061)
+Runs the AWS CLI. Source: [src/agents/text_gen.gd:1182](../src/agents/text_gen.gd#L1182)
 
 ## Painters (3)
 

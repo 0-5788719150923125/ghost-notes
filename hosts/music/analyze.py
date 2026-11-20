@@ -17,6 +17,8 @@ Writes `<out>/reference.json`:
      "voice": {bar: {"pitch": [16], "onset": [16], "group"}}   (a sung bar's tune a sixteenth at a time: the pitch
               sung there, MIDI or 0, and how likely a syllable begins there; bars singing one line share a group)
      "lines": [{"bar", "text"}]   (each lyric line's first bar, where `lines` was given)
+     "parts": [SongParts keys]   (what the song was heard to have: drums, bass, keys or pad, lead, vocal)
+     "bass": {bar: {"pitch": [8], "onset": [8]}}   (the bass line an eighth at a time, a pitch class or -1)
      "stray": seconds the beats stray from one straight grid}
 
 and `<out>/done.json` ({"ok"} or {"ok": false, "error"}). Nothing of the song's sound is kept: its numbers only.
@@ -51,6 +53,15 @@ FLOOR_OVER = 1.4
 # counted as sung that much less.
 HISS_VOICE = 0.015
 HISS_LEAST = 0.35
+# What a song is heard to have: drums where its percussive part is this share of its energy; harmony under the voice
+# where the band's middle band (the foreground taken out) is; struck (keys) rather than held (a pad) where this share
+# of its frames rise sharply; a lead where at least two unsung bars have this foreground share; a bass where its note
+# stands this far over the third likeliest (harmonic summation, normalized) in two eighths of five.
+DRUMS_SHARE = 0.06
+HARMONY_SHARE = 0.08
+STRUCK_SHARE = 0.06
+LEAD_SHARE = 0.12
+BASS_CLEAR = 0.04
 # Where chords are read from (Hz).
 CHORD_BAND = (100.0, 1000.0)
 
@@ -160,6 +171,9 @@ def analyze(spec: dict) -> dict:
     onset = np.maximum(np.diff(band, prepend=band[:1]), 0.0)
     bar_chord = [tuple(beat_chords[b * METER]) if b * METER < len(beat_chords) else (0, "") for b in range(bars)]
     profile = L.voice_profile(sal, cands, onset, step_t, bars, sung, bar_chord)
+    say("the parts")
+    bass_line = bass_of(mid, H4, step_t, bars, fps)
+    parts = heard(S, H, P, mask, sung, share, hiss, bass_line)
     say("the form")
     timbre = L.sync(np.log1p(L.log_bands(S, count=24)), bar_edges)
     timbre = (timbre - timbre.mean(axis=1, keepdims=True)) / (timbre.std(axis=1, keepdims=True) + 1e-9)
@@ -178,10 +192,68 @@ def analyze(spec: dict) -> dict:
     out = {"tempo": round(60.0 / beat, 3), "beat": beat, "offset": round(offset, 4), "bars": int(bars), "meter": METER,
            "length": round(length, 3), "key": k, "chords": chords, "sections": secs, "drums": patterns,
            "voice": voice_bars, "sung": [round(float(v), 2) for v in sung], "stray": round(stray, 4),
+           "parts": parts, "bass": bass_line,
            "took": round(time.time() - began, 1)}
     lines = spec.get("lines") or []
     if lines:
         out["lines"] = place_lines(lines, sung, secs)
+    return out
+
+
+def bass_of(mid: np.ndarray, H4: np.ndarray, step_t: np.ndarray, bars: int, fps: float) -> dict:
+    """The bass line, an eighth at a time: {bar: {"pitch": [pitch class or -1, 8 a bar], "onset": [0-1]}} - the bass
+    note by harmonic summation where it is clear, and how strongly the low band starts a note there. {} where the song
+    has no bass to speak of."""
+    B = L.bass_chroma(L.spectrogram(mid, 8192))
+    f4 = np.arange(H4.shape[0]) * L.RATE / 4096
+    low = np.log1p(100.0 * H4[(f4 >= 40.0) & (f4 <= 250.0)].sum(axis=0))
+    rise = np.maximum(np.diff(low, prepend=low[:1]), 0.0)
+    rise = rise / (np.percentile(rise, 99) + 1e-9)
+    out = {}
+    eighths = step_t[::2]
+    for b in range(bars):
+        pitch, onset = [], []
+        for k in range(8):
+            i = b * 8 + k
+            if i + 1 >= len(eighths):
+                pitch.append(-1)
+                onset.append(0.0)
+                continue
+            a, e = int(eighths[i] * fps), max(int(eighths[i + 1] * fps), int(eighths[i] * fps) + 1)
+            col = B[:, a:min(e, B.shape[1])].mean(axis=1) if a < B.shape[1] else np.zeros(12)
+            top = np.sort(col)
+            clear = top[-1] - top[-3] > BASS_CLEAR
+            pitch.append(int(np.argmax(col)) if clear else -1)
+            onset.append(round(float(np.clip(rise[a:min(a + 3, len(rise))].max() if a < len(rise) else 0.0, 0.0, 1.0)), 2))
+        out[str(b)] = {"pitch": pitch, "onset": onset}
+    clear_share = np.mean([p >= 0 for v in out.values() for p in v["pitch"]]) if out else 0.0
+    return out if clear_share >= 0.4 else {}
+
+
+def heard(S: np.ndarray, H: np.ndarray, P: np.ndarray, mask: np.ndarray, sung: np.ndarray, share: np.ndarray,
+          hiss: np.ndarray, bass_line: dict) -> list:
+    """Which parts the song has, as SongParts keys: drums where the percussive part is a real share of it, a bass where
+    one was read, keys (struck chords) or a pad (held ones) where the band holds harmony under the voice (its middle
+    band, the foreground taken out), a lead where bars carry a strong line of their own that does not hiss as words do,
+    and a voice where bars are sung."""
+    f = L.bin_hz()
+    total = float(np.sum(S ** 2)) + 1e-12
+    out = []
+    if float(np.sum(P ** 2)) / total >= DRUMS_SHARE:
+        out.append("drums")
+    if bass_line:
+        out.append("bass")
+    bg = H * (1.0 - mask)
+    midb = (f >= 200.0) & (f <= 2000.0)
+    if float(np.sum(bg[midb] ** 2)) / total >= HARMONY_SHARE:
+        e = np.log1p(100.0 * bg[midb].sum(axis=0))
+        rise = np.maximum(np.diff(e, prepend=e[:1]), 0.0)
+        struck = float(np.mean(rise > 0.5 * np.percentile(rise, 99)))
+        out.append("keys" if struck >= STRUCK_SHARE else "pad")
+    if int(np.sum((share >= LEAD_SHARE) & (hiss < 0.5 * HISS_VOICE))) >= 2:
+        out.append("lead")
+    if int(np.sum(sung > SUNG)) >= 4:
+        out.append("vocal")
     return out
 
 

@@ -21,7 +21,11 @@ class_name TextGen
 ## (turned over when `flip`) and listed at the top of `prompt.txt`.
 ##
 ## A writer, not an agent, unless ghost hands it tools. A run works from its prompt alone and is
-## stateless (no session kept or resumed; a caller wanting a conversation sends it). Claude is run with
+## stateless (no session kept or resumed) unless its job names a `session` (`{id, resume}`): a backend
+## that [method Backend.sessions] then keeps the CLI's conversation, starting it under that id (Codex
+## names its own) or resuming it, so a conversation's earlier turns are read from the provider's prompt
+## cache rather than sent again ([WriterChat]). A session is found by the folder a run starts in, so a
+## conversation's runs share one `cwd` while each keeps its own `dir`. Claude is run with
 ## none of its own tools; Codex, whose `exec` keeps a read-only shell, is told to work only from the
 ## message ([constant Codex.ONLY_THIS]); Grok keeps `read_file` only when it has pictures to look at.
 ##
@@ -189,6 +193,29 @@ static func follow(job: Dictionary, path: String, read: Callable, idle := "start
 	return now
 
 
+## The folder a job's CLI starts in: its `cwd` where it names one (a conversation's runs share one, since a CLI finds
+## a session by it), else its own `dir`.
+static func cwd_of(job: Dictionary) -> String:
+	var c := String(job.get("cwd", ""))
+	return c if not c.is_empty() else String(job["dir"])
+
+
+## The session a job keeps (`{id, resume}`), {} for a stateless run.
+static func session_in(job: Dictionary) -> Dictionary:
+	return job["session"] if job.get("session") is Dictionary else {}
+
+
+## [param text] said by the writer between its tool calls, kept in [param now]'s `said` for a conversation to show as it
+## comes ([method AgentJobs.said]).
+static func note_said(now: Dictionary, text: String) -> void:
+	var t := text.strip_edges()
+	if t.is_empty():
+		return
+	if not (now.get("said") is Array):
+		now["said"] = []
+	(now["said"] as Array).append(t)
+
+
 ## A tool as a person reads it: `mcp__ghost__look` and `ghost__look` are "look".
 static func tool_name(name: String) -> String:
 	return name.get_slice("__", name.get_slice_count("__") - 1) if name.contains("__") else name
@@ -249,6 +276,19 @@ class Backend:
 	func takes_tools() -> bool:
 		return false
 
+	## Whether this writer keeps a job's `session` and resumes it (see the class note).
+	func sessions() -> bool:
+		return false
+
+	## After the run: the id of the session it kept, "" for none.
+	func session_of(_job: Dictionary) -> String:
+		return ""
+
+	## After the run: what it cost, as far as its stream says: `{fresh, cached, made, out, usd}` (tokens read new, read from
+	## the cache, written to the cache, written out; dollars), each 0 where it says nothing.
+	func usage_of(_job: Dictionary) -> Dictionary:
+		return {}
+
 	## The models a picker offers for this writer: `[{key, label}]`, the default (key "") first.
 	static func models() -> Array:
 		return [{"key": "", "label": "Default"}]
@@ -293,7 +333,8 @@ class Backend:
 ## `--safe-mode` leaves out the author's CLAUDE.md, memory, skills, hooks, MCP servers, plugins and
 ## output styles, and `--system-prompt-file` replaces Claude Code's own agent prompt, so the model sees
 ## the two files and nothing else. `--tools ""` removes every tool. `--no-session-persistence`: nothing
-## is resumed. The message goes in as stream-json (one user message on stdin), the only input that
+## is resumed - unless the job keeps a `session`, started under its id (`--session-id`) and resumed by it
+## (`--resume`); the CLI then holds the system prompt as first sent for every later turn. The message goes in as stream-json (one user message on stdin), the only input that
 ## carries pictures; the reply is the stream's `result` event (`--verbose` is required with stream-json
 ## output). `--bare` is not used: it reads only ANTHROPIC_API_KEY, never the subscription login.
 class Claude:
@@ -359,7 +400,7 @@ class Claude:
 		if tools.is_empty() and not String(job.get("tools_url", "")).is_empty():
 			job["error"] = "could not write the tools' config into " + String(job["dir"])
 			return -1
-		var pid := Subprocess.start_redirected(binary(), Claude.argv(job, String(p["system"]), tools), {"cwd": String(job["dir"]),
+		var pid := Subprocess.start_redirected(binary(), Claude.argv(job, String(p["system"]), tools), {"cwd": TextGen.cwd_of(job),
 			"stdin": String(p["input"]), "out": String(p["reply"]), "err": String(p["log"])},
 			"claude writer")
 		if pid <= 0:
@@ -378,9 +419,31 @@ class Claude:
 		args.append_array(["--tools", "",
 			"--system-prompt-file", system_path,
 			"--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-			"--include-partial-messages", "--no-session-persistence"])
+			"--include-partial-messages"])
+		var session := TextGen.session_in(job)
+		if String(session.get("id", "")).is_empty():
+			args.append("--no-session-persistence")
+		else:
+			args.append_array(["--resume" if bool(session.get("resume", false)) else "--session-id", String(session["id"])])
 		args.append_array(tools)
 		return args
+
+	func sessions() -> bool:
+		return true
+
+	func session_of(job: Dictionary) -> String:
+		var d: Variant = _reply(job)
+		var said := String((d as Dictionary).get("session_id", "")) if d is Dictionary else ""
+		return said if not said.is_empty() else String(TextGen.session_in(job).get("id", ""))
+
+	func usage_of(job: Dictionary) -> Dictionary:
+		var d: Variant = _reply(job)
+		if not (d is Dictionary):
+			return {}
+		var u: Dictionary = (d as Dictionary)["usage"] if (d as Dictionary).get("usage") is Dictionary else {}
+		return {"fresh": int(u.get("input_tokens", 0)), "cached": int(u.get("cache_read_input_tokens", 0)),
+			"made": int(u.get("cache_creation_input_tokens", 0)), "out": int(u.get("output_tokens", 0)),
+			"usd": float((d as Dictionary).get("total_cost_usd", 0.0))}
 
 	## Ghost's tools for a job with a `tools_url`: the server named in a config file beside the prompt
 	## (`mcp.json` - a path in argv, never the URL's token), no other server (`--strict-mcp-config`), its
@@ -464,6 +527,11 @@ class Claude:
 						now["chars"] = int(now["chars"]) + String(delta.get("text", "")).length()
 					"tool_use":
 						now["doing"] = "calling " + TextGen.tool_name(String(block.get("name", "a tool")))
+			"assistant":
+				var msg: Dictionary = e["message"] if e.get("message") is Dictionary else {}
+				for b in msg.get("content", []):
+					if b is Dictionary and String((b as Dictionary).get("type", "")) == "text":
+						TextGen.note_said(now, String((b as Dictionary).get("text", "")))
 			"user":
 				now["doing"] = "thinking"          # a tool has answered: the model's turn again
 			"result":
@@ -486,7 +554,9 @@ class Claude:
 ##
 ## `codex exec` has no system prompt to replace, so the system prompt leads the message, after
 ## [constant ONLY_THIS]. Read-only, in the job's own folder, `--ephemeral` so no session is kept, and
-## `-o` names the file the final message is written to. Pictures go as `--image` files, prepared as
+## `-o` names the file the final message is written to. A job keeping a `session` is not ephemeral: its first
+## run names the thread (`thread.started`), and each later one is `exec resume <thread>`, told only the new
+## message (the thread already holds what leads it), read-only by a config override since `resume` takes no `-s`. Pictures go as `--image` files, prepared as
 ## Claude is sent them ([method TextGen.picture]) and saved beside the prompt; the message says which is
 ## which. The tier is the reasoning effort; the model is the CLI's.
 ##
@@ -546,7 +616,7 @@ class Codex:
 		var url := String(job.get("tools_url", ""))
 		ImageGen.Codex.run_offered(job)
 		var pid := Subprocess.start_redirected(binary(), Codex.argv(job, m["pictures"]),
-			{"cwd": String(job["dir"]), "stdin": String(p["prompt"]), "out": String(p["reply"]),
+			{"cwd": TextGen.cwd_of(job), "stdin": String(p["prompt"]), "out": String(p["reply"]),
 			"err": String(p["log"]), "env": {TOKEN_ENV: AgentTools.token_of(url)} if not url.is_empty() else {}},
 			"codex writer")
 		if pid <= 0:
@@ -562,6 +632,8 @@ class Codex:
 		var sys := String(job.get("system", "")).strip_edges()
 		if not sys.is_empty():
 			head.append(sys)
+		if bool(TextGen.session_in(job).get("resume", false)):
+			head.clear()                   # the thread holds them from its first message
 		var pictures: Array = []
 		var lines := PackedStringArray()
 		for im in job.get("images", []):
@@ -572,15 +644,23 @@ class Codex:
 			pictures.append({"from": from, "flip": bool(d.get("flip", false)),
 				"to": String(job["dir"]).path_join("picture_%d.jpg" % (pictures.size() + 1))})
 			lines.append("Attached picture %d - %s" % [pictures.size(), String(d.get("label", "")).trim_suffix(":")])
-		var body := "\n\n".join(head) + "\n\n---\n\n"
+		var body := ("\n\n".join(head) + "\n\n---\n\n") if not head.is_empty() else ""
 		if not lines.is_empty():
 			body += "\n".join(lines) + "\n\n"
 		return {"error": "", "prompt": body + String(job.get("prompt", "")), "pictures": pictures}
 
 	static func argv(job: Dictionary, pictures: Array) -> PackedStringArray:
-		var args := PackedStringArray(["exec", "--skip-git-repo-check", "--json", "--ephemeral",
-			"-s", "read-only", "-C", String(job["dir"]),
-			"-c", "model_reasoning_effort=" + (String(job["effort"]) if not String(job.get("effort", "")).is_empty()
+		var session := TextGen.session_in(job)
+		var resume := String(session.get("id", "")) if bool(session.get("resume", false)) else ""
+		var args := PackedStringArray(["exec"])
+		if not resume.is_empty():
+			args.append_array(["resume", "-c", "sandbox_mode=\"read-only\""])
+		args.append_array(["--skip-git-repo-check", "--json"])
+		if session.is_empty():
+			args.append("--ephemeral")
+		if resume.is_empty():
+			args.append_array(["-s", "read-only", "-C", TextGen.cwd_of(job)])
+		args.append_array(["-c", "model_reasoning_effort=" + (String(job["effort"]) if not String(job.get("effort", "")).is_empty()
 				else String(EFFORT.get(String(job.get("tier", "best")), "medium"))),
 			"-o", String(Backend.paths(job)["last"])])
 		if not String(job.get("model", "")).is_empty():
@@ -594,11 +674,33 @@ class Codex:
 		# `--image=` per file, then `--`: the flag takes many values (see ImageGen.Codex)
 		for pic in pictures:
 			args.append("--image=" + String((pic as Dictionary)["to"]))
-		args.append_array(["--", "-"])
+		args.append("--")
+		if not resume.is_empty():
+			args.append(resume)
+		args.append("-")
 		return args
 
 	func resolve(job: Dictionary) -> String:
 		return FileAccess.get_file_as_string(String(Backend.paths(job)["last"])).strip_edges()
+
+	func sessions() -> bool:
+		return true
+
+	func session_of(job: Dictionary) -> String:
+		for e in Grok.events(String(Backend.paths(job)["reply"])):
+			if String((e as Dictionary).get("type", "")) == "thread.started":
+				return str((e as Dictionary).get("thread_id", ""))
+		return String(TextGen.session_in(job).get("id", ""))
+
+	func usage_of(job: Dictionary) -> Dictionary:
+		var out := {}
+		for e in Grok.events(String(Backend.paths(job)["reply"])):
+			if String((e as Dictionary).get("type", "")) == "turn.completed" and (e as Dictionary).get("usage") is Dictionary:
+				var u: Dictionary = (e as Dictionary)["usage"]
+				var cached := int(u.get("cached_input_tokens", 0))
+				out = {"fresh": maxi(0, int(u.get("input_tokens", 0)) - cached), "cached": cached, "made": 0,
+					"out": int(u.get("output_tokens", 0)), "usd": 0.0}
+		return out
 
 	func failure(job: Dictionary) -> String:
 		var last := ImageGen.Codex.last_message(String(Backend.paths(job)["reply"]))
@@ -634,6 +736,7 @@ class Codex:
 			"item.completed":
 				if String(item.get("type", "")) == "agent_message":
 					now["chars"] = int(now["chars"]) + String(item.get("text", "")).length()
+					TextGen.note_said(now, String(item.get("text", "")))
 				now["doing"] = "working"
 			"turn.completed", "turn.failed":
 				now["doing"] = "finishing"
@@ -662,8 +765,9 @@ class Codex:
 ## the message instead, as Codex is sent its.
 ##
 ## No session is kept: Grok keeps every run and has no switch against it, so a finished run's sessions
-## are deleted with `sessions delete` as the job's last steps ([method forget]). The painter
-## ([ImageGen.Grok]) shares all of this.
+## are deleted with `sessions delete` as the job's last steps ([method forget]) - unless the job keeps a
+## `session`, started under its id (`-s`) and resumed by it (`--resume`), and left for the next turn. The
+## painter ([ImageGen.Grok]) shares all of this.
 class Grok:
 	extends Backend
 
@@ -809,7 +913,10 @@ class Grok:
 	## its workspace, and the model and effort chosen - else [param effort], else the model's own.
 	static func common(job: Dictionary, effort: String) -> PackedStringArray:
 		var args := PackedStringArray(["--no-memory", "--no-subagents", "--disable-web-search",
-			"--cwd", String(job["dir"])])
+			"--cwd", TextGen.cwd_of(job)])
+		var session := TextGen.session_in(job)
+		if not String(session.get("id", "")).is_empty():
+			args.append_array(["--resume" if bool(session.get("resume", false)) else "-s", String(session["id"])])
 		if not String(job.get("model", "")).is_empty():
 			args.append_array(["-m", String(job["model"])])
 		var e := String(job.get("effort", ""))
@@ -843,7 +950,7 @@ class Grok:
 			env.merge(TOOLS_ENV, true)
 		job["step"] = "write"
 		var pid := Subprocess.start_redirected(binary(), Grok.argv(job, not (m["pictures"] as Array).is_empty()),
-			{"cwd": String(job["dir"]), "out": String(p["reply"]), "err": String(p["log"]), "env": env},
+			{"cwd": TextGen.cwd_of(job), "out": String(p["reply"]), "err": String(p["log"]), "env": env},
 			"grok writer")
 		if pid <= 0:
 			job["error"] = "could not start grok (is the Grok Build CLI installed and logged in?)"
@@ -917,7 +1024,10 @@ class Grok:
 			"text":
 				now["doing"] = "writing"
 				now["chars"] = int(now["chars"]) + Grok.field(e, "data").length()
+				now["_words"] = String(now.get("_words", "")) + Grok.field(e, "data")
 			"tool_call":
+				TextGen.note_said(now, String(now.get("_words", "")))
+				now["_words"] = ""
 				var tool := Grok.field(e, "toolName")
 				match tool:
 					"use_tool":
@@ -934,6 +1044,8 @@ class Grok:
 				if Grok.field(e, "status") in ["completed", "failed"]:
 					now["doing"] = "thinking"
 			"end":
+				TextGen.note_said(now, String(now.get("_words", "")))
+				now["_words"] = ""
 				now["doing"] = "finishing"
 
 	## A JSON-lines file's objects, quietly.
@@ -970,9 +1082,18 @@ class Grok:
 		return out
 
 	func advance(job: Dictionary) -> int:
+		if not TextGen.session_in(job).is_empty():
+			return 0                       # kept for the conversation's next turn
 		if String(job.get("step", "")) == "write":
 			job["sessions"] = Grok.sessions_of(String(job["dir"]), String(Grok.outcome(String(Backend.paths(job)["reply"]))["session"]))
 		return Grok.forget(job, binary())
+
+	func sessions() -> bool:
+		return true
+
+	func session_of(job: Dictionary) -> String:
+		var said := String(Grok.outcome(String(Backend.paths(job)["reply"]))["session"])
+		return said if not said.is_empty() else String(TextGen.session_in(job).get("id", ""))
 
 	func resolve(job: Dictionary) -> String:
 		var o := Grok.outcome(String(Backend.paths(job)["reply"]))

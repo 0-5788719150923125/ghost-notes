@@ -37,7 +37,7 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 
 | Mark | Example | Panels | What it does |
 |---|---|---|---|
-| Picture | `<!-- image: what the picture shows -->` | Generative | An illustration, described, placed where it sits: a full page when it opens the chapter or a scene, beside the text otherwise. Generated on request in the Illustrations panel. |
+| Picture | `<!-- image: what the picture shows -->` | Generative | An illustration, described, placed where it sits: a full page when it opens the chapter or a scene, beside the text otherwise. Painted on the Pictures card, or with the rest by the Pipeline card's Generate. |
 | Full-page picture | `<!-- image (full): what the picture shows -->` | Generative | A picture pinned to a page of its own, wherever it sits. |
 | Picture, left edge | `<!-- image (left): what the picture shows -->` | Generative | A picture beside the text, pinned to the left edge. (right) and (inline) pin it the other ways. |
 | Sketch | `<!-- sketch: a wiring diagram -->` | Generative | A drawing made on the page in the writer's own ink, black on white, without the book's style or references. |

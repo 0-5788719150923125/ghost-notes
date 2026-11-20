@@ -636,7 +636,25 @@ func persist() -> void:
 
 ## ...and read back: the rows, the cast (from an older build's numbered tabs, or its single voice,
 ## when that is what is stored) and the tabs from the stored draft - before a document is bound.
+##
+## A panel opened on a note starts from nothing instead: one reader in the default voice and the rows at their
+## defaults, until the note's own block brings its cast ([method apply]). A Voice just attached has no cast in its block,
+## and reads in that one voice, never in the cast of whatever note was read last; voices kept for every note are picked
+## from the Dex. What is stored here is the memory of a panel opened on no note (the command line, a gate).
 func load_stored() -> void:
+	if not panel.note_path.is_empty():
+		_syncing = true
+		_turn.value = 1.0
+		_hesitate.value = HESITATE_DEFAULT
+		_hesitate_on.button_pressed = true
+		_hesitate.editable = true
+		_syncing = false
+		_stash = {Manuscript.NARRATOR: _merge({})}
+		_order = PackedStringArray(_stash.keys())
+		_names = PackedStringArray()
+		_slots = []
+		refresh("", "")
+		return
 	_syncing = true
 	_turn.value = clampf(float(Settings.read(panel.section(), "turn", 1.0)), 0.0, Delivery.MAX_TURN_SCALE)
 	_hesitate.value = clampf(float(Settings.read(panel.section(), "hesitate", HESITATE_DEFAULT)),

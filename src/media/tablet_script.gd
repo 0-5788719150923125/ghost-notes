@@ -318,7 +318,7 @@ static func parse(source: String) -> Dictionary:
 		"notes": w.notes, "speakable": "\n".join(w.say)}
 
 
-## The real pages of [param body], as picture rows for the Illustrations panel:
+## The real pages of [param body], as picture rows for the Pictures card:
 ## `[{key, prompt, url, placement: "page"}]` - captured rather than painted.
 static func snapshots(body: String) -> Array:
 	if not is_tablet(body):

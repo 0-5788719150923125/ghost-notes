@@ -4,6 +4,9 @@ extends Node
 ## hand a passage to one of them. Each claim fails silently if it breaks (an unrecognized cue reads
 ## on in the narrator's voice; a per-tab setting that never reaches the request changes nothing).
 ##
+## A panel opened on a note starts its cast from one reader in the default voice, never from the cast the panel last
+## held (the last note read); a panel opened on no note takes up what it held (control).
+##
 ## Needs a real boot: [Phonemes] and the panel's Director-backed sliders are autoload-bound.
 ##   tests/run_boot_probe.sh tests/reading/multi_voice_check.gd 120
 
@@ -65,6 +68,7 @@ func _ready() -> void:
 	_check_stress_reaches_the_voice()
 	_check_cards_familiar()
 	_check_voice_colors()
+	_check_note_starts_fresh()
 	# Free the children moved into the tree while their callback owner is still alive, including deferred UI work.
 	for child in [_ed._panel, _ed._cast._repace_timer, _ed._cast._cast_timer]:
 		child.queue_free()
@@ -121,6 +125,25 @@ func _rests(segs: Array) -> Array:
 
 
 ## The cues. Lines that look like a cue but are prose must not be swallowed and read in the wrong voice.
+## The cast another note left in the panel's memory is not this note's: a note starts from one default reader (control: a
+## panel on no note takes the stored cast up). In memory only - this process never saves settings.
+func _check_note_starts_fresh() -> void:
+	var was: Variant = Settings.read(_ed.section(), "cast", {})
+	var was_path := _ed.note_path
+	Settings.write(_ed.section(), "cast", {"Control": {"voice": "kokoro", "speaker": 2}, "Aisle": {"voice": "kokoro", "speaker": 13}})
+	_ed.note_path = "/nowhere/a new note.md"
+	_ed._cast.load_stored()
+	var fresh := _ed._cast.cast_dict()
+	_ok(fresh.size() == 1 and fresh.has(Manuscript.NARRATOR)
+		and String((fresh[Manuscript.NARRATOR] as Dictionary).get("voice", "")) == ReadingPanel.DEFAULT_VOICE,
+		"a note starts from one reader in the default voice, not the last note's cast (%s)" % str(fresh.keys()))
+	_ed.note_path = ""
+	_ed._cast.load_stored()
+	_ok(_ed._cast.cast_dict().has("Control"), "CONTROL: a panel opened on no note takes up the cast it held")
+	_ed.note_path = was_path
+	Settings.write(_ed.section(), "cast", was)
+
+
 func _check_cues() -> void:
 	_slots(3)
 	var segs: Array = _ed._split_speakers(

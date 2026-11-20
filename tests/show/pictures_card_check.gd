@@ -14,6 +14,9 @@ extends SceneTree
 ## no × of its own, where the Medium card has one. Every panel shows what comes with the cards it shows
 ## (its workspace's `hosts`; control: the table's without the Pictures card).
 ##
+## A Medium attached gives its pictures a look of their own: the block it writes is no style and no references, the
+## painter kept (control: the library held the last note's style and a reference before it).
+##
 ## One card: built beside the Medium card (as a letter, a dispatch desk and a tablet), which never carries a
 ## list of pictures of its own (control: the Pictures card holds one).
 ##
@@ -72,9 +75,27 @@ func _run() -> void:
 	await _clip_rows()
 	await _flip_row()
 	await _clip_decode()
+	_fresh_look()
 	Illustrations.use_for_test()
 	print("pictures_card_check: %s" % ("ALL OK" if _fails == 0 else "%d FAILED" % _fails))
 	quit(0 if _fails == 0 else 1)
+
+
+## A Medium attached starts its pictures' look from nothing, not the last note's.
+func _fresh_look() -> void:
+	var ref := "user://illustrations_test/fresh_look_ref.png"
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(ref.get_base_dir()))
+	Image.create(4, 4, false, Image.FORMAT_RGB8).save_png(ref)
+	Illustrations.use_for_test({"styles": {"image": "colored pencil on crumpled paper", "sketch": "ballpoint"},
+		"backend": "codex", "refs_by_kind": {"image": [ref], "sketch": []}}, false)
+	_ok(Illustrations.style("image") == "colored pencil on crumpled paper" and not Illustrations.references("image").is_empty(),
+		"CONTROL: the library holds the last note's style and a reference")
+	var block: Variant = Components.attach_blocks("medium").get("illustrations")
+	_ok(block is Dictionary, "attaching a Medium writes its pictures a block")
+	Illustrations.set_look(block if block is Dictionary else {})
+	_ok(Illustrations.style("image").is_empty() and Illustrations.style("sketch").is_empty() and Illustrations.references("image").is_empty()
+		and Illustrations.backend() == "codex", "...and it is a look of their own: no style, no references, the painter kept")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(ref))
 
 
 ## Which marks are pictures is the presentation's.

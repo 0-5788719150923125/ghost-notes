@@ -84,7 +84,7 @@ static func use_for_test(store := {}, read_only := false) -> void:
 
 
 ## The chapter's pictures in reading order ([method Manuscript.images] rows): what "the pictures before
-## this one" means for a self-referenced kind. Set by whoever holds the text (the Illustrations panel).
+## this one" means for a self-referenced kind. Set by whoever holds the text (the Pictures card).
 static var _chapter: Array = []
 
 static func set_chapter(images: Array) -> void:

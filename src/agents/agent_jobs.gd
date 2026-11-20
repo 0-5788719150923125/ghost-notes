@@ -100,6 +100,9 @@ static func clear_outputs(job: Dictionary) -> String:
 ##   lane     - optional: jobs sharing a lane run one at a time, in order
 ##   label    - optional: a few words for logs and status lines
 ##   tools_url - text only, optional: the [AgentTools] endpoint whose tools the writer may call
+##   session  - text only, optional: `{id, resume}`, the CLI conversation the run keeps ([TextGen]); its outcome
+##              then names the session (`session`) and what it cost (`usage`)
+##   cwd      - optional: the folder the CLI starts in, shared by a conversation's runs; `dir` by default
 ##   timeout  - optional: seconds before the run is abandoned; none by default
 static func submit(spec: Dictionary) -> String:
 	if read_only():
@@ -147,6 +150,19 @@ static func activity(id: String) -> String:
 		if String((q as Dictionary)["id"]) == id:
 			return "waiting its turn"
 	return ""
+
+
+## What a running job's writer has said between its tool calls so far ([method TextGen.note_said]), oldest first; read off
+## its stream at most once a second, or now when [param fresh] (a tool call arriving, so what was said before it shows
+## before it). Empty for a job not running: its outcome carries the rest (`said`).
+static func said(id: String, fresh := false) -> Array:
+	if not _running.has(id):
+		return []
+	var job: Dictionary = _running[id]
+	if fresh and job.get("gen") is Object and (job["gen"] as Object).has_method("activity"):
+		job["gen"].activity(job)
+	var now: Variant = job.get("_now")
+	return ((now as Dictionary).get("said", []) as Array).duplicate() if now is Dictionary else []
 
 
 ## Drop an ended job's outcome once the caller has taken it.
@@ -264,6 +280,11 @@ static func _land(job: Dictionary) -> Dictionary:
 		else:
 			out["ok"] = true
 			out["text"] = text
+		if not TextGen.session_in(job).is_empty():
+			out["session"] = String(gen.session_of(job))
+			out["usage"] = gen.usage_of(job)
+			gen.activity(job)
+			out["said"] = (TextGen.now_of(job).get("said", []) as Array).duplicate()
 	else:
 		var made: String = gen.resolve(job)
 		var img := Image.new()

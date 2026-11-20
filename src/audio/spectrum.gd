@@ -166,6 +166,7 @@ func _ready() -> void:
 ## with "" on a direct boot (falls back to --audio, then res://audio/song.wav). Safe to re-point.
 func begin(path := "") -> void:
 	paused = false
+	known = {}
 	if not path.is_empty():
 		_override_path = path
 	_load_audio()
@@ -188,6 +189,7 @@ func begin(path := "") -> void:
 		#A reading's take writes its own bookend into its PCM and records it in its sidecar. Believe the
 		#file over the request, or a file that already opens with silence would be held twice.
 		_adopt_baked_bookend()
+		_adopt_song()
 		#The lead-in holds the first sample, not the session: the clock runs at once so scenes animate and
 		#the picture fades up through the hold. _process starts playback when the hold is spent.
 		_hold = 0.0
@@ -228,6 +230,17 @@ func _bake_cache_path() -> String:
 			fa.close()
 	return "user://bake_%d.spec" % hash(p + "_" + str(sz))
 
+
+## A COMPOSED SONG'S OWN GRID: `{beats: PackedFloat32Array, bar: int (beats a bar), beat: float (seconds), sections:
+## PackedFloat32Array}`, every time in the song's own seconds - from a file's sidecar (`grid`, [method begin]) or handed
+## by what streams the song ([SongStream]). While it is set,
+## the beat pulses on the song's beats (fullest on a bar's first), the beat period is its beat and the movement rises
+## where its sections begin - nothing guessed from a mix whose loudness hardly moves. {} for a song read by ear. The
+## spectrum and the harmony are still what is heard.
+var known := {}
+## Seconds on the session clock where the song's own second 0 is heard (a file's held intro; a stream's start, minus
+## where in the song it began): the grid's times are read against it.
+var known_origin := 0.0
 
 ## Generator ring size (seconds) for streamed sessions - see begin_stream().
 const STREAM_BUFFER := 4.0
@@ -441,12 +454,23 @@ func release_conductor(owner: Object) -> void:
 		_conductor = {}
 
 
-## The conductor's hooks, {} when none is registered or its owner has been freed (which releases it).
+## The conductor's hooks, {} when none is registered or its owner has been freed or is on its way out (which releases
+## it): a panel replaced in one frame is freed at its end, after the new one has begun.
 func conductor() -> Dictionary:
-	if _conductor_owner != null and _conductor_owner.get_ref() == null:
+	if _conductor_owner != null and (_conductor_owner.get_ref() == null or _leaving(_conductor_owner.get_ref())):
 		_conductor_owner = null
 		_conductor = {}
 	return _conductor
+
+
+## Whether [param o] is a node queued for deletion, or under one.
+static func _leaving(o: Object) -> bool:
+	var n := o as Node
+	while n != null:
+		if n.is_queued_for_deletion():
+			return true
+		n = n.get_parent()
+	return false
 
 
 func _hook(name: String) -> Callable:
@@ -532,6 +556,7 @@ func transport_toggle() -> void:
 func stop() -> void:
 	paused = false
 	_waits = {}
+	known = {}
 	if _player != null:
 		_player.stream_paused = false
 		_player.stop()
@@ -586,6 +611,26 @@ func _adopt_baked_bookend() -> void:
 	lead_in = maxf(0.0, float((bk as Dictionary).get("in", 0.0)))
 	tail = maxf(0.0, float((bk as Dictionary).get("out", 0.0)))
 	bookend_baked = lead_in > 0.001 or tail > 0.001
+
+
+## What a composed song's file says of itself in its sidecar (`SongBake.write_sidecar`): its grid ([member known]) and
+## its seed (the show's, over the file's fingerprint). A file with neither has no grid.
+func _adopt_song() -> void:
+	known = {}
+	if _loaded_path.is_empty() or not FileAccess.file_exists(_loaded_path.get_basename() + ".json"):
+		return
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(_loaded_path.get_basename() + ".json"))
+	if not (parsed is Dictionary):
+		return
+	var side: Dictionary = parsed
+	if side.get("seed") is float:
+		song_hash = int(side["seed"])
+	var grid: Variant = side.get("grid")
+	if grid is Dictionary and (grid as Dictionary).get("beats") is Array:
+		var g: Dictionary = grid
+		known = {"beats": PackedFloat32Array(g["beats"]), "bar": int(g.get("bar", 4)), "beat": float(g.get("beat", 0.5)),
+			"sections": PackedFloat32Array(g.get("sections", []))}
+		known_origin = _clock_offset()
 
 
 ## How far the session clock runs ahead of the player's own position. Zero when the bookend is baked
@@ -843,6 +888,8 @@ func _process(delta: float) -> void:
 	f.beat_period = _beat_period
 
 	_compute_movement(f)
+	if not known.is_empty():
+		_known_frame(f)
 	current = f
 
 	#Roll the perceptual harmonic descriptor and its content seed, so scenes can be seeded from the
@@ -851,6 +898,25 @@ func _process(delta: float) -> void:
 		_sig.update(f.bands, f.bass + f.low_mid, f.mid, f.high + f.treble, f.flux, delta)
 	if _sig_fast != null:
 		_sig_fast.update(f.bands, f.bass + f.low_mid, f.mid, f.high + f.treble, f.flux, delta)
+
+
+# The grid a composed song hands ([member known]) laid over this frame: the beat a pulse from the last beat (decaying as
+# an onset's does, fullest on a downbeat), the period the song's beat, the movement up for two seconds after a section
+# begins.
+func _known_frame(f: AudioFeatures) -> void:
+	var t := f.time - known_origin
+	var beats: PackedFloat32Array = known.get("beats", PackedFloat32Array())
+	var i := beats.bsearch(t, true) - 1
+	if i >= 0:
+		var since := t - beats[i]
+		var bar := maxi(int(known.get("bar", 4)), 1)
+		var peak := 1.0 if i % bar == 0 else 0.75
+		f.beat = maxf(0.0, peak - since * 4.0) if since >= 0.0 else 0.0
+	f.beat_period = float(known.get("beat", f.beat_period))
+	var secs: PackedFloat32Array = known.get("sections", PackedFloat32Array())
+	var k := secs.bsearch(t, true) - 1
+	if k >= 0 and t - secs[k] < 2.0:
+		f.movement = maxf(f.movement, 1.0 - (t - secs[k]) / 2.0)
 
 
 # Spectral flux plus a sliding-window movement score: flux is how much new frequency content arrived

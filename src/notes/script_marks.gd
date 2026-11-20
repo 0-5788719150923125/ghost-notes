@@ -126,7 +126,7 @@ const REGISTRY := {
 	"image": {
 		"label": "Picture",
 		"group": "pictures",
-		"blurb": "An illustration, described, placed where it sits: a full page when it opens the chapter or a scene, beside the text otherwise. Generated on request in the Illustrations panel.",
+		"blurb": "An illustration, described, placed where it sits: a full page when it opens the chapter or a scene, beside the text otherwise. Painted on the Pictures card, or with the rest by the Pipeline card's Generate.",
 		"before": "<!-- image: ", "fill": "what the picture shows", "after": " -->", "line": "own",
 		"modes": ["generative"],
 		"pattern": Manuscript.IMAGE,

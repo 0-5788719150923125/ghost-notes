@@ -953,7 +953,7 @@ class KokoroBackend(PiperBackend):
         first, last = int(frames[0, 0]) * 2, (total - int(frames[0, -1])) * 2
         keep[:first] = True
         keep[last:] = True
-        f0_set = np.where(keep, f0p, f0).astype(np.float32)
+        f0_set = singing.seam_pitch(np.where(keep, f0p, f0), keep, f0p).astype(np.float32)
         # each vowel's energy held at its own peak, and never under the phrase's vowels' (the plan lets a long vowel
         # die away as a pause would): the decoder keeps a held vowel voiced only while it is told it is loud
         peaks = [float(np.max(n_p[2 * a:min(2 * a + HOLD_LOOK, steps)])) for a, b in laid["vowels"] if 2 * a < steps]
@@ -964,6 +964,7 @@ class KokoroBackend(PiperBackend):
             if b2 - a2 > 2:
                 target = max(float(np.max(n_p[a2:min(a2 + HOLD_LOOK, b2)])), floor)
                 n_set[a2:b2] = np.maximum(n_p[a2:b2], target)
+        n_set = singing.seam_energy(n_set, n_p)
         wave_at = [o.name for o in sung_sess.get_outputs()].index("waveform")
 
         def decode(energy):
@@ -990,7 +991,7 @@ class KokoroBackend(PiperBackend):
                 lift = np.repeat(np.convolve(short, np.ones(3) / 3.0, mode="same"), 2) / SUSTAIN_SLOPE
                 raised[2 * a:2 * b] = np.minimum(raised[2 * a:2 * b] + lift[:2 * (b - a)], ENERGY_MOST)
             if np.any(raised != n_set):
-                audio = decode(raised)
+                audio = decode(singing.seam_energy(raised, n_p))
         self._write_wav(out_path, audio, SR)
         return {"wav": out_path, "sample_rate": SR, "start": laid["origin"] + PLAN_LEAD,
                 "duration": audio.size / float(SR), "sung": laid["sung"], "frames": total}

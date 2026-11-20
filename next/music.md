@@ -44,9 +44,47 @@ the ear. The design below is the plan; this says what of it stands.
   what the mix was made from).
 - **A section the author pins** (`place`, ‹ › on the card's form rows): where the reading laid a section of the words
   wrong, the author moves it a bar at a time; the placement keeps the rest.
+- **The vocoder** (`dsp.vocoder`, the Voice entry's Vocoder dial): the sung takes speak through a synth playing the
+  line's own notes (two saws and a square an octave down, each note begun before its beat for the consonant) - a
+  channel vocoder of 28 bands, the voice's hiss over 5 kHz carried through for its consonants. The carrier holds the
+  score's pitch exactly, whatever Kokoro's does.
+- **What the reference has is what the song has**: the importer hears which parts a song has (`parts`: drums, bass,
+  keys or pad, a lead, a voice) and the Sound starts with those; its drum pattern, its bass line (an eighth at a time,
+  harmonic summation) and its sung tune are the parts' patterns where it has them (`Composer.choice_of`).
+- **A roll draws everything left on Auto** (`Composer.drawn`): the tempo, key and mode, swing, the form and how its
+  lines are paced (as many bars a line as keep it singable at that tempo), the chords and how often they change, who
+  plays in each section, every part's pattern, sound and notes, the tune (now and then recited), the singer (Puck or
+  Heart) and how they sing. Every part's number is the song's and its own (`Composer.part_seed`), so rolling a part
+  moves it alone. With a reference, LIKENESS (the card's dial, 0.5 unset) is the chance a roll keeps each thing the
+  reference has - its tempo, key, form, chords, drums, bass line and tune, each by a draw of its own; the chords, drums,
+  bass and tune lie on its bars, so they are kept only with its form, and a part pinned to the reference keeps it.
+  Every picker has Auto, the roll's; the card says what this roll drew and kept. A Key over a reference moves the
+  whole song - its chords, tune and bass - by the nearest interval from the reference's key.
+- **The words as subtitles**: beside the mix, every word sung and when (`SongBake.write_sidecar`), in the file's own
+  seconds; a song's session clock runs ahead of the file by the held intro, so its subtitles start from it.
+- **Heard as it is made** (`SongStream`, hosts/music/host.py and stream.py): Play on a composed song in a session a
+  person plays streams it, as a reading streams - the music host, kept running, makes it six seconds at a time about
+  fourteen ahead of the ear (a part read from its kept stem where the bake made one, made over the window where not),
+  the voice host sings the lines ahead in order (every take kept as the bake keeps it, so a bake after reuses them),
+  and each window fades into the next over 20 ms. A dial, a roll or a part changed while it plays is heard about six
+  seconds on: what is queued past that is let go and made again from the new score. A seek begins the stream again
+  where it lands. THE BAND WAITS FOR A LATE SINGER: a line not sung by the time it is due is waited for where its bar
+  begins, the bar before it played again without the voice (eight bars at most, then it goes without and its words
+  leave the subtitles); the rail and subtitles hold while it waits. Stopped, the lines ahead are sung once the voice
+  host is up, and a take a bake sings is heard as it lands. A video's export makes the mix first where it is not made
+  from the score as it stands (`SoundCard.export_song`, the exporter's take provider), and renders it. So while the
+  song streams, its Pipeline rows for the lines and the mix are ON DEMAND (`PipelineRow` state `on_demand`, out of the
+  tally): a roll asks for no Generate, the lines kept count up as the stream sings them.
+- **The show hears the song's own grid**: a composed song tells the show its beats, bars and sections
+  (`Spectrum.known`; in the mix's sidecar for a file and an export, from the stream live), so the scenes pulse on its
+  beats, fullest on a bar's first, and Auto cuts on them and where a section begins - the spectrum and harmony are
+  still what is heard. Its seed is the score's (`SongBake.seed_of`), the same live and in its export.
 
 **Measured:**
 
+- ERROR ME FOUND sung: a median 8 cents from its notes (88% within 50 cents); through the vocoder 2 cents (98%), its
+  sharp transients (the voice's clicks) a third as many. A step in a curve Kokoro is told is a click in what it makes,
+  so where the told curves meet its own plan they are eased over 37 ms (`singing.seam_pitch`, `seam_energy`).
 - Kokoro follows a told pitch curve: held notes within about 10 cents (pYIN on af_heart and am_puck), vowel onsets
   within 25 ms of the beat. Michael breaks into the octave below at A4; Puck holds it, so Puck is the default singer.
 - A vowel held past its spoken length dies: Kokoro plans its energy down as a pause would. Held at the vowel's peak,
@@ -55,22 +93,64 @@ the ear. The design below is the plan; this says what of it stands.
 - ERROR ME FOUND: 95.000 BPM (a straight grid there scores 32.6 against about 5 at every tempo near it), C major,
   the bass walking C F D F a bar each, the verses found at bars 12, 40 and 68. The breaks' lead reads as strongly
   as the chorus's voice, so the choruses were laid four bars early: pinned at 32 and 60 in the note.
-- Rendering: about 5x real time (the 3:40 song's eight parts in 55-70 s; a part not changed is read back). Singing its
-  52 lines: about two minutes. Reading the reference: 13-25 s.
+- The show's onset rule (loudness jumping over its own average) finds 62 beats a minute in the original ERROR ME FOUND
+  and 5 in our mix, whose loudness hardly moves beat to beat; the harmony moves about a third as much between two
+  seconds (`tests/music/song_features_probe.gd`). Hence the grid.
+- Streaming it: a window of six seconds takes 0.45 s with every part kept and about 2 s with none (after a roll);
+  loading a score takes 0.4 s kept and 4.6 s not. Windows laid end to end are the whole render (correlation 0.997 with
+  stems kept, its loudness envelope 0.99 without), and a join steps no more than the song elsewhere - without the
+  fade, two takes of a held chord met at 8.6 times the steps around them (`test_music.py`).
+- Rendering the 3:40 song: about 26 s from nothing (its parts made side by side, a struck part's notes rung by one
+  convolution a pitch, a kit's hits made once a kind and velocity), about 6 s with every part kept; the vocoder, in the
+  short-time spectrum, 3 s. Singing its 52 lines: about two minutes, only when the voice changes (its takes are kept
+  by what made them). Reading the reference: 13-35 s.
 
 **For the user to judge:**
 
-1. ERROR ME FOUND by ear (open the note; the Pipeline card's Mix is made): whether the voice holds its melody, whether
-   the melody is the song's (the verses' read as narrow stepwise lines around C4-F4), the Tune dial, the parts.
+1. ERROR ME FOUND by ear (open the note and press Play: it streams): whether the voice holds its melody, whether
+   the melody is the song's (the verses' read as narrow stepwise lines around C4-F4), the Tune dial, the parts; a
+   roll heard while it plays; with a Medium on Auto, whether the scenes move with it.
 2. Whether the instruments are the right first set (every one synthesized; no samples).
 3. The bet: a song made by choosing among seeded parts feels like the author's own.
+4. Rolls by ear: whether Likeness at its default (0.5) is the right family resemblance, and 0 wild enough.
 
-**Open:** a chorus of voices (several singers on one line, each a little early, late, sharp or flat); lyrics aligned to
-the reference by a speech recognizer (it would settle where each section and syllable falls - `speech_venv` already
-has Whisper); the reference's melody judged by ear and improved; writing a part down note by note (a piano roll on the
-Timeline); MIDI and stem export; the show's seed kept off the mix's fingerprint (today a new mix re-rolls the scenes);
-a loop of the section being rolled heard at once; the bed under a reading; a Sound linked from another note (Targeting
-Individuality ends on this song).
+**Open:** what "Next" lists below; MIDI and stem export; a loop of the section being rolled heard at once; the bed
+under a reading; a Sound linked from another note (Targeting Individuality ends on this song); the stream's held
+intro and fade (it starts at once); a mix made before the sidecar carried the grid shows no grid in an export until
+it is made again.
+
+**Next:**
+
+- **The words aligned to the reference.** The tune is read where the reference's voice begins sounds, and its
+  sections placed by where it sings; a speech recognizer's word times (Whisper, `speech_venv`) aligned to the note's
+  words would say where every word and syllable of the reference falls - its sections, its syllables' onsets and the
+  pitch under each vowel - and would settle a section laid wrong without a pin. A vocoded reference voice (this
+  song's) is harder to read either way.
+- **A piano roll on the Timeline**: the sung line's notes (and later every part's) drawn and dragged, written back as
+  the line's own notes over the reference's; the timeline shows which pattern plays where, not the notes.
+- **Singers from the Voice card.** Today a singer is a Kokoro reader or a voice kept in the library (a blend made in a
+  reading's Lab and kept). The Lab ([ReaderBrowser]) is a part of a reading's cast ([ReadingCast]); lifted to work on
+  any voice row, it would open from the Voice entry, and the vocal part would hold a cast of singers - the chorus,
+  each a little early, late, sharp or flat, drawn from the library as a bank.
+- **The Dex keeps what a song is made of.** Props, voices and environment elements are shelves of the library
+  ([Library], the Dex); a reference read gives more to keep: its melodies (a line's notes), grooves (a drum bar and
+  its feel), progressions, bass lines, and instruments fitted to its sounds - each Kept from the Sound card into a
+  shelf of its own and offered to any song's parts as a pattern or an instrument, as a prop is to a table.
+- **Splats of sound.** The audio kin of Gaussian splats are Gabor atoms: a sinusoid under a Gaussian window, placed in
+  time and frequency with its width, level and phase - matching pursuit's dictionary. A sound fitted by gradient
+  descent as a few hundred atoms (as the paint host fits strokes to a picture) is a compact, editable, differentiable
+  stand-in for it: a timbre to resynthesize, morph or turn into an instrument's settings ("a sound as settings"
+  below), and a way to read a dense mix as separable events. Research, not a plan: worth a probe on one isolated
+  sound before anything is built.
+- **A key's mode**: a Key over a reference transposes; a change of mode (major to minor) moves only the out-of-key notes.
+  Remapping each pitch by its degree would change the mode itself.
+- **The stream's stems kept**: a part made over windows is made again at every window and every seek; the host could
+  make each new part's stem whole beside the stream, so the rest of the song is read from it.
+- **The band by ear**: every instrument's sound is a guess never heard by whoever wrote it; each rendered alone, kept
+  or cut by the author, is the shortest way to a band worth drawing from.
+- **Wider banks to roll from**: a roll is as varied as what it draws among - five drum patterns, five bass, four
+  keys, one lead (its motif), seven progressions, two singers. More rows of each (a lead that answers the voice, a
+  riff, more grooves, more singers heard to hold a melody) and a meter other than 4/4 widen every roll at once.
 
 **A note on what is taken:** the importer reads a song's melody for the author's own use. A melody is what copyright
 protects most strongly, so a song published with another's tune is a cover, and needs its license.

@@ -26,6 +26,9 @@ import numpy as np
 import dsp
 from dsp import RATE
 
+# A kit's hits are made once for each of HIT_STEPS velocities and HIT_VARIANTS takes, then laid as played.
+HIT_STEPS = 10
+HIT_VARIANTS = 3
 # 808 hat oscillators (Hz), the metallic cluster.
 HAT_TONES = (205.3, 304.4, 369.6, 522.7, 540.0, 800.0)
 # A vowel's first three formants (Hz) and their bandwidths, a male voice's.
@@ -167,10 +170,21 @@ def _hit(name: str, params: dict, vel: float, rng) -> tuple[np.ndarray, float]:
 
 
 def kit(part: dict, n: int, rng) -> np.ndarray:
+    """The kit's hits, each kind made once a velocity step and a variant (HIT_VARIANTS of them, taken in turn) and laid
+    where it is played - a song's thousands of hits are a few dozen sounds."""
     params = part.get("instrument", {})
     out = np.zeros((2, n))
+    made: dict = {}
+    turn: dict = {}
     for note in part.get("notes", []):
-        sound, where = _hit(str(note.get("hit", "kick")), params, float(note.get("vel", 0.9)), rng)
+        name = str(note.get("hit", "kick"))
+        vel = round(float(note.get("vel", 0.9)) * HIT_STEPS) / HIT_STEPS
+        k = turn.get(name, 0)
+        turn[name] = (k + 1) % HIT_VARIANTS
+        key = (name, vel, k)
+        if key not in made:
+            made[key] = _hit(name, params, vel, rng)
+        sound, where = made[key]
         lvl = float((params.get(str(note.get("hit")), {}) or {}).get("level", 1.0)) if isinstance(params.get(str(note.get("hit"))), dict) else 1.0
         _place(out, int(float(note["t"]) * RATE), dsp.pan(sound * lvl, where * float(params.get("width", 1.0))))
     return out
@@ -306,21 +320,38 @@ def pluck(part: dict, n: int, rng) -> np.ndarray:
 
 
 def modal_part(part: dict, n: int, rng) -> np.ndarray:
+    """Struck things, each pitch's ringing made once (its modes, each a sine dying over its time, summed) and convolved
+    with an impulse at every note of that pitch - over just the stretch where it is played. (A note's modes laid one
+    by one cost minutes over a song of struck chords.)"""
+    from scipy import signal as _sig
     p = part.get("instrument", {})
     ratios = p.get("ratios", [1.0, 2.0, 2.76, 5.4, 8.93])
     decays = p.get("decays", [2.5, 1.6, 1.0, 0.5, 0.3])
     amps = p.get("amps", [1.0, 0.5, 0.35, 0.2, 0.1])
     length = float(p.get("length", 1.0))
+    ring = int(max(decays) * length * 1.3 * RATE)
+    strike = dsp.butter(dsp.noise(int(0.004 * RATE), rng), "highpass", 2000.0) * float(p.get("hardness", 0.2))
     out = np.zeros(n)
+    by_pitch: dict = {}
     for note in part.get("notes", []):
-        at = int(float(note["t"]) * RATE)
-        f0 = float(dsp.midi_hz(float(note["midi"])))
-        m = int(max(decays) * length * 1.3 * RATE)
-        vel = float(note.get("vel", 0.8))
-        s = dsp.modal(m, [f0 * r for r in ratios], [d * length for d in decays], [a * (vel ** (k * 0.3)) for k, a in enumerate(amps)])
-        strike = dsp.butter(dsp.noise(int(0.004 * RATE), rng), "highpass", 2000.0) * float(p.get("hardness", 0.2))
-        s[:len(strike)] += strike
-        _place(out, at, s * vel)
+        by_pitch.setdefault(float(note["midi"]), []).append(note)
+    for midi, notes in by_pitch.items():
+        f0 = float(dsp.midi_hz(midi))
+        ir = dsp.modal(ring, [f0 * float(r) for r in ratios], [float(d) * length for d in decays], amps)
+        ir[:len(strike)] += strike
+        at = [int(float(nt["t"]) * RATE) for nt in notes]
+        a = min(at)  # may be before the buffer: a note struck earlier still rings into it
+        b = min(max(at) + 1, n)
+        if a >= n or b <= a:
+            continue
+        hits = np.zeros(b - a)
+        for t, nt in zip(at, notes):
+            if a <= t < b:
+                hits[t - a] += float(nt.get("vel", 0.8))
+        y = _sig.oaconvolve(hits, ir)
+        lo, e = max(a, 0), min(n, a + len(y))
+        if e > lo:
+            out[lo:e] += y[lo - a:e - a]
     return dsp.pan(out * 0.3, 0.0)
 
 

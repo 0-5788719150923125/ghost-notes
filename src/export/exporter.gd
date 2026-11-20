@@ -21,6 +21,8 @@ class_name Exporter
 
 const Bake := preload("res://src/audio/bake.gd")
 const YouTube := preload("res://src/export/youtube.gd")
+## What the ⤓ says on hover once there is something to render.
+const READY_TIP := "Render the note's video to a file, in the background"
 
 # Output quality presets, offered when the Export button is pressed. `w`/`h` is the file's resolution and `fps` what Movie
 # Maker records at.
@@ -242,7 +244,7 @@ func _notification(what: int) -> void:
 func _build_ui() -> void:
 	_btn = Button.new()
 	_btn.text = "⤓"                    # icon-only - matches assistant.gd's chat-bubble toggle
-	_btn.tooltip_text = "Render this visualization + audio to a video file (in the background)"
+	_btn.tooltip_text = READY_TIP
 	_btn.focus_mode = Control.FOCUS_NONE
 	_btn.custom_minimum_size = Vector2(40, 40)
 	_btn.visible = false
@@ -407,9 +409,9 @@ func _process(dt: float) -> void:
 	# grayed, never gone: nothing to render yet
 	var content := _has_content()
 	_btn.disabled = not content
-	_btn.tooltip_text = ("Render this visualization + audio to a video file (in the background)"
-		if content else
-		"Nothing to render yet - catch a seed (or play a song) first")
+	_btn.tooltip_text = READY_TIP if content else (
+		"Nothing to render yet - the voice needs words to read, and a moment to start" if take_provider.is_valid()
+		else "Nothing to render yet - give the note a voice to read it, or a sound to play")
 
 
 func _tick_render(dt: float) -> void:
@@ -688,7 +690,7 @@ func _on_export() -> void:
 	_song = "" if take_first and take_provider.is_valid() else Spectrum.audio_path()
 	if _song.is_empty() and not take_provider.is_valid():
 		_note_t = 4.0
-		_set_status("⚠  Nothing to export yet - play or speak something first",
+		_set_status("⚠  Nothing to export yet - give the note a voice to read it, or a sound to play",
 			Color(1.0, 0.85, 0.6))
 		return
 	# An upload whose title cannot be made (the note's YouTube card names a macro the note does not fill, YouTubeCard.why_not)

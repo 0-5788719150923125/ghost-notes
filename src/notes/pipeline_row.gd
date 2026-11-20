@@ -18,6 +18,7 @@ const STATES := {
 	"stale": {"label": "Stale", "glyph": "⚠", "blurb": "Made, from something that has changed since."},
 	"missing": {"label": "Not made", "glyph": "·", "blurb": "Nothing made yet."},
 	"none": {"label": "Nothing to make", "glyph": "–", "blurb": "This note has nothing here to make: left out of the count."},
+	"on_demand": {"label": "On demand", "glyph": "○", "blurb": "Made when it is wanted (an export makes it), nothing waiting on it now: left out of the count."},
 }
 
 ## Its name in its section: what a gate and a press find it by, unchanged while it is the same thing.
@@ -76,6 +77,6 @@ static func glyph(of_state: String) -> String:
 	return String(Registry.field(STATES, of_state, "glyph", "·"))
 
 
-## Whether a row in [param of_state] counts towards the card's tally: it is something to make.
+## Whether a row in [param of_state] counts towards the card's tally: it is something to make now.
 static func counted(of_state: String) -> bool:
-	return of_state != "none"
+	return of_state != "none" and of_state != "on_demand"

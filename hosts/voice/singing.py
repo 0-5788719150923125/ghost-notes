@@ -16,7 +16,9 @@ length (the backend's header, THE OPENING), so the frame the take starts on is p
 
 The pitch: each note's own, with what a singer adds (`ornament`, after Saitou and colleagues' speech-to-singing
 recipe): a glide into a change of note that overshoots a little and settles (a damped second-order response), vibrato
-coming in on a held note, a slow drift. `tune` 1 takes them all out - a hard-tuned voice, every note a step.
+coming in on a held note, a slow drift. `tune` 1 takes them all out - a hard-tuned voice, every note a step. Where
+what is told meets what Kokoro plans, the two are eased together (`seam_pitch`, `seam_energy`): a step in a curve the
+decoder reads is a click in what it makes.
 """
 
 from __future__ import annotations
@@ -41,6 +43,8 @@ VOWEL_LEAST = 2
 VOICED = 40.0
 # How damped a glide into a new note is (1 none past it): at 0.65 a change overshoots by about a fourteenth and settles.
 DAMPING = 0.65
+# Curve steps (12.5 ms each) a seam between what is told and what Kokoro plans is eased over.
+SEAM = 3
 
 
 def is_vowel(sym: str) -> bool:
@@ -266,6 +270,42 @@ class _Lcg:
     def next(self) -> float:
         self.s = (1664525 * self.s + 1013904223) & 0xFFFFFFFF
         return self.s / 4294967296.0
+
+
+def seam_pitch(f0, keep, planned, steps: int = SEAM):
+    """No step where a sung pitch meets Kokoro's own: where the sung curve gives way to a voiced planned value (or takes
+    over from one), the two are crossed over `steps` steps in the log domain. A switch to an unvoiced plan is left
+    as it is - voicing starting and stopping is speech's own."""
+    import numpy as np
+
+    out = np.array(f0, dtype=float)
+    n = len(out)
+    for i in range(1, n):
+        if bool(keep[i]) == bool(keep[i - 1]):
+            continue
+        a, b = (i - 1, i)
+        if min(planned[a], planned[b]) < VOICED and (keep[a] and planned[a] < VOICED or keep[b] and planned[b] < VOICED):
+            continue
+        lo, hi = max(0, i - steps), min(n, i + steps)
+        x0, x1 = np.log(max(out[lo], 1.0)), np.log(max(out[hi - 1], 1.0))
+        for j in range(lo, hi):
+            u = (j - lo) / max(hi - lo - 1, 1)
+            w = 0.5 - 0.5 * np.cos(np.pi * u)
+            out[j] = float(np.exp(x0 + (x1 - x0) * w))
+    return out
+
+
+def seam_energy(told, planned, steps: int = SEAM):
+    """The energy told, its departures from Kokoro's plan (a held vowel's hold, its lift) eased in and out over `steps`
+    steps (a Hann window) rather than stepped: a step in what the decoder is told is a click in what it makes."""
+    import numpy as np
+
+    told = np.asarray(told, dtype=float)
+    planned = np.asarray(planned, dtype=float)
+    win = np.hanning(2 * steps + 1)
+    win /= win.sum()
+    lift = np.convolve(told - planned, win, mode="same")
+    return planned + np.maximum(lift, 0.0) + np.minimum(told - planned, 0.0)
 
 
 def hz(midi: float) -> float:

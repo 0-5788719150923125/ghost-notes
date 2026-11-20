@@ -3,7 +3,7 @@
 ## Status
 
 **Built.** A component any note can have ("+" -> Direction), its card the Direction card (`src/ui/direction_card.gd`,
-`DirectionCard`), its block `ghost: direction: {text, writer, writer_model, writer_effort}`, its words read through
+`DirectionCard`), its block `ghost: direction: {text}`, its words read through
 `Direction.text_of` (`src/notes/direction.gd`) by whatever runs agents - never by naming the card.
 
 - **At the table** (every table show): Generate on an episode with no plan writes the card's words into it as its first
@@ -14,14 +14,13 @@
   what it leaves open. A made episode keeps its own: the card can be rewritten for the next one. Its row on the Episode
   card (Direction, first) takes the card's words up again with its ⟳, and what was made from the old ones goes stale.
   Episodes made before there were directions have no such step and never go stale for one.
-- **Refine** has the card's writer (its own AgentPick row) read the note - the show's brief, or a note's words - and the
-  direction, and write the direction back whole in the note's terms: everything asked kept, made precise, nothing done in
-  advance (rules/agents/direction.yaml). The note is never written. Refine stands in the window the direction is written
-  in, not on the card, so the author never leaves the text to run it; the refined words land in its box
-  (`TextField.add_action`, `TextField.replace` - any card's long words can carry actions of their own). It has no undo of
-  its own.
-- **Gates**: `tests/ui/direction_card_check.gd` (the component, the card's block through the frontmatter, Refine's prompt
-  and landing) and `tests/table_show/direction_step_check.gd` (taken up, told, kept; the controls an episode given none
+- **Refine…** stands in the window the direction is written in, not on the card: a conversation with a writer (next/refine.md,
+  `TextRefine`, `WriterChat`) who reads the note and changes the direction where the author sees it, turn after turn, every ask
+  kept and made precise, nothing done in advance (rules/agents/refine.yaml, `direction`). The note is never written. Who
+  refines (agent, model, effort) is picked in that window; a note whose block still names a `writer` starts its conversation
+  with it. Each change is a step the box's undo takes back.
+- **Gates**: `tests/ui/direction_card_check.gd` (the component, the card's block through the frontmatter, Refine… in its
+  window and a change landing) and `tests/table_show/direction_step_check.gd` (taken up, told, kept; the controls an episode given none
   and one made before directions).
 
 **Open:**

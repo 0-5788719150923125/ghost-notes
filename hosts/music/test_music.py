@@ -11,11 +11,20 @@ render.py, then read by analyze.py (FFmpeg decodes it; the test skips, saying so
 Held:
 - render.py makes the mix and a stem a part; made again from the same spec, each stem is read back, not made;
 - the mix is loud enough, under the ceiling, and its stereo field holds the pad wider than the lead;
+- the vocoder: a vowel sung at 200 Hz through a carrier at 300 Hz comes out at 300 Hz, its spectrum the vowel's (its
+  energy where the vowel's formants are, not where the bare carrier's is) - the control, the carrier alone, has no
+  such shape;
 - the importer finds the tempo within a quarter of a beat a minute, the key's scale (C major or its relative minor),
   the chord roots of most bars, the kick on one and three and the snare on two and four, and the lead's pitch
   classes on most of its sung steps;
 - the control: the same score at another tempo is read at that tempo, and with its lead muted the importer finds far
-  fewer sung bars.
+  fewer sung bars;
+- the stream (stream.py): the song made in windows whose joins fall off the beat is the whole - from kept stems its
+  samples, from nothing kept its loudness envelope - and its joins are no louder a step than the song elsewhere; the
+  controls, a window made with no time before it (the room's tail lost after each join) and windows not faded into
+  each other (two takes of a held chord meeting), each fail; a bar played again while the singer is late (a vamp,
+  `follows`) begins where what came before it would have gone on - the control, not faded in, jumps; a take gone from
+  the disk is left out and the song made without it, a take there heard.
 """
 
 import json
@@ -32,6 +41,8 @@ import numpy as np  # noqa: E402
 
 FAILS = 0
 CHORDS = [(0, (48, 52, 55)), (7, (43, 47, 50)), (9, (45, 48, 52)), (5, (41, 45, 48))]
+# the stream's window here: its joins off the beat (at 100 BPM a beat is 0.6 s)
+STREAM_WINDOW = 5.3
 # the lead's tune, a bar's eighths (MIDI): drawn once from a seeded stream, chord tones on the beats and steps between,
 # so no two bars of it are alike (a voice's line over sixteen bars rarely repeats a bar exactly)
 _rng = np.random.default_rng(11)
@@ -90,6 +101,78 @@ def score(bpm: float, out: Path, lead: bool = True) -> dict:
             "vocals": [], "master": {"reverb": {"seconds": 0.8}, "gain": -4.0, "ceiling": -1.0}}
 
 
+def windows(spec: dict, length: float, pre: float = None, xfade: float = None) -> np.ndarray:
+    """The song of `spec` made in stream.py's windows of STREAM_WINDOW seconds, laid end to end."""
+    import stream
+    old = stream.PRE, stream.XFADE
+    stream.PRE = old[0] if pre is None else pre
+    stream.XFADE = old[1] if xfade is None else xfade
+    try:
+        song = stream.Song(spec)
+        out, t = [], 0.0
+        while t < length:
+            t1 = min(t + STREAM_WINDOW, length)
+            out.append(song.window(t, t1))
+            t = t1
+        return np.concatenate(out, axis=1)
+    finally:
+        stream.PRE, stream.XFADE = old
+
+
+def joins(x: np.ndarray, whole: np.ndarray) -> dict:
+    """How windows `x` meet, against `whole`: the leftover in the half second after each join over the leftover
+    elsewhere, and the step at each join over the steps near it, beside the same step off the joins (median each)."""
+    n = min(x.shape[1], whole.shape[1])
+    x, w = x[:, :n], whole[:, :n]
+    rate = 44100
+    r = x * (np.sum(x * w) / np.sum(x * x)) - w
+    at = [int(round(k * STREAM_WINDOW * rate)) for k in range(1, int(n / rate / STREAM_WINDOW) + 1)]
+    at = [a for a in at if a + rate < n]
+    d = np.abs(np.diff(x.mean(axis=0)))
+
+    def step(a: int) -> float:
+        return d[a - 1] / (np.median(d[a - 2205:a + 2205]) + 1e-9)
+
+    level = 20.0 * np.log10(np.sqrt(np.mean(x ** 2)) / np.sqrt(np.mean(w ** 2)))
+    hop = int(0.05 * rate)
+
+    def env(y: np.ndarray) -> np.ndarray:
+        m = y.mean(axis=0)
+        return np.log(1e-6 + np.add.reduceat(m[: len(m) // hop * hop] ** 2, np.arange(0, len(m) // hop * hop, hop)))
+
+    return {"after": float(np.median([np.mean(r[:, a:a + rate // 2] ** 2) for a in at]) / np.mean(r ** 2)),
+            "step": float(np.median([step(a) for a in at])), "off": float(np.median([step(a + int(1.7 * rate)) for a in at])),
+            "level": float(level), "corr": float(np.corrcoef(x.mean(axis=0), w.mean(axis=0))[0, 1]),
+            "envelope": float(np.corrcoef(env(x), env(w))[0, 1])}
+
+
+def fake_take(path: Path) -> Path:
+    """A take as the voice host writes one: a second of a sung vowel's stand-in (a 220 Hz tone), 16-bit at 24 kHz."""
+    from scipy.io import wavfile
+    t = np.arange(24000) / 24000.0
+    wavfile.write(str(path), 24000, (0.5 * np.sin(2 * np.pi * 220.0 * t) * 32767).astype(np.int16))
+    return path
+
+
+def vamped(spec: dict, follows: bool) -> float:
+    """The song made up to a bar line, then the bar before it three times again without the voice: how far each repeat's
+    first sample lies from where the stretch before it would have gone on (its next sample), over a step of the song
+    there (the median step between samples) - the worst of the three."""
+    import stream
+    song = stream.Song(spec)
+    bar = 4 * float(spec["beat"])
+    b = 8 * bar
+    prev = song.window(0.0, b)
+    worst = 0.0
+    for _ in range(3):
+        natural = song._tail[:, 0].copy()
+        v = song.window(b - bar, b, False, follows)
+        step = float(np.median(np.abs(np.diff(prev[:, -2205:], axis=1)))) + 1e-9
+        worst = max(worst, float(np.abs(v[:, 0] - natural).max()) / step)
+        prev = v
+    return worst
+
+
 def run(script: str, spec: dict, folder: Path) -> dict:
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / (script + ".json")
@@ -123,6 +206,64 @@ def main() -> int:
         def width(s):
             return float(np.sum((s[:, 0] - s[:, 1]) ** 2) / (np.sum((s[:, 0] + s[:, 1]) ** 2) + 1e-9))
         ok(width(stems["pad"]) > 5.0 * width(stems["bass"]) + 1e-6, "the pad's unison spreads it wider than the bass")
+        print("-- the stream")
+        st = work / "s"
+        spec = score(100.0, st)
+        for p in spec["parts"]:
+            if p["key"] in ("pad", "drums"):
+                p["fx"] = {**p["fx"], "reverb": 0.4}  # a room to carry over a join
+        spec["master"]["reverb"]["seconds"] = 2.0
+        made = run("render", spec, st)
+        whole = (wavfile.read(made["mix"])[1].astype(np.float64) / 32768.0).T
+        kept = joins(windows(spec, spec["length"]), whole)
+        ok(kept["corr"] > 0.99 and abs(kept["level"]) < 1.0,
+           "from kept stems the windows are the whole: correlation %.3f, %+.2f dB" % (kept["corr"], kept["level"]))
+        ok(kept["after"] < 1.4, "the room carries over a join: %.2fx the leftover elsewhere" % kept["after"])
+        bare = joins(windows(spec, spec["length"], pre=0.0), whole)
+        ok(bare["after"] > 1.4, "the control, nothing made before a window, loses the room after a join: %.2fx" % bare["after"])
+        cold = dict(spec, out=str(work / "s_cold"))
+        fresh = joins(windows(cold, spec["length"]), whole)
+        ok(fresh["envelope"] > 0.98 and abs(fresh["level"]) < 1.5,
+           "from nothing kept the windows sound as the whole: envelope %.3f, %+.2f dB" % (fresh["envelope"], fresh["level"]))
+        ok(fresh["step"] < 1.5 * fresh["off"], "a join is no step: %.1fx the steps near it, %.1fx off the joins" % (fresh["step"], fresh["off"]))
+        raw = joins(windows(cold, spec["length"], xfade=0.0), whole)
+        ok(raw["step"] > 2.0 * raw["off"], "the control, windows not faded together, steps at a join: %.1fx against %.1fx" % (raw["step"], raw["off"]))
+        import stream
+        taken = dict(spec, vocals=[{"key": "vocal", "level": 0.0, "pan": 0.0, "fx": {}, "takes": [
+            {"wav": str(fake_take(work / "take.wav")), "at": 2.0}, {"wav": str(work / "gone.wav"), "at": 6.0}]}])
+        song = stream.Song(taken)
+        heard = float(np.sqrt(np.mean(song.window(2.0, 3.0) ** 2)))
+        bare_take = float(np.sqrt(np.mean(stream.Song(spec).window(2.0, 3.0) ** 2)))
+        gone = song.window(6.0, 7.0)
+        ok(heard > bare_take * 1.05 and gone.shape[1] == 44100,
+           "a take there is heard (%.3f against %.3f without), and one gone from the disk is left out, the song made without it" % (heard, bare_take))
+        vamp = vamped(cold, True)
+        bare_vamp = vamped(cold, False)
+        ok(vamp < 0.5 and bare_vamp > 3.0,
+           "a bar played again begins where what came before goes on: %.2f of a step off; the control, not faded in, %.1f steps" % (
+               vamp, bare_vamp))
+        print("-- the vocoder")
+        import dsp
+        import instruments
+        rng = np.random.default_rng(1)
+        n = 44100
+        voice = instruments.vox({"instrument": {"vowel": "a", "vibrato": 0.0, "amp": {"a": 0.01, "d": 0.1, "s": 1.0, "r": 0.05}},
+                                 "notes": [{"t": 0.0, "len": 0.95, "midi": 55.0}]}, n, rng).mean(axis=0)
+        ph, dt = dsp.phase(300.0, n)
+        carrier = dsp.saw(ph, dt)
+        robot = dsp.vocoder(voice, carrier)
+        seg = robot[11025:33075]
+        ac = np.correlate(seg[:8000], seg[:8000], mode="full")[7999:]
+        lag = 60 + int(np.argmax(ac[60:400]))
+        f0 = 44100.0 / lag
+        def formant_share(x):
+            spec = np.abs(np.fft.rfft(x[11025:33075]))
+            f = np.fft.rfftfreq(22050, 1 / 44100)
+            return float(spec[(f > 600) & (f < 1200)].sum() / spec[(f > 100) & (f < 4000)].sum())
+        ok(abs(f0 - 300.0) < 8.0, "a vowel at 200 Hz through a carrier at 300 Hz comes out at %.0f Hz" % f0)
+        ok(formant_share(robot) > 1.3 * formant_share(carrier),
+           "...shaped as the vowel: %.2f of its energy where the vowel's first formants are, the bare carrier %.2f"
+           % (formant_share(robot), formant_share(carrier)))
         if ffmpeg is None:
             print("  skip the importer: no ffmpeg")
             return 1 if FAILS else 0

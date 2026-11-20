@@ -21,7 +21,8 @@ extends Node
 ##   it goes to the trash (the gate's seam, `NoteStore.discard`) and out of the list. A note's own "⋯" does
 ##   the same and the list comes back.
 ## - The round trip: New, then "+" Sound (a Sound card, composed with nothing made yet, and the Pipeline card it
-##   makes on; nothing timed, no stage, a Medium no longer grayed), "+" Medium (Auto: the seeded show); choosing a
+##   makes on; its song heard as it is made, so the transport is up but no stage until Play, a Medium no longer
+##   grayed), "+" Medium (Auto: the seeded show); choosing a
 ##   song file writes it into the note as the Sound's file and opens it
 ##   again loaded and waiting at its start; it plays through the transport; a note with a Medium holds its
 ##   storyboard with nothing attached, and the seed chooses until something is written. A second clock is refused with the reason (a Voice
@@ -350,7 +351,7 @@ func _check_round_trip() -> void:
 	_ok(panel != null and panel._pipeline != null, "...and its Pipeline card, where the song is made")
 	if panel == null:
 		return
-	_ok(not Spectrum.timed() and not _stage_up(), "...nothing timed and no stage until there is a song")
+	_ok(Spectrum.timed() and not _stage_up(), "...its song heard as it is made: the transport is up, and no stage until Play")
 	_ok(_offer(panel, "voice") == "grayed" and _tip(panel, "voice").contains("clock") and _tip(panel, "voice").contains("Sound"),
 		"a second clock is refused, and \"+\" says which to detach (%s)" % _tip(panel, "voice").get_slice("\n\n", 1))
 	_ok(_offer(panel, "sound") == "", "what is attached is not offered again")
@@ -385,6 +386,7 @@ func _check_round_trip() -> void:
 	# ...and a component comes off again
 	if panel != null:
 		var words := String(FrontMatter.split(FileAccess.get_file_as_string(note)).body)
+		var before := NoteStore.blocks_of(note)
 		var x := _detach_button(panel, "Sound")
 		_ok(x != null and not x.disabled, "the Sound card has an ×")
 		_ok(_detach_button(panel, "Body") == null, "...and the Body has none: the words are the note")
@@ -401,8 +403,10 @@ func _check_round_trip() -> void:
 		await _frames(20)
 		panel = _main._note_panel
 		var left := NoteStore.blocks_of(note)
-		_ok(not left.has("sound") and left.has("medium") and left.keys() == ["medium"],
-			"detaching the Sound takes its block out and leaves the others (%s)" % str(left.keys()))
+		var others := before.duplicate(true)
+		others.erase("sound")
+		_ok(before.has("sound") and not left.has("sound") and left.has("medium") and JSON.stringify(left) == JSON.stringify(others),
+			"detaching the Sound takes its block out and leaves the others as they were (%s)" % str(left.keys()))
 		_ok(String(FrontMatter.split(FileAccess.get_file_as_string(note)).body) == words, "...and the note's words as they were")
 		_ok(panel != null and panel._sound == null and not Spectrum.timed() and not _stage_up(),
 			"...the note opens again without it: no clock, no stage")

@@ -128,9 +128,10 @@ func _registry() -> void:
 		if not b.is_empty():
 			_ok(not blocks.has(b), "%s: its block '%s' is its own (also %s)" % [k, b, blocks.get(b, "-")])
 			blocks[b] = k
-		# what "+" writes for a component is in a block that is its own, or it comes with another
+		# what "+" writes for a component is in a block that is its own, or of what comes only with it
 		for written in Components.attach_blocks(k):
-			_ok(written == b, "%s: attaching it writes its own block ('%s', not '%s')" % [k, b, written])
+			_ok(written == b or Components.blocks_of(k).has(written),
+				"%s: attaching it writes its own block, or one of what comes with it ('%s', not '%s')" % [k, b, written])
 	# the blocks the panels keep are the components' blocks
 	for b in ["voice", "medium", "illustrations", "look", "bookends", "table", "sound", "clip", "youtube"]:
 		_ok(blocks.has(b), "the document block '%s' belongs to a component" % b)
@@ -197,6 +198,8 @@ func _composition() -> void:
 	_ok(Components.attached_of({"scenes": {"sequence": []}}) == ["text"], "...and an old scenes: block attaches nothing")
 	_ok(String((Components.attach_blocks("medium")["medium"] as Dictionary).get("format", "")) == "auto",
 		"a Medium starts as the seeded show: the Auto format")
+	_ok(Components.attach_blocks("medium").get("illustrations") == {} and not Components.attach_blocks("look").has("illustrations"),
+		"...and its pictures with a look of their own, never the last note's (control: a Look writes none)")
 	# every attachable component is seen once its blocks are in the note
 	for k in Components.REGISTRY:
 		var add := Components.attach_blocks(k)
