@@ -406,7 +406,7 @@ func _check_round_trip() -> void:
 		_ok(String(FrontMatter.split(FileAccess.get_file_as_string(note)).body) == words, "...and the note's words as they were")
 		_ok(panel != null and panel._sound == null and not Spectrum.timed() and not _stage_up(),
 			"...the note opens again without it: no clock, no stage")
-		_ok(panel != null and panel._medium != null and _waiting(panel).contains("song or a voice"),
+		_ok(panel != null and panel._medium != null and _waiting(panel).contains("sound or a voice"),
 			"...and the Medium left on it says what it is waiting for (%s)" % _waiting(panel))
 	ch._home_button.pressed.emit()
 	await _frames(12)
