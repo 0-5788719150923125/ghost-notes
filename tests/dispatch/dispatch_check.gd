@@ -22,10 +22,23 @@ extends SceneTree
 ##   title goes, its blur never lifting on the desk (controls: no title, black from the start; the usual pull lifting by then);
 ## - two looks at the same thing are one, the camera held between them; in a live reading the camera holds on the glass for a
 ##   next look before its words are heard, a long talk away too (controls: a look at something else between; a look home);
-## - the tablet: picked up and held low over the desk, the camera on it, and put down dark; an address typed into its bar, a
+## - the tablet: picked up and held low over the desk, the camera on it, and laid back in its place, its screen left lit as
+##   it was, dimmed for the last seconds and locked dark half a minute on (the control: before it is woken it is dark); on
+##   every desk it is carried clear of what stands under its way by each thing's outline, on most no higher than the hand
+##   holds it (the control: straight and at its least height, something is in its way on some desk); an address typed into its bar, a
 ##   link on the page tapped; a page following the words said on it, else easing down, the words read off it lit as said
 ##   (control: a page nothing is read off); its player dark until the desk is played live into it;
+## - the tablet browsed (tests/fixtures/dispatch_browsing.md): a link at a page's foot brought into view and tapped; back by
+##   its arrow to the page before, scrolled where it was left (the control: a page come up is at its top), and a link tapped
+##   on it; a new tab, blank beside the first, its bar taking the next address under the keyboard; a search typed into a search
+##   engine's own box at the tablet medium's pace, its results under what was searched for (the control: from an article, into
+##   the bar); a reply typed into the page's message box as it is said, clear of the keyboard, and sent (the control: a page
+##   that takes none has no box); the page loaded again where it was left, its box kept;
 ## - a clip: the screen's static until it is imported, then its frames looping;
+## - a picture told `unwatched` lands on its screen with the camera left on what it was on (the control: the same picture
+##   untold turns the camera to its screen);
+## - a call's timer after a reading started mid-way: counted from where the call fell on the reading, as a whole reading
+##   counts it (the control: from the far past the call is placed in, it is hours);
 ## - the camera turns to what is active (terminal typing, receiver in a storm, ringing phone) and a look holds while nothing else
 ##   is; it goes to the radar only at its sounds; the radar target moves in small steps under the voice, never a jump, with its
 ##   old place written beside it until it arrives; the receiver is open only in its storm;
@@ -37,7 +50,9 @@ extends SceneTree
 ## - captions: a typed word is read on the terminal, a spoken line is captioned;
 ## - a live reading, words arriving a sentence at a time: an action begun keeps its start when the plan is made again;
 ## - the roots: some on the desk, grown further at the end than at the start, none under an open phone or its lid, none
-##   through the printer's paper or its heap (control: grown knowing nothing of them, they go through);
+##   through the printer's paper or its heap (control: grown knowing nothing of them, they go through); none lying on the
+##   desk nearer what stands there than it is thick (control: grown knowing nothing of what stands there, into it); each a
+##   moderate reach across the top, some over the near edge and hanging down clear of the desk's front, some ending on it;
 ## - the desk is its number's: the same number is the same desk, across numbers it is mirrored and packed differently; on
 ##   forty desks no two things meet by their own meshes' outlines, nothing packed hides a label, dial, screen or the clock's
 ##   cards from the chair and nothing hides one in its own close-up (controls: a mug just before the clock hides it; a switch
@@ -55,6 +70,7 @@ extends SceneTree
 ## Run: godot --headless --path . --script tests/dispatch/dispatch_check.gd
 
 const FIXTURE := "res://tests/fixtures/dispatch_note.md"
+const BROWSING := "res://tests/fixtures/dispatch_browsing.md"
 
 var _fails: Array = []
 
@@ -435,8 +451,16 @@ func _run() -> void:
 	_gain_bell_lamp(md, actions, t0, plan_r, bell_block)
 	_black_tablet_clip(md, actions, t0, plan_r, st)
 	_clock_mid_way(md, body, parsed, words, st)
+	# two small notes on one desk of their own (the same phones, so it is built once)
+	var small := DispatchMedium.new()
+	small.feed = md.feed
+	small.mount(st)
+	_unwatched(small)
+	_timer_mid_way(small)
+	small.queue_free()
 	_clock_skip(st, md.feed)
 	_receiver(st, md.feed)
+	_browsing(st, md.feed)
 	_glass_hold(st, md.feed)
 	_opens_black(st)
 	_bridge_live(st, md.feed)
@@ -669,6 +693,92 @@ func _receiver(st: SubViewport, feed: ShowFeed) -> void:
 		"the control: the room's own typed line opens nothing on the receiver")
 
 
+## The tablet browsed, on the browsing note: what its screen shows as each page is reached.
+func _browsing(st: SubViewport, feed: ShowFeed) -> void:
+	var body := FileAccess.get_file_as_string(BROWSING)
+	var md := DispatchMedium.new()
+	md.feed = feed
+	md.mount(st)
+	md.load_note(body, {"seed": 3})
+	md._now = 0.0
+	md.take_words(DispatchScript.rehearsal(DispatchScript.parse(body), 0.32))
+	var acts: Array = md._actions
+	var at: Array = []                    # the page actions, by index
+	for i in acts.size():
+		if String(acts[i]["kind"]) == "page":
+			at.append(i)
+	var face := func(t: float) -> Dictionary: return md.tablet_at(t)["face"]
+	var times := func(n: int) -> Dictionary: return md._page_times(int(at[n]))
+	var up := func(n: int) -> Dictionary: return md.tablet_at(float(md._page_times(int(at[n]))["shown"]) + 0.05)["face"]
+	var view := float(DispatchScreens.TABLET_SIZE.y) - TabletChrome.TOP
+	var down := func(f: Dictionary) -> Vector2: return Vector2(0.0, TabletChrome.TOP - float(f.get("scroll", 0.0)))
+	# a link at the page's foot, then back
+	var forum: TabletPage = up.call(0)["page"]
+	var words_tap: Dictionary = face.call(float(times.call(1)["tap"]) + 0.05)
+	var left := md._reach_scroll(int(at[0]), int(at[1]))
+	_ok(words_tap.get("page") == forum and words_tap.has("tap") and left > view * 0.5 and is_equal_approx(float(words_tap["scroll"]), snappedf(left, 0.5)),
+		"a link at the page's foot is brought into view and tapped there (scrolled %.0f px)" % left)
+	var back_tap: Dictionary = face.call(float(times.call(2)["tap"]) + 0.05)
+	var back_up: Dictionary = up.call(2)
+	_ok(back_tap.get("tap") == TabletChrome.back_at() and back_tap.get("page") == up.call(1)["page"] and bool(back_tap["can_back"])
+		and back_up.get("page") == forum and is_equal_approx(float(back_up["scroll"]), snappedf(left, 0.5)) and not bool(back_up["can_back"])
+		and float(up.call(0)["scroll"]) == 0.0,
+		"back is tapped on its arrow and the page before comes back scrolled where it was left (%.0f px; the control: a page come up is at its top)" % float(back_up["scroll"]))
+	var tell_tap: Dictionary = face.call(float(times.call(3)["tap"]) + 0.05)
+	_ok(String(acts[at[3]]["how"]) == "tap" and tell_tap.get("page") == forum and tell_tap.has("tap") and float(tell_tap["scroll"]) < left - view * 0.3
+		and String(up.call(3)["url"]) == "forum.board" and up.call(3)["page"] != forum,
+		"a link on the page come back to is brought into view and tapped, never its address typed (%.0f px from %.0f)" % [float(tell_tap["scroll"]), left])
+	# a new tab, and an address typed into it
+	var plus: Dictionary = face.call(float(times.call(4)["tap"]) + 0.05)
+	var blank: Dictionary = face.call(float(times.call(4)["shown"]) + 0.4)
+	_ok(plus.get("tap") == TabletChrome.plus_rect(Vector2(DispatchScreens.TABLET_SIZE)).get_center() and (plus["tabs"] as Array).size() == 1
+		and blank.get("page") == null and blank["tabs"] == [up.call(3)["page"].title, "New Tab"] and int(blank["tab"]) == 1 and bool(blank["typing"])
+		and String(blank["typed"]).is_empty() and float(blank["kb"]) > 0.5 and not bool(blank["can_back"]),
+		"a new tab is opened by its plus: a blank tab beside the first, its bar ready and the keyboard up (%s)" % str(blank["tabs"]))
+	var ducks_keys: PackedFloat32Array = times.call(5)["keys"]
+	var ducks_typing: Dictionary = face.call(ducks_keys[4] + 0.01)
+	var ducks: TabletPage = up.call(5)["page"]
+	_ok(String(ducks_typing["typed"]) == "ducks" and bool(ducks_typing["typing"]) and float(ducks_typing["kb"]) == 1.0 and String(ducks_typing["key"]) == "s"
+		and ducks_typing.get("page") == null and ducks != null and float(up.call(5).get("kb", 0.0)) < 1.0 and up.call(5)["tabs"] == [up.call(3)["page"].title, ducks.title],
+		"an address is typed into the blank tab's bar a key at a time under the keyboard, and its page comes up in that tab (%s)" % String(ducks_typing["typed"]))
+	# a search in the engine's own box
+	var box_keys: PackedFloat32Array = times.call(6)["keys"]
+	var box_tap: Dictionary = face.call(float(times.call(6)["tap"]) + 0.05)
+	var box_typing: Dictionary = face.call(box_keys[7] + 0.01)
+	var results: Dictionary = up.call(6)
+	_ok(ducks.search_rect.size != Vector2.ZERO and box_tap.get("tap") == ducks.search_rect.get_center() + down.call(box_tap)
+		and String(box_typing.get("box", "")) == "how many" and not bool(box_typing.get("typing", false)) and box_typing.get("page") == ducks
+		and float(box_typing["kb"]) > 0.9 and ducks.search_rect.end.y + down.call(box_typing).y < float(DispatchScreens.TABLET_SIZE.y) * (1.0 - TabletChrome.KEYBOARD),
+		"a search on a search engine's page is typed into the page's own box, tapped first, clear of the keyboard - never into the address bar (%s)" % String(box_typing.get("box", "")))
+	var lazy := (box_keys[box_keys.size() - 1] - box_keys[0]) / float(box_keys.size() - 1)
+	_ok(String(results["url"]) == "how many are there" and results["page"] != ducks and bool(results["can_back"]) and not results.has("box")
+		and lazy > DispatchScript.TABLET_KEY * 1.5,
+		"...at the tablet medium's pace, and its results come up under what was searched for (%.2f s a key, the bar's %.2f)" % [lazy, DispatchScript.TABLET_KEY])
+	var bar_keys: PackedFloat32Array = times.call(8)["keys"]
+	var bar_typing: Dictionary = face.call(bar_keys[2] + 0.01)
+	_ok(String(bar_typing.get("typed", "")) == "who" and bool(bar_typing["typing"]) and not bar_typing.has("box") and float(times.call(8)["tap"]) == INF,
+		"the control: a search from an article is typed into the address bar")
+	_ok(up.call(11)["page"] == ducks and not bool(up.call(11)["can_back"]) and bool(up.call(10)["can_back"]),
+		"back three times over is the tab's first page again, nothing behind it")
+	# a reply typed into the page
+	var post_i := _first(acts, "post")
+	var keyed: PackedFloat32Array = md._chars[post_i]
+	var chat: TabletPage = up.call(12)["page"]
+	var posting: Dictionary = face.call(keyed[5] + 0.01)
+	var sent := md._sent_at(post_i)
+	var after: Dictionary = face.call(sent + 0.1)
+	_ok(chat.reply_rect.size != Vector2.ZERO and forum.reply_rect.size == Vector2.ZERO and String(posting.get("post", "")) == "Be pat"
+		and float(posting["kb"]) > 0.9 and chat.reply_rect.end.y + down.call(posting).y < float(DispatchScreens.TABLET_SIZE.y) * (1.0 - TabletChrome.KEYBOARD)
+		and keyed[5] >= md._word_t0(int(acts[post_i]["from"])) and sent < INF and not after.has("post")
+		and after.get("tap") == chat.send_rect().get_center() + down.call(after),
+		"a reply is typed into the page's message box as it is said, clear of the keyboard, and sent (the control: a page that takes none has no box - %s)" % String(posting.get("post", "")))
+	var again: Dictionary = up.call(13)
+	_ok(again["page"] != chat and (again["page"] as TabletPage).reply_rect.size != Vector2.ZERO
+		and is_equal_approx(float(again["scroll"]), snappedf(minf(md._page_left(int(at[12])), maxf((again["page"] as TabletPage).height - view, 0.0)), 0.5)),
+		"the page loaded again comes up where it was left, its message box kept (%.0f px)" % float(again["scroll"]))
+	md.queue_free()
+
+
 ## The camera on the terminal: after a block it stays on the glass while the voice talks of what is up, however long, through
 ## to what comes next, never pulled back to the whole desk for nothing (the controls: a block's look as it was, home within
 ## seconds; the same long talk with a linger of 8 s, home before the look).
@@ -816,11 +926,21 @@ func _black_tablet_clip(md: DispatchMedium, actions: Array, t0: PackedFloat32Arr
 	var held := t0[tab_up] + DispatchScript.TABLET_UP / md._sp[tab_up] + 0.1
 	md._pose(held)
 	var in_hand := md._set.tablet.global_transform.origin.distance_to(md._set.tablet_held_xf().origin) < 0.001
-	md._pose(md._end_of(tab_down) + 0.2)
+	var laid := md._end_of(tab_down)
+	md._pose(laid + 0.2)
 	var home := md._set.tablet.global_transform.origin.distance_to(md._set.tablet_home.origin) < 0.001
-	var off := float(md.tablet_at(md._end_of(tab_down) + 0.2)["face"]["power"]) == 0.0
-	_ok(in_hand and home and off and float(md.tablet_at(t0[tab_up] - 0.1)["face"]["power"]) == 0.0 and md.looking_at(held + 2.0) == "tablet",
-		"the tablet is picked up and held low over the desk, the camera on it, its screen woken, and put back down dark")
+	_ok(in_hand and home and float(md.tablet_at(t0[tab_up] - 0.1)["face"]["power"]) == 0.0 and md.looking_at(held + 2.0) == "tablet",
+		"the tablet is picked up and held low over the desk, the camera on it, its screen woken, and laid back in its place")
+	# laid down, its screen is left lit on the page it was left on and locks itself: dimmed for the last seconds, then dark
+	var lock := DispatchMedium.TABLET_LOCK
+	var lain: Dictionary = md.tablet_at(laid + 0.2)["face"]
+	var lit_late := float(md.tablet_at(laid + lock - DispatchMedium.TABLET_DIM - 0.5)["face"]["power"])
+	var dimmed := float(md.tablet_at(laid + lock - 1.0)["face"]["power"])
+	var locked := float(md.tablet_at(laid + lock + DispatchMedium.TABLET_OFF + 0.1)["face"]["power"])
+	_ok(float(lain["power"]) == 1.0 and lain.get("page") != null and lit_late == 1.0 and dimmed > 0.0 and dimmed < 0.5 and locked == 0.0
+		and is_equal_approx(md._end_of(tab_down) - t0[tab_down], DispatchScript.TABLET_DOWN / md._sp[tab_down]) and DispatchScript.TABLET_DOWN >= 1.5,
+		"laid down unhurried, the tablet's screen stays lit on its page %.0f s, dimmed for the last of them, then locks dark (%.2f, %.2f, %.2f, %.2f)"
+			% [lock, float(lain["power"]), lit_late, dimmed, locked])
 	var pages: Array = []
 	for i in actions.size():
 		if String(actions[i]["kind"]) == "page":
@@ -857,13 +977,20 @@ func _black_tablet_clip(md: DispatchMedium, actions: Array, t0: PackedFloat32Arr
 	for i in actions.size():
 		if String(actions[i]["kind"]) == "live" and String(actions[i]["screen"]) == "tablet":
 			live_i = i
-	var player := Manuscript.image_key(DispatchMedium.PLAYER)
+	var player := Manuscript.image_key(DispatchScript.PLAYER)
 	md._now = t0[live_i] - 0.05
 	var dark_player := md._page_tex(player)
 	md._now = t0[live_i] + 0.5
 	var live_player := md._page_tex(player)
 	_ok(dark_player != null and dark_player != md._live_vp.get_texture() and live_player == md._live_vp.get_texture(),
 		"the page's player is dark until the desk is played live into it")
+	# laid down, the player plays on while the screen is lit, and stops as it locks
+	md._now = laid + 5.0
+	var plays_on := md._page_tex(player) == md._live_vp.get_texture()
+	md._now = laid + lock + DispatchMedium.TABLET_OFF + 0.1
+	var stopped := md._page_tex(player) != md._live_vp.get_texture()
+	md._now = t0[live_i] + 0.5
+	_ok(t0[live_i] < t0[tab_down] and plays_on and stopped, "laid down, the tablet's player plays on until its screen locks (%s, %s)" % [plays_on, stopped])
 	# a clip: the screen's static until one is imported, then its frames, looping
 	var clip_i := -1
 	for i in actions.size():
@@ -900,6 +1027,56 @@ func _black_tablet_clip(md: DispatchMedium, actions: Array, t0: PackedFloat32Arr
 	var w1 := md._word_t1(int(actions[said_i]["from"]))
 	_ok(float(md.storm_at((w0 + w1) * 0.5).get("voice", 0.0)) > 0.0, "a paragraph in a voice with no phone comes in on the receiver, the needle moving with it")
 
+
+
+## A picture told `unwatched` lands on its screen with the camera left where it is (the control: untold, the camera turns to it).
+func _unwatched(md: DispatchMedium) -> void:
+	var looked := {}
+	for told in [", unwatched", ""]:
+		var body := ("<!-- speaker: Control -->\n\nOne two three four five six seven eight.\n\n<!-- image (feed%s): an aisle with nobody in it -->\n\n"
+			+ "Nine ten eleven twelve thirteen fourteen fifteen sixteen.\n\n<!-- ring: AISLE -->\n\nSeventeen.\n") % told
+		md.load_note(body, {"seed": 3})
+		md._now = 0.0
+		md.take_words(DispatchScript.rehearsal(DispatchScript.parse(body), 0.32))
+		var pic := _first(md._actions, "picture")
+		var at := md.starts()[pic]
+		looked[told] = [at < INF, String(md._actions[pic]["screen"]), md.looking_at(at + 1.0), md._look_key(md._actions[pic])]
+	_ok(looked[", unwatched"] == [true, "feed", "home", ""] and looked[""] == [true, "feed", "feed", "feed"],
+		"an unwatched picture lands on its screen with the camera left where it is; untold, the camera turns to it (%s, %s)"
+			% [looked[", unwatched"], looked[""]])
+
+
+## A call's timer after a reading started mid-way, past where the call began: counted from where the call fell on the reading, as a
+## whole reading counts it (the control: counted from the far past the call is placed in, it is hours).
+func _timer_mid_way(md: DispatchMedium) -> void:
+	var body := ("<!-- speaker: Control -->\n\nOne two three four five six seven eight nine ten eleven twelve.\n\n<!-- call: AISLE -->\n\n"
+		+ "<!-- speaker: Aisle -->\n\nHello there this is aisle seven and I am standing by the coffee right now.\n\n"
+		+ "<!-- speaker: Control -->\n\nGood stay there and keep your eyes on him until I say so.\n\n"
+		+ "<!-- speaker: Aisle -->\n\nHe is reading the back of a bag and has not looked up once.\n\n<!-- /call -->\n")
+	var parsed := DispatchScript.parse(body)
+	var words := DispatchScript.rehearsal(parsed, 0.32)
+	var spoken: PackedStringArray = parsed["spoken"]
+	var k := spoken.find("good")
+	var since := float((words[k] as Dictionary)["t0"])
+	var at := float((words[spoken.find("bag")] as Dictionary)["t0"])
+	md.load_note(body, {"seed": 3})
+	md._now = 0.0
+	md.take_words(words)
+	var whole_secs := at - md._call_began("AISLE", at)
+	var later: Array = []
+	for w in words.slice(k):
+		var d: Dictionary = (w as Dictionary).duplicate()
+		d["t0"] = float(d["t0"]) - since
+		d["t1"] = float(d["t1"]) - since
+		later.append(d)
+	md.load_note(body, {"seed": 3}, spoken.slice(k, k + 8), k, since)
+	md._now = 0.0
+	md.take_words(later)
+	var mid_secs := (at - since) - md._call_began("AISLE", at - since)
+	var far_secs := (at - since) - md.starts()[_first(md._actions, "call")]
+	_ok(md._follower.start_si == k and whole_secs > 5.0 and absf(mid_secs - whole_secs) < 2.0 and far_secs > 3600.0,
+		"a call begun before a mid-way start has run as long as in a whole reading (%.1f s, whole %.1f s; from the far past %.0f s)"
+			% [mid_secs, whole_secs, far_secs])
 
 
 ## A note that opens in the black, on a title: the title stands over the blurred desk, the camera home; the picture goes
@@ -987,9 +1164,27 @@ func _layout() -> void:
 	var spots_follow := true
 	var ring_ok := true
 	var first: Dictionary = {}
+	var carried := 0
+	var carried_clear := 0
+	var carried_low := 0
+	var straight_blocked := 0
 	for seed in range(1, 41):
 		var s := DispatchSet.new()
 		var node := s.build(labels, seed, tex, {"clock": true, "tablet": true} if seed % 2 == 0 else {})
+		if s.tablet != null:
+			# the tablet's way between its place and the hand
+			var lies := s.tablet_home
+			var hand := s.tablet_held_xf()
+			var route := DispatchMedium.tablet_route(s)
+			var mid := lies.origin.lerp(hand.origin, 0.5)
+			carried += 1
+			if s.slab_clear(s.tablet_box, lies, DispatchMedium.tablet_way(lies, hand, route), DispatchMedium.CARRY_GAP, ["tablet"]):
+				carried_clear += 1
+			if route.y <= hand.origin.y + 0.001:
+				carried_low += 1
+			if not s.slab_clear(s.tablet_box, lies, DispatchMedium.tablet_way(lies, hand,
+					Vector3(mid.x, lies.origin.y + DispatchMedium.TABLET_OVER.x, mid.z)), DispatchMedium.CARRY_GAP, ["tablet"]):
+				straight_blocked += 1
 		flips[int(s.flip)] = true
 		var m: Vector2 = s.at["mug"]
 		mugs[snappedf(m.x, 0.01)] = true
@@ -1050,6 +1245,10 @@ func _layout() -> void:
 	_ok(blotter_cross.is_empty(), "the chart is taped down wholly on the desk's own top, never across the blotter (%s)" % blotter_cross)
 	_layout_controls(labels, tex)
 	_ok(mug_reach, "the mug is at arm's reach, 25 to 40 cm in from the edge, beside the keyboard")
+	_ok(carried >= 15 and carried_clear == carried and carried_low * 4 >= carried * 3,
+		"the tablet is carried clear of what stands under its way on every desk, on most no higher than the hand holds it (%d desks, %d clear, %d no higher)"
+			% [carried, carried_clear, carried_low])
+	_ok(straight_blocked > 0, "the control: carried straight and at its least height, something stands in the tablet's way on %d desks" % straight_blocked)
 	_ok(spots_follow, "the camera turns to where each thing is")
 	_ok(ring_ok, "the old coffee ring is a thin opaque rim, never a clear disc")
 
@@ -1293,7 +1492,9 @@ func _ok(cond: bool, what: String) -> void:
 
 ## No root lies where a phone is laid open, on eight desks: the held phones' whole footprint, lids included (control: the strip
 ## round the bases leaves the lids out). No root goes through the printer's paper or its heap, anywhere along the line its tube is drawn on (control: the same roots grown
-## knowing nothing of them go through), nor lies across the chart taped to the desk (control: grown with it left out, they do).
+## knowing nothing of them go through). No root lying on the desk comes nearer what stands there - the chart taped to it too -
+## than it is thick (control: grown knowing nothing of what stands there, into it); each reaches a moderate way across the top
+## and goes over the near edge, down clear of the desk's front, or ends on the top.
 ## The chart lies a hair over the desk's top, never in its plane (control: its make seats its sheet on its own foot). The patch
 ## panel's cables end in a part of what they plug into or past the desk's edge, go over the roots on the desk (control: laid
 ## blind) and round what stands on it, through none of it (control: laid straight from socket to port); each plugs into a side
@@ -1311,8 +1512,6 @@ func _roots_clear() -> void:
 	var paper_blind := 0
 	var facing_least := 1.0
 	var was_most := -1.0
-	var chart_through := []
-	var chart_blind := 0
 	var chart_lift := INF
 	var chart_seat := 0.0
 	var loose_ends := []
@@ -1324,6 +1523,12 @@ func _roots_clear() -> void:
 	var panel_front := 0
 	var crossed := []
 	var flat_crossed := 0
+	var touching := []
+	var touching_blind := 0
+	var reach_most := 0.0
+	var over_edge := 0
+	var on_top := 0
+	var hang_wrong := []
 	for sd in range(1, 9):
 		var ds := DispatchSet.new()
 		var node := ds.build(labels, sd, tex)
@@ -1378,21 +1583,13 @@ func _roots_clear() -> void:
 			cable_through.append(sd)
 		ds.lay_cables([])
 		cable_blind += int(_cables_through(ds.cable_paths, rr.lying))
-		# the chart taped flat on the desk: no root lying on the desk crosses it (the control: grown with it left out of what
-		# they go round, they cross it)
+		# the chart taped flat on the desk lies a hair over its top
 		var chart := _foot(ds, "chart")
 		if chart.has_area():
 			var cf: MeshInstance3D = (ds.rigs["chart"] as PropRig).face("chart")
 			var face_y := (_xf_in(cf, node) * cf.get_aabb()).position.y
 			chart_lift = minf(chart_lift, face_y - DispatchSet.DESK_Y)
 			chart_seat = maxf(chart_seat, absf((_xf_in(cf, ds.rigs["chart"].node) * cf.get_aabb()).position.y))
-			if _lies_in(rr, chart):
-				chart_through.append(sd)
-			var feet := ds.footprints.filter(func(f: Rect2) -> bool: return f != chart)
-			var unaware := DispatchRoots.new()
-			var un := unaware.build(sd, feet, held, ds.clear)
-			chart_blind += int(_lies_in(unaware, chart))
-			un.free()
 		for path in rr.lying:
 			var pts: PackedVector3Array = path["points"]
 			var rad: PackedFloat32Array = path["radii"]
@@ -1400,6 +1597,28 @@ func _roots_clear() -> void:
 				if held.grow(-rad[k] * 0.5).has_point(Vector2(pts[k].x, pts[k].z)):
 					through.append(sd)
 					break
+			# past where it goes over the near edge it is off the top: out past the front, and down below it by its end
+			var off := int(path.get("off", -1))
+			if off >= 0:
+				for k in range(off, pts.size()):
+					if pts[k].z < DispatchSet.NEAR:
+						hang_wrong.append(sd)
+						break
+				if pts[pts.size() - 1].y > DispatchSet.DESK_Y - DispatchRoots.HANG.x + 0.01:
+					hang_wrong.append(sd)
+		# no root lying on the desk comes nearer what stands there, or where a phone is laid open, than it is thick (the control:
+		# grown knowing nothing of what stands there, they lie in it)
+		var stood: Array = ds.footprints + [held]
+		if _roots_touch(rr, stood):
+			touching.append(sd)
+		var unseeing := DispatchRoots.new()
+		var un_node := unseeing.build(sd, [], Rect2(), ds.clear)
+		touching_blind += int(_roots_touch(unseeing, stood))
+		un_node.free()
+		for o in rr.on_desk:
+			reach_most = maxf(reach_most, float(o["reach"]))
+			over_edge += int(bool(o["leaves"]))
+			on_top += int(not bool(o["leaves"]))
 		var lid := ds.held_xf(0) * Vector3(0, 0, -DispatchSet.PHONE.z * 1.4)
 		var h := ds.at_of("held")
 		var strip := Rect2(Vector2(minf(h.x, h.x + ds.flip * DispatchSet.HELD_STEP * 2.0) - 0.05, h.y - 0.07),
@@ -1418,6 +1637,12 @@ func _roots_clear() -> void:
 		node.free()
 	_ok(through.is_empty() and lid_out == 8,
 		"no root lies where a phone is laid open, its lid with it (the control: the strip round the bases leaves the lid out on %d of 8; through on %s)" % [lid_out, str(through)])
+	_ok(touching.is_empty() and touching_blind > 0,
+		"no root lying on the desk comes nearer what stands there - the chart taped to it, where a phone is laid open - than it is thick (%s; the control: grown knowing nothing of what stands there, into it on %d of 8)"
+		% [str(touching), touching_blind])
+	_ok(reach_most <= DispatchRoots.DESK_REACH.y * DispatchRoots.REACH_OVER * 1.2 and over_edge > 0 and on_top > 0 and hang_wrong.is_empty(),
+		"a root reaches a moderate way across the top (%.2f m at most), going over the near edge and down clear of the desk's front (%d) or ending on the top (%d) - wrong on %s"
+		% [reach_most, over_edge, on_top, str(hang_wrong)])
 	_ok(facing_least > 0.98 and was_most < 0.9,
 		"an open phone laid on the desk faces the chair (the least %.3f; the control, the turn it once had, at most %.3f)" % [facing_least, was_most])
 	_ok(paper_through.is_empty() and paper_blind > 0,
@@ -1437,8 +1662,6 @@ func _roots_clear() -> void:
 	_ok(chart_lift >= DispatchSet.FLAT_LIFT * 0.9 and chart_seat < 0.0002,
 		"the chart lies %.2f mm over the desk's top, never in its plane (the control: its make seats its sheet on its own foot, %.2f mm up)"
 		% [chart_lift * 1000.0, chart_seat * 1000.0])
-	_ok(chart_through.is_empty() and chart_blind > 0,
-		"no root lying on the desk crosses the chart taped there (the control: grown with it left out, across it on %d of 8; with it, on %s)" % [chart_blind, str(chart_through)])
 
 
 ## [param n]'s transform in [param top]'s space, walked up its parents: a set built out of any tree.
@@ -1620,14 +1843,19 @@ static func _foot(ds: DispatchSet, k: String) -> Rect2:
 	return foot
 
 
-## Whether a root of [param rr] lying on the desk passes over [param rect] (x, z) - into a sheet lying there.
-static func _lies_in(rr: DispatchRoots, rect: Rect2) -> bool:
+## Whether a root of [param rr] lying on the desk's top comes nearer one of [param stood] (Rect2s in x, z) than it is thick there.
+static func _roots_touch(rr: DispatchRoots, stood: Array) -> bool:
 	for path in rr.lying:
 		var pts: PackedVector3Array = path["points"]
 		var rad: PackedFloat32Array = path["radii"]
-		for k in range(int(path["from"]), pts.size()):
-			if rect.grow(rad[k] * 0.5).has_point(Vector2(pts[k].x, pts[k].z)):
-				return true
+		var end := int(path.get("off", -1))
+		for k in range(int(path["from"]), pts.size() if end < 0 else end):
+			var p := Vector2(pts[k].x, pts[k].z)
+			for f in stood:
+				var rect: Rect2 = f
+				var away := Vector2(maxf(maxf(rect.position.x - p.x, p.x - rect.end.x), 0.0), maxf(maxf(rect.position.y - p.y, p.y - rect.end.y), 0.0))
+				if away.length() < rad[k] - 0.001:
+					return true
 	return false
 
 

@@ -71,6 +71,17 @@ The episode's Voice row is an optional saved narration. Until it is requested or
 from the tally, so an unused recording leaves a completed episode complete. Its action waits for a ready voice;
 once requested or saved, its running, made or stale state counts normally.
 
+**Rows cost nothing to ask for.** The card asks every section for its rows four times a second while something is
+being made, so a step's progress is seen as it moves, and once a second while nothing is (`PipelineCard.EVERY`,
+`EVERY_IDLE`); what the card itself changes is shown at once. So A SECTION'S ROWS NEVER ASK THE DISK: what a row says
+is read from what its owner holds in memory, which the owner looks at again when it writes or is told to. The
+Pictures' rows asked the library about each picture's versions a score of times, each a look at every file: seven
+hundred looks a refresh for thirty pictures, most of a frame. The library holds what it found
+(`Illustrations._held`: the versions and references on disk, the look's signature) until it writes, or the window is
+come back to (`look_again`). Gate: `tests/media/pictures_held_check.gd`. The same holds for a card's own refresh:
+the YouTube card asks for the note's title, episode, author and book twice a second, and each ask read the whole
+note file; `DocSource.field` holds the file's fields until the file changes (`tests/notes/doc_sync_check.gd`).
+
 ## What changed for the person
 
 - Tags, Thumbnail: a "YouTube" section, always in the same place, whatever else is on the note.

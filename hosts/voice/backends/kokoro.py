@@ -55,6 +55,10 @@ So there is no lead-in: the ids are the model's own and the pad is planned at sp
 plan (median 1.00 at Pace 1 and 1.6) and a voice's speaking level moves at most 0.23 dB, so levels.json
 stands.
 
+The end: a sentence's end is not the call's. At the end of a call Kokoro lets the last word go, so a sentence
+that ends on a full stop is read with its own first word after it and the take cut in the rest the model makes
+at the stop (AFTER_WORDS, `_after`, `_cut_after`).
+
 Not here: `noise_scale` and `noise_w` (the Tone's `noise` columns do nothing on these voices), F0 as an
 input (the arc and the Tone resample), Kokoro's own dwell at a mark (the pause figures are Piper's
 measurements), the vowel probe.
@@ -82,6 +86,7 @@ from .piper import (
     _VOWELS,
     DUR_SCALE_INPUT,
     REST_FLOOR_INPUT,
+    SENTENCE_END,
     TRAIL_STRETCH,
     PiperBackend,
     _final_rimes,
@@ -116,6 +121,10 @@ GAP_BACK = 0.015
 HOLD_LEAST = 0.09
 STYLE = 256
 PAD_ID = 0
+# How this backend reads a request, said on every voice's row (`voices`): a row keys the takes kept in its voice
+# (TakeCache), so raising it has every sentence kept before said again. Raised when the same request comes out
+# another take.
+READS = 2
 
 LICENSE = (
     "Apache-2.0 (hexgrad/Kokoro-82M). Its training data includes synthetic audio from closed "
@@ -417,6 +426,7 @@ class KokoroBackend(PiperBackend):
                     "license": fam.get("license", LICENSE),
                     "derivation": fam["derivation"],
                     "speakers": len(fam["packs"]),
+                    "reads": READS,
                     # Who each speaker number is, said by the host (VoiceReaders.offer): the libritts
                     # readers are described from files, these from the tables above.
                     "readers": [
@@ -821,6 +831,9 @@ class KokoroBackend(PiperBackend):
 
         A sentence over MAX_TOKENS is read in pieces cut at a word-space - after a mark where one
         is in reach - each with its own pads and its own style, the pieces' plans laid end to end.
+
+        A sentence that ends on a full stop is followed in its call by its own first word (AFTER_WORDS, or as
+        many as the request's `after` says) and cut before it; what is handed back is the sentence's alone.
         """
         import numpy as np
 
@@ -909,12 +922,16 @@ class KokoroBackend(PiperBackend):
         lay_unit: list[int] = []
         lay_floor: list[float] = []
         moving = kk.get("moving")
-        for a, b in _pieces(ids, units, unit_of):
+        space = vocab.get(" ")
+
+        def read(a: int, b: int, more: list):
+            """ids[a:b] in one call, `more` said after them: (audio, the plan's frames an id, a pad at each end)."""
             body = ids[a:b]
             n = max(1, len(body))
             pack = kk["pack"]
+            rest = [space, *more] if more else []
             feeds = {
-                "input_ids": np.array([[PAD_ID, *body, PAD_ID]], dtype=np.int64),
+                "input_ids": np.array([[PAD_ID, *body, *rest, PAD_ID]], dtype=np.int64),
                 "style": np.asarray(pack[min(n, pack.shape[0]) - 1], dtype=np.float32).reshape(1, STYLE),
                 "speed": np.array([speed], dtype=np.float32),
             }
@@ -925,26 +942,45 @@ class KokoroBackend(PiperBackend):
                 u0, u1 = moving["span"]
                 total = float(max(1, len(ids)))
                 places = [u0 + (u1 - u0) * min(max(x / total, 0.0), 1.0)
-                          for x in (a, *[j + 0.5 for j in range(a, b)], b)]
+                          for x in (a, *[j + 0.5 for j in range(a, b)], *([b] * len(rest)), b)]
                 rows = [p[min(n, p.shape[0]) - 1].reshape(STYLE) for p in moving["packs"]]
                 feeds["style"] = blend.rows_along(moving["blend"], rows, places, float(moving["pos"]))
-            fl = [0.0, *floor[a:b], 0.0]
-            # the first pad undoes `speed`: it is planned as at speed 1.0, where the first word meets the voice waking
-            sc = [speed, *scale[a:b], 1.0]
             if fed_floor and REST_FLOOR_INPUT in takes:
-                feeds[REST_FLOOR_INPUT] = np.array(fl, dtype=np.float32)
+                feeds[REST_FLOOR_INPUT] = np.array([0.0, *floor[a:b], *([0.0] * len(rest)), 0.0], dtype=np.float32)
+            # the first pad undoes `speed`: it is planned as at speed 1.0, where the first word meets the voice waking
             if fed_scale and DUR_SCALE_INPUT in takes:
-                feeds[DUR_SCALE_INPUT] = np.array(sc, dtype=np.float32)
+                feeds[DUR_SCALE_INPUT] = np.array([speed, *scale[a:b], *([1.0] * len(rest)), 1.0], dtype=np.float32)
             out = sess.run(None, feeds)
-            audio_parts.append(np.asarray(out[0]).reshape(-1).astype(np.float32))
             planned = np.asarray(out[1]).reshape(-1).astype(np.float64)
             # an unpatched graph hands back the plan before its Round and Clip: done here as there
-            frames_parts.append(planned if REST_FLOOR_INPUT in takes else np.maximum(np.round(planned), 1.0))
+            return (np.asarray(out[0]).reshape(-1).astype(np.float32),
+                    planned if REST_FLOOR_INPUT in takes else np.maximum(np.round(planned), 1.0))
+
+        pieces = _pieces(ids, units, unit_of)
+        for a, b in pieces:
+            # the sentence's end is not the call's (AFTER_WORDS): words after it, and the take cut before them
+            more = []
+            if (a, b) == pieces[-1] and space is not None:
+                more = _after(ids, units, unit_of, sound, int(params.get("after", AFTER_WORDS)))
+                if b - a + 1 + len(more) > MAX_TOKENS:
+                    more = []
+            take, planned = read(a, b, more)
+            if more:
+                heard = [k for k in range(a, b) if sound[k]]
+                # the places in the call's plan (a pad first) of the sentence's last sound and the first one after
+                cut = _cut_after(take, planned, 1 + heard[-1] - a, 2 + b - a + sound[: len(more)].index(True),
+                                 frame_s) if heard else None
+                if cut is None:  # it read on: the sentence alone
+                    take, planned = read(a, b, [])
+                else:
+                    take, planned = take[:cut], _plan_to(planned[: 1 + b - a], cut / float(HOP))
+            audio_parts.append(take)
+            frames_parts.append(planned)
             lay_owner += [-1, *owner[a:b], -1]
             lay_rest += [-2, *rest_of[a:b], -2]
             lay_sound += [False, *sound[a:b], False]
             lay_unit += [-1, *unit_of[a:b], -1]
-            lay_floor += fl
+            lay_floor += [0.0, *floor[a:b], 0.0]
         audio = np.concatenate(audio_parts) if audio_parts else np.zeros(1, dtype=np.float32)
         frames = np.concatenate(frames_parts) if frames_parts else np.zeros(0)
         if frames.size == len(lay_owner):
@@ -1061,6 +1097,17 @@ SEAM_TAIL = 0.14
 # What counts as sound at a take's ends: a share of its peak, as the splicer's SPLICE_QUIET.
 SEAM_QUIET = 0.02
 
+# A sentence's end is not the call's. Kokoro was taught on calls of many sentences (its own pipeline packs a
+# paragraph into one), and at the end of a call it lets the last word go: a short one is planned as it is
+# anywhere and said far under the same word with more after it, whatever its stress or its length. So a
+# sentence that ends on a full stop is followed in its call by a word-space and its own first AFTER_WORDS
+# words (`_after`), and the take is cut in the rest the model makes at the stop (`_cut_after`); where it
+# makes none, the sentence is read alone.
+AFTER_WORDS = 1
+# The rest at the stop: under this share of the peak, where nothing sounds at all (a faint last sound, a hum
+# or a soft hiss under SEAM_QUIET, is over it).
+AFTER_QUIET = 0.005
+
 
 # Nothing hisses after a voice that ended voiced. On a sentence ending in a vowel Kokoro often renders a
 # burst of hiss as the voice lets go and through the mark after it ("Oh." 18 to 23 dB under the peak, 86 to
@@ -1173,6 +1220,84 @@ def _trim_ends(audio, frames, sound: list, frame_s: float):
         if left <= 0.0:
             break
     return audio[cut0 : audio.size - cut1], frames
+
+
+def _after(ids: list, units: list, unit_of: list, sound: list, words: int) -> list:
+    """The ids said after a sentence so that its end is not the call's (AFTER_WORDS): its own first `words`
+    words, up to the mark or word-space that ends the last of them - [] where it does not end on a full stop
+    (SENTENCE_END: what trails off or breaks off is read to the call's end) or has no word."""
+    if words <= 0 or not ids or units[unit_of[-1]][0] not in SENTENCE_END:
+        return []
+    out: list = []
+    said = 0
+    inside = False
+    for k, i in enumerate(ids):
+        if sound[k]:
+            said += 0 if inside else 1
+            inside = True
+        elif inside and said == words:
+            break
+        else:
+            inside = False
+        out.append(i)
+    while out and not sound[len(out) - 1]:
+        out.pop()
+    return out
+
+
+def _cut_after(audio, frames, last: int, nxt: int, frame_s: float):
+    """Where a call read with words after its sentence ends as the sentence's own take, in samples - or None
+    where the model did not rest at the stop. `frames` is the call's plan (a pad first), `last` the place in it
+    of the sentence's last sound and `nxt` of the first sound after it. The plan gives a stop's rest to the
+    sound before it, so the rest is looked for in the waveform: the longest stretch under AFTER_QUIET from the
+    start of the last sound to the start of the words after. The cut is SEAM_TAIL past the last moment over
+    SEAM_QUIET (what `_trim_ends` leaves after a take) and never before the rest starts, and the rest must
+    run SEAM_LEAD past it."""
+    import numpy as np
+
+    sr = HOP / frame_s
+    step = max(1, int(0.005 * sr))
+    lo = int(max(0.0, float(frames[:last].sum()) * frame_s - PLAN_LEAD) * sr) // step
+    hi = min(audio.size // step, int(max(0.0, float(frames[:nxt].sum()) * frame_s - PLAN_LEAD) * sr) // step)
+    if hi - lo < 2:
+        return None
+    level = np.sqrt((audio[: hi * step].reshape(hi, step).astype(np.float64) ** 2).mean(axis=1))
+    peak = float(np.max(np.abs(audio[: hi * step])))
+    if peak <= 0.0:
+        return None
+    # the longest run of rest in [lo, hi), as (start, end)
+    rest = np.concatenate(([False], level[lo:] <= AFTER_QUIET * peak, [False]))
+    turns = np.flatnonzero(rest[1:] != rest[:-1])
+    if turns.size == 0:
+        return None
+    runs = turns.reshape(-1, 2)
+    k = int(np.argmax(runs[:, 1] - runs[:, 0]))
+    start, end = lo + int(runs[k, 0]), lo + int(runs[k, 1])
+    loud = np.flatnonzero(level[:start] > SEAM_QUIET * peak)
+    heard_to = int(loud[-1]) + 1 if loud.size else 0
+    cut = max(start, heard_to + int(round(SEAM_TAIL * sr / step)))
+    if end - cut < int(round(SEAM_LEAD * sr / step)):
+        return None
+    return cut * step
+
+
+def _plan_to(frames, total: float):
+    """`frames` (a call's plan through its sentence's last id) as the plan of a take cut at `total` frames, a last
+    pad after it: what the plan holds past the cut taken off its end (a stop's rest is planned on the sound before
+    it), what the take holds past the plan the pad's. It adds up to the take, as `_trim_ends` leaves it."""
+    import numpy as np
+
+    out = np.append(np.asarray(frames, dtype=np.float64), 0.0)
+    left = float(out.sum()) - total
+    if left < 0.0:
+        out[-1] = -left
+    for k in range(out.size - 2, 0, -1):
+        if left <= 0.0:
+            break
+        take = min(out[k], left)
+        out[k] -= take
+        left -= take
+    return out
 
 
 def _span(value):

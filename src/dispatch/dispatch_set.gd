@@ -209,6 +209,7 @@ var clock_face: MeshInstance3D    # the flip clock's cards (null without a clock
 var tablet: Node3D                # the tablet, posed by the medium (null without one)
 var tablet_screen: MeshInstance3D
 var tablet_home := Transform3D()
+var tablet_box := AABB()            # the tablet's own box, in its own space: what is carried ([method slab_clear])
 var footprints: Array = []        # Rect2s of what is on the desk (x, z), for the roots to go round - the chart too, which a root lying on the desk would pass through
 var clear: Array = []             # AABBs of what fills the air by the desk, which no root goes through: the paper, its heap
 var bodies := {}                  # a thing -> the box its meshes fill, in the set's space ([method bounds])
@@ -2089,6 +2090,9 @@ func _things() -> void:
 	mug_home = mug.transform
 	if tablet != null:
 		tablet_home = tablet.transform
+		var own := _gather(tablet, Transform3D.IDENTITY)
+		if not own.is_empty():
+			tablet_box = _part_of(own)["box"]
 	# the ring of dried coffee: a thin, uneven, dull ring where a mug's foot dried on the lacquer, and an older arc beside
 	# it - opaque and matte, lit and shadowed as the desk is (a translucent disc catches none of the lamp's light and
 	# reads as glass) - a little off the mug's foot, so it shows beside it
@@ -2187,25 +2191,37 @@ func tablet_held_xf() -> Transform3D:
 
 # --- where the camera looks -------------------------------------------------------------------------------------------
 
-## The highest top (m) of what is on the desk within [param radius] of the way across it from [param from] to [param to] (x, z),
-## [param skip]'s things aside (what is carried): what a thing carried between them must clear. The desk's own top where nothing
-## stands in the way.
-func clear_over(from: Vector3, to: Vector3, radius: float, skip: Array) -> float:
-	var top := DESK_Y
+## Whether a slab ([param body], its box in its own space) carried from where it lies ([param lies]) through [param way] (where
+## it is at each step, the set's space) keeps [param gap] over everything standing on the desk under it but what [param skip]
+## names, and never dips into the desk's top - by each thing's own outline, as the desk is packed, so what it passes beside is
+## not in its way. A part that reaches over where it lies (it lies tucked under it) is none of what it must clear: no height
+## would.
+func slab_clear(body: AABB, lies: Transform3D, way: Array, gap: float, skip: Array) -> bool:
+	var rest: PackedVector2Array = _slab_at(body, lies)["outline"]
+	var stands := {}
 	for k in _parts:
-		if k in skip:
-			continue
-		for part in _parts[k]:
-			var b: AABB = (part as Dictionary)["box"]
-			if b.end.y <= top:
+		if not k in skip:
+			stands[k] = (_parts[k] as Array).filter(func(part: Dictionary) -> bool: return not _meets(rest, -INF, INF, [part]))
+	for step in way:
+		var at := _slab_at(body, step)
+		var box: AABB = at["box"]
+		if box.position.y < DESK_Y - 0.001:
+			return false
+		for k in stands:
+			if bodies.has(k) and not (bodies[k] as AABB).grow(gap).intersects(box):
 				continue
-			var r := Rect2(b.position.x, b.position.z, b.size.x, b.size.z).grow(radius)
-			for s in 33:
-				var p := from.lerp(to, float(s) / 32.0)
-				if r.has_point(Vector2(p.x, p.z)):
-					top = b.end.y
-					break
-	return top
+			if _meets(at["outline"], box.position.y - gap, box.end.y, stands[k]):
+				return false
+	return true
+
+
+## A slab ([param body], its box in its own space) at [param xf]: its outline from above, how high it reaches, its box
+## ([method _part_of]).
+static func _slab_at(body: AABB, xf: Transform3D) -> Dictionary:
+	var pts := PackedVector3Array()
+	for c in 8:
+		pts.append(xf * body.get_endpoint(c))
+	return _part_of(pts)
 
 
 ## Whether a thing [param radius] round and [param tall] high carried along [param way] (its foot at each point, the set's space)

@@ -101,6 +101,15 @@ func _kinds(d: Dictionary) -> Array:
 	return out
 
 
+## How a dispatch desk's tablet reaches each of its pages, in order.
+func _hows(d: Dictionary) -> Array:
+	var out := []
+	for a in d["actions"]:
+		if String(a["kind"]) == "page":
+			out.append(String(a["how"]))
+	return out
+
+
 ## The proof: each example, read by the parser of record. A key missing from this match fails, so a new entry cannot
 ## ship unverified.
 func _parsers_agree() -> void:
@@ -153,9 +162,15 @@ func _parsers_agree() -> void:
 			"new_tab":
 				_ok(_kinds(TabletScript.parse("<!-- url: a.test -->\n\nText.\n\n%s\n<!-- url: b.test -->\n\nMore.\n" % ex)).has("tab"),
 					"a new tab mark opens no tab")
+				var desk := DispatchScript.parse("<!-- speaker: Control -->\n\n<!-- tablet -->\n\n```page\nurl: a.test\n```\n\n%s\n\n```page\nurl: b.test\n```\n\n<!-- /tablet -->\n\nDone.\n" % ex)
+				_ok(_hows(desk) == ["type", "tab", "type"] and (desk["warnings"] as PackedStringArray).is_empty(),
+					"a new tab mark opens no tab on a dispatch desk's tablet (%s)" % str(_hows(desk)))
 			"back":
 				var d := TabletScript.parse("<!-- url: a.test -->\n\nOne.\n\n<!-- url: b.test -->\n\nTwo.\n\n%s\n" % ex)
 				_ok(_kinds(d).has("back"), "a back mark goes nowhere")
+				var desk := DispatchScript.parse("<!-- speaker: Control -->\n\n<!-- tablet -->\n\n```page\nurl: a.test\n\n[B](b.test)\n```\n\n```page\nurl: b.test\n```\n\n%s\n\n<!-- /tablet -->\n\nDone.\n" % ex)
+				_ok(_hows(desk) == ["type", "tap", "back"] and (desk["warnings"] as PackedStringArray).is_empty(),
+					"a back mark goes nowhere on a dispatch desk's tablet (%s)" % str(_hows(desk)))
 			"redirect":
 				var d := TabletScript.parse("<!-- url: a.test -->\n\n[Go](b.test)\n\n%s\n<!-- url: b.test -->\n\nThere.\n" % ex)
 				var hops := []
@@ -487,6 +502,12 @@ func _dispatch_mark(k: String, ex: String) -> void:
 			var kinds: Array = (d["actions"] as Array).map(func(x: Dictionary) -> String: return String(x["kind"]))
 			_ok(kinds == ["text", "reply"] and String(d["actions"][1]["label"]) == "AISLE" and String(d["actions"][1]["text"]) == "Good. Let him wonder."
 				and (d["spoken"] as PackedStringArray).has("wonder"), "a reply is not typed into the phone that texted, or not said (%s)" % str(kinds))
+			var on_page := DispatchScript.parse(head + "<!-- tablet -->\n\n```page\nurl: chat.test\n\n# Chat\n```\n\n<!-- reply: tablet -->\n\nHello there.\n\n<!-- /tablet -->" + tail)
+			var page_kinds: Array = (on_page["actions"] as Array).map(func(x: Dictionary) -> String: return String(x["kind"]))
+			_ok(page_kinds == ["tablet", "page", "post", "sent", "tablet"] and String(on_page["actions"][2]["text"]) == "Hello there."
+				and (on_page["spoken"] as PackedStringArray).has("hello") and (on_page["warnings"] as PackedStringArray).is_empty()
+				and bool((((on_page["tablet"] as Dictionary)["pages"] as Array)[0] as Dictionary).get("reply", false)),
+				"reply: tablet is not typed into the page's message box, or not said (%s)" % str(page_kinds))
 		"ping":
 			var a: Dictionary = DispatchScript.parse(head + ex + tail)["actions"][0]
 			_ok(String(a["kind"]) == "ping" and String(a["place"]) == "the stairwell" and is_equal_approx(float(a["rest"]), DispatchScript.PING)
@@ -520,6 +541,15 @@ func _dispatch_mark(k: String, ex: String) -> void:
 			var a: Dictionary = d["actions"][0]
 			_ok(String(a["kind"]) == "picture" and String(a["screen"]) == "feed" and Manuscript.images(DispatchScript.pictures_only(ex)).size() == 1
 				and not (d["spoken"] as PackedStringArray).has("picture"), "a picture on a screen is not pinned there, or not painted")
+			# told `unwatched`, it is the same mark to the editor and the same picture to the painter
+			var aside := ex.replace("(feed)", "(feed, unwatched)")
+			var told: Dictionary = DispatchScript.parse(head + aside + tail)["actions"][0]
+			var row := RegEx.new()
+			row.compile(String(ScriptMarks.REGISTRY[k]["pattern"]))
+			var found := row.search(aside)
+			_ok(aside != ex and found != null and found.get_string() == aside.strip_edges() and bool(told.get("unwatched", false)) and String(told["screen"]) == "feed"
+				and String(told["key"]) == String(a["key"]) and Manuscript.images(DispatchScript.pictures_only(aside)).size() == 1,
+				"a picture told unwatched is not its row's mark, or not the same picture")
 		"video_screen":
 			var d := DispatchScript.parse(head + ex + tail)
 			var a: Dictionary = d["actions"][0]
@@ -554,8 +584,10 @@ func _dispatch_mark(k: String, ex: String) -> void:
 				"%s: the tablet is not picked up, its page shown and never said, and put down (%s)" % [k, str(kinds)])
 		"player":
 			var d := DispatchScript.parse(head + "<!-- tablet -->\n\n```page\nurl: a.vid/watch\n\n" + ex + "\n```\n\n<!-- live: tablet -->\n\n<!-- /tablet -->" + tail)
-			var source := DispatchMedium._tablet_source(d["pages"])
-			_ok(source.contains("<!-- image: %s -->" % DispatchMedium.PLAYER) and (d["warnings"] as PackedStringArray).is_empty()
+			var blocks: Array = (((d["tablet"] as Dictionary)["pages"] as Array)[0] as Dictionary)["blocks"]
+			var players := blocks.filter(func(b: Dictionary) -> bool:
+				return String(b["kind"]) == "image" and String(b.get("key", "")) == Manuscript.image_key(DispatchScript.PLAYER))
+			_ok(players.size() == 1 and (d["warnings"] as PackedStringArray).is_empty()
 				and DispatchMedium.pictures_in(head + ex + tail).is_empty(), "a player is not on the page, or is painted")
 		"replay":
 			var d := DispatchScript.parse(head + "<!-- tablet -->\n\n" + ex + "\n\n<!-- /tablet -->" + tail)

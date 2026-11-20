@@ -37,6 +37,8 @@ const FrontMatter_ := preload("res://src/data/front_matter.gd")
 ## How long the settings must stop moving before the document is written, in ms. Longer than [constant
 ## Settings.DEBOUNCE_MS]: the author's manuscript may be open in their editor.
 const AUTOSAVE_MS := 1200
+## How long after a file was written its time alone is taken to say it has not changed (seconds, [method _field_source]).
+const FIELD_SETTLED := 2
 ## How often the snapshot is taken (comparing it is cheap, but not per-frame cheap).
 const POLL_MS := 250
 ## Clear's tooltip; the button is on the [ScriptWriter] card.
@@ -108,6 +110,14 @@ var _path := ""
 var _body := ""                  # the body as last read from or written to _path (LF)
 var _dialog: Window = null       # the one dialog open at a time (file or confirmation)
 var _syncing := false            # a programmatic write to the box must not mark it edited
+var _imported := ""              # the document whose settings the panel took last ([method _import])
+# The file as last read for its fields ([method _field_source]): what it was (its path, when it was written), its bytes
+# and text, and each field found in it.
+var _field_at: Array = []
+var _field_sure := false         # ...read, or compared, since the file's time could no longer hide a second write
+var _field_bytes := PackedByteArray()
+var _field_text := ""
+var _field_memo := {}
 # Autosave: `_seen` is the last settings snapshot observed, `_saved` the last one written to the document, and
 # `_settled_ms` when `_seen` stopped changing. A quiet period is "unchanged since", which a dirty bit cannot express.
 var _seen := ""
@@ -216,11 +226,33 @@ func field(key: String) -> String:
 	if is_sync():
 		if not FileAccess.file_exists(_path):
 			return ""
-		return FrontMatter.field_of(FileAccess.get_file_as_string(_path), key)
+		var text := _field_source()
+		if not _field_memo.has(key):
+			_field_memo[key] = FrontMatter.field_of(text, key)
+		return _field_memo[key]
 	var v := str(_fields.get(key, ""))
 	if v.is_empty() and _text != null:
 		v = FrontMatter.field_of(_text.text, key)
 	return v
+
+
+## The file's text for its fields, read again only where the file has changed: a card asks for every name on it
+## twice a second ([method field]), and reading a long note and finding a line in it is a millisecond an ask. The
+## file's time says it has changed; a time is whole seconds, so what was read of a file written in the last few is
+## compared byte for byte until it has been once more after they passed, which two writes in one second cannot get past.
+func _field_source() -> String:
+	var written := FileAccess.get_modified_time(_path)
+	var at := [_path, written]
+	if at == _field_at and _field_sure:
+		return _field_text
+	var bytes := FileAccess.get_file_as_bytes(_path)
+	if at != _field_at or bytes != _field_bytes:
+		_field_at = at
+		_field_bytes = bytes
+		_field_text = FileAccess.get_file_as_string(_path)
+		_field_memo = {}
+	_field_sure = int(Time.get_unix_time_from_system()) - written > FIELD_SETTLED
+	return _field_text
 
 
 ## Set a field. Synced, it is written into the file at once by the same checked line surgery as the voice, and
@@ -289,12 +321,21 @@ func pull() -> String:
 	if raw == null:
 		return _text.text if _unsaved() else _body
 	if _unsaved():
-		_import(String(raw), true)
+		_take(String(raw))
 		return _text.text
 	_body = FrontMatter_.lf(String(FrontMatter_.split(String(raw)).body))
 	_show(_body)
-	_import(String(raw), true)
+	_take(String(raw))
 	return _body
+
+
+## The document's settings taken ([method _import]), unless it is the document taken last and the panel stands as that
+## left it: a reading started again part way reads the same file, and handing every card its block again is an eighth
+## of a second of the app's thread.
+func _take(raw: String) -> void:
+	if raw == _imported and (not capture.is_valid() or _snapshot() == _saved):
+		return
+	_import(raw, true)
 
 
 ## The editor holds words the file does not.
@@ -714,6 +755,7 @@ func _read_raw() -> Variant:
 
 ## Take the voice out of a document and hand it to the panel.
 func _import(raw: String, quiet := false) -> void:
+	_imported = raw
 	var res := FrontMatter_.read_block(raw)
 	if not res.ok:
 		_note("Read %s. Its frontmatter could not be parsed (%s), so the voice is unchanged."

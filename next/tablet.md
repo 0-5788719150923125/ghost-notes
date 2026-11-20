@@ -29,7 +29,8 @@ Nothing is read off the screen: no title, and text before the first `url` is nei
 
 - **How a page is reached.** First url: wake, open the browser on a blank tab, look at it, then type the address. A url
   linked from the page on screen: scroll to the link, tap it. Anything else (or after a new tab): type it in the address
-  bar.
+  bar; the address of the page already up replaces it, adding nothing to go back to. A search with no page up, or in a
+  blank tab, is typed into the address bar, its results the search engine's last used.
 - **Skimming.** Wherever the reading passes over something it does not read (12+ skipped words, a picture, placeholder
   stories), the hand skims: a still beat, a slow drag, a stop on each picture, a 2 s look where it stopped (SKIM_LOOK),
   then the next read line. The voice rests for it. Reading scrolls are drags, not flicks.
@@ -52,6 +53,10 @@ Nothing is read off the screen: no title, and text before the first `url` is nei
   `speakable()` returns any chapter without `url:`/`search:` untouched.
 - `src/media/tablet_page.gd` - typesets a page into a column (portrait 1200 / landscape 1600 logical px).
 - `src/media/tablet.gd` - the 3D desk and slab, one screen SubViewport, and the schedule.
+- `src/media/tablet_chrome.gd` - the screen's furniture every tablet draws: the status bar, the browser's tabs and bar, a
+  blank tab's page, a box while it is typed into, the keyboard.
+- **The dispatch desk's tablet browses by this walk** (next/dispatch.md): its page fences and its `back` and `new tab`
+  are written out as these marks, and each action names the mark that made it (`mark`), its tab and what is behind it.
 - Hooked in `GenerativeEditor._split_speakers` (two small changes).
 - **The screen is a pure function of show time**: action groups are placed in the gap between the spoken words around them
   (finishing a beat before the next word), and the screen is replayed from the schedule every frame. Scroll is a list of

@@ -31,7 +31,11 @@ Held, each with the case that must not change:
  11. a blend of readers (blend.py): its line as src/voice/voice_blend.gd writes it; mix, spherical and split
  made row by row; its accent its heaviest reader's unless it says one, its level its readers'; a request's
  `blend` made of the checkpoint's packs once and fed to the graph (a reader it does not hold left out, fewer
- than two the speaker's own pack, a voice taught here never blended).
+ than two the speaker's own pack, a voice taught here never blended);
+ 12. a sentence's end is not the call's: one ending on a full stop is sent with its own first word after it,
+ in the style of its own count, and the take cut SEAM_TAIL after its last sound - its times the ones it has
+ read alone; a model that reads on at the stop is asked again for the sentence alone, and a sentence ending
+ on no full stop is never followed; the cut is in the rest, never in a stop's closure or a faint last sound.
 
 Synthesis runs against a fake session, as in test_expression.py: no model download, no eSpeak.
 """
@@ -78,13 +82,15 @@ class _Session:
     puts them. 600 samples a frame. Records what it was fed. Without the two inputs it hands back
     the plan before the Round, as the stock export does."""
 
-    def __init__(self, takes=("rest_floor", "dur_scale"), lead=1.0, tail=1.0, quiet_marks=False) -> None:
+    def __init__(self, takes=("rest_floor", "dur_scale"), lead=1.0, tail=1.0, quiet_marks=False, stop=0.0) -> None:
         self.takes = tuple(takes)
         self.fed: list = []
         # Kokoro's own ends: its first pad's frames, and whether a mark, a word-space and a pad are
         # silent - the plain fake sounds through everything, so nothing is trimmed from it
         self.lead = lead
         self.tail = tail
+        # ...and the frames it rests on a full stop (its plan's own where 0)
+        self.stop = stop
         self.quiet = {0} | ({VOCAB.index(c) for c in ".,; "} if quiet_marks else set())
 
     def get_overridable_initializers(self):
@@ -108,6 +114,8 @@ class _Session:
             }
         )
         plan = np.array([1.0 if i in (0, SPACE) else 2.0 + (i % 3) for i in ids]) / speed
+        if self.stop:
+            plan[[k for k, i in enumerate(ids) if i == VOCAB.index(".")]] = self.stop
         plan[0] = self.lead / speed
         plan[-1] = self.tail / speed
         if "dur_scale" not in self.takes:
@@ -165,7 +173,8 @@ SENTENCE = [
 
 
 def _render(tokens, params=None, sess=None, british=False):
-    """`_synth_tokens` on the fake voice: (result, session, wav rate, wav samples)."""
+    """`_synth_tokens` on the fake voice: (result, session, wav rate, wav samples). The sentence alone
+    (`after` 0) unless `params` says otherwise: what is said after it is section 12's."""
     k, cfg = _backend(british)
     sess = sess or _Session()
     with tempfile.TemporaryDirectory() as td:
@@ -174,7 +183,7 @@ def _render(tokens, params=None, sess=None, british=False):
             list(tokens),
             "kokoro",
             str(out),
-            {"phonemizer": "ghost", "pause_scale": 0.0, "trail": 0.0, **(params or {})},
+            {"phonemizer": "ghost", "pause_scale": 0.0, "trail": 0.0, "after": 0, **(params or {})},
             cfg,
             sess,
         )
@@ -797,7 +806,7 @@ def test_a_voice_taught_here():
     import json
 
     import numpy as np
-    from backends.kokoro import KokoroBackend
+    from backends.kokoro import READS, KokoroBackend
     from backends.piper import PiperBackend
 
     with _voices_root() as root:
@@ -824,6 +833,7 @@ def test_a_voice_taught_here():
            "read in its own accent, from its own pack")
         eq(("blend" in rows["kokoro"], KokoroBackend.describe().get("blend"), PiperBackend.describe().get("blend")),
            (False, True, None), "the backend says its readers blend, never a voice's row - whose fields key its kept takes")
+        eq({r["reads"] for r in rows.values()}, {READS}, "every row says how the backend reads (READS), which does key them")
         ok("kokoro-half" not in rows and not KokoroBackend.owns("kokoro-half"), "CONTROL: without its description, no voice")
         ok(not KokoroBackend.owns("../trained/kokoro-someone"), "CONTROL: a name with a path in it is not")
         eq(KokoroBackend._trained("kokoro"), None, "CONTROL: a checkpoint's name is never a voice taught here")
@@ -1141,6 +1151,93 @@ def test_a_request_reads_in_its_blend():
     ok(Path(blend.AXES).is_file() and len(blend.axes()["breath"]["axis"]) == 256
        and len(blend.axes()["spread"]["axes"]) == len(blend.axes()["spread"]["sd"]),
        "the axes measured off the readers are beside blend.py, whole")
+
+
+# -- 12. words after the sentence ---------------------------------------------
+
+
+@check
+def test_a_sentence_is_followed_in_its_call():
+    """A sentence ending on a full stop is sent with a word-space and its own first word after it, in the style
+    of its own count, and where the model rests at the stop the take is the sentence's: cut SEAM_TAIL after its
+    last sound, every time what it is read alone. THE CONTROLS: a model that reads on at the stop (the plain fake,
+    which sounds through its marks) is asked again for the sentence alone; a sentence ending on no full stop, and
+    `after` 0, are sent alone."""
+    import numpy as np
+    from backends.kokoro import AFTER_WORDS
+
+    def body(fed):
+        return "".join(VOCAB[i] for i in fed["ids"][1:-1])
+
+    rests = dict(lead=14.0, tail=10.0, quiet_marks=True, stop=12.0)
+    alone, a_sess, _rate, a_n = _render(SENTENCE, sess=_Session(**rests))
+    res, sess, _rate, n = _render(SENTENCE, {"after": AFTER_WORDS}, sess=_Session(**rests))
+    eq(len(sess.fed), 1, "one call")
+    eq(body(sess.fed[0]), "ˈɪt, wʌz nˈɛvəɹ sˈO. ˈɪt", "the sentence, a word-space and its own first word")
+    eq(float(np.asarray(sess.fed[0]["style"]).ravel()[0]), float(len(a_sess.fed[0]["ids"]) - 3),
+       "in the style of the sentence's own token count")
+    ok(abs(n - a_n) <= 1 and abs(res["duration"] - alone["duration"]) < 1e-3,
+       "the take is cut SEAM_TAIL after the sentence's last sound, as it is trimmed read alone",
+       "%.3f s against %.3f" % (res["duration"], alone["duration"]))
+    eq([(r["index"], r["t0"], r["t1"]) for r in res["tokens"]], [(r["index"], r["t0"], r["t1"]) for r in alone["tokens"]],
+       "every word where it is read alone")
+    eq([(p["p"], p["t0"], p["t1"]) for p in res["phones"]], [(p["p"], p["t0"], p["t1"]) for p in alone["phones"]],
+       "and every phone")
+    _res, sess, _rate, _n = _render(SENTENCE, {"after": 3}, sess=_Session(**rests))
+    eq(body(sess.fed[0]), "ˈɪt, wʌz nˈɛvəɹ sˈO. ˈɪt, wʌz nˈɛvəɹ", "asked for three, its first three, the mark between them kept")
+    _res, sess, _rate, _n = _render([_tok("so", "sˈoʊ", ".")], {"after": 3}, sess=_Session(**rests))
+    eq(body(sess.fed[0]), "sˈO. sˈO", "a sentence of fewer words is followed by them all, never its stop")
+    res, sess, _rate, n = _render(SENTENCE, {"after": AFTER_WORDS})
+    eq([body(f) for f in sess.fed], ["ˈɪt, wʌz nˈɛvəɹ sˈO. ˈɪt", "ˈɪt, wʌz nˈɛvəɹ sˈO."],
+       "CONTROL: a model that reads on at the stop is asked again for the sentence alone")
+    plain, _sess, _rate, p_n = _render(SENTENCE)
+    ok(n == p_n and res["tokens"] == plain["tokens"], "...and that is the take")
+    open_end = [dict(t) for t in SENTENCE]
+    open_end[-1]["punct"] = ","
+    _res, sess, _rate, _n = _render(open_end, {"after": AFTER_WORDS}, sess=_Session(**rests))
+    eq([body(f) for f in sess.fed], ["ˈɪt, wʌz nˈɛvəɹ sˈO,"], "CONTROL: a sentence ending on no full stop is sent alone")
+    _res, sess, _rate, _n = _render(SENTENCE, {"after": 0}, sess=_Session(**rests))
+    eq([body(f) for f in sess.fed], ["ˈɪt, wʌz nˈɛvəɹ sˈO."], "CONTROL: asked for no words after, the sentence alone")
+
+
+@check
+def test_the_cut_is_in_the_rest():
+    """`_cut_after` cuts SEAM_TAIL after the last moment over SEAM_QUIET, in the longest rest between the
+    sentence's last sound and the words after: past a stop's closure and release, and past a faint last sound
+    (never before the rest starts). THE CONTROL: a rest too short to hold the seam's ends is no cut. `_plan_to`
+    takes what the plan holds past the cut off its end, or gives the pad what the take holds past the plan."""
+    import numpy as np
+    from backends.kokoro import HOP, SEAM_LEAD, SEAM_TAIL, SR, _cut_after, _plan_to
+
+    frame_s = HOP / float(SR)
+
+    def call(parts):
+        """[(seconds, level)] as audio."""
+        out = []
+        for seconds, level in parts:
+            t = np.arange(int(round(seconds * SR)), dtype=np.float64)
+            out.append(level * np.sin(2.0 * np.pi * t / 96.0))
+        return np.concatenate(out).astype(np.float32)
+
+    # a vowel, a stop's closure and release, the rest, the words after: the plan gives the rest to the stop
+    frames = np.array([4.0, 12.0, 22.0, 2.0, 1.0, 12.0, 4.0])  # pad, vowel, stop (with the rest), mark, space, word, pad
+    audio = call([(0.1, 0.0), (0.3, 0.5), (0.06, 0.0), (0.03, 0.3), (0.4, 0.0), (0.3, 0.5), (0.1, 0.0)])
+    cut = _cut_after(audio, frames, 2, 5, frame_s)
+    ok(cut is not None and abs(cut / SR - (0.49 + SEAM_TAIL)) < 0.006,
+       "cut SEAM_TAIL after the stop's release, not in its closure", "%s" % (None if cut is None else round(cut / SR, 3)))
+    faint = call([(0.1, 0.0), (0.3, 0.5), (0.25, 0.008), (0.3, 0.0), (0.3, 0.5), (0.1, 0.0)])
+    cut = _cut_after(faint, np.array([4.0, 12.0, 22.0, 2.0, 1.0, 12.0, 4.0]), 2, 5, frame_s)
+    ok(cut is not None and abs(cut / SR - 0.65) < 0.006, "a faint last sound is whole: the cut is where the rest starts",
+       "%s" % (None if cut is None else round(cut / SR, 3)))
+    short = call([(0.1, 0.0), (0.3, 0.5), (SEAM_TAIL + SEAM_LEAD - 0.03, 0.0), (0.3, 0.5), (0.1, 0.0)])
+    eq(_cut_after(short, np.array([4.0, 12.0, 6.0, 1.0, 12.0, 4.0]), 1, 4, frame_s), None,
+       "CONTROL: a rest shorter than the seam's ends is no cut")
+    eq(_cut_after(call([(1.2, 0.5)]), np.array([4.0, 12.0, 6.0, 1.0, 12.0, 4.0]), 1, 4, frame_s), None,
+       "CONTROL: nor is a voice that never rests")
+    got = _plan_to(np.array([4.0, 12.0, 22.0, 2.0]), 30.5)
+    eq([float(f) for f in got], [4.0, 12.0, 14.5, 0.0, 0.0], "past the cut, the plan is taken off its end")
+    got = _plan_to(np.array([4.0, 12.0, 6.0, 2.0]), 27.25)
+    eq([float(f) for f in got], [4.0, 12.0, 6.0, 2.0, 3.25], "past the plan, the take is the pad's")
 
 
 def main() -> int:

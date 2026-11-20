@@ -505,14 +505,20 @@ static func trim_to_outro(chunks: Array, outro: float) -> Dictionary:
 static func near(chunks: Array, from: int, near_of: Callable, voice := "") -> void:
 	var ks := PackedFloat32Array()
 	var who := PackedStringArray()
-	var text := ""
+	var said := PackedStringArray()
+	var dial := {}                      # a voice's Near dial, asked once a voice
 	for c in chunks:
 		var name := voice if not voice.is_empty() else String((c as Dictionary).get("speaker", ""))
-		ks.append(float(near_of.call(name)))
+		if not dial.has(name):
+			dial[name] = float(near_of.call(name))
+		ks.append(float(dial[name]))
 		who.append(name)
 		for w in (c as Dictionary).get("words", []):
-			text += String((w as Dictionary).get("text", "")) + " "
-	# same words, same moves - in the reading, the audition of it and the export alike
+			said.append(String((w as Dictionary).get("text", "")))
+	# same words, same moves - in the reading, the audition of it and the export alike. Every word with a space
+	# after it, joined once: the live window asks this at every sentence, and a string grown a word at a time is
+	# copied whole at each.
+	var text := " ".join(said) + " " if not said.is_empty() else ""
 	var plan := VoiceFX.near_plan(ks, who, hash("near " + text))
 	for i in range(maxi(from, 0), chunks.size()):
 		(chunks[i] as Dictionary)["near"] = plan[i]

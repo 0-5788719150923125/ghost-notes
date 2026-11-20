@@ -73,6 +73,7 @@ func _initialize() -> void:
 	_check_agreement()
 	_check_untouched()
 	_check_back()
+	_check_marks()
 	_check_real()
 	_check_arrivals()
 	_check_omnibox()
@@ -190,6 +191,34 @@ Dropped words.
 
 # One
 """
+
+
+## What the dispatch desk's tablet browses by: each action names the mark that made it, its tab and what is behind it.
+func _check_marks() -> void:
+	var d := TabletScript.parse("<!-- url: a.test -->\n\nOne. [B](a.test/b)\n\n<!-- url: a.test/b -->\n\nTwo.\n\n"
+		+ "<!-- url: a.test/b -->\n\nTwo again.\n\n<!-- back -->\n\n<!-- back -->\n\n<!-- new tab -->\n<!-- search: what is it -->\n\n### [R](r.test)\n")
+	var made := {}
+	for a in d["actions"]:
+		if (a as Dictionary).has("mark") and String(a["kind"]) != "open":
+			made[int(a["mark"])] = a
+	var kinds := []
+	for m in 7:
+		kinds.append(String((made[m] as Dictionary)["kind"]) if made.has(m) else "")
+	_ok(kinds == ["type", "link", "type", "back", "", "tab", "search"],
+		"each url, search, new tab and back mark names the action it made, and a back with nothing behind it makes none: %s" % str(kinds))
+	_ok(bool(made[2].get("again", false)) and int(made[2]["behind"]) == 1 and not bool(made[1].get("again", false)) and int(made[1]["behind"]) == 1
+		and int(made[3]["page"]) == 0 and int(made[3]["behind"]) == 0,
+		"the address of the page already up replaces it - nothing more behind it, and back goes to the page before both (the control: a new address adds one)")
+	var blank: Dictionary = made[6]
+	_ok(int(made[5]["tab"]) == 1 and int(made[5]["behind"]) == 0 and bool(blank["bar"]) and int(blank["from"]) == -1 and int(blank["tab"]) == 1
+		and String(d["pages"][int(blank["page"])]["host"]) == TabletScript.ENGINE and bool(d["pages"][int(blank["page"])]["results"]),
+		"a search in a blank tab is typed into the address bar, its results a search engine's")
+	var first := TabletScript.parse("<!-- search: what is it -->\n\n### [R](r.test)\n")
+	var first_kinds := []
+	for a in first["actions"]:
+		first_kinds.append(String(a["kind"]))
+	_ok(first_kinds == ["wake", "open", "search"] and bool(first["actions"][2]["bar"]) and (first["pages"] as Array).size() == 1,
+		"a search with no page up opens the browser and is typed into the address bar: %s" % str(first_kinds))
 
 
 func _check_back() -> void:

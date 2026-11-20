@@ -60,11 +60,22 @@ thumbnail had also grown its own two-press delete and its own full-size window w
 - **A picture shown twice is one picture to make**: `Medium.pictures_of` lists each once, at its first mark, so a card and
   its Pipeline rows never hold two rows of one key.
 
+## A picture flipped
+
+- **Flip is a post-process** (`Illustrations.set_flipped`; the check on a picture's opened entry): the version shown says
+  `flip`, and a mirrored copy is kept beside what was made (`vNNN.flip.png`; a clip's frames under `vNNN/flip/`), written
+  on a worker and served once whole. Nothing is painted again and what was made is never changed.
+- **Whatever shows a picture shows it flipped**: `path_for` and `clip_of` hand out the copy, so no medium knows of it, and
+  later pictures are matched to what is shown.
+- Each version is flipped by itself; unticked, the copy is gone; a deleted version takes its copy. A page captured has no
+  Flip.
+
 ## Gates
 
 `tests/show/pictures_card_check.gd`: which marks each medium shows (with controls); the card comes with its hosts and never
 alone; one card on a letter's panel and no list on the Letter, Dispatch desk or Picture card; it stands and goes with the
-medium, its section with it; Generate all's count and read-only refusal; a captured page is never counted. Related:
+medium, its section with it; Generate all's count and read-only refusal; a captured page is never counted; an entry's Flip.
+`tests/media/illustrations_check.gd` holds the flip itself (a picture, a clip, the copy's coming and going). Related:
 pictures_rows_check (the widget), doc_sync_check (the look kept by the Pictures card), panel_fit_check, youtube_check (the
 note's pictures as its presentation shows them, a medium with none as the control).
 
@@ -76,5 +87,5 @@ note's pictures as its presentation shows them, a medium with none as the contro
   pictures_card, pictures_rows, pipeline, tablet, youtube).
 - Each picture is an entry (`EntryCard`, the look every card's list shares): its thumbnail, what it shows and its status, and a
   × top-right deleting the picture shown (pressed twice; grayed with nothing painted). A click opens it: its versions, Regenerate,
-  Import…. What the episode's agents made (`MadePictures`) are entries too, their × grayed: a step is kept, never deleted.
-- Open: the author has not yet seen it in the app.
+  Import…, Flip. What the episode's agents made (`MadePictures`) are entries too, their × grayed: a step is kept, never deleted.
+- Open: the author has not yet seen it in the app, Flip included (seen only in an offscreen capture of the list).

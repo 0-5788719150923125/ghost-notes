@@ -375,6 +375,55 @@ window ran dry once in 120 sentences at 2.2x, twice at 1.5x, fifteen times at 1.
 Gate: `tests/reading/stream_depth_check.gd` (boot probe; the replay's control: the old window runs dry at 1.5x,
 the new one does not, and at 4x both start at once).
 
+**The room and the takes are workers' work** (`ReadingStream._pump_fx`, `_land`, `_landed`). `VoiceFX` is a
+GDScript loop over every sample: 28 ms a second of audio with every dial at rest, 143 ms with echo, room,
+resonance, ambience and lean up. The ring takes up to six seconds at once (a sentence landing on a queue run dry,
+which a playing reading's shallow window allows): 4 s is 627 ms of whichever thread runs the chain. So the queue
+goes through it a piece at a time (`FX_PIECE`, a quarter second) on a worker, a take is decoded and kept on one,
+and the app's thread copies finished frames into the ring: 5 s onto an empty ring costs it 0.2 ms a frame at most
+and the ring is full again in 0.85 s. Between two pieces the chain is the app's thread's (the room's marks, a dial moved); the workers are
+high priority, since the pool keeps low-priority work to a few threads and a piece waiting behind a bake is a
+ring run dry. The readers' moves (`ReadingPlan.near`, a pass over every word) are planned when a Near dial moves,
+not at every sentence.
+
+**The plan is kept, and a long one is a worker's** (`ReadingPanel._plan_made`, `plan_ahead`, `_plan_landed`;
+`ReadingStream.planned`). `ReadingPlan.make` is a pass over every word (a 7,300-word note: 512 ms, most of it the
+pronunciation parse) and a function of the walk's words, the title and what is asked, so the panel keeps the last
+one and a scrub, a voice changed, an export and Play again plan nothing while those stand; each asker gets chunks
+of its own. A script of `PLAN_AWAY` characters or more with no plan kept is planned on a worker: Play says so,
+returns, and carries on from the top when the plan lands (Stop meanwhile ends the wait; the plan is kept all the
+same). The tables a plan reads take a lock (`Manuscript._rx`, `Phonemes._load_data`). On that note Play costs the
+app's thread 11 ms and a scrub 20 ms. The Dispatch walk keeps its last answer (`DispatchWalk`), and the Pictures
+card follows the script only where it has changed (`PicturesCard.set_script_text`).
+
+**A seek is a reading started again, and costs what is new in it** (`ReadingStream.speak_from`, `DocSource._take`,
+`DispatchMedium.load_note`, `_load_pictures`). A seek reads the file again, as Play does, and hands the medium the
+same note with another start. Words written since the plan in hand was made are planned by a worker, as Play's
+are: the reading on the stream plays on, the bar waiting on the sentence sought, and it starts there when the
+plan lands. The file's settings go to the panel only when the file or the panel has changed since they last did
+(handing every card its block is an eighth of a second). The Dispatch desk keeps what it read of the note while
+the words stand (reading every mark is a quarter of a second) and its pictures while their files stand (decoding
+thirty is a second of a worker). A reading started part way places what came before it far in the past
+(`ReadingFollower.START_PAST`), so NOTHING IN A PLAN COUNTS TIME FROM AN ACTION'S START TO NOW: the radar's ticks,
+once a sweep along a walk, are laid from the reading's first moment (a walk begun before a seek was forty thousand
+sweeps, a second of the app's thread each time a sentence landed, for the rest of that reading).
+
+Gate: `tests/reading/stream_chain_check.gd` (controls: the same chain run from the app's thread is seen on it; a
+short script is planned in the call; other words are planned anew; a seek after the words changed plans nothing in
+the call) and `tests/dispatch/dispatch_seek_check.gd` (controls: every sweep of a leg begun in the far past; other
+words read anew; another picture file, and the same one written again, decoded anew). Open: a Dispatch note's own
+walk (`DispatchScript.parse`, a tenth of a second for a long one) runs on the app's thread wherever its text is
+first asked about - the reading's walk at the first Play after an edit, the Pictures card at a pause in typing,
+the desk at the first stream of changed words.
+
+**The desk's plan is made again only as the reading nears what it knows** (`DispatchMedium.take_words`,
+`PLAN_AHEAD`). When each thing on the desk happens hangs on when its words are said, and a live reading learns that
+a sentence at a time, so the plan cannot be made once; a kept take, whose every word is known, makes it once. Each
+making is the whole plan (every action placed, the camera's looks, the sounds: 11 ms for this note, the fades found
+once a note, `fade_at`). More heard far ahead of the playhead changes nothing seen or heard yet, so in the app it
+waits until the reading comes within a minute of what the plan knows: a paused reading making fifteen minutes of
+voice makes the plan a handful of times, not once a sentence. A render and a gate make it at once.
+
 **Faster still, not done:** the int8 graph (`model_quantized.onnx`, smaller and quicker on a processor, some
 quality lost: to be heard first), or the graphics card (onnxruntime's CUDA build: tens of times real time, but
 gigabytes of CUDA libraries in the voice environment, which is kept small on purpose).
@@ -539,6 +588,87 @@ own (held whole, the last consonant draws out). In the demo (a sentence another 
 st "gentle" or 0-1.5 "level", a paragraph's last 4-6; never above the word's start) the last word is voiced in
 20 of 22 sentences against 10 as now; median end against start -1.5 / -0.7 st, -4.2 as now (`now.wav`,
 `gentle.wav`, `level.wav`). Open: the ear.
+
+### The last word of a call is let go
+
+A sentence's last word, where it is short and unstressed ("him", "it", "them"), comes out far under the rest of
+it, and in a whispering pack not at all: Nicole's "...it starts painting things that aren't him." ends on
+"aren't" (Whisper base.en and medium.en hear it so too).
+
+**Measured** on that sentence as the reading sends it (Nicole shaped by a wandering noise, Pace 1.2), the model's
+own audio before anything of ours, the last word's loudest 10 ms against the take's:
+
+| read | "him" |
+|---|---|
+| as sent | -31 dB |
+| no noise; Pace 1; the stock graph; four other places in the wander | -25 to -31 |
+| primary stress written on it | -28 |
+| its vowel floored at 4, 6 and 8 frames; the word at twice its plan | -28 to -30 |
+| Heart, Bella, Sky, Puck, Emma, Michael, as sent | -13 to -19 |
+| Nicole, the next sentence's first words after the stop, in the same call | -14 |
+
+Not ours (`_quiet_tail` lets go only of what is 43 dB under by then), not the blend, the pace or the graph that
+moves, and not the word's stress or length: every pack plans it h 1 frame, ɪ 2, m 11 to 18 and lets its level go
+across them, and the whispering pack's goes under hearing. It is the call's end. Kokoro's own pipeline sends a
+paragraph a call ("Rests and fades", above), so a sentence's end is seldom the end of what it was taught; the
+reading sends a sentence a call, and every sentence ends as a call does.
+
+**Built** (`AFTER_WORDS`, `_after`, `_cut_after`, `_plan_to` in backends/kokoro.py): a sentence ending on a
+full stop, an exclamation or a question mark is followed in its call by a word-space and its own first word, in
+the style of its own token count, and the take is cut in the rest the model makes at the stop.
+
+- **The rest is found in the waveform.** The plan gives a stop's rest to the sound before it (a last "m" of 30
+  frames is the m and 0.6 s of silence), so the cut is looked for from the start of the last sound to the start of
+  the word after: the longest stretch under `AFTER_QUIET` (-46 dB re the peak), which a stop's closure is never.
+  The cut is `SEAM_TAIL` past the last moment over `SEAM_QUIET`, never before the rest starts (a faint last hum or
+  hiss is whole), and the rest must run `SEAM_LEAD` past it. The plan is cut with the take (`_plan_to`).
+- **Where the model reads on, the sentence is read alone.** After a sentence of a word or two it rests 40 to 75
+  ms at the stop, the length of a closure, and no cut is safe: that call is thrown away and the sentence read as
+  before (14 of 90: every one-word sentence, 8 of 10 of two words, 2 of 10 of three, none longer). Flooring the
+  word-space after the stop makes a rest in some and holds the last vowel through it in others.
+- **One word after.** With two, more sentences are read on (18 of 90) at more cost; with four, more again. The
+  last word is as loud with one as with two.
+- **What trails off or breaks off is read to the call's end**: a sentence ending on an ellipsis, a dash, a colon
+  or no mark is sent alone.
+- **A take ends `SEAM_TAIL` after its last sound.** Read alone, a last sound that fades under hearing still holds
+  its planned frames, and `_trim_ends` cuts only past the plan: Nicole's takes ran a median 0.43 s (0.20 to 0.75)
+  past the last moment over `SEAM_QUIET`. Cut in the rest, a take ends where the seam assumes, and the rest
+  between two sentences is the Pause dial's.
+- **Takes kept before are said again** (`READS` on every Kokoro row, which keys `TakeCache` and a take's `sig`).
+
+**Measured, 90 sentences of the note in Control's voice** (each read alone and as built, the take as the app
+gets it; a word's level is its loudest 10 ms against the median of its sentence's other words):
+
+| | alone | a word after |
+|---|---|---|
+| last word under -10 dB | 12 | 4 |
+| under -15 dB | 3 | 0 |
+| the model's time | 203 s | 255 s (25% more, a third of it on sentences read on) |
+
+**And 51 of its 102 sentences that end on "it", "him", "them", "me" or "you"**, the same way:
+
+| | alone | a word after |
+|---|---|---|
+| last word, median | -12.0 dB | -7.6 dB |
+| under -10 dB | 34 | 14 |
+| under -15 dB | 11 | 2 |
+| under -20 dB | 5 | 1 |
+
+Louder by 3 dB or more in 33, quieter by as much in 2 (both still over -12). In Aisle's and Van's voices (Puck and
+Michael mixed with Nicole; 24 sentences each) the last word's median goes from -2.5 to -0.6 dB and from -1.0 to
++0.4, nothing is read on, and the model's time is 13 to 20% more. Whisper medium.en hears the same words either
+way in all but the 50 ms words under "Open", so it counts only a word wholly gone: the sentence above, alone.
+
+The stream's window follows what a take costs (`ReadingStream.depth`). Listening: `dist/voice_ab/last_word/`
+(`turn_it_kept.wav`, the take as it was kept; `turn_it_after.wav`, as built).
+
+Gate: `hosts/voice/test_kokoro.py` (12: the ids sent, the style, the take and every time equal to the sentence
+read alone; controls: a model that reads on, a sentence ending on no full stop, a rest too short, a closure, a
+faint last sound).
+
+**Open:** the ear, on the last words and on the shorter rest between sentences. A word of one frame a sound
+inside a sentence ("to", "he" at Pace 1.2) is heard or not from one render to the next, with or without a word
+after: the pace's, not the call's end.
 
 ### It comes out hot
 

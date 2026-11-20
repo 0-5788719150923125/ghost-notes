@@ -405,18 +405,18 @@ func _check_handover_is_sample_accurate() -> void:
 	_ed._stream.fx = VoiceFX.new()
 	_ed._stream._join.marks = [{"at": 0, "speaker": "Narrator"}, {"at": 1000, "speaker": "Voice 2"}]
 	_ed._stream._fx_live_name = ""
-	_ed._stream._pushed = 0
+	_ed._stream._through = 0
 	# at the head: the first voice is dialed in, and the push stops at the change
 	_ok(_ed._stream._fx_admit(4096) == 1000, "the push must stop at the handover, got %d"
 		% _ed._stream._fx_admit(4096))
 	_ok(_ed._stream._fx_live_name == "Narrator", "the opening voice's room was not dialed in")
 	_ok(_ed._stream.fx.echo_wet < 0.1, "the second voice's room arrived early")
 	# short of it, nothing changes and the remaining distance is what is offered
-	_ed._stream._pushed = 600
+	_ed._stream._through = 600
 	_ok(_ed._stream._fx_admit(4096) == 400, "frames offered up to the handover")
 	_ok(_ed._stream._fx_live_name == "Narrator", "the voice changed before its own first frame")
 	# on it
-	_ed._stream._pushed = 1000
+	_ed._stream._through = 1000
 	_ok(_ed._stream._fx_admit(4096) == 4096, "past the last mark the whole buffer is free")
 	_ok(_ed._stream._fx_live_name == "Voice 2" and _ed._stream.fx.echo_wet > 0.5,
 		"the second voice's room did not arrive at its own frame")

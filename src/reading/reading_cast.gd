@@ -612,7 +612,7 @@ func apply(cfg: Dictionary) -> void:
 	refresh(panel._cast_text())
 		# The room, once, exactly as [method _load_persisted] does it: the chain is stateful and a tab switch alone does
 		# not re-dial it.
-	Delivery.apply_fx(panel._stream.fx, slot_cfg(slot))
+	panel._stream.dial(slot_cfg(slot))
 		# Whatever is on the stream was cut against the previous cast.
 	panel._stream.mark_stale()
 	panel.touch()
@@ -986,7 +986,7 @@ func follow_library() -> void:
 		return
 	if shown and _rate != null:
 		_apply_slot(slot)
-		Delivery.apply_fx(panel._stream.fx, slot_cfg(slot))
+		panel._stream.dial(slot_cfg(slot))
 	if panel._stream.has_reading():
 		if shown and String(slot_cfg(slot)["voice"]) != voice_was:
 			panel._stream.restart()

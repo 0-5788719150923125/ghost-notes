@@ -6,8 +6,8 @@ class_name IllustrationPanel
 ##
 ## Top to bottom: which painter, its model and effort ([AgentPick]); the style every picture shares; the
 ## reference images that show that style; Generate all (every picture with none yet); and the note's pictures,
-## an entry each ([EntryCard]): what exists, and a × deleting the picture shown; opened, its versions and buttons to make
-## or remake it or import a file instead (Import…). The same
+## an entry each ([EntryCard]): what exists, and a × deleting the picture shown; opened, its versions, buttons to make
+## or remake it or import a file instead (Import…), and Flip, which shows it mirrored ([method Illustrations.set_flipped]). The same
 ## pictures are rows of the note's Pipeline card ([Section]; next/pipeline.md). A picture that stands for a clip (its
 ## row has `clip`, the video the script names) is painted as a short loop (Generate) or imported from a video (Import…),
 ## owed like any picture until it has one.
@@ -264,7 +264,7 @@ func _show_kinds() -> void:
 
 
 ## One picture's entry ([EntryCard]): its thumbnail (a click opens it full size), what it shows and its status, and a × that deletes
-## the picture shown (its file too: the one before it is shown instead, or none). Opened, its versions, Regenerate and Import….
+## the picture shown (its file too: the one before it is shown instead, or none). Opened, its versions, Regenerate, Import… and Flip.
 func _row(im: Dictionary) -> Control:
 	var key := String(im["key"])
 	var st := Illustrations.status(key)
@@ -278,6 +278,8 @@ func _row(im: Dictionary) -> Control:
 		parts.append("stale")
 	if Illustrations.is_imported(key) and not clip:
 		parts.append("imported")
+	if Illustrations.is_flipped(key):
+		parts.append("flipped")
 	var e := EntryCard.new(String(im["prompt"]), "  ·  ".join(parts), String(im["prompt"]))
 	# what it shows, in two lines at most
 	var desc := e.name_label
@@ -353,6 +355,8 @@ func _row(im: Dictionary) -> Control:
 	go.pressed.connect(func() -> void: _ask(im))
 	acts.add_child(go)
 	acts.add_child(_import_button(im))
+	if _paintable(im):
+		acts.add_child(_flip_check(im, not path.is_empty()))
 	e.open = _open.has(key)
 	e.toggled.connect(func(on: bool) -> void:
 		if on:
@@ -378,6 +382,28 @@ func _import_button(im: Dictionary) -> Button:
 		b.disabled = b.disabled or Illustrations.status(String(im["key"])) == "running"
 	b.pressed.connect(func() -> void: _open_dialog(im))
 	return b
+
+
+## Flip, on [param im]'s entry: the picture shown mirrored left to right wherever the note shows it, ticked while it is
+## (and while its mirrored copy is being written). Grayed with no picture ([param has_one]) to flip. A page captured has none.
+func _flip_check(im: Dictionary, has_one: bool) -> CheckBox:
+	var key := String(im["key"])
+	var c := CheckBox.new()
+	c.text = "Flip"
+	c.focus_mode = Control.FOCUS_NONE
+	c.set_pressed_no_signal(Illustrations.is_flipped(key) or Illustrations.flipping(key))
+	c.disabled = not has_one or Illustrations.read_only()
+	c.tooltip_text = ("Show this %s mirrored left to right, wherever the note shows it. Nothing is painted again and the one "
+		+ "made is kept: untick it to show that again. Each version is flipped by itself.") % (
+		"clip, every frame of it," if im.has("clip") else "picture")
+	if not has_one:
+		c.tooltip_text = "Nothing painted yet, so nothing to flip."
+	c.toggled.connect(func(on: bool) -> void:
+		var err := Illustrations.set_flipped(key, on)
+		if not err.is_empty():
+			_status.text = "⚠  " + err
+		_seen = "")
+	return c
 
 
 func _ask(im: Dictionary) -> void:

@@ -515,13 +515,23 @@ static var _clitics := {}
 static var _function_words := {}
 static var _suffixes: Array = []
 static var _loaded := false
-static var _edges: RegEx                  # a word's marks at either end (guessed)
+static var _load_lock := Mutex.new()
+static var _edges := RegEx.create_from_string("^[^\\p{L}\\p{N}]+|[^\\p{L}\\p{N}]+$")     # a word's marks at either end (guessed)
 
 
+## The tables read, once. A reading is planned on a worker too, so whoever asks second waits for the first to
+## finish reading: `_loaded` is set when the tables are whole.
 static func _load_data() -> void:
 	if _loaded:
 		return
-	_loaded = true
+	_load_lock.lock()
+	if not _loaded:
+		_read_data()
+		_loaded = true
+	_load_lock.unlock()
+
+
+static func _read_data() -> void:
 	if FileAccess.file_exists(CMUDICT_PATH):
 		var cf := FileAccess.open(CMUDICT_PATH, FileAccess.READ)
 		var txt := cf.get_as_text()
@@ -738,8 +748,6 @@ static func is_known(word: String) -> bool:
 ## comparing "cosine," whole with "cosine" would leave it unmarked.
 static func guessed(w: Dictionary) -> bool:
 	var text := String(w.get("text", ""))
-	if _edges == null:
-		_edges = RegEx.create_from_string("^[^\\p{L}\\p{N}]+|[^\\p{L}\\p{N}]+$")
 	var shown := _edges.sub(String(w.get("display", text)), "", true)
 	return not text.is_empty() and shown.to_lower() == text.to_lower() and not is_known(text)
 

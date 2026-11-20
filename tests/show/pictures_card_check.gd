@@ -37,6 +37,10 @@ extends SceneTree
 ## most and never upscaled, 20 s at most, `clip.json` beside them, its sound a mono WAV only where the video
 ## had sound (control: the silent one has none). ‹ › step between clips, ✕ takes a clip's folder, a file
 ## that is no video fails with a reason and keeps nothing, and a read-only session refuses.
+##
+## A picture's entry offers Flip ([method Illustrations.set_flipped]): grayed with nothing painted, and none on a page
+## captured (control); ticked, the picture served is its mirrored copy and the entry says flipped; unticked, it is
+## served as made again.
 
 const WORDS := ("Words. <!-- image: A harbor at dawn. --> More.\n\n<!-- sketch: a tree of dots -->\n\n"
 	+ "Then. <!-- image: A storm over the bay. -->\n")
@@ -66,6 +70,7 @@ func _run() -> void:
 	_comes_with()
 	await _one_card()
 	await _clip_rows()
+	await _flip_row()
 	await _clip_decode()
 	Illustrations.use_for_test()
 	print("pictures_card_check: %s" % ("ALL OK" if _fails == 0 else "%d FAILED" % _fails))
@@ -216,6 +221,71 @@ func _clip_rows() -> void:
 	row.free()
 	panel.queue_free()
 	await process_frame
+
+
+## Flip on a picture's entry: grayed with nothing painted, none on a page captured; ticked, the picture is flipped and its
+## entry says so.
+func _flip_row() -> void:
+	Illustrations.use_for_test({}, false)
+	var key := Manuscript.image_key("A harbor at dawn.")
+	var im := {"kind": "image", "prompt": "A harbor at dawn.", "placement": "inline", "key": key}
+	var page := {"kind": "image", "prompt": "www.shop.test/item/42", "placement": "page", "url": "https://www.shop.test/item/42",
+		"key": "a-page-captured"}
+	var panel = load("res://src/media/illustration_panel.gd").new()
+	root.add_child(panel)
+	panel.set_pictures([im, page])
+	var row: Control = panel._row(im)
+	var of_page: Control = panel._row(page)
+	var flip := _check_of(row, "Flip")
+	_ok(flip != null and flip.disabled and not flip.button_pressed and _check_of(of_page, "Flip") == null,
+		"a picture's entry offers Flip, grayed with nothing painted; a page captured has none (the control)")
+	row.free()
+	of_page.free()
+	var src := ProjectSettings.globalize_path("user://pictures_card_flip_check.png")
+	Image.create(8, 4, false, Image.FORMAT_RGB8).save_png(src)
+	Illustrations.import_file(im, src)
+	var plain := Illustrations.path_for(key)
+	row = panel._row(im)
+	flip = _check_of(row, "Flip")
+	_ok(flip != null and not flip.disabled and not flip.button_pressed, "with a picture it can be ticked")
+	if flip != null:
+		flip.button_pressed = true
+	await _mirrored(key)
+	row.free()
+	row = panel._row(im)
+	flip = _check_of(row, "Flip")
+	_ok(Illustrations.is_flipped(key) and Illustrations.path_for(key) != plain and flip != null and flip.button_pressed
+		and (row as EntryCard).line_label.text.contains("flipped"),
+		"ticked, the picture served is its mirrored copy, and its entry says flipped: %s" % (row as EntryCard).line_label.text)
+	if flip != null:
+		flip.button_pressed = false
+	_ok(not Illustrations.is_flipped(key) and Illustrations.path_for(key) == plain, "unticked, it is served as made again")
+	row.free()
+	Illustrations.delete_version(key, 0)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://illustrations_test").path_join(key))
+	DirAccess.remove_absolute(src)
+	panel.queue_free()
+	await process_frame
+	Illustrations.use_for_test({}, true)
+
+
+## Until [param key]'s mirrored copy is written (a guard against a hang, never a measure of the machine).
+func _mirrored(key: String) -> void:
+	var until := Time.get_ticks_msec() + 60000
+	while Illustrations.flipping(key) and Time.get_ticks_msec() < until:
+		Illustrations.pump()
+		await process_frame
+
+
+## The check box saying [param words] under [param node], or null.
+static func _check_of(node: Node, words: String) -> CheckBox:
+	if node is CheckBox and (node as CheckBox).text == words:
+		return node as CheckBox
+	for c in node.get_children():
+		var found := _check_of(c, words)
+		if found != null:
+			return found
+	return null
 
 
 ## A video imported as a clip: decoded in the background into a version of frames, with its sound where it had one.

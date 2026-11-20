@@ -21,9 +21,11 @@ class_name TabletScript
 ##
 ## How a page is reached is inferred. The first url opens the browser from the home screen on a blank
 ## tab and is typed into it; a url linked from the page on screen (`[word](url)`) is scrolled to and
-## tapped; any other url is typed into the address bar. A page grows a search box when a search is made
-## on it. A heading with no text under it gets squiggles for a body, and every page is padded with
-## placeholder stories so there is something to scroll past.
+## tapped; any other url is typed into the address bar (the address of the page already up replaces it:
+## nothing is added to go back to). A page grows a search box when a search is made on it; a search with
+## no page up, or in a blank tab, is typed into the address bar. A heading with no text under it gets
+## squiggles for a body, and every page is padded with placeholder stories so there is something to
+## scroll past.
 ##
 ## Nothing is read off the screen: no title is announced, text before the first url is not spoken, and
 ## a page's own opening title (its first `#` heading) is shown and skipped.
@@ -38,6 +40,9 @@ class_name TabletScript
 ## every run of actions replaced by one rest long enough to perform them (`<!-- action-hold: S -->`,
 ## which the Generative panel splices like a hesitation). The rest and the medium's schedule come from
 ## the same [method phases].
+##
+## The dispatch desk's tablet ([DispatchScript]) browses by this walk: its page fences and marks are
+## written out as these marks, and each action says which mark made it (`mark`).
 
 ## Own-line actions. Group 1 is the verb, 2 its argument.
 const MARKER := "^\\s*<!--\\s*(url|search|new tab|back|landscape|portrait|rotate|filler|redirect|notify)\\s*(?::\\s*(.*?))?\\s*-->\\s*$"
@@ -74,6 +79,8 @@ const TABLE_ROW := "^\\s*\\|"
 const TABLE_RULE := "^\\s*\\|?\\s*:?-{2,}:?\\s*(\\|\\s*:?-{2,}:?\\s*)*\\|?\\s*$"
 ## What makes a chapter a tablet chapter: nothing is rewritten for any other.
 const TABLET := "<!--\\s*(?:url|search)\\s*:"
+## Whose results a search typed into the address bar brings up before any search engine has been used.
+const ENGINE := "search"
 const SKIP_MARK := ""
 
 ## Seconds per typed character, on average (a lazy typist on glass). Each letter is a little early or
@@ -299,6 +306,10 @@ static func host_of(url: String) -> String:
 ##     actions: [{kind, after, dur, text, page, from, word, to}]  `after` = spoken words before it
 ##     speakable: the text for the voice
 ##
+## An action a url, search, new tab or back mark made also says which (`mark`, their count before it),
+## the tab it is in (`tab`) and how many pages are behind it there (`behind`); `again` on an address that
+## was the page's own.
+##
 ## Text before the first url is on no page and is neither shown nor read.
 static func parse(source: String) -> Dictionary:
 	var w := _Walk.new()
@@ -367,6 +378,8 @@ class _Walk:
 	var _tab := 0
 	var _returned := false       # back on a page already written: nothing more may be added to it
 	var _engine := ""            # the host of the search engine last searched on
+	var _marks := 0              # the url, search, new tab and back marks walked
+	var _mark := -1              # the one being walked, -1 outside one
 
 	func run(body: String) -> void:
 		for raw in body.split("\n"):
@@ -710,6 +723,10 @@ class _Walk:
 	func _act(a: Dictionary) -> void:
 		if actions.is_empty() and String(a["kind"]) != "wake":
 			_act({"kind": "wake"})
+		if _mark >= 0 and not String(a["kind"]) in ["wake", "skim"]:
+			a["mark"] = _mark
+			a["tab"] = _tab
+			a["behind"] = (_hist[_tab] as Array).size()
 		a["after"] = spoken.size()
 		a["dur"] = float(TabletScript.phases(String(a["kind"]), String(a.get("text", "")),
 			int(a.get("n", 0)), int(a.get("m", 0)), (a.get("hops", []) as Array).size())["end"])
@@ -755,6 +772,13 @@ class _Walk:
 		return hops if not hops.is_empty() else TabletScript.auto_hops(dest)
 
 	func _marker(verb: String, arg: String) -> void:
+		if verb in ["url", "search", "new tab", "back"]:
+			_mark = _marks
+			_marks += 1
+		_do(verb, arg)
+		_mark = -1
+
+	func _do(verb: String, arg: String) -> void:
 		match verb:
 			"notify":
 				var n := _note_of(arg)
@@ -779,10 +803,13 @@ class _Walk:
 				var k := TabletScript.url_key(arg)
 				var by_link := _browser and not _fresh_tab and from >= 0 and links.has(k)
 				var own_tab := by_link and not hops.is_empty()
+				# The address of the page already up replaces it, as a browser does
+				var again := _browser and not _fresh_tab and from >= 0 \
+					and TabletScript.url_key(String((pages[from] as Dictionary)["url"])) == k
 				if own_tab:
 					_hist.append([])
 					_tab = _hist.size() - 1
-				elif from >= 0 and not _fresh_tab:
+				elif from >= 0 and not _fresh_tab and not again:
 					(_hist[_tab] as Array).append(from)
 				_returned = false
 				if not _browser:
@@ -796,35 +823,45 @@ class _Walk:
 						"new_tab": own_tab})
 				else:
 					_act({"kind": "type", "text": arg, "page": p, "from": from, "hops": hops})
+				if again:
+					(actions.back() as Dictionary)["again"] = true
 				_fresh_tab = false
 				_cur = p
 				_skim_words = 0
 				_skim_fill = 0
 				_skim_pics = []
 			"search":
-				if arg.is_empty() or _cur < 0 or _fresh_tab:
-					push_warning("tablet: a search needs a page to search from - '%s' ignored" % arg)
+				if arg.is_empty():
+					push_warning("tablet: a search with no words - ignored")
 					return
 				_leave()
-				var from := _cur
-				(_hist[_tab] as Array).append(from)
-				_returned = false
-				var fp: Dictionary = pages[from]
 				# Where the query is typed: a search engine's page (a box and little else, or its
-				# results) takes it in its own box; any other page does what a browser does: the query
-				# goes in the address bar and the results come from the engine last used.
-				var engine := bool(fp["results"]) or bool(fp["search_box"]) or _written_blocks(fp) <= 3
-				var host := String(fp["host"])
-				if engine:
-					fp["search_box"] = true
-					_engine = host
-				elif not _engine.is_empty():
-					host = _engine
+				# results) takes it in its own box; anywhere else does what a browser does: the query
+				# goes in the address bar - of a blank tab too - and the results come from the engine
+				# last used.
+				var from := -1 if _fresh_tab else _cur
+				var engine := false
+				var host := _engine if not _engine.is_empty() else TabletScript.ENGINE
+				if from >= 0:
+					(_hist[_tab] as Array).append(from)
+					var fp: Dictionary = pages[from]
+					engine = bool(fp["results"]) or bool(fp["search_box"]) or _written_blocks(fp) <= 3
+					if engine:
+						fp["search_box"] = true
+						host = String(fp["host"])
+						_engine = host
+					elif _engine.is_empty():
+						host = String(fp["host"])
+				_returned = false
+				if not _browser:
+					_act({"kind": "open", "page": -1, "from": -1})
+					_browser = true
 				var p := _new_page("%s/?q=%s" % [host, arg.uri_encode()])
 				(pages[p] as Dictionary)["query"] = arg
 				(pages[p] as Dictionary)["results"] = true
 				(pages[p] as Dictionary)["search_box"] = true
 				_act({"kind": "search", "text": arg, "page": p, "from": from, "bar": not engine})
+				_fresh_tab = false
 				_cur = p
 				_skim_words = 0
 				_skim_fill = 0
@@ -835,9 +872,9 @@ class _Walk:
 					_act({"kind": "open", "page": -1, "from": -1})
 					_browser = true
 				else:
-					_act({"kind": "tab"})
 					_hist.append([])
 					_tab = _hist.size() - 1
+					_act({"kind": "tab"})
 				_fresh_tab = true
 				_returned = false
 			"back":

@@ -28,7 +28,9 @@ block (the author's, never ghost's `ghost:` block).
   as the night is: a lead that eases every move in, then critically damped springs (`LEAD_TAU`, `SPRING_TAU`; half a move
   in about 4 s, nearly all of it in 8): nothing jumps, whips or lurches. Two looks at the same thing are one, held between
   (`SAME_BRIDGE`); in a live reading the camera holds on for a next look that comes soon, before its words are heard
-  (`_said_by`), rather than pull back to the whole desk for nothing. What happens in the black turns it to nothing. With nothing new for a while it eases back to the whole desk, with a breath of
+  (`_said_by`), rather than pull back to the whole desk for nothing. What happens in the black turns it to nothing, and so
+  does a picture told `unwatched` (`image (feed, unwatched)`): it lands on its screen with the camera left on what it was
+  on. With nothing new for a while it eases back to the whole desk, with a breath of
   slow wander under it.
 - **A phone in hand is held to the ear**: it floats up beside the camera on the right, open and tilted, in the corner of
   the frame. A phone on hold lies open on the desk in front of the rows.
@@ -51,18 +53,20 @@ block (the author's, never ghost's `ghost:` block).
   Io-A's sea; bare is Io-B's crackle. A text message gets a short rest so it can be read before the reply.
 - **The roots are grown, seeded, and some grow**: a dozen-odd systems from the ceiling behind and beside the desk, random
   walks biased down that branch as they go; most hang into the dark past the desk to the floor, a few come over the desk's
-  far edge and crawl across its top toward the chair between the things on it. The ones on the desk creep on through the
-  night (a front moving along them with show time). Bark is from the props' wood shader, dark and fibrous; depth fog takes
+  far edge or its ends and crawl across its top toward the chair through the open room between the things on it, a moderate
+  reach, then over the near edge and down the desk's front. The ones on the desk creep on through the night (a front moving
+  along them with show time). Bark is from the props' wood shader, dark and fibrous; depth fog takes
   the far ones.
 
 ## The marks
 
 As `MEDIUM.md` has them, with the changes above: `call:`, `/call`, `/call: X`, `ring:`, `text: X | words`, `ping: place |
 bearing, range`, `sound:`, `static:`, `print`, `sleep`, `off:`, `look:`, `lift:`, `switch:`, `live:` (a screen or the tablet),
-`image (feed|satellite|tv|full)`, `/image`, `video (feed|satellite|tv): file | words`, ` ```terminal ` blocks (one program,
+`image (feed|satellite|tv|full)`, `/image`, `video (feed|satellite|tv): file | words` (a screen's picture may be told
+`, unwatched`), ` ```terminal ` blocks (one program,
 `DispatchTerminal`'s line kinds), `strike` after a typed line, `<!-- redact: words -->` on a line of a terminal block,
-`gain: N`, `bell`, `lamp: off|on`, `fade: to-black|from-black, HH:MM, secs`, `tablet` / `/tablet` with ` ```page ` fences and
-`<!-- player -->`, `replay: tablet | words`, and the voice's own (`speaker`, `heard:`, `hesitation`, `delivery`). `act:`
+`gain: N`, `bell`, `lamp: off|on`, `fade: to-black|from-black, HH:MM, secs`, `tablet` / `/tablet` with ` ```page ` fences,
+`back`, `new tab` and `<!-- player -->`, `reply: tablet`, `replay: tablet | words`, and the voice's own (`speaker`, `heard:`, `hesitation`, `delivery`). `act:`
 stays a note. The ScriptMarks registry has a row for each (docs/script.md).
 
 ## Files (`src/dispatch/`, a folder after `letter`)
@@ -156,9 +160,19 @@ Open:
 How it is built:
 
 - **The desk is crowded, and the roots go round it by a grid search** (`AStarGrid2D`, 2 cm cells, what stands there and a
-  margin solid; a flood over it picks the spot each root can reach nearest the chair's middle, apart from the others).
-  Free steering got stuck within centimeters. A root may lie across something flat (the chart); its growth runs along its
-  crawl from the desk's edge.
+  margin solid). Free steering got stuck within centimeters. Its growth runs along its crawl from the desk's edge.
+- **A root on the desk goes as a root goes, not by the shortest way** (`DispatchRoots._desk_root`). The ground is dearer the
+  nearer a thing it is, dearer where another root lies, and hard in patches of each root's own, so the cheapest way keeps to
+  the open room and meanders (`_weigh`); the way is eased and sways within the room it has to spare (`_eased`). It comes on
+  and goes only where there is room for a root (4 cm from its middle to a thing: never squeezed between the phones and where
+  one is laid open). It wants a reach of 0.45 to 0.85 m across the top: of the ways to the near edge no longer than that
+  allows it takes the one nearest it, goes over the edge and hangs 14 to 34 cm down the desk's front; shut in among the
+  things, or with every way to the edge too long, it ends on the top at its reach (`_leaving`). It is as thick as its way lets
+  it be - nowhere thicker than the room round it less 8 mm, thinning toward a narrow place over a length and never thicker
+  again past it (`_fitted`) - so its skin never meets what stands there. Gate: `dispatch_check` `_roots_clear` (none nearer a
+  thing than it is thick, the control grown knowing nothing of what stands there; a moderate reach; over the edge clear of
+  the front, or an end on the top). The open room in front of the phones' rows is where a phone on hold is laid open
+  (`held_rect`, three places): no root lies there.
 - **The right side is laid out by what the chair must see past what**: the radar in front, the receiver at the desk's end
   so its view clears the radar, the TV up on a crate so it is seen over it.
 - **Light**: the feed monitor's snow lights the desk's dark end (the printer, the phones); the lamp lights the keyboard and
@@ -333,7 +347,8 @@ The revised night (rift's `MEDIUM.md`, its design and what differs from it) is t
   shell. A ` ```terminal ` block is its lines in order: commands typed on the command line, panels kept by id (`panel: id =
   NAME | LEFT | RIGHT`) that a key or `> open id` brings back as they last stood, `type:` lines typed and said behind the
   keys (`type (Name):` in that voice), `key:` lines typed and never said, `show:`, `set:` (a row changed in place, what
-  differs backspaced and typed), `wait:`, `alert:` (its beep), `print`, `strike`, `clear`, `{N}` holding a line part-drawn,
+  differs backspaced and typed - or, written straight after the panel is come back to, there as the panel is drawn: it
+  comes back as it now stands), `wait:`, `alert:` (its beep), `print`, `strike`, `clear`, `{N}` holding a line part-drawn,
   any desk mark at its point. The note's `terminal:` block holds the title, the width and the keys every panel shares. The
   parse simulates the glass through the whole note, so every action at the terminal carries the glass it starts from and
   the medium plays its own steps at a moment (`DispatchMedium.terminal_at`). A panel is read before the next step - a new
@@ -355,17 +370,36 @@ The revised night (rift's `MEDIUM.md`, its design and what differs from it) is t
   runs a minute a minute. The camera is on the clock in the black. A note may open on a fade up: its title stands over the blurred desk as any show's does, the picture goes down to black as the title goes, and the night comes up on the clock. The first
   ping after it has no track across the black. A typed line opening on a time far off the clock (by a steady voice) is
   warned of.
+- **A reading started mid-way** places what came before it far in the past: what counts time from one of those - the
+  clock from a fade, a call's timer from its first move, the tablet's lock from when it was laid down - counts from where it
+  fell on the reading (`_on_reading`), so a scrub shows what a whole reading would.
 - **The tablet** (built where the script uses one) is the tablet medium's own at a real tablet's size - its rounded slab
   and glass (`TabletMedium.rounded_slab`, `SCREEN_SHADER`), portrait, its screen 1200 by 1600 - lying on the desk; it is
   lifted and held low over the desk's near edge, tipped toward the chair, the camera looking down into it
-  (`DispatchSet.tablet_held_xf`), and put back down dark. Its screen is the tablet medium's: the pages `TabletScript` reads
+  (`DispatchSet.tablet_held_xf`), and laid back down unhurried, its screen left lit on the page it was left on until it
+  locks itself half a minute on (dimmed for the last seconds; `TABLET_LOCK`). It is carried as a hand would, never over
+  what it only passes beside (`DispatchMedium.tablet_route`: the straightest way that clears what stands under it, by each
+  thing's own outline, no higher than the hand holds it; round by the desk's near side, or drawn out toward the chair
+  first, before it is lifted any higher). Its screen is the tablet medium's: the pages `TabletScript` reads
   from the fences as one source, set by `TabletPage`, under the one browser every tablet draws (`TabletChrome`: the status
-  bar with the desk's time, the tab, back, the padlocked address bar, the load line). An address is typed into the bar, or
-  a link on the page up found and tapped, the page loading, then held to be looked at; shown and never said, it scrolls to
-  what the room says that is on it - and where the room reads on from the page, word after word, those words are lit as
-  the tablet medium lights what its voice reads (`_page_follow`, `_page_lit`) - else eases down. `<!-- player -->` is a
-  picture slot that `live: tablet` fills with the desk seen from behind the chair; the tablet in that picture shows the same
-  picture. `replay: tablet | words` says the room's earlier words again through the tablet's speaker (`heard: tablet`).
+  bar with the desk's time, the tabs, back, the padlocked address bar, the load line, a blank tab's page, the keyboard).
+  A page is held to be looked at once it loads; shown and never said, it scrolls to what the room says that is on it - and
+  where the room reads on from the page, word after word, those words are lit as the tablet medium lights what its voice
+  reads (`_page_follow`, `_page_lit`) - else eases down. `<!-- player -->` is a picture slot that `live: tablet` fills with
+  the desk seen from behind the chair; the tablet in that picture shows the same picture. `replay: tablet | words` says the
+  room's earlier words again through the tablet's speaker (`heard: tablet`).
+- **The tablet is browsed by the tablet medium's own walk** (`DispatchScript.browsing`): the page fences, and each `back`
+  and `new tab` while it is up, are written out as a tablet chapter's marks and read by `TabletScript`, whose actions say
+  which mark made each (`mark`, `tab`, `behind`, `again`) - one inference of how a page is reached, for both. So a page the
+  one up links to is found and tapped; any other address is typed into the bar; a search is typed into the box of a search
+  engine's page (a page that is little but its name) at the tablet medium's pace, else into the bar, its results the engine's
+  last used; `back` taps the arrow and the page before in that tab comes back scrolled where it was left (the room may talk
+  over it, and the next link is tapped from it); `new tab` taps the plus, a blank tab beside the others taking the next
+  address; the address of the page up again is that page loaded again, where it was left. The keyboard is up while anything
+  is typed. `reply: tablet` types the room's next words into the message box at the foot of the page up as they are said
+  and sends them (an action `post`); a page at an address that takes a reply has the box each time it comes up. What does
+  nothing is warned of: `back` or `new tab` with the tablet down, `back` with nothing behind it, a reply with no page up.
+  Not built on it: a tab switched back to, `landscape`, `notify:`, `redirect`.
 - **Clips on a screen**: `video (tv): file | words` is a picture whose slot on the Pictures card takes a clip: Generate
   paints it as a short loop (one sheet of six cells in the note's look, cut into frames at 8 fps: `Illustrations._keep_loop`),
   Import… decodes a video into frames (`Illustrations.import_clip`, FFmpeg), and the screen plays them by show time,
@@ -383,4 +417,5 @@ Run on the episode with a steady voice: no script error, every fade up on its cl
 night about 49 minutes.
 
 Open: the author's eye and ear on the night in pieces - the glass's pace and the camera's hold on it, the clock shot, the
-tablet's size and its pages' scroll, the dog clip once imported (its sound is kept and not played yet).
+tablet's size, its pages' scroll and its browsing (the pace of a search typed into its box, the keyboard over the page,
+the message box), the dog clip once imported (its sound is kept and not played yet).

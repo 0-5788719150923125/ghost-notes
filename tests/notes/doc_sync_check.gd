@@ -21,6 +21,8 @@ extends Node
 ##   an edit made to the file elsewhere meanwhile is a conflict the author resolves.
 ##   Never by an unattended process: asserted by taking the gate's own seam away and watching the same dial move reach
 ##   nothing.
+##   The file's fields are held until the file changes ([method DocSource.field]): written elsewhere twice in a second,
+##   each is seen; the control, a write its time does not show is not seen until the file is compared again.
 ## Needs a real boot: the panel's sliders are Director-backed and [Settings] is an autoload.
 ##   tests/run_boot_probe.sh tests/notes/doc_sync_check.gd 120
 
@@ -660,6 +662,28 @@ func _check_fields() -> void:
 	var back := FileAccess.get_file_as_string(_path)
 	_ok(back == before.replace("title: 'Chapter One'", "title: Chapter One"),
 		"the fields did not round-trip back to the original file:\n%s" % back)
+	# The file is read for its fields once and held, and read again where it has changed: written elsewhere twice in one
+	# second, each is seen (its bytes say so while its time cannot); the control, held past that, a write its time does not
+	# show is not seen until it is compared again.
+	var put := func(text: String) -> void:
+		var f := FileAccess.open(_path, FileAccess.WRITE)
+		f.store_string(text)
+		f.close()
+	put.call(back.replace("Chapter One", "Chapter Two"))
+	var two := _doc.field("title")
+	put.call(back.replace("Chapter One", "Chapter Six"))
+	var six := _doc.field("title")
+	_doc._field_sure = true
+	put.call(back.replace("Chapter One", "Chapter Ten"))
+	_doc._field_at = [_doc._path, FileAccess.get_modified_time(_doc._path)]
+	var held := _doc.field("title")
+	_doc._field_sure = false
+	var seen := _doc.field("title")
+	put.call(back)
+	_ok(two == "Chapter Two" and six == "Chapter Six" and held == "Chapter Six" and seen == "Chapter Ten"
+			and _doc.field("title") == "Chapter One",
+		"the file's fields are not held until the file changes (written twice in a second: %s, %s; held: %s; compared again: %s)"
+			% [two, six, held, seen])
 
 
 ## Save… writes the script into a new file with the voice in its frontmatter and stays there: an edit typed afterwards

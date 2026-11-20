@@ -1478,31 +1478,11 @@ func _draw_browser(ci: CanvasItem, o: int) -> void:
 	TabletChrome.draw_browser(ci, L, {"tabs": titles, "tab": int(_st["tab"]),
 		"can_back": not ((_st["hist"] as Dictionary).get(int(_st["tab"]), []) as Array).is_empty(), "url": _shown_url(page),
 		"editing": String(_st["editing"]) == "bar", "typed": String(_st["typed"]), "hop": hop, "load": float(_st["load"]), "now": _now})
-	var f := TabletPage.face(false, 0)
-	var ink := Color(0.12, 0.12, 0.14)
 	# a search being typed shows in the page's box
 	if String(_st["editing"]) == "search" and page >= 0:
-		var lp := layout(page, o)
-		var sr := lp.search_rect
-		var y := sr.position.y + TOP - scroll_of(page, _now, o)
-		var r := Rect2(sr.position.x, y, sr.size.x, sr.size.y)
-		ci.draw_rect(r.grow(-6.0), Color.WHITE)
-		ci.draw_style_box(_ring(), r)
-		ci.draw_string(f, Vector2(r.position.x + 74.0, r.get_center().y + 11.0), String(_st["typed"]),
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 30, ink)
-
-
-var _ring_box: StyleBoxFlat
-
-func _ring() -> StyleBoxFlat:
-	if _ring_box == null:
-		_ring_box = StyleBoxFlat.new()
-		_ring_box.draw_center = false
-		_ring_box.border_color = Color(0.25, 0.5, 1.0)
-		_ring_box.set_border_width_all(3)
-		_ring_box.set_corner_radius_all(38)
-		_ring_box.anti_aliasing = true
-	return _ring_box
+		var sr := layout(page, o).search_rect
+		TabletChrome.draw_typed(ci, Rect2(sr.position.x, sr.position.y + TOP - scroll_of(page, _now, o), sr.size.x, sr.size.y),
+			String(_st["typed"]))
 
 
 func _tab_title(p: int) -> String:
@@ -1584,19 +1564,7 @@ func _draw_hop(ci: CanvasItem, o: int, url: String, shows: bool) -> void:
 
 
 func _draw_start(ci: CanvasItem, o: int) -> void:
-	var L := logical(o)
-	ci.draw_rect(Rect2(0.0, TOP, L.x, L.y - TOP), Color(0.97, 0.97, 0.98))
-	var f := TabletPage.face(false, 2)
-	ci.draw_string(f, Vector2(70.0, TOP + 90.0), "Favorites", HORIZONTAL_ALIGNMENT_LEFT, -1, 34,
-		Color(0.12, 0.12, 0.14))
-	var cols := 6 if o == 0 else 8
-	var s := 110.0
-	var gap := (L.x - 140.0 - cols * s) / float(cols - 1)
-	for i in cols * 2:
-		var r := Rect2(70.0 + (i % cols) * (s + gap), TOP + 140.0 + (i / cols) * (s + 80.0), s, s)
-		ci.draw_style_box(TabletChrome.box(Color.from_hsv(_hash01("fav%d" % i), 0.35, 0.92), 22), r)
-		TabletPage.squiggle(ci, Vector2(r.position.x + 14.0, r.end.y + 30.0), s - 28.0, 6.0,
-			Color(0.5, 0.5, 0.55), hash([_seed, "fv", i]))
+	TabletChrome.draw_start(ci, logical(o), _seed)
 
 
 ## The book's highlight, letter by letter: what [method TabletPage.draw] needs to color the words of
@@ -1620,56 +1588,8 @@ func _lit(page: int) -> Dictionary:
 		"char0": _char0, "hue0": _hue0}
 
 
-const KEYS := ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
-
-func _key_rect(o: int, top: float, row: int, col: int, n: int) -> Rect2:
-	var L := logical(o)
-	var kw := L.x / 10.8
-	var kh := (L.y - top - 30.0) / 4.0
-	var x0 := (L.x - n * kw) * 0.5
-	return Rect2(x0 + col * kw + 5.0, top + 14.0 + row * kh + 5.0, kw - 10.0, kh - 10.0)
-
-
 func _draw_keyboard(ci: CanvasItem, o: int) -> void:
-	var k := float(_st["kb"])
-	if k <= 0.0:
-		return
-	var L := logical(o)
-	var h := L.y * (0.34 if o == 0 else 0.44)
-	var top := L.y - h * k
-	ci.draw_rect(Rect2(0.0, top, L.x, h), Color(0.8, 0.81, 0.84))
-	var f := TabletPage.face(false, 0)
-	var press := String(_st["key"]).to_lower()
-	var pk := float(_st["key_k"])
-	for row in 3:
-		var keys: String = KEYS[row]
-		for col in keys.length():
-			var r := _key_rect(o, top, row, col, keys.length())
-			var down := press == keys[col] and pk > 0.0
-			ci.draw_style_box(TabletChrome.box(Color(0.62, 0.64, 0.68) if down else Color.WHITE, 10), r)
-			ci.draw_string(f, r.position + Vector2(0.0, r.size.y * 0.66), keys[col], HORIZONTAL_ALIGNMENT_CENTER,
-				r.size.x, 30, Color(0.1, 0.1, 0.12))
-			if down:
-				# the pop-up a key shows under the finger
-				var pop := Rect2(r.position - Vector2(10.0, r.size.y * 1.3), r.size + Vector2(20.0, r.size.y * 0.3))
-				ci.draw_style_box(TabletChrome.box(Color.WHITE, 14), pop)
-				ci.draw_string(f, pop.position + Vector2(0.0, pop.size.y * 0.7), keys[col],
-					HORIZONTAL_ALIGNMENT_CENTER, pop.size.x, 44, Color(0.1, 0.1, 0.12))
-	var space := _key_rect(o, top, 3, 2, 10)
-	space.size.x = space.size.x * 5.0 + 40.0
-	ci.draw_style_box(TabletChrome.box(Color(0.62, 0.64, 0.68) if press == " " and pk > 0.0 else Color.WHITE, 10), space)
-	var go := _key_rect(o, top, 3, 8, 10)
-	go.size.x = go.size.x * 2.0 + 10.0
-	ci.draw_style_box(TabletChrome.box(Color(0.15, 0.4, 0.95) if press == "\n" and pk > 0.0 else Color(0.25, 0.5, 1.0), 10), go)
-	ci.draw_string(f, go.position + Vector2(0.0, go.size.y * 0.66), "go", HORIZONTAL_ALIGNMENT_CENTER,
-		go.size.x, 28, Color.WHITE)
-	var dot := _key_rect(o, top, 3, 7, 10)
-	ci.draw_style_box(TabletChrome.box(Color(0.62, 0.64, 0.68) if press == "." and pk > 0.0 else Color.WHITE, 10), dot)
-	ci.draw_string(f, dot.position + Vector2(0.0, dot.size.y * 0.66), ".", HORIZONTAL_ALIGNMENT_CENTER,
-		dot.size.x, 30, Color(0.1, 0.1, 0.12))
-	for c in 2:
-		var mr := _key_rect(o, top, 3, c, 10)
-		ci.draw_style_box(TabletChrome.box(Color(0.68, 0.7, 0.74), 10), mr)
+	TabletChrome.draw_keyboard(ci, logical(o), float(_st["kb"]), String(_st["key"]), float(_st["key_k"]))
 
 
 ## Debug line for probes.

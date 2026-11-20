@@ -5,8 +5,9 @@ class_name VoiceFX
 ##
 ## An echo is a delay line and the resonance is a bank of narrow resonators excited by the voice, so
 ## both work on a buffer regardless of what made it. This is that ambience as a filter over arbitrary
-## audio. It runs in the generative path's push loop, sample by sample, with all state held here so a
-## chunk boundary is not a discontinuity.
+## audio. It runs sample by sample, with all state held here so a chunk boundary is not a discontinuity:
+## too costly for the app's thread, so whoever plays through it hands it a piece at a time on a worker
+## ([method ReadingStream._pump_fx], [method ReadingAudition._pump_fx]).
 ##
 ## The resonance: in the formant voice the sympathetic strings are tuned to the reading's anchor notes (from the
 ## seed's genome). Any other voice has no genome, so the chord is derived from the audio, which keeps the

@@ -10,8 +10,10 @@ class_name DispatchRoots
 ## edge to the floor. Systems of their own stand beside the desk on both sides, coming down to the floor and crawling a
 ## long way along it; at each end one clings under the desk's edge, runs down its front corner and out across the floor
 ## toward the chair. The ones on the desk come down behind it, over its far edge or its ends where there is a gap, and
-## crawl across its top toward the chair between the things standing on it ([member DispatchSet.footprints]); how much of
-## each is grown is a pure function of show time ([method grow]), its tip a taper moving on along it. No root goes through
+## crawl across its top toward the chair through the open room between the things standing on it ([member
+## DispatchSet.footprints]), meandering, each as thick as its way lets it be, and after a moderate reach go over the near edge
+## and hang down the desk's front ([method _desk_root]); how much of each is grown is a pure function of show time ([method
+## grow]), its tip a taper moving on along it. No root goes through
 ## what fills the air beside the desk ([member DispatchSet.clear]: the printer's paper and its heap): it goes round ([method
 ## _cleared]).
 ##
@@ -46,8 +48,40 @@ const DOWN := 0.32
 const THICK := Vector2(0.035, 0.11)
 const TIP := 0.004
 const DESK_THICK := Vector2(0.018, 0.03)
-## The desk's grid for the roots' way across it (m a cell).
+## The desk's grid for the roots' way across it (m a cell), and how near a thing a root's middle may be (m): it comes on and
+## goes only where there is room for a root this thick and more, never squeezed between two things.
 const CELL := 0.02
+const GRID_MARGIN := 0.04
+## A root on the desk (m): the least and most it reaches across the top before it goes over the near edge; a way to the edge
+## up to this much longer than its reach is still taken, a longer one left for an end on the top; a way shorter than the least
+## of all is no root on the desk. How far down the desk's front
+## it hangs once over. How thick it is where it comes over the far edge (over its own), and how much of that goes over the near one.
+const DESK_REACH := Vector2(0.45, 0.85)
+const REACH_OVER := 1.25
+const REACH_LEAST := 0.2
+const HANG := Vector2(0.14, 0.34)
+const EDGE_THICK := 1.5
+const OVER_THICK := 0.5
+## The ground as a root finds it ([method _weigh]): the room it likes round it (m) and how much dearer its way is hard against a
+## thing; how much dearer the hard patches that make it meander are, and how many of them a meter; how much dearer where another
+## root lies. Where it may go over the near edge: every this many cells along it.
+const ROOM_WIDE := 0.12
+const ROOM_DEAR := 3.0
+const MEANDER := 2.2
+const MEANDER_GRAIN := 4.5
+const ROOT_DEAR := 6.0
+const EDGE_EVERY := 3
+## How near a thing a root's skin comes (m); how fast it thins toward a narrow place (m of radius a m along it); how many times
+## its way is eased ([method _eased]).
+const SKIN_GAP := 0.008
+const THIN_RATE := 0.14
+const EASE_PASSES := 24
+## How far a root sways off its way to either side (m), the lengths of its two waves (m), how far along it the sway comes in
+## from each end, and how far inside the desk's ends and far edge its middle keeps.
+const SWAY := 0.03
+const SWAY_WAVES := Vector2(0.26, 0.61)
+const SWAY_EASE := 0.07
+const SWAY_IN := 0.015
 ## Sides round a root (more for a thick one).
 const SIDES := 9
 ## The desk's roots are grown this share at the start of the night, all of it after [constant GROWN_BY] seconds.
@@ -69,12 +103,16 @@ var _desk_mat: ShaderMaterial
 var _feet: Array = []
 var _held := Rect2()
 var _clear: Array = []           # what no root goes through (AABBs, the set's space)
+var _room := PackedFloat32Array()    # each cell of the desk's grid: how far it is from the nearest thing (m)
+var _taken := PackedByteArray()      # ...and whether a root lies over it
 ## Every root off the desk's top as made, `{points, radii}`: the hanging ones, those beside the desk and under its ends.
 var hanging: Array = []
-## The roots on the desk as made: each `{from, to}` (x, z, m) - where it came onto the desk and where its tip is grown to.
+## The roots on the desk as made: each `{from, to, leaves, reach}` - where it came onto the desk and where it goes over the
+## near edge (`leaves`) or its tip is grown to (x, z, m), and how far that is along it.
 var on_desk: Array = []
-## What lies on the desk's top, every root and tendril there: `{points, radii, from}` - its points from `from` on are on
-## the top (a gate holds that nothing goes through what stands there).
+## What lies on the desk's top, every root and tendril there: `{points, radii, from, off}` - its points from `from` on are on
+## the top, up to `off` where it goes over the near edge and hangs (-1: it ends on the top). A gate holds that none comes
+## nearer what stands there than it is thick.
 var lying: Array = []
 
 
@@ -429,24 +467,25 @@ func _under_root(r: RandomNumberGenerator, side: float, out: Array) -> void:
 
 
 ## The [param k]th root on the desk: down from the ceiling behind the desk to its far edge (or an end) at a gap between
-## the things standing there, over the edge, and across the top toward the chair by the free way round what stands there
-## (Godot's [AStarGrid2D] over the desk's top, a cell [constant CELL] across, what stands there and a margin solid),
-## wandering a little off it, with now and then a fine tendril off its side. Into [param out]: the root, then its tendrils.
+## the things standing there, over the edge, and across the top toward the chair - not by the shortest way, but as a root
+## goes: through the open room, where the ground is soft for it ([method _weigh]), a moderate reach ([constant DESK_REACH]),
+## and then over the near edge and down the desk's front ([method _leaving]); with no way to the edge that short, it ends
+## on the top at its reach. It is as thick as the room it passes through lets it be ([method _fitted]), so its skin never
+## meets what stands there. Now and then a fine tendril goes off its side. Into [param out]: the root, then its tendrils.
 func _desk_root(r: RandomNumberGenerator, k: int, grid: AStarGrid2D, out: Array, used: Array) -> void:
 	var gaps := _gaps()
 	if gaps.is_empty():
 		return
-	# its own way in, and a way from it to the chair's side: each gap in turn from its own, the first that has one
+	_weigh(grid, r.randi())
+	# its own way in, and a way from it toward the chair: each gap in turn from its own, the first that has one
 	var entry := Vector2.INF
-	var target := Vector2.ZERO
-	var way := PackedVector2Array()
+	var got := {}
 	for g in gaps.size():
 		var e: Vector2 = gaps[(k * 2 + g) % gaps.size()]
 		if used.has(e) or grid.is_point_solid(_cell(e)):
 			continue
-		target = _target(r, e, grid)
-		way = grid.get_point_path(_cell(e), _cell(target), true)
-		if way.size() >= 6:
+		got = _leaving(r, e, grid)
+		if not got.is_empty():
 			entry = e
 			break
 	if entry == Vector2.INF:
@@ -454,37 +493,55 @@ func _desk_root(r: RandomNumberGenerator, k: int, grid: AStarGrid2D, out: Array,
 	used.append(entry)
 	var y := DispatchSet.DESK_Y
 	var r0 := r.randf_range(DESK_THICK.x, DESK_THICK.y) * float(_v["thick"])
+	var flat := _eased(r, got["way"])
+	var leaves: bool = got["leaves"]
+	# how thick: its own at the edge it comes over, thinning along the top - to a tip there, or to what goes over the near edge
+	var lens := PackedFloat32Array([0.0])
+	for i in range(1, flat.size()):
+		lens.append(lens[i - 1] + flat[i].distance_to(flat[i - 1]))
+	var reach := maxf(lens[lens.size() - 1], 0.001)
+	var at_edge := r0 * EDGE_THICK
+	var at_end := at_edge * OVER_THICK if leaves else TIP
+	var flat_r := PackedFloat32Array()
+	for i in flat.size():
+		flat_r.append(lerpf(at_edge, at_end, pow(lens[i] / reach, 0.9)))
+	flat_r = _fitted(flat, flat_r, lens)
+	# its way down: from the ceiling to the edge, as thick there as the top lets it begin
 	var pts := PackedVector3Array()
+	var rad := PackedFloat32Array()
 	var behind := entry + (Vector2(0, -0.08) if absf(entry.y - DispatchSet.FAR) < 0.03 else Vector2(signf(entry.x) * 0.08, 0))
 	var top := Vector3(behind.x + r.randf_range(-0.5, 0.5), DispatchSet.CEILING, behind.y - r.randf_range(0.2, 0.6))
 	var drop := Vector3(behind.x, y + 0.03, behind.y)
+	var thin := flat_r[0] / at_edge
 	for i in 30:
 		var u := float(i) / 29.0
 		var p := top.lerp(drop, u)
 		p.x += sin(u * PI * 2.0 + float(k)) * 0.06 * (1.0 - u)
 		p.z += sin(u * PI) * -0.12
 		pts.append(p)
-	var edge := pts.size()
-	var flat := _wander(r, way, 0.012)
-	for q in flat:
-		pts.append(Vector3(q.x, y + r0 * 0.85, q.y))
-	var rad := PackedFloat32Array()
-	var n := pts.size()
-	for i in n:
-		var u := float(i) / float(n - 1)
-		rad.append(lerpf(r0 * 1.8, TIP, pow(u, 0.9)))
-	# its way down filled in to the line it is drawn on, then round what fills the air by the desk; its way across the top keeps
-	# clear of what stands there already
-	var head := _dense({"points": pts.slice(0, edge + 1), "radii": rad.slice(0, edge + 1)})
-	var head_p: PackedVector3Array = head["points"]
-	var head_r: PackedFloat32Array = head["radii"]
-	pts = head_p.slice(0, head_p.size() - 1) + pts.slice(edge)
-	rad = head_r.slice(0, head_r.size() - 1) + rad.slice(edge)
-	edge = head_p.size() - 1
+		rad.append(lerpf(r0 * 1.8, at_edge, u) * thin)
+	# filled in to the line it is drawn on, as far as the first point of its way across the top
+	pts.append(Vector3(flat[0].x, y + flat_r[0] * 0.85, flat[0].y))
+	rad.append(flat_r[0])
+	var head := _dense({"points": pts, "radii": rad})
+	pts = head["points"]
+	rad = head["radii"]
+	var edge := pts.size() - 1
+	for i in range(1, flat.size()):
+		pts.append(Vector3(flat[i].x, y + flat_r[i] * 0.85, flat[i].y))
+		rad.append(flat_r[i])
+	var off := -1
+	if leaves:
+		off = pts.size()
+		var hung := _hang(r, pts[pts.size() - 1], rad[rad.size() - 1])
+		pts.append_array(hung["points"])
+		rad.append_array(hung["radii"])
+	# its way down goes round what fills the air by the desk
 	pts = _kept_clear(pts, rad, edge)
 	out.append({"points": pts, "radii": rad, "grow_at": edge})
-	lying.append({"points": pts, "radii": rad, "from": edge})
-	on_desk.append({"from": entry, "to": flat[flat.size() - 1]})
+	lying.append({"points": pts, "radii": rad, "from": edge, "off": off})
+	on_desk.append({"from": entry, "to": flat[flat.size() - 1], "leaves": leaves, "reach": reach})
+	_take(flat, flat_r)
 	# Tendrils: fine roots off its side on the desk, each short and wandering until something stands in its way
 	for t in r.randi_range(1, 3):
 		var at := r.randi_range(int(flat.size() * 0.25), maxi(int(flat.size() * 0.8), int(flat.size() * 0.25) + 1))
@@ -492,7 +549,7 @@ func _desk_root(r: RandomNumberGenerator, k: int, grid: AStarGrid2D, out: Array,
 		var dir := (flat[at + 1] - flat[at - 1]).normalized().rotated(r.randf_range(0.7, 1.3) * (1.0 if r.randf() < 0.5 else -1.0))
 		var tp := PackedVector3Array()
 		var p := flat[at]
-		var tr := lerpf(r0 * 1.8, TIP, pow(float(edge + at) / float(n - 1), 0.9)) * 0.45
+		var tr := maxf(flat_r[at] * 0.45, TIP)
 		for _i in r.randi_range(10, 22):
 			tp.append(Vector3(p.x, y + tr * 0.8, p.y))
 			dir = dir.rotated(r.randf_range(-0.45, 0.45))
@@ -505,11 +562,11 @@ func _desk_root(r: RandomNumberGenerator, k: int, grid: AStarGrid2D, out: Array,
 			for i in tp.size():
 				trad.append(lerpf(tr, TIP * 0.6, float(i) / float(tp.size() - 1)))
 			out.append({"points": tp, "radii": trad, "grow_at": 0, "tendril": true})
-			lying.append({"points": tp, "radii": trad, "from": 0})
+			lying.append({"points": tp, "radii": trad, "from": 0, "off": -1})
 
 
 ## The desk's top as a grid for the roots' way across it: a cell [constant CELL] across, solid where something stands (and
-## a margin round it), and where a phone laid open will lie.
+## a margin round it), and where a phone laid open will lie. How much room each cell has round it is kept ([member _room]).
 func _desk_grid() -> AStarGrid2D:
 	var g := AStarGrid2D.new()
 	var w := int(ceil(DispatchSet.DESK_W / CELL))
@@ -519,35 +576,139 @@ func _desk_grid() -> AStarGrid2D:
 	g.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
 	g.default_compute_heuristic = AStarGrid2D.HEURISTIC_EUCLIDEAN
 	g.update()
-	var held := _held
+	_room = PackedFloat32Array()
+	_room.resize(w * d)
+	_taken = PackedByteArray()
+	_taken.resize(w * d)
 	for i in w:
 		for j in d:
 			var p := _point(Vector2i(i, j))
-			if _blocked(p, 0.026) or held.has_point(p):
+			_room[j * w + i] = room_at(p)
+			if _blocked(p, GRID_MARGIN):
 				g.set_point_solid(Vector2i(i, j), true)
 	return g
 
 
-## Where a root from [param entry] heads: of every free cell it can reach (a flood over the grid), the one nearest the
-## chair's middle, a little at random, and apart from where the roots before it went ([member on_desk]).
-func _target(r: RandomNumberGenerator, entry: Vector2, grid: AStarGrid2D) -> Vector2:
+## How far [param p] (x, z) is from the nearest thing standing on the desk (m; 0 inside one).
+func room_at(p: Vector2) -> float:
+	var least := INF
+	for f in _feet:
+		var rect: Rect2 = f
+		var d := Vector2(maxf(maxf(rect.position.x - p.x, p.x - rect.end.x), 0.0), maxf(maxf(rect.position.y - p.y, p.y - rect.end.y), 0.0)).length()
+		least = minf(least, d)
+	return least
+
+
+## The ground as one root finds it ([param grid]'s weights, from [param seed]): dearer the nearer a thing it is (within
+## [constant ROOM_WIDE]), dearer where another root already lies, and hard in patches of its own - so its cheapest way keeps to
+## the open room and meanders, no two roots the same way.
+func _weigh(grid: AStarGrid2D, seed: int) -> void:
+	var noise := FastNoiseLite.new()
+	noise.seed = seed
+	noise.frequency = MEANDER_GRAIN
+	var w := grid.region.size.x
+	var d := grid.region.size.y
+	for i in w:
+		for j in d:
+			var c := Vector2i(i, j)
+			if grid.is_point_solid(c):
+				continue
+			var p := _point(c)
+			var cost := 1.0 + ROOM_DEAR * clampf(1.0 - _room[j * w + i] / ROOM_WIDE, 0.0, 1.0) \
+				+ MEANDER * (0.5 + 0.5 * noise.get_noise_2d(p.x, p.y))
+			if _taken[j * w + i] != 0:
+				cost += ROOT_DEAR
+			grid.set_point_weight_scale(c, cost)
+
+
+## The cells a root lying along [param flat] ([param rad] thick) covers, kept for the roots after it ([member _taken]).
+func _take(flat: PackedVector2Array, rad: PackedFloat32Array) -> void:
+	var w := int(ceil(DispatchSet.DESK_W / CELL))
+	var d := int(ceil(DispatchSet.DESK_D / CELL))
+	for i in flat.size():
+		var reach := ceili((rad[i] + CELL) / CELL)
+		var c := _cell(flat[i])
+		for dx in range(-reach, reach + 1):
+			for dz in range(-reach, reach + 1):
+				var n := c + Vector2i(dx, dz)
+				if n.x >= 0 and n.x < w and n.y >= 0 and n.y < d:
+					_taken[n.y * w + n.x] = 1
+
+
+## Where a root come onto the desk at [param entry] goes: `{way (cells), leaves}`, {} for no way worth one. It wants a reach
+## of its own across the top ([constant DESK_REACH]). Of the ways to the near edge no longer than it reaches ([constant
+## REACH_OVER]) it takes the one nearest that, a little at random and apart from where the roots before it went, and leaves
+## over the edge there. With none that short, it ends on the top at its reach: along the shortest way to the edge, or - shut in
+## among the things, no way to the edge at all - toward as near the chair's side as it can get ([method _deepest]).
+func _leaving(r: RandomNumberGenerator, entry: Vector2, grid: AStarGrid2D) -> Dictionary:
 	var start := _cell(entry)
-	if not grid.is_in_boundsv(start) or grid.is_point_solid(start):
-		return entry
+	var want := r.randf_range(DESK_REACH.x, DESK_REACH.y)
+	var row := grid.region.size.y - 1
+	var best := PackedVector2Array()
+	var best_score := INF
+	var short := PackedVector2Array()
+	var short_len := INF
+	for i in range(1, grid.region.size.x - 1, EDGE_EVERY):
+		var c := Vector2i(i, row)
+		if grid.is_point_solid(c):
+			continue
+		var way := grid.get_point_path(start, c, false)
+		if way.size() < 6:
+			continue
+		var length := _way_length(way)
+		if length < short_len:
+			short_len = length
+			short = way
+		if length > want * REACH_OVER:
+			continue
+		var score := absf(length - want) + r.randf_range(0.0, 0.08)
+		var at := _point(c)
+		for o in on_desk:
+			score += maxf(0.0, 0.25 - at.distance_to((o as Dictionary)["to"])) * 2.0
+		if score < best_score:
+			best_score = score
+			best = way
+	if not best.is_empty():
+		return {"way": best, "leaves": true}
+	if short.is_empty():
+		var deep := _deepest(r, start, grid)
+		short = grid.get_point_path(start, deep, false) if deep != start else PackedVector2Array()
+	# as far along it as it reaches
+	var cut := PackedVector2Array()
+	var gone := 0.0
+	for n in short.size():
+		if n > 0:
+			gone += short[n].distance_to(short[n - 1]) * CELL
+		if gone > want:
+			break
+		cut.append(short[n])
+	return {"way": cut, "leaves": false} if _way_length(cut) >= REACH_LEAST else {}
+
+
+## How long [param way] (cells) is (m).
+static func _way_length(way: PackedVector2Array) -> float:
+	var length := 0.0
+	for n in range(1, way.size()):
+		length += way[n].distance_to(way[n - 1]) * CELL
+	return length
+
+
+## Of every free cell a root can get to from [param start] (a flood over the grid), the one nearest the chair's side of the
+## desk, a little at random and apart from where the roots before it went.
+func _deepest(r: RandomNumberGenerator, start: Vector2i, grid: AStarGrid2D) -> Vector2i:
 	var seen := {start: true}
 	var front: Array = [start]
-	var best := entry
+	var best := start
 	var best_score := -INF
-	var chair := Vector2(0.0, DispatchSet.NEAR)
 	while not front.is_empty():
 		var c: Vector2i = front.pop_back()
 		var p := _point(c)
-		var score := -p.distance_to(chair) + r.randf_range(0.0, 0.12)
+		var score := p.y + r.randf_range(0.0, 0.06)
 		for o in on_desk:
 			score -= maxf(0.0, 0.18 - p.distance_to((o as Dictionary)["to"])) * 4.0
-		if p.y > 0.1 and score > best_score:
+		if score > best_score:
 			best_score = score
-			best = p
+			best = c
 		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 			var n: Vector2i = c + d
 			if grid.is_in_boundsv(n) and not seen.has(n) and not grid.is_point_solid(n):
@@ -565,8 +726,11 @@ func _point(c: Vector2i) -> Vector2:
 	return Vector2((float(c.x) + 0.5) * CELL - DispatchSet.DESK_W * 0.5, (float(c.y) + 0.5) * CELL + DispatchSet.FAR)
 
 
-## A grid's path in meters, smoothed and wandering [param amount] off it - kept off what stands there.
-func _wander(r: RandomNumberGenerator, way: PackedVector2Array, amount: float) -> PackedVector2Array:
+## A grid's way in meters as a root lies along it: its corners cut twice, then eased [constant EASE_PASSES] times - each point
+## toward the middle of its neighbours, kept where that would bring it nearer a thing than the grid lets a root's middle be -
+## and swaying off it to either side as it goes ([constant SWAY], two waves of its own from [param r]), by no more than half
+## the room it has to spare there, never past the desk's own edges, and not at all at its two ends.
+func _eased(r: RandomNumberGenerator, way: PackedVector2Array) -> PackedVector2Array:
 	var pts := PackedVector2Array()
 	for c in way:
 		pts.append(_point(Vector2i(int(c.x), int(c.y))))
@@ -577,14 +741,71 @@ func _wander(r: RandomNumberGenerator, way: PackedVector2Array, amount: float) -
 			sm.append(pts[i].lerp(pts[i + 1], 0.75))
 		sm.append(pts[pts.size() - 1])
 		pts = sm
-	var ph := r.randf() * TAU
-	var out := PackedVector2Array()
-	for i in pts.size():
-		var t := (pts[mini(i + 1, pts.size() - 1)] - pts[maxi(i - 1, 0)]).normalized()
-		var off := t.orthogonal() * amount * sin(float(i) * 0.21 + ph) * sin(float(i) * 0.07 + ph * 0.5)
-		var q := pts[i] + off
-		out.append(q if not _blocked(q, 0.012) else pts[i])
+	for _k in EASE_PASSES:
+		var next := pts.duplicate()
+		for i in range(1, pts.size() - 1):
+			var q := (pts[i - 1] + pts[i] * 2.0 + pts[i + 1]) * 0.25
+			if not _blocked(q, GRID_MARGIN):
+				next[i] = q
+		pts = next
+	var ph := Vector2(r.randf() * TAU, r.randf() * TAU)
+	var along := 0.0
+	var total := 0.0
+	for i in range(1, pts.size()):
+		total += pts[i].distance_to(pts[i - 1])
+	var out := pts.duplicate()
+	var half := Vector2(DispatchSet.DESK_W * 0.5 - SWAY_IN, 0.0)
+	for i in range(1, pts.size() - 1):
+		along += pts[i].distance_to(pts[i - 1])
+		var side := (pts[i + 1] - pts[i - 1]).normalized().orthogonal()
+		var spare := maxf(room_at(pts[i]) - GRID_MARGIN, 0.0) * 0.5
+		var ends := minf(smoothstep(0.0, SWAY_EASE, along), smoothstep(0.0, SWAY_EASE, total - along))
+		var by := minf(SWAY, spare) * ends * (0.65 * sin(along * TAU / SWAY_WAVES.x + ph.x) + 0.35 * sin(along * TAU / SWAY_WAVES.y + ph.y))
+		var q := pts[i] + side * by
+		q.x = clampf(q.x, -half.x, half.x)
+		q.y = clampf(q.y, DispatchSet.FAR + SWAY_IN, DispatchSet.NEAR)
+		if not _blocked(q, GRID_MARGIN):
+			out[i] = q
 	return out
+
+
+## [param rad] along [param flat] (each point [param lens] m along it) as the room lets a root be: nowhere thicker than the
+## room round it less [constant SKIN_GAP], never thicker again past a narrow place, and thinning toward one over a length
+## ([constant THIN_RATE]) rather than at once.
+func _fitted(flat: PackedVector2Array, rad: PackedFloat32Array, lens: PackedFloat32Array) -> PackedFloat32Array:
+	var out := rad.duplicate()
+	for i in flat.size():
+		out[i] = clampf(room_at(flat[i]) - SKIN_GAP, TIP, out[i])
+		if i > 0:
+			out[i] = minf(out[i], out[i - 1])
+	for i in range(flat.size() - 2, -1, -1):
+		out[i] = minf(out[i], out[i + 1] + THIN_RATE * (lens[i + 1] - lens[i]))
+	return out
+
+
+## A root's way over the desk's near edge and down its front, on from [param last] ([param r1] thick there): `{points, radii}`
+## - round the edge, then hanging a way down ([constant HANG]) clear of the front, swaying a little, thinning to its tip.
+func _hang(r: RandomNumberGenerator, last: Vector3, r1: float) -> Dictionary:
+	var pts := PackedVector3Array()
+	var rad := PackedFloat32Array()
+	var out_by := r1 * 0.85 + 0.006
+	var over := 6
+	var down := r.randf_range(HANG.x, HANG.y)
+	var steps := ceili(down / 0.02)
+	var sway := r.randf_range(-1.0, 1.0)
+	var ph := r.randf() * TAU
+	var total := float(over + steps)
+	for i in range(1, over + 1):
+		var a := PI * 0.5 * float(i) / float(over)
+		pts.append(Vector3(last.x, DispatchSet.DESK_Y + cos(a) * out_by, DispatchSet.NEAR + sin(a) * out_by))
+		rad.append(lerpf(r1, TIP, pow(float(i) / total, 1.3)))
+	for i in range(1, steps + 1):
+		var u := float(i) / float(steps)
+		var thick := lerpf(r1, TIP, pow(float(over + i) / total, 1.3))
+		pts.append(Vector3(last.x + sway * 0.05 * u + sin(u * 5.0 + ph) * 0.012 * u, DispatchSet.DESK_Y - down * u,
+			DispatchSet.NEAR + thick * 0.85 + 0.006))
+		rad.append(thick)
+	return {"points": pts, "radii": rad}
 
 
 ## Where a root can come onto the desk: points along its far edge, and down its ends, with nothing standing there and nothing it
@@ -594,7 +815,7 @@ func _gaps() -> Array:
 	var x := -DispatchSet.DESK_W * 0.5 + 0.06
 	while x < DispatchSet.DESK_W * 0.5 - 0.06:
 		var p := Vector2(x, DispatchSet.FAR + 0.015)
-		if not _blocked(p, 0.035) and not _blocked(p + Vector2(0, 0.06), 0.035) and not _drops_through(p + Vector2(0, -0.08)):
+		if not _blocked(p, GRID_MARGIN) and not _blocked(p + Vector2(0, 0.06), GRID_MARGIN) and not _drops_through(p + Vector2(0, -0.08)):
 			out.append(p)
 			x += 0.16
 		x += 0.02
@@ -602,7 +823,7 @@ func _gaps() -> Array:
 		var z := DispatchSet.FAR + 0.1
 		while z < 0.1:
 			var p := Vector2(side * (DispatchSet.DESK_W * 0.5 - 0.015), z)
-			if not _blocked(p, 0.035) and not _drops_through(p + Vector2(side * 0.08, 0)):
+			if not _blocked(p, GRID_MARGIN) and not _drops_through(p + Vector2(side * 0.08, 0)):
 				out.append(p)
 				z += 0.2
 			z += 0.03
@@ -624,20 +845,6 @@ func _blocked(p: Vector2, margin: float) -> bool:
 		if (f as Rect2).grow(margin).has_point(p):
 			return true
 	return false
-
-
-## The push away from what stands near [param p] (within [param margin]).
-func _push(p: Vector2, margin: float) -> Vector2:
-	var out := Vector2.ZERO
-	for f in _feet:
-		var rect: Rect2 = (f as Rect2).grow(margin + 0.04)
-		if not rect.has_point(p):
-			continue
-		var c := rect.get_center()
-		var d := p - c
-		var e := Vector2(d.x / maxf(rect.size.x, 0.01), d.y / maxf(rect.size.y, 0.01))
-		out += Vector2(signf(d.x), 0.0) if absf(e.x) > absf(e.y) else Vector2(0.0, signf(d.y))
-	return out
 
 
 ## The roots' mesh: a tube along each path, its radius as the path says; UV.x is how far along its root (0-1), UV2 meters

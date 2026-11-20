@@ -26,7 +26,9 @@ class_name DispatchTerminal
 ##     type (Name): words         ...said in that voice
 ##     key: words                 typed into the body quickly and never said
 ##     show: words                drawn down the body, wrapped at the width
-##     set: LABEL ... VALUE       the body row beginning LABEL becomes this line: what differs backspaced, typed again
+##     set: LABEL ... VALUE       the body row beginning LABEL becomes this line: what differs backspaced, typed again.
+##                                Straight after the panel is come back to (`> 3`, then its `set:` lines) the row is
+##                                there as the panel is drawn, never typed again: it comes back as it now stands
 ##     wait: 2                    two seconds on what is up, in place of the read
 ##     alert: line | line         a box over the panel, with the terminal's beep; gone at the next command or panel
 ##     print, strike, clear       the printer; the last typed line backspaced away; the body emptied
@@ -201,6 +203,7 @@ static func compile(lines: PackedStringArray, glass: Dictionary, cfg: Dictionary
 	var t := 0.0
 	var reading := -1.0                  # a panel just drawn: how long it is read before the next step (-1 none)
 	var known := false                   # ...it was come back to
+	var came_back := -1                  # the step that brought a kept panel back, nothing done on it since (-1 none)
 	var steps := 0
 	if not bool(g["awake"]):
 		t = _step(g, ops, {"op": "wake", "t": t}, t) + WAKE
@@ -214,9 +217,12 @@ static func compile(lines: PackedStringArray, glass: Dictionary, cfg: Dictionary
 		var kind := m.get_string(1) if m != null else ("clear" if bare != null and bare.get_string(1) == "clear" else "")
 		if s.begins_with(">"):
 			kind = "command"
+		var comes_changed := kind == "set" and came_back >= 0
+		if kind != "set":
+			came_back = -1
 		# a panel just drawn is read before the next step (its own lines, keys and shown words are its drawing; a wait
-		# says how long instead)
-		if reading >= 0.0 and not kind in ["", "keys", "show", "wait"]:
+		# says how long instead; a row it comes back changed with is its drawing too)
+		if reading >= 0.0 and not kind in ["", "keys", "show", "wait"] and not comes_changed:
 			t += KNOWN_LOOK if known else reading
 			reading = -1.0
 		match kind:
@@ -251,6 +257,7 @@ static func compile(lines: PackedStringArray, glass: Dictionary, cfg: Dictionary
 					t += ALERT_LEAST
 					continue
 				t = _reopen(g, ops, to, t)
+				came_back = ops.size() - 1
 				reading = read_of(up(g), cfg)
 				known = true
 			"panel":
@@ -260,6 +267,7 @@ static func compile(lines: PackedStringArray, glass: Dictionary, cfg: Dictionary
 						warnings.append("terminal: panel: %s is no kept panel yet" % spec)
 						continue
 					t = _reopen(g, ops, spec, t)
+					came_back = ops.size() - 1
 					reading = read_of(up(g), cfg)
 					known = true
 					continue
@@ -311,7 +319,21 @@ static func compile(lines: PackedStringArray, glass: Dictionary, cfg: Dictionary
 				var lead := old.length() - old.lstrip(" ").length()
 				if line.lstrip(" ").length() == line.length():
 					line = old.substr(0, lead) + line
-				t = _set_row(g, ops, row, old, line, t, k)
+				if comes_changed:
+					# the panel just come back comes back as it now stands: the row drawn with the rest of it, and read as
+					# what is new on it
+					var back: Dictionary = ops[came_back]
+					var rows: Dictionary = back.get("set", {})
+					rows[row] = line
+					back["set"] = rows
+					var own := _own_up(g)
+					var body: PackedStringArray = own["body"]
+					body[row] = line
+					own["body"] = body
+					reading = minf(READ_LEAST + READ_WORD * float(_words(" ".join(PackedStringArray(rows.values())))), READ_MOST)
+					known = false
+				else:
+					t = _set_row(g, ops, row, old, line, t, k)
 				if line.length() > width:
 					warnings.append("terminal: a line wider than the panel (%d > %d): %s" % [line.length(), width, line.strip_edges()])
 			"wait":
@@ -358,7 +380,8 @@ static func _step(g: Dictionary, ops: Array, op: Dictionary, t: float) -> float:
 	return t
 
 
-## A kept panel opened again: its header at once, its body drawn down the glass. Returns when it is drawn.
+## A kept panel opened again: its header at once, its body drawn down the glass (its step's `set`, the rows it comes back
+## changed with). Returns when it is drawn.
 static func _reopen(g: Dictionary, ops: Array, id: String, t: float) -> float:
 	var rows := ((g["kept"] as Dictionary)[id]["body"] as PackedStringArray).size()
 	_step(g, ops, {"op": "open", "t": t, "id": id, "rows": rows}, t)
@@ -442,6 +465,14 @@ static func at(glass: Dictionary, ops: Array, r: float, whole := false) -> Dicti
 					g["drawn"] = -1
 				else:
 					g["up"] = id
+					# the rows it comes back changed with (`{row: line}`), there as it is drawn
+					if op.has("set"):
+						var p := _own_up(g)
+						var body: PackedStringArray = p["body"]
+						for row in op["set"]:
+							if int(row) < body.size():
+								body[int(row)] = String(op["set"][row])
+						p["body"] = body
 					var rows := int(op["rows"])
 					var n := clampi(int(floor((r - t) / LINE_EACH)) + 1, 0, rows) if r < INF else rows
 					g["drawn"] = -1 if n >= rows else n

@@ -4,8 +4,8 @@ class_name TabletChrome
 ## TabletChrome - a tablet's screen furniture, drawn one way for every tablet that shows the web: the tablet medium's
 ## ([TabletMedium]) and the dispatch desk's ([DispatchScreens]). The status bar (the time, the battery, the wifi) and, over
 ## a page, the browser: its tab strip, back and forward, the address bar (the host behind a padlock, the words being typed
-## into it, or a redirect's whole address) and the load line. In logical pixels; the page is drawn under it, from
-## [constant TOP] down.
+## into it, or a redirect's whole address) and the load line; a blank tab's page, a box on a page while it is typed into,
+## and the keyboard. In logical pixels; the page is drawn under it, from [constant TOP] down.
 
 ## The status bar, the tab strip and the address bar's row (logical pixels); the page begins under them.
 const STATUS := 40.0
@@ -13,7 +13,13 @@ const TABS := 62.0
 const BAR := 86.0
 const TOP := STATUS + TABS + BAR
 
+## The keyboard's letters, a row a string; and how much of the screen's height it takes, upright and on its side.
+const KEYS := ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
+const KEYBOARD := 0.34
+const KEYBOARD_WIDE := 0.44
+
 static var _boxes := {}
+static var _ring_box: StyleBoxFlat
 
 
 ## A rounded box of [param col], [param radius] px at its corners, made once.
@@ -130,3 +136,85 @@ static func draw_browser(ci: CanvasItem, L: Vector2, st: Dictionary) -> void:
 	var ld := float(st.get("load", -1.0))
 	if ld >= 0.0:
 		ci.draw_rect(Rect2(0.0, TOP - 4.0, L.x * (1.0 - pow(1.0 - ld, 2.0)), 4.0), Color(0.2, 0.48, 1.0))
+
+
+## A blank tab's page on a screen [param L] across: a row of favorites, their colors and names made up from [param seed].
+static func draw_start(ci: CanvasItem, L: Vector2, seed: int) -> void:
+	ci.draw_rect(Rect2(0.0, TOP, L.x, L.y - TOP), Color(0.97, 0.97, 0.98))
+	var f := TabletPage.face(false, 2)
+	ci.draw_string(f, Vector2(70.0, TOP + 90.0), "Favorites", HORIZONTAL_ALIGNMENT_LEFT, -1, 34,
+		Color(0.12, 0.12, 0.14))
+	var cols := 6 if L.x < L.y else 8
+	var s := 110.0
+	var gap := (L.x - 140.0 - cols * s) / float(cols - 1)
+	for i in cols * 2:
+		var r := Rect2(70.0 + (i % cols) * (s + gap), TOP + 140.0 + (i / cols) * (s + 80.0), s, s)
+		var hue := float(hash([seed, "fav%d" % i]) & 0xFFFF) / 65535.0
+		ci.draw_style_box(box(Color.from_hsv(hue, 0.35, 0.92), 22), r)
+		TabletPage.squiggle(ci, Vector2(r.position.x + 14.0, r.end.y + 30.0), s - 28.0, 6.0,
+			Color(0.5, 0.5, 0.55), hash([seed, "fv", i]))
+
+
+## A box on a page while it is typed into - [param r] where it is on the screen, [param typed] what it holds so far, set
+## [param inset] in from its left (past its magnifying glass): ringed, as a field under a finger is.
+static func draw_typed(ci: CanvasItem, r: Rect2, typed: String, inset := 74.0) -> void:
+	if _ring_box == null:
+		_ring_box = StyleBoxFlat.new()
+		_ring_box.draw_center = false
+		_ring_box.border_color = Color(0.25, 0.5, 1.0)
+		_ring_box.set_border_width_all(3)
+		_ring_box.anti_aliasing = true
+	_ring_box.set_corner_radius_all(int(r.size.y * 0.5))
+	ci.draw_rect(Rect2(r.position + Vector2(inset - 10.0, 6.0), Vector2(r.size.x - inset - 20.0, r.size.y - 12.0)), Color.WHITE)
+	ci.draw_style_box(_ring_box, r)
+	ci.draw_string(TabletPage.face(false, 0), Vector2(r.position.x + inset, r.get_center().y + 11.0), typed,
+		HORIZONTAL_ALIGNMENT_LEFT, r.size.x - inset - 26.0, 30, Color(0.12, 0.12, 0.14))
+
+
+## Key [param col] of [param n] in row [param row] of a keyboard whose top is at [param top] on a screen [param L] across.
+static func key_rect(L: Vector2, top: float, row: int, col: int, n: int) -> Rect2:
+	var kw := L.x / 10.8
+	var kh := (L.y - top - 30.0) / 4.0
+	var x0 := (L.x - n * kw) * 0.5
+	return Rect2(x0 + col * kw + 5.0, top + 14.0 + row * kh + 5.0, kw - 10.0, kh - 10.0)
+
+
+## The keyboard risen [param up] (0-1) from the foot of a screen [param L] across: its letters, the space bar, the period
+## and "go"; the key [param key] under the finger darkened, a letter's with its pop-up, while [param press] is above 0.
+static func draw_keyboard(ci: CanvasItem, L: Vector2, up: float, key: String, press: float) -> void:
+	if up <= 0.0:
+		return
+	var h := L.y * (KEYBOARD if L.x < L.y else KEYBOARD_WIDE)
+	var top := L.y - h * up
+	ci.draw_rect(Rect2(0.0, top, L.x, h), Color(0.8, 0.81, 0.84))
+	var f := TabletPage.face(false, 0)
+	var down_key := key.to_lower()
+	var ink := Color(0.1, 0.1, 0.12)
+	for row in 3:
+		var keys: String = KEYS[row]
+		for col in keys.length():
+			var r := key_rect(L, top, row, col, keys.length())
+			var down := down_key == keys[col] and press > 0.0
+			ci.draw_style_box(box(Color(0.62, 0.64, 0.68) if down else Color.WHITE, 10), r)
+			ci.draw_string(f, r.position + Vector2(0.0, r.size.y * 0.66), keys[col], HORIZONTAL_ALIGNMENT_CENTER,
+				r.size.x, 30, ink)
+			if down:
+				# the pop-up a key shows under the finger
+				var pop := Rect2(r.position - Vector2(10.0, r.size.y * 1.3), r.size + Vector2(20.0, r.size.y * 0.3))
+				ci.draw_style_box(box(Color.WHITE, 14), pop)
+				ci.draw_string(f, pop.position + Vector2(0.0, pop.size.y * 0.7), keys[col],
+					HORIZONTAL_ALIGNMENT_CENTER, pop.size.x, 44, ink)
+	var space := key_rect(L, top, 3, 2, 10)
+	space.size.x = space.size.x * 5.0 + 40.0
+	ci.draw_style_box(box(Color(0.62, 0.64, 0.68) if down_key == " " and press > 0.0 else Color.WHITE, 10), space)
+	var go := key_rect(L, top, 3, 8, 10)
+	go.size.x = go.size.x * 2.0 + 10.0
+	ci.draw_style_box(box(Color(0.15, 0.4, 0.95) if down_key == "\n" and press > 0.0 else Color(0.25, 0.5, 1.0), 10), go)
+	ci.draw_string(f, go.position + Vector2(0.0, go.size.y * 0.66), "go", HORIZONTAL_ALIGNMENT_CENTER,
+		go.size.x, 28, Color.WHITE)
+	var dot := key_rect(L, top, 3, 7, 10)
+	ci.draw_style_box(box(Color(0.62, 0.64, 0.68) if down_key == "." and press > 0.0 else Color.WHITE, 10), dot)
+	ci.draw_string(f, dot.position + Vector2(0.0, dot.size.y * 0.66), ".", HORIZONTAL_ALIGNMENT_CENTER,
+		dot.size.x, 30, ink)
+	for c in 2:
+		ci.draw_style_box(box(Color(0.68, 0.7, 0.74), 10), key_rect(L, top, 3, c, 10))

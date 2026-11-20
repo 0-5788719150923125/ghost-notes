@@ -53,6 +53,7 @@ const TAIL_SHARE := 0.2
 var items: Array = []         # in page coordinates, in drawing order
 var word_rect := {}           # global word index -> Rect2
 var search_rect := Rect2()
+var reply_rect := Rect2()     # the message box of a page that takes a reply (its `reply`), under its last line
 var block_rect := {}          # block index -> Rect2, for the pictures a skim stops on
 var bg := Color.WHITE
 var ink := Color(0.1, 0.1, 0.12)
@@ -193,6 +194,8 @@ func build(doc: Dictionary, pi: int, w: float, min_h: float) -> void:
 				_y += 24.0
 	if not boxed:
 		_search_box("")
+	if bool(page.get("reply", false)):
+		_reply_box()
 	# A page goes on past its article (related stories, comments) so its last written lines can be
 	# scrolled up to where the rest were read.
 	var want := maxf(min_h, _y + min_h * TAIL_SHARE)
@@ -432,12 +435,15 @@ func _real(page: Dictionary, w: float, min_h: float) -> void:
 
 
 ## The name an earlier page on this host gave the site (its opening H1, set as the masthead), or "" when
-## this is the first page of the host seen (whose own H1 then becomes the masthead).
+## this is the first page of the host seen (whose own H1 then becomes the masthead). A page at this one's own
+## address is this page come up again, set as it was: never an earlier page of its site.
 func _site_name() -> String:
-	var host := String((script_doc["pages"][index] as Dictionary)["host"])
+	var here: Dictionary = script_doc["pages"][index]
+	var host := String(here["host"])
 	for k in index:
 		var pg: Dictionary = script_doc["pages"][k]
-		if String(pg["host"]) != host or bool(pg["results"]) or (pg["blocks"] as Array).is_empty():
+		if String(pg["host"]) != host or bool(pg["results"]) or (pg["blocks"] as Array).is_empty() \
+				or TabletScript.url_key(String(pg["url"])) == TabletScript.url_key(String(here["url"])):
 			continue
 		var b0: Dictionary = (pg["blocks"] as Array)[0]
 		if b0["kind"] == "heading" and int(b0["level"]) == 1:
@@ -526,6 +532,19 @@ func _search_box(query: String, wide := false) -> void:
 	search_rect = r
 	items.append({"kind": "search", "rect": r, "query": query})
 	_y += 76.0 + 26.0
+
+
+## A message box under the page's last line, a Send at its right end: where a reply is typed.
+func _reply_box() -> void:
+	_y += 8.0
+	reply_rect = Rect2(_x0, _y, _col, 76.0)
+	items.append({"kind": "reply", "rect": reply_rect})
+	_y += 76.0 + 34.0
+
+
+## The message box's Send, on the page.
+func send_rect() -> Rect2:
+	return Rect2(reply_rect.end.x - 150.0, reply_rect.position.y + 10.0, 140.0, reply_rect.size.y - 20.0)
 
 
 func _result_url(b: Dictionary) -> void:
@@ -617,6 +636,8 @@ func draw(ci: CanvasItem, top: float, scroll: float, clip_y0: float, clip_y1: fl
 				_draw_image(ci, rr, d, textures)
 			"search":
 				_draw_search(ci, rr, String(d["query"]))
+			"reply":
+				_draw_reply(ci, rr)
 			"dot":
 				ci.draw_circle(rr.get_center(), rr.size.x * 0.5, d["col"], true, -1.0, true)
 			"pager":
@@ -793,6 +814,17 @@ func _draw_search(ci: CanvasItem, r: Rect2, query: String) -> void:
 	if not query.is_empty():
 		ci.draw_string(_face(false, 0), Vector2(r.position.x + 74.0, r.get_center().y + 11.0), query,
 			HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 100.0, 30, ink)
+
+
+## The message box, empty: what it asks for, and its Send.
+func _draw_reply(ci: CanvasItem, r: Rect2) -> void:
+	_pill(ci, r, Color.WHITE, ink.lerp(bg, 0.7))
+	ci.draw_string(_face(false, 0), Vector2(r.position.x + 28.0, r.get_center().y + 11.0), "Say something…",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 30, ink.lerp(bg, 0.6))
+	var send := Rect2(r.end.x - 150.0, r.position.y + 10.0, 140.0, r.size.y - 20.0)
+	_pill(ci, send, accent, accent)
+	ci.draw_string(_face(false, 2), Vector2(send.position.x, send.get_center().y + 9.0), "Send", HORIZONTAL_ALIGNMENT_CENTER,
+		send.size.x, 26, Color.WHITE)
 
 
 ## A picture nobody painted: a pale wash with a few soft overlapping blobs of related colors, the shape

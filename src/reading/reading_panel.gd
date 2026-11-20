@@ -98,6 +98,18 @@ var subtitles: Node            # set by main; its clock is re-based by the strea
 # warning after the text is fixed. Rebuilt by every plan ([method _plan_of]), and read by whoever reports it.
 var _plan_note := ""
 
+## A script of at least this many characters is planned on a worker when Play finds no plan kept for it ([method
+## plan_ahead]): the plan is a pass over every word, about a hundredth of a millisecond a character, and a shorter
+## one costs this thread less than the frame a worker's would wait.
+const PLAN_AWAY := 1200
+## The plan kept ([method _plan_made]) and what it was made of ([method _plan_asked]): while the words, the title and
+## what is asked stand, a scrub, a voice changed, an export and Play again plan nothing.
+var _plan_for: Array = []
+var _plan_kept := {}
+## The plan a worker is making: {box, task, of} ([method plan_ahead]).
+var _plan_task := {}
+var _plans_left: Array = []     # workers on plans no longer wanted, waited for as they finish
+
 ## This panel's own rows that belong to a medium feature (the Ink): tag -> the Controls to show
 ## or hide together, by [method _sync_medium_rows]. A card keeps its own (see [MediumCard]).
 var _medium_rows := {}
@@ -225,6 +237,7 @@ func _ready() -> void:
 ## Every frame: the autosave, the audition, and the reading's ring ([method ReadingStream.tick]).
 func _process(delta: float) -> void:
 	_process_persist()
+	_plan_landed()
 		# the audition whether or not a reading plays: it is not part of one, and would otherwise never be noticed to
 		# have finished
 	_audition.tick()
@@ -237,6 +250,7 @@ func _process(delta: float) -> void:
 func _exit_tree() -> void:
 	if _cast.keep != null:
 		_cast.keep.release()
+	_plans_finish()
 	Spectrum.release_conductor(self)
 	var ch := Shell.of(self)
 	if ch != null:
@@ -264,7 +278,7 @@ func transport_hooks() -> Dictionary:
 		"stop": _stream.stop,
 		"playing": func() -> bool: return _stream.live() and not Spectrum.paused,
 		"can_play": func() -> bool: return _can_play,
-		"can_stop": func() -> bool: return _stream.has_reading() or _stream.playback != null,
+		"can_stop": func() -> bool: return _stream.has_reading() or _stream.playback != null or _stream.planning(),
 				# A stopped reading has nothing on the rail: the sentence scale is the last plan's, and a seek there would
 				# start a reading.
 		"position": func() -> float: return _stream.position() if _stream.has_reading() else 0.0,
@@ -880,7 +894,7 @@ func _load_persisted() -> void:
 	_cast.load_stored()
 		# Last, and once: every dial the chain reads is now in the slot, so this is where the loaded session's room is
 		# applied.
-	Delivery.apply_fx(_stream.fx, _cast.slot_cfg(_cast.slot))
+	_stream.dial(_cast.slot_cfg(_cast.slot))
 		# ...and now the box is filled, after the cast is loaded, because an open document overrules what was loaded
 		# above: in sync mode the file is the source of truth for both the words and the voice (see
 		# DocSource.bind_text). The text arriving re-derives the tabs.
@@ -996,12 +1010,75 @@ func _plan_ask(body := "") -> Dictionary:
 ## chapter off its screen, [method _reading_of]). What the plan noticed goes on the line that reports it
 ## ([member _plan_note]).
 func _plan_of(body: String) -> Dictionary:
-	var read := _reading_of(body)
-	var plan := ReadingPlan.make(String(read["body"]), String(read["title"]), _plan_ask(body))
+	var plan := _plan_made(_plan_asked(body))
 	_plan_note = ""
 	if not String(plan["note"]).is_empty():
 		_note(String(plan["note"]))
 	return plan
+
+
+## What a plan of [param body] is made of: the words as the walk reads them, the title announced first and what is
+## asked ([method _plan_ask]). The plan is a function of these three and nothing else.
+func _plan_asked(body: String) -> Array:
+	var read := _reading_of(body)
+	return [String(read["body"]), String(read["title"]), _plan_ask(body)]
+
+
+## The plan of [param of] ([method _plan_asked]): the one kept when it was made of the same, else made here and
+## kept. Each asker gets chunks of its own, so an export made while a reading plays cannot disturb it; the words
+## and tokens within are shared, and nothing writes to them.
+func _plan_made(of: Array) -> Dictionary:
+	if _plan_for != of:
+		_plan_for = of
+		_plan_kept = ReadingPlan.make(of[0], of[1], of[2])
+	var chunks: Array = []
+	for c in _plan_kept["chunks"]:
+		chunks.append((c as Dictionary).duplicate())
+	return {"chunks": chunks, "note": _plan_kept["note"], "fade": _plan_kept["fade"], "sentences": _plan_kept["sentences"]}
+
+
+## Have the plan of [param body] in hand before it is asked for: true while a worker is making it ([method
+## _plan_landed] keeps it, and tells the reading that waits on it), false when it is kept already or short enough
+## to make where it is asked ([constant PLAN_AWAY]). The worker is high priority, as the voice's are ([ReadingStream]).
+func plan_ahead(body: String) -> bool:
+	var of := _plan_asked(body)
+	if _plan_for == of or String(of[0]).length() + String(of[1]).length() < PLAN_AWAY:
+		return false
+	if not _plan_task.is_empty():
+		if _plan_task["of"] == of:
+			return true
+		# other words were asked about first: that plan is no longer wanted, and its worker is waited for when done
+		_plans_left.append(int(_plan_task["task"]))
+	var box := [{}]
+	var work := func() -> void:
+		box[0] = ReadingPlan.make(of[0], of[1], of[2])
+	_plan_task = {"box": box, "of": of, "task": WorkerThreadPool.add_task(work, true, "a reading's plan")}
+	return true
+
+
+## Every frame: the plan a worker has finished is kept, and the reading that waits on it carries on.
+func _plan_landed() -> void:
+	for k in range(_plans_left.size() - 1, -1, -1):
+		if WorkerThreadPool.is_task_completed(int(_plans_left[k])):
+			WorkerThreadPool.wait_for_task_completion(int(_plans_left[k]))
+			_plans_left.remove_at(k)
+	if _plan_task.is_empty() or not WorkerThreadPool.is_task_completed(int(_plan_task["task"])):
+		return
+	WorkerThreadPool.wait_for_task_completion(int(_plan_task["task"]))
+	_plan_for = _plan_task["of"]
+	_plan_kept = (_plan_task["box"] as Array)[0]
+	_plan_task = {}
+	_stream.planned()
+
+
+## Let go of the workers still planning: waited for, so none outlives the panel unclaimed.
+func _plans_finish() -> void:
+	if not _plan_task.is_empty():
+		WorkerThreadPool.wait_for_task_completion(int(_plan_task["task"]))
+	_plan_task = {}
+	for t in _plans_left:
+		WorkerThreadPool.wait_for_task_completion(int(t))
+	_plans_left = []
 
 
 ## The chunks of [param body] ([method _plan_of]): what playback, the scrub and the export read.

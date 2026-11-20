@@ -12,6 +12,11 @@ class_name ReadingStream
 ## the live effects chain and the place under the voice - and asks the [ReadingPanel] it is part of for the words,
 ## a voice's settings, the host and the requests. The panel asks it to play, stop, re-pace and seek, and, for the
 ## transport, where it is.
+##
+## What costs a loop over every sample runs on a worker, as the audition's does ([ReadingAudition]): a take's file is
+## decoded and kept there ([method _land]), and the queue goes through the room a piece at a time ([method _pump_fx];
+## [VoiceFX] is GDScript, a seventh of a second of this thread per second of audio with every dial up). This thread joins
+## what comes back and copies finished frames into the ring, so a sentence landing on an empty queue costs it nothing.
 
 ## The [ReadingPanel] this is a part of: everything read through it is something this part is handed.
 var panel: ReadingPanel
@@ -38,6 +43,9 @@ const DEPTH_SAFETY := 1.5
 const DEPTH_MOST := 45.0
 ## How much voice a paused reading makes ahead of the playhead (seconds, [method _depth_now]): the whole of any reading a show makes.
 const BUFFER_PAUSED := 900.0
+## How much of the queue goes through the room at a time, on a worker (seconds). The chain is stateful, so pieces run in
+## order, one at a time; a dial moved while one is there reaches the next ([method dial]).
+const FX_PIECE := 0.25
 
 # The plan on the stream ([ReadingPlan])
 var chunks: Array = []        # [{tokens, words, ...}] planned up front, cheap
@@ -47,6 +55,10 @@ var take_path := ""
 var take_done := false
 ## The reading on the stream no longer matches the panel: the next Play reads it again.
 var stale := false
+## Play is pressed, or the bar has settled on a sentence, and it waits on a plan a worker is making ([method
+## ReadingPanel.plan_ahead]): [method planned] carries on. Stop, or a reading begun any other way, lets go of it.
+var _planning := false
+var _plan_from := -1                     # ...the sentence a seek waits to read from, -1 for Play from the top
 ## The outro mark, live: how long the fade is (0 = no mark; where it starts is the join's, [member ReadingJoin.fade_at]).
 var _fade_len := 0.0
 # The predicted timeline: a scrub bar scaled by how much audio has been decoded would change length under the
@@ -61,20 +73,30 @@ var _start_chunk := 0
 var _seek_k := -1                        # a seek waiting for the bar to settle
 
 # The window: what is asked of the host and what has come back
-var _ready_takes: Array = []   # [{wav, index, spans}] synthesized, awaiting the push
+var _ready_takes: Array = []   # [{pcm, index, spans, phones}] synthesized and decoded, awaiting the push
+var _landing: Array = []       # takes a worker is decoding: [{box, task, index, spans, phones, epoch}] ([method _land])
+var _left: Array = []          # workers on takes no longer wanted, waited for as they finish
 var _next_to_request := 0
 var _next_to_play := 0
 var _in_flight := 0
 var _req_chunk := {}           # request id -> {idx, epoch, sent}
 var _epoch := 0                # bumped on a pace change; stale replies are dropped
 var _cost := 0.0               # the host's seconds per estimated second of a chunk, 0 unmeasured
+var _voices := PackedStringArray()     # who speaks in the plan, each once
+var _near_dials: Array = []    # each of their Near dials when the readers' moves were last planned ([method _plan_near])
+var _near_from := -1           # ...and the chunk they were planned from, -1 not yet
 var _done_ms := 0              # when the host last handed something back (it makes one at a time)
 
 # The one continuous stream
 var playback: AudioStreamGeneratorPlayback
 var _stream_open := false      # explicit: a null playback must not retry forever
-var _pending := PackedFloat32Array()   # decoded samples not yet handed to the ring
+var _pending := PackedFloat32Array()   # decoded samples not yet through the room
 var _read := 0                 # cursor into _pending (slicing it per frame would copy the whole queue)
+var _through := 0              # frames handed to the room: the clock its marks and the voices over the line are in
+var _fx_task := {}             # the one piece going through the room right now: {box, task, n}
+var _dial := {}                # a dial moved while a piece was on the worker, dialed in when it is back
+var _wet := PackedVector2Array()       # through the room, waiting for the ring to have room
+var _wet_read := 0             # cursor into _wet
 var _pushed := 0               # frames handed to the ring, for the played-time clock
 var _ring_capacity := 0        # measured, never computed - see _drain_ready
 var _lead_in := 0.0            # the intro seeded into _pending by plan, in seconds
@@ -110,22 +132,23 @@ func _init(owner: ReadingPanel) -> void:
 ## Play: read the script from the top, or, while a reading plays, pause it and carry on. Speak is a toggle while
 ## a reading plays: Pause, then Resume, from where it was. Reading again from the top is Stop, then Play.
 func play() -> void:
+	if _planning and _plan_from < 0:
+		return                      # pressed again while the plan is made: it is coming
 	if live():
 		Spectrum.set_paused(not Spectrum.paused)
 		panel._set_status("Paused. Space or ▶ carries on; ■ ends the reading."
 			if Spectrum.paused else "Resumed.")
 		return
+		# The real-time read: in sync mode this is the file as it is on disk right now, so the author can keep writing
+		# in their own editor with ghost open beside it. Read once: every read hands the file's settings to the panel.
+	var body := panel._reading_body().strip_edges()
 		# A take kept for these words in these voices plays as it is, the host asked for nothing
-	var said := panel._reading_body().strip_edges()
-	if not said.is_empty():
-		panel._cast.refresh(said)
-		if _play_take(panel.kept_take(said)):
+	if not body.is_empty():
+		panel._cast.refresh(body)
+		if _play_take(panel.kept_take(body)):
 			return
 	if panel._host == null or not panel._host.is_up() or panel._cast.voice_pick.selected < 0:
 		return
-		# The real-time read: in sync mode this is the file as it is on disk right now, so the author can keep writing
-		# in their own editor with ghost open beside it.
-	var body := panel._reading_body().strip_edges()
 	if body.is_empty():
 		panel._set_status("Nothing to read yet: write the words on the Script card, then press ▶.")
 		return
@@ -133,6 +156,13 @@ func play() -> void:
 	panel._cast.refresh(body)
 	if panel._test_busy():
 		panel._stop_test()
+		# A long script's plan is a pass over every word, so a worker makes it and Play carries on from the top when it
+		# is in hand ([method planned]); a short one, or one kept, is planned here.
+	if panel.plan_ahead(body):
+		_planning = true
+		_plan_from = -1
+		panel._set_status("Planning the reading…")
+		return
 		# plan is a full teardown: stream closed, queues emptied, pending request ids dropped so replies for the old
 		# text are discarded on arrival rather than spliced into the new reading.
 	plan(body)
@@ -144,6 +174,25 @@ func play() -> void:
 	_sync_speak_buttons()
 	panel._set_status("Planned %d chunk(s). Synthesizing the first…%s" % [chunks.size(), panel._plan_note])
 	_pump()
+
+
+## Whether Play waits on a plan being made ([member _planning]).
+func planning() -> bool:
+	return _planning
+
+
+## The plan Play waits on is in hand: Play, from the top - the words read again as they stand now, so a script
+## written on in the meantime is planned again.
+func planned() -> void:
+	if not _planning:
+		return
+	_planning = false
+	if _plan_from < 0:
+		play()
+		return
+	_seek_k = _plan_from
+	_plan_from = -1
+	seek_now()
 
 
 ## The take kept at [param path], played whole (next/editing.md step 3): the file a render plays, through the
@@ -191,6 +240,11 @@ func restart() -> void:
 ## alone: the playback, the Director's attachment to the stage and the subtitle overlay belong to the owner, so
 ## `end_stream` is wired beside `begin_stream` (see main._end_generative_stream).
 func stop() -> void:
+	if _planning:
+		_planning = false
+		_plan_from = -1
+		_seek_k = -1
+		panel._set_status("Stopped. Space or ▶ reads again from the top.")
 	if not has_reading() and playback == null:
 		return
 	Spectrum.set_stream_paused(false)
@@ -211,6 +265,10 @@ func plan(body: String) -> void:
 		_join.frames = _pending.size()
 	var made := panel._plan_of(body)
 	chunks = made["chunks"]
+	for c in chunks:
+		var who := String((c as Dictionary).get("speaker", ""))
+		if not _voices.has(who):
+			_voices.append(who)
 	_fade_len = float(made["fade"])
 	_start_chunk = 0
 	_seek_k = -1
@@ -221,6 +279,8 @@ func plan(body: String) -> void:
 ## cannot drift apart. The pending request map matters most: replies for chunks already asked for are still in
 ## flight on the host, and dropping their ids here makes them discarded on arrival.
 func _reset_playback() -> void:
+	_planning = false
+	_plan_from = -1
 	chunks = []
 	take_path = ""
 	take_done = false
@@ -230,6 +290,9 @@ func _reset_playback() -> void:
 	_next_to_play = 0
 	_in_flight = 0
 	_cost = 0.0
+	_voices = PackedStringArray()
+	_near_dials = []
+	_near_from = -1
 	_done_ms = 0
 	_stream_open = false
 	playback = null
@@ -237,6 +300,20 @@ func _reset_playback() -> void:
 	_ring_capacity = 0
 	_pending = PackedFloat32Array()
 	_read = 0
+		# The chain is the next reading's too, so a piece on the worker is waited for (a fraction of a second, as the
+		# audition's Stop does) and the dial that waited on it goes in; a take being decoded is left to finish.
+	if not _fx_task.is_empty():
+		WorkerThreadPool.wait_for_task_completion(int(_fx_task["task"]))
+	_fx_task = {}
+	if not _dial.is_empty():
+		Delivery.apply_fx(fx, _dial)
+	_dial = {}
+	for l in _landing:
+		_left.append(int((l as Dictionary)["task"]))
+	_landing = []
+	_wet = PackedVector2Array()
+	_wet_read = 0
+	_through = 0
 	_fx_live_name = ""
 		# The intro silence belongs to a reading that is starting, so it is seeded in plan and only cleared here. The
 		# join's frames are the clock every word span and seam is measured against, so starting them at the end of that
@@ -260,7 +337,8 @@ func _sync_speak_buttons() -> void:
 
 ## Read from sentence [param k]: Stop, then Play from there. The old stream is ended (the voice stops at once and
 ## the stage is handed back), then a fresh reading is planned and requested from [param k] on, with no intro. The
-## media start where it starts ([method start_words]).
+## media start where it starts ([method start_words]). Where the words have changed since the plan in hand was made,
+## a worker plans them first and this is asked again when it has ([method planned]).
 func speak_from(k: int) -> void:
 	_seek_k = -1
 	if panel._host == null or not panel._host.is_up() or panel._cast.voice_pick.selected < 0:
@@ -269,12 +347,20 @@ func speak_from(k: int) -> void:
 	var body := panel._reading_body().strip_edges()
 	if body.is_empty():
 		return
+	panel._cast.refresh(body)
+		# Words written since the plan in hand was made are planned by a worker, as Play's are: the reading on the stream
+		# plays on, the bar waiting where it was put, and [method planned] reads from there.
+	if panel.plan_ahead(body):
+		_planning = true
+		_plan_from = k
+		_seek_k = k
+		panel._set_status("Planning the reading…")
+		return
 	if not chunks.is_empty() or playback != null:
 		Spectrum.set_stream_paused(false)
 		_reset_playback()
 		if panel.end_stream.is_valid():
 			panel.end_stream.call()
-	panel._cast.refresh(body)
 	if panel._test_busy():
 		panel._stop_test()
 	plan(body)
@@ -328,7 +414,9 @@ func live() -> bool:
 		return not take_done and Spectrum.has_audio()
 	if chunks.is_empty():
 		return false
-	if _next_to_play < chunks.size() or not _pending.is_empty() or playback == null:
+	if _next_to_play < chunks.size() or _pending.size() > _read or playback == null:
+		return true
+	if not _fx_task.is_empty() or _wet.size() > _wet_read:
 		return true
 	return _ring_capacity - int(playback.get_frames_available()) > 256
 
@@ -448,12 +536,14 @@ func ahead() -> float:
 	return _buffered_seconds()
 
 
-## How much finished audio is waiting to be heard: decoded but not yet pushed, plus whatever is in the ring.
+## How much finished audio is waiting to be heard: decoded but not yet pushed (in the queue, in the room or past it),
+## plus whatever is in the ring.
 func _buffered_seconds() -> float:
 	var queued := 0
 	if playback != null and _ring_capacity > 0:
 		queued = maxi(0, _ring_capacity - int(playback.get_frames_available()))
-	return float(maxi(_pending.size() - _read, 0) + queued) / float(maxi(panel._sr, 1))
+	var in_room := int(_fx_task.get("n", 0)) + _wet.size() - _wet_read
+	return float(maxi(_pending.size() - _read, 0) + in_room + queued) / float(maxi(panel._sr, 1))
 
 
 ## Keep LOOKAHEAD chunks in flight and start playback as soon as the chunk we are waiting for exists.
@@ -465,34 +555,44 @@ func _pump() -> void:
 		# queued counts; the intro still to be pushed is taken off.
 	var intro_left := maxf(0.0, _lead_in - float(_pushed) / float(maxi(panel._sr, 1)))
 	var planned := false
-	var hits := 0             # sentences taken from the cache this pump: a window's worth at most, then drained
-	while _in_flight < LOOKAHEAD and hits < LOOKAHEAD and _next_to_request < chunks.size() \
+		# A take being decoded is in the window as one the host is making is: it is not in the queue yet
+	while _in_flight + _landing.size() < LOOKAHEAD and _next_to_request < chunks.size() \
 			and _buffered_seconds() - intro_left < _depth_now():
 		var idx := _next_to_request
 		if not planned:
 			planned = true
-			panel._plan_near(chunks, idx)
+			_plan_near(idx)
 		_next_to_request += 1
-		_in_flight += 1
 		var s := panel._cast.cfg_of(String((chunks[idx] as Dictionary).get("speaker", "")))
 		var args: Dictionary = panel._request_args(s, chunks[idx])
 		var key: String = panel.take_key(s, args)
-				# A sentence said before ([TakeCache]) is in the queue at once, as the host's reply would be - no host asked
+				# A sentence said before ([TakeCache]) lands as the host's reply would - no host asked
 		var kept := TakeCache.find(key)
 		if not kept.is_empty():
 			var copy := TakeCache.copy_out(key, ReadingPanel.TAKE_DIR + "/chunk_%d_%d.wav" % [idx, _epoch])
 			if not copy.is_empty():
-				_in_flight -= 1
 				var out: Dictionary = kept["out"]
 				panel._sr = int(out.get("sample_rate", panel._sr))
-				_ready_takes.append({"wav": copy, "index": idx, "spans": out.get("tokens", []), "phones": out.get("phones", [])})
-				hits += 1
+				_land(copy, idx, out.get("tokens", []), out.get("phones", []))
 				continue
+		_in_flight += 1
 		var id := panel._host.request("", panel._cast.voice_id_of(s),
 			ReadingPanel.TAKE_DIR + "/chunk_%d_%d.wav" % [idx, _epoch], args, null)
 		_req_chunk[id] = {"idx": idx, "epoch": _epoch, "sent": Time.get_ticks_msec(), "key": key}
-	if hits > 0:
-		_drain_ready()
+
+
+## Where each reader is from chunk [param from] on ([method ReadingPanel._plan_near]), each voice's Near dial as it is
+## now: planned again only when a dial has moved or the reading is asked from further back. The plan is a pass over
+## every word of the reading, and the pump asks at every sentence.
+func _plan_near(from: int) -> void:
+	var dials: Array = []
+	for who in _voices:
+		dials.append(float(panel._cast.cfg_of(who)["near"]))
+	if dials == _near_dials and _near_from >= 0 and from >= _near_from:
+		return
+	_near_from = from if dials != _near_dials or _near_from < 0 else mini(_near_from, from)
+	_near_dials = dials
+	panel._plan_near(chunks, from)
 
 
 ## How deep the window is now: [method depth] over the chunks the pump would ask for next - and, while the reading
@@ -561,7 +661,8 @@ func owns(id: int) -> bool:
 	return _req_chunk.has(id)
 
 
-## A chunk the reading asked for came back: into the queue, in order ([method _drain_ready]).
+## A chunk the reading asked for came back: decoded on a worker ([method _land]), then into the queue, in order
+## ([method _drain_ready]).
 func arrived(id: int, result: Dictionary) -> void:
 	var meta: Dictionary = _req_chunk[id]
 	_req_chunk.erase(id)
@@ -582,18 +683,54 @@ func arrived(id: int, result: Dictionary) -> void:
 		panel._set_status("The host returned no audio.")
 		return
 	panel._sr = int(result.get("sample_rate", panel._sr))
-	# ...kept, so it is never asked for again ([TakeCache])
-	if not Settings.is_read_only():
-		TakeCache.put(String(meta.get("key", "")), wav, result)
-	_ready_takes.append({"wav": wav, "index": idx,
-		"spans": result.get("tokens", []), "phones": result.get("phones", [])})
-	_drain_ready()
+	# ...kept, so it is never asked for again ([TakeCache]): the worker's own copy of the reply, written as it reads the take
+	var key := "" if Settings.is_read_only() else String(meta.get("key", ""))
+	_land(wav, idx, result.get("tokens", []), result.get("phones", []), key,
+		result.duplicate(true) if not key.is_empty() else {})
 	_pump()
 
 
 ## A request the host could not make: its slot in the window is free again.
 func failed() -> void:
 	_in_flight = maxi(0, _in_flight - 1)
+
+
+## Chunk [param idx]'s take at [param wav], read on a worker: decoded ([method Splice.decode_wav], a loop over every
+## sample) and, under a [param key], kept with the host's [param reply] ([method TakeCache.put], which lists the cache).
+## [method _landed] takes it from there.
+func _land(wav: String, idx: int, spans: Array, phones: Array, key := "", reply := {}) -> void:
+	var box := [PackedFloat32Array()]
+	var read := func() -> void:
+		if not key.is_empty():
+			TakeCache.put(key, wav, reply)
+		box[0] = Splice.decode_wav(wav)
+	_landing.append({"box": box, "index": idx, "spans": spans, "phones": phones, "epoch": _epoch,
+		"task": WorkerThreadPool.add_task(read, true, "a reading's take")})
+
+
+## Every take a worker has finished reading, into the queue in order ([method _drain_ready]) - one asked for before a
+## re-pace is dropped - and every worker left behind by a Stop, waited for now it is done.
+func _landed() -> void:
+	for k in range(_left.size() - 1, -1, -1):
+		if WorkerThreadPool.is_task_completed(int(_left[k])):
+			WorkerThreadPool.wait_for_task_completion(int(_left[k]))
+			_left.remove_at(k)
+	var any := false
+	var i := 0
+	while i < _landing.size():
+		var l: Dictionary = _landing[i]
+		if not WorkerThreadPool.is_task_completed(int(l["task"])):
+			i += 1
+			continue
+		WorkerThreadPool.wait_for_task_completion(int(l["task"]))
+		_landing.remove_at(i)
+		if int(l["epoch"]) != _epoch:
+			continue
+		_ready_takes.append({"pcm": (l["box"] as Array)[0], "index": l["index"], "spans": l["spans"], "phones": l["phones"]})
+		any = true
+	if any:
+		_drain_ready()
+		_pump()
 
 
 # --- the take: joined in order ----------------------------------------------------------------
@@ -619,7 +756,7 @@ func _drain_ready() -> void:
 		var idx := int(take["index"])
 		_next_to_play += 1
 
-		var pcm := Splice.read_wav(String(take["wav"]))
+		var pcm: PackedFloat32Array = take.get("pcm", PackedFloat32Array())
 		if pcm.is_empty() or idx < 0 or idx >= chunks.size():
 			continue
 		var who := String((chunks[idx] as Dictionary).get("speaker", ""))
@@ -696,8 +833,9 @@ func words_for(idx: int, spans: Array) -> Array:
 # --- the ring: pushed a frame at a time, through the room -------------------------------------
 
 ## Feed the ring, every frame of a reading. The generator is the only thing keeping the session alive, so this
-## must never fall behind; it is a few array copies a frame.
+## must never fall behind; it is a few array copies a frame, the room's work a worker's ([method _pump_fx]).
 func tick(delta: float) -> void:
+	_landed()
 	if playback == null:
 		return
 	_tick_environment(delta)
@@ -719,47 +857,78 @@ func tick(delta: float) -> void:
 	if not chunks.is_empty() and _next_to_request < chunks.size():
 		_pump()
 
-	if _pending.size() - _read <= 0:
-		return
-	var room := int(playback.get_frames_available())
-	if room <= 0:
-		return
-	var avail := _fx_admit(_pending.size() - _read)
-	var n := mini(room, avail)
+	_pump_fx()
+	var n := mini(int(playback.get_frames_available()), _wet.size() - _wet_read)
 		# the place is rendered ahead on a worker ([method Soundscape.prefetch]); a frame takes at most half a second of
 		# it, so filling the ring at the start is spread over frames
 	if _env != null:
 		n = mini(n, panel._sr / 2)
 	if n <= 0:
 		return
-		# the ambience runs here rather than in the host: it is stateful across chunk boundaries, so a seam must not
-		# reset the echo tail or the ring
-		# ...the voices over this line, each where it sits ([ReadingJoin])
-	fx.side = _join.side_between(_pushed, _pushed + n, panel._cast.pan_of)
-	var buf: PackedVector2Array = fx.process_stereo(_pending.slice(_read, _read + n))
-		# ...and the place after it, so the room and the bed are the voice's and the wind is not
+	var buf := _wet.slice(_wet_read, _wet_read + n)
+		# the place after the room, so the room and the bed are the voice's and the wind is not
 	if _env != null:
 		buf = _env.mix(buf)
-	if _join.fade_at >= 0:
+	if _join.fade_at >= 0 and _pushed + n > _join.fade_at:
 		for i in n:
 			buf[i] *= _fade_gain(_pushed + i)
 	playback.push_buffer(buf)
 	_pushed += n
+	_wet_read += n
+	if _wet_read == _wet.size() or _wet_read > panel._sr:
+		_wet = _wet.slice(_wet_read)
+		_wet_read = 0
+
+
+## The next piece of the queue through the room, on a worker ([constant FX_PIECE]), and the piece before it, finished,
+## onto what waits for the ring. The ambience runs here rather than in the host: it is stateful across chunk
+## boundaries, so a seam must not reset the echo tail. Between two pieces the chain is this thread's: the marks the
+## next piece has reached are dialed in ([method _fx_admit]) and the voices over it laid beside it ([ReadingJoin]).
+## Never more than a piece past what the ring has room for, so a dial is heard as soon as the ring allows. The voice
+## is heard as it is made, so its workers are high priority: the pool keeps the rest (a bake, a set being built) to a
+## few of its threads, and a piece waiting behind one of those is a ring run dry.
+func _pump_fx() -> void:
+	if not _fx_task.is_empty():
+		if not WorkerThreadPool.is_task_completed(int(_fx_task["task"])):
+			return
+		WorkerThreadPool.wait_for_task_completion(int(_fx_task["task"]))
+		_wet.append_array((_fx_task["box"] as Array)[0])
+		_fx_task = {}
+		if not _dial.is_empty():
+			Delivery.apply_fx(fx, _dial)
+			_dial = {}
+	var piece_most := int(FX_PIECE * float(panel._sr))
+	var left := _pending.size() - _read
+	if left <= 0 or _wet.size() - _wet_read - int(playback.get_frames_available()) >= piece_most:
+		return
+	var n := mini(_fx_admit(left), piece_most)
+	if n <= 0:
+		return
+	var chain := fx
+	chain.side = _join.side_between(_through, _through + n, panel._cast.pan_of)
+	var piece := _pending.slice(_read, _read + n)
 	_read += n
-		# compact only when the consumed head is worth reclaiming, not every frame
-	if _read > 0 and (_read == _pending.size() or _read > 4 * panel._sr):
+	_through += n
+		# compact only when the consumed head is worth reclaiming: all of it, or most of what is held (a paused reading's
+		# queue is minutes long, and a copy of it every few seconds is a frame lost)
+	if _read == _pending.size() or (_read > 4 * panel._sr and _read * 2 > _pending.size()):
 		_pending = _pending.slice(_read)
 		_read = 0
+	var box := [PackedVector2Array()]
+	var run := func() -> void:
+		box[0] = chain.process_stereo(piece)
+	_fx_task = {"box": box, "n": n, "task": WorkerThreadPool.add_task(run, true, "a reading's room")}
 
 
-## The room changes at a frame, not at a chunk. Dial in every scheduled change the push has reached, and report
-## how many frames may go out before the next one. The coordinate is absolute frames pushed, the only clock these
-## marks can use: the ring runs seconds ahead of what is heard, but the chain transforms the samples at exactly
-## these positions on their way out. Cut short at the next mark rather than crossing it, or a buffer of one
-## speaker is read in the other's room. Split out of [method tick] because this arithmetic can be wrong by a buffer.
+## The room changes at a frame, not at a chunk. Dial in every scheduled change the chain has reached, and report
+## how many frames may go through it before the next one. The coordinate is absolute frames handed to the chain
+## ([member _through]), the only clock these marks can use: the ring runs seconds ahead of what is heard, but the
+## chain transforms the samples at exactly these positions on their way out. Cut short at the next mark rather than
+## crossing it, or a piece of one speaker is read in the other's room. Asked only while no piece is on the worker.
+## Split out of [method _pump_fx] because this arithmetic can be wrong by a buffer.
 func _fx_admit(avail: int) -> int:
 	var marks := _join.marks
-	while not marks.is_empty() and int((marks[0] as Dictionary)["at"]) <= _pushed:
+	while not marks.is_empty() and int((marks[0] as Dictionary)["at"]) <= _through:
 		var m: Dictionary = marks.pop_front()
 		if m.has("speaker"):
 			_fx_live_name = String(m["speaker"])
@@ -769,7 +938,7 @@ func _fx_admit(avail: int) -> int:
 			Delivery.near_to(fx, m["near"])
 	if marks.is_empty():
 		return avail
-	return mini(avail, maxi(0, int((marks[0] as Dictionary)["at"]) - _pushed))
+	return mini(avail, maxi(0, int((marks[0] as Dictionary)["at"]) - _through))
 
 
 ## The outro mark's fade at stream sample [param sample]: 1 before it starts, easing to 0 over
@@ -790,7 +959,28 @@ func live_fx() -> void:
 	if not _fx_live_name.is_empty() and _fx_live_name != panel._cast.tab_name():
 		return
 	_fx_live_name = panel._cast.tab_name()
-	Delivery.apply_fx(fx, panel._cast.slot_cfg(panel._cast.slot))
+	dial(panel._cast.slot_cfg(panel._cast.slot))
+
+
+## The live chain dialed to a voice's settings [param s] ([method Delivery.apply_fx]): now, or, while a piece is on
+## the worker (the chain is the worker's until it is back), when it is. The last one asked is the one dialed.
+func dial(s: Dictionary) -> void:
+	if _fx_task.is_empty():
+		Delivery.apply_fx(fx, s)
+	else:
+		_dial = s
+
+
+## Let go: every worker still on something of this reading's is waited for.
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_PREDELETE:
+		return
+	if not _fx_task.is_empty():
+		WorkerThreadPool.wait_for_task_completion(int(_fx_task["task"]))
+	for l in _landing:
+		WorkerThreadPool.wait_for_task_completion(int((l as Dictionary)["task"]))
+	for t in _left:
+		WorkerThreadPool.wait_for_task_completion(int(t))
 
 
 # --- the place under the voice ----------------------------------------------------------------

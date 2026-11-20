@@ -26,8 +26,12 @@ const BLURB := "Everything agents and tools make for this note, in one list. Gen
 const NAME_MOST := 124.0
 ## How far a group's rows stand in.
 const INDENT := 12.0
-## Rows ask the disk what exists, so four times a second, as the cards' rows always did.
+## How often the sections are asked for their rows while something is being made (seconds): four times a second, so a
+## step's progress is seen as it moves...
 const EVERY := 0.25
+## ...and while nothing is: a row then changes only where a person changed something on another card, and a list of
+## thirty rows made again is most of a frame of the app's thread.
+const EVERY_IDLE := 1.0
 ## The [Settings] section its groups' folds are kept in: the viewer's, never the note's.
 const FOLDS := "folds"
 
@@ -139,8 +143,8 @@ func _process(delta: float) -> void:
 	_t -= delta
 	if _t > 0.0:
 		return
-	_t = EVERY
 	refresh()
+	_t = EVERY if busy() else EVERY_IDLE
 
 
 ## A section, under the ones handed before it - the order of the note's cards, so what writes the words

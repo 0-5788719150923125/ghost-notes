@@ -58,14 +58,20 @@ const HEARD := "<!--\\s*heard\\s*:\\s*([A-Za-z_]+)\\s*-->"
 const SAY := "<!--\\s*say\\s*:\\s*([^>]*?)\\s*-->"
 
 static var _re := {}
+static var _re_lock := Mutex.new()
 
 
+## [param pattern] compiled, once. Asked from workers too (a reading planned off the app's thread), so the table
+## takes a lock.
 static func _rx(pattern: String) -> RegEx:
-	if not _re.has(pattern):
-		var r := RegEx.new()
+	_re_lock.lock()
+	var r: RegEx = _re.get(pattern)
+	if r == null:
+		r = RegEx.new()
 		r.compile(pattern)
 		_re[pattern] = r
-	return _re[pattern]
+	_re_lock.unlock()
+	return r
 
 
 ## A title as a key (a show's folder, a printing's file): lowercase words joined by dashes.

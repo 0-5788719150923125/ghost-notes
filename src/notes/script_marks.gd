@@ -282,7 +282,7 @@ const REGISTRY := {
 	"search": {
 		"label": "Search",
 		"group": "tablet",
-		"blurb": "Tablet: type this into a search box - the page's own, on a search engine, else the address bar - and the results page follows.",
+		"blurb": "Tablet: type this into a search box - the page's own, on a search engine, else the address bar (a blank tab's too) - and the results page follows.",
 		"before": "<!-- search: ", "fill": "what is the 7th realm", "after": " -->", "line": "own",
 		"modes": ["generative"],
 		"pattern": "<!--\\s*search\\s*:[^>]*-->",
@@ -290,7 +290,7 @@ const REGISTRY := {
 	"new_tab": {
 		"label": "New tab",
 		"group": "tablet",
-		"blurb": "Tablet: a pause to think, then a blank tab; the next web page is typed into it.",
+		"blurb": "Tablet: a pause to think, then a blank tab; the next web page is typed into it. A dispatch desk's tablet takes it too, between its page fences while it is up.",
 		"before": "<!-- new tab -->", "fill": "", "after": "", "line": "own",
 		"modes": ["generative"],
 		"pattern": "<!--\\s*new tab\\s*-->",
@@ -298,7 +298,7 @@ const REGISTRY := {
 	"back": {
 		"label": "Back",
 		"group": "tablet",
-		"blurb": "Tablet: back to the page before, scrolled where it was left. An unread page is glanced down first. Follow it with a mark, not text.",
+		"blurb": "Tablet: back to the page before, scrolled where it was left. An unread page is glanced down first. Follow it with a mark, not text. A dispatch desk's tablet takes it too, between its page fences while it is up, and the room may talk over the page come back to.",
 		"before": "<!-- back -->", "fill": "", "after": "", "line": "own",
 		"modes": ["generative"],
 		"pattern": "<!--\\s*back\\s*-->",
@@ -466,7 +466,7 @@ const REGISTRY := {
 	"reply": {
 		"label": "Reply",
 		"group": "dispatch",
-		"blurb": "Dispatch desk: the room's next words are typed into the phone that texted last (or the one named) as they are said, a key at a time under its message, and sent - the voice still says them.",
+		"blurb": "Dispatch desk: the room's next words are typed into the phone that texted last (or the one named) as they are said, a key at a time under its message, and sent - the voice still says them. reply: tablet types them into the message box at the foot of the tablet's page, and sends them.",
 		"before": "<!-- reply -->", "fill": "", "after": "", "line": "own",
 		"modes": ["generative"],
 		"pattern": "<!--\\s*reply\\s*(?::[^>]*)?-->",
@@ -586,10 +586,10 @@ const REGISTRY := {
 	"image_screen": {
 		"label": "Picture on a screen",
 		"group": "dispatch",
-		"blurb": "Dispatch desk: a picture on one of the desk's screens - feed, satellite or tv - until the next picture there or off. Painted by the Illustrations library from its words.",
+		"blurb": "Dispatch desk: a picture on one of the desk's screens - feed, satellite or tv - until the next picture there or off, the camera turning to it. Painted by the Illustrations library from its words. image (feed, unwatched) lands it with the camera left on what it was on.",
 		"before": "<!-- image (feed): ", "fill": "what the picture shows", "after": " -->", "line": "own",
 		"modes": ["generative"],
-		"pattern": "<!--\\s*image\\s*\\(\\s*(?:feed|satellite|tv)\\s*\\)\\s*:[^>]*-->",
+		"pattern": "<!--\\s*image\\s*\\(\\s*(?:feed|satellite|tv)\\s*(?:,[^)]*)?\\)\\s*:[^>]*-->",
 	},
 	"video_screen": {
 		"label": "Clip on a screen",
@@ -597,12 +597,12 @@ const REGISTRY := {
 		"blurb": "Dispatch desk: a moving picture on one of the desk's screens - feed, satellite or tv - looping under the screen's snow until the next picture there or off: the clip imported on the Pictures card for these words (the file name says which for the author). The screen's static until one is imported.",
 		"before": "<!-- video (tv): ", "fill": "dog.webm | a small dog spinning after its own tail", "after": " -->", "line": "own",
 		"modes": ["generative"],
-		"pattern": "<!--\\s*video\\s*\\(\\s*(?:feed|satellite|tv)\\s*\\)\\s*:[^>]*-->",
+		"pattern": "<!--\\s*video\\s*\\(\\s*(?:feed|satellite|tv)\\s*(?:,[^)]*)?\\)\\s*:[^>]*-->",
 	},
 	"terminal": {
 		"label": "Terminal",
 		"group": "dispatch",
-		"blurb": "Dispatch desk: the terminal's one program on a fixed screen, worked line by line, silent with the voice waiting: > a command typed on the command line (it opens the panel written next, else its key's); panel: id = NAME | LEFT | RIGHT a panel kept by its id and opened again as it last stood; keys:, type: (typed and said behind the keys; type (Name): in that voice), key: (typed, never said), show:, set: (a row changed in place), wait:, alert:, print, strike, clear, any desk mark; any other line a body line, {2} holding it part-drawn. The note's terminal: block gives its title, width and keys.",
+		"blurb": "Dispatch desk: the terminal's one program on a fixed screen, worked line by line, silent with the voice waiting: > a command typed on the command line (it opens the panel written next, else its key's); panel: id = NAME | LEFT | RIGHT a panel kept by its id and opened again as it last stood; keys:, type: (typed and said behind the keys; type (Name): in that voice), key: (typed, never said), show:, set: (a row changed in place; straight after its panel is come back to, there as it is drawn), wait:, alert:, print, strike, clear, any desk mark; any other line a body line, {2} holding it part-drawn. The note's terminal: block gives its title, width and keys.",
 		"before": "```terminal\n", "fill": "> 3\npanel: assets = ASSETS | 12 ON THE BOOKS\nAISLE ...... AISLE SEVEN\nkeys: X MENU\ntype: 22:54. Watcher in place.", "after": "\n```", "line": "own",
 		"modes": ["generative"],
 		"pattern": "(?m)^[ \\t]*```[ \\t]*terminal[ \\t]*\\n[\\s\\S]*?\\n[ \\t]*```[ \\t]*$",
@@ -618,7 +618,7 @@ const REGISTRY := {
 	"tablet": {
 		"label": "Tablet",
 		"group": "dispatch",
-		"blurb": "Dispatch desk: the tablet on the desk is picked up and held before the eye, its screen waking, until /tablet puts it back down dark. Its pages are page fences between the two.",
+		"blurb": "Dispatch desk: the tablet on the desk is picked up and held before the eye, its screen waking, until /tablet lays it back down, its screen left lit until it locks itself half a minute on. Its pages are page fences between the two.",
 		"before": "<!-- tablet -->", "fill": "", "after": "", "line": "own",
 		"modes": ["generative"],
 		"pattern": "<!--\\s*tablet\\s*-->",
@@ -626,7 +626,7 @@ const REGISTRY := {
 	"tablet_end": {
 		"label": "Put down",
 		"group": "dispatch",
-		"blurb": "Dispatch desk: the tablet is put back down on the desk, its screen dark.",
+		"blurb": "Dispatch desk: the tablet is laid back down on the desk, its screen left lit on its page until it locks itself half a minute on.",
 		"before": "<!-- /tablet -->", "fill": "", "after": "", "line": "own",
 		"modes": ["generative"],
 		"pattern": "<!--\\s*/\\s*tablet\\s*-->",
@@ -634,7 +634,7 @@ const REGISTRY := {
 	"page": {
 		"label": "Page",
 		"group": "dispatch",
-		"blurb": "Dispatch desk: a web page on the tablet while it is up, in the tablet's own markdown, its first line url: (or search:). Reached by tapping a link to it on the page up, else typed into the bar. Shown and never said: it scrolls to what the room says that is on it, else eases down the page.",
+		"blurb": "Dispatch desk: a web page on the tablet while it is up, in the tablet's own markdown, its first line url: (or search:). Browsed as the tablet browses: a page the one up links to is tapped, any other address typed into the bar; a search is typed into a search engine's own box, else into the bar; the address of the page up again reloads it. Shown and never said: it scrolls to what the room says that is on it, else eases down the page.",
 		"before": "```page\nurl: ", "fill": "notalone.board", "after": "\n\n# Not Alone\n\nA forum for people who are being followed.\n```", "line": "own",
 		"modes": ["generative"],
 		"pattern": "(?m)^[ \\t]*```[ \\t]*page[ \\t]*\\n[\\s\\S]*?\\n[ \\t]*```[ \\t]*$",

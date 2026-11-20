@@ -18,7 +18,8 @@ extends SceneTree
 ##   texted, still said (control: with no text before it, a warning);
 ## - the terminal, one block: the glass set as a fixed screen (title bar, header, body, keys spread, command line), panels
 ##   kept by id and opened again by a key as they last stood, typed lines kept with them, a digit's panel written after it,
-##   a series key, `set:` changing a row in place, `{N}` holding a line part-drawn, `wait:` in place of the read (the control:
+##   a series key, `set:` straight after its panel is come back to there as the panel is drawn (the control: on a panel that
+##   has been up, the row changed in place), `{N}` holding a line part-drawn, `wait:` in place of the read (the control:
 ##   with none, the panel is read), `clear`, the body scrolling past sixteen rows, a command that opens nothing an INVALID
 ##   OPTION and a warning, a strike taking the typed line off the glass, a print of what was typed (with none, the panel up); a
 ##   typed line naming an option chooses it - typed at the prompt, that row in inverse, read and thought over first, the camera
@@ -31,9 +32,16 @@ extends SceneTree
 ## - fades: the voice waits for them, what is marked in the black happens at once, the first ping after one has no track, a
 ##   fade up on a time; a note opening on one opens in the black with no breath before it (control: the fixture's breath);
 ##   a said line's time far off the clock is warned of (control: one in step is not);
+## - a picture on a screen told `unwatched` is the same picture, marked for the camera and painted as any other (controls: a
+##   word a picture is not told, and a picture over the whole screen told one, are each warned of);
 ## - the tablet: pages typed into the bar or tapped from the page up (or come back to), never said; a replay says the room's
 ##   earlier words again through the tablet (control: words never said are warned of); a clip on a screen is a picture with
 ##   its file, handed to the Pictures card as a clip;
+## - the tablet browsed as the tablet medium browses (tests/fixtures/dispatch_browsing.md): back to the page before in its
+##   tab and a link tapped from it, a new tab with the next address typed into it, a search typed into a search engine's own
+##   box at the tablet's pace and from an article into the bar (its results the engine's last used), a reply typed into the
+##   page's message box and that page loaded again (controls: back and new tab with the tablet down, a reply with no page
+##   up and a back with nothing behind it are each warned of and do nothing; a search with no page up goes in the bar);
 ## - gain, bell, lamp: the knob turns from three to its number and back with the voice waiting; the bell rings a half beat
 ##   before the block after it; the lamp is switched; none are said (controls: a gain with no number and a lamp neither on
 ##   nor off are said and do nothing);
@@ -51,6 +59,7 @@ extends SceneTree
 ## Run: godot --headless --path . --script tests/dispatch/dispatch_script_check.gd
 
 const FIXTURE := "res://tests/fixtures/dispatch_note.md"
+const BROWSING := "res://tests/fixtures/dispatch_browsing.md"
 
 var _fails: Array = []
 
@@ -236,12 +245,22 @@ func _init() -> void:
 		and DispatchTerminal.choice_row(pty["glass"], "ONE.") < 0,
 		"a typed [D] under its option chooses it - typed at the prompt, that row in inverse, read and thought over first (%.1f s), held after - the control: ONE. is typed into the body (%s)"
 		% [float(psess["rest"]), str(prows["chosen"])])
-	# a series key; set: a row changed in place; {N}: a line part-drawn
+	# a series key; set: straight after the panel is come back to, the row is there as the panel is drawn, never typed again
+	# (the control: on a panel that has been up a while, it is changed in place); {N}: a line part-drawn
 	var again: Dictionary = actions[_nth(actions, "session", 2)]
 	var reopened := DispatchTerminal.at(again["glass"], again["ops"], INF)
 	var rbody: PackedStringArray = DispatchTerminal.up(reopened)["body"]
-	var set_op: Dictionary = (again["ops"] as Array).filter(func(o: Dictionary) -> bool: return String(o["op"]) == "set")[0]
-	var mid_set := DispatchTerminal.at(again["glass"], again["ops"], float((set_op["back"] as PackedFloat32Array)[2]) + 0.001)
+	var came_back: Dictionary = (again["ops"] as Array).filter(func(o: Dictionary) -> bool: return String(o["op"]) == "open")[0]
+	var drawing := DispatchTerminal.at(again["glass"], again["ops"], float(came_back["t"]) + DispatchTerminal.LINE_EACH * 1.5)
+	_ok((again["ops"] as Array).filter(func(o: Dictionary) -> bool: return String(o["op"]) == "set").is_empty()
+		and int(drawing["drawn"]) == 2 and String((DispatchTerminal.up(drawing)["body"] as PackedStringArray)[1]) == "STATUS ...... LOOSE",
+		"a row set straight after its panel is come back to is there as the panel is drawn, never typed again (%s)"
+			% String((DispatchTerminal.up(drawing)["body"] as PackedStringArray)[1]))
+	var watched: Array = DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```terminal\n> x\npanel: record-1 = RECORD | A\nNAME ........ SUBJECT\n"
+		+ "STATUS ...... CONTAINED\n```\n\nThere.\n\n```terminal\nwait: 1\nset: STATUS ...... LOOSE\n```\n\nNow.\n")["actions"]
+	var changed: Dictionary = watched[_nth(watched, "session", 1)]
+	var set_op: Dictionary = (changed["ops"] as Array).filter(func(o: Dictionary) -> bool: return String(o["op"]) == "set")[0]
+	var mid_set := DispatchTerminal.at(changed["glass"], changed["ops"], float((set_op["back"] as PackedFloat32Array)[2]) + 0.001)
 	var line_op: Dictionary = (again["ops"] as Array).filter(func(o: Dictionary) -> bool: return String(o["op"]) == "line")[0]
 	var part := DispatchTerminal.at(again["glass"], again["ops"], float(line_op["t"]) + 1.0)
 	var whole := DispatchTerminal.at(again["glass"], again["ops"], float(line_op["t"]) + 2.1)
@@ -249,7 +268,7 @@ func _init() -> void:
 		"`> r` opens the series' first, as it last stood, and set: replaces the row beginning its label (%s)" % str(rbody))
 	_ok(String((DispatchTerminal.up(mid_set)["body"] as PackedStringArray)[1]).begins_with("STATUS ...... ") and String((DispatchTerminal.up(mid_set)["body"] as PackedStringArray)[1]) != "STATUS ...... CONTAINED"
 		and String((DispatchTerminal.up(mid_set)["body"] as PackedStringArray)[1]) != "STATUS ...... LOOSE",
-		"a row changing is seen to change: what differs backspaced, then typed (%s)" % String((DispatchTerminal.up(mid_set)["body"] as PackedStringArray)[1]))
+		"the control: on a panel that has been up, a row changing is seen to change: what differs backspaced, then typed (%s)" % String((DispatchTerminal.up(mid_set)["body"] as PackedStringArray)[1]))
 	_ok(Array(DispatchTerminal.up(part)["body"]).back() == "SEARCHING ...." and Array(DispatchTerminal.up(whole)["body"]).back() == "SEARCHING .... DONE",
 		"{2} holds a line part-drawn for two seconds, then the rest of it (%s / %s)" % [Array(DispatchTerminal.up(part)["body"]).back(), Array(DispatchTerminal.up(whole)["body"]).back()])
 	# a command that opens nothing; clear; the body scrolling; a print with nothing typed
@@ -357,10 +376,21 @@ func _init() -> void:
 	var twice_pages: Array = (twice["actions"] as Array).filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "page")
 	_ok(twice_pages.size() == 3 and String(twice_pages[1]["how"]) == "again" and str(twice["warnings"]).contains("tablet down"),
 		"a page come back to is reloaded, and a page with the tablet down is warned of (%s)" % str(twice["warnings"]))
+	_browsing()
 	var replayed := sp.find("<!-- speaker: Control -->\n<!-- heard: tablet -->")
 	_ok(replayed > 0 and sp.find("He is in the hall.", replayed) - replayed < 120 and spoken.count("hall") == 3, "a replay says the room's own words again through the tablet's speaker")
 	var unsaid := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n<!-- tablet -->\n\n<!-- replay: tablet | Never said. -->\n\n<!-- /tablet -->\n")
 	_ok(str(unsaid["warnings"]).contains("was not said"), "the control: a replay of words never said is warned of (%s)" % str(unsaid["warnings"]))
+	var page_src := "<!-- speaker: Control -->\n\nHi.\n\n<!-- tablet -->\n\n```page\nurl: a.example\n\n# A Site\n\nOne two three.\n\n%sFour five.\n```\n\nLook at this.\n\n<!-- /tablet -->\n"
+	var placed_p := DispatchScript.parse(page_src % "<!-- said: Look at this -->\n\n")
+	var unplaced := DispatchScript.parse(page_src % "")
+	var pinned: Array = (placed_p["actions"] as Array).filter(func(x: Dictionary) -> bool: return String(x["kind"]) == "page")
+	var free: Array = (unplaced["actions"] as Array).filter(func(x: Dictionary) -> bool: return String(x["kind"]) == "page")
+	var places: Array = pinned[0]["said"] if pinned.size() == 1 else []
+	_ok(places.size() == 1 and int(places[0]["before"]) == 5 and places[0]["words"] == DispatchScript.words_of("Look at this")
+			and (placed_p["tablet"]["words"] as Array).size() == (unplaced["tablet"]["words"] as Array).size()
+			and free.size() == 1 and (free[0]["said"] as Array).is_empty(),
+		"a page's said mark is a place on it for those words, after the words written above it, and never a word of the page (the control: a page with none has no place) (%s)" % str(places))
 	var clip: Dictionary = actions.filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "picture" and a.has("clip"))[0]
 	var clip_rows: Array = DispatchMedium.pictures_in(body).filter(func(im: Dictionary) -> bool: return im.has("clip"))
 	_ok(String(clip["screen"]) == "tv" and String(clip["clip"]) == "dog.webm" and clip_rows.size() == 1 and String(clip_rows[0]["key"]) == String(clip["key"])
@@ -389,6 +419,22 @@ func _init() -> void:
 	var full: Array = d["spans"]
 	_ok(full.size() == 1 and int(full[0]["to"]) > int(full[0]["from"]), "a picture over the whole screen spans its passage")
 	_ok(Manuscript.images(DispatchScript.pictures_only(body)).size() == 2, "every picture is handed to the painter")
+	# a picture told `unwatched` is the same picture on the same screen, kept so for the camera, and painted as any other (the
+	# controls: a word a picture is not told, and a picture over the whole screen told anything, are each warned of)
+	var aside := "<!-- speaker: Control -->\n\nHi.\n\n<!-- image (feed, unwatched): an empty aisle -->\n\n<!-- image (tv): a dog -->\n\n<!-- video (tv, unwatched): dog.webm | a dog spinning -->\n\nThere.\n"
+	var told := DispatchScript.parse(aside)
+	var pics: Array = (told["actions"] as Array).filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "picture")
+	_ok(pics.size() == 3 and bool(pics[0].get("unwatched", false)) and String(pics[0]["screen"]) == "feed"
+		and String(pics[0]["key"]) == Manuscript.image_key("an empty aisle") and is_equal_approx(float(pics[0]["rest"]), DispatchScript.PICTURE)
+		and not pics[1].has("unwatched") and bool(pics[2].get("unwatched", false)) and String(pics[2]["clip"]) == "dog.webm"
+		and (told["warnings"] as PackedStringArray).is_empty() and DispatchMedium.pictures_in(aside).size() == 3
+		and DispatchMedium.pictures_in(aside).any(func(im: Dictionary) -> bool: return String(im["key"]) == String(pics[0]["key"])),
+		"a picture told unwatched is the same picture on its screen, marked for the camera, and handed to the painter (%s)" % str(told["warnings"]))
+	var mistold := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n<!-- image (feed, sideways): an aisle -->\n\n<!-- image (full, unwatched): a hill -->\n\nThere.\n\n<!-- /image -->\n")
+	var mis: Array = (mistold["actions"] as Array).filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "picture")
+	_ok(mis.size() == 1 and not mis[0].has("unwatched") and (mistold["spans"] as Array).size() == 1
+		and str(mistold["warnings"]).contains("image (feed, sideways)") and str(mistold["warnings"]).contains("image (full, unwatched)"),
+		"the controls: a word a picture is not told, and a picture over the whole screen told one, are each warned of (%s)" % str(mistold["warnings"]))
 	_ok(DispatchScript.rehearsal(d).size() == spoken.size(), "a rehearsal times every spoken word")
 	# a synced note: its words come without their frontmatter, and the desk puts the note's back on them (the control: the
 	# words alone have no desk block or terminal keys)
@@ -462,6 +508,57 @@ func _init() -> void:
 		for f in _fails:
 			print("dispatch_script_check: FAIL  " + f)
 		quit(1)
+
+
+## The tablet browsed: how each page of the browsing note is reached, and the marks that do nothing said so.
+func _browsing() -> void:
+	var br := DispatchScript.parse(FileAccess.get_file_as_string(BROWSING))
+	var acts: Array = br["actions"]
+	var at: Array = []                    # the page actions, by index
+	for i in acts.size():
+		if String(acts[i]["kind"]) == "page":
+			at.append(i)
+	var hows: Array = at.map(func(i: int) -> String: return String(acts[i]["how"]))
+	_ok(hows == ["type", "tap", "back", "tap", "tab", "type", "search", "tap", "search", "back", "back", "back", "type", "again"]
+		and (br["warnings"] as PackedStringArray).is_empty() and (br["pages"] as Array).size() == 9 and not (br["spoken"] as PackedStringArray).has("forum"),
+		"the tablet is browsed as the tablet medium browses, its pages never said (%s, %s)" % [str(hows), str(br["warnings"])])
+	var back: Dictionary = acts[at[2]]
+	_ok(int(back["page"]) == int(acts[at[0]]["page"]) and int(back["resume"]) == int(at[0]) and int(back["behind"]) == 0
+		and is_equal_approx(float(back["rest"]), DispatchScript.TABLET_AGAIN) and int(acts[at[1]]["behind"]) == 1,
+		"back is the page before in its tab, come back to as the action that had it up left it, nothing behind it again")
+	var tab: Dictionary = acts[at[4]]
+	_ok(int(tab["page"]) == -1 and int(tab["tab"]) == 1 and tab["tabs"] == [2, -1] and int(tab["behind"]) == 0
+		and is_equal_approx(float(tab["rest"]), DispatchScript.TABLET_TAB) and bool(acts[at[5]]["bar"]) and acts[at[5]]["tabs"] == [2, 3],
+		"a new tab is a blank tab of its own beside the first, the next address typed into its bar (%s)" % str(tab["tabs"]))
+	var boxed: Dictionary = acts[at[6]]
+	var barred: Dictionary = acts[at[8]]
+	var lazy := float(TabletScript.char_times("how many are there")["how many are there".length()])
+	_ok(not bool(boxed["bar"]) and String(boxed["text"]) == "how many are there" and String(boxed["url"]).begins_with("ducks.tom/")
+		and is_equal_approx(float(boxed["rest"]), DispatchScript.TABLET_BOX + DispatchScript.TABLET_HAND + lazy + DispatchScript.TABLET_ENTER
+			+ DispatchScript.TABLET_GO + DispatchScript.TABLET_LOOK),
+		"a search on a search engine's page is typed into its own box, at the tablet medium's pace (%.2f s)" % float(boxed["rest"]))
+	_ok(bool(barred["bar"]) and String(barred["text"]) == "who counts them" and String(barred["url"]).begins_with("ducks.tom/")
+		and is_equal_approx(float(barred["rest"]), DispatchScript.TABLET_GO + DispatchScript.TABLET_LOOK + DispatchScript.TABLET_KEY * 15.0),
+		"the control: a search from an article is typed into the address bar, its results the engine's last used (%s)" % String(barred["url"]))
+	var posts: Array = acts.filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "post")
+	var doc_pages: Array = (br["tablet"] as Dictionary)["pages"]
+	_ok(posts.size() == 1 and String(posts[0]["text"]) == "Be patient tonight." and int(posts[0]["page"]) == 7 and (br["spoken"] as PackedStringArray).has("patient")
+		and int(posts[0]["to"]) - int(posts[0]["from"]) == 3 and not acts.any(func(a: Dictionary) -> bool: return String(a["kind"]) == "reply")
+		and String(acts[acts.find(posts[0]) + 1]["kind"]) == "sent" and int(acts[acts.find(posts[0]) + 1]["after"]) == int(posts[0]["to"])
+		and is_equal_approx(float(acts[acts.find(posts[0]) + 1]["rest"]), DispatchScript.TABLET_SENT)
+		and bool(doc_pages[7].get("reply", false)) and bool(doc_pages[8].get("reply", false)) and not bool(doc_pages[0].get("reply", false))
+		and int(acts[at[13]]["behind"]) == int(acts[at[12]]["behind"]),
+		"reply: tablet types the room's next words into the page's message box, still said, and the voice waits for it to be sent; the page loaded again keeps its box and adds nothing behind it")
+	var lost := DispatchScript.parse("<!-- speaker: Control -->\n\n<!-- back -->\n\n<!-- new tab -->\n\n<!-- tablet -->\n\n<!-- new tab -->\n\n"
+		+ "<!-- reply: tablet -->\n\nHi.\n\n```page\nsearch: who is it\n```\n\n<!-- back -->\n\n<!-- /tablet -->\n\nBye.\n")
+	var lost_pages: Array = (lost["actions"] as Array).filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "page")
+	var said := "\n".join(lost["warnings"])
+	_ok(lost_pages.size() == 1 and String(lost_pages[0]["how"]) == "search" and bool(lost_pages[0]["bar"])
+		and String(lost_pages[0]["url"]).begins_with(TabletScript.ENGINE + "/")
+		and (lost["warnings"] as PackedStringArray).size() == 4 and said.contains("back: the tablet is down") and said.contains("new tab: the tablet is down")
+		and said.contains("reply: tablet with no page up") and said.contains("back: nothing behind")
+		and not (lost["actions"] as Array).any(func(a: Dictionary) -> bool: return String(a["kind"]) == "post"),
+		"the controls: back and a new tab with the tablet down, a reply with no page up and a back with nothing behind it are warned of and do nothing; a new tab on the blank tab it wakes on is nothing; a search with no page up goes in the bar (%s)" % said)
 
 
 func _ok(cond: bool, what: String) -> void:

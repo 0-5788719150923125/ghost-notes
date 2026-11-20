@@ -25,6 +25,10 @@ class_name Illustrations
 ## painted as a loop, one sheet of cells cut into frames ([method generate], [method _keep_loop]). Its frames are a version
 ## like any other, the first one its still.
 ##
+## A version can be shown flipped left to right ([method set_flipped]): a post-process, its mirrored copy kept beside what
+## was made, which is never changed. [method path_for] and [method clip_of] hand out the copy, so whatever shows a picture
+## shows it flipped.
+##
 ## Settings is reached by name at runtime so this file loads in a bare `--script` gate where no
 ## autoload exists (see [method use_for_test]).
 
@@ -72,8 +76,11 @@ static func use_for_test(store := {}, read_only := false) -> void:
 	_queue = []
 	_errors = {}
 	_decoding = {}
+	for file in _flipping.keys():
+		_stop_flip(String(file))
 	_chapter = []
 	_memo = {}
+	_held = {}
 
 
 ## The chapter's pictures in reading order ([method Manuscript.images] rows): what "the pictures before
@@ -97,6 +104,19 @@ static func _settings() -> Node:
 ## a value they read write it back (_put_entry, set_*).
 static var _memo := {}
 
+## What was last found on disk, and made of it: which of a picture's versions and which reference files are there, and
+## the look's signature. The Pipeline card lists every picture four times a second, and each row asked the disk about
+## every version some twenty times. This library makes and deletes its own files and writes its own section, so what is
+## held stands until it writes ([method _write]); a file taken away from outside is found gone when the window is come
+## back to ([method look_again], from [method pump]).
+static var _held := {}
+static var _focused := true
+
+
+## Look at the disk again at the next ask: for whoever changes a picture's files without writing its record.
+static func look_again() -> void:
+	_held = {}
+
 static func _read(key: String, dflt: Variant) -> Variant:
 	if _memo.has(key):
 		return _memo[key]
@@ -115,6 +135,7 @@ static func _write(key: String, value: Variant) -> void:
 	if read_only():
 		return
 	_memo[key] = value
+	_held = {}
 	if _test_active:
 		_test_store[key] = value.duplicate(true) if (value is Dictionary or value is Array) else value
 		return
@@ -175,11 +196,14 @@ static func set_style(text: String, kind := "image") -> void:
 ## The reference images for [param kind], as `user://` paths of the copies this library holds. Per kind,
 ## like the style. A library from before there were kinds held one list: the pictures'.
 static func references(kind := "image") -> Array:
-	var out: Array = []
-	for p in (_all_refs().get(kind, []) as Array):
-		if FileAccess.file_exists(String(p)):
-			out.append(String(p))
-	return out
+	var held := "refs|" + kind
+	if not _held.has(held):
+		var out: Array = []
+		for p in (_all_refs().get(kind, []) as Array):
+			if FileAccess.file_exists(String(p)):
+				out.append(String(p))
+		_held[held] = out
+	return (_held[held] as Array).duplicate()
 
 
 static func _all_refs() -> Dictionary:
@@ -283,12 +307,16 @@ static func look_signature(style_text: String, refs: Array) -> String:
 ## The look a [param kind] of picture is made under now. The chain of earlier pictures is not part of
 ## it: rerolling the first picture would otherwise mark every later one stale.
 static func current_signature(kind := "image") -> String:
+	var held := "signature|" + kind
+	if _held.has(held):
+		return _held[held]
 	# an edited reference instruction changes the look; the default does not
 	var extra := ""
 	for which in ["references", "self_reference"]:
 		if not String(_all_prompts(which).get(kind, "")).is_empty():
 			extra += "|" + ref_prompt(which, kind)
-	return look_signature(style(kind) + extra, references(kind))
+	_held[held] = look_signature(style(kind) + extra, references(kind))
+	return _held[held]
 
 
 ## How the attachments are to be used, per kind and per group - `references` (the author's reference
@@ -546,13 +574,16 @@ static func _put_entry(key: String, e: Dictionary) -> void:
 	_write("index", idx)
 
 
-## The versions that still exist on disk, oldest first.
+## The versions that still exist on disk, oldest first: the entry's own records, in a list of the caller's.
 static func versions(key: String) -> Array:
-	var out: Array = []
-	for v in (entry(key).get("versions", []) as Array):
-		if v is Dictionary and FileAccess.file_exists(String((v as Dictionary).get("file", ""))):
-			out.append(v)
-	return out
+	var held := "versions|" + key
+	if not _held.has(held):
+		var out: Array = []
+		for v in (entry(key).get("versions", []) as Array):
+			if v is Dictionary and FileAccess.file_exists(String((v as Dictionary).get("file", ""))):
+				out.append(v)
+		_held[held] = out
+	return (_held[held] as Array).duplicate()
 
 
 static func current_index(key: String) -> int:
@@ -562,12 +593,13 @@ static func current_index(key: String) -> int:
 	return clampi(int(entry(key).get("current", n - 1)), 0, n - 1)
 
 
-## The picture currently chosen for [param key], absolute, or "" when there is none yet.
+## The picture currently chosen for [param key] as it is shown (its mirrored copy where it is flipped), absolute, or ""
+## when there is none yet.
 static func path_for(key: String) -> String:
 	var i := current_index(key)
 	if i < 0:
 		return ""
-	return ProjectSettings.globalize_path(String((versions(key)[i] as Dictionary)["file"]))
+	return ProjectSettings.globalize_path(_shown(versions(key)[i]))
 
 
 static func select_version(key: String, i: int) -> void:
@@ -591,6 +623,8 @@ static func delete_version(key: String, i: int) -> bool:
 	if i < 0 or i >= vs.size():
 		return false
 	var file := String((vs[i] as Dictionary)["file"])
+	_stop_flip(file)
+	_drop_mirror(vs[i])
 	if (vs[i] as Dictionary).has("clip"):
 		_remove_tree(ProjectSettings.globalize_path(file.get_base_dir()))     # a clip's frames are its folder
 	else:
@@ -715,6 +749,12 @@ static func stop(keys: Array) -> void:
 ## Start what fits, notice what finished. Called from main._process and from the panel (a job is a
 ## subprocess and something with a frame has to see it end).
 static func pump() -> void:
+	# come back to (from a file manager, say): what is on disk is looked at again
+	var tree := Engine.get_main_loop() as SceneTree
+	var focused := tree != null and tree.root.has_focus()
+	if focused and not _focused:
+		look_again()
+	_focused = focused
 	if read_only():
 		return
 	for c in PageCapture.pump():
@@ -727,6 +767,7 @@ static func pump() -> void:
 		if err.is_empty():
 			print("ghost: page %s captured" % String(c["url"]))
 	_advance_clips()
+	_advance_flips()
 	_advance_jobs()
 	while _jobs.size() < MAX_JOBS:
 		var i := _next_startable()
@@ -990,8 +1031,9 @@ static func import_clip(image: Dictionary, path: String) -> String:
 	return ""
 
 
-## [param key]'s current version as a clip: `{dir (absolute), fps, frames, size: Vector2i, sound}` (`sound` an
-## absolute path, there only when the video had sound); {} when the current version is a still or there is none.
+## [param key]'s current version as a clip: `{dir (absolute), fps, frames, size: Vector2i, sound}` (`dir` the folder
+## its frames are shown from, the mirrored ones where it is flipped; `sound` an absolute path, there only when the video
+## had sound); {} when the current version is a still or there is none.
 static func clip_of(key: String) -> Dictionary:
 	var i := current_index(key)
 	if i < 0:
@@ -1000,13 +1042,13 @@ static func clip_of(key: String) -> Dictionary:
 	var c: Variant = v.get("clip")
 	if not (c is Dictionary):
 		return {}
-	var dir := ProjectSettings.globalize_path(String(v["file"]).get_base_dir())
+	var made := ProjectSettings.globalize_path(String(v["file"]).get_base_dir())
 	var wh: Array = (c as Dictionary).get("size", [0, 0])
-	var out := {"dir": dir, "fps": int((c as Dictionary).get("fps", CLIP_FPS)),
-		"frames": int((c as Dictionary).get("frames", 0)),
+	var out := {"dir": ProjectSettings.globalize_path(_shown(v).get_base_dir()),
+		"fps": int((c as Dictionary).get("fps", CLIP_FPS)), "frames": int((c as Dictionary).get("frames", 0)),
 		"size": Vector2i(int(wh[0]), int(wh[1])) if wh.size() >= 2 else Vector2i.ZERO}
-	if (c as Dictionary).has("sound") and FileAccess.file_exists(dir.path_join(String(c["sound"]))):
-		out["sound"] = dir.path_join(String(c["sound"]))
+	if (c as Dictionary).has("sound") and FileAccess.file_exists(made.path_join(String(c["sound"]))):
+		out["sound"] = made.path_join(String(c["sound"]))
 	return out
 
 
@@ -1118,6 +1160,157 @@ static func _keep_loop(key: String, img: Image, job: Dictionary) -> String:
 	_keep_version(key, {"sig": String(job.get("sig", "")), "backend": String(job.get("backend", "")), "clip": clip, "file": file,
 		"loop": LOOP_SHEET}, String(job.get("description", "")), LOOP)
 	return ""
+
+
+# --- flipped -----------------------------------------------------------------
+
+## A version shown flipped says `flip` in its record, and its mirrored copy is beside what was made: `vNNN.flip.png`
+## for a picture, every frame under `vNNN/flip/` for a clip. The copy is there only while its version is flipped, and
+## is written on a worker: the record says `flip` once [method pump] sees it whole.
+const FLIP_PNG := ".flip.png"
+const FLIP_DIR := "flip"
+## How well a clip's mirrored frames are kept (JPEG quality).
+const FLIP_JPG := 0.95
+
+## A version's `file` -> {key, on, box, task, of}, for the mirrored copies being written now: `on` whether it is still
+## wanted, `box` the worker's [done, stop], `of` the version's record as it was asked.
+static var _flipping := {}
+
+
+## Show [param key]'s current picture mirrored left to right ([param on]), or as it was made: what was painted or
+## imported is kept, and nothing is asked of a painter. Each version is flipped by itself. "" when done or begun, else
+## why not.
+static func set_flipped(key: String, on: bool) -> String:
+	if read_only():
+		return "this session is read-only (a render or a probe) - nothing is flipped here"
+	var i := current_index(key)
+	if i < 0:
+		return "there is no picture to flip"
+	var v: Dictionary = versions(key)[i]
+	var file := String(v["file"])
+	if _flipping.has(file):
+		(_flipping[file] as Dictionary)["on"] = on
+	if not on:
+		if v.has("flip"):
+			v.erase("flip")
+			_put_entry(key, entry(key))
+			if not _flipping.has(file):
+				_drop_mirror(v)
+			revision += 1
+		return ""
+	if _flipping.has(file) or is_flipped(key):
+		return ""
+	var from := ProjectSettings.globalize_path(file)
+	var to := ProjectSettings.globalize_path(_mirror_of(v))
+	var pairs: Array = [[from, to]]
+	if v.has("clip"):
+		DirAccess.make_dir_recursive_absolute(to.get_base_dir())
+		pairs = []
+		for n in int((v["clip"] as Dictionary).get("frames", 0)):
+			pairs.append([from.get_base_dir().path_join(CLIP_FRAME % n), to.get_base_dir().path_join(CLIP_FRAME % n)])
+	var box := [false, false]
+	_flipping[file] = {"key": key, "on": true, "box": box, "of": v.duplicate(true),
+		"task": WorkerThreadPool.add_task(func() -> void: _mirror(pairs, box), false, "a picture flipped")}
+	return ""
+
+
+## Whether [param key]'s current picture is shown mirrored.
+static func is_flipped(key: String) -> bool:
+	var i := current_index(key)
+	if i < 0:
+		return false
+	var v: Dictionary = versions(key)[i]
+	return _shown(v) != String(v["file"])
+
+
+## Whether [param key]'s current picture is being mirrored now, to be shown so.
+static func flipping(key: String) -> bool:
+	var i := current_index(key)
+	if i < 0:
+		return false
+	var f: Dictionary = _flipping.get(String((versions(key)[i] as Dictionary)["file"]), {})
+	return bool(f.get("on", false))
+
+
+## The file version [param v] shows: its mirrored copy where it says `flip` and the copy is there, else what was made.
+## Whether the copy is there is held ([member _held]): a record says `flip`, or stops saying it, with a write.
+static func _shown(v: Dictionary) -> String:
+	var file := String(v["file"])
+	if not bool(v.get("flip", false)):
+		return file
+	var held := "shown|" + file
+	if not _held.has(held):
+		var copy := _mirror_of(v)
+		_held[held] = copy if FileAccess.file_exists(copy) else file
+	return _held[held]
+
+
+## Where version [param v]'s mirrored copy of its `file` is kept.
+static func _mirror_of(v: Dictionary) -> String:
+	var file := String(v.get("file", ""))
+	if v.has("clip"):
+		return file.get_base_dir().path_join(FLIP_DIR).path_join(file.get_file())
+	return file.get_basename() + FLIP_PNG
+
+
+## Each of [param pairs] (`[from, to]`, absolute) written mirrored left to right: [param box][0] says whether all were,
+## and it stops once [param box][1] is set. A pure function of what it is handed, for a worker.
+static func _mirror(pairs: Array, box: Array) -> void:
+	for p in pairs:
+		if bool(box[1]):
+			return
+		var img := Image.load_from_file(String(p[0]))
+		if img == null or img.is_empty():
+			return
+		img.flip_x()
+		var to := String(p[1])
+		if (img.save_jpg(to, FLIP_JPG) if to.get_extension() == "jpg" else img.save_png(to)) != OK:
+			return
+	box[0] = true
+
+
+## Notice which mirrored copies are written: a version still wanted flipped says `flip` from here, and any other copy
+## is dropped.
+static func _advance_flips() -> void:
+	for file in _flipping.keys():
+		var f: Dictionary = _flipping[file]
+		if not WorkerThreadPool.is_task_completed(int(f["task"])):
+			continue
+		WorkerThreadPool.wait_for_task_completion(int(f["task"]))
+		_flipping.erase(file)
+		var key := String(f["key"])
+		var written := bool((f["box"] as Array)[0])
+		var kept := false
+		for v in (entry(key).get("versions", []) as Array):
+			if written and bool(f["on"]) and v is Dictionary and String((v as Dictionary).get("file", "")) == String(file):
+				(v as Dictionary)["flip"] = true
+				_put_entry(key, entry(key))
+				kept = true
+		if not kept:
+			_drop_mirror(f["of"])
+			if bool(f["on"]):
+				push_warning("ghost: illustration %s could not be flipped" % key)
+		revision += 1
+
+
+## Stop the mirrored copy of the version whose `file` is [param file] being written, and drop what was.
+static func _stop_flip(file: String) -> void:
+	if not _flipping.has(file):
+		return
+	var f: Dictionary = _flipping[file]
+	(f["box"] as Array)[1] = true
+	WorkerThreadPool.wait_for_task_completion(int(f["task"]))
+	_flipping.erase(file)
+	_drop_mirror(f["of"])
+
+
+## Version [param v]'s mirrored copy off the disk.
+static func _drop_mirror(v: Dictionary) -> void:
+	var copy := ProjectSettings.globalize_path(_mirror_of(v))
+	if v.has("clip"):
+		_remove_tree(copy.get_base_dir())
+	elif FileAccess.file_exists(copy):
+		DirAccess.remove_absolute(copy)
 
 
 ## Stop [param key]'s decode and drop what it wrote.

@@ -8,6 +8,11 @@ extends SceneTree
 ## instruction; a cache key that changes when a comment is re-wrapped; a reroll that replaces instead of adding a
 ## version; an output resolver that picks up a png from a different run; and a read-only process (a render, a
 ## probe) that starts jobs or writes the index.
+##
+## A flip is a post-process ([method Illustrations.set_flipped]): the picture served is a mirrored copy written away
+## from the app's thread, served only once it is whole; what was made is byte for byte as it was (control: its left is
+## still its left); a version is flipped by itself; unflipped, the copy is gone; a clip's every frame is mirrored; a
+## deleted version takes its copy; a read-only session refuses.
 
 var _fails := 0
 
@@ -16,6 +21,14 @@ func _check(ok: bool, what: String) -> void:
 	print(("  ok    " if ok else "  FAIL  ") + what)
 	if not ok:
 		_fails += 1
+
+
+## Until [param key]'s mirrored copy is written (a guard against a hang, never a measure of the machine).
+func _flipped(I, key: String) -> void:
+	var until := Time.get_ticks_msec() + 60000
+	while I.flipping(key) and Time.get_ticks_msec() < until:
+		I._advance_flips()
+		OS.delay_msec(2)
 
 
 func _init() -> void:
@@ -288,6 +301,62 @@ func _init() -> void:
 	_check(I.is_imported(ik), "...and stepping back reaches the import")
 	_check(I.import_file({"key": ik}, dir.path_join("nothing-here.png")) != "", "a file that is not there is refused")
 
+	print("-- flipped")
+	var fk := "flipk"
+	var halves := Image.create(8, 4, false, Image.FORMAT_RGB8)
+	halves.fill_rect(Rect2i(0, 0, 4, 4), Color(1, 0, 0))
+	halves.fill_rect(Rect2i(4, 0, 4, 4), Color(0, 0, 1))
+	var hsrc := dir.path_join("halves.png")
+	halves.save_png(hsrc)
+	var fim := {"key": fk, "prompt": "red on the left, blue on the right", "placement": "inline"}
+	I.import_file(fim, hsrc)
+	var plain: String = I.path_for(fk)
+	var plain_bytes := FileAccess.get_file_as_bytes(plain)
+	var fr: int = I.revision
+	_check(I.set_flipped(fk, true) == "" and I.flipping(fk) and not I.is_flipped(fk) and I.path_for(fk) == plain,
+		"a flip asked for is served as made until its copy is written")
+	_flipped(I, fk)
+	var mirror: String = I.path_for(fk)
+	var seen := Image.load_from_file(mirror)
+	_check(I.is_flipped(fk) and mirror != plain and seen != null and seen.get_pixel(0, 0).b > 0.9 and seen.get_pixel(7, 0).r > 0.9,
+		"flipped, the picture served is mirrored left to right")
+	_check(FileAccess.get_file_as_bytes(plain) == plain_bytes and Image.load_from_file(plain).get_pixel(0, 0).r > 0.9,
+		"...and what was made is kept as it was (the control: its left is still red)")
+	_check(I.revision > fr, "...and the pages are told to redraw")
+	I.import_file(fim, hsrc)
+	_check(I.versions(fk).size() == 2 and not I.is_flipped(fk), "a version is flipped by itself: the next one is as made")
+	I.select_version(fk, 0)
+	_check(I.is_flipped(fk) and I.path_for(fk) == mirror, "...and stepping back reaches the flipped one")
+	_check(I.set_flipped(fk, false) == "" and not I.is_flipped(fk) and I.path_for(fk) == plain and not FileAccess.file_exists(mirror),
+		"unflipped, it is served as made and the copy is gone")
+	I.set_flipped(fk, true)
+	_flipped(I, fk)
+	_check(I.is_flipped(fk) and I.delete_version(fk, 0) and not FileAccess.file_exists(mirror) and not FileAccess.file_exists(plain)
+		and not I.is_flipped(fk), "deleting a flipped version takes its copy too")
+	# a clip: a painted loop whose every cell is red on the left
+	var ck := "flipclip"
+	var cells: Vector2i = I.LOOP_CELLS
+	var sheet := Image.create(1536, 1024, false, Image.FORMAT_RGB8)
+	var cw := 1536 / cells.x
+	var ch := 1024 / cells.y
+	for n in cells.x * cells.y:
+		sheet.fill_rect(Rect2i((n % cells.x) * cw, (n / cells.x) * ch, cw / 2, ch), Color(1, 0, 0))
+		sheet.fill_rect(Rect2i((n % cells.x) * cw + cw / 2, (n / cells.x) * ch, cw / 2, ch), Color(0, 0, 1))
+	I._keep_loop(ck, sheet, {"sig": "", "backend": "test", "description": "a loop"})
+	var made: Dictionary = I.clip_of(ck)
+	I.set_flipped(ck, true)
+	_flipped(I, ck)
+	var turned: Dictionary = I.clip_of(ck)
+	var every := int(turned.get("frames", 0)) == cells.x * cells.y and String(turned.get("dir", "")) != String(made.get("dir", ""))
+	for n in int(turned.get("frames", 0)):
+		var frame := Image.load_from_file(I.clip_frame(turned, n))
+		every = every and frame != null and frame.get_pixel(2, 2).b > 0.6 and frame.get_pixel(frame.get_width() - 3, 2).r > 0.6
+	var was := Image.load_from_file(I.clip_frame(made, 0))
+	_check(every and I.path_for(ck) == I.clip_frame(turned, 0) and was != null and was.get_pixel(2, 2).r > 0.6,
+		"a clip flipped plays every frame mirrored, its still the first of them (the control: the frames made are as they were)")
+	_check(I.delete_version(ck, 0) and not DirAccess.dir_exists_absolute(String(made.get("dir", ""))),
+		"deleting a flipped clip takes its whole folder")
+
 	print("-- read-only")
 	var ro := {}
 	I.use_for_test(ro, true)
@@ -297,6 +366,7 @@ func _init() -> void:
 	I.set_style("changed")
 	I.add_references([files[0]])
 	_check(I.import_file({"key": "k"}, files[0]) != "", "a read-only session refuses an import")
+	_check(I.set_flipped(ik, true) != "" and not I.flipping(ik), "a read-only session refuses a flip")
 	_check(ro.is_empty(), "...and writes nothing")
 
 	print("illustrations_check: %s" % ("PASS" if _fails == 0 else "%d FAILED" % _fails))

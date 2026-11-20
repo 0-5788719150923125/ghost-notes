@@ -25,6 +25,7 @@ signal noted(msg: String)
 
 var _list: IllustrationPanel
 var _body := ""
+var _followed := false         # the list has followed [member _body] as it stands
 var _medium := ""
 var _look_t := 0.0
 var _card: Control = null      # the card it stands on, hidden while the medium shows no pictures
@@ -95,8 +96,12 @@ func pipeline() -> PipelineSection:
 
 # --- what it follows ---------------------------------------------------------------------------------------------------
 
-## The note's words, whenever the reading reads them (on every pause in typing): the list follows them.
+## The note's words, whenever the reading reads them (on every pause in typing, every Play and every scrub): the
+## list follows them where they have changed. Finding a format's pictures is a walk of the whole note, and a list
+## built again loses a click on its way to one of its buttons.
 func set_script_text(body: String) -> void:
+	if _followed and body == _body:
+		return
 	_body = body
 	_follow(true)
 
@@ -111,6 +116,7 @@ func _follow(again: bool) -> void:
 	var listed := Medium.uses(med, "illustrations")
 	_list.visible = listed
 	_list.set_pictures(Medium.pictures_of(med, _body) if listed else [])
+	_followed = true
 	_stand()
 
 

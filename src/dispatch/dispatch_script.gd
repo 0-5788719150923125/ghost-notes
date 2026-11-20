@@ -19,7 +19,8 @@ class_name DispatchScript
 ##                                     to be read: the words on its screen, never said or captioned. It goes home after,
 ##                                     unless it texts again in a moment.
 ##     <!-- reply -->, <!-- reply: AISLE -->   the room's next words are typed into that phone (the last to text) as they are
-##                                     said, a key at a time, under the message, and sent.
+##                                     said, a key at a time, under the message, and sent. `reply: tablet` types them into
+##                                     the message box at the foot of the tablet's page as they are said, and sends them.
 ##     <!-- ping: a place | 110, 2.9 -->   the target comes to that place on the radar: a ping, the place written beside
 ##                                     the blip (the first: the radar finds him there). The numbers place it as a radar
 ##                                     reports a contact: bearing in degrees clockwise from the scope's top, range in range
@@ -43,18 +44,32 @@ class_name DispatchScript
 ##     <!-- live: tv -->               that screen shows this desk, live, seen from just behind the empty chair (words
 ##                                     after a comma say so for a reader: `live: tv, this desk from behind the chair`);
 ##                                     `live: tablet` plays it into the player on the tablet's page.
-##     <!-- tablet --> ... <!-- /tablet -->   the tablet is picked up and held before the eye, its screen waking, and put
-##                                     back down dark. Each ```page fence while it is up is a page, in the tablet medium's
-##                                     own markdown ([TabletScript]), its first line `url: address` or `search: words`:
-##                                     reached by tapping a link to it on the page up, else typed into the address bar.
-##                                     Shown and never said; it follows the room's words, scrolling what is said into
-##                                     view, else easing down the page. `<!-- player -->` on a page is a video player.
+##     <!-- tablet --> ... <!-- /tablet -->   the tablet is picked up and held before the eye, its screen waking, and laid
+##                                     back down unhurried, its screen left lit until it locks itself half a minute on, to
+##                                     come back up on the page it was left on. Each ```page fence
+##                                     while it is up is a page, in the tablet medium's own markdown ([TabletScript]), its
+##                                     first line `url: address` or `search: words`. It is browsed as the tablet medium
+##                                     browses ([method browsing]): a page the one up links to is tapped, any other address
+##                                     typed into the bar; a search is typed into the box of a search engine's page (a page
+##                                     that is little but its name), else into the bar; the address of the page up again
+##                                     is that page reloaded. Shown and never said; it follows the room's words, scrolling
+##                                     what is said into view, else easing down the page. `<!-- player -->` on a page is a
+##                                     video player. `<!-- said: words -->` on a line of a page, over a picture or a
+##                                     paragraph: the page is brought there as the room says those words, and stays;
+##                                     a page with one goes only where they say, its top until the first (what is said
+##                                     over it is narration, never read off it).
+##     <!-- back -->                   the tablet's back arrow is tapped: the page before in this tab, scrolled where it
+##                                     was left (with none behind it, warned of).
+##     <!-- new tab -->                a blank tab is opened on the tablet; the next page is typed into its bar.
 ##     <!-- replay: tablet | words --> the room's own earlier words said again through the tablet's speaker, as the
 ##                                     video's soundtrack (found among what was said, else warned of).
-##     <!-- image (feed): words -->    a picture on that screen (feed, satellite, tv) until the next there or `off`.
+##     <!-- image (feed): words -->    a picture on that screen (feed, satellite, tv) until the next there or `off`, the
+##                                     camera turning to it; `image (feed, unwatched): words` lands it with the camera left
+##                                     on what it was on.
 ##     <!-- video (tv): clip.webm | words -->   a moving picture on that screen, looping under its snow, until the next
 ##                                     there or `off`: the clip imported on the Pictures card for those words (the file
-##                                     name a hint for the author); the screen's static until one is.
+##                                     name a hint for the author); the screen's static until one is. `(tv, unwatched)` as
+##                                     a picture's.
 ##     <!-- image (full): words --> ... <!-- /image -->   a picture over the whole screen for the passage, one straight
 ##                                     after another dissolving into it.
 ##     <!-- strike -->                 after a typed line: the writer stops to decide, then backspaces it off the screen.
@@ -105,11 +120,16 @@ class_name DispatchScript
 ## out here from the calls.
 
 ## Own-line desk marks: group 1 the verb, 2 its argument.
-const MARK := "^\\s*<!--\\s*(call|/\\s*call|ring|text|reply|ping|moving|sound|static|print|sleep|off|look|lift|switch|live|strike|gain|bell|lamp|fade|tablet|/\\s*tablet|replay|/\\s*image)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
-## A moving picture: group 1 its screen, 2 the clip's file name, 3 its words.
-const VIDEO := "^\\s*<!--\\s*video\\s*\\(\\s*([a-z]+)\\s*\\)\\s*:\\s*([^|]*?)\\s*\\|\\s*([\\s\\S]*?)\\s*-->\\s*$"
-## A picture: group 1 where (full, feed, satellite, tv; none is full), 2 its words.
-const IMAGE := "^\\s*<!--\\s*image\\s*(?:\\(\\s*([a-z]+)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->\\s*$"
+const MARK := "^\\s*<!--\\s*(call|/\\s*call|ring|text|reply|ping|moving|sound|static|print|sleep|off|look|lift|switch|live|strike|gain|bell|lamp|fade|tablet|/\\s*tablet|back|new\\s+tab|replay|/\\s*image)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
+## A moving picture: group 1 its screen and what it is told ([method _pinned]), 2 the clip's file name, 3 its words.
+const VIDEO := "^\\s*<!--\\s*video\\s*\\(\\s*([a-z]+(?:\\s*,\\s*[a-z]+)*)\\s*\\)\\s*:\\s*([^|]*?)\\s*\\|\\s*([\\s\\S]*?)\\s*-->\\s*$"
+## A picture: group 1 where (full, feed, satellite, tv; none is full) and what it is told ([method _pinned]), 2 its words.
+const IMAGE := "^\\s*<!--\\s*image\\s*(?:\\(\\s*([a-z]+(?:\\s*,\\s*[a-z]+)*)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->\\s*$"
+## What a picture pinned to a screen is told, after the screen and a comma (`image (feed, unwatched)`): it lands with the
+## camera left on what it was on.
+const UNWATCHED := "unwatched"
+## In a page fence, on a line of its own: the room's words the page is brought to that place for. Group 1 the words.
+const SAID := "(?m)^[ \\t]*<!--\\s*said\\s*:\\s*([^>]*?)\\s*-->[ \\t]*$"
 const FENCE_OPEN := "^\\s*```\\s*(terminal|page)\\s*$"
 const FENCE_CLOSE := "^\\s*```\\s*$"
 ## Words redacted inside a shown block or a session: group 1 the words.
@@ -131,15 +151,29 @@ const SCREENS := ["feed", "satellite", "tv"]
 ## ([constant VoiceFX.HEARD]).
 const RECEIVER := "receiver"
 
-## The tablet (seconds): picked up and its screen woken; put down; a key of an address typed, then the page loading; a link
-## looked at before it is tapped; a page come up looked at before anything else, or one come back to.
+## The tablet (seconds): picked up and its screen woken; laid back down; a key of an address typed, then the page loading; a link
+## looked at before it is tapped; a page come up looked at before anything else, or one come back to (reloaded, or by the
+## back arrow). A search typed into a page's own box: the box found and tapped, the hand over the keys, its words at the
+## tablet medium's pace ([method TabletScript.char_times]), then looked over before they are entered. A new tab: its plus
+## tapped and the blank tab looked at. A reply typed into a page's message box: the box found and tapped before its words,
+## and after them its Send pressed and the box seen empty (an action `sent`, nothing but the voice's rest for it).
 const TABLET_UP := 1.2
-const TABLET_DOWN := 1.0
+const TABLET_DOWN := 1.8
 const TABLET_KEY := 0.11
 const TABLET_GO := 0.6
 const TABLET_TAP := 1.4
 const TABLET_LOOK := 2.5
 const TABLET_AGAIN := 1.0
+const TABLET_BOX := 1.2
+const TABLET_HAND := 0.4
+const TABLET_ENTER := 0.7
+const TABLET_TAB := 1.2
+const TABLET_POST := 1.8
+const TABLET_SENT := REPLY_SEND + 0.6
+## What stands in a page for its video player (`<!-- player -->`): a picture by this name.
+const PLAYER := "\uE0F7 the video player"
+## `reply:`'s word for the tablet's page, and what the walk keeps for it (no phone's label: those are in capitals).
+const TABLET_REPLY := "tablet"
 ## The timing of each action (seconds). `rest` is what the voice waits for it; an action may move on past its rest,
 ## under the next words (`len`). A phone: out of its row, opened and to the ear; dialed; the two rings in the earpiece,
 ## each a pair of short rings on a cycle, answered as the second's pair ends; answered at once when it was ringing;
@@ -301,7 +335,7 @@ static func speakable(body: String) -> String:
 ## a desk's screen shows the middle of it), so the painting is found by its words whatever it was pinned to.
 static func pictures_only(body: String) -> String:
 	var src := Manuscript.strip_frontmatter(body)
-	return _rx("<!--\\s*image\\s*(?:\\(\\s*\\w+\\s*\\))?\\s*:").sub(src, "<!-- image (screen):", true)
+	return _rx("<!--\\s*image\\s*(?:\\([^)]*\\))?\\s*:").sub(src, "<!-- image (screen):", true)
 
 
 ## The phones' labels, in order along the rows: the note's `desk:` block's `phones`, else every label its marks name, in
@@ -431,17 +465,41 @@ static func _classify(s: String) -> Dictionary:
 		return {"kind": "mark", "verb": m.get_string(1).replace(" ", "").to_lower(), "arg": m.get_string(2).strip_edges()}
 	var vd := _rx(VIDEO).search(s)
 	if vd != null:
-		return {"kind": "video", "where": vd.get_string(1).to_lower(), "file": vd.get_string(2).strip_edges(),
+		var on := _pinned(vd.get_string(1))
+		return {"kind": "video", "where": on["where"], "told": on["told"], "file": vd.get_string(2).strip_edges(),
 			"prompt": vd.get_string(3).strip_edges()}
 	var im := _rx(IMAGE).search(s)
 	if im != null:
-		var where := im.get_string(1).to_lower()
-		return {"kind": "image", "where": where if (where in SCREENS) else "full", "prompt": im.get_string(2).strip_edges()}
+		var on := _pinned(im.get_string(1))
+		var where := String(on["where"])
+		return {"kind": "image", "where": where if (where in SCREENS) else "full", "told": on["told"],
+			"prompt": im.get_string(2).strip_edges()}
 	if _rx(VOICE_LINE).search(s) != null:
 		return {"kind": "voice", "text": s.strip_edges()}
 	if _rx("^\\s*<!--[\\s\\S]*?-->\\s*$").search(s) != null:
 		return {"kind": "note"}
 	return {}
+
+
+## What a picture's parentheses say ([param said]: `feed`, `feed, unwatched`): `{where, told}` - where it is pinned, and
+## each word after it.
+static func _pinned(said: String) -> Dictionary:
+	var parts := said.split(",", false)
+	var told := PackedStringArray()
+	for k in range(1, parts.size()):
+		told.append(String(parts[k]).strip_edges())
+	return {"where": String(parts[0]).strip_edges() if not parts.is_empty() else "", "told": told}
+
+
+## Picture action [param pic] as its mark's parentheses tell it ([param told], [method _pinned]): [constant UNWATCHED]
+## kept on it; any other word warned of, [param mark] saying where.
+static func _tell(pic: Dictionary, told: PackedStringArray, mark: String, warnings: PackedStringArray) -> Dictionary:
+	for w in told:
+		if String(w) == UNWATCHED:
+			pic[UNWATCHED] = true
+		else:
+			warnings.append("%s, %s): a picture on a screen is told %s, or nothing" % [mark, w, UNWATCHED])
+	return pic
 
 
 static func _end_para(out: Array, para: PackedStringArray) -> void:
@@ -613,7 +671,8 @@ static func label_of(s: String) -> String:
 
 
 ## The whole note, walked: `{speakable, spoken, actions, spans, phones, room, warnings, terminal (its config), pages (the
-## tablet's), dark (it opens in the black), rings}`.
+## tablet's fences), tablet (those pages as the tablet medium reads them, [method browsing]), dark (it opens in the black),
+## rings}`.
 ##
 ## `actions`, in order, are each `{kind, after, rest, len, fwd, back, ...}`: `after` the spoken word it comes before (its
 ## count of words before it), `rest` what the voice waits for it, `len` how long it moves, and where it falls in its
@@ -657,7 +716,11 @@ static func parse(body: String) -> Dictionary:
 	var jump := false                     # come back up from the black: the next ping has no track
 	var tablet_up := false                # the tablet held up
 	var pages: Array = []                 # the tablet's pages, in order: {url, search, text}
-	var on_page := -1                     # the page up on the tablet
+	var on_page := -1                     # the page up on the tablet (-1 a blank tab)
+	var tabs: Array = [-1]                # the page up in each of the tablet's tabs
+	var shown_by := {}                    # a page -> the action that last had it up
+	var posted := {}                      # the addresses whose page takes a reply
+	var tablet := browsing(all)           # the tablet's pages as the tablet medium reads them, each block given its step
 	if not dark:
 		gap.append([OPENING, -1])
 		pending.append("<!-- action-hold: %s -->" % String.num(OPENING, 2))
@@ -689,6 +752,8 @@ static func parse(body: String) -> Dictionary:
 				var where := String(blk["where"])
 				var prompt := String(blk["prompt"])
 				if where == "full":
+					for w in blk["told"]:
+						warnings.append("image (full, %s): only a picture on a screen of the desk (%s) is told anything" % [w, ", ".join(PackedStringArray(SCREENS))])
 					var blend := open_image >= 0
 					if open_image >= 0:
 						(spans[open_image] as Dictionary)["to"] = spoken.size()
@@ -696,16 +761,16 @@ static func parse(body: String) -> Dictionary:
 						"from": spoken.size(), "to": -1, "blend": blend or _ends_at(spans, spoken.size())})
 					open_image = spans.size() - 1
 				else:
-					_act(actions, gap, pending, spoken.size(), {"kind": "picture", "screen": where,
-						"key": Manuscript.image_key(prompt), "prompt": prompt}, PICTURE, PICTURE)
+					_act(actions, gap, pending, spoken.size(), _tell({"kind": "picture", "screen": where,
+						"key": Manuscript.image_key(prompt), "prompt": prompt}, blk["told"], "image (%s" % where, warnings), PICTURE, PICTURE)
 			"video":
 				var where := String(blk["where"])
 				if not where in SCREENS:
 					warnings.append("video (%s): a clip plays on a screen of the desk (%s)" % [where, ", ".join(PackedStringArray(SCREENS))])
 					continue
 				var prompt := String(blk["prompt"])
-				_act(actions, gap, pending, spoken.size(), {"kind": "picture", "screen": where, "key": Manuscript.image_key(prompt),
-					"prompt": prompt, "clip": String(blk["file"])}, PICTURE, PICTURE)
+				_act(actions, gap, pending, spoken.size(), _tell({"kind": "picture", "screen": where, "key": Manuscript.image_key(prompt),
+					"prompt": prompt, "clip": String(blk["file"])}, blk["told"], "video (%s" % where, warnings), PICTURE, PICTURE)
 			"page":
 				var pg := page_of(String(blk["text"]))
 				if String(pg["url"]).is_empty():
@@ -713,21 +778,29 @@ static func parse(body: String) -> Dictionary:
 					continue
 				if not tablet_up:
 					warnings.append("page: %s with the tablet down (<!-- tablet --> picks it up)" % String(pg["url"]))
+				var step: Dictionary = blk.get("step", {})
+				var p := int(step.get("page", pages.size()))
+				pg["url"] = String(((tablet["pages"] as Array)[p] as Dictionary)["url"]) if p < (tablet["pages"] as Array).size() else String(pg["url"])
 				var how := "type"
-				var rest := TABLET_GO + TABLET_LOOK
-				var was: Dictionary = pages[on_page] if on_page >= 0 else {}
-				if not was.is_empty() and String(was["url"]) == String(pg["url"]):
+				var entered := String(pg["url"])
+				match String(step.get("kind", "")):
+					"link":
+						how = "tap"
+					"search":
+						how = "search"
+						entered = String(pg["search"])
+				if bool(step.get("again", false)):
 					how = "again"
-					rest = TABLET_AGAIN
-				elif not was.is_empty() and links_to(String(was["text"]), String(pg["url"])):
-					how = "tap"
-					rest = TABLET_TAP + TABLET_GO + TABLET_LOOK
-				else:
-					how = "search" if not String(pg["search"]).is_empty() else "type"
-					rest += TABLET_KEY * float((String(pg["search"]) if how == "search" else String(pg["url"])).length())
-				_act(actions, gap, pending, spoken.size(), {"kind": "page", "page": pages.size(), "url": String(pg["url"]), "how": how},
-					rest, rest)
-				on_page = pages.size()
+				var bar := how == "type" or (how == "search" and bool(step.get("bar", true)))
+				var rest := page_rest(how, entered, bar)
+				var tab := int(step.get("tab", tabs.size() - 1))
+				while tabs.size() <= tab:
+					tabs.append(-1)
+				tabs[tab] = p
+				shown_by[p] = _act(actions, gap, pending, spoken.size(), {"kind": "page", "page": p, "url": String(pg["url"]), "how": how,
+					"text": entered, "bar": bar, "tab": tab, "tabs": tabs.duplicate(), "behind": int(step.get("behind", 0)),
+					"said": blk.get("said", [])}, rest, rest)
+				on_page = p
 				pages.append(pg)
 			"run":
 				var run := DispatchTerminal.compile(blk["lines"], glass, term, warnings)
@@ -798,7 +871,19 @@ static func parse(body: String) -> Dictionary:
 					var wn := words_of(text).size()
 					_act(actions, gap, pending, spoken.size(), {"kind": "receiver", "heard": RECEIVER, "storm": storm,
 						"from": spoken.size(), "to": spoken.size() + wn}, 0.0, 0.0)
-				if not reply_to.is_empty() and who == room:
+				var posting := reply_to == TABLET_REPLY and who == room
+				if posting and on_page < 0:
+					warnings.append("reply: tablet with no page up on it")
+					posting = false
+					reply_to = ""
+				if posting:
+					var shown := " ".join(text.split("\n", false))
+					var wn := words_of(text).size()
+					_act(actions, gap, pending, spoken.size(), {"kind": "post", "page": on_page, "text": shown, "from": spoken.size(),
+						"to": spoken.size() + wn, "spans": typed_spans(shown)}, TABLET_POST, TABLET_POST)
+					posted[TabletScript.url_key(String((pages[on_page] as Dictionary)["url"]))] = true
+					reply_to = ""
+				elif not reply_to.is_empty() and who == room:
 					var shown := " ".join(text.split("\n", false))
 					var wn := words_of(text).size()
 					var typing := reply_typing(shown)
@@ -816,6 +901,9 @@ static func parse(body: String) -> Dictionary:
 				if not words.is_empty():
 					gap = []
 					ringing = ""
+				if posting:
+					# said and typed, it is sent: the voice waits for that before anything else happens on the page
+					_act(actions, gap, pending, spoken.size(), {"kind": "sent"}, TABLET_SENT, TABLET_SENT)
 			"mark":
 				var verb := String(blk["verb"])
 				var arg := String(blk["arg"])
@@ -883,6 +971,12 @@ static func parse(body: String) -> Dictionary:
 						_act(actions, gap, pending, at, {"kind": "text", "label": label, "words": words}, rest, rest + READ_DOWN)
 						last_text = label
 					"reply":
+						if arg.strip_edges().to_lower() == TABLET_REPLY and not phones.has(label_of(arg)):
+							if not tablet_up or on_page < 0:
+								warnings.append("reply: tablet with no page up on it")
+								continue
+							reply_to = TABLET_REPLY
+							continue
 						var label := label_of(arg) if not arg.is_empty() else last_text
 						if label.is_empty():
 							warnings.append("reply with no text to answer")
@@ -987,6 +1081,33 @@ static func parse(body: String) -> Dictionary:
 							continue
 						tablet_up = false
 						_act(actions, gap, pending, at, {"kind": "tablet", "up": false}, TABLET_DOWN, TABLET_DOWN)
+					"back", "newtab":
+						var said := "back" if verb == "back" else "new tab"
+						if not tablet_up:
+							warnings.append("%s: the tablet is down (<!-- tablet --> picks it up)" % said)
+							continue
+						var step: Dictionary = blk.get("step", {})
+						if step.is_empty():
+							# a new tab on a tablet with nothing open yet is the blank tab it wakes on
+							if verb == "back":
+								warnings.append("back: nothing behind the page up in this tab")
+							continue
+						var tab := int(step.get("tab", tabs.size() - 1))
+						while tabs.size() <= tab:
+							tabs.append(-1)
+						if verb == "back":
+							var p := int(step["page"])
+							tabs[tab] = p
+							var resume := int(shown_by.get(p, -1))
+							shown_by[p] = _act(actions, gap, pending, at, {"kind": "page", "page": p, "url": String((pages[p] as Dictionary)["url"]),
+								"how": "back", "text": "", "bar": false, "tab": tab, "tabs": tabs.duplicate(), "behind": int(step.get("behind", 0)),
+								"resume": resume}, TABLET_AGAIN, TABLET_AGAIN)
+							on_page = p
+						else:
+							tabs[tab] = -1
+							_act(actions, gap, pending, at, {"kind": "page", "page": -1, "url": "", "how": "tab", "text": "", "bar": true,
+								"tab": tab, "tabs": tabs.duplicate(), "behind": 0}, TABLET_TAB, TABLET_TAB)
+							on_page = -1
 					"replay":
 						var where := arg.get_slice("|", 0).strip_edges().to_lower()
 						var said := arg.get_slice("|", 1).strip_edges() if arg.contains("|") else ""
@@ -1053,9 +1174,15 @@ static func parse(body: String) -> Dictionary:
 			speak[speak.size() - 1] = String(speak[speak.size() - 1]) + " " + " ".join(pending)
 	_silences(actions)
 	warnings.append_array(_clock_check(actions, spoken.size()))
+	if not reply_to.is_empty():
+		warnings.append("reply: no words of the room's after it to type")
+	# a page that takes a reply has its message box, each time it comes up
+	for pg in tablet["pages"]:
+		if posted.has(TabletScript.url_key(String((pg as Dictionary)["url"]))):
+			(pg as Dictionary)["reply"] = true
 	var rings: Variant = desk_of(body).get("rings", SCOPE_RINGS)
 	return {"speakable": "\n\n".join(speak), "spoken": spoken, "actions": actions, "spans": spans,
-		"phones": phones, "room": room, "warnings": warnings, "terminal": term, "pages": pages, "dark": _opens_dark(all),
+		"phones": phones, "room": room, "warnings": warnings, "terminal": term, "pages": pages, "tablet": tablet, "dark": _opens_dark(all),
 		"rings": maxf(float(rings), 1.0) if str(rings).is_valid_float() else float(SCOPE_RINGS)}
 
 
@@ -1128,13 +1255,81 @@ static func page_of(text: String) -> Dictionary:
 	return out
 
 
-## Does page text [param text] link to [param url] (`[words](url)`, a scheme or `www.` aside)?
-static func links_to(text: String, url: String) -> bool:
-	var want := TabletScript.url_key(url)
-	for m in _rx(TabletScript.LINK).search_all(text):
-		if TabletScript.url_key(m.get_string(2)) == want:
-			return true
-	return false
+## The places a page ([param text], the tablet medium's markdown) is brought to for words said while it is up: each
+## `<!-- said: words -->` on it, `{words (as the voice says them), before (how many of the page's words are written above
+## the mark, as [TabletScript] counts them)}`.
+static func said_in(text: String) -> Array:
+	var out: Array = []
+	for m in _rx(SAID).search_all(text):
+		var above := _rx(SAID).sub(text.substr(0, m.get_start()), "", true)
+		out.append({"words": words_of(m.get_string(1)),
+			"before": (TabletScript.parse("<!-- url: page.example -->\n\n" + above)["words"] as Array).size()})
+	return out
+
+
+## The tablet's browsing, worked out by the tablet medium's own walk: the page fences of [param all], and each `back`
+## and `new tab` while the tablet is up, written out in order as a tablet chapter's marks and read by [TabletScript] - the
+## document returned (`pages`, `words`, `actions`; a page's player a picture named [constant PLAYER]). Each of those blocks
+## is given its `step`: the action that walk made of it (`kind` a link tapped, an address typed, a search - in the page's
+## box unless `bar` - or a back; `page`, `tab`, `behind`, `again`), and none where it made nothing of it.
+static func browsing(all: Array) -> Dictionary:
+	var src := PackedStringArray()
+	var made: Array = []                  # the block behind each mark written, in order
+	var up := false
+	for b in all:
+		var blk: Dictionary = b
+		match String(blk["kind"]):
+			"mark":
+				match String(blk["verb"]):
+					"tablet":
+						up = true
+					"/tablet":
+						up = false
+					"back", "newtab":
+						if up:
+							src.append("<!-- back -->\n" if String(blk["verb"]) == "back" else "<!-- new tab -->\n")
+							made.append(blk)
+			"page":
+				var pg := page_of(String(blk["text"]))
+				if String(pg["url"]).is_empty():
+					continue
+				# what browses is the desk's marks, never a line of a page
+				var text := _rx("(?m)^\\s*<!--\\s*(?:url|search|new tab|back)\\b[^>]*-->\\s*$").sub(String(pg["text"]), "", true)
+				text = _rx("<!--\\s*player\\s*-->").sub(text, "<!-- image: %s -->" % PLAYER, true)
+				blk["said"] = said_in(text)
+				text = _rx(SAID).sub(text, "", true)
+				src.append("<!-- search: %s -->" % pg["search"] if not String(pg["search"]).is_empty() else "<!-- url: %s -->" % pg["url"])
+				src.append("")
+				src.append(text)
+				src.append("")
+				made.append(blk)
+	var doc := TabletScript.parse("\n".join(src))
+	for a in doc["actions"]:
+		var act: Dictionary = a
+		var m := int(act.get("mark", -1))
+		if m >= 0 and m < made.size() and String(act["kind"]) != "open":
+			(made[m] as Dictionary)["step"] = act
+	return doc
+
+
+## How long the voice waits for a page reached [param how] (`type`, `tap`, `search`, `again`), [param typed] what is typed
+## to reach it - into the address bar ([param bar]) a key each [constant TABLET_KEY], into a page's own box at the tablet
+## medium's pace ([method box_typing]).
+static func page_rest(how: String, typed: String, bar: bool) -> float:
+	match how:
+		"again":
+			return TABLET_AGAIN
+		"tap":
+			return TABLET_TAP + TABLET_GO + TABLET_LOOK
+	if bar:
+		return TABLET_GO + TABLET_LOOK + TABLET_KEY * float(typed.length())
+	return TABLET_BOX + box_typing(typed) + TABLET_ENTER + TABLET_GO + TABLET_LOOK
+
+
+## How long [param typed] takes to type into a page's own box: the hand over the keys, then each letter as the tablet
+## medium types it ([method TabletScript.char_times]).
+static func box_typing(typed: String) -> float:
+	return TABLET_HAND + float(TabletScript.char_times(typed)[typed.length()])
 
 
 ## A clock's minutes into the day as it shows them: `HH:MM`.

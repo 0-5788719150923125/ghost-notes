@@ -32,7 +32,8 @@ class_name ReadingFollower
 
 ## A word's time is unknown only at exactly this; every other value, negative included, is a time.
 const NO_TIME := -1.0
-## The past a mid-way start's earlier words are placed in.
+## The past a mid-way start's earlier words are placed in. Nothing counts time from one of them to a word heard (a
+## radar's sweeps, a clock's minutes): there are tens of thousands of either in between.
 const START_PAST := -100000.0
 ## ...or, near ([member near_past]), how long before 0 the last of them ends (seconds).
 const PAST_GAP := 1.0

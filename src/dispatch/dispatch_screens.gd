@@ -217,8 +217,10 @@ func show_clock(st: Dictionary) -> void:
 	_show(clock, _clock, st)
 
 
-## The tablet: `{power (0-1), page: TabletPage, scroll, lit (its words read, [method TabletPage.draw]), title, url (the
-## host), typing and typed, load (0-1), can_back, tap: Vector2 and tap_u, minutes (the time), battery, now, textures:
+## The tablet: `{power (0-1), page: TabletPage (none: a blank tab), scroll, lit (its words read, [method TabletPage.draw]),
+## tabs (their titles) and tab, url (what the bar says), typing and typed (the bar), box (a search typed into the page's
+## own), post (a reply typed into its message box), kb, key and key_k (the keyboard, the key under the finger), load (0-1),
+## can_back, tap: Vector2 and tap_u, seed, minutes (the time), battery, now, textures:
 ## Callable}`; dark with no power.
 func show_tablet(st: Dictionary) -> void:
 	_show(tablet, _tablet, st)
@@ -734,8 +736,10 @@ func _card_half(c: CanvasItem, tex: Texture2D, dest: Rect2, digit: String, upper
 
 
 ## The tablet ([TabletChrome]): dark when off; awake, the page set by the tablet medium ([TabletPage]), scrolled, the
-## words read off it lit as the tablet medium lights them, under the browser - its tab, back, the address bar (typed into
-## while an address is typed, a line loading under it) - and the status bar with the desk's time; a finger's tap a ring.
+## words read off it lit as the tablet medium lights them - a blank tab's page where there is none - under the browser: its
+## tabs, back, the address bar (typed into while an address is typed, a line loading under it); a search typed into the
+## page's own box, a reply into its message box; the status bar with the desk's time; the keyboard while anything is
+## typed; a finger's tap a ring.
 func _draw_tablet(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(TABLET_SIZE)
 	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.0, 0.0, 0.0))
@@ -745,14 +749,22 @@ func _draw_tablet(c: CanvasItem, st: Dictionary) -> void:
 	c.draw_rect(Rect2(Vector2.ZERO, size), Color.WHITE)
 	var page: TabletPage = st.get("page", null)
 	var top := TabletChrome.TOP
+	var down := Vector2(0.0, top - float(st.get("scroll", 0.0)))
 	if page != null:
 		page.draw(c, top, float(st.get("scroll", 0.0)), top, size.y, st.get("lit", {}), float(st.get("now", 0.0)),
 			st.get("textures", func(_k: String) -> Texture2D: return null))
+		if st.has("box"):
+			TabletChrome.draw_typed(c, Rect2(page.search_rect.position + down, page.search_rect.size), String(st["box"]))
+		if st.has("post"):
+			TabletChrome.draw_typed(c, Rect2(page.reply_rect.position + down, page.reply_rect.size - Vector2(160.0, 0.0)), String(st["post"]), 28.0)
+	else:
+		TabletChrome.draw_start(c, size, int(st.get("seed", 0)))
 	var typing := bool(st.get("typing", false))
-	TabletChrome.draw_browser(c, size, {"tabs": [String(st.get("title", ""))], "tab": 0, "can_back": bool(st.get("can_back", false)),
+	TabletChrome.draw_browser(c, size, {"tabs": st.get("tabs", [""]), "tab": int(st.get("tab", 0)), "can_back": bool(st.get("can_back", false)),
 		"url": String(st.get("url", "")), "editing": typing, "typed": String(st.get("typed", "")), "load": float(st.get("load", -1.0)),
 		"now": float(st.get("now", 0.0))})
 	TabletChrome.draw_status(c, size, true, int(st.get("minutes", 0)), float(st.get("battery", 70.0)))
+	TabletChrome.draw_keyboard(c, size, float(st.get("kb", 0.0)), String(st.get("key", "")), float(st.get("key_k", 0.0)))
 	var tap_u := float(st.get("tap_u", -1.0))
 	if tap_u >= 0.0 and tap_u < 1.0:
 		var at: Vector2 = st.get("tap", size * 0.5)
