@@ -13,7 +13,7 @@ From the audio to the screen, or to a video file. Each part's reference is its o
 
 ## The signal path
 
-- **[`Spectrum`](../src/audio/spectrum.gd)** (an autoload) owns the audio player and the analyzer, and emits one [`AudioFeatures`](../src/audio/audio_features.gd) a frame: `energy`, `bass`, `low_mid`, `mid`, `high`, `treble`, `beat`, `beat_period`, `flux`, `movement`, `bands`, `time`. It is the one typed interface every scene reads; no scene touches the audio engine.
+- **[`Spectrum`](../src/audio/spectrum.gd)** (an autoload) owns the audio player and the analyzer, and emits one [`AudioFeatures`](../src/audio/audio_features.gd) a frame: `energy`, `bass`, `low_mid`, `mid`, `high`, `treble`, `beat`, `beat_period`, `flux`, `movement`, `bands`, `time`, `_wave_of`, `_wave`, `_waved`, `_wave_lock`. It is the one typed interface every scene reads; no scene touches the audio engine.
 - **[`GhostScene`](../src/scene_kit/ghost_scene.gd)** is one visualizer: `build_params(rng)` rolls a **definition** from a seeded RNG, `update(features, delta)` modulates it by the audio, and `_draw()` renders it through the scene's **view** (zoom, tilt, rotation, offset).
 - **Motion is its own axis.** What a scene draws is separate from how it moves - its **behavior**, one of `drift`, `fluid`, `static`: `static` reacts to the audio alone, `drift` adds whole-scene camera breathing, `fluid` adds independent per-element motion. A [`ModBank`](../src/motion/mod_bank.gd) of slow seeded oscillators feeds named organic channels and per-element `wobble(key, i)`.
 - **The seed is the song's.** The session seed derives from the audio's own fingerprint, so the same song always plays the same show; `--seed N` rolls another.

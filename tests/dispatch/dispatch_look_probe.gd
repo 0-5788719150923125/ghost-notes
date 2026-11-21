@@ -11,12 +11,14 @@ extends Node
 ## sounds like over the whole run to a file. `--opening title` opens on the channel's name over the blur, and `--lead S`
 ## gives the voice's first word S seconds in, as the intro's hold does. `--light K`, `--bright X`, `--shafts k=v,...`, `--fog k=v,...`, `--air a,b`
 ## and `--heard a,b` are the Environment card's (tests/table/environment_flags.gd); `--terminal`, `--radar`, `--scope` and `--dial`
-## (each `#rrggbb`) the Props card's colors for the terminal's text, the radar's glow, the receiver's oscilloscope and its dial lamp.
+## (each `#rrggbb`) the Props card's colors for the terminal's text, the radar's glow, the receiver's oscilloscope and its dial lamp;
+## `--trace figure|sweep` how the scope draws.
 ## `--eye x,y,z --aim x,y,z` photographs from there instead of where the desk's camera is (the set's space, m), to see what no
 ## shot holds - the printer's paper falling past the desk's end, say. With no Environment flag the note's own `environment:` block is
 ## used. Each `play` mark plays what [method ScreenPlays.record_of] finds (a note played live, a video file), or `--film WHAT=PATH=SECS`
-## (a video by hand, each `=`-parted). `--voice <wav>` stands in for the heard audio's bands (what the receiver's SDR screen reads a
-## voice off): the recording's, through the receiver's band, whenever any word is said - the screen shows only the receiver's.
+## (a video by hand, each `=`-parted). `--voice <wav>` stands in for the heard audio (the SDR screen reads a voice's bands off it, the
+## scope its waveform): the recording's bands, through the receiver's band, and its waveform, whenever any word is said - the
+## screens show only the receiver's.
 ## `--sdr 1` also writes that screen's own picture beside each photograph (`_sdr.png`).
 ## It prints where each action falls, and asserts
 ## only that a frame is not uniform.
@@ -73,7 +75,7 @@ func _run() -> void:
 			"--light", "--bright", "--shafts", "--fog", "--air", "--heard": EnvFlags.take(_environment, args[i], args[i + 1])
 			"--terminal": _glass["terminal_screen"] = {"text": args[i + 1]}
 			"--radar": _glass["radar_screen"] = {"glow": args[i + 1]}
-			"--scope", "--dial":
+			"--scope", "--dial", "--trace":
 				if not _glass.has("receiver_glow"):
 					_glass["receiver_glow"] = {}
 				_glass["receiver_glow"][args[i].substr(2)] = args[i + 1]
@@ -156,6 +158,7 @@ func _run() -> void:
 	var heard := DispatchSounds.new(desk)
 	var voiced: Array = SpectrumBake.bake(_voice, 30, AudioFeatures.BAND_COUNT, AudioFeatures.FREQ_MIN, AudioFeatures.FREQ_MAX,
 		AudioFeatures.DB_FLOOR) if not _voice.is_empty() else []
+	var voice_info := HeardWave.wav_info(_voice) if not _voice.is_empty() else {}
 	if not _voice.is_empty():
 		print("dispatch_look_probe: voice %s, %d frames" % [_voice, voiced.size()])
 	Spectrum.virtual_clock = 0.0
@@ -170,9 +173,14 @@ func _run() -> void:
 					fed += 1
 				if fed > subs.words.size():
 					subs.words = words.slice(0, fed)
+			var heard_now: AudioFeatures = Spectrum.current
 			if not voiced.is_empty():
-				Spectrum.current.bands = _voice_bands(words, desk._now, voiced)
-			medium.advance(Spectrum.current, DT, 1.0)
+				heard_now = AudioFeatures.new()
+				heard_now.time = t
+				heard_now.bands = _voice_bands(words, desk._now, voiced)
+				if _saying(words, desk._now):
+					heard_now.hear_from(HeardWave.of_wav.bind(_voice, voice_info, fmod(desk._now, float(voiced.size()) / 30.0)))
+			medium.advance(heard_now, DT, 1.0)
 			if not _sound.is_empty():
 				audio.append_array(heard.render(int(round(t * DispatchSounds.RATE)) - audio.size()))
 			if float(want) - t < 1.6 or int(round(t / DT)) % 300 == 0:
@@ -213,6 +221,13 @@ func _run() -> void:
 ## The heard audio's bands at [param t] with [param voiced] (a recording's, 30 a second) standing in for the voice: its
 ## frames in turn, through the receiver's band (300-2600 Hz, rolled off 12 dB an octave), while any of [param words] is said;
 ## silence between.
+static func _saying(words: Array, t: float) -> bool:
+	for w in words:
+		if float((w as Dictionary)["t0"]) <= t and t <= float(w["t1"]) + 0.1:
+			return true
+	return false
+
+
 static func _voice_bands(words: Array, t: float, voiced: Array) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	out.resize(AudioFeatures.BAND_COUNT)

@@ -164,13 +164,15 @@ const RADAR_FIELDS := {
 	"glow": {"label": "Glow color", "blurb": "The color the scope's sweep, rings and blips glow in. The light the radar throws takes its hue.",
 		"type": "color", "default": "#45ff5b", "roll": ["#45ff5b", "#ffa31a", "#d9ff4d"]},
 }
-## The receiver's glows ([Roll]; kept in the block's `receiver_glow`): its oscilloscope's trace and the lamp behind its dial, any color
-## picked, the scope's default [constant DispatchScreens.SCOPE_GLOW] to 8 bits.
+## The receiver's properties ([Roll]; kept in the block's `receiver_glow`): its oscilloscope's trace and the lamp behind its dial, any
+## color picked, the scope's default [constant DispatchScreens.SCOPE_GLOW] to 8 bits; and how its scope draws ([DispatchScope]).
 const RECEIVER_FIELDS := {
 	"scope": {"label": "Scope color", "blurb": "The color the oscilloscope's grid and trace glow in.",
 		"type": "color", "default": "#49ff60", "roll": ["#49ff60", "#ffb000", "#7fd4ff"]},
 	"dial": {"label": "Dial light", "blurb": "The color of the lamp lighting the tuning dial from behind.",
 		"type": "color", "default": "#ffd98c", "roll": ["#ffd98c", "#ffc070", "#b8ffc8"]},
+	"trace": {"label": "Scope", "blurb": "How the scope draws what the receiver plays: a figure (it against morphed copies of itself, turning in depth) or a sweep (it over time).",
+		"type": "enum", "options": ["figure", "sweep"], "default": "figure", "roll": ["figure", "sweep"]},
 }
 ## The material a terminal make's lamps wear (its power light, its case's light), which take the hue of its text.
 const TERMINAL_LAMP := "green light"
@@ -1072,6 +1074,11 @@ static func radar_ink(spec: Dictionary) -> Color:
 static func receiver_inks(spec: Dictionary) -> Dictionary:
 	var v := Roll.own_or_drawn(RECEIVER_FIELDS, spec)
 	return {"scope": Color.html(String(v["scope"])), "dial": Color.html(String(v["dial"]))}
+
+
+## How the receiver's scope draws ([constant RECEIVER_FIELDS] `trace`) as [param spec] keeps it: `figure` or `sweep`.
+static func scope_trace(spec: Dictionary) -> String:
+	return String(Roll.own_or_drawn(RECEIVER_FIELDS, spec)["trace"])
 
 
 ## [param rig]'s lights, and its parts of material [param lamp] ("" for none), made to go with [param ink] in place of [param own],

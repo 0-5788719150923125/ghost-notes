@@ -33,7 +33,8 @@ class_name DispatchMedium
 ## message, and sent; then it goes home.
 ##
 ## The receiver is open in its storms and under a voice that comes in on it ([method _build_receiver]): the storm brought
-## down while the voice is said over it, the needle and the scope's trace moving with the storm and with each word. The SDR
+## down while the voice is said over it, the needle swinging with the storm and each word, the scope tracing the receiver's own
+## output as a scope across its speaker would ([DispatchScope]: its static, and the voice's real waveform). The SDR
 ## screen standing on the scope draws the band's spectrum and waterfall from the same stretches, and the voice's own spectrum
 ## from the heard audio's bands while that voice speaks ([DispatchSpectrum]).
 ##
@@ -373,6 +374,8 @@ var _roots_node: Node3D
 var _screens: DispatchScreens
 var _spectrum: DispatchSpectrum         # the receiver's SDR screen: its waterfall's rows as they are made
 var _bands := PackedFloat32Array()      # the heard audio's bands this frame ([AudioFeatures], handed to [method advance])
+var _heard: AudioFeatures               # ...and the whole frame, its waveform the scope's ([member _scope])
+var _scope: DispatchScope               # the receiver's oscilloscope: its trace worked out on a worker
 var _sounds: DispatchSounds
 var _blur: IntroBlur
 var _censor: DispatchCensor
@@ -411,6 +414,7 @@ func mount(st: SubViewport) -> void:
 	_screens = DispatchScreens.new()
 	add_child(_screens)
 	_spectrum = DispatchSpectrum.new()
+	_scope = DispatchScope.new()
 	_build_world()
 	_censor = DispatchCensor.new()
 	add_child(_censor)
@@ -618,11 +622,14 @@ func _land_set() -> void:
 
 
 ## The terminal's text, the radar's glow and the receiver's oscilloscope as the note keeps them ([method DispatchSet.terminal_ink],
-## [method DispatchSet.radar_ink], [method DispatchSet.receiver_inks]): the screens drawn in them, the title typed in the terminal's hue.
+## [method DispatchSet.radar_ink], [method DispatchSet.receiver_inks]): the screens drawn in them, the title typed in the terminal's hue;
+## and how the scope draws ([method DispatchSet.scope_trace]).
 func _dress_inks() -> void:
 	var term := DispatchSet.terminal_ink(_makes.get("terminal_screen", {}))
 	_screens.set_inks(term, DispatchSet.radar_ink(_makes.get("radar_screen", {})),
 		DispatchSet.receiver_inks(_makes.get("receiver_glow", {}))["scope"])
+	if _scope != null:
+		_scope.mode = DispatchSet.scope_trace(_makes.get("receiver_glow", {}))
 	if _title != null:
 		_title.ink = DispatchScreens.tinted(TITLE_INK, DispatchScreens.PHOSPHOR, term)
 
@@ -818,7 +825,8 @@ func _captioned(w0: int, w1: int, _t: float) -> bool:
 func advance(features, delta: float, _bookend: float) -> void:
 	var t := maxf(feed.show_time(), 0.0)
 	_dt = delta
-	_bands = (features as AudioFeatures).bands if features is AudioFeatures else PackedFloat32Array()
+	_heard = features as AudioFeatures if features is AudioFeatures else null
+	_bands = _heard.bands if _heard != null else PackedFloat32Array()
 	_ensure_doc()
 	if _build_task >= 0 and WorkerThreadPool.is_task_completed(_build_task):
 		WorkerThreadPool.wait_for_task_completion(_build_task)
@@ -2278,8 +2286,10 @@ func _pose(t: float) -> void:
 	_screens.show_radar(radar_at(t))
 	var st := storm_at(t)
 	var voice := float(st.get("voice", 0.0))
-	_screens.show_scope({"t": snappedf(t, 1.0 / 30.0), "level": float(st.get("level", 0.0)), "storm": String(st.get("storm", "")),
-		"voice": voice})
+	# the scope: the receiver's own output, swept as a scope sweeps it
+	_scope.seed = _seed
+	if _scope.tick(t, _open, _heard, _power_now, _sounds.receiver_share if _sounds != null else 1.0, TablePhysics.render_waits()):
+		_screens.show_scope(_scope.shown())
 	# the SDR screen, its rows made as show time passes them
 	if _set.spectrum_screen != null and _spectrum.tick(t, _open, _bands, _power_now):
 		_screens.show_spectrum({"tex": _spectrum.texture, "top": _spectrum.top(), "trace": _spectrum.trace, "power": _power_now})

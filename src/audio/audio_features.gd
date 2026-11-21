@@ -41,6 +41,33 @@ var bands: PackedFloat32Array = PackedFloat32Array()
 ## Seconds of audio elapsed (playback position), or an idle clock when no audio is loaded.
 var time: float = 0.0
 
+## The heard audio's waveform ([method wave]): its rate (Hz) and how many samples a window holds (about 93 ms).
+const WAVE_RATE := 11025
+const WAVE_SAMPLES := 1024
+var _wave_of := Callable()
+var _wave := PackedFloat32Array()
+var _waved := false
+var _wave_lock := Mutex.new()
+
+
+## Where [method wave] reads from ([HeardWave], set by [Spectrum]): a Callable taking nothing and answering the window, safe
+## on any thread.
+func hear_from(source: Callable) -> void:
+	_wave_of = source
+
+
+## The heard audio's waveform up to [member time], mono: [constant WAVE_SAMPLES] samples at [constant WAVE_RATE], newest
+## last - what a scope draws; empty where nothing is heard. Read only when first asked (a file read exactly at this moment, or
+## what a stream played), then kept; safe from a worker.
+func wave() -> PackedFloat32Array:
+	_wave_lock.lock()
+	if not _waved:
+		_waved = true
+		_wave = _wave_of.call() if _wave_of.is_valid() else PackedFloat32Array()
+	var out := _wave
+	_wave_lock.unlock()
+	return out
+
 
 ## Linear sample of the band spectrum at [param t] in 0..1, interpolated.
 func sample(t: float) -> float:

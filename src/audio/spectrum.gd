@@ -76,6 +76,11 @@ var _tap: AudioEffectCapture          # the LIVE_TAP recorder (see the const)
 var _tap_ring := PackedFloat32Array()
 var _tap_pos := 0
 var _tap_filled := 0
+## The heard waveform ([method AudioFeatures.wave]): the show's own bus caught for a stream, and the WAV playing read off the
+## disk ([HeardWave]) - its path and its header.
+var _heard := HeardWave.new()
+var _wav_path := ""
+var _wav := {}
 ## The bookend: held silence before the content and after it, so the opening words are not spoken
 ## behind a dark screen. [member lead_in] holds playback for that many seconds while the session clock
 ## runs; [member tail] keeps the session alive that long after the audio ends, before
@@ -169,6 +174,8 @@ func _ready() -> void:
 	_player.bus = "Master"
 	if not nested:
 		_player.finished.connect(_on_player_finished)
+		# on a bus of its own, sent to the Master bus: what it plays is caught for the heard waveform, and nothing else is
+		_heard.tap(_player)
 	add_child(_player)
 	#Audio is loaded in begin(), when main decides (a direct boot, or a note with a song opens).
 
@@ -866,6 +873,7 @@ func _process(delta: float) -> void:
 				_tap_ring[_tap_pos] = (v.x + v.y) * 0.5
 				_tap_pos = (_tap_pos + 1) % _tap_ring.size()
 			_tap_filled = mini(_tap_filled + got.size(), _tap_ring.size())
+	_heard.drain()
 
 	var f := AudioFeatures.new()
 
@@ -895,6 +903,7 @@ func _process(delta: float) -> void:
 				_fill_bands_baked(f)
 			else:
 				_fill_bands(f)
+			_hear(f, pos)
 	elif _has_audio and _player.playing:
 		#The render clock: accumulated fixed-fps time, not the player's position (see `render_clock`).
 		if render_clock:
@@ -906,6 +915,7 @@ func _process(delta: float) -> void:
 			_fill_bands_baked(f)
 		else:
 			_fill_bands(f)
+		_hear(f, f.time - _clock_offset())
 	elif _held or _tailing:
 		#Bookend silence: continuous with the playing branch above, only quiet.
 		f.time = _hold if _held else lead_in + _content_length() + _tail_t
@@ -959,6 +969,18 @@ func _process(delta: float) -> void:
 		_sig.update(f.bands, f.bass + f.low_mid, f.mid, f.high + f.treble, f.flux, delta)
 	if _sig_fast != null:
 		_sig_fast.update(f.bands, f.bass + f.low_mid, f.mid, f.high + f.treble, f.flux, delta)
+
+
+## Where frame [param f]'s heard waveform is read from ([method AudioFeatures.wave]): the WAV playing, read [param pos] seconds
+## into it; else, for the session's own player, what its bus played (a stream, a file of another kind).
+func _hear(f: AudioFeatures, pos: float) -> void:
+	if _loaded_path != _wav_path:
+		_wav_path = _loaded_path
+		_wav = HeardWave.wav_info(_loaded_path) if _loaded_path.to_lower().ends_with(".wav") else {}
+	if not _wav.is_empty():
+		f.hear_from(HeardWave.of_wav.bind(_wav_path, _wav, pos))
+	elif not nested:
+		f.hear_from(_heard.caught())
 
 
 # The grid a composed song hands ([member known]) laid over this frame: the beat a pulse from the last beat (decaying as

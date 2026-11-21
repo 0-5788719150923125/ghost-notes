@@ -82,6 +82,7 @@ stays a note. The ScriptMarks registry has a row for each (docs/script.md).
 | `dispatch_desk.gd` | `DispatchDesk`: the desk itself - its wood, top, blotter and base - built from properties (`FIELDS`), each drawn by its number until set |
 | `dispatch_roots.gd` | `DispatchRoots`: the roots grown and meshed, how many hang, lie on the desk and stand beside it, how thick and how they wander (`FIELDS`); a hanging root kept clear of the printer's paper and heap along the very line its tube is drawn on (`_drawn_clear`: filled in, each run moved round the side that moves it least, smoothed and cleared again), none comes down onto the desk where the paper falls, and the root clinging under the desk's end comes down in front of the paper hanging there (`_in_front`) |
 | `dispatch_screens.gd` | the 2D faces drawn into the screens: the terminal (its redacted words as written, and where they lie), the radar and its clutter, the scope, the SDR's spectrum and waterfall, a phone's two screens and keypad, the receiver's dial, the gain knob's scale |
+| `dispatch_scope.gd` | `DispatchScope`: what the receiver's oscilloscope draws - the receiver's own output (its static from `DispatchSounds.receiver_wave`, a voice on it from the heard waveform through its words), levelled by the receiver's AGC, triggered and swept; worked out on a worker |
 | `dispatch_spectrum.gd` | `DispatchSpectrum`: what the SDR screen on the receiver shows - each row of its waterfall a pure function of its moment, the receiver's stretches and the heard audio's bands; the ring of rows it has made |
 | `dispatch_censor.gd` | `DispatchCensor`: redacted words hidden over the finished frame - a tracked box cracked into flat shards (`shaders/dispatch_redact.gdshader`) |
 | `dispatch_sounds.gd` | `DispatchSounds`: every sound of the desk, a function of show time |
@@ -106,10 +107,38 @@ jet's pitch falls, nothing is louder than the voice, the two storms differ, the 
 through a camera, the censor over it - no letter of the hidden words outside a box, every shard one color and the average
 of the frame under it, the tracker never short of the words), `tests/dispatch/dispatch_spectrum_check.gd` (the SDR screen:
 the filter's edges, a storm and its pops seen, a voice as a carrier and mirrored sidebands, the room's voice never on it, the
-ring of rows; control: a screen that takes every voice heard); probe `tests/dispatch/dispatch_look_probe.gd` (frames to look
+ring of rows; control: a screen that takes every voice heard), `tests/dispatch/dispatch_scope_check.gd` (the scope: a pop a
+spike where it is heard, a voice its own waveform and the room's never, a held tone standing still, the AGC; controls: the
+moment before the pop, running free), `tests/audio/heard_wave_check.gd` (the heard waveform read exactly off a WAV and off
+what a bus caught); probe `tests/dispatch/dispatch_look_probe.gd` (frames to look
 at; `--voice <wav> --sdr 1` for the SDR screen with a real voice's bands).
 
 ## Status
+
+**The receiver's scope draws the receiver's own output** (built; not yet seen by the author): what a scope across its speaker
+shows, never a drawn pattern (`DispatchScope`). Its static is the receiver's own synthesis, rendered for the moment on the glass
+(`DispatchSounds.receiver_wave`: the same filters and levels, each pop in the slot and of the size the speaker plays it, a noise
+of its own); a voice that comes in on the receiver is its real waveform, off the heard audio (`AudioFeatures.wave`, below), taken
+only through that voice's words, so the room's voice never shows. The receiver's AGC levels it, as an old set's does: an idle
+hiss brought up to a fine thread, a storm filling the glass, a voice bringing the gain down and the static under it, coming back
+up over a moment after. It draws one of two ways, the receiver's `trace` property on the Props card (`DispatchSet.RECEIVER_FIELDS`):
+a FIGURE (the default), the scope in XY - the output against a copy 0.3-3.5 ms behind and a copy 0.8-6 ms behind read at another
+rate (its pitch and tempo morphed: held near one, where the figure precesses, or at 1.25, 1.5 or 0.75, where it ties Lissajous
+knots, eased from one to the next every six seconds), three channels tracing the signal's phase portrait in three dimensions,
+shown turning in depth as a slowly turning mix of two of them on the X input would; drawn through an 800 Hz tone so its loops are
+the voice's lowest partials, smooth; the beam brightest where it moves slowest and on the near side, the two figures before it
+fading. A held vowel is a knot of ribbons, a storm a fuzzy ball with each pop flaring out of it, an idle receiver a small blob. Or a
+SWEEP, triggered on a rising edge, so a held vowel stands still and noise runs; 2.5 ms a division; the sweep before it fading on
+the phosphor. The figure's drift (delays, rate, turn, tilt) is a function of show time and the desk's number. Worked out on a
+worker a frame behind, in a render waited for. For the author: the figure's look with the real voice, how fast it turns, the
+rates it ties, its tone, and whether the default is the figure or the sweep. The needle still swings with the
+storm's level and each word. The dial and the SDR screen read one frequency (`DispatchSpectrum.FREQ`, 20.1 MHz).
+
+**The heard waveform** (`AudioFeatures.wave`, `HeardWave` in `audio/`): every scene and medium is handed the last 93 ms of what
+is heard, mono at 11,025 Hz, read only when asked and safe from a worker. A WAV playing (an export's take, a nested note's song)
+is read exactly off the disk at its moment, never held whole; a stream (a reading said live, a song made as it plays) is caught
+off the show's own bus (`Heard`, sent to the Master bus), so the desk's sounds are not in it. Not XY: the receiver is mono, and a
+true scope in XY mode would draw only a diagonal line.
 
 **The SDR screen on the receiver** (built; the author has not seen it): a hobbyist's addition to the old set, its own role
 (`sdr`, `data/props/sdr.prop.json`: a 5" panel on a stand, a radio dongle in its side, a coax down the receiver's back) standing
@@ -122,8 +151,10 @@ is drawn from what the receiver sounds: the band's hiss inside the receiver's fi
 pale streaks (the very pops `DispatchSounds` plays), Io-A's surf as swells, and a voice that comes in on the receiver as a
 station - its carrier a line down the middle from a beat before its first word to after its last, and the voice's own spectrum
 mirrored either side, read off the heard audio's bands (`AudioFeatures`, which the medium is handed every frame: the live
-analyzer, or the export's bake) only through that voice's words, so the room's voice, the keys and the phones never show. A
-jump in the show starts the waterfall empty, as the program just started; the grid down, it is black. The levels were set from
+analyzer, or the export's bake) only through that voice's words, so the room's voice, the keys and the phones never show. The
+screen is always full: where the show jumps (a scrub, a reading begun mid-way, its first frame) the rows before are made again
+on a worker, with the bands kept for each row a voice was heard in, so a scrub back over the Council keeps it; the grid down,
+its rows are dark. The levels were set from
 a real take through the receiver's band (its bands 0.2-0.75 in speech) and looked at with the look probe and a recording's
 bands standing in. Live reads the bands a few decibels hotter than an export's bake (the analyzer's peak against the bake's
 mean), so the voice is a little brighter live. No constellation: an AM voice has none, and drawing one would say the signal is

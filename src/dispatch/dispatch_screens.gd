@@ -231,7 +231,8 @@ func show_radar(st: Dictionary) -> void:
 	_show(radar, _radar, st)
 
 
-## The scope: `{t, level (0-1), storm, voice (0-1)}`.
+## The scope ([method DispatchScope.shown]): a figure `{figure, glow, trails}` - its points (the glass's half height 1), how
+## brightly the beam draws each, and the figures before it - or a sweep `{trace, was}`, the sweep and the one before it.
 func show_scope(st: Dictionary) -> void:
 	_show(scope, _scope, st)
 
@@ -452,8 +453,14 @@ static func _lit(at: Vector2, sweep: float) -> float:
 	return exp(-behind / 1.6)
 
 
-## The scope: a dim grid, and the trace across it - a hum's slow sine at rest, the static's jumping noise in a storm, and
-## a voice coming in on the receiver as a fast wave swelling and shrinking along it.
+## How much of the glass's half height a full-scale trace reaches, and how bright the sweep before it still glows.
+const SCOPE_REACH := 0.9
+const SCOPE_AFTERGLOW := 0.3
+
+
+## The scope: a dim grid, and the receiver's output on it as [DispatchScope] draws it - a figure turning in depth, its beam
+## brightest where it moves slowest, the figures before it fading on the phosphor; or a sweep across the glass (its hiss a fine
+## thread, a pop a spike, a voice its own wave), the sweep before it fading. What is louder than the glass holds runs off it.
 func _draw_scope(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(SCOPE_SIZE)
 	c.draw_rect(Rect2(Vector2.ZERO, size), _scope_glass)
@@ -463,29 +470,39 @@ func _draw_scope(c: CanvasItem, st: Dictionary) -> void:
 	for k in range(1, 6):
 		var y := size.y * float(k) / 6.0
 		c.draw_line(Vector2(0, y), Vector2(size.x, y), Color(_scope_ink, 0.12), 1.0)
-	var t := float(st.get("t", 0.0))
-	var level := float(st.get("level", 0.0))
-	var storm := String(st.get("storm", ""))
-	var voice := float(st.get("voice", 0.0))
+	var lit := _scope_ink.lightened(0.2)
+	if st.has("figure"):
+		var trails: Array = st.get("trails", [])
+		for k in range(mini(trails.size(), DispatchScope.TRAILS.size()) - 1, -1, -1):
+			_beam(c, (trails[k] as Array)[0], (trails[k] as Array)[1], float(DispatchScope.TRAILS[k]), lit)
+		_beam(c, st["figure"], st.get("glow", PackedFloat32Array()), 1.0, lit)
+		return
+	for which in [["was", SCOPE_AFTERGLOW], ["trace", 0.9]]:
+		var v: PackedFloat32Array = st.get(which[0], PackedFloat32Array())
+		if v.size() < 2:
+			continue
+		var pts := PackedVector2Array()
+		pts.resize(v.size())
+		for i in v.size():
+			pts[i] = Vector2(size.x * float(i) / float(v.size() - 1), size.y * 0.5 * (1.0 - v[i] * SCOPE_REACH))
+		c.draw_polyline(pts, Color(lit, float(which[1])), 2.0, true)
+
+
+## A figure's [param points] (the glass's half height 1, its middle 0) drawn as the beam draws them on the scope's glass: each
+## as bright as [param glow] says, at [param fade] of it, in [param lit].
+func _beam(c: CanvasItem, points: PackedVector2Array, glow: PackedFloat32Array, fade: float, lit: Color) -> void:
+	if points.size() < 2:
+		return
+	var size := Vector2(SCOPE_SIZE)
+	var half := size.y * 0.5 * SCOPE_REACH
 	var pts := PackedVector2Array()
-	var seed := int(t * 60.0)
-	for i in 129:
-		var x := size.x * float(i) / 128.0
-		var u := float(i) / 128.0
-		var y := sin(u * TAU * 3.0 + t * 2.0) * 4.0
-		if voice > 0.0:
-			var swell := 0.55 + 0.45 * sin(u * TAU * 1.3 + t * 7.0)
-			y += (sin(u * TAU * 11.0 + t * 37.0) * 0.6 + sin(u * TAU * 23.0 + t * 53.0) * 0.3
-				+ sin(u * TAU * 37.0 + t * 19.0) * 0.15) * swell * voice * size.y * 0.3
-		if level > 0.0:
-			var n := DispatchSounds.hash01(seed, i) * 2.0 - 1.0
-			if storm == "surf":
-				y += (n * 0.6 + sin(u * TAU * 7.0 + t * 9.0) * 0.4) * level * size.y * 0.32
-			else:
-				var spike := 1.0 if DispatchSounds.hash01(seed + 3, i) < 0.06 * level else 0.0
-				y += (n * 0.25 + spike * n * 1.6) * level * size.y * 0.4
-		pts.append(Vector2(x, size.y * 0.5 + y))
-	c.draw_polyline(pts, Color(_scope_ink.lightened(0.2), 0.9), 2.0, true)
+	pts.resize(points.size())
+	var cols := PackedColorArray()
+	cols.resize(points.size())
+	for i in points.size():
+		pts[i] = size * 0.5 + Vector2(points[i].x, -points[i].y) * half
+		cols[i] = Color(lit, (glow[i] if i < glow.size() else 1.0) * fade)
+	c.draw_polyline_colors(pts, cols, 1.6, true)
 
 
 ## The SDR screen, as a hobbyist's program draws it: a bar with the frequency tuned and the mode, the spectrum's line over a
@@ -784,21 +801,32 @@ func _draw_gain(c: CanvasItem) -> void:
 		c.draw_string(_mono, mid + d * (knob + 30.0) + Vector2(-w.x * 0.5, w.y * 0.3), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, ink)
 
 
-## The receiver's dial: a lit face with the bands' numbers along it and the cursor at 20.1.
+## The receiver's dial: a lit face with the band's megahertz along it, a tick every fifth of one, and the cursor where it is
+## tuned - the SDR screen's own frequency ([constant DispatchSpectrum.FREQ]).
+const DIAL_MHZ := Vector2(18.0, 22.0)
+const DIAL_X := Vector2(40.0, 472.0)
+
+
 func _draw_dial(c: CanvasItem) -> void:
 	var size := Vector2(512, 256)
 	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.78, 0.66, 0.42))
 	var ink := Color(0.12, 0.08, 0.04)
-	for k in 21:
-		var x := 40.0 + float(k) * 21.6
+	var x_of := func(mhz: float) -> float: return lerpf(DIAL_X.x, DIAL_X.y, (mhz - DIAL_MHZ.x) / (DIAL_MHZ.y - DIAL_MHZ.x))
+	var ticks := int(round((DIAL_MHZ.y - DIAL_MHZ.x) * 5.0))
+	for k in ticks + 1:
+		var x: float = x_of.call(DIAL_MHZ.x + float(k) * 0.2)
 		c.draw_line(Vector2(x, 120), Vector2(x, 150 if k % 5 == 0 else 138), ink, 2.0)
-	for k in 5:
-		var mhz := 18 + k
-		c.draw_string(_mono, Vector2(28.0 + float(k) * 108.0, 190), "%d" % mhz, HORIZONTAL_ALIGNMENT_LEFT, -1, 30, ink)
+	for mhz in range(int(DIAL_MHZ.x), int(DIAL_MHZ.y) + 1):
+		var label := "%d" % mhz
+		var w := _mono.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 30).x
+		c.draw_string(_mono, Vector2(float(x_of.call(float(mhz))) - w * 0.5, 190), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 30, ink)
 	c.draw_string(_mono, Vector2(40, 70), "MHz", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, ink)
-	var x := 40.0 + (20.1 - 18.0) / 5.0 * 432.0
-	c.draw_line(Vector2(x, 90), Vector2(x, 230), Color(0.7, 0.05, 0.03), 4.0)
-	c.draw_string(_mono, Vector2(x - 40, 250), "20.1", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.7, 0.05, 0.03))
+	var tuned := DispatchSpectrum.FREQ / 1e6
+	var at: float = x_of.call(tuned)
+	c.draw_line(Vector2(at, 90), Vector2(at, 230), Color(0.7, 0.05, 0.03), 4.0)
+	var said := "%.1f" % tuned
+	c.draw_string(_mono, Vector2(at - _mono.get_string_size(said, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x * 0.5, 250), said,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.7, 0.05, 0.03))
 
 
 ## The digits 0-9 a flip clock's cards show, white, one to a cell: drawn once, each card's halves cut from it.

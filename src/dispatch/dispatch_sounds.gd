@@ -529,6 +529,109 @@ static func _cluster(seed: int, c: int) -> float:
 	return lerpf(0.5, 1.0, hash01(seed + 17, c)) if hash01(seed + 13, c) < 0.62 else CLUSTER_QUIET
 
 
+## The receiver's own sound for what draws it as it is (the scope, [DispatchScope]): how long its filters are run before the
+## first sample shown (s), how long a pop is followed after it begins (s), and the share of each side the receiver is heard
+## at, as one.
+const WAVE_WARM := 0.006
+const POP_TAIL := 0.024
+const RX := 0.7
+
+
+## The receiver's own sound - its hiss and the storm it is open on, as [method _run] makes them - for the [param n] samples
+## at [param rate] up to show time [param t], mono: the same filters (made for [param rate]), the same levels, Io-B's pops in
+## the very slots and sizes [method _storm] begins them, a noise of its own; at [param share] of its level ([member
+## receiver_share]), silent where not [param powered]. [param open]: the receiver's stretches ([method
+## DispatchMedium._build_receiver]). A pure function of them.
+static func receiver_wave(open: Array, t: float, n: int, rate: int, share: float, powered: bool) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(maxi(n, 0))
+	if not powered or share <= 0.0 or n <= 0:
+		return out
+	var dt := 1.0 / float(rate)
+	var warm := int(WAVE_WARM * float(rate))
+	var first := int(round(t * float(rate))) - n + 1
+	var t0 := float(first - warm) * dt
+	var t1 := float(first + n - 1) * dt
+	var o := {}
+	for s in open:
+		if float(s["t"]) <= t1 and t0 < float(s["t1"]):
+			o = s
+			break
+	# its level at a few moments across the window (it moves over seconds)
+	var lv := PackedFloat32Array()
+	for k in 5:
+		var at := lerpf(t0, t1, float(k) / 4.0)
+		var inside := not o.is_empty() and at >= float(o["t"]) and at < float(o["t1"])
+		lv.append(receiver_level(o, at - float(o["t"])) if inside else 0.0)
+	var surf := String(o.get("storm", "")) == "surf"
+	var f_hs := 2.0 * sin(PI * minf(2400.0, float(rate) / 6.5) / float(rate))
+	var f_ss := 2.0 * sin(PI * minf(900.0, float(rate) / 6.5) / float(rate))
+	var h0 := 0.0
+	var h1 := 0.0
+	var s0 := 0.0
+	var s1 := 0.0
+	var span := float(n + warm - 1)
+	for k in n + warm:
+		var idx := first - warm + k
+		var ts := float(idx) * dt
+		var inside := not o.is_empty() and ts >= float(o["t"]) and ts < float(o["t1"])
+		var x4 := float(k) / maxf(span, 1.0) * 4.0
+		var i4 := mini(int(x4), 3)
+		var level := lerpf(lv[i4], lv[i4 + 1], x4 - float(i4)) if inside else 0.0
+		var hx := _white(idx, 1) * (HISS_OPEN * level * 0.6 + HISS if inside else HISS) * share
+		h0 += f_hs * h1
+		h1 += f_hs * (hx - h0 - 1.1 * h1)
+		var v := h1 * RX
+		if surf and inside:
+			var x := _white(idx, 2) * SURF * level
+			s0 += f_ss * s1
+			s1 += f_ss * (x - s0 - 0.7 * s1)
+			v += (s1 * 1.6 + x * 0.25) * share * RX
+		if k >= warm:
+			out[k - warm] = v
+	if not o.is_empty() and not surf:
+		_pops_into(out, o, first, rate, share)
+	return out
+
+
+## Io-B's pops that ring in the window of [param out] (its first sample [param first], at [param rate]) laid into it: each in
+## the slot and of the size [method _storm] begins it, a burst of noise rung through its band and dying away.
+static func _pops_into(out: PackedFloat32Array, o: Dictionary, first: int, rate: int, share: float) -> void:
+	var seed := int(o.get("seed", 0))
+	var dt := 1.0 / float(rate)
+	var t0 := float(first) * dt - float(o["t"])
+	var t1 := float(first + out.size() - 1) * dt - float(o["t"])
+	var span := float(o["t1"]) - float(o["t"])
+	for slot in range(int(floor((t0 - POP_TAIL) / POP_SLOT)), int(floor(t1 / POP_SLOT)) + 1):
+		var u := float(slot) * POP_SLOT
+		if u < 0.0 or u >= span:
+			continue
+		if hash01(seed, slot) >= POP_RATE * POP_SLOT * receiver_level(o, u):
+			continue
+		var a := POP * lerpf(0.3, 1.0, hash01(seed + 7, slot)) * share
+		var fc := lerpf(900.0, 3200.0, hash01(seed + 11, slot))
+		var f := 2.0 * sin(PI * minf(fc, float(rate) / 6.5) / float(rate))
+		var kd := exp(-1.0 / (POP_LEN * float(rate)))
+		var lo := 0.0
+		var bd := 0.0
+		var at := int(round((float(o["t"]) + u) * float(rate)))
+		for idx in range(at, mini(at + int(POP_TAIL * float(rate)), first + out.size())):
+			var x := _white(idx, 3 + slot % 7) * a
+			lo += f * bd
+			bd += f * (x - lo - 0.6 * bd)
+			a *= kd
+			if idx >= first:
+				out[idx - first] += bd * RX
+
+
+## A noise sample in [-1, 1) for sample [param i] and [param salt], the same every time: an integer mix.
+static func _white(i: int, salt: int) -> float:
+	var h := (i * 73856093) ^ (salt * 19349663)
+	h = ((h ^ (h >> 13)) * 1274126177) & 0xFFFFFFFF
+	h = h ^ (h >> 16)
+	return float(h & 0xFFFF) / 32768.0 - 1.0
+
+
 ## The ring the far end sends back, [param u] seconds after dialing ended: a pair of short rings a cycle, quiet in the earpiece.
 func _ringback(u: float) -> float:
 	var cyc := fposmod(u, DispatchScript.RING_CYCLE)

@@ -11,8 +11,9 @@ extends SceneTree
 ##   through the receiver's word, they do);
 ## - with the grid down the screen is dark;
 ## - a row is a pure function of its moment and what it is handed (the same twice);
-## - the waterfall: each row laid one image row above the one before, round the ring, in the palette's colors; run on, the rows
-##   made stay; a jump back starts it empty (the control: the row that was there before the jump was not empty);
+## - the waterfall: each row laid one image row above the one before, round the ring, in the palette's colors; full from its
+##   first frame; run on, the rows made stay; a jump makes the rows before it again, a voice heard there with them (the
+##   control: a screen that never heard it has none there);
 ## - the SDR's own make has the screen the medium draws on, at the screen's proportions.
 ##
 ## Run: godot --headless --path . --script tests/dispatch/dispatch_spectrum_check.gd
@@ -104,23 +105,36 @@ func _init() -> void:
 	_ok(S.row_at(61.5, open, bands, true) == heard, "a row is the same twice")
 	# the waterfall's ring
 	_ok(S.row_y(6) == posmod(S.row_y(5) - 1, S.ROWS) and S.row_y(S.ROWS) == S.row_y(0), "each row is laid one image row above the one before, round the ring")
-	var sp := S.new()
 	var lut := S.palette()
-	sp.tick(0.0, open, none, 1.0)
+	var sp := S.new()
 	sp.tick(5.0 / S.ROW_RATE, open, none, 1.0)
+	sp.settle()
 	var c := mid + 10
-	var want := S.row_at(5.0 / S.ROW_RATE, open, none, true)
-	var k := int(want[c] * 255.0) * 4
-	_ok(sp.head == 5 and sp.top() == S.row_y(5) and sp.image.get_pixel(c, S.row_y(5)) == Color8(lut[k], lut[k + 1], lut[k + 2]),
-		"a row made is laid in the palette's colors where its ring says (head %d)" % sp.head)
-	var four := sp.image.get_pixel(c, S.row_y(4))
+	var full := true
+	for r in [5, 3, 5 - S.ROWS + 1]:
+		full = full and sp.image.get_pixel(c, S.row_y(r)) == _color(S.row_at(float(r) / S.ROW_RATE, open, none, true), c, lut)
+	_ok(sp.head == 5 and sp.top() == S.row_y(5) and full,
+		"from its first frame every row of the waterfall is made, each in the palette's colors where its ring says")
+	var five := sp.image.get_pixel(c, S.row_y(5))
 	sp.tick(7.0 / S.ROW_RATE, open, none, 1.0)
-	_ok(sp.head == 7 and sp.image.get_pixel(c, S.row_y(4)) == four, "run on, the rows already made stay")
-	var blank := Color8(lut[0], lut[1], lut[2])
-	_ok(four != blank, "the control: the row there before a jump is not empty")
-	sp.tick(2.0 / S.ROW_RATE, open, none, 1.0)
-	_ok(sp.head == 2 and sp.image.get_pixel(c, S.row_y(4)) == blank and sp.image.get_pixel(c, S.row_y(2)) != blank,
-		"a jump back starts the waterfall empty, but for the row it lands on")
+	_ok(sp.head == 7 and sp.image.get_pixel(c, S.row_y(5)) == five, "run on, the rows already made stay")
+	# a scrub back over the voice keeps it; the control, a screen that never heard it, has none there
+	var said := int(61.5 * S.ROW_RATE)
+	for r in range(said - 6, said + 6):
+		sp.tick(float(r) / S.ROW_RATE, open, bands, 1.0)
+		sp.settle()
+	sp.tick(5.0, open, none, 1.0)
+	sp.settle()
+	sp.tick(float(said + 8) / S.ROW_RATE, open, none, 1.0)
+	sp.settle()
+	var kept := sp.image.get_pixel(at, S.row_y(said))
+	var fresh := S.new()
+	fresh.tick(float(said + 8) / S.ROW_RATE, open, none, 1.0)
+	fresh.settle()
+	var never := fresh.image.get_pixel(at, S.row_y(said))
+	_ok(kept == _color(S.row_at(float(said) / S.ROW_RATE, open, bands, true), at, lut)
+		and never == _color(S.row_at(float(said) / S.ROW_RATE, open, none, true), at, lut) and kept != never,
+		"a jump makes the rows before it again, a voice heard there with them (the control, never heard: none)")
 	# the SDR's make
 	var b := PropMakes.made("sdr", {}, 1)
 	var rig := PropRig.new(b) if b.get("node") is Node3D else null
@@ -161,6 +175,12 @@ func _outside(row: PackedFloat32Array) -> float:
 			s += row[c]
 			n += 1
 	return s / float(maxi(n, 1))
+
+
+## Column [param c] of [param levels] in [param lut]'s colors, as the waterfall lays it.
+func _color(levels: PackedFloat32Array, c: int, lut: PackedByteArray) -> Color:
+	var k := int(levels[c] * 255.0) * 4
+	return Color8(lut[k], lut[k + 1], lut[k + 2])
 
 
 func _ok(cond: bool, what: String) -> void:

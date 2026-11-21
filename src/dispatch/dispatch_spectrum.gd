@@ -14,17 +14,21 @@ class_name DispatchSpectrum
 ## medium's `advance`) only while that voice is speaking. So the room's own voice, the keys and a phone never reach it.
 ##
 ## A row is a pure function of its moment and what it is handed ([method row_at]). The waterfall keeps the rows it has made
-## ([method tick]): a jump in the show starts it empty, as the program is when just started; with the grid down it makes
-## blank rows. Levels are display decibels, [constant DB_LOW] the screen's black and [constant DB_HIGH] its top.
+## ([method tick]), and the bands each row heard a voice through; where the show jumps (a scrub, a reading begun mid-way, its
+## first frame) the rows before are made again on a worker ([method _refill]), a voice heard there before with them, so the
+## screen is always full. With the grid down its rows are dark. Levels are display decibels, [constant DB_LOW] the screen's
+## black and [constant DB_HIGH] its top.
 
 ## The band across the screen (Hz) round the dial's frequency (Hz), its columns (the middle one the carrier's), its rows
-## (the waterfall's height) and how many it makes a second; at most this many in one frame, the rest left blank.
+## (the waterfall's height) and how many it makes a second; the most one frame makes itself, past which the waterfall is made
+## again on a worker; how many rows' heard bands are kept, the nearest the show's place.
 const SPAN := 12000.0
 const FREQ := 20.1e6
 const COLS := 201
 const ROWS := 120
 const ROW_RATE := 24.0
 const MOST_A_FRAME := 8
+const HEARD_MOST := 30000
 ## The screen's scale (display dB): its black and its top; the SDR's own floor, off the receiver's filter.
 const DB_LOW := -110.0
 const DB_HIGH := -30.0
@@ -73,11 +77,16 @@ var head := -1                    # the newest row made: its moment times [const
 var trace := PackedFloat32Array() # the spectrum's line: the newest rows eased into, each column on the screen's scale (0-1)
 var _lut := PackedByteArray()     # the palette, 256 colors RGBA8
 var _line: Image                  # one row's colors, laid into the ring
+var _heard := {}                  # a row made while the receiver's voice spoke -> the bands it was read off
+var _task := -1                   # the waterfall being made again on a worker ([method _refill]), and what it hands back
+var _box := {}
+var _next := {}                   # a refill asked for while one runs: started once that one is in, which is then stale
 static var _cols := {}            # what each column keeps from row to row ([method _columns])
 
 
 func _init() -> void:
 	_lut = palette()
+	_columns()
 	image = Image.create_empty(COLS, ROWS, false, Image.FORMAT_RGBA8)
 	_line = Image.create_empty(COLS, 1, false, Image.FORMAT_RGBA8)
 	_blank()
@@ -89,27 +98,37 @@ func _init() -> void:
 ## stretches, [method DispatchMedium._build_receiver]), the heard audio's [param bands] and the grid's [param power]: true
 ## when anything changed. A jump back, or on by more than the waterfall holds, starts it empty.
 func tick(t: float, open: Array, bands: PackedFloat32Array, power: float) -> bool:
+	var changed := _land()
 	var now := int(floor(t * ROW_RATE))
 	if now == head:
-		return false
-	if now < head or now - head > ROWS:
-		_blank()
-		trace.fill(0.0)
+		return changed
+	var jumped := head < 0 or now < head or now - head > MOST_A_FRAME
+	if jumped:
+		_refill(now - 1, open, power > 0.5)
 		head = now - 1
-	var from := maxi(head + 1, now - MOST_A_FRAME + 1)
-	var row := PackedFloat32Array()
-	row.resize(COLS)
-	for r in range(head + 1, from):
-		row.fill(0.0)
-		_lay(r, row)
-	for r in range(from, now + 1):
-		row = row_at(float(r) / ROW_RATE, open, bands, power > 0.5)
+	for r in range(head + 1, now + 1):
+		var at := float(r) / ROW_RATE
+		if not bands.is_empty() and heard_at(at, open) > 0.0:
+			_keep(r, bands)
+		var row := row_at(at, open, bands, power > 0.5)
 		_lay(r, row)
 		for c in COLS:
-			trace[c] = lerpf(trace[c], row[c], TRACE_EASE)
+			trace[c] = row[c] if jumped else lerpf(trace[c], row[c], TRACE_EASE)
+		jumped = false
 	head = now
 	texture.update(image)
 	return true
+
+
+## A waterfall being made again on a worker waited for and laid in (a gate's).
+func settle() -> void:
+	while _task >= 0:
+		_land(true)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and _task >= 0:
+		WorkerThreadPool.wait_for_task_completion(_task)
 
 
 ## The image row the newest row is in: the waterfall is drawn from there down, then from the image's top.
@@ -178,6 +197,14 @@ static func row_at(t: float, open: Array, bands: PackedFloat32Array, powered: bo
 			p += exp((CARRIER_DB + (0.0 if off == 0 else float(CARRIER_SIDE[off - 1]))) * DB_E) * key
 		out[c] = clampf((log(p) * E_DB - DB_LOW) / (DB_HIGH - DB_LOW), 0.0, 1.0)
 	return out
+
+
+## How much of the heard audio is the receiver's voice at show time [param t] ([method voice_gate]; 0 with none on it).
+static func heard_at(t: float, open: Array) -> float:
+	for s in open:
+		if float(s["t"]) <= t and t < float(s["t1"]):
+			return voice_gate(s, t - float(s["t"]))
+	return 0.0
 
 
 ## Column [param c]'s frequency, off the carrier (Hz): the middle column 0, the edges half of [constant SPAN] either side.
@@ -283,6 +310,78 @@ static func _columns() -> Dictionary:
 		spk.append(log(-log((float(k) + 0.5) / float(SPECKLE))) * E_DB)
 	_cols = {"if": ifg, "voice": heard, "band": at_band, "speckle": spk}
 	return _cols
+
+
+## The whole waterfall up to row [param to] made again on a worker ([method _made]), from what the receiver is open on
+## ([param open]) and the bands kept for its rows; asked while one runs, it waits for that one, which is then stale.
+func _refill(to: int, open: Array, powered: bool) -> void:
+	var heard := {}
+	for r in range(to - ROWS + 1, to + 1):
+		if _heard.has(r):
+			heard[r] = _heard[r]
+	var job := {"to": to, "open": open.duplicate(true), "heard": heard, "powered": powered}
+	if _task >= 0:
+		_next = job
+		return
+	_start(job)
+
+
+func _start(job: Dictionary) -> void:
+	var box := {"to": int(job["to"])}
+	var lut := _lut
+	_box = box
+	_task = WorkerThreadPool.add_task(func() -> void:
+		box["image"] = _made(int(job["to"]), job["open"], job["heard"], bool(job["powered"]), lut), false, "the SDR's waterfall")
+
+
+## The refill in, where it is done (or waited for, [param wait]): laid under the rows made here since it was asked for,
+## unless a newer one waits, which is started. True where the waterfall changed.
+func _land(wait := false) -> bool:
+	if _task < 0 or not (wait or WorkerThreadPool.is_task_completed(_task)):
+		return false
+	WorkerThreadPool.wait_for_task_completion(_task)
+	_task = -1
+	var made: Image = _box.get("image")
+	var landed := false
+	if made != null and _next.is_empty():
+		for r in range(maxi(int(_box["to"]) + 1, head - ROWS + 1), head + 1):
+			made.blit_rect(image, Rect2i(0, row_y(r), COLS, 1), Vector2i(0, row_y(r)))
+		image = made
+		texture.update(image)
+		landed = true
+	if not _next.is_empty():
+		var job := _next
+		_next = {}
+		_start(job)
+	return landed
+
+
+## The waterfall's [constant ROWS] rows up to row [param to], each in its place round the ring, in [param lut]'s colors: a
+## worker's, touching nothing but what it is handed.
+static func _made(to: int, open: Array, heard: Dictionary, powered: bool, lut: PackedByteArray) -> Image:
+	var px := PackedByteArray()
+	px.resize(COLS * ROWS * 4)
+	var none := PackedFloat32Array()
+	for r in range(to - ROWS + 1, to + 1):
+		var levels := row_at(float(r) / ROW_RATE, open, heard.get(r, none), powered)
+		var base := row_y(r) * COLS * 4
+		for c in COLS:
+			var k := int(levels[c] * 255.0) * 4
+			px[base + c * 4] = lut[k]
+			px[base + c * 4 + 1] = lut[k + 1]
+			px[base + c * 4 + 2] = lut[k + 2]
+			px[base + c * 4 + 3] = 255
+	return Image.create_from_data(COLS, ROWS, false, Image.FORMAT_RGBA8, px)
+
+
+## Row [param r]'s heard [param bands] kept, so it is made again with its voice; the farthest from it let go past
+## [constant HEARD_MOST].
+func _keep(r: int, bands: PackedFloat32Array) -> void:
+	_heard[r] = bands
+	if _heard.size() > HEARD_MOST:
+		for k in _heard.keys():
+			if absi(int(k) - r) > HEARD_MOST / 2:
+				_heard.erase(k)
 
 
 ## Row [param r]'s [param levels] in the palette's colors, laid into the ring.
