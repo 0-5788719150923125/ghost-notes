@@ -7,7 +7,8 @@ class_name PuppetSheet
 ## puppet SWAPS between them as a hand-drawn cartoon does (its view as it turns or runs, its mouth as it talks, its mood), and bends
 ## each only for the small life between ([PuppetBody]).
 ##
-## A row: `view` (front, side, back), `mouth` (closed, open, wide; "" for a drawing that is only itself), `mood` ("" for none), `from`
+## A row: `view` (front, side, back), `mouth` (closed, open, wide; "" for a drawing that is only itself), `mood` ("" for none), `action`
+## ("" for none: a stride swapped with the profile as it goes, a wind-up and a reeling a verb swaps in for its moment), `from`
 ## (the drawing it is painted from, "" the maker's own), `ask` (what the painter is asked for - the drawing, never its style, which is
 ## the maker's), and `blurb`. A side drawing faces right; facing left is it mirrored.
 ##
@@ -17,7 +18,8 @@ class_name PuppetSheet
 const FILE := "sheet.json"
 const VIEWS := ["front", "side", "back"]
 const MOUTHS := ["closed", "open", "wide"]
-const MOODS := ["", "scared", "angry", "laughing"]
+const MOODS := ["", "scared", "angry", "laughing", "dead"]
+const ACTIONS := ["", "stride", "windup", "reeling"]
 
 const REGISTRY := {
 	"front": {"label": "Front", "view": "front", "mouth": "closed", "mood": "", "from": "",
@@ -47,12 +49,26 @@ const REGISTRY := {
 	"laughing": {"label": "Laughing", "view": "front", "mouth": "", "mood": "laughing", "from": "front",
 		"ask": "The same character facing us, laughing hard: eyes squeezed shut, mouth wide open, leaning back, a hand on its belly. Whole body, head to feet.",
 		"blurb": "Laughing."},
+	"dead": {"label": "Cartoon-dead", "view": "front", "mouth": "", "mood": "dead", "from": "front",
+		"ask": "The same character knocked out cold, cartoon-dead: flung flat, arms and legs splayed out wildly, X's for eyes, tongue hanging out. Whole body.",
+		"blurb": "Knocked out cold, X's for eyes."},
+	"stride": {"label": "Stride", "view": "side", "mouth": "", "mood": "", "action": "stride", "from": "side",
+		"ask": "Exactly the same character in the same profile, facing the RIGHT side of the page, caught mid-stride as it walks: its front leg reaching forward, its back leg pushing off behind, its arms swinging the other way. Same size, whatever it holds still in its hands.",
+		"blurb": "Mid-stride in profile: swapped with the profile at every step, as a drawn walk is."},
+	"windup": {"label": "Wind-up", "view": "front", "mouth": "", "mood": "", "action": "windup", "from": "front",
+		"ask": "The same character facing us, winding up to strike: whatever it holds raised high behind its head (or a fist pulled back if it holds nothing), its body leaning back, teeth gritted. Whole body, head to feet.",
+		"blurb": "Winding up a blow."},
+	"reeling": {"label": "Reeling", "view": "front", "mouth": "", "mood": "", "action": "reeling", "from": "front",
+		"ask": "The same character facing us, just hit hard on the head: reeling, knees buckling, eyes crossed and spinning, tongue lolling, a bump rising on its head. Whole body, head to feet.",
+		"blurb": "Just struck, reeling."},
 }
 
 
-## The drawing of those a puppet [param have] (key -> anything) best for its [param view], [param mouth] and [param mood]: the mood's
-## own where it has one, else the view's with that mouth (wide falling back to open, open to closed), else its front; "" for none.
-static func pick(have: Dictionary, view: String, mouth: String, mood: String) -> String:
+## The drawing of those a puppet [param have] (key -> anything) best for its [param view], [param mouth], [param mood] and [param action]:
+## the action's own where it has one, the mood's next, else the view's with that mouth (wide falling back to open, open to closed), else its front; "" for none.
+static func pick(have: Dictionary, view: String, mouth: String, mood: String, action := "") -> String:
+	if not action.is_empty() and have.has(action):
+		return action
 	if not mood.is_empty() and have.has(mood):
 		return mood
 	var v := view if have.has(view) else "front"

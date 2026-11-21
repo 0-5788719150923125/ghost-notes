@@ -183,6 +183,9 @@ func _checks() -> void:
 	bad["sequence"][0]["track"]["spans"][0]["target"] = "nobody"
 	_ok(p.check(bad).contains("not in that shot"), "control: a span aimed at someone absent is named")
 	bad = _board()
+	bad["sequence"][0]["cast"][2]["at"] = [-0.45, -0.72, 0]
+	_ok(p.check(bad).contains("standing on each other"), "control: two puppets started on the same spot are named")
+	bad = _board()
 	bad["sequence"][0]["track"]["spans"][0]["action"] = "teleport"
 	_ok(p.check(bad).contains("no verb"), "control: a verb there is none of is named")
 	bad = _board()
@@ -211,6 +214,9 @@ func _sheet() -> void:
 	_ok(PuppetSheet.pick(have, "back", "closed", "") == "front", "a view with no drawing is the front")
 	_ok(PuppetSheet.pick(have, "side", "open", "scared") == "scared", "a mood's drawing wins")
 	_ok(PuppetSheet.pick(have, "front", "closed", "angry") == "front", "a mood with no drawing is the view's")
+	have["reeling"] = 1
+	_ok(PuppetSheet.pick(have, "front", "open", "scared", "reeling") == "reeling", "an action's drawing wins over a mood's")
+	_ok(PuppetSheet.pick(have, "side", "open", "", "stride") == "side", "an action with no drawing is the view's")
 
 
 func _board() -> Dictionary:

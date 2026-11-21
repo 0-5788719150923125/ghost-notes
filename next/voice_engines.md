@@ -930,6 +930,12 @@ target recording, scored by Resemblyzer.
 
 ### Built
 
+- **A voice sings too** (next/music.md, "The voices"): the Lab's Singing rows - Vibrato, its Rate, Drift - are kept with
+  the voice (`VoiceLibrary.SINGING`; a voice kept before them hashes as before while they sit at their defaults, and
+  its spoken sample never hears them), and Sing sings a short climb and a held note in the voice on screen as a
+  composed Sound casting it would. Sung, the Tone's pitch shift is a change of SIZE, the notes held: the phrase sung
+  that much higher and quicker, then slowed back (`host._sung_at_size`, the reading's resampler), so a Spooky voice
+  sings the written note in a larger voice (`Delivery.sung_params`). Only a Kokoro voice sings.
 - `hosts/voice/blend.py`: the line (`mix: af_heart 2, bf_emma 1`, `split british: af_heart sound, bf_emma
   delivery`) and five methods: **Mix** (weighted mean), **Mix, kept full** (spherical: each half's length put
   back to the readers' own), **Sound and delivery** (one side's timbre, the other's prosody; a part per

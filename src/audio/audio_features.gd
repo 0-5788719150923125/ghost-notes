@@ -28,8 +28,12 @@ var flux: float = 0.0
 ## [Director] cuts scenes on this rather than a timer. Stays low through a steady passage.
 var movement: float = 0.0
 
-## How many bands [member bands] holds, as [Spectrum] analyzes them.
+## How many bands [member bands] holds, as [Spectrum] analyzes them: log-spaced from [constant FREQ_MIN] to
+## [constant FREQ_MAX] Hz, each its decibels over a window of [constant DB_FLOOR] mapped onto 0..1.
 const BAND_COUNT := 64
+const FREQ_MIN := 30.0
+const FREQ_MAX := 16000.0
+const DB_FLOOR := 60.0
 
 ## The full spectrum this frame: N band magnitudes, low to high, each ~0..1.
 var bands: PackedFloat32Array = PackedFloat32Array()

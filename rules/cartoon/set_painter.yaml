@@ -2,7 +2,8 @@
 # handed in as references for the style alone, laid out as a stage the puppets stand in front of (the floor across the bottom third, the
 # middle left open), with nothing a puppet would be mistaken for and no words.
 #
-# The code gives: {{place}}, {{file}}.
+# The code gives: {{place}}, {{file}}; `has_ground`, {{ground}} (where characters stand in it, where that is not the floor across the
+# bottom third - a far ridge they cross on the skyline).
 prompt:
   - "Use your image generation tool to make one picture, then save it in the current directory as {{file}}."
   - ""
@@ -12,8 +13,12 @@ prompt:
   - ""
   - >-
       The picture: a wide, empty stage backdrop for a cartoon, seen straight on from the front, as if the place were a theater stage;
-      landscape, wider than tall. The floor or ground fills the bottom third, and the middle of it is left open and uncluttered, since
-      characters will stand there. The place:
+      landscape, wider than tall.
+  - when: "!has_ground"
+    say: "The floor or ground fills the bottom third, and the middle of it is left open and uncluttered, since characters will stand there."
+  - when: has_ground
+    say: "Where characters will stand: {{ground}} Leave it open and uncluttered there."
+  - "The place:"
   - "{{place}}"
   - ""
   - >-

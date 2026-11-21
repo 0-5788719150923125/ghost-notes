@@ -13,7 +13,8 @@ extends SceneTree
 ## - A value at its default is left out (control: one off its default is in) - but a setting a roll draws where it is
 ##   unset, Likeness, is in at any value; every setting moves the code (control: the same block is the same code); a
 ##   fresh roll is a short code, a tuned song a longer one.
-## - A name no word covers (a pattern of the author's own) is written out and still comes back.
+## - A name no word covers (a pattern of the author's own) is written out and still comes back; the voices - what each
+##   sings, its sections, a kept voice's name - come back from the code.
 ## - A ROW ADDED MOVES ONLY THE ROLLS IT WINS: over 2000 rolls a seventh name takes about a seventh of the picks, every
 ##   pick that changed going to it (control: a pick by place in the list moves most of them); weighted, a heavier name
 ##   wins about as many times more often and a name added still takes only what it wins; the composer's own picks of a
@@ -24,12 +25,12 @@ extends SceneTree
 const PINNED := 167
 const PINNED_HASH := "03debb323f63cbef9d2638cd57b872a41bb0104f058ff0ca273f0c1efa896d97"
 
-const SONG := """Verse
+const SONG := """<!-- verse -->
 
 Welcome random user
 To my soliloquy
 
-[Chorus]
+<!-- chorus -->
 Error me found
 """
 
@@ -50,6 +51,7 @@ func _initialize() -> void:
 	_round_trip()
 	_defaults()
 	_names()
+	_voices()
 	_stable()
 	_fresh()
 	print("song_code_check: %s" % ("FAILED (%d)" % _fails if _fails > 0 else "ok"))
@@ -136,6 +138,15 @@ func _defaults() -> void:
 	if SongCode.of(t2) != code:
 		moved.append("a part taken out")
 	_ok(moved.size() == 10, "every setting moves the code: %s" % str(moved))
+
+
+func _voices() -> void:
+	var block := {"seed": 77, "parts": {"vocal": {"singer": {"kept": "Deep Ana", "name": "Deep Ana"}, "sections": [0, 1, 3]},
+		"vocal_2": {"sings": "harmony", "sections": [3, 4]}, "vocal_3": {"sings": "tune", "sections": [2], "singer": {"kept": "Ana"}}}}
+	var code := SongCode.of(block)
+	var back := SongCode.applied({}, code)
+	_ok(String(back["why"]).is_empty() and JSON.stringify(SongCode.settings(back["block"])) == JSON.stringify(SongCode.settings(block)),
+		"a song's voices come back from its code - what each sings, where, and its kept singer (%d letters)" % code.length())
 
 
 func _names() -> void:

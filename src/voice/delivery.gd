@@ -131,6 +131,51 @@ const TONE_PRESETS := {
 }
 
 
+## Kokoro's readers by speaker number, as its host numbers them (hosts/voice/backends/kokoro.py, PACKS: it only
+## grows): what a voice's reader is called before the host has listed them.
+const KOKORO_READERS := ["af_heart", "af_bella", "af_nicole", "af_aoede", "af_kore", "af_sarah", "af_alloy", "af_nova",
+	"af_sky", "af_jessica", "af_river", "am_fenrir", "am_michael", "am_puck", "am_echo", "am_eric", "am_liam", "am_onyx",
+	"am_santa", "am_adam", "bf_emma", "bf_isabella", "bf_alice", "bf_lily", "bm_fable", "bm_george", "bm_lewis", "bm_daniel"]
+
+
+## The pitch shift of tone [param tone] (a [constant TONE_PRESETS] index), in semitones.
+static func tone_semis(tone: int) -> float:
+	var keys := TONE_PRESETS.keys()
+	return float((TONE_PRESETS[keys[clampi(tone, 0, keys.size() - 1)]] as Dictionary)["semis"])
+
+
+## How voice [param cfg] (a cast row or a kept voice) is asked to sing (the voice host's `sing`): its reader, its blend,
+## and its Tone's pitch shift as a change of SIZE (`semis`: the formants move, the notes stay where they are written).
+static func sung_params(cfg: Dictionary) -> Dictionary:
+	var out := {"speaker": int(cfg.get("speaker", 0))}
+	if not String(cfg.get("blend", "")).is_empty():
+		out["blend"] = String(cfg["blend"])
+	var semis := tone_semis(int(cfg.get("tone", 0)))
+	if absf(semis) > 0.001:
+		out["semis"] = semis
+	return out
+
+
+## How voice [param cfg] sings a held note: its vibrato (semitones deep, sways a second) and its drift.
+static func sung_style(cfg: Dictionary) -> Dictionary:
+	return {"vibrato": float(cfg.get("vibrato", 0.15)), "vibrato_rate": float(cfg.get("vibrato_rate", 5.4)),
+		"drift": float(cfg.get("drift", 0.03))}
+
+
+## Whether voice [param cfg] is a man's: most of its blend's readers, or its one reader, named so (am_, bm_), by
+## [param names] (the host's list of readers by number; [constant KOKORO_READERS] where it is empty).
+static func sings_low(cfg: Dictionary, names: Array = []) -> bool:
+	var readers: Array = Array(VoiceBlend.readers(String(cfg.get("blend", ""))))
+	if readers.is_empty():
+		var list: Array = names if not names.is_empty() else KOKORO_READERS
+		var i := int(cfg.get("speaker", 0))
+		readers = [String(list[i]) if i >= 0 and i < list.size() else ""]
+	var men := 0
+	for r in readers:
+		men += 1 if String(r).length() >= 2 and String(r)[1] == "m" else 0
+	return men * 2 > readers.size()
+
+
 ## The longest run of emphasized words that is stress. Italics also mark things that are not said
 ## harder (a paragraph in italics is a change of time or place, [ScriptMarks] "italic"; a thought; a
 ## title): a word or a few is a reader leaning on them, a longer run is typography.

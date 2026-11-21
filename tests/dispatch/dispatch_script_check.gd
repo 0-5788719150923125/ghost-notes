@@ -695,6 +695,12 @@ func _grid_down() -> void:
 	var short := DispatchScript.parse(note, {"ERROR ME FOUND": {"kind": "note", "ready": true, "secs": 5.0}})
 	_ok(String(short["speakable"]).count("action-hold") == String(d["speakable"]).count("action-hold") - 1,
 		"the control: a film shorter than what follows it adds no rest")
+	# a film told `loop` plays under what follows, and the voice never waits for it
+	var looped := DispatchScript.parse(note.replace("play (terminal)", "play (terminal, loop)"), films)
+	var la: Dictionary = (looped["actions"] as Array)[1]
+	_ok(bool(la.get(DispatchScript.LOOP, false)) and String(looped["speakable"]).count("action-hold") == String(d["speakable"]).count("action-hold") - 1
+		and (looped["warnings"] as PackedStringArray).is_empty(),
+		"a film told loop is waited for by nothing, the voice going on over it (%s)" % str(looped["warnings"]))
 	var odd := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n<!-- power: dim -->\n\n<!-- environment: beams sideways -->\n\n<!-- play (phone): x.mp4 -->\n\n<!-- play (tv, mono): x.mp4 -->\n\nThere.\n")
 	var oa: Array = odd["actions"]
 	var ow := str(odd["warnings"])

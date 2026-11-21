@@ -6,15 +6,18 @@ extends Node
 ## For looking; nothing is held.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/cartoon/cartoon_app_probe.gd 120 --board=<storyboard.json> [--out=<dir>] [--at=S]
+##       [--seek=S]
 ##
 ## `--board` is a cartoon's storyboard (a note's `storyboard.json`), copied into the probe's note; its cast and sets must be on the
-## library's shelves. Writes `app.png` under the out folder, and what came up to the log.
+## library's shelves. Writes `app.png` under the out folder, and what came up to the log; `--seek` then moves the playhead there, as a
+## scrub does, and writes `seek.png`.
 
 const ROOT := "user://cartoon_app_probe"
 
 var _out := "user://cartoon_app_probe/look"
 var _board := ""
 var _at := 5.0
+var _seek := -1.0
 
 
 func _ready() -> void:
@@ -30,6 +33,8 @@ func _run() -> void:
 			_board = s.trim_prefix("--board=")
 		elif s.begins_with("--at="):
 			_at = float(s.trim_prefix("--at="))
+		elif s.begins_with("--seek="):
+			_seek = float(s.trim_prefix("--seek="))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_out))
 	NoteStore.root = ROOT + "/notes"
 	NoteUpload.root = ROOT + "/folders"
@@ -73,6 +78,15 @@ func _run() -> void:
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(ProjectSettings.globalize_path(_out).path_join("app.png"))
 	print("cartoon_app_probe: show time %.1f s, wrote %s" % [Spectrum.current.time, ProjectSettings.globalize_path(_out).path_join("app.png")])
+	# a scrub: the playhead moved, and the written show goes where it is told to be
+	if _seek >= 0.0:
+		var before := int(Director.get("_manual_i"))
+		Spectrum.seek(_seek)
+		for i in 20:
+			await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(ProjectSettings.globalize_path(_out).path_join("seek.png"))
+		print("cartoon_app_probe: sought to %.1f s: show time %.1f s, entry %d -> %d" % [_seek, Spectrum.current.time, before, int(Director.get("_manual_i"))])
 	Spectrum.transport_stop()
 	for i in 10:
 		await get_tree().process_frame

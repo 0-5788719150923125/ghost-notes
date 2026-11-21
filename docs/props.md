@@ -21,7 +21,7 @@ Source: [src/table/thing_library.gd](../src/table/thing_library.gd)
 
 ### Voices kept
 
-VoiceLibrary - voices kept for every note (next/library.md): the library's `voices` shelf (`Library`), one file per voice, `<slug>.json`: `{name, line, hash, voice}`. A kept voice is who speaks and how (`OWN`): the model and its reader, a Kokoro blend or the formant voice, the tone, the pace, the pauses, the delivery dials and the ink. Where it is heard - the room (`ROOM`) - is never kept: it stays each note's, one narrator in a car and at a desk.
+VoiceLibrary - voices kept for every note (next/library.md): the library's `voices` shelf (`Library`), one file per voice, `<slug>.json`: `{name, line, hash, voice}`. A kept voice is who speaks and how (`OWN`): the model and its reader, a Kokoro blend or the formant voice, the tone, the pace, the pauses, the delivery dials, the ink, and how it sings (`SINGING`: what a composed Sound casting it reads). Where it is heard - the room (`ROOM`) - is never kept: it stays each note's, one narrator in a car and at a desk.
 
 A note reads a kept voice by name (`kept:` on its row, `ReadingCast`) and carries a copy of what it last read. A voice renamed answers to its old names too (`was`), so the notes reading it follow it.
 
@@ -92,6 +92,7 @@ Source: [src/desk/prop_makes.gd](../src/desk/prop_makes.gd)
 | `phone` A phone | Each of the desk's phones: lifted to the ear, opened, rung, read; its name on its tape. | `data/props/phone.prop.json` | `inner`, `outer`, `tape` | `open` how open its lid is, 0 shut to 1 open | 1.5 - 4 |
 | `radar` The radar | The round scope its sweep and blips are drawn on, and its gain knob. | `data/props/radar.prop.json` | `scope` | `gain` the gain the script turns it to, one to ten | 18 - 45 |
 | `receiver` The receiver | The shortwave receiver: its dial at the frequency, the needle swinging with the static, the scope's trace. | `data/props/receiver.prop.json` | `dial`, `scope` | `signal` how strong what it hears is, 0 to 1 | 18 - 45 |
+| `sdr` The SDR screen | The little modern screen standing on the receiver: the band's spectrum and waterfall, a voice coming in on it bright in the noise. | `data/props/sdr.prop.json` | `screen` |  | 6 - 16 |
 | `printer` The printer | The printer whose paper feeds off the desk's end, its head running across as it prints. | `data/props/printer.prop.json` |  | `head` where the head is across its rail, -0.5 to 0.5 | 8 - 25 |
 | `feed` The security monitor | The little monitor the security cameras' pictures play on. | `data/props/security_monitor.prop.json` | `screen` | `glow` how brightly its picture lights the desk | 12 - 35 |
 | `satellite` The satellite's monitor | The flat monitor on its arm, the view straight down from orbit on it. | `data/props/flat_monitor.prop.json` | `screen` | `glow` how brightly its picture lights the desk | 12 - 35 |

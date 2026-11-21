@@ -54,6 +54,8 @@ const WORDS := [
 	# instruments
 	"kit_rock", "kit_edm", "kit_trap", "finger_bass", "reese", "bass_808", "acid", "piano", "supersaw", "synth_pluck",
 	"clav", "brass", "strings", "flute", "crunch_guitar", "metal_guitar", "acoustic_guitar", "glock",
+	# the voices
+	"sings", "sections", "vocal_2", "vocal_3", "vocal_4", "intro", "outro",
 ]
 
 

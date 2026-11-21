@@ -81,7 +81,8 @@ stays a note. The ScriptMarks registry has a row for each (docs/script.md).
 | `dispatch_set.gd` | `DispatchSet`: the desk and everything on it, built - terminal, keyboard, phones, radar, receiver and scope, printer and its heap, the three screens, the switch, the chart, the handbook, the things, the chair, the room |
 | `dispatch_desk.gd` | `DispatchDesk`: the desk itself - its wood, top, blotter and base - built from properties (`FIELDS`), each drawn by its number until set |
 | `dispatch_roots.gd` | `DispatchRoots`: the roots grown and meshed, how many hang, lie on the desk and stand beside it, how thick and how they wander (`FIELDS`); a hanging root kept clear of the printer's paper and heap along the very line its tube is drawn on (`_drawn_clear`: filled in, each run moved round the side that moves it least, smoothed and cleared again), none comes down onto the desk where the paper falls, and the root clinging under the desk's end comes down in front of the paper hanging there (`_in_front`) |
-| `dispatch_screens.gd` | the 2D faces drawn into the screens: the terminal (its redacted words as written, and where they lie), the radar and its clutter, the scope, a phone's two screens and keypad, the receiver's dial, the gain knob's scale |
+| `dispatch_screens.gd` | the 2D faces drawn into the screens: the terminal (its redacted words as written, and where they lie), the radar and its clutter, the scope, the SDR's spectrum and waterfall, a phone's two screens and keypad, the receiver's dial, the gain knob's scale |
+| `dispatch_spectrum.gd` | `DispatchSpectrum`: what the SDR screen on the receiver shows - each row of its waterfall a pure function of its moment, the receiver's stretches and the heard audio's bands; the ring of rows it has made |
 | `dispatch_censor.gd` | `DispatchCensor`: redacted words hidden over the finished frame - a tracked box cracked into flat shards (`shaders/dispatch_redact.gdshader`) |
 | `dispatch_sounds.gd` | `DispatchSounds`: every sound of the desk, a function of show time |
 | `dispatch_props.gd` | `DispatchProps`: the desk's things on the note's Props card and the Dex - the mug and the cup of pencils as roles any make can play (Choose…, kept in the Medium block's `things`; next/library.md, "Roles"), the desk and the roots as parts with properties and a Roll (kept in the Medium block's `desk` and `roots`; the desk's Choose… offers desks drawn by other numbers), and every thing the desk builds, pictured alone |
@@ -103,10 +104,31 @@ credits' roll), `tests/dispatch/dispatch_sounds_check.gd` (the
 jet's pitch falls, nothing is louder than the voice, the two storms differ, the same twice), `tests/voice/heard_check.gd`
 (the band, the plan, the join's marks), `tests/dispatch/dispatch_redact_check.gd` (GPU: the terminal on a bulged quad
 through a camera, the censor over it - no letter of the hidden words outside a box, every shard one color and the average
-of the frame under it, the tracker never short of the words); probe `tests/dispatch/dispatch_look_probe.gd` (frames to
-look at).
+of the frame under it, the tracker never short of the words), `tests/dispatch/dispatch_spectrum_check.gd` (the SDR screen:
+the filter's edges, a storm and its pops seen, a voice as a carrier and mirrored sidebands, the room's voice never on it, the
+ring of rows; control: a screen that takes every voice heard); probe `tests/dispatch/dispatch_look_probe.gd` (frames to look
+at; `--voice <wav> --sdr 1` for the SDR screen with a real voice's bands).
 
 ## Status
+
+**The SDR screen on the receiver** (built; the author has not seen it): a hobbyist's addition to the old set, its own role
+(`sdr`, `data/props/sdr.prop.json`: a 5" panel on a stand, a radio dongle in its side, a coax down the receiver's back) standing
+on the receiver's oscilloscope (`DispatchSet._sdr`, on the highest part over the scope's glass), so the old green trace and the
+modern waterfall are seen one over the other in the receiver's look, which aims a little higher for it. A spare thing: its × on
+the Props card takes it off. It shows what a hobbyist's program shows (`DispatchSpectrum`, drawn by `DispatchScreens`): the
+frequency (the dial's 20.100 MHz) and AM, the spectrum's line over a grid of decibels with the 6 kHz passband shaded and the
+tuned frequency marked, and the waterfall under it, a row 24 times a second, the newest at the top, five seconds of it. Every row
+is drawn from what the receiver sounds: the band's hiss inside the receiver's filter and dark past its edges, Io-B's pops as
+pale streaks (the very pops `DispatchSounds` plays), Io-A's surf as swells, and a voice that comes in on the receiver as a
+station - its carrier a line down the middle from a beat before its first word to after its last, and the voice's own spectrum
+mirrored either side, read off the heard audio's bands (`AudioFeatures`, which the medium is handed every frame: the live
+analyzer, or the export's bake) only through that voice's words, so the room's voice, the keys and the phones never show. A
+jump in the show starts the waterfall empty, as the program just started; the grid down, it is black. The levels were set from
+a real take through the receiver's band (its bands 0.2-0.75 in speech) and looked at with the look probe and a recording's
+bands standing in. Live reads the bands a few decibels hotter than an export's bake (the analyzer's peak against the bake's
+mean), so the voice is a little brighter live. No constellation: an AM voice has none, and drawing one would say the signal is
+digital. For the author: whether a modern screen belongs on this desk at all, where it stands, its size, how bright it is
+against the scope, and the voice's colors with a real voice.
 
 **The grid, notes inside notes, and videos** (built; the user has watched the first pass): `power: off` takes every thing that runs on the grid dark at once
 (`PropRig.set_power`: each make's lights and glowing parts; the radar's, the oscilloscope's and every screen's glass collapsing to

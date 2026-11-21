@@ -2,7 +2,8 @@ extends Node
 class_name DispatchScreens
 
 ## DispatchScreens - what the desk's screens show, drawn in 2D (next/dispatch.md): the terminal's text on black, the radar's sweep
-## and blip, the oscilloscope's trace (each green unless the Props card picks its color, [method set_inks]), a phone's two little screens, the printer's paper; and, drawn once, the chart
+## and blip, the oscilloscope's trace (each green unless the Props card picks its color, [method set_inks]), the receiver's SDR
+## screen (its spectrum and waterfall, [DispatchSpectrum]), a phone's two little screens, the printer's paper; and, drawn once, the chart
 ## of the council's hours, the receiver's dial at 20.1, the radar's gain scale and a phone's keypad. Words printed on a thing (a
 ## phone's tape, GOOD and BAD, the handbook's spine) are its make's own ([constant Props.SHAPES] `face`'s `text`).
 ##
@@ -16,6 +17,25 @@ class_name DispatchScreens
 const TERM_SIZE := Vector2i(1120, 840)
 const RADAR_SIZE := Vector2i(512, 512)
 const SCOPE_SIZE := Vector2i(256, 200)
+## The SDR screen (a 5" panel's 5:3) and its parts top to bottom (px): the bar with the frequency, the spectrum, the scale
+## of frequencies under it; the waterfall fills the rest.
+const SPECTRUM_SIZE := Vector2i(500, 300)
+const SPECTRUM_BAR := 24.0
+const SPECTRUM_PLOT := 104.0
+const SPECTRUM_SCALE := 16.0
+## Where the SDR screen's frequencies are labeled (Hz off the dial's), the passband it is set to (Hz either side), and its colors:
+## the program's grays, its line, the tuned frequency's mark, the values it reads out.
+const SPECTRUM_TICKS := [-4000.0, -2000.0, 0.0, 2000.0, 4000.0]
+const SPECTRUM_PASS := 3000.0
+const SDR_GROUND := Color(0.075, 0.08, 0.09)
+const SDR_BAR := Color(0.13, 0.14, 0.155)
+const SDR_PLOT := Color(0.1, 0.105, 0.115)
+const SDR_GRID := Color(0.32, 0.34, 0.37, 0.55)
+const SDR_LABEL := Color(0.62, 0.65, 0.7)
+const SDR_LINE := Color(0.36, 0.8, 0.92)
+const SDR_TUNED := Color(0.95, 0.18, 0.12, 0.85)
+const SDR_VALUE := Color(1.0, 0.7, 0.22)
+const SDR_CENTER := Color(0.4, 0.95, 0.45)
 const PHONE_SIZE := Vector2i(300, 368)
 ## A phone's keypad, drawn once for every phone: its size (px).
 const KEYPAD_SIZE := Vector2i(262, 400)
@@ -49,6 +69,7 @@ var terminal: SubViewport
 var keypad: SubViewport
 var radar: SubViewport
 var scope: SubViewport
+var spectrum: SubViewport
 var paper: SubViewport
 var chart: SubViewport
 var dial: SubViewport
@@ -60,6 +81,7 @@ var faces: Array = []             # the phone screens' viewports
 var _term: Face
 var _radar: Face
 var _scope: Face
+var _spectrum: Face
 var _paper: Face
 var _clock: Face
 var _tablet: Face
@@ -90,6 +112,11 @@ func build(_labels: PackedStringArray) -> void:
 		scope = _vp(SCOPE_SIZE, true)
 		_scope = Face.new(self, "scope")
 		scope.add_child(_scope)
+		spectrum = _vp(SPECTRUM_SIZE, true)
+		_spectrum = Face.new(self, "spectrum")
+		# the waterfall's cells crisp, as the program draws them
+		_spectrum.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		spectrum.add_child(_spectrum)
 		paper = _vp(PAPER_SIZE, true)
 		_paper = Face.new(self, "paper")
 		paper.add_child(_paper)
@@ -209,6 +236,12 @@ func show_scope(st: Dictionary) -> void:
 	_show(scope, _scope, st)
 
 
+## The SDR screen: `{tex (the waterfall's ring, [member DispatchSpectrum.texture]), top (its newest row's image row), trace
+## (the spectrum's line, a column each on its scale, 0-1), power}`; dark with no power.
+func show_spectrum(st: Dictionary) -> void:
+	_show(spectrum, _spectrum, st)
+
+
 ## The paper: `{lines: PackedStringArray (newest last), feed (0-1 of the line being fed), partial (characters of the line
 ## being printed), fed (all of it fed, in lines: where its holes and perforations are)}`.
 func show_paper(st: Dictionary) -> void:
@@ -273,6 +306,7 @@ class Face extends Node2D:
 			"terminal": screens._draw_terminal(self, state)
 			"radar": screens._draw_radar(self, state)
 			"scope": screens._draw_scope(self, state)
+			"spectrum": screens._draw_spectrum(self, state)
 			"paper": screens._draw_paper(self, state)
 			"phone": screens._draw_phone(self, state)
 			"chart": screens._draw_chart(self)
@@ -452,6 +486,74 @@ func _draw_scope(c: CanvasItem, st: Dictionary) -> void:
 				y += (n * 0.25 + spike * n * 1.6) * level * size.y * 0.4
 		pts.append(Vector2(x, size.y * 0.5 + y))
 	c.draw_polyline(pts, Color(_scope_ink.lightened(0.2), 0.9), 2.0, true)
+
+
+## The SDR screen, as a hobbyist's program draws it: a bar with the frequency tuned and the mode, the spectrum's line over a
+## grid of decibels with the passband shaded and the tuned frequency marked, the frequencies under it, and the waterfall
+## filling the rest - its newest row at the top ([method DispatchSpectrum.top]), drawn down to the ring's end and on from its
+## start. Black with no power.
+func _draw_spectrum(c: CanvasItem, st: Dictionary) -> void:
+	var size := Vector2(SPECTRUM_SIZE)
+	if float(st.get("power", 1.0)) < 0.5:
+		c.draw_rect(Rect2(Vector2.ZERO, size), Color.BLACK)
+		return
+	var font := ThemeDB.fallback_font
+	c.draw_rect(Rect2(Vector2.ZERO, size), SDR_GROUND)
+	# the bar: the frequency, the mode and passband
+	c.draw_rect(Rect2(0, 0, size.x, SPECTRUM_BAR), SDR_BAR)
+	var mhz := DispatchSpectrum.FREQ / 1e6
+	c.draw_string(font, Vector2(8, 18), "%.3f.000" % mhz, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(0.88, 0.92, 0.96))
+	c.draw_string(font, Vector2(104, 18), "MHz", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, SDR_LABEL)
+	var mode := "AM   BW %.1fk" % (SPECTRUM_PASS * 2.0 / 1000.0)
+	c.draw_string(font, Vector2(size.x - 8 - font.get_string_size(mode, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x, 17), mode,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, SDR_VALUE)
+	# the spectrum: a grid of decibels and frequencies, the passband shaded, the tuned frequency's mark, the line
+	var plot := Rect2(0, SPECTRUM_BAR, size.x, SPECTRUM_PLOT)
+	c.draw_rect(plot, SDR_PLOT)
+	var x_of := func(hz: float) -> float: return (hz / DispatchSpectrum.SPAN + 0.5) * size.x
+	var pass0: float = x_of.call(-SPECTRUM_PASS)
+	c.draw_rect(Rect2(pass0, plot.position.y, float(x_of.call(SPECTRUM_PASS)) - pass0, plot.size.y), Color(1, 1, 1, 0.05))
+	var db := -40.0
+	while db > DispatchSpectrum.DB_LOW:
+		var y := plot.end.y - (db - DispatchSpectrum.DB_LOW) / (DispatchSpectrum.DB_HIGH - DispatchSpectrum.DB_LOW) * plot.size.y
+		c.draw_line(Vector2(0, y), Vector2(size.x, y), SDR_GRID, 1.0)
+		c.draw_string(font, Vector2(4, y - 2), "%d dB" % int(db), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, SDR_LABEL)
+		db -= 20.0
+	for hz in SPECTRUM_TICKS:
+		var x: float = x_of.call(float(hz))
+		c.draw_line(Vector2(x, plot.position.y), Vector2(x, plot.end.y), SDR_GRID, 1.0)
+	var trace: PackedFloat32Array = st.get("trace", PackedFloat32Array())
+	if trace.size() == DispatchSpectrum.COLS:
+		var pts := PackedVector2Array()
+		pts.resize(trace.size())
+		for k in trace.size():
+			pts[k] = Vector2((float(k) + 0.5) / float(trace.size()) * size.x, plot.end.y - trace[k] * plot.size.y)
+		c.draw_polyline(pts, SDR_LINE, 1.5, true)
+	c.draw_line(Vector2(size.x * 0.5, plot.position.y), Vector2(size.x * 0.5, plot.end.y), SDR_TUNED, 1.0)
+	# the scale of frequencies
+	var scale_y := plot.end.y
+	c.draw_rect(Rect2(0, scale_y, size.x, SPECTRUM_SCALE), SDR_GROUND)
+	for hz in SPECTRUM_TICKS:
+		var x: float = x_of.call(float(hz))
+		var label := "%.3f" % ((DispatchSpectrum.FREQ + float(hz)) / 1e6)
+		var w := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+		c.draw_line(Vector2(x, scale_y), Vector2(x, scale_y + 3), SDR_LABEL, 1.0)
+		c.draw_string(font, Vector2(clampf(x - w * 0.5, 2.0, size.x - w - 2.0), scale_y + 13), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 11,
+			SDR_CENTER if is_zero_approx(float(hz)) else SDR_LABEL)
+	# the waterfall, newest at the top: the ring from its newest row to its end, then on from its start
+	var tex: Texture2D = st.get("tex")
+	if tex == null:
+		return
+	var wf := Rect2(0, scale_y + SPECTRUM_SCALE, size.x, size.y - scale_y - SPECTRUM_SCALE)
+	var rows := float(DispatchSpectrum.ROWS)
+	var top := int(st.get("top", 0))
+	var first := float(DispatchSpectrum.ROWS - top)
+	var row_h := wf.size.y / rows
+	c.draw_texture_rect_region(tex, Rect2(wf.position, Vector2(wf.size.x, first * row_h)),
+		Rect2(0, top, DispatchSpectrum.COLS, first))
+	if top > 0:
+		c.draw_texture_rect_region(tex, Rect2(wf.position.x, wf.position.y + first * row_h, wf.size.x, float(top) * row_h),
+			Rect2(0, 0, DispatchSpectrum.COLS, top))
 
 
 ## The paper as it lies from the slot (the picture's foot) back along itself: continuous paper, sprocket holes down both edges

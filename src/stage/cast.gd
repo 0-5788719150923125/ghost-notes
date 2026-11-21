@@ -72,6 +72,8 @@ const PARAMS := {
 			"blurb": "How tall it stands, feet to top, in the stage's units (the frame is about 1.8 tall at the default camera's distance)."},
 		"facing": {"label": "Faces", "type": "enum", "options": ["", "left", "right"], "default": "",
 			"blurb": "Which way it looks. Unset, as it is drawn (one drawn from the front counts as facing right)."},
+		"shade": {"label": "Shade", "type": "num", "default": 0.0,
+			"blurb": "How dark it is drawn: 0 its own colors, 1 a black silhouette against the sky (a far shot at night). `set` and `ramp` move it."},
 	},
 	"backdrop": {
 		"picture": {"label": "Picture", "type": "text", "default": "",
@@ -841,6 +843,7 @@ class PuppetActor extends Actor:
 	func setup(seed_value: int, cfg: Dictionary, _rng: RandomNumberGenerator) -> void:
 		rig_name = String(cfg.get("rig", ""))
 		scale = maxf(0.05, float(cfg.get("height", 1.2)))
+		state["shade"] = clampf(float(cfg.get("shade", 0.0)), 0.0, 1.0)
 		_seed = seed_value
 		_body()
 
@@ -884,13 +887,24 @@ class PuppetActor extends Actor:
 			return
 		var u: float = stage.unit()
 		var px := scale * lens._focal / pj.z * u / pb.rig.height()
-		pb.node.modulate.a = fade
+		var dark := 1.0 - 0.94 * clampf(float(state.get("shade", 0.0)), 0.0, 1.0)
+		pb.node.modulate = Color(dark, dark, dark * 1.04, fade)
 		pb.shown = fade > 0.003
 		pb.show_at(stage.view.matrix(stage.size) * Transform2D(0.0, Vector2(px, px), 0.0, Vector2(pj.x, pj.y) * u))
 
+	## Carried into another shot: what that shot says of it (its height, and its shade and facing where it gives them) taken, and its
+	## node moved there.
 	func moved_to(stage) -> void:
+		scale = maxf(0.05, float(spec.get("height", scale)))
+		if spec.has("shade"):
+			state["shade"] = clampf(float(spec["shade"]), 0.0, 1.0)
 		if body != null:
-			(body as PuppetBody).adopt(stage)
+			var pb := body as PuppetBody
+			var want := String(spec.get("facing", ""))
+			if not want.is_empty():
+				var drawn := "left" if String(pb.rig.data.get("faces", "front")) == "left" else "right"
+				pb.facing = -1.0 if want != drawn else 1.0
+			pb.adopt(stage)
 
 	func draw_scale() -> float:
 		return scale * 0.45
@@ -944,6 +958,12 @@ class BackdropActor extends Actor:
 	func setup(_seed_value: int, cfg: Dictionary, _rng: RandomNumberGenerator) -> void:
 		picture = String(cfg.get("picture", ""))
 		width = float(cfg.get("width", 0.0))
+		PuppetRig.backdrop(picture)
+
+	## Carried into another shot under the same name: that shot's picture and width.
+	func moved_to(_stage) -> void:
+		picture = String(spec.get("picture", picture))
+		width = float(spec.get("width", 0.0))
 		PuppetRig.backdrop(picture)
 
 	func draw_items(stage, lens: Lens3D, u: float) -> Array:

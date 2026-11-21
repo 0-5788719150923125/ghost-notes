@@ -32,7 +32,7 @@ class_name Storyboard
 
 const MAX_USE_DEPTH := 8
 ## The keys of a storyboard, in the order it is written in.
-const KEYS := ["name", "loop", "transition", "sensitivity", "elastic", "defs", "sequence", "tail"]
+const KEYS := ["name", "loop", "bookend", "transition", "sensitivity", "elastic", "defs", "sequence", "tail"]
 ## Where a storyboard's errors say it is when a note keeps it.
 const IN_NOTE := "in this note"
 ## No entry is scheduled shorter than this, in seconds.
@@ -51,6 +51,8 @@ const MIN_ENTRY := 0.5
 const BOARD := {
 	"loop": {"label": "Loop", "type": "bool", "default": true,
 		"blurb": "At the end, start again from the first entry. Off, the show follows the song instead: it holds its last entry, or cycles the tail, and rolls back to the top when the song does."},
+	"bookend": {"label": "Fades in and out", "type": "bool", "default": true,
+		"blurb": "The whole show comes up from black at its start and goes down to black at its end. Off, it is there from its first frame to its last (a cartoon that loops, a show a screen comes on in the middle of)."},
 	"transition": {"label": "Transition", "type": "enum", "options": ["cut", "dip", "fade"], "default": "cut",
 		"blurb": "How one entry gives way to the next unless the entry says otherwise: a hard cut, a dip through black, or a crossfade. Two entries that can morph always do."},
 	"sensitivity": {"label": "Tempo", "type": "float", "min": 0.05, "max": 20.0, "step": 0.05, "default": 1.0,
@@ -205,6 +207,7 @@ static func from_data(data: Variant, where: String, fallback_name := "", path :=
 		"ok": true, "error": "", "path": path,
 		"name": String(expanded.get("name", fallback_name)),
 		"loop": bool(expanded.get("loop", true)),
+		"bookend": bool(expanded.get("bookend", true)),
 		"transition": String(expanded.get("transition", "")),
 		"sensitivity": float(expanded.get("sensitivity", -1.0)),
 		"sequence": expanded["sequence"],
@@ -341,6 +344,8 @@ static func new_entry(scene: String) -> Dictionary:
 ## walks where it is in no file of its own.
 static func raw_of(loaded: Dictionary) -> Dictionary:
 	var out := {"name": String(loaded.get("name", "")), "loop": bool(loaded.get("loop", true))}
+	if not bool(loaded.get("bookend", true)):
+		out["bookend"] = false
 	if not String(loaded.get("transition", "")).is_empty():
 		out["transition"] = String(loaded["transition"])
 	if float(loaded.get("sensitivity", -1.0)) > 0.0:

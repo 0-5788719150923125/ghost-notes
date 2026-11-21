@@ -32,7 +32,7 @@ const GAITS := ["walk", "run", "tiptoe", "hop", "float", "slide"]
 const POSE_NAMES := ["rest", "arms_up", "arms_out", "arms_down", "cower", "shrug", "spooky", "cheer", "windup", "kick", "point"]
 const FX_KINDS := ["pow", "stars", "dust", "sweat", "alarm", "lines"]
 ## What `set` and `ramp` can move on an actor: the ones every kind has, then the eye's own.
-const PARAM_NAMES := ["scale", "fade", "hue", "time_scale", "drive", "tremble", "dilate", "lid", "iris"]
+const PARAM_NAMES := ["scale", "fade", "hue", "time_scale", "drive", "tremble", "dilate", "lid", "iris", "shade"]
 ## The shapes `form` makes ([method Form.slots]).
 const FORM_SHAPES := ["tetra", "ring", "line"]
 ## From the world (y up) to a prism's own frame (y down), and back: the same matrix.
@@ -1619,10 +1619,14 @@ class Pose extends Action:
 			_to[a] = to
 
 	func apply(_stage, actors: Array, k: float, _f: AudioFeatures, _dt: float) -> void:
+		# on a puppet with a model sheet, a pose it has a drawing for shows that drawing while the pose is mostly held (a spiked
+		# pose's drawing goes as the pose comes back)
+		var shown := String(PuppetBody.POSE_DRAWINGS.get(String(args.get("pose", "rest")), "")) if k > 0.3 else ""
 		for a in actors:
 			var pb := Actions.puppet(a)
 			if pb == null or not _from.has(a):
 				continue
+			pb.posed = shown
 			var f: Dictionary = _from[a]
 			var t: Dictionary = _to[a]
 			var keys := f.keys()
@@ -1733,6 +1737,7 @@ class Strike extends Action:
 			var s: Dictionary = _swing[a]
 			var pose := {}
 			var lunge := 0.0
+			pb.action = "windup" if k < 0.5 else ""
 			if k < 0.45:
 				pose = Actions._mix(f, w, smoothstep(0.0, 1.0, k / 0.45))
 				pb.squash_hold = lerpf(1.0, 0.9, k / 0.45)
@@ -1763,6 +1768,7 @@ class Strike extends Action:
 				a.pos = _home[a]
 				pb.squash_hold = 1.0
 				pb.snap = 1.0
+				pb.action = ""
 
 
 ## hit - a puppet is hit, from another actor's side or from the left or right: it recoils, spins, squashes and its eyes pop, with a
@@ -1874,6 +1880,7 @@ static func land_blow(stage, victim, dir: Vector2, force: float, mark: String) -
 	if pb == null:
 		return
 	pb.hit(dir, force)
+	pb.react("reeling", 0.5 + 0.6 * force)
 	var h := Actions.drawn_height(victim)
 	match mark:
 		"pow":

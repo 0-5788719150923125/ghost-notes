@@ -18,10 +18,10 @@ CUT  {"src": the drawing, "dir": the folder, "holes": [ids] | null, "keep": [ids
   or only one color inside one (a flash drawn round a hammer, its hammer kept).
   The crop is the figure's before anything is taken out, so coordinates hold from one cut to the next.
 
-ALIGN  {"dir": the drawing's folder (its cut.png), "base": the folder of the drawing it is painted from}
+ALIGN  {"dir": the drawing's folder (its cut.png), "base": the folder of the drawing it is painted from, "by"?: height | width}
   A drawing of a model sheet (next/cartoon.md) is resampled onto its base's canvas: scaled to the base figure's height, its feet's
-  middle on theirs - so it shares the base's coordinates, and a skeleton placed on the base fits it. The cut as painted is kept as
-  `cut_raw.png`.
+  middle on theirs - so it shares the base's coordinates, and a skeleton placed on the base fits it; `by: width` matches widths
+  instead (a bed whose sleeper sits up in it keeps its size). The cut as painted is kept as `cut_raw.png`.
 
 BUILD  {"dir", "bones": [{name, parent, head: [x, y], tail: [x, y], role?, side?}], "jaw"?: {outline: [[x, y], ...], hinge: [x, y],
         parent?, cavity?: "#rrggbb", open?: degrees, drop?: px}, "eyes"?: [{name?, center, radius: r | [rx, ry], lid?: "#rrggbb"}],
@@ -236,7 +236,10 @@ def align(spec):
     v = Image.open(raw).convert("RGBA")
     bb = _bbox(np.asarray(b)[..., 3] > 128)
     vb = _bbox(np.asarray(v)[..., 3] > 128)
-    k = (bb[3] - bb[1]) / max(1.0, float(vb[3] - vb[1]))
+    if spec.get("by") == "width":
+        k = (bb[2] - bb[0]) / max(1.0, float(vb[2] - vb[0]))
+    else:
+        k = (bb[3] - bb[1]) / max(1.0, float(vb[3] - vb[1]))
     vs = v.resize((max(1, round(v.width * k)), max(1, round(v.height * k))), Image.LANCZOS)
     # its feet's middle onto the base's: the bottom row of each figure, the middle of its width
     ox = round((bb[0] + bb[2]) / 2.0 - (vb[0] + vb[2]) / 2.0 * k)

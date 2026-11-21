@@ -15,7 +15,9 @@ extends Node
 ## `--eye x,y,z --aim x,y,z` photographs from there instead of where the desk's camera is (the set's space, m), to see what no
 ## shot holds - the printer's paper falling past the desk's end, say. With no Environment flag the note's own `environment:` block is
 ## used. Each `play` mark plays what [method ScreenPlays.record_of] finds (a note played live, a video file), or `--film WHAT=PATH=SECS`
-## (a video by hand, each `=`-parted).
+## (a video by hand, each `=`-parted). `--voice <wav>` stands in for the heard audio's bands (what the receiver's SDR screen reads a
+## voice off): the recording's, through the receiver's band, whenever any word is said - the screen shows only the receiver's.
+## `--sdr 1` also writes that screen's own picture beside each photograph (`_sdr.png`).
 ## It prints where each action falls, and asserts
 ## only that a frame is not uniform.
 
@@ -40,6 +42,8 @@ var _glass := {}                   # the screens' colors, as the Props card keep
 var _eye: Variant = null           # --eye and --aim: where every photograph is taken from instead
 var _aim := Vector3.ZERO
 var _films := {}                   # what each `play` plays -> what it is ([ScreenPlays]), or --film WHAT=PATH=SECS
+var _voice := ""                   # --voice: a recording whose bands stand in for the heard audio's
+var _sdr := false                  # --sdr 1: the SDR screen's own picture written too
 
 const EnvFlags := preload("res://tests/table/environment_flags.gd")
 
@@ -62,6 +66,8 @@ func _run() -> void:
 			"--words": _word = float(args[i + 1])
 			"--live": _live = args[i + 1] == "1"
 			"--sound": _sound = args[i + 1]
+			"--voice": _voice = args[i + 1]
+			"--sdr": _sdr = args[i + 1] == "1"
 			"--opening": _opening = args[i + 1]
 			"--lead": _lead = float(args[i + 1])
 			"--light", "--bright", "--shafts", "--fog", "--air", "--heard": EnvFlags.take(_environment, args[i], args[i + 1])
@@ -148,6 +154,10 @@ func _run() -> void:
 	var audio := PackedVector2Array()
 	var desk := medium as DispatchMedium
 	var heard := DispatchSounds.new(desk)
+	var voiced: Array = SpectrumBake.bake(_voice, 30, AudioFeatures.BAND_COUNT, AudioFeatures.FREQ_MIN, AudioFeatures.FREQ_MAX,
+		AudioFeatures.DB_FLOOR) if not _voice.is_empty() else []
+	if not _voice.is_empty():
+		print("dispatch_look_probe: voice %s, %d frames" % [_voice, voiced.size()])
 	Spectrum.virtual_clock = 0.0
 	for want in _times:
 		while t < float(want):
@@ -160,6 +170,8 @@ func _run() -> void:
 					fed += 1
 				if fed > subs.words.size():
 					subs.words = words.slice(0, fed)
+			if not voiced.is_empty():
+				Spectrum.current.bands = _voice_bands(words, desk._now, voiced)
 			medium.advance(Spectrum.current, DT, 1.0)
 			if not _sound.is_empty():
 				audio.append_array(heard.render(int(round(t * DispatchSounds.RATE)) - audio.size()))
@@ -176,6 +188,8 @@ func _run() -> void:
 		var img := stage.get_texture().get_image()
 		var path := "%s_t%06.1f.png" % [_out, float(want)]
 		img.save_png(path)
+		if _sdr and desk._screens.spectrum != null:
+			desk._screens.spectrum.get_texture().get_image().save_png(path.trim_suffix(".png") + "_sdr.png")
 		var st := _spread(img)
 		if st < 0.02:
 			_flat += 1
@@ -194,6 +208,24 @@ func _run() -> void:
 	for _i in 3:
 		await get_tree().process_frame
 	get_tree().quit(1 if _flat > 0 else 0)
+
+
+## The heard audio's bands at [param t] with [param voiced] (a recording's, 30 a second) standing in for the voice: its
+## frames in turn, through the receiver's band (300-2600 Hz, rolled off 12 dB an octave), while any of [param words] is said;
+## silence between.
+static func _voice_bands(words: Array, t: float, voiced: Array) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(AudioFeatures.BAND_COUNT)
+	for w in words:
+		if float((w as Dictionary)["t0"]) <= t and t <= float(w["t1"]) + 0.1:
+			var raw: PackedFloat32Array = voiced[int(t * 30.0) % voiced.size()]
+			var ratio := AudioFeatures.FREQ_MAX / AudioFeatures.FREQ_MIN
+			for b in out.size():
+				var hz := AudioFeatures.FREQ_MIN * pow(ratio, (float(b) + 0.5) / float(out.size()))
+				var off := maxf(log(300.0 / hz), log(hz / 2600.0)) / log(2.0)
+				out[b] = clampf(raw[b] - maxf(off, 0.0) * 12.0 / AudioFeatures.DB_FLOOR, 0.0, 1.0)
+			break
+	return out
 
 
 static func _at(words: Array, si: int) -> float:

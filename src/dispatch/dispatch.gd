@@ -33,7 +33,9 @@ class_name DispatchMedium
 ## message, and sent; then it goes home.
 ##
 ## The receiver is open in its storms and under a voice that comes in on it ([method _build_receiver]): the storm brought
-## down while the voice is said over it, the needle and the scope's trace moving with the storm and with each word.
+## down while the voice is said over it, the needle and the scope's trace moving with the storm and with each word. The SDR
+## screen standing on the scope draws the band's spectrum and waterfall from the same stretches, and the voice's own spectrum
+## from the heard audio's bands while that voice speaks ([DispatchSpectrum]).
 ##
 ## The subtitles caption what cannot be read on the desk, as the letter's do: speech, never the words typed on the
 ## terminal as they are said ([method _captioned]); a text is read on its phone and nowhere else.
@@ -369,6 +371,8 @@ var _set_node: Node3D
 var _roots: DispatchRoots
 var _roots_node: Node3D
 var _screens: DispatchScreens
+var _spectrum: DispatchSpectrum         # the receiver's SDR screen: its waterfall's rows as they are made
+var _bands := PackedFloat32Array()      # the heard audio's bands this frame ([AudioFeatures], handed to [method advance])
 var _sounds: DispatchSounds
 var _blur: IntroBlur
 var _censor: DispatchCensor
@@ -406,6 +410,7 @@ func mount(st: SubViewport) -> void:
 	add_child(_placeholder)
 	_screens = DispatchScreens.new()
 	add_child(_screens)
+	_spectrum = DispatchSpectrum.new()
 	_build_world()
 	_censor = DispatchCensor.new()
 	add_child(_censor)
@@ -557,6 +562,11 @@ func _land_set() -> void:
 		_set.radar_screen.material_override = _screen_mat("radar", _screens.radar.get_texture(), Color.WHITE, _glass("radar", "scope"))
 	if _set.scope_screen != null:
 		_set.scope_screen.material_override = _screen_mat("scope", _screens.scope.get_texture(), Color.WHITE, _glass("receiver", "scope"))
+	if _set.spectrum_screen != null:
+		# a flat panel: no tube's roll of brightness
+		var flat := _glass("sdr", "screen")
+		flat["flicker"] = 0.0
+		_set.spectrum_screen.material_override = _screen_mat("spectrum", _screens.spectrum.get_texture(), Color.WHITE, flat)
 	var pm := StandardMaterial3D.new()
 	pm.albedo_texture = _screens.paper.get_texture()
 	pm.roughness = 0.9
@@ -805,9 +815,10 @@ func _captioned(w0: int, w1: int, _t: float) -> bool:
 	return false
 
 
-func advance(_features, delta: float, _bookend: float) -> void:
+func advance(features, delta: float, _bookend: float) -> void:
 	var t := maxf(feed.show_time(), 0.0)
 	_dt = delta
+	_bands = (features as AudioFeatures).bands if features is AudioFeatures else PackedFloat32Array()
 	_ensure_doc()
 	if _build_task >= 0 and WorkerThreadPool.is_task_completed(_build_task):
 		WorkerThreadPool.wait_for_task_completion(_build_task)
@@ -2091,10 +2102,19 @@ func film_at(key: String, t: float) -> Dictionary:
 		var since := t - _t0[i]
 		var at := since - FILM_WAKE
 		var gone := secs + FILM_HOLD
+		# a film told `loop` goes round and round until something else is put on its screen
+		var looping := bool(a.get(DispatchScript.LOOP, false)) and secs > 0.0
+		if looping:
+			gone = INF
+			if at >= 0.0:
+				at = fposmod(at, secs)
 		if cut >= 0 and _t0[cut] <= t:
 			out = {}
 			continue
-		if not bool(film.get("ready", false)) or (String(film.get("kind", "")) == "note" and film.get("stream") == null):
+		# a note's show waits for what plays it to be read ([method NestedShow.prepared]): its song, or none for a silent note
+		var unread := String(film.get("kind", "")) == "note" and (not film.has("stream") \
+			or (film.get("stream") == null and not String(film.get("song", "")).is_empty()))
+		if not bool(film.get("ready", false)) or unread:
 			# not ready (a note's song not heard yet, a file not read, nothing by that name): the glass wakes on its static, as a
 			# clip not imported does, until something else is put on it
 			out = {"i": i, "what": String(a["what"]), "at": 0.0, "mono": false, "snow": true, "playing": false,
@@ -2260,6 +2280,9 @@ func _pose(t: float) -> void:
 	var voice := float(st.get("voice", 0.0))
 	_screens.show_scope({"t": snappedf(t, 1.0 / 30.0), "level": float(st.get("level", 0.0)), "storm": String(st.get("storm", "")),
 		"voice": voice})
+	# the SDR screen, its rows made as show time passes them
+	if _set.spectrum_screen != null and _spectrum.tick(t, _open, _bands, _power_now):
+		_screens.show_spectrum({"tex": _spectrum.texture, "top": _spectrum.top(), "trace": _spectrum.trace, "power": _power_now})
 	# what the receiver hears: the storm, swelling in a word said over it, never quite still
 	_feeds["receiver"] = {"signal": clampf(0.08 + float(st.get("level", 0.0)) * 0.85 + voice * 0.45 + 0.03 * sin(t * 1.3), 0.0, 1.0) * _power_now}
 	# what the screen throws on the desk: as much as its glass is lit, never a whole screen's worth for a cursor alone; a film's

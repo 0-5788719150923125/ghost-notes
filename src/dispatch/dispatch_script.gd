@@ -93,7 +93,8 @@ class_name DispatchScript
 ##                                     path - its picture on the glass and its sound in the room. Marks written after it in
 ##                                     the same silence happen while it plays; the voice waits for the rest of it where the
 ##                                     silence ends. `(terminal, mono)` shows it in the screen's own phosphor; `unwatched`
-##                                     leaves the camera where it is.
+##                                     leaves the camera where it is; `loop` plays it round and round under all that follows,
+##                                     the voice never waiting for it, until something else is put on its screen (`off: tv`).
 ##     <!-- fade: to-black, 4 -->      the picture goes down to black over that many seconds (2 bare), the voice waiting.
 ##                                     In the black the desk is still heard; what is marked there happens unseen and at
 ##                                     once (a hesitation holds the black, a sound plays in it, a voice may speak in it).
@@ -153,6 +154,9 @@ const IMAGE := "^\\s*<!--\\s*image\\s*(?:\\(\\s*([a-z]+(?:\\s*,\\s*[a-z]+)*)\\s*
 ## What a picture pinned to a screen is told, after the screen and a comma (`image (feed, unwatched)`): it lands with the
 ## camera left on what it was on.
 const UNWATCHED := "unwatched"
+## ...and a film told `loop` (`play (tv, loop)`): round and round under what follows, the voice never waiting, until its screen is put
+## to something else.
+const LOOP := "loop"
 ## In a page fence, on a line of its own: the room's words the page is brought to that place for. Group 1 the words.
 const SAID := "(?m)^[ \\t]*<!--\\s*said\\s*:\\s*([^>]*?)\\s*-->[ \\t]*$"
 const FENCE_OPEN := "^\\s*```\\s*(terminal|page)\\s*$"
@@ -969,9 +973,11 @@ static func parse(body: String, films := {}) -> Dictionary:
 						playing[MONO] = true
 					elif String(w) == UNWATCHED:
 						playing[UNWATCHED] = true
+					elif String(w) == LOOP:
+						playing[LOOP] = true
 					else:
-						warnings.append("play (%s, %s): a film is told %s or %s, or nothing" % [where, w, MONO, UNWATCHED])
-				_act(actions, gap, pending, spoken.size(), playing, PLAY_LEAD, maxf(secs, PLAY_LEAD))
+						warnings.append("play (%s, %s): a film is told %s, %s or %s, or nothing" % [where, w, MONO, UNWATCHED, LOOP])
+				_act(actions, gap, pending, spoken.size(), playing, PLAY_LEAD, PLAY_LEAD if bool(playing.get(LOOP, false)) else maxf(secs, PLAY_LEAD))
 			"page":
 				var pg := page_of(String(blk["text"]))
 				if String(pg["url"]).is_empty():
@@ -1811,7 +1817,7 @@ static func _hold_films(actions: Array, gap: Array, pending: PackedStringArray) 
 		if i < 0:
 			continue
 		var a: Dictionary = actions[i]
-		if String(a["kind"]) != "play" or a.has("held") or float(a["secs"]) <= 0.0:
+		if String(a["kind"]) != "play" or a.has("held") or float(a["secs"]) <= 0.0 or bool(a.get(LOOP, false)):
 			continue
 		a["held"] = true
 		var after := float(a["rest"]) + REST_PAD

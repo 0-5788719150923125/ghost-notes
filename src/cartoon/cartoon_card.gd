@@ -20,6 +20,7 @@ var _workspace: Object = null
 var _note_path := ""
 var _folder := ""
 var _block := {}
+var _has_bookends := false
 var _producer: CartoonProducer = null
 var _walking := false
 var _cast_box: VBoxContainer
@@ -37,6 +38,7 @@ static func for_note(ctx: Dictionary) -> CartoonCard:
 	c._workspace = ctx.get("workspace")
 	c._note_path = String(ctx.get("path", ""))
 	c._folder = String(ctx.get("folder", ""))
+	c._has_bookends = ctx.get("blocks") is Dictionary and (ctx["blocks"] as Dictionary).has("bookends")
 	return c
 
 
@@ -108,6 +110,10 @@ func apply(block: Dictionary) -> void:
 		_block["silent"] = true
 	_seconds.set_value_no_signal(float(_block.get("seconds", CartoonProducer.SECONDS)))
 	producer().block = _block
+	# a cartoon starts on its first frame and ends on its last (it may loop, or play on a screen): no holds unless a Bookends card asks
+	if not _has_bookends:
+		Director.set_intro_hold(0.0)
+		Director.set_outro_hold(0.0)
 	_list()
 
 

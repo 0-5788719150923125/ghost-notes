@@ -20,6 +20,7 @@ What a storyboard can say, read from the tables its editor builds its rows from 
 | Key | In the editor | Type | What it is |
 | --- | --- | --- | --- |
 | `loop` | Loop | bool | At the end, start again from the first entry. Off, the show follows the song instead: it holds its last entry, or cycles the tail, and rolls back to the top when the song does. |
+| `bookend` | Fades in and out | bool | The whole show comes up from black at its start and goes down to black at its end. Off, it is there from its first frame to its last (a cartoon that loops, a show a screen comes on in the middle of). |
 | `transition` | Transition | enum: `cut`, `dip`, `fade` | How one entry gives way to the next unless the entry says otherwise: a hard cut, a dip through black, or a crossfade. Two entries that can morph always do. |
 | `sensitivity` | Tempo | float | The story's pace. Higher is faster: every hold shrinks and every entry's timeline is compressed with it, so each event still lands. What an actor does on its own never speeds up. |
 | `elastic` | Elastic | float | How far a stage's timeline breathes with the song: a loud passage runs it faster, a quiet one slower, the total unchanged. 0 keeps it even. |
@@ -101,7 +102,7 @@ A human eye (`EyeBody`) on a slot. Gaze is driven by a look verb feeding `state.
 | `radius` | Size | num | How large the eye is. Unset, drawn between 0.24 and 0.34. |
 | `hue` | Hue | num | The iris's color, around the wheel from 0 to 1. Unset, drawn from the seed. |
 
-Source: [src/stage/cast.gd:190](../src/stage/cast.gd#L190)
+Source: [src/stage/cast.gd:192](../src/stage/cast.gd#L192)
 
 ### `prism` - PrismActor
 
@@ -112,7 +113,7 @@ A living wireframe prism (`PrismBody`) on a slot, drawn through the projected-sl
 | `scale` | Size | num | How large the prism is. Unset, drawn between 0.24 and 0.30. |
 | `hue` | Hue | num | Its color, around the wheel from 0 to 1: blue near 0.6, red at 0. |
 
-Source: [src/stage/cast.gd:546](../src/stage/cast.gd#L546)
+Source: [src/stage/cast.gd:548](../src/stage/cast.gd#L548)
 
 ### `swarm` - SwarmActor
 
@@ -134,7 +135,7 @@ A formation of prisms streaming along an invisible track into the void: a group 
 | `lead` | Lead | actor | An actor carried in from the entry before whose prism becomes the first blue member. |
 | `lead_red` | Red lead | actor | An actor carried in whose prism becomes the red strand's lead, waiting until the helix opens. |
 
-Source: [src/stage/cast.gd:646](../src/stage/cast.gd#L646)
+Source: [src/stage/cast.gd:648](../src/stage/cast.gd#L648)
 
 ### `puppet` - PuppetActor
 
@@ -145,8 +146,9 @@ A drawing made a puppet (`PuppetBody` on a `PuppetRig`, next/cartoon.md): its ow
 | `rig` | Rig | text | Which puppet: its name on the library's puppets shelf, or the folder of a rig by its path. |
 | `height` | Height | num | How tall it stands, feet to top, in the stage's units (the frame is about 1.8 tall at the default camera's distance). |
 | `facing` | Faces | enum: `left`, `right` | Which way it looks. Unset, as it is drawn (one drawn from the front counts as facing right). |
+| `shade` | Shade | num | How dark it is drawn: 0 its own colors, 1 a black silhouette against the sky (a far shot at night). `set` and `ramp` move it. |
 
-Source: [src/stage/cast.gd:837](../src/stage/cast.gd#L837)
+Source: [src/stage/cast.gd:839](../src/stage/cast.gd#L839)
 
 ### `backdrop` - BackdropActor
 
@@ -157,7 +159,7 @@ A painted set hung behind a cartoon's puppets (`PuppetRig.backdrop`): a flat pic
 | `picture` | Picture | text | The painted set: its name on the library's sets shelf, or a picture's path. |
 | `width` | Width | num | How wide it hangs, in the stage's units. 0 covers the frame at its distance, with room for the camera to move. |
 
-Source: [src/stage/cast.gd:924](../src/stage/cast.gd#L924)
+Source: [src/stage/cast.gd:938](../src/stage/cast.gd#L938)
 
 ## Actions (verb registry)
 
@@ -446,7 +448,7 @@ talk - a puppet talks for the window: its jaw chatters in syllables and words an
 | --- | --- | --- | --- |
 | `loud` | How hard | num | How wide and fast its mouth goes, from a mumble at 0.3 to a shout at 1. Silent: only the mouth and the nods are seen. |
 
-Source: [src/stage/actions.gd:1642](../src/stage/actions.gd#L1642)
+Source: [src/stage/actions.gd:1646](../src/stage/actions.gd#L1646)
 
 ### `face` - Face
 
@@ -456,7 +458,7 @@ face - a puppet turns: left or right (to its profile where its model sheet has o
 | --- | --- | --- | --- |
 | `to` | To | text | Which way it turns: left or right (in profile, where it has a profile drawn), toward an actor by name, or front (to us) or back (away). |
 
-Source: [src/stage/actions.gd:1659](../src/stage/actions.gd#L1659)
+Source: [src/stage/actions.gd:1663](../src/stage/actions.gd#L1663)
 
 ### `strike` - Strike
 
@@ -468,7 +470,7 @@ strike - a puppet hits another: it winds up (the arm nearer them up and back, cr
 | `force` | Force | num | How hard, from a tap at 0.2 to a blow that spins them at 1. |
 | `mark` | Mark | enum: `pow`, `stars` | What is drawn where it lands: a star burst, dizzy stars round their head, or nothing. |
 
-Source: [src/stage/actions.gd:1696](../src/stage/actions.gd#L1696)
+Source: [src/stage/actions.gd:1700](../src/stage/actions.gd#L1700)
 
 ### `hit` - Hit
 
@@ -480,7 +482,7 @@ hit - a puppet is hit, from another actor's side or from the left or right: it r
 | `force` | Force | num | How hard, 0 to 1. |
 | `mark` | Mark | enum: `pow`, `stars` | What is drawn on them: a star burst, dizzy stars round their head, or nothing. |
 
-Source: [src/stage/actions.gd:1770](../src/stage/actions.gd#L1770)
+Source: [src/stage/actions.gd:1776](../src/stage/actions.gd#L1776)
 
 ### `hop` - Hop
 
@@ -492,7 +494,7 @@ hop - a puppet crouches, springs up (stretching), flies and lands (squashing, du
 | `to` | To | vec3 | Where it lands. Unset, where it stood (or where `by` takes it). |
 | `by` | By | vec3 | How far it hops from where it is. |
 
-Source: [src/stage/actions.gd:1790](../src/stage/actions.gd#L1790)
+Source: [src/stage/actions.gd:1796](../src/stage/actions.gd#L1796)
 
 ### `shake` - Shake
 
@@ -502,7 +504,7 @@ shake - a puppet shakes for the window: fear, rage, a chill. args: amount.
 | --- | --- | --- | --- |
 | `amount` | How hard | num | How hard it shakes, 0 to 1: fear, rage, a chill. |
 
-Source: [src/stage/actions.gd:1834](../src/stage/actions.gd#L1834)
+Source: [src/stage/actions.gd:1840](../src/stage/actions.gd#L1840)
 
 ### `fx` - Fx
 
@@ -513,7 +515,7 @@ fx - a mark drawn on a puppet: a star burst, dizzy stars round its head, dust at
 | `kind` | Mark | enum | A star burst, dizzy stars, dust, sweat flying, an alarm over the head, or speed lines. |
 | `bone` | At | text | The bone it is drawn at (its tip). Unset, the top of the head. |
 
-Source: [src/stage/actions.gd:1847](../src/stage/actions.gd#L1847)
+Source: [src/stage/actions.gd:1853](../src/stage/actions.gd#L1853)
 
 ### `feel` - Feel
 
@@ -523,7 +525,7 @@ feel - a puppet's mood from now on: its model sheet's drawing of it (scared, ang
 | --- | --- | --- | --- |
 | `mood` | Mood | enum | The mood it shows from now on, where its model sheet has that drawing: scared, angry, laughing, or none. |
 
-Source: [src/stage/actions.gd:1684](../src/stage/actions.gd#L1684)
+Source: [src/stage/actions.gd:1688](../src/stage/actions.gd#L1688)
 
 ## Track (the timeline runner)
 

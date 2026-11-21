@@ -50,6 +50,10 @@ const POSES := {
 }
 ## How far a pose turns an arm toward where it points, at most (degrees): a drawing bends, it does not spin round.
 const REACH := 115.0
+## How much a puppet with a model sheet bends its limbs, of what one drawing alone would: its big moves are drawings of their own.
+const SHEET_BEND := 0.3
+## The drawing a pose shows on a puppet whose sheet has it ([constant PuppetSheet.REGISTRY]).
+const POSE_DRAWINGS := {"cower": "scared", "arms_up": "scared", "cheer": "laughing", "windup": "windup"}
 ## How long a mouth drawing holds at least (s): two frames at twelve a second, as a hand-drawn mouth does.
 const MOUTH_HOLD := 2.0 / 12.0
 ## The simulation's step (s): springs advance in steps no longer than this, the same live as in an export.
@@ -76,6 +80,12 @@ var shown := true
 var view := "front"
 ## Its mood: a key of [constant PuppetSheet.MOODS], drawn where it has that drawing ("" none).
 var mood := ""
+## What it is doing that has a drawing of its own ([constant PuppetSheet.ACTIONS]: a verb's wind-up, a blow's reeling), "" none.
+var action := ""
+## The drawing a held pose shows ([constant POSE_DRAWINGS]), "" none.
+var posed := ""
+var _action_left := 0.0              # seconds a reaction ([method react]) holds its drawing
+var _bend := 1.0                     # how much its limbs bend ([constant SHEET_BEND] with a model sheet)
 
 var _squash: Node2D = null
 var _cels := {}                      # drawing key -> Cel
@@ -148,6 +158,7 @@ func _init(r: PuppetRig, seed: int, h: float) -> void:
 	_cel = _cels.get("front", _cels.values()[0])
 	for c in _cels.values():
 		(c as Cel).talks = _cels.has((c as Cel).view + "_open")
+	_bend = SHEET_BEND if _cels.size() > 1 else 1.0
 
 
 static func _v2(a: Variant) -> Vector2:
@@ -269,6 +280,12 @@ func hit(dir: Vector2, force: float) -> void:
 	pop_eyes(0.4 + 0.6 * force, 0.5 + force)
 
 
+## Its drawing of [param what] (reeling, ...) shown for [param secs], whatever it was doing.
+func react(what: String, secs: float) -> void:
+	action = what
+	_action_left = secs
+
+
 ## A squash kicked in: [param amount] below 0 flattens it, above stretches it, on a spring.
 func kick(amount: float) -> void:
 	_sq_v += amount * 14.0
@@ -340,6 +357,10 @@ func step(dt: float, pos: Vector3) -> void:
 func _advance(dt: float) -> void:
 	_t += dt
 	_mouth_t += dt
+	if _action_left > 0.0:
+		_action_left -= dt
+		if _action_left <= 0.0:
+			action = ""
 	var g: Dictionary = GAITS.get(gait if not gait.is_empty() else "walk", GAITS["walk"])
 	var going := clampf(_speed / maxf(0.05, float(g["pace"]) * 0.35), 0.0, 1.0) if not gait == "slide" else 0.0
 	if gait == "float" or spooky > 0.0:
@@ -348,7 +369,8 @@ func _advance(dt: float) -> void:
 	var cyc := sin(_phase * TAU)
 	var targets := {}
 	for n in _order:
-		targets[n] = float(pose.get(n, 0.0))
+		var r := String(_role[n])
+		targets[n] = float(pose.get(n, 0.0)) * (_bend if r in ["arm", "hand", "leg"] else 1.0)
 	# breath and sway
 	var breath := sin(_t * TAU * 0.33 + float(_ph[0]))
 	var sway := sin(_t * TAU * 0.21 + float(_ph[1])) * (1.0 - going)
@@ -358,11 +380,11 @@ func _advance(dt: float) -> void:
 		var sd := 1.0 if String(_side[n]) == "left" else -1.0
 		match role:
 			"leg":
-				targets[n] = float(targets[n]) + going * float(g["leg"]) * cyc * sd
+				targets[n] = float(targets[n]) + going * float(g["leg"]) * cyc * sd * _bend
 			"arm":
-				targets[n] = float(targets[n]) - going * float(g["arm"]) * cyc * sd + 1.5 * breath * sd
+				targets[n] = float(targets[n]) - going * float(g["arm"]) * cyc * sd * _bend + 1.5 * breath * sd
 			"hand":
-				targets[n] = float(targets[n]) + going * float(g["arm"]) * 0.4 * cos(_phase * TAU) * sd
+				targets[n] = float(targets[n]) + going * float(g["arm"]) * 0.4 * cos(_phase * TAU) * sd * _bend
 			"loose":
 				targets[n] = float(targets[n]) + 7.0 * sin(_t * TAU * 0.8 + float(_ph[2]) + _order.find(n)) * (0.35 + going) \
 					- _heading * facing * going * 10.0
@@ -469,7 +491,11 @@ func _choose(going: float) -> void:
 	if want_mouth != _mouth and _mouth_t >= MOUTH_HOLD:
 		_mouth = want_mouth
 		_mouth_t = 0.0
-	var key := PuppetSheet.pick(_cels, want_view, _mouth, mood)
+	# a drawn walk: the profile and its stride swapped at every step
+	var doing := action if not action.is_empty() else posed
+	if doing.is_empty() and want_view == "side" and going > 0.35 and _cels.has("stride") and sin(_phase * TAU * 2.0) > 0.0:
+		doing = "stride"
+	var key := PuppetSheet.pick(_cels, want_view, _mouth, mood, doing)
 	if key.is_empty() or key == _cel.key:
 		return
 	var was := _cel

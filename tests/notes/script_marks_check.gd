@@ -30,6 +30,7 @@ func _init() -> void:
 	_patterns_match_examples()
 	_parsers_agree()
 	_cards_brief()
+	_song_marks()
 	_insertion()
 	_highlighter()
 	if fails == 0:
@@ -54,7 +55,7 @@ func _registry_shape() -> void:
 		_ok(ScriptMarks.GROUPS.has(e.get("group", "")), "%s names an unknown group" % k)
 		_ok(String(e.get("line", "")) in ["", "own", "start"], "%s has an unknown line rule" % k)
 		for m in e.get("modes", []):
-			_ok(m in ["generative", "table"], "%s names an unknown mode %s" % [k, m])
+			_ok(m in ["generative", "table", "song"], "%s names an unknown mode %s" % [k, m])
 		for m in e.get("blurbs", {}):
 			_ok((e["modes"] as Array).has(m) and not String(e["blurbs"][m]).is_empty(),
 				"%s words itself for %s, a panel it is not offered in" % [k, m])
@@ -258,6 +259,29 @@ func _parsers_agree() -> void:
 				# the control: the same item under any other heading is no card
 				_ok(CardDeck.parse("## The host\n\n%s\n" % ScriptMarks.example("card")).is_empty(),
 					"a list item outside the Cards section is a card")
+			"section":
+				var secs := Lyrics.parse("%s\nError me found\n\n<!-- verse -->\nWelcome random user\n\n%s\n" % [ex, ex])
+				_ok(secs.size() == 3 and String(secs[0]["kind"]) == "chorus" and String(secs[1]["kind"]) == "verse"
+						and String(secs[2]["kind"]) == "chorus" and (secs[2]["lines"] as Array).size() == (secs[0]["lines"] as Array).size(),
+					"a song's section mark does not begin its section, or one with no lines under it is not the last of its kind again: %s" % str(secs))
+				var named := Lyrics.parse("<!-- pre-chorus -->\nHere it comes\n<!-- hook -->\nError me found\n")
+				_ok(named.size() == 2 and String(named[0]["kind"]) == "bridge" and String(named[0]["label"]) == "Pre-chorus"
+						and String(named[1]["kind"]) == "chorus" and String(named[1]["label"]) == "Hook",
+					"a pre-chorus does not play as a bridge, or a hook as a chorus, each named as written: %s" % str(named))
+			"instrumental":
+				var secs := Lyrics.parse("<!-- intro: 2 -->\n<!-- verse -->\nWelcome\n%s\n<!-- chorus -->\nError me found\n<!-- ending -->\n" % ex)
+				var before: Array = secs[1].get("before", []) if secs.size() == 2 else []
+				var after: Array = secs[1].get("after", []) if secs.size() == 2 else []
+				_ok(secs.size() == 2 and (secs[0].get("before", []) as Array).size() == 1 and int(secs[0]["before"][0]["bars"]) == 2
+						and before.size() == 1 and String(before[0]["kind"]) == "break" and int(before[0]["bars"]) == 8
+						and after.size() == 1 and String(after[0]["kind"]) == "outro" and int(after[0]["bars"]) == Lyrics.INSTRUMENTAL_BARS,
+					"an instrumental section's mark is not a section of its bars where it is written: %s" % str(secs))
+			"repeat":
+				var secs := Lyrics.parse("<!-- chorus -->\nError me found\n%s\n" % ex)
+				_ok(secs.size() == 1 and (secs[0]["lines"] as Array).size() == 2,
+					"a repeat does not sing the section so far again: %s" % str(secs))
+				var bare := Lyrics.parse("<!-- chorus -->\nError me found\nTrying to shutdown now\n<!-- repeat -->\n")
+				_ok(bare.size() == 1 and (bare[0]["lines"] as Array).size() == 4, "a bare repeat is not twice in all")
 			"heading":
 				var b := Manuscript.blocks(ex + "\n\nText.\n")
 				_ok(b.size() > 0 and String(b[0]["kind"]) == "heading"
@@ -378,6 +402,27 @@ func _cards_brief() -> void:
 
 
 ## Does [param word] carry emphasis anywhere in [param text], as the voice parses it?
+## A song's editor offers its own marks and the script's it honors, each held to what it says of a song: a heading and a
+## note to self (one running over lines too) are never sung, and a say mark has its word sung as it spells it - the
+## control, the same words with no mark, sing the word as ghost reads it.
+func _song_marks() -> void:
+	var offered := ScriptMarks.for_mode("song")
+	_ok(offered.has("section") and offered.has("repeat") and offered.has("instrumental") and offered.has("say") and offered.has("heading") and offered.has("note")
+		and not offered.has("speaker"), "a song's editor does not offer a song's marks: %s" % str(offered))
+	var secs := Lyrics.parse("# A title\n\n<!-- verse -->\n<!-- a note -->\nWelcome random user\n<!-- a note that\nruns over lines -->\nTo my soliloquy\n")
+	var sung := PackedStringArray()
+	for l in Lyrics.lines_of(secs):
+		sung.append(String(l["text"]))
+	_ok(sung == PackedStringArray(["Welcome random user", "To my soliloquy"]),
+		"a heading or a note to self is sung in a song: %s" % str(sung))
+	var said := Lyrics.parse("<!-- say: soliloquy = S AH0 L IH1 L AH0 K W IY0 -->\n<!-- verse -->\nTo my soliloquy\n")
+	var word: Dictionary = said[0]["lines"][0]["words"][2] if not said.is_empty() else {}
+	_ok((word.get("arpa", []) as Array) == ["S", "AH0", "L", "IH1", "L", "AH0", "K", "W", "IY0"] and int(word.get("syllables", 0)) == 4,
+		"a say mark does not have its word sung as it spells it: %s" % str(word))
+	var plain := Lyrics.parse("<!-- verse -->\nTo my soliloquy\n")
+	_ok(not (plain[0]["lines"][0]["words"][2] as Dictionary).has("arpa"), "the control: a word no mark spells carries a spelling")
+
+
 func _stressed(text: String, word: String) -> bool:
 	for sentence in Phonemes.parse(Manuscript.unspoken(text)):
 		for w in sentence:

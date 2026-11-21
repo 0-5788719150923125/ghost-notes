@@ -86,7 +86,8 @@ func _ready() -> void:
 	Settings.write(SECTION, "doc_path", path)
 	Settings.write(SECTION, "sync", not path.is_empty())
 	_writer = preload("res://src/ui/script_writer.gd").new()
-	_writer.setup(SECTION, PackedStringArray(_doc_blocks()), SECTION)
+	# a note with a Sound is written as a song: its editor offers a song's marks (ScriptMarks, "song")
+	_writer.setup(SECTION, PackedStringArray(_doc_blocks()), "song" if _attached.has("sound") else SECTION)
 	_writer.refine_folder = func() -> String: return NoteUpload.folder_of(path)
 	_writer.refine_parts = func() -> Array: return _attached
 	_writer.bind_note()

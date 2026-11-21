@@ -4,10 +4,12 @@ class_name SongBake
 ## SongBake - a composed Sound made into a file, and a song file read for its patterns, off the app's thread
 ## (next/music.md, "Rendering"). One job at a time, each ending on [signal done]:
 ##
-## - [method bake]: each sung phrase of the score sung by the voice host ([method VoiceHost.sing]), kept in
-##   `<folder>/takes/` under a hash of what made it (the singer, the style, the words and their notes), so a phrase not
-##   changed is never sung again (a take no line names any more is removed); then the score rendered by the music
-##   host (hosts/music/render.py, which keeps each part's stem under a hash of its own) into `<folder>/mix.wav`.
+## - [method bake]: each sung line of the score - every voice's ([method lines_of]) - sung by the
+##   voice host ([method VoiceHost.sing]) in its singer (a kept voice read by name: its reader, blend and Tone, [method
+##   singer_of]), kept in `<folder>/takes/` under a hash of what made it (the singer, the style, the words and their
+##   notes), so a line not changed is never sung again (a take no line names any more is removed); then the score
+##   rendered by the music host (hosts/music/render.py, which keeps each part's stem under a hash of its own) into
+##   `<folder>/mix.wav`.
 ## - [method analyze]: hosts/music/analyze.py reads a song into `<folder>/reference.json` - its grid, key, chords,
 ##   form, drums and melody; never its sound.
 ##
@@ -34,17 +36,18 @@ const REFERENCE := "reference.json"
 ## subtitles' (the words sung and when, [method Subtitles.sidecar_for]).
 const MADE := "made.json"
 ## Raised when a phrase kept would be sung differently from the same notes: every kept take is sung again.
-const TAKES := 2
+const TAKES := 3
 ## Seconds between looks at a running host's log for a line to say.
 const LOOK := 0.5
 
 var _job := ""              # "", "sing", "render", "analyze"
 var _score := {}
 var _folder := ""           # absolute
-var _queue: Array = []      # phrases still to sing: [{i, words, out, meta}]
-var _takes: Array = []      # each phrase's take {wav, at}, or null until sung
+var _lines: Array = []      # every line sung ([method lines_of])
+var _queue: Array = []      # lines still to sing: [{l, out, meta}]
+var _takes: Array = []      # each line's take {wav, at, voice}, or null until sung
 var _asking := -1           # the request being sung
-var _asking_i := -1
+var _asking_i := -1         # ...the line it is
 var _host: VoiceHost = null
 var _host_up := false
 var _host_dead := false          # the voice host could not start or stopped
@@ -54,7 +57,6 @@ var _env_wait := ""         # the job waiting for the music environment ("render
 var _spec := {}
 var _look := 0.0
 var _said := ""
-var _singer := {}         # who sings this bake ({voice, speaker, blend})
 var _listing := -1        # the voices asked of the host, for the singers ([method list_singers])
 var _listed := Callable()
 var _save := {}           # a mix being saved as another format: {pid, dest, log, progress, seconds}
@@ -101,27 +103,24 @@ func bake(score: Dictionary, folder: String) -> void:
 	DirAccess.make_dir_recursive_absolute(_folder.path_join("takes"))
 	_takes.clear()
 	_queue.clear()
-	var vocal: Dictionary = score.get("vocal", {})
-	var singer := singer_of(vocal.get("singer", {}))
-	var phrases: Array = vocal.get("phrases", []) if not bool(vocal.get("mute", false)) else []
-	for i in phrases.size():
-		var p: Dictionary = phrases[i]
-		var h := _take_hash(singer, vocal.get("style", {}), p["words"])
-		var out := _folder.path_join("takes").path_join(h + ".wav")
-		var meta := _folder.path_join("takes").path_join(h + ".json")
+	_lines = lines_of(score)
+	for l in _lines.size():
+		var line: Dictionary = _lines[l]
+		var p: Dictionary = line["phrase"]
+		var out := take_of(_folder, line["voice"], p)
+		var meta := out.get_basename() + ".json"
 		var kept: Variant = JSON.parse_string(FileAccess.get_file_as_string(meta)) if FileAccess.file_exists(meta) else null
 		if FileAccess.file_exists(out) and kept is Dictionary:
-			_takes.append({"wav": out, "at": float(p["at"]) + float((kept as Dictionary).get("start", 0.0))})
+			_takes.append({"wav": out, "at": float(p["at"]) + float((kept as Dictionary).get("start", 0.0)), "voice": line["key"]})
 		else:
 			_takes.append(null)
-			_queue.append({"i": i, "words": p["words"], "out": out, "meta": meta})
+			_queue.append({"l": l, "out": out, "meta": meta})
 	_job = "sing"
 	set_process(true)
 	if _queue.is_empty():
 		_render()
 		return
-	_say("singing %d of %d lines" % [_queue.size(), phrases.size()])
-	_singer = singer
+	_say("singing %d of %d lines" % [_queue.size(), _lines.size()])
 	_voice_host()
 	if _host_up:
 		_sing_next()
@@ -262,17 +261,17 @@ func _sing_next() -> void:
 		_render()
 		return
 	var q: Dictionary = _queue[0]
-	_asking_i = int(q["i"])
+	_asking_i = int(q["l"])
+	var line: Dictionary = _lines[_asking_i]
 	var left := 0
 	for t in _takes:
 		if t == null:
 			left += 1
-	_say("singing: \"%s\" (%d left)" % [String((_score["vocal"]["phrases"][_asking_i] as Dictionary)["text"]), left])
-	var params := {"speaker": int(_singer.get("speaker", 0))}
-	if not String(_singer.get("blend", "")).is_empty():
-		params["blend"] = String(_singer["blend"])
-	var style: Dictionary = (_score["vocal"] as Dictionary).get("style", {})
-	_asking = _host.sing(q["words"], String(_singer.get("voice", "kokoro")), String(q["out"]), params, style)
+	var who := String((line["voice"] as Dictionary).get("role", ""))
+	_say("singing: \"%s\"%s (%d left)" % [String((line["phrase"] as Dictionary)["text"]), (" (%s)" % who) if not who.is_empty() else "", left])
+	var singer := singer_of((line["voice"] as Dictionary).get("singer", {}))
+	_asking = _host.sing((line["phrase"] as Dictionary)["words"], String(singer.get("voice", "kokoro")), String(q["out"]),
+		params_of(singer), (line["voice"] as Dictionary).get("style", {}))
 
 
 func _on_sung(id: int, msg: Dictionary) -> void:
@@ -292,8 +291,9 @@ func _on_sung(id: int, msg: Dictionary) -> void:
 	if f != null:
 		f.store_string(JSON.stringify({"start": float(msg.get("start", 0.0)), "duration": float(msg.get("duration", 0.0))}))
 		f.close()
-	var p: Dictionary = _score["vocal"]["phrases"][int(q["i"])]
-	_takes[int(q["i"])] = {"wav": String(q["out"]), "at": float(p["at"]) + float(msg.get("start", 0.0))}
+	var line: Dictionary = _lines[int(q["l"])]
+	_takes[int(q["l"])] = {"wav": String(q["out"]), "at": float((line["phrase"] as Dictionary)["at"]) + float(msg.get("start", 0.0)),
+		"voice": line["key"]}
 	_asking = -1
 	take_sung.emit(String(q["out"]), float(msg.get("start", 0.0)))
 	_sing_next()
@@ -415,22 +415,21 @@ static func write_sidecar(score: Dictionary, mix: String) -> void:
 		f.close()
 
 
-## Every word sung in [param score], in the song's own seconds, each line a sentence: what the subtitles show.
+## Every word sung in [param score], in the song's own seconds, each line a sentence: what the subtitles show - each
+## section's leading voice's ([method Composer._mark_leads]), each word naming its `line` ([method lines_of]).
 static func words_of(score: Dictionary) -> Array:
 	var words: Array = []
-	var v: Dictionary = score.get("vocal", {})
-	if bool(v.get("mute", false)):
-		return words
-	var line := 0
-	for p in v.get("phrases", []):
+	var lines: Array = lines_of(score).filter(func(l: Dictionary) -> bool: return bool((l["phrase"] as Dictionary).get("lead", false)))
+	lines.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["phrase"]["at"]) < float(b["phrase"]["at"]))
+	for k in lines.size():
+		var p: Dictionary = lines[k]["phrase"]
 		for w in p["words"]:
 			var notes: Array = w["notes"]
 			if notes.is_empty():
 				continue
 			var last: Dictionary = notes[notes.size() - 1]
 			words.append({"text": String(w["text"]), "t0": float(p["at"]) + float(notes[0]["t"]),
-				"t1": float(p["at"]) + float(last["t"]) + float(last["len"]), "sentence": line})
-		line += 1
+				"t1": float(p["at"]) + float(last["t"]) + float(last["len"]), "sentence": k, "line": String(lines[k]["id"])})
 	return words
 
 
@@ -455,23 +454,65 @@ static func seed_of(score: Dictionary) -> int:
 	return JSON.stringify(score).sha1_text().substr(0, 13).hex_to_int()
 
 
-## Where the take of [param phrase] of [param vocal] (a score's) is kept in [param folder]'s takes, whether or not it is
-## there yet: a hash of who sings, how, and the phrase's words and notes.
+## Every line sung in [param score], voice by voice, a muted voice's left out - `[{id, voice, key, i, phrase}]` (`voice`
+## the score's voice it is of, `key` that voice's part, `id` "key:i"); a line its section's lead has `lead` on its phrase.
+static func lines_of(score: Dictionary) -> Array:
+	var out: Array = []
+	for v in score.get("voices", []):
+		if not (v is Dictionary) or (v as Dictionary).is_empty() or bool((v as Dictionary).get("mute", false)):
+			continue
+		var key := String((v as Dictionary).get("key", "vocal"))
+		var phrases: Array = (v as Dictionary).get("phrases", [])
+		for i in phrases.size():
+			out.append({"id": "%s:%d" % [key, i], "voice": v, "key": key, "i": i, "phrase": phrases[i]})
+	return out
+
+
+## What the voice host is asked to sing in [param singer] ([method singer_of]): its reader, its blend, its Tone's size.
+static func params_of(singer: Dictionary) -> Dictionary:
+	var params := {"speaker": int(singer.get("speaker", 0))}
+	if not String(singer.get("blend", "")).is_empty():
+		params["blend"] = String(singer["blend"])
+	if absf(float(singer.get("semis", 0.0))) > 0.001:
+		params["semis"] = float(singer["semis"])
+	return params
+
+
+## Where the take of [param phrase] of [param vocal] (a score's voice) is kept in [param folder]'s takes,
+## whether or not it is there yet: a hash of who sings, how, and the phrase's words and notes.
 static func take_of(folder: String, vocal: Dictionary, phrase: Dictionary) -> String:
 	var h := _take_hash(singer_of(vocal.get("singer", {})), vocal.get("style", {}), phrase["words"])
 	return ProjectSettings.globalize_path(folder).path_join("takes").path_join(h + ".wav")
 
 
-## Who sings: the score's singer, a voice kept in the library read by its name (`kept`).
+## Who sings: the score's singer, a voice kept in the library read by its name (`kept`: its reader, its blend and its
+## Tone's shift, `semis`, which the voice host makes a change of size). A kept voice is read once a library version.
 static func singer_of(singer: Variant) -> Dictionary:
 	var s: Dictionary = singer if singer is Dictionary else {}
 	if not String(s.get("kept", "")).is_empty():
-		var kept := VoiceLibrary.read(String(s["kept"]))
-		var v: Dictionary = kept.get("voice", {}) if kept.get("voice") is Dictionary else {}
+		var v := _kept_voice(String(s["kept"]))
 		if String(v.get("voice", "")).begins_with("kokoro"):
-			return {"voice": String(v["voice"]), "speaker": int(v.get("speaker", 0)), "blend": String(v.get("blend", ""))}
+			var out := {"voice": String(v["voice"]), "speaker": int(v.get("speaker", 0)), "blend": String(v.get("blend", ""))}
+			var semis := Delivery.tone_semis(int(v.get("tone", 0)))
+			if absf(semis) > 0.001:
+				out["semis"] = semis
+			return out
 	return {"voice": String(s.get("voice", Composer.SINGER["voice"])), "speaker": int(s.get("speaker", Composer.SINGER["speaker"])),
 		"blend": String(s.get("blend", ""))}
+
+
+static var _kept_read := {}     # name -> its kept voice, while the library is at _kept_version
+static var _kept_version := -1
+
+
+static func _kept_voice(name: String) -> Dictionary:
+	if _kept_version != VoiceLibrary.version:
+		_kept_read.clear()
+		_kept_version = VoiceLibrary.version
+	if not _kept_read.has(name):
+		var e := VoiceLibrary.read(name)
+		_kept_read[name] = e.get("voice", {}) if e.get("voice") is Dictionary else {}
+	return _kept_read[name]
 
 
 static func _take_hash(singer: Dictionary, style: Variant, words: Array) -> String:

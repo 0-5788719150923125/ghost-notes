@@ -4,8 +4,8 @@ SongStream asks). The same score render.py makes whole, in windows of a few seco
 - a part whose stem is kept (render.py's, under the same hash) is read from it - a slice of the file, nothing made;
 - a part not kept is made over the window and PRE seconds before it, its notes still sounding from before the window
   included, so a held chord, a note's release, an echo and the room carry into the window as they would in the whole;
-- the voice is its takes laid where they fall (the app sings them ahead and says which are there), through the
-  vocoder where the score asks for one;
+- each voice (the lead, a chorus's voices) is its takes laid where they fall (the app sings them ahead and says which
+  are there, each take naming its voice), through the vocoder where the score asks for one, placed left to right;
 - every part's level is brought to one loudness (render.PLAYING) by a gain found once - from its kept stem, or from
   the stretch where it plays most - and the whole by one gain found once from the song's busiest stretch, so the
   windows join at one level.
@@ -58,8 +58,7 @@ class Song:
             self.parts.append({"part": part, "kept": kept, "gain": 1.0})
         for p in self.parts:
             p["gain"] = self._part_gain(p)
-        self.vocal = dict(spec["vocals"][0]) if spec.get("vocals") else None
-        self.vocal_gain = None
+        self.voices = [dict(v, _gain=None) for v in spec.get("vocals") or []]
         self._takes: dict = {}  # a take's samples at RATE, read once
         self._tail = None  # the last window's XFADE past its end, and where it begins
         self._tail_at = -1.0
@@ -100,11 +99,13 @@ class Song:
             x = x * p["gain"] * 10.0 ** (float(part.get("level", 0.0)) / 20.0)
             mix += x
             send += x * float((part.get("fx") or {}).get("reverb", 0.0))
-        if voice and self.vocal is not None and not self.vocal.get("mute"):
-            x = self._voice(w0, n)
+        for v in self.voices if voice else []:
+            if v.get("mute"):
+                continue
+            x = self._voice(v, w0, n)
             if x is not None:
                 mix += x
-                send += x * float((self.vocal.get("fx") or {}).get("reverb", 0.15))
+                send += x * float((v.get("fx") or {}).get("reverb", 0.15))
         if np.any(send):
             mix += dsp.convolve(send, self.ir) * 0.5
         mix *= self.master
@@ -113,8 +114,10 @@ class Song:
         return mix[:, skip:]
 
     def set_takes(self, takes: list) -> None:
-        if self.vocal is not None:
-            self.vocal["takes"] = takes
+        """Every take sung so far, each to the voice it names (the lead's where it names none)."""
+        for v in self.voices:
+            key = str(v.get("key", "vocal"))
+            v["takes"] = [t for t in takes if str(t.get("voice", "vocal")) == key]
 
     # -- a part over a stretch -----------------------------------------------------------------------
 
@@ -163,13 +166,13 @@ class Song:
 
     # -- the voice -----------------------------------------------------------------------------------
 
-    def _voice(self, w0: float, n: int):
-        """The voice over [w0, w0 + n samples): the takes there laid where they fall, through the vocoder where the
-        score asks for one, through its own effects, at the one loudness; None where nothing is sung there."""
+    def _voice(self, v: dict, w0: float, n: int):
+        """Voice `v` over [w0, w0 + n samples): the takes there laid where they fall, through the vocoder where the
+        score asks for one, through its own effects, at the one loudness, placed; None where nothing is sung there."""
         x = np.zeros((2, n))
         t1 = w0 + n / RATE
         any_take = False
-        for take in self.vocal.get("takes", []):
+        for take in v.get("takes", []):
             at = float(take.get("at", 0.0))
             frames = render.wav_seconds(str(take["wav"]))  # 0 for a take gone from the disk: that stretch goes without
             if frames <= 0.0 or at >= t1 or at + frames <= w0:
@@ -185,18 +188,19 @@ class Song:
             if b > a:
                 x[:, s + a:s + b] += mono[a:b]
                 any_take = True
-                if self.vocal_gain is None:
-                    self.vocal_gain = render.playing_gain(np.stack([mono, mono]))
+                if v["_gain"] is None:
+                    v["_gain"] = render.playing_gain(np.stack([mono, mono]))
         if not any_take:
             return None
-        amount = float(self.vocal.get("vocoder", 0.0))
-        if amount > 0.0 and self.vocal.get("notes"):
-            notes = [{**nt, "t": float(nt["t"]) - w0} for nt in self.vocal["notes"]
+        amount = float(v.get("vocoder", 0.0))
+        if amount > 0.0 and v.get("notes"):
+            notes = [{**nt, "t": float(nt["t"]) - w0} for nt in v["notes"]
                      if float(nt["t"]) < t1 + 0.1 and float(nt["t"]) + float(nt["len"]) > w0 - 0.2]
-            x = render.vocoded(x, notes, amount, render.rng_of(self.seed, "vocoder"))
-        fx = {"highpass": 90.0, "compress": {"threshold": -20.0, "ratio": 3.0}, **(self.vocal.get("fx", {}) or {})}
-        x = render.effects(x, fx, self.beat, render.rng_of(self.seed, "vocal"))
-        return x * (self.vocal_gain or 1.0) * 10.0 ** (float(self.vocal.get("level", 0.0)) / 20.0)
+            x = render.vocoded(x, notes, amount, render.rng_of(self.seed, render.vocoder_salt(v)))
+        fx = {"highpass": 90.0, "compress": {"threshold": -20.0, "ratio": 3.0}, **(v.get("fx", {}) or {})}
+        x = render.effects(x, fx, self.beat, render.rng_of(self.seed, str(v.get("key", "vocal"))))
+        x = render.placed(x, float(v.get("pan", 0.0)))
+        return x * (v["_gain"] or 1.0) * 10.0 ** (float(v.get("level", 0.0)) / 20.0)
 
 
 def _busiest(times: list, span: float, length: float) -> float:

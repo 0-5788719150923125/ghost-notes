@@ -31,6 +31,8 @@ of megabytes and Godot can load a WAV directly.
   -> {"id": 6, "op": "sing", "voice": "kokoro", "out": "/path/to/phrase.wav", "params": {"speaker": 0},
       "words": [{"text": "error", "notes": [{"t": 0.0, "len": 0.3, "midi": 64}, ...]}], "style": {"tune": 0.0}}
   <- {"id": 6, "ok": true, "wav": "...", "sample_rate": 24000, "start": -0.31, "duration": 2.1, "sung": [...]}
+     A `semis` in its params (a voice's Tone) is a change of SIZE, the notes and their times kept (`_sung_at_size`);
+     every phrase is sung on past its end and cut, so its last word is whole (`_sung_whole`).
 
   -> {"id": 4, "op": "cancel", "ids": [2, 3]}
   <- {"id": 3, "ok": false, "cancelled": true}
@@ -248,8 +250,11 @@ class Host:
             backend = self.backend(req.get("backend") or self.backend_for(voice))
             if not hasattr(backend, "sing"):
                 raise BackendError(f"the {backend.name} voices cannot sing")
-            return backend.sing(voice=voice, words=req.get("words") or [], out_path=req["out"],
-                                params=req.get("params") or {}, style=req.get("style") or {})
+            params = dict(req.get("params") or {})
+            semis = float(params.pop("semis", 0.0) or 0.0)
+            if abs(semis) > 1e-3:
+                return _sung_at_size(backend, voice, req.get("words") or [], req["out"], params, req.get("style") or {}, semis)
+            return _sung_whole(backend, voice, req.get("words") or [], req["out"], params, req.get("style") or {})
         if op == "ensure":
             # download/prepare a voice without synthesizing, so a UI can show
             # progress before the user is waiting on audio
@@ -272,6 +277,91 @@ class Host:
             if cls.owns(voice):
                 return name
         raise BackendError(f"no backend owns voice '{voice}'")
+
+
+# A phrase is sung on past its end by TAIL_WORDS of its own opening words, each a TAIL_NOTE long after TAIL_GAP of rest, and
+# cut TAIL_RELEASE past its last note, faded over the last TAIL_FADE of that (`_sung_whole`).
+TAIL_WORDS = 3
+TAIL_GAP = 0.35
+TAIL_NOTE = 0.25
+TAIL_RELEASE = 0.08
+TAIL_FADE = 0.04
+
+
+def _sung_whole(backend, voice: str, words: list, out: str, params: dict, style: dict) -> dict:
+    """A phrase sung with its last word whole. Kokoro ending an utterance on a word lets that word die away - a short
+    one to nothing, a held one's last consonants early (the same as a spoken sentence's end, which the reading gives
+    the next sentence's opening words for) - so the phrase is sung on past its end, TAIL_WORDS of its own opening words
+    after a short rest at its last note's pitch, and the take cut just after its last note: only the phrase is kept,
+    its last word sung as one in the middle of a line is."""
+    import wave
+
+    import numpy as np
+
+    notes = [n for w in words for n in w.get("notes", [])]
+    texts = [str(w.get("text", "")) for w in words if str(w.get("text", "")).strip()]
+    if not notes or not texts:
+        return backend.sing(voice=voice, words=words, out_path=out, params=params, style=style)
+    last = max(notes, key=lambda n: float(n["t"]) + float(n["len"]))
+    end = float(last["t"]) + float(last["len"])
+    tail = []
+    at = end + TAIL_GAP
+    for text in (texts * TAIL_WORDS)[:TAIL_WORDS]:
+        tail.append({"text": text, "notes": [{"t": at, "len": TAIL_NOTE, "midi": float(last["midi"])}]})
+        at += TAIL_NOTE + 0.03
+    got = dict(backend.sing(voice=voice, words=list(words) + tail, out_path=out, params=params, style=style))
+    with wave.open(out, "rb") as w:
+        rate = w.getframerate()
+        audio = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float32) / 32767.0
+    cut = max(1, min(audio.size, int(round((end + TAIL_RELEASE - float(got.get("start", 0.0))) * rate))))
+    kept = audio[:cut].copy()
+    fade = min(kept.size, int(TAIL_FADE * rate))
+    if fade > 0:
+        kept[-fade:] *= np.linspace(1.0, 0.0, fade, dtype=np.float32)
+    pcm = (np.clip(kept, -1.0, 1.0) * 32767.0).astype("<i2")
+    tmp = out + ".part"
+    with wave.open(tmp, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm.tobytes())
+    Path(tmp).replace(out)
+    got["duration"] = kept.size / float(rate)
+    got["sung"] = [x for x in got.get("sung", []) if not isinstance(x, dict) or int(x.get("word", 0)) < len(words)]
+    return got
+
+
+def _sung_at_size(backend, voice: str, words: list, out: str, params: dict, style: dict, semis: float) -> dict:
+    """A phrase sung by a voice `semis` semitones larger or smaller (the Tone's pitch shift, which moves the formants),
+    on the notes and times it is given: sung `semis` lower and quicker by the ratio, then played back slower by it - the
+    pitch and timing come back where they were written and the formants move with the playback, as the reading's Tone
+    moves them (piper._resample, the band-limited resampler)."""
+    import wave
+
+    import numpy as np
+    from backends.piper import _resample
+
+    r = 2.0 ** (semis / 12.0)
+    told = [{**w, "notes": [{**n, "t": float(n["t"]) * r, "len": float(n["len"]) * r, "midi": float(n["midi"]) - semis}
+                            for n in w.get("notes", [])]} for w in words]
+    got = _sung_whole(backend, voice, told, out, params, style)
+    with wave.open(out, "rb") as w:
+        rate = w.getframerate()
+        audio = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float32) / 32767.0
+    sized = _resample(audio, r)
+    pcm = (np.clip(sized, -1.0, 1.0) * 32767.0).astype("<i2")
+    tmp = out + ".part"
+    with wave.open(tmp, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm.tobytes())
+    Path(tmp).replace(out)
+    got = dict(got)
+    got["start"] = float(got.get("start", 0.0)) / r
+    got["duration"] = sized.size / float(rate)
+    got["sung"] = [{**x, "t": float(x["t"]) / r} if isinstance(x, dict) and "t" in x else x for x in got.get("sung", [])]
+    return got
 
 
 if __name__ == "__main__":

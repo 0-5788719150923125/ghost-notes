@@ -67,6 +67,11 @@ var _fx_room: HSlider
 var _fx_presence: HSlider
 var _fx_lean: HSlider
 var _fx_seat: HSlider
+var _sing_vibrato: HSlider     # how the voice sings, where a composed Sound casts it
+var _sing_rate: HSlider
+var _sing_drift: HSlider
+var _sing_id := -1             # the Lab's sung phrase being made
+var _sing_player: AudioStreamPlayer
 var _fx_near: HSlider
 var _fx_pad: HSlider
 var _tone: OptionButton
@@ -474,6 +479,87 @@ func _build_sound(box: VBoxContainer) -> void:
 		+ "swells in the gaps, and it is what plays alone through the Intro hold. Any setting plays "
 		+ "the bed at full level; the dial is SEVERITY - how often a low bass swell answers the "
 		+ "reader's pitch moving. Low is the bed alone; higher, the bass comes more often.")
+	_build_singing(box)
+
+
+## The Lab's Singing rows: how this voice sings where a composed Sound casts it (kept with it, [constant
+## VoiceLibrary.SINGING]), and Sing, a short phrase sung in it as the Sound would - its Tone a change of size, the notes
+## held.
+func _build_singing(box: VBoxContainer) -> void:
+	var head := HBoxContainer.new()
+	box.add_child(head)
+	var title := ReaderBrowser._heading("Singing")
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var sing := Button.new()
+	sing.text = "Sing"
+	sing.focus_mode = Control.FOCUS_NONE
+	sing.tooltip_text = "This voice sings a short phrase as a composed Sound casting it would: its Tone moves its size and leaves the notes where they are, with the vibrato and drift below. A Kokoro voice sings; the others cannot."
+	sing.pressed.connect(sing_test)
+	head.add_child(sing)
+	_sing_vibrato = _fx_slider(box, "Vibrato", float(VoiceLibrary.DEFAULTS["vibrato"]),
+		"How far a held note's pitch sways, in semitones, once it has held a while - when this voice sings a song's part.", true)
+	_sing_rate = _fx_slider(box, "Rate", float(VoiceLibrary.DEFAULTS["vibrato_rate"]),
+		"How fast the vibrato sways, in sways a second.", true)
+	_sing_drift = _fx_slider(box, "Drift", float(VoiceLibrary.DEFAULTS["drift"]),
+		"The slow wander under every sung note, in semitones: a person, never a machine, holding a pitch.", true)
+	for pair in [[_sing_vibrato, "vibrato"], [_sing_rate, "vibrato_rate"], [_sing_drift, "drift"]]:
+		var sl: HSlider = pair[0]
+		var span: Array = VoiceLibrary.SINGING[pair[1]]
+		sl.min_value = float(span[0])
+		sl.max_value = float(span[1])
+		sl.step = 0.05 if String(pair[1]) == "vibrato_rate" else 0.01
+
+
+## The voice on screen sings a short phrase - a climb and a held note - near where it sits, as a composed Sound casting
+## it would ([method Delivery.sung_params], [method Delivery.sung_style]); heard as soon as it is made.
+func sing_test() -> void:
+	capture_slot()
+	var cfg := slot_cfg(slot)
+	if not String(cfg["voice"]).begins_with("kokoro"):
+		panel.status("Only a Kokoro voice sings.")
+		return
+	var host: VoiceHost = panel._host
+	if host == null or not host.is_up():
+		panel.status("The voice is still starting - Sing again in a moment.")
+		return
+	if not host.synthesized.is_connected(_on_sung):
+		host.synthesized.connect(_on_sung)
+	var low := 52 if Delivery.sings_low(cfg, _speaker_names()) else 60
+	var words: Array = []
+	var at := 0.0
+	var steps := [0, 2, 4, 5, 7, 9, 7]
+	var said := ["Hold", "this", "note", "and", "let", "it", "ring"]
+	for i in said.size():
+		var held := 2.4 if i == said.size() - 1 else 0.42
+		words.append({"text": said[i], "notes": [{"t": at, "len": held, "midi": low + int(steps[i])}]})
+		at += held + 0.04
+	if _sing_id >= 0:
+		host.cancel([_sing_id])
+	_sing_id = host.sing(words, String(cfg["voice"]), ProjectSettings.globalize_path("user://lab_sung.wav"),
+		Delivery.sung_params(cfg), Delivery.sung_style(cfg))
+	panel.status("Singing…")
+
+
+func _on_sung(id: int, msg: Dictionary) -> void:
+	if id != _sing_id:
+		return
+	_sing_id = -1
+	var path := String(msg.get("wav", ""))
+	if not bool(msg.get("ok", true)) or not FileAccess.file_exists(path):
+		panel.status("The voice could not sing: %s" % String(msg.get("error", "")))
+		return
+	if _sing_player == null:
+		_sing_player = AudioStreamPlayer.new()
+		panel.add_child(_sing_player)
+	_sing_player.stream = AudioStreamWAV.load_from_file(path)
+	_sing_player.play()
+	panel.status("")
+
+
+## Kokoro's readers by speaker number, as the host listed them.
+func _speaker_names() -> Array:
+	return VoiceReaders.all("kokoro").map(func(r: Dictionary) -> String: return String(r.get("reader", "")))
 
 
 func _build_ink_row(box: VBoxContainer) -> void:
@@ -1029,6 +1115,7 @@ func capture_slot() -> void:
 		"presence": _fx_presence.value, "ambience": _fx_pad.value, "lean": _fx_lean.value,
 		"near": _fx_near.value, "seat": _fx_seat.value,
 		"ink": _ink_value(),
+		"vibrato": _sing_vibrato.value, "vibrato_rate": _sing_rate.value, "drift": _sing_drift.value,
 	}
 	if not _kept_name.is_empty():
 		_slots[slot]["kept"] = _kept_name
@@ -1059,6 +1146,9 @@ func _apply_slot(i: int) -> void:
 	_fx_lean.value = float(s["lean"])
 	_fx_near.value = float(s["near"])
 	_fx_seat.value = float(s.get("seat", 0.0))
+	_sing_vibrato.value = float(s["vibrato"])
+	_sing_rate.value = float(s["vibrato_rate"])
+	_sing_drift.value = float(s["drift"])
 	_show_ink(String(s["ink"]))
 		# After the voice, because it sets how many readers there are (a speaker id only means something against its model).
 	_show_voice_license()

@@ -67,7 +67,7 @@ func _compose_and_bake() -> void:
 		MusicTheory.key_name(int(score["key"]["tonic"]), String(score["key"]["scale"])), int(score["bars"]), float(score["length"])])
 	for s in score["sections"]:
 		print("  %-8s bars %3d-%3d" % [String(s["label"]), int(s["bar"]), int(s["bar"]) + int(s["bars"]) - 1])
-	var phrases: Array = (score.get("vocal", {}) as Dictionary).get("phrases", [])
+	var phrases: Array = Composer.voice_of(score).get("phrases", [])
 	for p in phrases:
 		var notes := PackedStringArray()
 		for w in p["words"]:

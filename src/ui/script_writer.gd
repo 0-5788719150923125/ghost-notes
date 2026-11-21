@@ -34,7 +34,7 @@ class_name ScriptWriter
 ## names its episodes hands the row its picked one's ([method hand_field]), so Episode is edited here,
 ## never on a card of its own.
 const FIELDS := {
-	"title": {"label": "Title", "modes": ["generative", "table", "note"],
+	"title": {"label": "Title", "modes": ["generative", "table", "note", "song"],
 		"tip": "The chapter's title. Read aloud first, by the voice that opens the chapter, and set at the head of the chapter in the Novel and Notebook. For a card show or a Proof note, the channel's name: on the title screen while the intro holds. The %title% of the YouTube title."},
 	"byline": {"label": "Byline", "modes": ["table"],
 		"tip": "A line under the channel's name on the title screen while the intro holds - \"with Pen & Ink\", or \"%episode%\". It takes the YouTube title's macros, filled for each episode: %title%, %episode%, %seed%, %author%, %book%, %date%. Empty, the name stands alone."},
@@ -55,6 +55,10 @@ const WORDING := {
 		"edit_tip": "Open the show's brief in an editor, with every mark a brief understands listed beside it - the deck, other voices, notes to yourself - ready to insert at the cursor. The brief is what the show is, who reads it and by what rules, and every agent behind every episode is handed it.",
 		"placeholder": "What is this show? Who reads it, how, and by what rules?",
 		"speakers": "Voices in this brief"},
+	"song": {"window": "Lyrics",
+		"edit_tip": "Open the song's words in an editor, with every mark a song understands listed beside it - where a verse, a chorus or a bridge begins, a section sung again, how a word is sung, notes to yourself - ready to insert at the cursor.",
+		"placeholder": "The song's words: a verse, a chorus, a verse...",
+		"speakers": "Voices in these words"},
 }
 
 ## How long typing must pause before the card's summary is recounted.

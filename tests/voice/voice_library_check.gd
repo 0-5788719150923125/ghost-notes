@@ -9,6 +9,10 @@ extends SceneTree
 ## - Its hash is what it is: the same voice under another name, with another room, or with its numbers written as YAML gives
 ##   them back, hashes the same; the control, one dial moved, does not. Its sound ([method VoiceLibrary.sound_of]) leaves the
 ##   ink out; the control, the tone changed, does not.
+## - HOW IT SINGS IS KEPT ([constant VoiceLibrary.SINGING]), bounded: a voice kept before it was (no singing fields)
+##   hashes as one at their defaults, so it stays the same voice; the control, its vibrato moved, hashes otherwise but
+##   sounds the same spoken. Sung ([method Delivery.sung_params]), a Spooky voice is asked three semitones larger and a
+##   Neutral one at its own size; a man's reader, or a blend of mostly men, sings low (the control, a woman's, does not).
 ## - Kept, it is read back, listed and found by its hash; kept again under its name it is replaced; renamed (never over
 ##   another voice's name) it answers to its old name too; removed it goes to the trash seam ([member Library.discard]) and its
 ##   sample with it, the author's trash never touched. Every write moves [member VoiceLibrary.version].
@@ -46,6 +50,7 @@ func _run() -> void:
 	_rmrf(ProjectSettings.globalize_path(ROOT))
 	_kept()
 	_hashes()
+	_singing()
 	_shelf(trashed)
 	_bounded()
 	_samples()
@@ -88,6 +93,27 @@ func _kept() -> void:
 	_ok(is_equal_approx(float(nan["pace"]), 1.0) and is_equal_approx(float(nan["pause"]), Delivery.MAX_PAUSE_SCALE)
 		and int(nan["tone"]) == 0 and is_equal_approx(float(nan["dynamics"]), 0.5),
 		"a NaN is its dial's default and an infinity its dial's end (%s)" % str(nan))
+
+
+func _singing() -> void:
+	var old := _row()
+	var defaults := _row()
+	for k in VoiceLibrary.SINGING:
+		defaults[k] = VoiceLibrary.DEFAULTS[k]
+	_ok(VoiceLibrary.hash_of(old) == VoiceLibrary.hash_of(defaults), "a voice kept before it sang is another voice now")
+	var swaying := _row()
+	swaying["vibrato"] = 0.6
+	_ok(VoiceLibrary.hash_of(swaying) != VoiceLibrary.hash_of(old), "the control: a voice's vibrato moved is the same voice")
+	_ok(VoiceLibrary.sound_of(swaying) == VoiceLibrary.sound_of(old), "...yet it sounds otherwise spoken")
+	var wild := VoiceLibrary.own_of({"voice": "kokoro", "vibrato": 9.0, "vibrato_rate": -2.0, "drift": NAN})
+	_ok(is_equal_approx(float(wild["vibrato"]), 1.0) and is_equal_approx(float(wild["vibrato_rate"]), 3.0)
+		and is_equal_approx(float(wild["drift"]), float(VoiceLibrary.DEFAULTS["drift"])), "how a voice sings is not kept bounded: %s" % str(wild))
+	var spooky := Delivery.TONE_PRESETS.keys().find("Spooky")
+	_ok(is_equal_approx(float(Delivery.sung_params({"speaker": 13, "tone": spooky}).get("semis", 0.0)), -3.0)
+		and not Delivery.sung_params({"speaker": 13, "tone": 0}).has("semis"), "a Spooky voice is not sung three semitones larger, or a Neutral one is resized")
+	_ok(Delivery.sings_low({"speaker": 13}) and Delivery.sings_low({"blend": "mix: am_puck 1, bm_fable 1, af_heart 1"})
+		and not Delivery.sings_low({"speaker": 0}) and not Delivery.sings_low({"blend": "mix: af_heart 1, bf_emma 1, am_puck 1"}),
+		"a man's reader or a blend of mostly men does not sing low, or a woman's does")
 
 
 func _hashes() -> void:

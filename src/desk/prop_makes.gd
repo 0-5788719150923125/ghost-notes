@@ -36,6 +36,8 @@ const ROLES := {
 	"receiver": {"label": "The receiver", "blurb": "The shortwave receiver: its dial at the frequency, the needle swinging with the static, the scope's trace.",
 		"own": "res://data/props/receiver.prop.json", "find": "radio", "tall": [18.0, 45.0], "faces": ["dial", "scope"],
 		"feeds": {"signal": "how strong what it hears is, 0 to 1"}},
+	"sdr": {"label": "The SDR screen", "blurb": "The little modern screen standing on the receiver: the band's spectrum and waterfall, a voice coming in on it bright in the noise.",
+		"own": "res://data/props/sdr.prop.json", "find": "screen", "tall": [6.0, 16.0], "faces": ["screen"], "feeds": {}},
 	"printer": {"label": "The printer", "blurb": "The printer whose paper feeds off the desk's end, its head running across as it prints.",
 		"own": "res://data/props/printer.prop.json", "find": "printer", "tall": [8.0, 25.0], "faces": [],
 		"feeds": {"head": "where the head is across its rail, -0.5 to 0.5"}},

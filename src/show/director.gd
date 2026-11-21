@@ -633,6 +633,9 @@ func attach(host: Node, medium: Medium = null) -> void:
 	if not is_equal_approx(pacing, 1.0):
 		# says at once whether the session runs with a non-default hold multiplier
 		print("ghost: scene pacing x%.2f (holds stretched from the remembered slider)" % pacing)
+	# a written storyboard re-walks to where the playhead is moved ([signal Spectrum.sought])
+	if not _song().sought.is_connected(_on_sought):
+		_song().sought.connect(_on_sought)
 	_session_seed = _resolve_seed()
 	print("ghost: session seed %d (%s)" % [_session_seed, _seed_source()])
 	_rng.seed = _session_seed ^ 0x1234567
@@ -850,6 +853,7 @@ func load_board(sb: Dictionary, source := "") -> bool:
 	_storyboard_seq = sb.sequence
 	_storyboard_tail = sb.tail
 	_storyboard_loop = sb.loop
+	_storyboard_bookend = bool(sb.get("bookend", true))
 	_storyboard_name = sb.name
 	_storyboard_source = source                 # how it was loaded, so the export can re-load it
 	_storyboard_transition = sb.transition      # e.g. "cut" forces jump cuts
@@ -873,6 +877,7 @@ func clear_storyboard() -> void:
 	_storyboard_name = ""
 	_storyboard_source = ""
 	_storyboard_loop = true
+	_storyboard_bookend = true
 	_storyboard_transition = ""
 	_storyboard_sensitivity = -1.0
 	_sched_starts = []
@@ -887,7 +892,7 @@ func clear_storyboard() -> void:
 func storyboard_data() -> Dictionary:
 	if not is_manual():
 		return {}
-	return Storyboard.raw_of({"name": _storyboard_name, "loop": _storyboard_loop,
+	return Storyboard.raw_of({"name": _storyboard_name, "loop": _storyboard_loop, "bookend": _storyboard_bookend,
 		"transition": _storyboard_transition, "sensitivity": _storyboard_sensitivity,
 		"sequence": _storyboard_seq, "tail": _storyboard_tail})
 
@@ -960,6 +965,17 @@ func seek_show(t: float) -> void:
 		if float(_sched_starts[k]) <= t:
 			i = k
 	goto_entry(i, t - float(_sched_starts[i]))
+
+
+## The playhead moved to [param t] ([signal Spectrum.sought]): a written storyboard goes there at the next frame (a drag's many seeks
+## make one walk a frame).
+func _on_sought(t: float) -> void:
+	if is_manual():
+		_sought = t
+
+
+var _sought := -1.0
+var _storyboard_bookend := true                     # the written show fades up and down at its ends (its board's `bookend`)
 
 
 ## The furthest into an entry [method goto_entry] plays at once (seconds); past it a long hold would stall a frame.
@@ -1071,6 +1087,8 @@ func _locked_scene_arg() -> int:
 # the scene transitions use. Runs whenever a song is loaded (live and export). Returns 1.0 (no fade)
 # only when idle. Audio is never touched.
 func _bookend_fade() -> float:
+	if is_manual() and not _storyboard_bookend:
+		return live_fade                              # a written show told to be there from its first frame to its last
 	var slen := _song().song_length()
 	if slen <= 0.0:
 		return live_fade                              # idle / no song: no bookend
@@ -1107,6 +1125,12 @@ var _time_debt := 0.0
 func _process(delta: float) -> void:
 	if _current == null:
 		return
+	if _sought >= 0.0:
+		var t := _sought
+		_sought = -1.0
+		if _storyboard_loop and _sched_end > 0.0:
+			t = fposmod(t, _sched_end)
+		seek_show(t)
 
 	# While the feedback console is open it holds the scene: freeze it entirely (no update, no redraw)
 	# so a heavy draw cannot starve the main loop and lag typing.

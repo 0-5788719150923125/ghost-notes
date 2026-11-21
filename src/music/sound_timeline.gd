@@ -3,8 +3,8 @@ class_name SoundTimeline
 
 ## SoundTimeline - a composed Sound's score as the one [Timeline] (next/music.md, "The card"; next/editing.md): a group
 ## a section (its kind's name, on the song's clock), a lane a part - the drums a span a bar named by their pattern, a
-## pitched part a span a chord, the voice a span each word sung - and the chord changes as flags in the group's own
-## lane. Every item's `source` is a path into the note's `sound:` block, so what reads the timeline knows where a part
+## pitched part a span a chord, each voice a span each word sung - and the chord changes as flags
+## in the group's own lane. Every item's `source` is a path into the note's `sound:` block, so what reads the timeline knows where a part
 ## is written. Pure: the score in, the Timeline out, every item on the `time` engine (shown at any moment at once).
 
 
@@ -32,25 +32,31 @@ static func of(score: Dictionary) -> Dictionary:
 				continue
 			var label := Registry.label(SongParts.PARTS, key) + (" (muted)" if bool(p.get("mute", false)) else "")
 			_part_spans(g, key, label, p, score, b0, b1, g0)
-		var v: Dictionary = score.get("vocal", {})
-		for ph in v.get("phrases", []):
-			if int(ph["bar"]) < b0 or int(ph["bar"]) >= b1:
-				continue
-			var k := 0
-			for w in ph["words"]:
-				var notes: Array = w["notes"]
-				var t0 := float(ph["at"]) + float(notes[0]["t"])
-				var last: Dictionary = notes[notes.size() - 1]
-				var t1 := float(ph["at"]) + float(last["t"]) + float(last["len"])
-				var names := PackedStringArray()
-				for n in notes:
-					names.append(_note_name(float(n["midi"])))
-				Timeline.add(g, "vocal", Registry.label(SongParts.PARTS, "vocal"), Timeline.item(
-					"w%d_%d" % [int(ph["bar"]), k], "%s  %s" % [String(w["text"]), " ".join(names)], t0 - g0, maxf(t1 - t0, 0.05),
-					["parts", "vocal"]))
-				k += 1
+		for v in score.get("voices", []):
+			_sung(g, v, String(v["key"]), SongParts.label_of(String(v["key"])) + (" (muted)" if bool(v.get("mute", false)) else ""),
+				String(v["key"]), b0, b1, g0)
 		groups.append(g)
 	return Timeline.make("song", groups)
+
+
+## Voice [param v]'s words sung in bars [param b0]..[param b1], a span each in lane [param lane] (written in the block's
+## part [param part]).
+static func _sung(g: Dictionary, v: Dictionary, lane: String, label: String, part: String, b0: int, b1: int, g0: float) -> void:
+	for ph in v.get("phrases", []):
+		if int(ph["bar"]) < b0 or int(ph["bar"]) >= b1:
+			continue
+		var k := 0
+		for w in ph["words"]:
+			var notes: Array = w["notes"]
+			var t0 := float(ph["at"]) + float(notes[0]["t"])
+			var last: Dictionary = notes[notes.size() - 1]
+			var t1 := float(ph["at"]) + float(last["t"]) + float(last["len"])
+			var names := PackedStringArray()
+			for n in notes:
+				names.append(_note_name(float(n["midi"])))
+			Timeline.add(g, lane, label, Timeline.item("%s%d_%d" % ["w" if lane == "vocal" else lane + "_w", int(ph["bar"]), k],
+				"%s  %s" % [String(w["text"]), " ".join(names)], t0 - g0, maxf(t1 - t0, 0.05), ["parts", part]))
+			k += 1
 
 
 ## A part's spans in bars [param b0]..[param b1]: the drums' bars, a pitched part's chords.

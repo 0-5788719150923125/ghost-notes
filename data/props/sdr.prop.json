@@ -1,0 +1,206 @@
+{
+	"name": "the SDR screen",
+	"line": "A little modern screen on a stand, black plastic, a radio dongle plugged into its side: a hobbyist's software radio showing the band's spectrum and waterfall.",
+	"thing": {
+		"name": "the SDR screen",
+		"parts": [
+			{
+				"shape": "box",
+				"size": [
+					12.4,
+					0.6,
+					6.5
+				],
+				"round": 0.2,
+				"at": [
+					0.0,
+					0.0,
+					0.3
+				],
+				"material": "case"
+			},
+			{
+				"shape": "box",
+				"size": [
+					11.0,
+					5.0,
+					3.6
+				],
+				"round": 0.4,
+				"at": [
+					0.0,
+					0.6,
+					-1.2
+				],
+				"material": "case"
+			},
+			{
+				"parts": [
+					{
+						"shape": "box",
+						"size": [
+							13.0,
+							8.6,
+							1.6
+						],
+						"round": 0.5,
+						"at": [
+							0.0,
+							0.0,
+							0.0
+						],
+						"material": "case"
+					},
+					{
+						"shape": "face",
+						"name": "screen",
+						"size": [
+							11.0,
+							6.6
+						],
+						"at": [
+							0.0,
+							4.5,
+							0.82
+						],
+						"material": "screen",
+						"lit": 1.0,
+						"glass": {
+							"curve": 0.0,
+							"lines": 0.0,
+							"bloom": 0.35,
+							"brightness": 1.2
+						}
+					},
+					{
+						"shape": "box",
+						"name": "power light",
+						"size": [
+							0.35,
+							0.2,
+							0.15
+						],
+						"round": 0.0,
+						"at": [
+							5.6,
+							0.45,
+							0.82
+						],
+						"material": "green light",
+						"start": {
+							"glow": 1.0
+						}
+					}
+				],
+				"at": [
+					0.0,
+					0.6,
+					2.0
+				],
+				"turn": [
+					-14.0,
+					0.0,
+					0.0
+				]
+			},
+			{
+				"shape": "box",
+				"size": [
+					0.8,
+					0.5,
+					1.2
+				],
+				"round": 0.0,
+				"at": [
+					5.9,
+					2.55,
+					-1.2
+				],
+				"material": "steel"
+			},
+			{
+				"shape": "box",
+				"size": [
+					4.6,
+					1.0,
+					1.9
+				],
+				"round": 0.3,
+				"at": [
+					8.6,
+					2.3,
+					-1.2
+				],
+				"material": "anodized",
+				"points": {
+					"coax": [
+						2.7,
+						0.5,
+						0.0
+					]
+				}
+			},
+			{
+				"shape": "lathe",
+				"profile": [
+					[
+						0,
+						0
+					],
+					[
+						0.45,
+						0
+					],
+					[
+						0.45,
+						0.8
+					],
+					[
+						0,
+						0.8
+					]
+				],
+				"at": [
+					10.9,
+					2.8,
+					-1.2
+				],
+				"material": "steel",
+				"turn": [
+					0.0,
+					0.0,
+					-90.0
+				]
+			}
+		]
+	},
+	"materials": {
+		"case": {
+			"kind": "plastic",
+			"color": "#151618",
+			"polish": 0.35
+		},
+		"screen": {
+			"kind": "plastic",
+			"color": "#040505",
+			"polish": 0.85
+		},
+		"steel": {
+			"kind": "metal",
+			"color": "#8c8f94",
+			"polish": 0.7,
+			"wear": 0.05
+		},
+		"anodized": {
+			"kind": "metal",
+			"color": "#2b4f8e",
+			"polish": 0.6,
+			"wear": 0.03
+		},
+		"green light": {
+			"kind": "painted",
+			"color": "#3dff6e",
+			"polish": 0.6
+		}
+	}
+}

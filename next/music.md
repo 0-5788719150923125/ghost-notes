@@ -12,7 +12,11 @@ the ear. The design below is the plan; this says what of it stands.
   Song was) or Composed. An old `song: {path}` block is read as the file source (`Components.OLD_BLOCKS`), and taken off
   with it. A new Sound starts composed.
 - **The composer** (`Composer.score`, a pure function like `TablePlan.make`): the `sound:` block, the note's words
-  (`Lyrics`: `Verse`, `[Chorus]`, `x2`, stanzas, syllables and stress from `Phonemes`) and a reference make the score -
+  (`Lyrics`: a script like any other - `<!-- verse -->`, `<!-- chorus -->`, `<!-- bridge -->` where a section begins (a
+  pre-chorus a bridge, a hook or refrain a chorus), one with no lines under it the last of its kind again,
+  `<!-- repeat -->`, instrumental sections where written - `<!-- intro: 4 -->`, `<!-- break: 8 -->` (a solo, interlude
+  or instrumental), `<!-- ending: 4 -->`, none of a kind written drawn (over a reference's form, its own bars stand) - stanzas, syllables and stress from `Phonemes`,
+  a `say:` mark's spelling sung as written, every other mark never sung) and a reference make the score -
   form, one chord track every pitched part reads, eight parts (`SongParts.PARTS`: drums, bass, keys, pad, guitar,
   lead, bells, voice) from their patterns (`SongParts.PATTERNS`) and instruments (`Instruments.ROWS`, each a `method`
   and its settings, some drawn from the part's own seed). Rolling a part moves no other (`composer_check`).
@@ -63,6 +67,14 @@ the ear. The design below is the plan; this says what of it stands.
   own; the chords, drums, bass and tune lie on its bars, so they are kept only with its form, and a part pinned to the
   reference keeps it. A Key over a reference moves the whole song - its chords, tune and bass - by the nearest
   interval from the reference's key.
+- **Every part is used in the sections it is given** (`Composer._used_in`, the card's Used in): each section of the song
+  has its key (a section of the words by its index, `intro`, `outro`, `break 2`), and a part whose `sections` name some
+  plays there and nowhere else, over the line-ups (`SongParts.SECTIONS`) and the roll's changes to them; a voice's
+  sections are sections of the words. A toggle a section on each part's entry, dimmed while drawn.
+- **The words are a song's script** (`ScriptMarks`, mode "song": a note with a Sound): its editor offers the song's
+  marks - a section, a repeat - and the script's it honors: say-as, a heading, a note to self, none of them sung. A word
+  a say mark spells keeps its ARPAbet and IPA to the voice host, which sings it so (`kokoro.py` reads them as the
+  reading's tokens do).
 - **The groove leads** (`SongParts` `styles`, `Composer.fits`): the song draws a drum pattern of its own, or takes the
   drums' pattern where it is set, and from it its styles (pop, rock, blues, edm, funk, hiphop, ballad, folk, latin),
   the range its tempo is drawn in and its feel (a shuffle swings, four on the floor is straight). Every pattern, sound
@@ -79,6 +91,29 @@ the ear. The design below is the plan; this says what of it stands.
   synth brass, strings, flute, crunch, high-gain and acoustic guitars, glockenspiel - all from the host's existing
   methods, every stem brought to one loudness in the mix. The densest band (supersaw stabs, gated pad and
   arpeggiator, Reese, a high-gain guitar) renders at a quarter of real time on one core.
+- **Who sings is a voice** (`Singers`): the Voice entry and every chorus voice cast a voice kept in the library - made
+  on any note's Voice card, its size its Tone (a Spooky voice sings the written notes in a larger voice) and its
+  vibrato and drift in the Lab's Singing rows, then kept - or one of Kokoro's readers; kept voices are listed first,
+  and a roll draws among them all. The Sound card keeps no voice of its own: Tune and Vocoder stay on its Voice entry
+  as what is done to the voice in the mix. A song and a Voice card on one note is still open (both take the clock).
+- **The voices** (`Composer._voices`; up to four Voice parts, `vocal`, `vocal_2`...): one tune, made by the first
+  voice's Melody (composed, recited or the reference's) and its number, and each voice an entry of its own - what it
+  SINGS (the tune, in the octave nearest where its singer sits, or a harmony to it), the SECTIONS of the words it sings
+  in (a toggle each: the first voice every one; another drawn - the last chorus always, a chorus after the first nearly
+  always, the last section and a bridge often, a verse seldom), and its singer. So a chorus is voices given harmonies in
+  the same sections, a duet a second voice given the tune in a verse the first leaves, a gang two voices on the tune.
+  HARMONIES are voiced together, highest singer first: on each note a tone of the chord the tune and the voices above
+  leave, nearest its last note within nine semitones of where its singer sits, held through a note the tune passes on,
+  a voice sitting low on the root. A roll draws a voice after the first its singer (one none before it has, a register
+  not yet sung the likelier), what it sings (a harmony twice as often, the song's styles weighing in) and its sections;
+  it sings with the first voice's hard tuning and vocoder unless it sets its own. In each section ONE VOICE LEADS - the
+  first singing the tune there, else the first singing at all, never a muted one: the subtitles are its words, and its
+  lines are sung first, the rest after them, nearest first.
+- **A phrase's last word is whole** (`host._sung_whole`): Kokoro ending an utterance on a word lets it die away, as a
+  spoken sentence's end does - measured on ERROR ME FOUND's takes, a fifth of the lines' last words 12 dB or more under
+  the rest and a short one gone ("page" 40 dB under), every held one's last consonants early and silent 0.2 s before
+  its note's end. So every phrase is sung on past its end by three of its own words after a short rest and the take
+  cut just past its last note: the last word comes out within a few dB of the line (`test_singing.py`).
 - **The song's code** (`SongCode`, `BlockCode` in `data/`): every setting of the block - the roll, Likeness, tempo,
   key, pins, each part and all set on it - as one code of letters and digits on the card's Code row, changing as
   anything on the card does; entered there (or pasted, then Enter), the settings come back. Reversible, not a hash, so
@@ -93,14 +128,16 @@ the ear. The design below is the plan; this says what of it stands.
 - **The words as subtitles**: beside the mix, every word sung and when (`SongBake.write_sidecar`), in the file's own
   seconds; a song's session clock runs ahead of the file by the held intro, so its subtitles start from it.
 - **Heard as it is made** (`SongStream`, hosts/music/host.py and stream.py): Play on a composed song in a session a
-  person plays streams it, as a reading streams - the music host, kept running, makes it six seconds at a time about
-  fourteen ahead of the ear (a part read from its kept stem where the bake made one, made over the window where not),
-  the voice host sings the lines ahead in order (every take kept as the bake keeps it, so a bake after reuses them),
+  person plays streams it, as a reading streams - the music host, kept running, makes it six seconds at a time on to
+  the song's end, NOTHING CAPPING HOW FAR AHEAD (a part read from its kept stem where the bake made one, made over the
+  window where not; paused, it keeps making, so a song left paused a while plays through without a stop, what is made
+  shown buffered on the rail), the voice host sings every line ahead, nearest first (every take kept as the bake keeps it, so a bake after reuses them),
   and each window fades into the next over 20 ms. A dial, a roll or a part changed while it plays is heard about six
   seconds on: what is queued past that is let go and made again from the new score. A seek begins the stream again
-  where it lands. THE BAND WAITS FOR A LATE SINGER: a line not sung by the time it is due is waited for where its bar
-  begins, the bar before it played again without the voice (eight bars at most, then it goes without and its words
-  leave the subtitles); the rail and subtitles hold while it waits. Stopped, the lines ahead are sung once the voice
+  where it lands. IT BUFFERS FOR ITS VOICES, NOTHING DROPPED: a line of any voice not sung yet holds the windows at the
+  bar line before its take could begin (`TAKE_LEAD`), and when what is made runs out the player pauses itself there,
+  saying what it sings, until the takes come and three seconds are made again; the rail and subtitles hold while it
+  waits. Only a line no voice can sing (the voice host gone, the line refused) goes without. Stopped, the lines ahead are sung once the voice
   host is up, and a take a bake sings is heard as it lands. A video's export makes the mix first where it is not made
   from the score as it stands (`SoundCard.export_song`, the exporter's take provider), and renders it. So while the
   song streams, its Pipeline rows for the lines and the mix are ON DEMAND (`PipelineRow` state `on_demand`, out of the
@@ -144,7 +181,10 @@ the ear. The design below is the plan; this says what of it stands.
 3. The bet: a song made by choosing among seeded parts feels like the author's own.
 4. Rolls by ear: whether a roll now varies enough and still hangs together (the groove's styles, STYLE_WEIGHT 5);
    each new sound and pattern alone, kept or cut.
-5. The song's code: whether its length is livable for a song tuned part by part, and whether a code should also be
+5. The voices by ear: ERROR ME FOUND with two or three more voices singing harmonies in the second chorus and the
+   last verse (or their roll's), a gang on the tune, a duet; whether Kokoro holds a low voice's register; a voice made
+   on a Voice card (Tone, Sing in its Lab), kept, and cast.
+6. The song's code: whether its length is livable for a song tuned part by part, and whether a code should also be
    kept for you (a list of the songs you liked on the card) rather than copied out by hand.
 
 **Open:** what "Next" lists below; MIDI and stem export; a loop of the section being rolled heard at once; the bed

@@ -13,6 +13,11 @@ class_name SoundCard
 ## composed for the words, or recited), its singer (a Kokoro reader, or a voice kept in the library) and how tuned it
 ## is (0 a singer's glides and vibrato, 1 every note a hard step). THE SONG'S CODE is every setting at once
 ## ([SongCode]): it changes as anything on the card does, and a code entered there brings that song's settings back.
+## EVERY PART IS USED IN THE SECTIONS IT IS GIVEN: a toggle a section of the song on its entry (a voice's, a section of
+## the words), dimmed while the line-ups and the roll choose, set once one is pressed. A SONG HAS UP TO FOUR VOICES
+## (next/music.md, "The voices"), each an entry of its own: what it sings (the tune, or a harmony to it) and who sings - a voice kept in the library,
+## designed on a Voice card with its Tone and how it sings in its Lab, or one of Kokoro's readers ([Singers]); the card
+## keeps no voice of its own. The first voice's Melody is how the tune is made.
 ## A ROLL DRAWS EVERY SETTING ([method Composer.rolled]): the song's Roll leaves only the reference, the parts, what is
 ## muted and where the words are pinned; a part's Roll draws that part alone. A setting the roll drew shows what it
 ## drew, dimmed; moved by hand it is set. Back (‹) walks to the song before each roll or code entered.
@@ -71,6 +76,8 @@ var _making_hash := ""          # the score a bake under way was made from
 var _ref_seen := 0              # counts the reference's readings, so a score is worked out again after one
 var _ref := {}                  # the reference as read, held (read from disk at the start and after a reading)
 var _ref_stamp_now := ""        # the chosen reference file as it stands: its path and when it last changed
+var _voices := {}               # the kept voices that can sing ([method Singers.kept]), read once a library version
+var _voices_at := -1
 
 var _source: OptionButton
 var _file_box: VBoxContainer
@@ -380,10 +387,15 @@ func _build() -> void:
 	_add = MenuButton.new()
 	_add.text = "+ Add a part"
 	_add.flat = false
-	_add.tooltip_text = "Another part for the song: a drum kit, a bass, keys, a pad, a guitar, a lead, bells, a voice."
+	_add.tooltip_text = "Another part for the song: a drum kit, a bass, keys, a pad, a guitar, a lead, bells, a voice (up to four)."
 	_add.get_popup().id_pressed.connect(func(id: int) -> void:
 		var k: String = SongParts.PARTS.keys()[id]
 		var parts := _parts()
+		if k == "vocal":
+			for v in SongParts.voice_keys():
+				if not parts.has(v):
+					k = v
+					break
 		parts[k] = {}
 		_block["parts"] = parts
 		_open[k] = true
@@ -501,7 +513,14 @@ func _build_parts() -> void:
 	var keys: Array = SongParts.PARTS.keys()
 	for i in keys.size():
 		var k: String = keys[i]
-		if parts.has(k):
+		if k == "vocal":
+			var have: Array = SongParts.voice_keys().filter(func(v: String) -> bool: return parts.has(v))
+			for v in have:
+				_parts_box.add_child(_part_entry(v, parts[v] if parts[v] is Dictionary else {}))
+			if have.size() < SongParts.VOICES_MOST:
+				popup.add_item(Registry.label(SongParts.PARTS, k), i)
+				popup.set_item_tooltip(popup.item_count - 1, Registry.blurb(SongParts.PARTS, k))
+		elif parts.has(k):
 			_parts_box.add_child(_part_entry(k, parts[k] if parts[k] is Dictionary else {}))
 		else:
 			popup.add_item(Registry.label(SongParts.PARTS, k), i)
@@ -510,10 +529,11 @@ func _build_parts() -> void:
 
 
 func _part_entry(k: String, cfg: Dictionary) -> EntryCard:
-	var row: Dictionary = SongParts.PARTS[k]
+	var row: Dictionary = SongParts.PARTS[SongParts.kind_of(k)]
+	var voice := SongParts.is_voice(k)
 	var chose := _chosen(k, cfg)
 	var has_ref := not _ref.is_empty()
-	var e := EntryCard.new(String(row["label"]), _entry_line(k, cfg), String(row["blurb"]))
+	var e := EntryCard.new(SongParts.label_of(k), _entry_line(k, cfg), String(row["blurb"]))
 	e.set_remove(func() -> void:
 		var parts := _parts()
 		parts.erase(k)
@@ -524,10 +544,13 @@ func _part_entry(k: String, cfg: Dictionary) -> EntryCard:
 	e.toggled.connect(func(on: bool) -> void:
 		_open[k] = on
 		# who may sing is the voice host's to list: asked when the Voice entry is opened, the first time
-		if on and k == "vocal" and VoiceReaders.all("kokoro").is_empty() and _bake != null:
+		if on and voice and VoiceReaders.all("kokoro").is_empty() and _bake != null:
 			_bake.list_singers(func() -> void: _build_parts()))
 	var o := e.options
-	var pr := _row("Pattern", o)
+	# a voice after the first sings the tune the first's Melody makes
+	var pr := _row("Melody" if voice else "Pattern", o if not voice or k == "vocal" else null)
+	if voice and k != "vocal":
+		pr.queue_free()
 	var pat := OptionButton.new()
 	pat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pat.fit_to_longest_item = false
@@ -540,7 +563,7 @@ func _part_entry(k: String, cfg: Dictionary) -> EntryCard:
 			pat.select(pat.item_count - 1)
 	pat.item_selected.connect(func(i: int) -> void: _set_part(k, "pattern", String(pat.get_item_metadata(i))))
 	pr.add_child(pat)
-	if k == "vocal":
+	if voice:
 		_voice_rows(o, k, cfg)
 	else:
 		var ir := _row("Sound", o)
@@ -556,8 +579,20 @@ func _part_entry(k: String, cfg: Dictionary) -> EntryCard:
 				inst.select(inst.item_count - 1)
 		inst.item_selected.connect(func(i: int) -> void: _set_part(k, "instrument", String(inst.get_item_metadata(i))))
 		ir.add_child(inst)
+		var playing: Array = []
+		var named: Array = []
+		var counted := {}
+		for sec in score().get("sections", []):
+			var label := String(sec["label"])
+			counted[label] = int(counted.get(label, 0)) + 1
+			named.append({"key": sec.get("key", ""), "name": "%s %d" % [label, int(counted[label])] if int(sec.get("lyric", -1)) >= 0 or counted[label] > 1 or label not in ["Intro", "Outro"] else label})
+			if (sec["parts"] as Array).has(k):
+				playing.append(sec.get("key", ""))
+		_used_in_row(o, k, cfg, named, playing)
 	var roll := _button("Roll", "This part drawn again, alone: what of it is on Auto - %s - and the details of its notes." \
-		% ("its melody, its singer and how they sing" if k == "vocal" else "its pattern and its sound"), func() -> void: roll_part(k))
+		% ("the tune itself, what it sings, the sections it sings in, its singer and how they sing" if k == "vocal" else
+			("what it sings, the sections it sings in, its singer and how they sing" if voice else "its pattern and its sound")),
+		func() -> void: roll_part(k))
 	roll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	o.add_child(roll)
 	_drawn_dial(o, "Level", -24.0, 6.0, 0.5, cfg.get("level"), float(_sounded(k).get("level", row["level"])),
@@ -584,10 +619,11 @@ static func _auto_item(picker: OptionButton, drawn: String, meta: Variant) -> vo
 ## What the score made of part [param k]: its pattern and sound, as the roll drew them where [param cfg] says nothing.
 func _chosen(k: String, cfg: Dictionary) -> Dictionary:
 	var s := score()
-	if k == "vocal":
-		var v: Dictionary = s.get("vocal", {})
+	if SongParts.is_voice(k):
+		var v := Composer.voice_of(s, k)
 		if not v.is_empty():
 			return {"pattern": String(v.get("pattern", "composed")), "instrument": ""}
+		return Composer.choice_of("vocal", cfg, int(_block.get("seed", 1)), _ref, false)
 	else:
 		for p in s.get("parts", []):
 			if String(p["key"]) == k:
@@ -612,7 +648,7 @@ func _roll_line() -> String:
 		for p in s.get("parts", []):
 			if String(p["pattern"]) == "reference":
 				kept.append({"drums": "drums", "bass": "bass line"}.get(String(p["key"]), String(p["key"])))
-		if String((s.get("vocal", {}) as Dictionary).get("pattern", "")) == "reference":
+		if String(((s.get("voices", []) as Array).front() if not (s.get("voices", []) as Array).is_empty() else {}).get("pattern", "")) == "reference":
 			kept.append("tune")
 		line += "\nFrom the reference: " + (", ".join(kept) if not kept.is_empty() else "nothing")
 	return line
@@ -622,55 +658,130 @@ func _roll_line() -> String:
 func _entry_line(k: String, cfg: Dictionary) -> String:
 	var chose := _chosen(k, cfg)
 	var line := Registry.label(SongParts.PATTERNS, String(chose["pattern"]))
-	if k == "vocal":
-		line += " · " + _singer_name(cfg)
+	if SongParts.is_voice(k):
+		var v := Composer.voice_of(score(), k)
+		var bits: Array = [Registry.label(SongParts.SINGS, String(v.get("sings", "tune"))), _singer_name(k, cfg)]
+		if k == "vocal":
+			bits.push_front(line)
+		var sections: Array = v.get("sections", [])
+		var all := Lyrics.parse(_words_text).size()
+		if sections.size() < all:
+			bits.append(", ".join(PackedStringArray(_section_names().filter(func(n: String) -> bool:
+				return sections.has(_section_names().find(n))))) if not sections.is_empty() else "sings nowhere")
+		line = " · ".join(PackedStringArray(bits))
 	else:
 		line += " · " + Registry.label(Instruments.ROWS, String(chose["instrument"]))
 	return line + (" · muted" if bool(cfg.get("mute", false)) else "")
 
 
-## The Voice entry's own rows: who sings, and how tuned.
+## The Used in row of part [param k]: a toggle each of [param named] (`{key, name}`, the sections it may be used in), those
+## in [param used] pressed - dimmed while its settings name none, the line-ups' and the roll's; pressing one sets them
+## all as they stand, and Auto lets them be drawn again.
+func _used_in_row(o: VBoxContainer, k: String, cfg: Dictionary, named: Array, used: Array) -> void:
+	var set_sections := cfg.get("sections") is Array
+	var ir := _row("Used in", o)
+	var flow := HFlowContainer.new()
+	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	flow.modulate = Color.WHITE if set_sections else Color(1, 1, 1, DRAWN_ALPHA)
+	ir.add_child(flow)
+	for n in named:
+		var key: Variant = n["key"]
+		var b := Button.new()
+		b.toggle_mode = true
+		b.focus_mode = Control.FOCUS_NONE
+		b.text = String(n["name"])
+		b.button_pressed = used.has(key)
+		b.tooltip_text = "Whether this part is used in this section of the song. Dimmed, the line-ups and the roll chose; pressed, they are set."
+		b.toggled.connect(func(on: bool) -> void:
+			var now: Array = used.duplicate()
+			if on and not now.has(key):
+				now.append(key)
+			elif not on:
+				now.erase(key)
+			_set_part(k, "sections", now))
+		flow.add_child(b)
+	if set_sections:
+		ir.add_child(_button("Auto", "Let the line-ups and the roll choose the sections again.", func() -> void: _set_part(k, "sections", {})))
+
+
+## Each section of the note's words named as the card shows it: its label and how many of that label so far ("Chorus 2").
+func _section_names() -> Array:
+	var out: Array = []
+	var seen := {}
+	for s in Lyrics.parse(_words_text):
+		var label := String(s["label"])
+		seen[label] = int(seen.get(label, 0)) + 1
+		out.append("%s %d" % [label, int(seen[label])])
+	return out
+
+
+## A Voice entry's own rows: what it sings (the tune or a harmony), the sections of the words it sings in (a toggle
+## each; dimmed, the roll's), who sings, how tuned, and through how much vocoder. How the singer sings - its size, its
+## vibrato and drift - is the voice's own, set in a Voice card's Lab and kept.
 func _voice_rows(o: VBoxContainer, k: String, cfg: Dictionary) -> void:
+	var sung := Composer.voice_of(score(), k)
+	var wr := _row("Sings", o)
+	var what := OptionButton.new()
+	what.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	what.fit_to_longest_item = false
+	_auto_item(what, Registry.label(SongParts.SINGS, String(sung.get("sings", "tune"))) if not cfg.has("sings") else "", "")
+	for x in SongParts.SINGS:
+		what.add_item(Registry.label(SongParts.SINGS, x))
+		what.set_item_metadata(what.item_count - 1, x)
+		what.set_item_tooltip(what.item_count - 1, Registry.blurb(SongParts.SINGS, x))
+		if x == String(cfg.get("sings", "")):
+			what.select(what.item_count - 1)
+	what.item_selected.connect(func(i: int) -> void: _set_part(k, "sings", String(what.get_item_metadata(i))))
+	wr.add_child(what)
+	var names := _section_names()
+	var named: Array = []
+	for n in names.size():
+		named.append({"key": n, "name": names[n]})
+	_used_in_row(o, k, cfg, named, sung.get("sections", []))
 	var sr := _row("Singer", o)
-	var who := OptionButton.new()
-	who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	who.fit_to_longest_item = false
-	who.tooltip_text = "Who sings: a Kokoro reader, or a voice kept in the library. Every Kokoro voice sings by the same path."
-	var sung: Dictionary = score().get("vocal", {})
 	var singer: Dictionary = cfg["singer"] if cfg.get("singer") is Dictionary else {}
-	_auto_item(who, _singer_name(cfg) if singer.is_empty() else "", {})
-	var readers := VoiceReaders.all("kokoro")
-	if readers.is_empty():
-		for r in Composer.SINGERS:
-			readers.append({"i": int(r["speaker"]), "reader": String(r["name"])})
-	for r in readers:
-		who.add_item(String(r["reader"]))
-		who.set_item_metadata(who.item_count - 1, {"voice": "kokoro", "speaker": int(r["i"]), "name": String(r["reader"])})
-		if not singer.is_empty() and String(singer.get("kept", "")).is_empty() and int(r["i"]) == int(singer.get("speaker", -1)):
-			who.select(who.item_count - 1)
-	for name in VoiceLibrary.names():
-		who.add_item("♥ " + String(name))
-		who.set_item_metadata(who.item_count - 1, {"kept": String(name), "name": String(name)})
-		if String(singer.get("kept", "")) == String(name):
-			who.select(who.item_count - 1)
+	var who := _singer_picker(singer, _singer_name(k, cfg) if singer.is_empty() else "")
 	who.item_selected.connect(func(i: int) -> void: _set_part(k, "singer", who.get_item_metadata(i)))
 	sr.add_child(who)
 	var style: Dictionary = sung.get("style", Composer.STYLE)
 	_drawn_dial(o, "Tune", 0.0, 1.0, 0.05, cfg.get("tune"), float(style.get("tune", Composer.STYLE["tune"])),
 		"How tuned the voice is: at 0 a singer's own glides into each note, its vibrato and drift; at 1 every note a hard step, the tuned sound of a vocoder or a pitch corrector.",
 		func(v: float) -> void: _set_part(k, "tune", v, false))
-	_drawn_dial(o, "Vibrato", 0.0, 1.0, 0.05, cfg.get("vibrato"), float(style.get("vibrato", Composer.STYLE["vibrato"])),
-		"How far a held note's pitch sways, in semitones, once it has held a while.", func(v: float) -> void: _set_part(k, "vibrato", v, false))
 	_drawn_dial(o, "Vocoder", 0.0, 1.0, 0.05, cfg.get("vocoder"), float(sung.get("vocoder", 0.0)),
 		"How much of the voice is heard through a vocoder: a synth playing the melody's own notes, given the voice's words. At 1 the robot alone, every note exactly in tune; at 0 the voice as it sings.",
 		func(v: float) -> void: _set_part(k, "vocoder", v, false))
 
 
-## Who sings part [param cfg]: the one set, or the one this roll drew.
-func _singer_name(cfg: Dictionary) -> String:
+## Who sings voice [param k] ([param cfg] its settings): the one set, or the one this roll drew.
+func _singer_name(k: String, cfg: Dictionary) -> String:
 	var s: Variant = cfg.get("singer") if cfg.get("singer") is Dictionary and not (cfg["singer"] as Dictionary).is_empty() \
-		else (score().get("vocal", {}) as Dictionary).get("singer", Composer.SINGER)
-	return String((s as Dictionary).get("name", (s as Dictionary).get("kept", "a voice"))) if s is Dictionary else "a voice"
+		else Composer.voice_of(score(), k).get("singer", Composer.SINGER)
+	return Singers.name_of(s) if s is Dictionary else "a voice"
+
+
+## A picker of who sings, [param singer] chosen in it: Auto (the roll's, saying [param drawn]), the voices kept in the
+## library that can sing (♥, first: a voice made for the song on a Voice card), then Kokoro's readers.
+func _singer_picker(singer: Dictionary, drawn: String) -> OptionButton:
+	var who := OptionButton.new()
+	who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	who.fit_to_longest_item = false
+	who.tooltip_text = "Who sings: a voice kept in the library (♥) - made on a Voice card, its size set by its Tone and its vibrato and drift in its Lab, then kept - or one of Kokoro's readers. Auto: the roll's pick among them."
+	_auto_item(who, drawn, {})
+	for name in _voices:
+		who.add_item("♥ " + String(name))
+		who.set_item_metadata(who.item_count - 1, {"kept": String(name), "name": String(name)})
+		if String(singer.get("kept", "")) == String(name):
+			who.select(who.item_count - 1)
+	var readers := VoiceReaders.all("kokoro")
+	if readers.is_empty():
+		for i in Delivery.KOKORO_READERS.size():
+			readers.append({"i": i, "reader": String(Delivery.KOKORO_READERS[i])})
+	for r in readers:
+		who.add_item(String(r["reader"]))
+		who.set_item_metadata(who.item_count - 1, {"voice": "kokoro", "speaker": int(r["i"]), "name": String(r["reader"])})
+		if not singer.is_empty() and String(singer.get("kept", "")).is_empty() and int(r["i"]) == int(singer.get("speaker", -1)):
+			who.select(who.item_count - 1)
+	return who
 
 
 ## Part [param k]'s [param field] set to [param value]; an empty one (Auto) is the roll's again.
@@ -798,8 +909,8 @@ func _drawn_dial(box: Container, label: String, lo: float, hi: float, step: floa
 ## What the score made of part [param k] ([member score]): its part, or the voice.
 func _sounded(k: String) -> Dictionary:
 	var s := score()
-	if k == "vocal":
-		return s.get("vocal", {})
+	if SongParts.is_voice(k):
+		return Composer.voice_of(s, k)
 	for p in s.get("parts", []):
 		if String(p["key"]) == k:
 			return p
@@ -849,9 +960,12 @@ func _load_ref() -> void:
 
 ## The score as the block and the note's words stand: worked out again only when either has changed.
 func score() -> Dictionary:
-	var made_of := JSON.stringify([_block, _words_text, _ref_seen]).sha1_text()
+	if _voices_at != VoiceLibrary.version:
+		_voices = Singers.kept()
+		_voices_at = VoiceLibrary.version
+	var made_of := JSON.stringify([_block, _words_text, _ref_seen, _voices]).sha1_text()
 	if made_of != _score_of:
-		_score = Composer.score(_block, {"lyrics": Lyrics.parse(_words_text), "reference": _ref})
+		_score = Composer.score(_block, {"lyrics": Lyrics.parse(_words_text), "reference": _ref, "voices": _voices})
 		_score_hash = JSON.stringify(_score).sha1_text()
 		_score_of = made_of
 		_count_kept()
@@ -914,9 +1028,8 @@ func sing_again() -> void:
 ## How many of the score's lines have their take kept (two lines sung alike share one).
 func _count_kept() -> void:
 	_kept = 0
-	var vocal: Dictionary = _score.get("vocal", {})
-	for p in vocal.get("phrases", []):
-		var wav := SongBake.take_of(folder(), vocal, p)
+	for line in SongBake.lines_of(_score):
+		var wav := SongBake.take_of(folder(), line["voice"], line["phrase"])
 		if FileAccess.file_exists(wav) and FileAccess.file_exists(wav.get_basename() + ".json"):
 			_kept += 1
 
@@ -976,7 +1089,7 @@ func pipeline_rows() -> Array:
 		r.redo = read_reference
 		out.append(r)
 	var s := score()
-	var phrases: Array = (s.get("vocal", {}) as Dictionary).get("phrases", [])
+	var phrases := SongBake.lines_of(s)
 	if not phrases.is_empty():
 		var t := PipelineRow.new("takes", "Lines sung")
 		var kept := _kept
@@ -999,8 +1112,9 @@ func pipeline_rows() -> Array:
 	# heard as it is made, the song needs no mix until it is exported, which makes it
 	if streams() and m.state in ["missing", "stale"]:
 		m.state = "on_demand"
+	var voices := (s.get("voices", []) as Array).size()
 	m.said = _status if busy else ("%d parts%s, %s" % [(s.get("parts", []) as Array).size(),
-		" and the voice" if not (s.get("vocal", {}) as Dictionary).is_empty() else "", Clock.text(float(s.get("length", 0.0)))]
+		(" and the voice" if voices == 1 else " and %d voices" % voices) if voices > 0 else "", Clock.text(float(s.get("length", 0.0)))]
 		+ (" - made by an export" if m.state == "on_demand" else ""))
 	m.again = "Make the song again from its parts as they stand: what is kept is read back, the rest made."
 	m.redo = make

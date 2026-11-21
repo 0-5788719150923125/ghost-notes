@@ -7,12 +7,15 @@ class_name CartoonProducer
 ## (rules/cartoon/director.yaml) into the note's folder ([NoteStoryboard]), where the note's show plays it. Each is one agent job
 ## ([AgentJobs]); [method pump] lands what ended. A storyboard that will not play is sent back once with what was wrong with it.
 ##
-## What it works from is the note's `cartoon:` block: `cast` [{name, picture, about, height}], `sets` [{name, place}], `seconds`, and
-## `silent` (no sound: talking is only seen). Puppets and sets are named, so every note can use them (a Dex shelf each).
+## What it works from is the note's `cartoon:` block: `cast` [{name, picture | describe, about, height, drawings, asks, rigid, align}]
+## (`asks`: a drawing's own words in place of the sheet's; `rigid`: every drawing held whole, no rigger; `align: width`: drawings set to
+## one width rather than height - a bed someone sits up in), `sets` [{name, place, ground}], `seconds`, `silent` (no sound: talking is only seen) and `loops` (played round and round: it ends as it begins). Puppets and sets are named, so every note can use them (a Dex shelf each).
 
 ## How long an agent may take (s): a rigger looks at a dozen pictures; a director writes one reply.
 const RIG_MOST := 2400
 const WRITE_MOST := 900
+## How close two puppets may start, as a share of half their two widths, before they stand on each other.
+const CROWD := 0.75
 ## A cartoon's length unless its block says, and how far a storyboard may stray from it.
 const SECONDS := 30.0
 const STRAY := [0.6, 1.6]
@@ -22,14 +25,15 @@ const VERBS := {
 	"talk": "its jaw chatters and its head nods for the window - a line said, unheard",
 	"pose": "it takes a pose and holds it (or, with ease spike, strikes it and comes back)",
 	"face": "it turns: left or right (in profile), toward another actor, front (to us) or back (away); it holds that view until turned again",
-	"feel": "it shows a mood from now on (scared, angry, laughing), or none",
+	"feel": "it shows a mood from now on (scared, angry, laughing, dead - knocked out cold, X's for eyes), or none, where it was drawn in it",
 	"strike": "it winds up and hits another, who reels; a mark where it lands",
 	"hit": "it is hit (from another actor's side, or left or right): recoils, spins, eyes pop",
 	"hop": "it crouches, springs up and lands, in place or to a place",
 	"shake": "it shakes for the window: fear, rage",
 	"fx": "a mark drawn on it a moment",
 	"blink": "it blinks",
-	"ramp": "eases a value across the window (`fade` 0 to 1 brings it in; 1 to 0 takes it away)",
+	"ramp": "eases a value across the window (`fade` 0 to 1 brings it in, 1 to 0 takes it away; `shade` 0 to 1 darkens it to a silhouette)",
+	"set": "sets a value at once (`fade`, `shade`)",
 }
 
 var note_path := ""
@@ -42,6 +46,7 @@ var painter := {"agent": "codex", "model": "", "effort": ""}
 var _work := {}                      # key ("rig:NAME", "set:NAME", "board", "paint:NAME:KEY", ...) -> {job, kind, ...}
 var _sheets := {}                    # a character's model sheet being made: name -> {picture, about, made: {key: step}, rigs: {view: ...}}
 var _errors := {}                    # key -> the last failure, a sentence
+var _widths := {}                    # a rig's width over its height, read once
 
 
 func _init(path: String, note_folder: String, cartoon: Dictionary) -> void:
@@ -188,24 +193,51 @@ const PAINTED := "painted.png"
 ## The character [param c] made a model sheet ([PuppetSheet]): every drawing painted from the maker's (or from another of the sheet),
 ## cut off its paper and set onto the drawing it was painted from; the front and the profile rigged by the rigger, their other mouths
 ## built on their skeletons, the back and the moods held rigid. `sheet.json` lists what was made. "" or why not.
-func sheet(c: Dictionary) -> String:
+func sheet(c: Dictionary, again := false) -> String:
 	var name := String(c.get("name", ""))
 	var picture := _abs(String(c.get("picture", "")))
-	if not FileAccess.file_exists(picture):
-		return _fail("rig:" + name, "%s's drawing is not at %s" % [name, picture])
+	var described := String(c.get("describe", "")).strip_edges()
+	if not FileAccess.file_exists(picture) and described.is_empty():
+		return _fail("rig:" + name, "%s has no drawing at %s, and nothing describes it" % [name, picture])
 	if not Library.writable():
 		return _fail("rig:" + name, "this session cannot write the library (read-only)")
 	var where := PuppetRig.folder_of(name)
-	var original := _as_png(picture, where.path_join("refs"))
+	# a character described rather than drawn takes its style from the cast's drawings
+	var style := PackedStringArray()
+	if FileAccess.file_exists(picture):
+		style.append(_as_png(picture, where.path_join("refs")))
+	else:
+		for o in cast():
+			var p := _abs(String((o as Dictionary).get("picture", "")))
+			if FileAccess.file_exists(p) and style.size() < 3:
+				style.append(_as_png(p, where.path_join("refs")))
+	var original := style[0] if not style.is_empty() else ""
+	var wanted: Array = c.get("drawings", []) if c.get("drawings") is Array and not (c.get("drawings") as Array).is_empty() else PuppetSheet.order()
 	var made := {}
-	_sheets[name] = {"picture": picture, "original": original, "about": String(c.get("about", "")), "folder": where, "made": made,
-		"said": "painting its drawings"}
+	var asks: Dictionary = c.get("asks", {}) if c.get("asks") is Dictionary else {}
+	_sheets[name] = {"picture": picture, "original": original, "about": String(c.get("about", described)), "folder": where, "made": made,
+		"said": "painting its drawings", "rigid": bool(c.get("rigid", false)), "align": String(c.get("align", "height"))}
 	_errors.erase("rig:" + name)
 	for key in PuppetSheet.order():
+		if not wanted.has(key):
+			continue
 		var row: Dictionary = PuppetSheet.REGISTRY[key]
 		var from := String(row["from"])
-		var refs := PackedStringArray([original]) if from.is_empty() else PackedStringArray([where.path_join(from).path_join(PAINTED), original])
-		var prompt := Rules.say("cartoon/sheet.prompt", {"ask": String(row["ask"]), "file": "image.png", "has_base": not from.is_empty()})
+		if not from.is_empty() and not wanted.has(from):
+			continue
+		# a drawing already made stays (a row added to the sheet paints only itself), unless the whole sheet is made again
+		if not again and FileAccess.file_exists(where.path_join(key).path_join(PuppetRig.FILE)):
+			made[key] = "done"
+			continue
+		var refs := PackedStringArray()
+		if from.is_empty():
+			refs = style
+		else:
+			refs = PackedStringArray([where.path_join(from).path_join(PAINTED)])
+			if not original.is_empty():
+				refs.append(original)
+		var prompt := Rules.say("cartoon/sheet.prompt", {"ask": String(asks.get(key, row["ask"])), "file": "image.png", "has_base": not from.is_empty(),
+			"described": from.is_empty() and not described.is_empty(), "describe": described})
 		made[key] = "painting"
 		var err := _submit("paint:%s:%s" % [name, key], {"kind": "image", "backend": String(painter["agent"]),
 			"dir": where.path_join(key).path_join("paint"), "prompt": prompt, "refs": refs, "target": where.path_join(key).path_join(PAINTED),
@@ -214,6 +246,8 @@ func sheet(c: Dictionary) -> String:
 		if not err.is_empty():
 			_sheets.erase(name)
 			return _fail("rig:" + name, err)
+	if not made.values().has("painting"):
+		_finish_sheet(name)
 	return ""
 
 
@@ -238,7 +272,8 @@ func _cut_drawing(name: String, key: String) -> void:
 			got = {"ok": false, "error": "the drawing it is painted from failed"}
 		else:
 			DirAccess.remove_absolute(dir.path_join("cut_raw.png"))
-			got = await RiggerTools.host("align", {"dir": dir, "base": String(s["folder"]).path_join(from)}, dir.path_join("job"))
+			got = await RiggerTools.host("align", {"dir": dir, "base": String(s["folder"]).path_join(from), "by": String(s.get("align", "height"))},
+				dir.path_join("job"))
 	_drawing_done(name, key, "cut" if bool(got.get("ok", false)) else "failed", String(got.get("error", "")))
 
 
@@ -260,10 +295,13 @@ func _drawing_done(name: String, key: String, state: String, why := "") -> void:
 		if String(made[k]) != "cut":
 			continue
 		var row: Dictionary = PuppetSheet.REGISTRY[k]
-		if k in ["front", "side"]:
+		if bool(s.get("rigid", false)):
+			made[k] = "building"
+			_build_drawing(name, k, {"rigid": true})
+		elif k in ["front", "side"]:
 			made[k] = "rigging"
 			_rig_drawing(name, k)
-		elif String(row["view"]) == "back" or not String(row["mood"]).is_empty():
+		elif String(row["view"]) == "back" or not String(row["mood"]).is_empty() or not String(row.get("action", "")).is_empty():
 			made[k] = "building"
 			_build_drawing(name, k, {"rigid": true})
 		elif String(made.get(String(row["view"]), "")) == "done":
@@ -355,7 +393,9 @@ func paint(s: Dictionary) -> String:
 			refs.append(_as_png(p, folder.path_join("cartoon").path_join("refs")))
 	var dir := folder.path_join("cartoon").path_join("sets").path_join(name)
 	var target := Library.shelf(PuppetRig.SETS).path_join(name + ".png")
-	var prompt := Rules.say("cartoon/set_painter.prompt", {"place": String(s.get("place", name)), "file": "image.png"})
+	var ground := String(s.get("ground", "")).strip_edges()
+	var prompt := Rules.say("cartoon/set_painter.prompt", {"place": String(s.get("place", name)), "file": "image.png",
+		"has_ground": not ground.is_empty(), "ground": ground})
 	return _submit("set:" + name, {"kind": "image", "backend": String(painter["agent"]), "dir": dir, "prompt": prompt, "refs": refs,
 		"target": target, "label": "cartoon set " + name, "model": String(painter["model"]), "effort": String(painter["effort"])},
 		{"name": name})
@@ -424,7 +464,8 @@ func director_vars(raw: String, error := "") -> Dictionary:
 			("; its own poses: " + ", ".join(own)) if not own.is_empty() else ""])
 	var set_lines := PackedStringArray()
 	for s in sets():
-		set_lines.append("- \"%s\": %s" % [String(s["name"]), String(s.get("place", ""))])
+		set_lines.append("- \"%s\": %s%s" % [String(s["name"]), String(s.get("place", "")),
+			(" Where they stand in it: %s" % String(s["ground"])) if not String(s.get("ground", "")).is_empty() else ""])
 	var verb_lines := PackedStringArray()
 	for v in VERBS:
 		var args: Dictionary = Actions.ARGS.get(v, {})
@@ -439,6 +480,7 @@ func director_vars(raw: String, error := "") -> Dictionary:
 		"shots": maxi(3, int(round(seconds / 4.5))), "cast": "\n".join(cast_lines), "sets": "\n".join(set_lines),
 		"verbs": "\n".join(verb_lines), "poses": ", ".join(Actions.POSE_NAMES), "gaits": ", ".join(Actions.GAITS),
 		"fx": ", ".join(Actions.FX_KINDS), "half_width": "1.2", "ground": "-0.72", "silent": bool(block.get("silent", true)),
+		"loops": bool(block.get("loops", false)),
 		"has_error": not error.is_empty(), "error": error}
 
 
@@ -479,6 +521,9 @@ func check(data: Variant) -> String:
 						return "%s: the backdrop \"%s\" is not one of the sets (%s)." % [where, ad.get("picture", ""), ", ".join(set_names)]
 				_:
 					return "%s: %s is a %s; a cartoon's cast is puppets and a backdrop." % [where, id, ad.get("kind", "")]
+		var crowd := _crowded(e)
+		if not crowd.is_empty():
+			return "%s: %s" % [where, crowd]
 		var track: Dictionary = e.get("track", {}) if e.get("track") is Dictionary else {}
 		for sp in track.get("spans", []):
 			var sd: Dictionary = sp if sp is Dictionary else {}
@@ -500,6 +545,54 @@ func check(data: Variant) -> String:
 	if total < want * float(STRAY[0]) or total > want * float(STRAY[1]):
 		return "it runs %.0f seconds; it should run about %.0f." % [total, want]
 	return ""
+
+
+## Two puppets of shot [param e] that start standing on each other: places closer than half of their two widths at nearly the same
+## depth (a puppet's width is its rig's at its height). "" where none do. How wide each is comes from its rig, read once.
+func _crowded(e: Dictionary) -> String:
+	var them: Array = []
+	for a in e.get("cast", []):
+		var ad: Dictionary = a if a is Dictionary else {}
+		if String(ad.get("kind", "")) != "puppet" or bool(ad.get("hidden", false)):
+			continue
+		var at: Array = ad.get("at", [0, 0, 0]) if ad.get("at") is Array and (ad.get("at") as Array).size() == 3 else [0, 0, 0]
+		if at[0] is Array or at[2] is Array:
+			continue
+		them.append({"id": String(ad.get("id", "")), "x": float(at[0]), "z": float(at[2]), "w": _width_of(String(ad.get("rig", "")), float(Storyboard.sample(ad.get("height", 1.0), RandomNumberGenerator.new())))})
+	for i in them.size():
+		for j in range(i + 1, them.size()):
+			var a: Dictionary = them[i]
+			var b: Dictionary = them[j]
+			var need := (float(a["w"]) + float(b["w"])) * 0.5 * CROWD
+			if absf(float(a["z"]) - float(b["z"])) < 0.35 and absf(float(a["x"]) - float(b["x"])) < need:
+				return "%s and %s start standing on each other (%.2f apart; they need about %.2f)." % [a["id"], b["id"],
+					absf(float(a["x"]) - float(b["x"])), need]
+	return ""
+
+
+## How wide the puppet [param rig] is at [param tall] (its front drawing's width over its height); a usual width where it is not read.
+func _width_of(rig: String, tall: float) -> float:
+	if not _widths.has(rig):
+		var r := PuppetRig.read_now(rig) if rigged(rig) else null
+		_widths[rig] = float((r.data.get("size", [1, 1]) as Array)[0]) / r.height() if r != null and r.ok() else 0.8
+	return tall * float(_widths[rig])
+
+
+## [param data] (a storyboard that plays) as a cartoon plays it: every stage shot framed still (`shot: centered`, `behavior: static`)
+## where it names nothing else, so the camera moves only where the director moved it on purpose, never drifting or pushing in; and no
+## fade up from black or down to it at its ends (`bookend: false`): a screen may come on in the middle of it, and a loop's end meets
+## its start.
+static func settled(data: Dictionary) -> Dictionary:
+	var out := data.duplicate(true)
+	out["bookend"] = false
+	for key in ["sequence", "tail"]:
+		for e in out.get(key, []):
+			if e is Dictionary and String((e as Dictionary).get("scene", "")) == "stage":
+				if not (e as Dictionary).has("shot"):
+					e["shot"] = "centered"
+				if not (e as Dictionary).has("behavior"):
+					e["behavior"] = "static"
+	return out
 
 
 ## The director's reply [param text] as the JSON object in it (fences and words round it left out); null where there is none.
@@ -569,7 +662,7 @@ func pump() -> void:
 			var data: Variant = parse_board(String(res.get("text", "")))
 			var why := check(data)
 			if why.is_empty():
-				var err := NoteStoryboard.write(folder, data)
+				var err := NoteStoryboard.write(folder, CartoonProducer.settled(data))
 				if not err.is_empty():
 					_fail(key, err)
 			elif int(w.get("tries", 0)) < 1:

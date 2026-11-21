@@ -30,7 +30,7 @@ class_name ScriptMarks
 ##   line     "own": the mark goes on a line of its own; "start": at the head of the line;
 ##            "" anywhere
 ##   modes    the Script cards that offer it, by their workspace's mode ([method Components.script_mode]:
-##            "generative", "table")
+##            "generative", "table"), or "song" - a note with a Sound, whose words are its lyrics ([Lyrics])
 ##   blurbs   optional, {mode: blurb}: what it does in a panel where that differs ([method blurb])
 ##   within   optional, a key of [constant REGIONS]: colored only inside that section of the script
 ##   pattern  how [ScriptHighlighter] finds it. Registry ORDER is highlight priority: a span
@@ -45,6 +45,30 @@ const DECK_HEADING := "(?i)^(#{1,6})\\s*(?:the\\s+)?cards\\s*:?\\s*$"
 const REGIONS := {"deck": DECK_HEADING}
 
 const REGISTRY := {
+	"section": {
+		"label": "Song section",
+		"group": "song",
+		"blurb": "Where a section of the song begins - verse, chorus or bridge (a pre-chorus plays as a bridge, a hook or refrain as a chorus) - on a line of its own; the lines under it are sung in it. Sections of a kind share their chords and their tune; a chorus lands hardest. With no lines under it, the last section of its kind is sung again (a chorus written once).",
+		"before": "<!-- ", "fill": "chorus", "after": " -->", "line": "own",
+		"modes": ["song"],
+		"pattern": "(?mi)^[ \\t]*<!--\\s*(?:verse|chorus|bridge|pre-?chorus|hook|refrain)\\s*-->[ \\t]*$",
+	},
+	"instrumental": {
+		"label": "Instrumental section",
+		"group": "song",
+		"blurb": "A section with no words, this many bars long, where it is written: intro, break (a solo, interlude or instrumental plays as a break - the lead takes the melody) or ending; bare, four bars. None of a kind written is drawn by the roll. Over a reference's form, its own bars between the sung sections stand instead.",
+		"before": "<!-- break: ", "fill": "8", "after": " -->", "line": "own",
+		"modes": ["song"],
+		"pattern": "(?mi)^[ \\t]*<!--\\s*(?:intro|break|solo|interlude|instrumental|ending)\\s*(?::\\s*\\d+)?\\s*-->[ \\t]*$",
+	},
+	"repeat": {
+		"label": "Repeat",
+		"group": "song",
+		"blurb": "The section so far sung again, on a line of its own: bare, twice in all; repeat: 3, three times in all.",
+		"before": "<!-- repeat: ", "fill": "2", "after": " -->", "line": "own",
+		"modes": ["song"],
+		"pattern": "(?mi)^[ \\t]*<!--\\s*repeat\\s*(?::\\s*\\d+)?\\s*-->[ \\t]*$",
+	},
 	"speaker": {
 		"label": "Speaker cue",
 		"group": "voices",
@@ -168,7 +192,8 @@ const REGISTRY := {
 		"group": "pronunciation",
 		"blurb": "How words are said, in ARPAbet (a vowel's stress its digit), wherever they come in the note - each still shown as written. For a name every voice gets wrong. IPA between slashes after it (`Gödel = G ER1 D AH0 L /ɡˈøːdl̩/`) is what a neural voice says instead, for a sound ARPAbet cannot spell.",
 		"before": "<!-- say: ", "fill": "Io-A = AY1 OW0 EY1", "after": " -->", "line": "own",
-		"modes": ["generative"],
+		"modes": ["generative", "song"],
+		"blurbs": {"song": "How a word is sung, in ARPAbet (a vowel's stress its digit), wherever it comes in the song - still shown as written; its syllables and stress are the ones the tune is set to. IPA between slashes after it is what the voice sings instead, for a sound ARPAbet cannot spell."},
 		"pattern": Manuscript.SAY,
 	},
 	"letter": {
@@ -217,8 +242,9 @@ const REGISTRY := {
 		"group": "typography",
 		"blurb": "Spoken like any line, set as a heading on the page. The frontmatter's title is read first on its own.",
 		"before": "# ", "fill": "Heading", "after": "", "line": "start",
-		"modes": ["generative", "table"],
-		"blurbs": {"table": "A section of the brief, for the agents to find their way by. One heading is read by Ghost Notes itself: Cards, the show's deck."},
+		"modes": ["generative", "table", "song"],
+		"blurbs": {"table": "A section of the brief, for the agents to find their way by. One heading is read by Ghost Notes itself: Cards, the show's deck.",
+			"song": "A heading, for the words' reader: never sung."},
 		"pattern": "(?m)^#{1,6}[ \\t].*$",
 	},
 	"scene_line": {
@@ -692,8 +718,9 @@ const REGISTRY := {
 		"group": "notes",
 		"blurb": "Any other HTML comment is an authoring note: never spoken, never printed.",
 		"before": "<!-- ", "fill": "a note to yourself", "after": " -->", "line": "",
-		"modes": ["generative", "table"],
-		"blurbs": {"table": "Any other HTML comment is a note to yourself: taken out of the brief before any agent is handed it."},
+		"modes": ["generative", "table", "song"],
+		"blurbs": {"table": "Any other HTML comment is a note to yourself: taken out of the brief before any agent is handed it.",
+			"song": "Any other HTML comment is a note to yourself: never sung, however many lines it runs over."},
 		"pattern": Manuscript.COMMENT,
 	},
 }
@@ -711,6 +738,7 @@ const GROUPS := {
 	"letter": {"label": "Letter", "color": Color(0.72, 0.9, 0.55)},
 	"dispatch": {"label": "Dispatch desk", "color": Color(0.5, 0.95, 0.72)},
 	"notes": {"label": "Notes", "color": Color(0.6, 0.6, 0.66)},
+	"song": {"label": "Song", "color": Color(0.95, 0.55, 0.85)},
 }
 
 

@@ -7,7 +7,7 @@ a window is written to a file and its path returned.
 
   -> {"id": 1, "op": "load", "spec": {...render.py's spec...}}
   <- {"id": 1, "ok": true, "length": 220.3}
-  -> {"id": 2, "op": "takes", "takes": [{"wav", "at"}]}       the voice's takes sung so far, all of them
+  -> {"id": 2, "op": "takes", "takes": [{"wav", "at", "voice"}]}  the takes sung so far, all of them, each its voice's
   <- {"id": 2, "ok": true}
   -> {"id": 3, "op": "window", "t0": 30.0, "t1": 36.0, "out": "/path/w3.f32"}
   <- {"id": 3, "ok": true, "wav": "/path/w3.f32", "t0": 30.0, "t1": 36.0}

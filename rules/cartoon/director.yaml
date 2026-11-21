@@ -3,7 +3,8 @@
 # registry's words (Actions.ARGS), so this file names no character, set or story.
 #
 # The code gives: {{title}}, {{brief}}, `has_direction`, {{direction}}, {{seconds}}, {{shots}}, {{cast}}, {{sets}}, {{verbs}}, {{poses}},
-# {{gaits}}, {{fx}}, {{half_width}}, {{ground}}; `silent`; `has_error`, {{error}} (what was wrong with the last storyboard written). A cast
+# {{gaits}}, {{fx}}, {{half_width}}, {{ground}}; `silent`; `loops` (it is played round and round); `has_error`, {{error}} (what was wrong
+# with the last storyboard written). A cast
 # line gives each puppet's width at its height, which spacing them depends on.
 prompt:
   - >-
@@ -56,6 +57,16 @@ staging:
       one's width apart, or one hides the other; let them overlap only when they touch on purpose (a collision, a blow, a huddle). The
       frame is about 0.6 of the camera's distance wide to either side of where it looks: the wide shot holds three side by side, and
       a closer shot holds one or two - aim it at them, and leave out of it whoever does not fit.
+  - >-
+      FAR OFF. To show them small in the distance (crossing a skyline, a far field), keep the wide camera and make them small where they
+      are: `height` about 0.25 to 0.4, their feet at y about -0.1 (a line just below the middle of the frame, where a set's far ridge or
+      horizon runs - a set whose characters stand on a ridge says so), `shade` 1 for black shapes against a bright sky. They need far
+      less room than up close, and a long walk across the whole frame takes them several seconds.
+  - when: loops
+    say: >-
+      IT LOOPS: the last moment is played straight into the first, again and again. End the last shot with every character back where
+      the first shot starts them - the same places, the same way round, the same mood (or none), standing still - so the cut back to the
+      start cannot be seen.
   - >-
       THE TRACK. `track: {nominal, spans}`, nominal equal to the shot's `hold`. A span is {action, target, args} with `at` (a moment) or
       `from` and `to` (a window), in seconds from the shot's start; `ease` is smooth by default, `linear` for an even pace or a verb with

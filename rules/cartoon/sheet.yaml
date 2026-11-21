@@ -2,7 +2,8 @@
 # hand, in another view, mouth or mood, on plain paper and nothing else, so it can be cut off it, set beside the others and swapped in.
 # What is drawn is the sheet's row (`ask`, the registry's own words); the style is the maker's drawing, handed in as a reference.
 #
-# The code gives: {{ask}}, {{file}}; `has_base` (the first reference is another drawing of the sheet, to change as asked).
+# The code gives: {{ask}}, {{file}}; `has_base` (the first reference is another drawing of the sheet, to change as asked); `described`,
+# {{describe}} (a character nobody drew: its words, the references only its style).
 prompt:
   - "Use your image generation tool to make one picture, then save it in the current directory as {{file}}."
   - ""
@@ -11,7 +12,11 @@ prompt:
       The first attached picture is a drawing of a character; the last is the original drawing it was made from, by its maker. Draw the
       character again as asked below, by the same hand: the same character in every particular - its shapes, colors, markings, how many
       of each limb and what it holds - drawn in the same felt-tip outlines and colors on the same plain paper.
-  - when: "!has_base"
+  - when: described
+    say: >-
+      The attached pictures are drawings by one hand, references for the DRAWING STYLE only: draw nothing from them. Draw this
+      character, as that hand would - its outlines, how it colors, its paper: {{describe}}
+  - when: ["!has_base", "!described"]
     say: >-
       The attached picture is a character drawn by hand. Draw it again as asked below, by the same hand: the same character in every
       particular - its shapes, colors, markings, how many of each limb and what it holds - drawn in the same outlines and colors.

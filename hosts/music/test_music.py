@@ -24,7 +24,9 @@ Held:
   controls, a window made with no time before it (the room's tail lost after each join) and windows not faded into
   each other (two takes of a held chord meeting), each fail; a bar played again while the singer is late (a vamp,
   `follows`) begins where what came before it would have gone on - the control, not faded in, jumps; a take gone from
-  the disk is left out and the song made without it, a take there heard.
+  the disk is left out and the song made without it, a take there heard; with a chorus, each take goes to the voice it
+  names (one of no voice to the lead) and a chorus voice placed to one side is heard there - the control, the lead's,
+  in the middle.
 """
 
 import json
@@ -237,6 +239,17 @@ def main() -> int:
         gone = song.window(6.0, 7.0)
         ok(heard > bare_take * 1.05 and gone.shape[1] == 44100,
            "a take there is heard (%.3f against %.3f without), and one gone from the disk is left out, the song made without it" % (heard, bare_take))
+        chorus = dict(spec, vocals=[{"key": "vocal", "level": 0.0, "pan": 0.0, "fx": {}, "takes": []},
+                                    {"key": "chorus_1", "level": 0.0, "pan": -0.8, "fx": {}, "takes": []}])
+        sung = stream.Song(chorus)
+        sung.set_takes([{"wav": str(work / "take.wav"), "at": 2.0, "voice": "chorus_1"}, {"wav": str(work / "take.wav"), "at": 8.0}])
+        routed = [t["at"] for t in sung.voices[1]["takes"]] == [2.0] and [t["at"] for t in sung.voices[0]["takes"]] == [8.0]
+        side = sung._voice(sung.voices[1], 2.0, 44100)
+        middle = sung._voice(sung.voices[0], 8.0, 44100)
+        lean = float(np.sum(side[0] ** 2) / max(np.sum(side[1] ** 2), 1e-12))
+        even = float(np.sum(middle[0] ** 2) / max(np.sum(middle[1] ** 2), 1e-12))
+        ok(routed and lean > 3.0 and abs(even - 1.0) < 0.05,
+           "each take goes to its voice, a chorus voice placed left is heard there (%.1fx left), the lead in the middle (%.2f)" % (lean, even))
         vamp = vamped(cold, True)
         bare_vamp = vamped(cold, False)
         ok(vamp < 0.5 and bare_vamp > 3.0,

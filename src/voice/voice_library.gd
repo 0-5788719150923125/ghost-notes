@@ -3,7 +3,8 @@ class_name VoiceLibrary
 
 ## VoiceLibrary - voices kept for every note (next/library.md): the library's `voices` shelf ([Library]), one file per voice,
 ## `<slug>.json`: `{name, line, hash, voice}`. A kept voice is who speaks and how ([constant OWN]): the model and its reader, a
-## Kokoro blend or the formant voice, the tone, the pace, the pauses, the delivery dials and the ink. Where it is heard - the
+## Kokoro blend or the formant voice, the tone, the pace, the pauses, the delivery dials, the ink, and how it sings
+## ([constant SINGING]: what a composed Sound casting it reads). Where it is heard - the
 ## room ([constant ROOM]) - is never kept: it stays each note's, one narrator in a car and at a desk.
 ##
 ## A note reads a kept voice by name (`kept:` on its row, [ReadingCast]) and carries a copy of what it last read. A voice
@@ -21,12 +22,16 @@ const SHELF := "voices"
 ## The ending of a voice handed on as a file ([method export_to]).
 const EXPORT := ".voice.json"
 ## What a voice keeps when it is kept: who speaks and how. Every other field of a cast row is the room ([constant ROOM]).
-const OWN := ["voice", "speaker", "blend", "formant", "tone", "pace", "pause", "dynamics", "arc", "effort", "ink"]
+const OWN := ["voice", "speaker", "blend", "formant", "tone", "pace", "pause", "dynamics", "arc", "effort", "ink",
+	"vibrato", "vibrato_rate", "drift"]
+## How a voice sings, and each dial's range. A voice's hash leaves one out while it is at its default (a voice kept
+## before these were is the same voice), and its spoken sample never hears them.
+const SINGING := {"vibrato": [0.0, 1.0], "vibrato_rate": [3.0, 8.0], "drift": [0.0, 0.15]}
 ## Where a voice is heard: each note's own, never kept.
 const ROOM := ["echo", "room", "resonance", "presence", "ambience", "lean", "near", "seat"]
 ## A kept field's value where a file gives none (a voice names its model, or it is no voice).
 const DEFAULTS := {"voice": "", "speaker": 0, "blend": "", "formant": {}, "tone": 0, "pace": 1.0, "pause": 1.0,
-	"dynamics": 0.5, "arc": 0.4, "effort": 0.35, "ink": ""}
+	"dynamics": 0.5, "arc": 0.4, "effort": 0.35, "ink": "", "vibrato": 0.15, "vibrato_rate": 5.4, "drift": 0.03}
 ## The Pace row's range.
 const PACE_LEAST := 0.4
 const PACE_MOST := 1.6
@@ -73,19 +78,28 @@ static func own_of(row: Dictionary) -> Dictionary:
 	for k in ["dynamics", "arc", "effort"]:
 		out[k] = _num(row.get(k), float(DEFAULTS[k]), 0.0, 1.0)
 	out["ink"] = _ink(row.get("ink", ""))
+	for k in SINGING:
+		out[k] = _num(row.get(k), float(DEFAULTS[k]), float(SINGING[k][0]), float(SINGING[k][1]))
 	return out
 
 
 ## What [param voice] is, as a short hash: only its kept fields count, never its name, its line or its room; numbers equal
 ## to a millionth hash the same.
 static func hash_of(voice: Dictionary) -> String:
-	return JSON.stringify(_canon(own_of(voice)), "", true).sha256_text().left(16)
+	var own := own_of(voice)
+	for k in SINGING:
+		if is_equal_approx(float(own[k]), float(DEFAULTS[k])):
+			own.erase(k)
+	return JSON.stringify(_canon(own), "", true).sha256_text().left(16)
 
 
-## What [param voice] sounds like, as a short hash: [method hash_of] without the ink. Its sample is named by it.
+## What [param voice] sounds like spoken, as a short hash: [method hash_of] without the ink or how it sings. Its sample
+## is named by it.
 static func sound_of(voice: Dictionary) -> String:
 	var own := own_of(voice)
 	own["ink"] = ""
+	for k in SINGING:
+		own[k] = DEFAULTS[k]
 	return hash_of(own)
 
 

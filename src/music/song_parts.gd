@@ -17,6 +17,10 @@ class_name SongParts
 ## attack and release. A progression names the `modes` it is written for (none: any), a `quality` every chord takes,
 ## `sevenths`, and `bars` a chord where its rhythm is fixed.
 
+## A SONG HAS UP TO VOICES_MOST VOICES, each a part of its own (`vocal`, `vocal_2`...: [method voice_keys]): each sings
+## the song's one tune or a harmony to it ([constant SINGS]) in the sections of the words it is given - [method
+## Composer._voices]. The first voice's pattern is how the tune is made.
+##
 ## The parts: the instrument and pattern each starts with, its register (MIDI, low to high), its level (dB) and pan,
 ## and its effects (the music host's: hosts/music/render.py).
 const PARTS := {
@@ -37,9 +41,21 @@ const PARTS := {
 		"fx": {"reverb": 0.3, "delay": {"beats": 0.75, "feedback": 0.3, "mix": 0.2}}},
 	"bells": {"label": "Bells", "blurb": "A few struck notes with long tails, here and there.", "instrument": "bell",
 		"pattern": "sparse", "register": [72, 96], "level": -18.0, "pan": -0.4, "fx": {"reverb": 0.5}},
-	"vocal": {"label": "Voice", "blurb": "The note's words sung: its verses and choruses on a melody, by one voice.",
+	"vocal": {"label": "Voice", "blurb": "The note's words sung, by one voice: the tune, or a harmony to it, in the sections it is given. A song may have four.",
 		"instrument": "", "pattern": "reference", "register": [48, 76], "level": 0.0, "pan": 0.0,
 		"fx": {"reverb": 0.18, "delay": {"beats": 0.5, "feedback": 0.2, "mix": 0.08}}},
+}
+
+## How many voices a song may have.
+const VOICES_MOST := 4
+
+## What a voice sings: the song's tune, in the octave nearest where its singer sits (two voices on the tune are a
+## unison, or a gang an octave apart), or a harmony to it. `styles` steer a roll between them, as a pattern's do.
+const SINGS := {
+	"tune": {"label": "The tune", "blurb": "The song's melody, in the octave nearest where this singer sits: the lead, a duet's other half, or a gang singing it together.",
+		"styles": ["rock", "hiphop", "edm"]},
+	"harmony": {"label": "A harmony", "blurb": "A tone of each chord the tune and the other harmonies leave free, moving as little as it can, held through a note the tune passes on; a voice sitting low sings each chord's root.",
+		"styles": ["pop", "ballad", "folk", "blues", "funk", "latin"]},
 }
 
 const PATTERNS := {
@@ -222,6 +238,30 @@ const SECTIONS := {
 	"break": {"label": "Break", "blurb": "Between the voice's sections: the lead takes the melody.", "parts": ["drums", "bass", "keys", "pad", "guitar", "lead"], "energy": 0.8},
 	"outro": {"label": "Outro", "blurb": "After the voice: the band thins away.", "parts": ["pad", "keys", "bass", "bells"], "energy": 0.4},
 }
+
+
+## The keys a song's voices take, in order: `vocal`, `vocal_2`... up to VOICES_MOST.
+static func voice_keys() -> Array:
+	var out: Array = ["vocal"]
+	for i in range(2, VOICES_MOST + 1):
+		out.append("vocal_%d" % i)
+	return out
+
+
+## Whether part key [param key] is a voice.
+static func is_voice(key: String) -> bool:
+	return voice_keys().has(key)
+
+
+## The kind of part key [param key] is (a [constant PARTS] key): every voice's is `vocal`.
+static func kind_of(key: String) -> String:
+	return "vocal" if is_voice(key) else key
+
+
+## A part's name on the card: its row's label, a voice after the first numbered ("Voice 2").
+static func label_of(key: String) -> String:
+	var label := Registry.label(PARTS, kind_of(key))
+	return label + key.trim_prefix("vocal_").insert(0, " ") if key.begins_with("vocal_") else label
 
 
 ## The patterns part [param part] may play, `reference` first where [param has_reference].

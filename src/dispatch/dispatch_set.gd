@@ -5,8 +5,9 @@ class_name DispatchSet
 ## a hollow under the ground, seen from the chair - the terminal (a beige CRT on a flat case, a narrow keyboard on a
 ## coiled cable), a dozen flip phones in two rows with their names on masking tape, the round green radar scope, the
 ## shortwave receiver (dial at 20.1, needle meter, speaker, a small oscilloscope on it, headphones, two wires up into the
-## dark), the dot-matrix printer feeding its paper off the desk's end into a heap, three small screens (a security
-## monitor, a flat satellite monitor on an arm, a little television), the switch box (GOOD above, BAD below), the chart, the
+## dark) and the little modern SDR screen standing on its oscilloscope, the dot-matrix printer feeding its paper off the
+## desk's end into a heap, three small screens (a security monitor, a flat satellite monitor on an arm, a little television),
+## the switch box (GOOD above, BAD below), the chart, the
 ## handbook, the mug, the gooseneck lamp, the patch panel, the GPS tracker; and the empty chair. Where the script uses them,
 ## a small flip clock and a tablet lying dark beside the keyboard ([method build]'s `wants`).
 ##
@@ -126,13 +127,13 @@ const LOW_OVER := 0.02
 ## renaming one redraws every desk's.
 ## The small things a desk can do without, taken off by a person ([PropMakes]' `{aside: true}`) as one with no room for it is left
 ## off: nothing else stands on them.
-const SPARE := ["handbook", "switch", "stamp", "tracker", "chart", "pencil_cup"]
+const SPARE := ["handbook", "switch", "stamp", "tracker", "chart", "pencil_cup", "sdr"]
 const MAKE_SALTS := {"mug": "mug", "pencil_cup": "cup", "terminal": "terminal", "keyboard": "keyboard", "phone": "phone",
 	"radar": "radar", "receiver": "receiver", "printer": "printer", "feed": "feed", "satellite": "satellite", "tv": "tv",
 	"tv_stand": "tv_stand", "lamp": "lamp", "switch": "switch", "handbook": "handbook", "stamp": "stamp", "tracker": "tracker",
-	"chart": "chart", "clock": "clock", "tablet": "tablet"}
+	"chart": "chart", "clock": "clock", "tablet": "tablet", "sdr": "sdr"}
 ## What of each thing the camera reads, by its make's faces ([member _faces]): what is packed is kept from hiding them.
-const READ := {"terminal": ["screen"], "radar": ["scope", "scale"], "receiver": ["dial", "meter", "scope"], "feed": ["screen"],
+const READ := {"terminal": ["screen"], "radar": ["scope", "scale"], "receiver": ["dial", "meter", "scope"], "sdr": ["screen"], "feed": ["screen"],
 	"satellite": ["screen"], "tv": ["screen"], "switch": ["good", "bad"], "handbook": ["spine"], "chart": ["chart"], "clock": ["cards"]}
 ## The material each phone's make wears in a color of its own, drawn phone by phone from its palette ([constant PHONE_FIELDS]).
 const PHONE_TINT := "body"
@@ -204,6 +205,7 @@ var phones: Array = []            # each {label, node, rig, inner, outer, tape, 
 var terminal_screen: MeshInstance3D   # the faces the medium hands pictures ([PropRig.face]; null where a make has none)
 var radar_screen: MeshInstance3D
 var scope_screen: MeshInstance3D
+var spectrum_screen: MeshInstance3D   # the SDR's screen ([method _sdr]; null where it is taken off)
 var dial: MeshInstance3D
 var paper: MeshInstance3D         # the paper coming up out of the printer, over its rest and down to the heap ([method feed_paper])
 var paper_print: Material         # what its printed side wears (the medium's picture of it); its back is the heap's paper
@@ -276,6 +278,7 @@ func build(labels: PackedStringArray, seed: int, tex: Dictionary, wants := {}) -
 	_phones()
 	_radar()
 	_receiver()
+	_sdr()
 	_printer()
 	_things_back()
 	_monitors()
@@ -1267,6 +1270,98 @@ func _receiver() -> void:
 		put(t.node, tube(p, 0.0018, 5), _mats["cable"], Vector3.ZERO)
 	_body("receiver", t.node)
 	_faces["receiver"] = _read("receiver")
+
+
+# --- the SDR screen ---------------------------------------------------------------------------------------------------
+
+## How far the SDR's coax comes straight out of its dongle (m), how thick it is, and where it goes into the receiver: beside
+## its second antenna's jack, this far toward its right (m).
+const COAX_OUT := 0.012
+const COAX_R := 0.0022
+const COAX_JACK := 0.035
+
+
+## The SDR's make ([PropMakes] `sdr`), a hobbyist's addition to the old set: a little modern screen standing on the receiver,
+## on its highest part over its oscilloscope's glass ([method atop]), turned as the receiver is - its `screen` face ([member
+## spectrum_screen]) the medium's ([DispatchSpectrum]) - and a coax from its dongle (its make's `coax` point) over the back and
+## down into the receiver beside its antenna's jack. Not where a person took it off.
+func _sdr() -> void:
+	var rc: PropRig = rigs.get("receiver")
+	if rc == null or aside("sdr"):
+		return
+	var rxf := bounds_xf(rc.node)
+	var on := atop(rc, rc.face("scope"))
+	var t := _place("sdr", rxf * (on["at"] as Vector3), turn["receiver"])
+	spectrum_screen = t.face("screen")
+	if spectrum_screen != null:
+		# its glass over the scope's, wherever its make has it
+		t.node.position -= t.node.basis * Vector3(t.face_xf("screen").origin.x, 0.0, 0.0)
+	var from: Variant = t.point("coax")
+	var jack: Variant = rc.point("antenna 2")
+	if from is Vector3 and jack is Vector3:
+		var xf := bounds_xf(t.node)
+		var a: Vector3 = xf * (from as Vector3)
+		var side := rxf.basis.x.normalized()
+		var back := -rxf.basis.z.normalized()
+		var box: AABB = on["box"]
+		# out of the dongle, over the back edge of what it stands on, down the receiver's back to its jack
+		var tip := rxf.affine_inverse() * a
+		var edge := rxf * Vector3(tip.x + 0.01, box.end.y + COAX_R, box.position.z - 0.004)
+		var into := rxf * ((jack as Vector3) + Vector3(COAX_JACK, 0.0, 0.0))
+		var way := PackedVector3Array([a, a + side * COAX_OUT, a + side * (COAX_OUT + 0.008) + back * 0.02 + Vector3.DOWN * 0.012,
+			edge, edge + back * 0.012 + Vector3.DOWN * 0.03, into + back * 0.012 + Vector3.UP * 0.02, into])
+		var inv := xf.affine_inverse()
+		var local := PackedVector3Array()
+		for p in _smooth(way, 6):
+			local.append(inv * p)
+		put(t.node, tube(local, COAX_R, 6), _mats["cable"], Vector3.ZERO)
+	_body("sdr", t.node)
+	_faces["sdr"] = _read("sdr")
+
+
+## Where a thing may stand on [param rig]'s make, in the make's own frame: on the highest of its meshes under the middle of its
+## face [param face] (under its own middle where it has none), at that mesh's middle in depth - `{at, box}`, the box stood on in
+## the make's frame. Rods and flat faces are passed over.
+static func atop(rig: PropRig, face: MeshInstance3D) -> Dictionary:
+	var x := _within(rig.node, face).origin.x if face != null else 0.0
+	var best := {"at": Vector3.ZERO, "box": AABB()}
+	var top := -INF
+	for mi in rig.node.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		if m.mesh == null or m.mesh.has_meta(THIN) or _flat(m):
+			continue
+		var box := _within(rig.node, m) * m.mesh.get_aabb()
+		if box.position.x <= x and x <= box.end.x and box.end.y > top:
+			top = box.end.y
+			best = {"at": Vector3(x, box.end.y, box.get_center().z), "box": box}
+	return best
+
+
+## [param n]'s transform in [param top]'s own frame (what is between them, never [param top]'s own).
+static func _within(top: Node3D, n: Node3D) -> Transform3D:
+	var xf := Transform3D.IDENTITY
+	var p: Node = n
+	while p != null and p != top and p is Node3D:
+		xf = (p as Node3D).transform * xf
+		p = p.get_parent()
+	return xf
+
+
+## [param way] through each of its points smoothly (Catmull-Rom), [param steps] points between each two.
+static func _smooth(way: PackedVector3Array, steps: int) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	var n := way.size()
+	for i in n - 1:
+		var p0 := way[maxi(i - 1, 0)]
+		var p1 := way[i]
+		var p2 := way[i + 1]
+		var p3 := way[mini(i + 2, n - 1)]
+		for s in steps:
+			var u := float(s) / float(steps)
+			out.append(0.5 * (2.0 * p1 + (p2 - p0) * u + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * u * u
+				+ (3.0 * p1 - p0 - 3.0 * p2 + p3) * u * u * u))
+	out.append(way[n - 1])
+	return out
 
 
 # --- the printer ------------------------------------------------------------------------------------------------------
@@ -2392,9 +2487,11 @@ func spot_of(k: String) -> Dictionary:
 			var ra := at_of("radar")
 			var scope := bounds_xf(radar_screen).origin if radar_screen != null else Vector3(ra.x - 0.02 * flip, y + 0.18, ra.y + 0.13)
 			return {"aim": scope - Vector3(0.0, RADAR_LOOK_LOW, 0.0), "eye": EYE + Vector3(0.18 * flip, -0.04, -0.12), "fov": 34.0}
-		"receiver":
+		"receiver", "sdr":
+			# a little higher where the SDR screen stands on it, so the two screens are seen one over the other
 			var rc := at_of("receiver")
-			return {"aim": Vector3(rc.x - 0.02 * flip, y + 0.14, rc.y), "eye": EYE + Vector3(0.42 * flip, 0.02, -0.10), "fov": 30.0}
+			var lift := 0.19 if spectrum_screen != null else 0.14
+			return {"aim": Vector3(rc.x - 0.02 * flip, y + lift, rc.y), "eye": EYE + Vector3(0.42 * flip, 0.02, -0.10), "fov": 30.0}
 		"printer":
 			var pr := at_of("printer")
 			return {"aim": Vector3(pr.x - 0.29 * flip, y - 0.18, pr.y + 0.14), "eye": EYE + Vector3(-0.42 * flip, 0.06, -0.02), "fov": 54.0}

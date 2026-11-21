@@ -63,6 +63,9 @@ const SLOT_DEFAULTS := {
 	"dynamics": 0.5, "arc": 0.4, "effort": 0.35,
 	"echo": 0.0, "room": 0.0, "resonance": 0.0, "presence": 1.0, "ambience": 0.0,
 	"lean": 0.0, "near": 0.0, "seat": 0.0,
+	# how this voice sings, where a composed Sound casts it (Composer, singing.py): a held note's vibrato (semitones deep,
+	# and how fast) and the slow drift under every note
+	"vibrato": 0.15, "vibrato_rate": 5.4, "drift": 0.03,
 		# the pen this voice writes in, in a medium that writes by hand - a name from NotebookLayout.INKS or a hex
 		# color; "" is the default black
 	"ink": "",

@@ -17,6 +17,12 @@ extends Node
 ##   and changes nothing; Back walks to the song before each. THE FIELD NEVER HOLDS A STALE CODE: focused, a roll still
 ##   writes it there and letting it go changes nothing; typed into, it is entered when let go (a bad one refused); a
 ##   press outside lets it go - the control, a press on it, keeps it. A part shows a Roll and no number.
+## - EVERY PART IS USED IN THE SECTIONS IT IS GIVEN: an instrument's entry has a toggle a section of the song, its intro
+##   and outro too; letting one go sets the sections it plays in.
+## - A SONG HAS UP TO FOUR VOICES, each an entry: the first has its Melody, Tune and Vocoder but no Vibrato of its own
+##   (a voice's, set in its Lab), and its singer picker lists the kept voices first; a second has what it sings and a
+##   toggle a section of the words, the ones it sings in pressed, and no Melody; pressing a toggle sets them; + Add a
+##   part offers Voice while a song has fewer than four; every voice's lines are counted in the Pipeline.
 ## - What it makes is the Pipeline's: composed, its section lists the mix as missing and the sung lines; given a mix
 ##   and its record, the mix is made - the control, the block changed after, is stale. Its ⤓ (the song exported, from the
 ##   bottom-right row where the note exports no video) stands grayed until there is a mix, and lit once there is; a note
@@ -39,10 +45,13 @@ extends Node
 ##   file loaded takes ([method Spectrum.begin]) - the control, a file with no sidecar, has no grid and its own
 ##   fingerprint. The show's beat rises on the grid's beats through Spectrum's own frames - the control, no grid and
 ##   nothing heard, never rises - and Stop lets the grid go.
-## - THE BAND WAITS FOR A LATE SINGER (the stream's choices driven by hand, nothing heard): its windows end at the bar the
-##   unsung line begins in; once due, the bar before it is asked again without the voice, holding the song there,
-##   VAMP_MOST times; then the line goes without and its words leave the subtitles - the control, the line's take there,
-##   is not waited for. A roll reaches the stream once the dials settle, and while the song streams its unmade mix is
+## - IT BUFFERS FOR ITS VOICES (the stream's choices driven by hand, nothing heard): its windows end at the bar line
+##   before a line not yet sung could begin and ask nothing more however often asked, a harmony voice's line holding them as the lead's does;
+##   playing with nothing made left to hear, the player pauses itself, the line's words kept, the transport still
+##   showing it playing; its takes come, the windows go on past it and, enough made, it plays on, the rail showing what
+##   is made ahead - the control, paused by the author, shows paused. A line no voice is left to sing goes without, its words off the
+##   subtitles - the control, every take there, is never waited for, and the song is made on to its end, nothing capping
+##   how far ahead. A roll reaches the stream once the dials settle, and while the song streams its unmade mix is
 ##   on demand, left out of the Pipeline's tally (an export makes it).
 ## - Where the music environment is installed, the music host streams a short song: the first sound is heard once its
 ##   preroll is made, a roll is taken while it plays, a seek starts it again there, Stop ends it.
@@ -56,12 +65,13 @@ func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(ROOT))
 	var note := ProjectSettings.globalize_path(ROOT).path_join("song.md")
 	var f := FileAccess.open(note, FileAccess.WRITE)
-	f.store_string("---\ntitle: song\n---\nVerse\none two three\nfour five six\nChorus\nseven eight\nnine ten\n")
+	f.store_string("---\ntitle: song\n---\n<!-- verse -->\none two three\nfour five six\n<!-- chorus -->\nseven eight\nnine ten\n")
 	f.close()
 	var folder := ProjectSettings.globalize_path(ROOT).path_join("folder")
 	_old_block(note, folder)
 	_keeps(note, folder)
 	_code(note, folder)
+	_voices(note, folder)
 	await _pipeline(note, folder)
 	await _export(note, folder)
 	_placed(note, folder)
@@ -194,6 +204,90 @@ func _code(note: String, folder: String) -> void:
 	c.queue_free()
 
 
+func _voices(note: String, folder: String) -> void:
+	var block := {"source": "composed", "seed": 4, "parts": {"vocal": {"pattern": "composed"}, "vocal_2": {"sings": "harmony"}}}
+	var c := _card({"sound": block}, note, folder)
+	c._voices = {"Deep Ana": {"voice": "kokoro", "speaker": 0, "blend": "", "tone": 13, "semis": -4.0, "center": 50,
+		"vibrato": 0.4, "vibrato_rate": 6.0, "drift": 0.05}}
+	c._voices_at = VoiceLibrary.version
+	c._score_of = ""
+	c._refresh()
+	var voice := _entry(c, "Voice")
+	var second := _entry(c, "Voice 2")
+	var labels := func(e: EntryCard) -> Array:
+		return e.options.find_children("*", "Label", true, false).map(func(l: Node) -> String: return (l as Label).text)
+	var pickers: Array = voice.options.find_children("*", "OptionButton", true, false) if voice != null else []
+	var singer: OptionButton = null
+	for p in pickers:
+		for i in (p as OptionButton).item_count:
+			if (p as OptionButton).get_item_text(i) == "♥ Deep Ana":
+				singer = p
+	_ok(voice != null and not labels.call(voice).has("Vibrato") and labels.call(voice).has("Tune") and labels.call(voice).has("Vocoder")
+		and labels.call(voice).has("Melody") and singer != null and singer.get_item_text(1) == "♥ Deep Ana",
+		"the Voice entry has its Melody, Tune and Vocoder but no Vibrato of its own, and lists the kept voices first")
+	_ok(second != null and labels.call(second).has("Sings") and labels.call(second).has("Used in") and not labels.call(second).has("Melody"),
+		"a second voice is an entry of its own - what it sings and where - singing the first's melody")
+	var toggles: Array = []
+	if second != null:
+		for f in second.options.find_children("*", "HFlowContainer", true, false):
+			for b in (f as Node).get_children():
+				if b is Button and (b as Button).toggle_mode:
+					toggles.append(b)
+	_ok(toggles.size() == 2 and String(toggles[1].text) == "Chorus 1" and bool(toggles[1].button_pressed),
+		"...a toggle a section of the words, the last chorus pressed (%d)" % toggles.size())
+	if toggles.size() == 2:
+		(toggles[0] as Button).button_pressed = not (toggles[0] as Button).button_pressed
+	var sections: Variant = (c.capture()["parts"]["vocal_2"] as Dictionary).get("sections")
+	_ok(sections is Array and (sections as Array).has(1), "...pressing one sets the sections it sings in: %s" % str(sections))
+	var popup := c._add.get_popup()
+	var another := -1
+	for i in popup.item_count:
+		if popup.get_item_text(i) == "Voice":
+			another = popup.get_item_id(i)
+	if another >= 0:
+		popup.id_pressed.emit(another)
+	_ok(another >= 0 and (c.capture()["parts"] as Dictionary).has("vocal_3") and _entry(c, "Voice 3") != null,
+		"+ Add a part offers Voice while there is room for one, and it is Voice 3")
+	var block2 := {"source": "composed", "seed": 4, "parts": {"drums": {}, "vocal": {"pattern": "composed"}}}
+	var d := _card({"sound": block2}, note, folder)
+	var drums := _entry(d, "Drums")
+	var used: Array = []
+	if drums != null:
+		for f in drums.options.find_children("*", "HFlowContainer", true, false):
+			for b in (f as Node).get_children():
+				if b is Button and (b as Button).toggle_mode:
+					used.append(b)
+	var names: Array = used.map(func(b: Button) -> String: return b.text)
+	_ok(names.size() == (d.score()["sections"] as Array).size() and names.has("Intro") and names.has("Verse 1") and names.has("Outro"),
+		"an instrument is used in the sections of the song, a toggle each - its intro and outro too: %s" % str(names))
+	var off: Button = null
+	for b in used:
+		if (b as Button).button_pressed:
+			off = b
+	if off != null:
+		off.button_pressed = false
+	var set_used: Variant = (d.capture()["parts"]["drums"] as Dictionary).get("sections")
+	_ok(set_used is Array and not (set_used as Array).is_empty() and (set_used as Array).size() < names.size(),
+		"...letting one go sets the sections it plays in: %s" % str(set_used))
+	d.queue_free()
+	var rows: Array = c.pipeline_rows()
+	var lines := SongBake.lines_of(c.score()).size()
+	var said := ""
+	for r in rows:
+		if (r as PipelineRow).key == "takes":
+			said = (r as PipelineRow).said
+	_ok(said.begins_with("%d lines" % lines) and lines > (Composer.voice_of(c.score())["phrases"] as Array).size(),
+		"every voice's lines are counted in the Pipeline: %s" % said)
+	c.queue_free()
+
+
+func _entry(c: SoundCard, name: String) -> EntryCard:
+	for e in c._parts_box.get_children():
+		if e is EntryCard and not e.is_queued_for_deletion() and (e as EntryCard).name_label.text == name:
+			return e
+	return null
+
+
 func _pipeline(note: String, folder: String) -> void:
 	var c := _card({"sound": {"source": "composed", "parts": {"bass": {}, "vocal": {"pattern": "composed"}}}}, note, folder)
 	await get_tree().process_frame
@@ -264,14 +358,15 @@ func _export(note: String, folder: String) -> void:
 			"its %s export ends \"Saved\" on the row's line, the file written (%s)" % [ext.to_upper(), c._line.said()])
 		c._line.clear()
 		DirAccess.remove_absolute(dest)
-	var score := {"vocal": {"phrases": [{"at": 2.0, "words": [{"text": "one", "notes": [{"t": 0.0, "len": 0.5, "midi": 60}]},
+	var score := {"voices": [{"key": "vocal", "phrases": [{"at": 2.0, "lead": true, "words": [{"text": "one", "notes": [{"t": 0.0, "len": 0.5, "midi": 60}]},
 		{"text": "two", "notes": [{"t": 0.5, "len": 0.25, "midi": 62}, {"t": 0.75, "len": 0.25, "midi": 64}]}]},
-		{"at": 5.0, "words": [{"text": "three", "notes": [{"t": 0.0, "len": 1.0, "midi": 60}]}]}]}}
+		{"at": 5.0, "lead": true, "words": [{"text": "three", "notes": [{"t": 0.0, "len": 1.0, "midi": 60}]}]}]},
+		{"key": "vocal_2", "phrases": [{"at": 2.0, "lead": false, "words": [{"text": "one", "notes": [{"t": 0.0, "len": 0.5, "midi": 64}]}]}]}]}
 	SongBake.write_sidecar(score, mix)
 	var side: Variant = JSON.parse_string(FileAccess.get_file_as_string(Subtitles.sidecar_for(mix)))
 	var words: Array = (side as Dictionary).get("words", []) if side is Dictionary else []
 	_ok(words.size() == 3 and is_equal_approx(float(words[1]["t0"]), 2.5) and is_equal_approx(float(words[1]["t1"]), 3.0)
-		and int(words[2]["sentence"]) == 1, "the subtitles beside a mix: its words when sung, each line a sentence")
+		and int(words[2]["sentence"]) == 1, "the subtitles beside a mix: its words when sung, each line a sentence, a voice that does not lead left out")
 	for f in [mix, mix.get_basename() + ".json"]:
 		DirAccess.remove_absolute(f)
 	c.queue_free()
@@ -407,7 +502,7 @@ func _stream(note: String, folder: String) -> void:
 	file.free()
 	for p in [mix, mix.get_basename() + ".json", bare]:
 		DirAccess.remove_absolute(p)
-	_waits(note, folder)
+	_buffers(note, folder)
 	add_child(live)
 	var stream: SongStream = null
 	for c in live.get_children():
@@ -453,69 +548,93 @@ class FakeSubtitles extends Node:
 	var time_base := 0.0
 
 
-## The stream's choices while its singer is late, driven by hand: what it asks of a host that never answers.
-func _waits(note: String, folder: String) -> void:
+## The stream's choices while a voice's lines are not sung yet, driven by hand: what it asks of a host that never answers.
+func _buffers(note: String, folder: String) -> void:
 	var block := {"sound": {"source": "composed", "tempo": 120.0, "key": "C major", "seed": 3,
-		"parts": {"drums": {}, "bass": {}, "vocal": {"pattern": "composed"}}}}
+		"parts": {"drums": {}, "bass": {}, "vocal": {"pattern": "composed"}, "vocal_2": {"sings": "harmony", "sections": [0, 1]}}}}
 	var score := SoundCard.for_note({"blocks": block, "path": note, "folder": folder}).score()
-	var phrases: Array = score["vocal"]["phrases"]
-	var made := func(taken: bool) -> SongStream:
+	var lines := SongBake.lines_of(score)
+	var first: Dictionary = Composer.voice_of(score)["phrases"][0]
+	var made := func(taken: Array, dead := false) -> SongStream:
 		var st := SongStream.new()
 		var bake := SongBake.new()
+		bake._host_dead = dead
 		st.add_child(bake)
 		st.setup(score, folder, bake)
 		Spectrum.release_conductor(st)
 		st._host = "up"
 		st._ready_load = st._epoch
 		st._takes.clear()
-		if taken:
-			st._takes[0] = {"wav": "/nowhere.wav", "at": float(phrases[0]["at"])}
+		for l in lines:
+			if taken.has("all") or taken.has(String(l["id"])):
+				st._takes[l["id"]] = {"wav": "/nowhere.wav", "at": float(l["phrase"]["at"]), "voice": l["key"]}
 		st._subtitles = FakeSubtitles.new()
 		st.add_child(st._subtitles)
 		st._show_words()
 		return st
 	var asked := func(st: SongStream) -> Array:
+		st._ask()
 		var out: Array = st._pending.values()
 		st._pending.clear()
 		st._asking = 0
 		st._inflight = 0.0
 		return out
-	var st: SongStream = made.call(false)
-	var line := st._bar_at(float(phrases[0]["at"]), false)
-	var first: Array = asked.call(st) if (func() -> bool: st._ask(); return true).call() else []
-	var reaches := 0.0
-	for w in first:
-		reaches = maxf(reaches, float(w["t1"]))
-	_ok(not first.is_empty() and absf(reaches - line) < 1e-3 and first.all(func(w: Dictionary) -> bool: return float(w["hold"]) < 0.0),
-		"a line not yet sung: the windows end at the bar it begins in (%.2f s, the line at %.2f s)" % [reaches, float(phrases[0]["at"])])
-	var vamps := 0
-	var held := true
-	for _k in 20:
-		st._ask()
-		for w in asked.call(st):
-			# the bars played again for this line (the next line's waits come after)
-			if float(w["hold"]) >= 0.0 and absf(float(w["hold"]) - line) < 1e-3:
-				vamps += 1
-				held = held and absf(float(w["t1"]) - line) < 1e-3
-		if st._missed.has(0):
-			break
-	var subs: Array = st._subtitles.words
-	_ok(vamps == SongStream.VAMP_MOST and held, "...once due, the bar before it again, holding the song there: %d times" % vamps)
-	_ok(st._missed.has(0) and not subs.any(func(w: Dictionary) -> bool: return int(w["sentence"]) == 0)
-		and subs.any(func(w: Dictionary) -> bool: return int(w["sentence"]) == 1),
-		"...then it goes without, and its words leave the subtitles (the next line's stay)")
+	var reach := func(windows: Array) -> float:
+		var most := 0.0
+		for w in windows:
+			most = maxf(most, float(w["t1"]))
+		return most
+	var bar := 0.0
+	var st: SongStream = made.call([])
+	bar = st._bar_at(float(first["at"]) - SongStream.TAKE_LEAD, false)
+	var windows: Array = asked.call(st)
+	var again: Array = []
+	for _k in 10:
+		again.append_array(asked.call(st))
+	_ok(not windows.is_empty() and absf(float(reach.call(windows)) - bar) < 1e-3 and again.is_empty() and st._missed.is_empty(),
+		"a line not yet sung: the windows end at the bar line before its take could begin (%.2f s, the line at %.2f s) and ask nothing more" % [reach.call(windows), float(first["at"])])
 	st.free()
-	var ready: SongStream = made.call(true)
-	ready._ask()
-	var past := false
-	var waited := 0
-	for _k in 6:
-		for w in asked.call(ready):
-			past = past or float(w["t1"]) > line + 0.01
-			waited += 1 if float(w["hold"]) >= 0.0 and absf(float(w["hold"]) - line) < 1e-3 else 0
-		ready._ask()
-	_ok(past and waited == 0, "the control: with its take there, nothing waits at its bar and the windows go on past it")
+	var lead_only: Array = lines.filter(func(l: Dictionary) -> bool: return String(l["key"]) == "vocal").map(func(l: Dictionary) -> String: return String(l["id"]))
+	st = made.call(lead_only)
+	_ok(absf(float(reach.call(asked.call(st))) - bar) < 1e-3, "...a harmony voice's line holding them as the lead's does")
+	var was := Spectrum.paused
+	st._open = true
+	st._want_play = true
+	Spectrum.set_stream_paused(false)
+	st._buffer()
+	var held := st.buffering() and Spectrum.paused
+	_ok(held and st._subtitles.words.any(func(w: Dictionary) -> bool: return String(w["line"]) == "vocal:0"),
+		"playing with nothing made left to hear, the player pauses itself, the line's words kept")
+	_ok(st.playing() and is_equal_approx(st.made_ahead(), 0.0),
+		"...still playing as the transport shows it, nothing made ahead on the rail")
+	for l in lines:
+		st._takes[l["id"]] = {"wav": "/nowhere.wav", "at": float(l["phrase"]["at"]), "voice": l["key"]}
+	var on: Array = asked.call(st)
+	var frames := PackedVector2Array()
+	frames.resize(int(SongStream.BUFFER_FULL * SongStream.RATE) + 10)
+	st._queue.append({"seq": 1, "t0": 0.0, "t1": 4.0, "frames": frames, "started": false})
+	st._buffer()
+	_ok(float(reach.call(on)) > bar + 0.01 and not st.buffering() and not Spectrum.paused,
+		"...its takes come, the windows go on past it, and with enough made it plays on")
+	_ok(absf(st.made_ahead() - float(frames.size()) / SongStream.RATE) < 0.01,
+		"...the rail showing what is made ahead: %.2f s" % st.made_ahead())
+	st.pause()
+	_ok(not st.playing() and not st.buffering(), "the control: paused by the author, it shows paused")
+	st._open = false
+	st.free()
+	st = made.call([], true)
+	var past := float(reach.call(asked.call(st)))
+	_ok(past > bar + 0.01 and st._missed.has("vocal:0") and not st._subtitles.words.any(func(w: Dictionary) -> bool: return String(w["line"]) == "vocal:0"),
+		"a line no voice is left to sing goes without, its words off the subtitles")
+	st.free()
+	var ready: SongStream = made.call(["all"])
+	_ok(float(reach.call(asked.call(ready))) > bar + 0.01, "the control: with every take there, nothing waits at its bar")
+	var far := 0.0
+	for _k in 200:
+		far = maxf(far, float(reach.call(asked.call(ready))))
+	_ok(absf(far - float(score["length"])) < 0.01, "...and it makes the song on to its end, however far ahead: %.1f of %.1f s" % [far, float(score["length"])])
 	ready.free()
+	Spectrum.set_stream_paused(was)
 
 
 ## How many times the show's beat rises past the Director's edge (0.5) in [param seconds] of frames.

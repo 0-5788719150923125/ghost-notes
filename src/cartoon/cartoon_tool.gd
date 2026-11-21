@@ -4,10 +4,11 @@ extends Node
 ## the note at a path, each step it is asked for waited for and said as it lands, then the app quits. It writes what the card would
 ## (puppets and sets on the library's shelves, the storyboard in the note's folder), so it is a tool, never a gate.
 ##
-##   godot --headless --path . -- --cartoon PATH [--make] [--rig NAME] [--paint NAME] [--direct] [--python PY]
+##   godot --headless --path . -- --cartoon PATH [--make] [--rig NAME] [--again NAME] [--paint NAME] [--direct] [--python PY]
 ##       [--writer claude|codex|grok] [--model M]
 ##
-## `--make` makes whatever is not made yet; `--python` runs the puppet host on that interpreter (its environment elsewhere).
+## `--make` makes whatever is not made yet; `--rig` makes a character's sheet, painting only the drawings it lacks, and `--again` all of
+## them anew; `--python` runs the puppet host on that interpreter (its environment elsewhere).
 
 var _producer: CartoonProducer = null
 var _t0 := 0
@@ -28,6 +29,7 @@ func _ready() -> void:
 			"--model": model = v
 			"--make": asked.append(["make", ""])
 			"--rig": asked.append(["rig", v])
+			"--again": asked.append(["again", v])
 			"--paint": asked.append(["paint", v])
 			"--direct": asked.append(["direct", ""])
 	if not FileAccess.file_exists(note):
@@ -44,6 +46,7 @@ func _ready() -> void:
 		match String(a[0]):
 			"make": why = _producer.make_missing()
 			"rig": why = _start_rig(String(a[1]))
+			"again": why = _start_rig(String(a[1]), true)
 			"paint": why = _start_paint(String(a[1]))
 			"direct": why = _producer.direct()
 		if not why.is_empty():
@@ -51,10 +54,10 @@ func _ready() -> void:
 	_t0 = Time.get_ticks_msec()
 
 
-func _start_rig(name: String) -> String:
+func _start_rig(name: String, again := false) -> String:
 	for c in _producer.cast():
 		if String(c["name"]) == name:
-			return _producer.make(c)
+			return _producer.sheet(c, true) if again else _producer.make(c)
 	return "no character %s in the note's cast" % name
 
 

@@ -16,11 +16,11 @@ extends Node
 
 ## Number of log-spaced bands in [member AudioFeatures.bands].
 const BAND_COUNT := AudioFeatures.BAND_COUNT
-const FREQ_MIN := 30.0
-const FREQ_MAX := 16000.0
+const FREQ_MIN := AudioFeatures.FREQ_MIN
+const FREQ_MAX := AudioFeatures.FREQ_MAX
 
 ## dB window mapped onto 0..1. Magnitudes quieter than -DB_FLOOR read as 0.
-const DB_FLOOR := 60.0
+const DB_FLOOR := AudioFeatures.DB_FLOOR
 
 ## Frames per second the offline bake is sampled at (must match bake_runner.gd).
 const BAKE_FPS := 30
@@ -67,6 +67,8 @@ var _sig_fast: HarmonicSignature = null  # short-memory twin for the Echo re-loc
 ## Emitted when a loaded song reaches its end (not in idle mode). Manual loops, Auto stops at its start
 ## and stays in its note. Looping streams never end, so this never fires for them.
 signal song_finished
+## The playhead was moved ([method seek]) to [param t] on the session clock: what follows a written show re-walks to it ([Director]).
+signal sought(t: float)
 
 var _player: AudioStreamPlayer
 var _analyzer: AudioEffectSpectrumAnalyzerInstance
@@ -373,12 +375,12 @@ func scrub_length() -> float:
 ## Move the playhead to [param t] on the session clock - the clock [member current].time runs on,
 ## bookend included, so a caller can hand back a position it read from there.
 ##
-## This does not re-derive the visuals. Everything that reads the clock follows at once (the baked
-## spectrum lookup, the karaoke, the bookend fade), but the [Director] is a simulation whose scene
-## choice, hold schedule and RNG evolve from the events it has seen: after a seek the show carries on
-## from the scene that is up. ([Echo] pulls it back toward the content by re-localizing against the
-## harmonic signature, as a drift rather than a guarantee.)
+## Everything that reads the clock follows at once (the baked spectrum lookup, the karaoke, the bookend fade). A seeded show
+## is a simulation whose scene choice, hold schedule and RNG evolve from the events it has seen: after a seek it carries on from
+## the scene that is up ([Echo] pulls it back toward the content as a drift). A WRITTEN storyboard is where it is told to be: the
+## [Director] hears [signal sought] and plays the entry at that moment up to it.
 func seek(t: float) -> void:
+	sought.emit(t)
 	var h := _hook("seek")
 	if h.is_valid():
 		h.call(t)

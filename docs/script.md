@@ -11,7 +11,7 @@ An entry does not implement its mark. The parsers of record stay where they are 
 
 A table brief is not a script, and has marks of its own: a show's document is the brief its agents work from, never read aloud, so a mark in it does something only where the code reads it out of the brief or an agent is told to honor it. Those are offered ("table" in `modes`), each saying what it does there (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its deck, a macro reads as its default and a note to self is taken out before any agent sees the brief (`TablePrompts.brief`), and a hesitation, a delivery or a stressed word stands in a line the brief gives the host word for word (rules/table/reader.yaml, `spoken`). The marks of a page or a tablet (pictures, scene lines, web pages) and the inline pronunciation are not offered: the table is the only medium there, and a reader's passage keeps no bracket (`TableProducer.clean_spoken`).
 
-Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (80 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
+Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (83 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
 
 ## Voices
 
@@ -47,7 +47,7 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | Mark | Example | Panels | What it does |
 |---|---|---|---|
 | Pronunciation | `[K AE T]` | Generative | Spells a word in ARPAbet phonemes, read exactly as written. For a name the voice gets wrong. |
-| Say as | `<!-- say: Io-A = AY1 OW0 EY1 -->` | Generative | How words are said, in ARPAbet (a vowel's stress its digit), wherever they come in the note - each still shown as written. For a name every voice gets wrong. IPA between slashes after it (`Gödel = G ER1 D AH0 L /ɡˈøːdl̩/`) is what a neural voice says instead, for a sound ARPAbet cannot spell. |
+| Say as | `<!-- say: Io-A = AY1 OW0 EY1 -->` | Generative, Song | How words are said, in ARPAbet (a vowel's stress its digit), wherever they come in the note - each still shown as written. For a name every voice gets wrong. IPA between slashes after it (`Gödel = G ER1 D AH0 L /ɡˈøːdl̩/`) is what a neural voice says instead, for a sound ARPAbet cannot spell. **In a Song brief:** How a word is sung, in ARPAbet (a vowel's stress its digit), wherever it comes in the song - still shown as written; its syllables and stress are the ones the tune is set to. IPA between slashes after it is what the voice sings instead, for a sound ARPAbet cannot spell. |
 | Letter | `[a]` | Generative | A letter that names something - a number, a point, a case - said by its name and shown as the letter: [a] is "ay", where a bare a is read as the word a. |
 
 ## Text
@@ -60,7 +60,7 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 
 | Mark | Example | Panels | What it does |
 |---|---|---|---|
-| Heading | `# Heading` | Generative, Table | Spoken like any line, set as a heading on the page. The frontmatter's title is read first on its own. **In a Table brief:** A section of the brief, for the agents to find their way by. One heading is read by Ghost Notes itself: Cards, the show's deck. |
+| Heading | `# Heading` | Generative, Table, Song | Spoken like any line, set as a heading on the page. The frontmatter's title is read first on its own. **In a Table brief:** A section of the brief, for the agents to find their way by. One heading is read by Ghost Notes itself: Cards, the show's deck. **In a Song brief:** A heading, for the words' reader: never sung. |
 | Scene line | `*Nine-thirty. Orientation.*` | Generative | A short paragraph entirely in italics announces a change of time or place; a picture just before it gets a full page. |
 | Italic | `*emphasized*` | Generative, Table | Shown in italics in the subtitles and on the page, and a word or a few so marked is hit: held longer and said louder. A longer run is typography, said plainly. The asterisks are never spoken. **In a Table brief:** In a line the brief gives the host to say word for word, the word the voice hits, shown in italics in the subtitle. Anywhere else it is emphasis for the agents reading the brief. |
 | Bold | `**strong**` | Generative, Table | Shown in bold in the subtitles and on the page, and a word or a few so marked is hit harder than an italic one. The asterisks are never spoken. **In a Table brief:** In a line the brief gives the host to say word for word, the word the voice hits hardest, shown in bold in the subtitle. Anywhere else it is emphasis for the agents reading the brief. |
@@ -158,4 +158,12 @@ A forum for people who are being followed.
 
 | Mark | Example | Panels | What it does |
 |---|---|---|---|
-| Note to self | `<!-- a note to yourself -->` | Generative, Table | Any other HTML comment is an authoring note: never spoken, never printed. **In a Table brief:** Any other HTML comment is a note to yourself: taken out of the brief before any agent is handed it. |
+| Note to self | `<!-- a note to yourself -->` | Generative, Table, Song | Any other HTML comment is an authoring note: never spoken, never printed. **In a Table brief:** Any other HTML comment is a note to yourself: taken out of the brief before any agent is handed it. **In a Song brief:** Any other HTML comment is a note to yourself: never sung, however many lines it runs over. |
+
+## Song
+
+| Mark | Example | Panels | What it does |
+|---|---|---|---|
+| Song section | `<!-- chorus -->` | Song | Where a section of the song begins - verse, chorus or bridge (a pre-chorus plays as a bridge, a hook or refrain as a chorus) - on a line of its own; the lines under it are sung in it. Sections of a kind share their chords and their tune; a chorus lands hardest. With no lines under it, the last section of its kind is sung again (a chorus written once). |
+| Instrumental section | `<!-- break: 8 -->` | Song | A section with no words, this many bars long, where it is written: intro, break (a solo, interlude or instrumental plays as a break - the lead takes the melody) or ending; bare, four bars. None of a kind written is drawn by the roll. Over a reference's form, its own bars between the sung sections stand instead. |
+| Repeat | `<!-- repeat: 2 -->` | Song | The section so far sung again, on a line of its own: bare, twice in all; repeat: 3, three times in all. |

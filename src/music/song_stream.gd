@@ -2,19 +2,22 @@ extends Node
 class_name SongStream
 
 ## SongStream - a composed Sound heard as it is made (next/music.md), the reading's sliding window ([ReadingStream]) for a
-## song: the music host (hosts/music/host.py, kept running) makes the song WINDOW seconds at a time, AHEAD seconds ahead
-## of what is heard, each part read from its kept stem where it has one and made where it has none; the voice host sings
-## the lines ahead in order, VOICE_AHEAD seconds of them, every take kept as a bake keeps it ([SongBake.take_of]). What
-## comes back is decoded on a worker and pushed into the session's one stream.
+## song: the music host (hosts/music/host.py, kept running) makes the song WINDOW seconds at a time, on ahead of what is
+## heard to the song's end, each part read from its kept stem where it has one and made where it has none; the voice
+## host sings every line ahead, nearest first, every take kept as a bake keeps it ([SongBake.take_of]). What comes back
+## is decoded on a worker and held to be pushed into the session's one stream. NOTHING CAPS HOW FAR AHEAD IT IS MADE -
+## paused, it keeps making and singing, so a song left paused a while plays through without a stop (what is made is held
+## in memory: about 85 MB a four-minute song).
 ##
-## THE BAND WAITS FOR THE SINGER: a line not yet sung when it is nearly due is waited for where its bar begins - the bar
-## before it played again without the voice, as a band vamps, until its take comes (at most VAMP_MOST bars a line; then,
-## or with no voice to sing it, it goes without and its words leave the subtitles). What is heard is a list of segments
-## (a window, or a vamp holding the song where it waits), so the rail and the subtitles hold while the band waits and the
-## show's beat runs on. Stopped, the lines ahead of where it would start are sung once the voice host is up, and a take a
+## IT BUFFERS FOR ITS VOICES: no line is left out. A line of any voice not yet sung holds the windows back at the bar line
+## before its take could begin (TAKE_LEAD); once what is made ahead of the ear runs out, the player pauses itself there (`buffering`, said on the
+## status line) until the takes come and BUFFER_FULL seconds are made again, then plays on - the rail and the subtitles
+## held while it waits. Only a line no voice can sing (the voice host gone, or the line refused) goes without, its words
+## off the subtitles. Stopped, the lines ahead of where it would start are sung once the voice host is up, and a take a
 ## bake sings is heard as soon as it lands.
 ##
-## It conducts the transport ([method Spectrum.conduct]): Play, pause, Stop, the rail's position and length, and a seek -
+## It conducts the transport ([method Spectrum.conduct]): Play, pause, Stop, the rail's position and length, what is made
+## ahead (drawn buffered on the rail; while it buffers, Play still shows playing), and a seek -
 ## the stream begun again from there (nothing behind the playhead is kept to seek within). A score handed while it plays
 ## ([method update]: a roll, a part changed) is the song from where the stream has been made to: what is queued and not
 ## yet pushed is let go, and the new song is heard a few seconds after the press. It hands the show the song's own grid
@@ -33,18 +36,17 @@ const ENV := "music_venv"
 const VENV := "user://music_venv"
 const HOST := "res://hosts/music/host.py"
 const RATE := 44100
-## Seconds a window holds, and how far ahead of the ear the song is made.
+## Seconds a window holds.
 const WINDOW := 6.0
-const AHEAD := 14.0
-## Seconds ahead the voice's lines are sung (a line's window waits for its take until it is nearly due).
-const VOICE_AHEAD := 45.0
-## A line not yet sung is waited for once what is made ahead of the ear is shorter than this (seconds): the band vamps.
-const DUE := 4.0
-## The most bars the band vamps waiting for one line, and the most seconds the stream's start waits silent for its first.
-const VAMP_MOST := 8
-const START_WAIT := 10.0
 ## Seconds made before the first sample is heard.
 const PREROLL := 1.5
+## The player buffers once less than BUFFER_LOW seconds of what is made are left to hear (what lies ahead not made yet:
+## a voice's line not sung, or the host behind), and plays on once BUFFER_FULL seconds are made again.
+const BUFFER_LOW := 0.25
+const BUFFER_FULL := 3.0
+## The most a take begins before its line's first note (seconds: a consonant sung ahead of the beat): a line not sung
+## holds the windows back at the bar line this far before it, so none is made without its start.
+const TAKE_LEAD := 1.0
 ## Seconds of the old song still heard after a score changes, while the host makes the new one: the queue is cut there,
 ## not emptied, so a roll is no gap of silence.
 const KEEP := 6.0
@@ -77,11 +79,9 @@ var _asking := 0                 # windows asked and not yet landed
 var _inflight := 0.0             # seconds of them
 var _seq := 0                    # each window's place in what is heard
 var _landing: Array = []         # windows being decoded: [{task, box, epoch, meta}]
-var _queue: Array = []           # windows landed, in order: [{seq, t0, t1, hold, frames, started}]
-var _segments: Array = []        # what is pushed, in order: [{at (frame), t0, hold (the song second a vamp holds, else -1)}]
-var _vamps := {}                 # phrase index -> bars vamped waiting for it
-var _missed := {}                # phrases gone without their take (their words off the subtitles)
-var _began_ms := 0
+var _queue: Array = []           # windows landed, in order: [{seq, t0, t1, frames, started}]
+var _segments: Array = []        # what is pushed, in order: [{at (frame), t0}]
+var _missed := {}                # lines gone without their take, no voice able to sing them (by line id)
 var _pushed := 0                 # frames pushed since the stream began
 var _ring := 0
 var _playback: AudioStreamGeneratorPlayback = null
@@ -89,10 +89,12 @@ var _subtitles: Node = null
 var _open := false               # the stream is open (begun and not ended)
 var _want_play := false          # Play is pressed
 var _prerolling := false         # held silent until PREROLL of it is pushed
+var _buffering := false          # held paused until BUFFER_FULL of it is made again
+var _waiting_said := ""          # what the status line last said it waits for
 ## Windows of the song now (the last score loaded) come back from the host.
 var landed := 0
 
-var _takes := {}                 # phrase index -> {wav, at}
+var _takes := {}                 # line id ("key:i", [method SongBake.lines_of]) -> {wav, at, voice}
 var _singing := ""               # the take being sung (its path), "" for none
 var _failed := {}                # takes the voice host could not sing: not waited for, not asked again
 var _sing_id := -1
@@ -130,7 +132,7 @@ func _exit_tree() -> void:
 func conduct() -> void:
 	Spectrum.conduct(self, {
 		"play": play, "pause": pause, "stop": stop_song,
-		"playing": func() -> bool: return _want_play and _open and not Spectrum.paused,
+		"playing": playing, "ahead": func() -> float: return made_ahead() if _open else -1.0,
 		"can_play": func() -> bool: return not _score.is_empty(),
 		"can_stop": func() -> bool: return _open,
 		"position": position, "length": func() -> float: return float(_score.get("length", 0.0)),
@@ -138,20 +140,30 @@ func conduct() -> void:
 	})
 
 
-## The song second being heard now: where a vamp waits, the second it holds.
+## The song second being heard now.
 func position() -> float:
 	var seg := _segment()
-	if seg.is_empty():
-		return _from
-	if float(seg["hold"]) >= 0.0:
-		return float(seg["hold"])
-	return float(seg["t0"]) + float(_heard() - int(seg["at"])) / RATE
-
-
-## The song second of what is playing now - a vamp's own bar while it waits (the show's beat runs on it).
-func _rendered() -> float:
-	var seg := _segment()
 	return _from if seg.is_empty() else float(seg["t0"]) + float(_heard() - int(seg["at"])) / RATE
+
+
+## Whether the player is held for its voices ([constant BUFFER_FULL]).
+func buffering() -> bool:
+	return _buffering
+
+
+## Whether the song is playing, as the transport shows it: Play pressed and not paused by the author - held to buffer
+## or to make its start (PREROLL), it is still playing.
+func playing() -> bool:
+	return _want_play and _open and (not Spectrum.paused or _buffering or _prerolling)
+
+
+## Seconds of the song made past what is heard - pushed and landed, not what is still being made: what the rail
+## shows buffered ([method Spectrum.ready_ahead]).
+func made_ahead() -> float:
+	var frames := _pushed - _heard()
+	for q in _queue:
+		frames += (q["frames"] as PackedVector2Array).size()
+	return float(maxi(frames, 0)) / RATE
 
 
 ## Frames heard since the stream began.
@@ -174,20 +186,12 @@ func _segment() -> Dictionary:
 	return seg
 
 
-## The song second where what is pushed ends (where a vamp waits, the second it holds).
+## The song second where what is pushed ends.
 func _pushed_to() -> float:
 	if _segments.is_empty():
 		return _from
 	var last: Dictionary = _segments[_segments.size() - 1]
-	return float(last["hold"]) if float(last["hold"]) >= 0.0 else float(last["t0"]) + float(_pushed - int(last["at"])) / RATE
-
-
-## Seconds made ahead of the ear: pushed and not heard, landed, and asked.
-func _ahead() -> float:
-	var frames := _pushed - _heard()
-	for q in _queue:
-		frames += (q["frames"] as PackedVector2Array).size()
-	return float(frames) / RATE + _inflight
+	return float(last["t0"]) + float(_pushed - int(last["at"])) / RATE
 
 
 func play() -> void:
@@ -200,6 +204,7 @@ func play() -> void:
 
 func pause() -> void:
 	_prerolling = false
+	_buffering = false
 	Spectrum.set_stream_paused(true)
 
 
@@ -212,7 +217,7 @@ func stop_song() -> void:
 
 ## The song heard from second [param t]: the stream begun again there, paused where it was paused.
 func seek(t: float) -> void:
-	var was := _want_play and (not Spectrum.paused or _prerolling)
+	var was := _want_play and (not Spectrum.paused or _prerolling or _buffering)
 	_from = clampf(t, 0.0, maxf(float(_score.get("length", 0.0)) - 0.5, 0.0))
 	if _open:
 		close()
@@ -227,7 +232,6 @@ func update(score: Dictionary) -> void:
 	_score = score
 	_grid = SongBake.grid_of(score)
 	_read_takes()
-	_vamps.clear()
 	_missed.clear()
 	if not _open:
 		return
@@ -239,7 +243,7 @@ func update(score: Dictionary) -> void:
 			break
 		kept.append(q)
 		ahead += float((q["frames"] as PackedVector2Array).size()) / RATE
-		end = float(q["hold"]) if float(q["hold"]) >= 0.0 else float(q["t1"])
+		end = float(q["t1"])
 	_queue = kept
 	_epoch += 1
 	_asking = 0
@@ -273,9 +277,8 @@ func _begin(from: float) -> void:
 	_pushed = 0
 	_queue.clear()
 	_segments.clear()
-	_vamps.clear()
 	_missed.clear()
-	_began_ms = Time.get_ticks_msec()
+	_buffering = false
 	_epoch += 1
 	if not begin_stream.is_valid():
 		return
@@ -434,68 +437,86 @@ func _process(_delta: float) -> void:
 		return
 	_ask()
 	_push()
+	_buffer()
 	var heard := position()
 	Spectrum.known = _grid
-	Spectrum.known_origin = Spectrum.current.time - _rendered()
+	Spectrum.known_origin = Spectrum.current.time - heard
 	if _subtitles != null and is_instance_valid(_subtitles):
 		_subtitles.set("time_base", Spectrum.current.time - heard)
 	if heard >= float(_score.get("length", 0.0)) - 0.05 and _queue.is_empty() and _asked + _from >= float(_score.get("length", 0.0)):
 		stop_song()
 
 
-## Windows asked of the host while what is made ahead of the ear is short of AHEAD, each ending on a bar. A line not
-## yet sung is waited for where its bar begins: the windows go up to there, and once what is made ahead is short of DUE
-## the bar before it is played again without the voice until its take comes (VAMP_MOST bars at most; the stream's start,
-## not on a bar, waits silent up to START_WAIT); past that, or with no voice to sing it, it goes without.
+## Windows asked of the host, on to the song's end, each ending on a bar. A line of any
+## voice not yet sung holds them back at the bar line before its take could begin until its take comes - what is made then runs out and the
+## player buffers ([method _buffer]); a line no voice can sing goes without.
 func _ask() -> void:
 	if _ready_load != _epoch or _host != "up":
 		return
 	var length := float(_score.get("length", 0.0))
-	while _from + _asked < length - 0.001 and _ahead() < AHEAD and _asking < 2:
+	while _from + _asked < length - 0.001 and _asking < 2:
 		var made_to := _from + _asked
 		var t1 := minf(_bar_at(made_to + WINDOW, true), length)
 		var wait := _unready(made_to, t1)
 		if not wait.is_empty():
-			var i := int(wait["i"])
-			var at := maxf(_bar_at(float(wait["at"]), false), made_to)
-			if float(wait["at"]) < made_to - 0.05:
-				_miss(i)  # begun before what is made: it cannot be sung from its start
+			if not _voice_alive():
+				_miss(String(wait["i"]))  # nobody left to sing it
 				continue
-			if at > made_to + 0.01:
-				t1 = at
-			elif _ahead() >= DUE:
+			var stop := _bar_at(float(wait["at"]) - TAKE_LEAD, false)
+			if stop <= made_to + 0.01:
 				return
-			elif not _on_bar(made_to):
-				if _pushed == 0 and _queue.is_empty() and _inflight <= 0.0 and _voice_alive() \
-						and Time.get_ticks_msec() - _began_ms < int(START_WAIT * 1000.0):
-					return
-				_miss(i)
-				continue
-			elif int(_vamps.get(i, 0)) < VAMP_MOST and _voice_alive():
-				_vamps[i] = int(_vamps.get(i, 0)) + 1
-				var v0 := maxf(made_to - _bar_len(), float(_score.get("start", 0.0)))
-				_window(v0, v0 + _bar_len(), made_to)
-				continue
-			else:
-				_miss(i)
-				continue
-		_window(made_to, t1, -1.0)
+			t1 = stop
+		_window(made_to, t1)
 		_asked = t1 - _from
 
 
-## A window of the song asked of the host: [param t0]..[param t1], or, where [param hold] is a song second, a vamp - that
-## stretch again without the voice, faded in from what was made last, holding the song at [param hold].
-func _window(t0: float, t1: float, hold: float) -> void:
+## A window of the song asked of the host: [param t0]..[param t1].
+func _window(t0: float, t1: float) -> void:
 	_seq += 1
-	var msg := {"op": "window", "t0": t0, "t1": t1,
-		"out": _folder.path_join("stream").path_join("w%d_%d.f32" % [_epoch, _seq])}
-	if hold >= 0.0:
-		msg["voice"] = false
-		msg["follows"] = true
-	var id := _send(msg)
-	_pending[id] = {"op": "window", "epoch": _epoch, "t0": t0, "t1": t1, "seq": _seq, "hold": hold}
+	var id := _send({"op": "window", "t0": t0, "t1": t1,
+		"out": _folder.path_join("stream").path_join("w%d_%d.f32" % [_epoch, _seq])})
+	_pending[id] = {"op": "window", "epoch": _epoch, "t0": t0, "t1": t1, "seq": _seq}
 	_asking += 1
 	_inflight += t1 - t0
+
+
+## THE PLAYER BUFFERS: playing with less than BUFFER_LOW seconds made left to hear and nothing more on its way, it pauses
+## itself where it is (saying what it waits for); held so, it plays on once BUFFER_FULL seconds are made, or the song is
+## made to its end. Pause and Play are the author's either way.
+func _buffer() -> void:
+	if not _open:
+		return
+	if _prerolling:
+		# held from the start: what it waits for, while nothing more is on its way
+		_say_waiting(_queue.is_empty() and _inflight <= 0.0)
+		return
+	var left := float(_pushed - _heard()) / RATE
+	var made := left
+	for q in _queue:
+		made += float((q["frames"] as PackedVector2Array).size()) / RATE
+	var done := _from + _asked >= float(_score.get("length", 0.0)) - 0.001 and _asking == 0
+	if _buffering:
+		if made >= BUFFER_FULL or (done and _inflight <= 0.0):
+			_buffering = false
+			Spectrum.set_stream_paused(false)
+			_say_waiting(false)
+		else:
+			_say_waiting(true)
+	elif _want_play and not Spectrum.paused and left < BUFFER_LOW and _queue.is_empty() and not done:
+		_buffering = true
+		Spectrum.set_stream_paused(true)
+		_say_waiting(true)
+
+
+## The status line: what the player waits for while it buffers ([param on]), and nothing once it plays on.
+func _say_waiting(on: bool) -> void:
+	var line := ""
+	if on:
+		var waiting := _unready(_from + _asked, _from + _asked + WINDOW)
+		line = ("buffering: singing \"%s\"" % String(waiting["text"])) if not waiting.is_empty() else "buffering"
+	if line != _waiting_said:
+		_waiting_said = line
+		said.emit(line)
 
 
 func _bar_len() -> float:
@@ -507,11 +528,6 @@ func _bar_at(t: float, after: bool) -> float:
 	var start := float(_score.get("start", 0.0))
 	var k := (t - start) / _bar_len()
 	return start + (ceilf(k - 1e-4) if after else floorf(k + 1e-4)) * _bar_len()
-
-
-func _on_bar(t: float) -> bool:
-	var k := (t - float(_score.get("start", 0.0))) / _bar_len()
-	return absf(k - roundf(k)) < 1e-3
 
 
 func _landed() -> void:
@@ -527,7 +543,7 @@ func _landed() -> void:
 		_asking = maxi(_asking - 1, 0)
 		_inflight = maxf(0.0, _inflight - (float(meta["t1"]) - float(meta["t0"])))
 		landed += 1
-		_queue.append({"seq": int(meta["seq"]), "t0": float(meta["t0"]), "t1": float(meta["t1"]), "hold": float(meta["hold"]),
+		_queue.append({"seq": int(meta["seq"]), "t0": float(meta["t0"]), "t1": float(meta["t1"]),
 			"frames": (l["box"] as Dictionary).get("frames", PackedVector2Array()), "started": false})
 	_landing = still
 	_queue.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["seq"]) < int(b["seq"]))
@@ -546,7 +562,7 @@ func _push() -> void:
 			return
 		if not bool(head["started"]):
 			head["started"] = true
-			_segments.append({"at": _pushed, "t0": float(head["t0"]), "hold": float(head["hold"])})
+			_segments.append({"at": _pushed, "t0": float(head["t0"])})
 		if frames.size() <= room:
 			_playback.push_buffer(frames)
 			_pushed += frames.size()
@@ -563,23 +579,21 @@ func _push() -> void:
 
 # --- the voice ------------------------------------------------------------------------------------------
 
-func _phrases() -> Array:
-	var v: Dictionary = _score.get("vocal", {})
-	return v.get("phrases", []) if not bool(v.get("mute", false)) else []
+func _lines() -> Array:
+	return SongBake.lines_of(_score)
 
 
 ## Every line's kept take, read from the takes folder (a bake's and this stream's are one set).
 func _read_takes() -> void:
 	_takes.clear()
-	var v: Dictionary = _score.get("vocal", {})
-	var phrases := _phrases()
-	for i in phrases.size():
-		var wav := SongBake.take_of(_folder, v, phrases[i])
+	for line in _lines():
+		var p: Dictionary = line["phrase"]
+		var wav := SongBake.take_of(_folder, line["voice"], p)
 		var meta := wav.get_basename() + ".json"
 		if FileAccess.file_exists(wav) and FileAccess.file_exists(meta):
 			var got: Variant = JSON.parse_string(FileAccess.get_file_as_string(meta))
 			if got is Dictionary:
-				_takes[i] = {"wav": wav, "at": float(phrases[i]["at"]) + float((got as Dictionary).get("start", 0.0))}
+				_takes[line["id"]] = {"wav": wav, "at": float(p["at"]) + float((got as Dictionary).get("start", 0.0)), "voice": line["key"]}
 
 
 ## The takes folder changed under it (a bake sang lines): what is kept there is read again and the host told.
@@ -596,24 +610,24 @@ func _known_takes() -> Array:
 	return out
 
 
-## The first line sung in [param t0]..[param t1] with no take yet, `{i, at}`, {} for none (a line that could not be
-## sung, or has gone without, is waited for no more).
+## The earliest line of any voice sung in [param t0]..[param t1] with no take yet, `{i (its id), at, text}`, {} for none
+## (a line the voice host could not sing, or that has gone without, is waited for no more).
 func _unready(t0: float, t1: float) -> Dictionary:
-	var phrases := _phrases()
-	var v: Dictionary = _score.get("vocal", {})
-	for i in phrases.size():
-		var p: Dictionary = phrases[i]
+	var first := {}
+	for line in _lines():
+		var p: Dictionary = line["phrase"]
 		var at := float(p["at"])
-		if at >= t1 + 0.5 or at + _phrase_length(p) <= t0 or _takes.has(i) or _missed.has(i):
+		if at >= t1 + TAKE_LEAD or at + _phrase_length(p) <= t0 or _takes.has(line["id"]) or _missed.has(line["id"]):
 			continue
-		if _failed.has(SongBake.take_of(_folder, v, p)):
+		if _failed.has(SongBake.take_of(_folder, line["voice"], p)):
 			continue
-		return {"i": i, "at": at}
-	return {}
+		if first.is_empty() or at < float(first["at"]):
+			first = {"i": line["id"], "at": at, "text": String(p.get("text", ""))}
+	return first
 
 
-## Line [param i] goes without its take: its words leave the subtitles.
-func _miss(i: int) -> void:
+## Line [param i] (its id) goes without its take, no voice able to sing it: its words leave the subtitles.
+func _miss(i: String) -> void:
 	_missed[i] = true
 	_show_words()
 
@@ -624,7 +638,7 @@ func _show_words() -> void:
 		return
 	var words: Array = SongBake.words_of(_score)
 	if not _missed.is_empty():
-		words = words.filter(func(w: Dictionary) -> bool: return not _missed.has(int(w["sentence"])))
+		words = words.filter(func(w: Dictionary) -> bool: return not _missed.has(String(w.get("line", ""))))
 	_subtitles.set("words", words)
 
 
@@ -640,22 +654,28 @@ static func _phrase_length(p: Dictionary) -> float:
 	return end
 
 
-## The next line within VOICE_AHEAD of the ear sung, one at a time, nearest first.
+## The next line ahead of the ear sung, one at a time, nearest first (a section's lead before the voices
+## singing with it): every voice's lines are waited for alike.
 func _sing() -> void:
 	if not _singing.is_empty() or _bake == null or _bake.busy():
 		return
 	# stopped, it sings ahead of where it would start only once the voice host is up (never started just for that)
 	if not _open and not _bake.voice_up():
 		return
-	var phrases := _phrases()
 	var now := position()
-	for i in phrases.size():
-		var p: Dictionary = phrases[i]
+	var lines := _lines()
+	lines.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ta := float(a["phrase"]["at"])
+		var tb := float(b["phrase"]["at"])
+		return ta < tb if not is_equal_approx(ta, tb) else bool(a["phrase"].get("lead", false)) and not bool(b["phrase"].get("lead", false)))
+	for line in lines:
+		var p: Dictionary = line["phrase"]
 		var at := float(p["at"])
 		# a line whose stretch is made already is not heard: the window went without it
-		if _takes.has(i) or at + _phrase_length(p) < maxf(now, _from + _asked) or at > now + VOICE_AHEAD:
+		if _takes.has(line["id"]) or at + _phrase_length(p) < maxf(now, _from + _asked):
 			continue
-		if _missed.has(i) or _failed.has(SongBake.take_of(_folder, _score["vocal"], p)):
+		var wav := SongBake.take_of(_folder, line["voice"], p)
+		if _missed.has(line["id"]) or _failed.has(wav):
 			continue
 		var host := _bake.voice()
 		if not _bake.voice_up():
@@ -663,13 +683,10 @@ func _sing() -> void:
 		if not host.synthesized.is_connected(_on_sung):
 			host.synthesized.connect(_on_sung)
 			host.failed.connect(_on_failed)
-		var v: Dictionary = _score["vocal"]
-		var singer := SongBake.singer_of(v.get("singer", {}))
-		var params := {"speaker": int(singer.get("speaker", 0))}
-		if not String(singer.get("blend", "")).is_empty():
-			params["blend"] = String(singer["blend"])
-		_singing = SongBake.take_of(_folder, v, p)
-		_sing_id = host.sing(p["words"], String(singer.get("voice", "kokoro")), _singing, params, v.get("style", {}))
+		var singer := SongBake.singer_of((line["voice"] as Dictionary).get("singer", {}))
+		_singing = wav
+		_sing_id = host.sing(p["words"], String(singer.get("voice", "kokoro")), _singing, SongBake.params_of(singer),
+			(line["voice"] as Dictionary).get("style", {}))
 		return
 
 
@@ -689,11 +706,9 @@ func _on_take(wav: String, start: float) -> void:
 
 ## Every line of the score now whose take is [param wav] given it, and the host told.
 func _serve(wav: String, start: float) -> void:
-	var phrases := _phrases()
-	var v: Dictionary = _score.get("vocal", {})
-	for i in phrases.size():
-		if SongBake.take_of(_folder, v, phrases[i]) == wav:
-			_takes[i] = {"wav": wav, "at": float(phrases[i]["at"]) + start}
+	for line in _lines():
+		if SongBake.take_of(_folder, line["voice"], line["phrase"]) == wav:
+			_takes[line["id"]] = {"wav": wav, "at": float((line["phrase"] as Dictionary)["at"]) + start, "voice": line["key"]}
 	if _host == "up":
 		_send({"op": "takes", "takes": _known_takes()})
 	sung.emit()

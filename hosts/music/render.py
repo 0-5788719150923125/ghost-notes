@@ -218,9 +218,20 @@ def vocal_stem(voc: dict, n: int, beat: float, seed: int) -> np.ndarray:
     amount = float(voc.get("vocoder", 0.0))
     if amount > 0.0 and voc.get("notes"):
         say("the vocoder")
-        x = vocoded(x, voc["notes"], amount, rng_of(seed, "vocoder"))
+        x = vocoded(x, voc["notes"], amount, rng_of(seed, vocoder_salt(voc)))
     fx = {"highpass": 90.0, "compress": {"threshold": -20.0, "ratio": 3.0}, **(voc.get("fx", {}) or {})}
     return effects(x, fx, beat, rng_of(seed, str(voc.get("key", "vocal"))))
+
+
+def vocoder_salt(voc: dict) -> str:
+    """The salt a voice's vocoder draws from: the voice's own `vocoder`, a chorus voice's its key's."""
+    key = str(voc.get("key", "vocal"))
+    return "vocoder" if key == "vocal" else "vocoder:" + key
+
+
+def placed(x: np.ndarray, pan: float) -> np.ndarray:
+    """A voice [2, n] (one sound in both channels) placed `pan` left (-1) to right (1)."""
+    return dsp.pan(x.mean(axis=0), pan) if pan else x
 
 
 def carrier(notes: list, n: int, rng) -> np.ndarray:
@@ -309,7 +320,7 @@ def render(spec: dict) -> dict:
             say(f"laying in {voc.get('key', 'vocal')}")
             x = vocal_stem(voc, n, beat, seed)
             write_float(path, x)
-        x = x * playing_gain(x) * 10.0 ** (float(voc.get("level", 0.0)) / 20.0)
+        x = placed(x, float(voc.get("pan", 0.0))) * playing_gain(x) * 10.0 ** (float(voc.get("level", 0.0)) / 20.0)
         made[str(voc.get("key", "vocal"))] = str(path)
         mix += x
         send += x * float((voc.get("fx") or {}).get("reverb", 0.15))

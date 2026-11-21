@@ -891,7 +891,8 @@ class KokoroBackend(PiperBackend):
         cfg = self._cfg_of(voice, params)
         kk = cfg["kokoro"]
         british = bool(kk["british"])
-        tokens = [{"text": str(w.get("text", ""))} for w in words]
+        # a word the note spells (a `say:` mark) keeps its ARPAbet and IPA: `_symbols` sings it so
+        tokens = [{"text": str(w.get("text", "")), **{k: w[k] for k in ("arpa", "say") if w.get(k)}} for w in words]
         if not tokens or not all(t["text"].strip() for t in tokens):
             raise BackendError("a sung phrase needs words, each with its notes")
         espeak = "en-gb" if british else "en-us"
