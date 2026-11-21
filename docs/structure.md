@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 725 references inside a folder, 1346 down the stack, 0 up it.
+Between scripts today: 726 references inside a folder, 1349 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -21,7 +21,7 @@ Between scripts today: 725 references inside a folder, 1346 down the stack, 0 up
 | `table/` | The set | 75 | `reading`, `media`, `ui`, `agents`, `scene_kit`, `geometry`, `render`, `audio`, `platform`, `data` |
 | `reading/` | The voice's workspaces | 17 | `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
 | `export/` | Export | 6 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
-| `music/` | Music | 9 | `timeline`, `show`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
+| `music/` | Music | 10 | `timeline`, `show`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 9 | `show`, `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `show/` | The show | 11 | `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `media/` | Media | 22 | `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
@@ -37,7 +37,7 @@ Between scripts today: 725 references inside a folder, 1346 down the stack, 0 up
 | `render/` | Drawing | 13 | `data` |
 | `audio/` | Audio & analysis | 9 | `platform` |
 | `platform/` | The machine | 12 | `data` |
-| `data/` | Plain data | 9 | nothing |
+| `data/` | Plain data | 10 | nothing |
 
 ## The folders, bottom first
 
@@ -45,7 +45,7 @@ Between scripts today: 725 references inside a folder, 1346 down the stack, 0 up
 
 Plain data in and out, at the bottom because it needs nothing: the YAML-subset parser, a document's frontmatter (re-read, one key edited, verified), pure edits of nested data, reading any registry's rows (`Registry`), what an agent is told (`rules/`), and a script read into cues, hesitations and pictures.
 
-[`clock`](../src/data/clock.gd), [`data_path`](../src/data/data_path.gd), [`front_matter`](../src/data/front_matter.gd), [`macros`](../src/data/macros.gd), [`manuscript`](../src/data/manuscript.gd), [`registry`](../src/data/registry.gd), [`roll`](../src/data/roll.gd), [`rules`](../src/data/rules.gd), [`yaml`](../src/data/yaml.gd)
+[`block_code`](../src/data/block_code.gd), [`clock`](../src/data/clock.gd), [`data_path`](../src/data/data_path.gd), [`front_matter`](../src/data/front_matter.gd), [`macros`](../src/data/macros.gd), [`manuscript`](../src/data/manuscript.gd), [`registry`](../src/data/registry.gd), [`roll`](../src/data/roll.gd), [`rules`](../src/data/rules.gd), [`yaml`](../src/data/yaml.gd)
 
 ### `platform/` - The machine
 
@@ -139,7 +139,7 @@ What keeps a note's storyboard in its folder and the dock it opens beside Play: 
 
 A note that makes its own sound (next/music.md): the theory and the banks a song is composed from (scales, chords, parts, patterns, instruments, kinds of section, all rows), the lyrics read from a note's words, the composer (a pure function from the `sound:` block, the words and a reference to a score), the bake that sings each line through the voice host and renders the parts through the music host (hosts/music/), the score on the one Timeline, and the Sound card - a file, or a song composed for the note.
 
-[`composer`](../src/music/composer.gd), [`instruments`](../src/music/instruments.gd), [`lyrics`](../src/music/lyrics.gd), [`music_theory`](../src/music/music_theory.gd), [`song_bake`](../src/music/song_bake.gd), [`song_parts`](../src/music/song_parts.gd), [`song_stream`](../src/music/song_stream.gd), [`sound_card`](../src/music/sound_card.gd), [`sound_timeline`](../src/music/sound_timeline.gd)
+[`composer`](../src/music/composer.gd), [`instruments`](../src/music/instruments.gd), [`lyrics`](../src/music/lyrics.gd), [`music_theory`](../src/music/music_theory.gd), [`song_bake`](../src/music/song_bake.gd), [`song_code`](../src/music/song_code.gd), [`song_parts`](../src/music/song_parts.gd), [`song_stream`](../src/music/song_stream.gd), [`sound_card`](../src/music/sound_card.gd), [`sound_timeline`](../src/music/sound_timeline.gd)
 
 ### `export/` - Export
 

@@ -120,11 +120,8 @@ static func resolve(key: String, seed: int) -> Dictionary:
 	var row: Dictionary = ROWS.get(key, ROWS.values()[0])
 	var out: Dictionary = (row["params"] as Dictionary).duplicate(true)
 	out["method"] = row["method"]
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([key, seed])
-	var paths: Array = (row.get("vary", {}) as Dictionary).keys()
-	paths.sort()
-	for path in paths:
+	# each setting drawn by its own path, so a setting added to a row moves no other
+	for path in (row.get("vary", {}) as Dictionary):
 		var span: Array = row["vary"][path]
 		var keys := String(path).split(".")
 		var at: Dictionary = out
@@ -132,5 +129,5 @@ static func resolve(key: String, seed: int) -> Dictionary:
 			if not (at.get(keys[i]) is Dictionary):
 				at[keys[i]] = {}
 			at = at[keys[i]]
-		at[keys[keys.size() - 1]] = rng.randf_range(float(span[0]), float(span[1]))
+		at[keys[keys.size() - 1]] = lerpf(float(span[0]), float(span[1]), Roll.unit(seed, "%s|%s" % [key, path]))
 	return out

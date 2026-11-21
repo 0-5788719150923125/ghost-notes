@@ -10,7 +10,8 @@ extends SceneTree
 ##   - Theory: a scale's degrees, the diatonic triads of C major, voice leading that moves each voice by a step or less
 ##     between C and F, and E(3,8) the tresillo.
 ##   - The score is a pure function: the same block and words make the same score; rolling one part's seed moves that
-##     part's notes and no other's (the control: the rolled part does change); rolling the song's moves every part.
+##     part's notes and no other's (the control: the rolled part does change), and draws its own pattern and sound (the
+##     voice its singer); rolling the song's moves every part.
 ##   - THE WORDS ON THE BARS THE REFERENCE SINGS: with a made reference whose voice sings bars 8-15 and 24-31, a verse
 ##     of eight lines and a chorus of eight land there, a line a bar - the control a reference singing elsewhere moves
 ##     them; the bars between are an intro, a break and an outro.
@@ -105,6 +106,22 @@ func _pure() -> void:
 	var voice_same := JSON.stringify(a["vocal"]) == JSON.stringify(c["vocal"])
 	_ok(drums_moved, "the control: rolling the drums' seed moves the drums")
 	_ok(bass_same and voice_same, "...and nothing else: the bass and the voice stay")
+	var sounds := {}
+	var bass_kept := true
+	for n in range(2, 26):
+		var r := _block()
+		r["parts"]["drums"]["seed"] = n
+		var sc := Composer.score(r, {"lyrics": lyrics})
+		sounds["%s/%s" % [_part(sc, "drums")["pattern"], _part(sc, "drums")["instrument_key"]]] = true
+		bass_kept = bass_kept and _part(sc, "bass")["instrument_key"] == _part(a, "bass")["instrument_key"] \
+			and _part(sc, "bass")["pattern"] == _part(a, "bass")["pattern"]
+	_ok(sounds.size() >= 4 and bass_kept, "a part's roll draws its own pattern and sound (%d of them in 24 rolls), the bass's kept" % sounds.size())
+	var singers := {}
+	for n in range(2, 26):
+		var r := _block()
+		r["parts"]["vocal"]["seed"] = n
+		singers[String(Composer.score(r, {"lyrics": lyrics})["vocal"]["singer"]["name"])] = true
+	_ok(singers.size() == Composer.SINGERS.size(), "...the voice's its singer (%d of %d)" % [singers.size(), Composer.SINGERS.size()])
 	var song_rolled := _block()
 	song_rolled["seed"] = 8
 	var d := Composer.score(song_rolled, {"lyrics": lyrics})

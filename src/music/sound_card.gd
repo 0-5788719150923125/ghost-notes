@@ -7,11 +7,13 @@ class_name SoundCard
 ## a note written before keeps `song: {path}`, read as a file.
 ##
 ## Composed, the card is choices, not a DAW: a REFERENCE (a song file the importer reads for its grid, key, chords,
-## form, drums and melody - never its sound), the tempo and key (the reference's, or drawn), the song's seed, and its
-## PARTS as entries ([EntryCard]): each its pattern and instrument (rows of [SongParts] and [Instruments]), its own
-## seed rolled or stepped back, its level, muted or not. The Voice entry sings the note's words ([Lyrics]): its melody
-## (the reference's, composed for the words, or recited), its singer (a Kokoro reader, or a voice kept in the library)
-## and how tuned it is (0 a singer's glides and vibrato, 1 every note a hard step).
+## form, drums and melody - never its sound), the tempo and key (the reference's, or drawn), and its PARTS as entries
+## ([EntryCard]): each its pattern and instrument (rows of [SongParts] and [Instruments]), its level, muted or not, and
+## a Roll that draws again what of it is on Auto. The Voice entry sings the note's words ([Lyrics]): its melody (the
+## reference's, composed for the words, or recited), its singer (a Kokoro reader, or a voice kept in the library) and
+## how tuned it is (0 a singer's glides and vibrato, 1 every note a hard step). THE SONG'S CODE is every setting at
+## once ([SongCode]): it changes as anything on the card does, its Roll draws a new song, and a code entered there
+## brings that song's settings back.
 ##
 ## What is made is the Pipeline card's ([method pipeline]): the reference read, the lines sung, the mix rendered
 ## ([SongBake]), each a row; Generate makes what is missing. A new mix is the note's song: the panel loads it
@@ -75,7 +77,7 @@ var _tempo: HSlider
 var _likeness: HSlider          # how much of the reference a roll keeps (shown with a reference)
 var _roll_info: Label           # what this roll drew
 var _key: OptionButton
-var _seed_label: Label
+var _code: LineEdit             # the song's settings as one code
 var _form_box: VBoxContainer
 var _parts_box: VBoxContainer
 var _add: MenuButton
@@ -328,14 +330,21 @@ func _build() -> void:
 			_block["key"] = k
 		_changed())
 	kr.add_child(_key)
-	var sr := _row("Song", _composed_box)
-	_seed_label = Label.new()
-	_seed_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_seed_label.tooltip_text = "The song's number: rolled, everything left on Auto is drawn again - the tempo, key and swing, the form and its pace, the chords, who plays where, every part's pattern, sound and notes, the tune, the singer. Each part's own number varies that part alone."
-	sr.add_child(_seed_label)
-	_seed_buttons(sr, func() -> int: return int(_block.get("seed", 1)), func(v: int) -> void:
-		_block["seed"] = v
-		_changed())
+	var sr := _row("Code", _composed_box)
+	_code = LineEdit.new()
+	_code.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_code.select_all_on_focus = true
+	_code.add_theme_font_size_override("font_size", 12)
+	_code.tooltip_text = "Every setting of this song as one code: it changes as anything on the card does. Keep a code to come back to a song - enter it here and its settings come back. The note's words and the reference are not in it, so a code on another note is the same choices over its words."
+	_code.text_submitted.connect(func(t: String) -> void: enter_code(t))
+	_code.focus_exited.connect(func() -> void:
+		if _code.text.strip_edges() != SongCode.of(_block):
+			enter_code(_code.text))
+	sr.add_child(_code)
+	sr.add_child(_button("Copy", "Copy the song's code.", func() -> void:
+		DisplayServer.clipboard_set(SongCode.of(_block))
+		_say("The song's code is copied.")))
+	sr.add_child(_button("Roll", "A new song: everything left on Auto drawn again - the tempo, key and swing, the form and its pace, the chords, who plays where, every part's pattern, sound and notes, the tune, the singer. What is set stays set.", roll_song))
 	_roll_info = _small("")
 	_composed_box.add_child(_roll_info)
 	_form_box = VBoxContainer.new()
@@ -351,7 +360,7 @@ func _build() -> void:
 	_add.get_popup().id_pressed.connect(func(id: int) -> void:
 		var k: String = SongParts.PARTS.keys()[id]
 		var parts := _parts()
-		parts[k] = {"seed": 1}
+		parts[k] = {}
 		_block["parts"] = parts
 		_open[k] = true
 		_changed())
@@ -413,7 +422,7 @@ func _refresh() -> void:
 	for i in _key.item_count:
 		if String(_key.get_item_metadata(i)) == key:
 			_key.select(i)
-	_seed_label.text = "#%d" % int(_block.get("seed", 1))
+	_show_code()
 	_build_form()
 	_build_parts()
 
@@ -519,14 +528,10 @@ func _part_entry(k: String, cfg: Dictionary) -> EntryCard:
 				inst.select(inst.item_count - 1)
 		inst.item_selected.connect(func(i: int) -> void: _set_part(k, "instrument", String(inst.get_item_metadata(i))))
 		ir.add_child(inst)
-	var sr := _row("Number", o)
-	var n := Label.new()
-	n.text = "#%d" % int(cfg.get("seed", 1))
-	n.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	n.tooltip_text = "This part's own number: with the song's, its rhythm's details and its sound's are drawn from it. Rolling it moves this part alone."
-	sr.add_child(n)
-	_seed_buttons(sr, func() -> int: return int((_parts().get(k, {}) as Dictionary).get("seed", 1)),
-		func(v: int) -> void: _set_part(k, "seed", v))
+	var roll := _button("Roll", "This part drawn again, alone: what of it is on Auto - %s - and the details of its notes." \
+		% ("its melody, its singer and how they sing" if k == "vocal" else "its pattern and its sound"), func() -> void: roll_part(k))
+	roll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	o.add_child(roll)
 	Card.slider_row(o, "Level", -24.0, 6.0, 0.5, float(cfg.get("level", row["level"])),
 		"How loud this part is in the mix, in decibels.", func(v: float) -> void: _set_part(k, "level", v, false))
 	var mute := CheckBox.new()
@@ -659,14 +664,46 @@ func _parts() -> Dictionary:
 		return (p as Dictionary).duplicate(true)
 	var out := {}
 	for k in Composer.default_parts(_ref, not Lyrics.parse(_words_text).is_empty()):
-		out[k] = {"seed": 1}
+		out[k] = {}
 	return out
 
 
-func _seed_buttons(row: HBoxContainer, now: Callable, put: Callable) -> void:
-	row.add_child(_button("‹", "The number before.", func() -> void: put.call(maxi(int(now.call()) - 1, 1))))
-	row.add_child(_button("Roll", "A new number: another variant of the same choices.", func() -> void: put.call(Roll.fresh() + 1)))
-	row.add_child(_button("›", "The number after.", func() -> void: put.call(int(now.call()) + 1)))
+## A new song: a new roll, each part's own back to the song's, what is set kept.
+func roll_song() -> void:
+	_block["seed"] = SongCode.fresh(int(_block.get("seed", 1)))
+	if _block.get("parts") is Dictionary:
+		for k in _block["parts"]:
+			if _block["parts"][k] is Dictionary:
+				(_block["parts"][k] as Dictionary).erase("seed")
+	_changed()
+
+
+## Part [param k] drawn again alone: a new number of its own.
+func roll_part(k: String) -> void:
+	_set_part(k, "seed", SongCode.fresh(int((_parts().get(k, {}) as Dictionary).get("seed", 1))))
+
+
+## The song's settings from [param code] ([SongCode]), the note's words, source and reference kept: "" when it read,
+## else what is wrong with it - said, and nothing changed.
+func enter_code(code: String) -> String:
+	var got := SongCode.applied(_block, code)
+	if not String(got["why"]).is_empty():
+		_say("That code is %s." % String(got["why"]))
+		_show_code(true)
+		return String(got["why"])
+	if SongCode.of(got["block"]) != SongCode.of(_block):
+		_block = got["block"]
+		_load_ref()
+		_changed()
+		_say("The song's settings are back from its code.")
+	_show_code(true)
+	return ""
+
+
+## The code as the settings stand, unless it is being typed into ([param now] true writes it anyway).
+func _show_code(now := false) -> void:
+	if _code != null and (now or not _code.has_focus()):
+		_code.text = SongCode.of(_block)
 
 
 ## The block changed: shown again ([param rebuild] false for a dial, whose own row is under the hand), the timeline if it
@@ -674,6 +711,8 @@ func _seed_buttons(row: HBoxContainer, now: Callable, put: Callable) -> void:
 func _changed(rebuild := true) -> void:
 	if rebuild:
 		_refresh()
+	else:
+		_show_code()
 	if _stream != null and is_inside_tree():
 		# counted, not timed: the timer runs on the frames' clock, which the wall clock does not keep pace with
 		_settle += 1

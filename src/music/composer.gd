@@ -24,8 +24,12 @@ class_name Composer
 ##   how its lines are paced, the chords and how often they change, who plays in each section, every part's pattern,
 ##   sound and notes, the tune, the singer and how they sing. With a reference, `likeness` is the chance each thing it
 ##   has is kept instead (its tempo, key, form, chords, drums, bass line and tune), each by a draw of its own.
-## - EACH PART draws from the song's seed and its own number together (`part_seed`): rolling the song is a new song,
-##   every part moved; rolling a part moves it alone, so muting or rolling a part is a fair comparison.
+## - EACH PART draws from the song's seed and its own number together (`part_seed`) - its pattern, its sound, its notes;
+##   the voice its singer and manner too: rolling the song is a new song, every part moved; rolling a part moves it
+##   alone, so muting or rolling a part is a fair comparison.
+## - A DRAW STAYS PUT AS THE ROWS GROW: each thing is drawn from a salt of its own ([method Roll.rng]), and a pick among
+##   rows by each row's own name ([method Roll.pick]), so a pattern, instrument or singer added takes only the rolls it
+##   wins and a song's code ([SongCode]) keeps its sound.
 ## - THE VOICE sings each line on the reference's melody in its bars (`reference`), or on a melody made for the words
 ##   (`composed`: stressed syllables on strong beats, chord tones there, a contour a line, lines answering each other),
 ##   or recites it (`recite`), moved by octaves to sit in the singer's range; heard, as far as its `vocoder` says,
@@ -182,7 +186,7 @@ static func drawn(block: Dictionary, ref: Dictionary, parts_cfg: Dictionary) -> 
 		else:
 			var tonic := rk.randi_range(0, 11)
 			# the reference's chords keep their own mode: a key drawn over them moves only where they stand
-			key = {"tonic": tonic, "scale": _ref_key(ref)["scale"] if harmony else MODES[rk.randi_range(0, MODES.size() - 1)]}
+			key = {"tonic": tonic, "scale": _ref_key(ref)["scale"] if harmony else String(Roll.pick(MODES, seed, "mode"))}
 	var swing := 0.5
 	if not (has_ref and keeps.call("feel")):
 		var rs := _rng(seed, "swing")
@@ -200,15 +204,16 @@ static func drawn(block: Dictionary, ref: Dictionary, parts_cfg: Dictionary) -> 
 ## moves every part at once - a new song - and rolling a part moves that part alone. The part's own number is its
 ## variation, the song its world.
 static func part_seed(seed: int, part: String, cfg: Dictionary) -> int:
-	return absi(hash(["part", seed, part, int(cfg.get("seed", 1))])) % 1000000007
+	return ("part|%d|%s|%d" % [seed, part, int(cfg.get("seed", 1))]).sha256_text().substr(0, 7).hex_to_int()
 
 
 ## THE BAND: a part's pattern and instrument where the block names none. The reference's own where the roll keeps it
-## ([param follow]) and the reference has the part (its drum pattern, its bass line, its sung tune); otherwise drawn
-## from the song's [param seed] among the rows the part can play - so rolling the song draws another band, and a part
-## the author set stays set.
+## ([param follow]) and the reference has the part (its drum pattern, its bass line, its sung tune); otherwise picked by
+## the part's number ([method part_seed]) among the rows the part can play ([method Roll.pick]) - so rolling the song or
+## the part draws another, a row added takes only the rolls it wins, and a part the author set stays set.
 static func choice_of(part: String, cfg: Dictionary, seed: int, ref: Dictionary, follow := true) -> Dictionary:
 	var row: Dictionary = SongParts.PARTS.get(part, {})
+	var pseed := part_seed(seed, part, cfg)
 	var pattern := String(cfg.get("pattern", ""))
 	if pattern.is_empty():
 		var has := (ref.get("parts", []) as Array).has(part)
@@ -219,18 +224,16 @@ static func choice_of(part: String, cfg: Dictionary, seed: int, ref: Dictionary,
 		elif part == "vocal":
 			# a tune made for the words, now and then recited
 			pattern = "reference" if follow and not (ref.get("voice", {}) as Dictionary).is_empty() \
-				else ("recite" if _rng(seed, "pattern:vocal").randf() < 0.15 else "composed")
+				else ("recite" if Roll.unit(pseed, "recite") < 0.15 else "composed")
 		else:
 			var offered := SongParts.patterns_for(part, false)
-			var rng := _rng(seed, "pattern:" + part)
-			pattern = String(offered[rng.randi_range(0, offered.size() - 1)]) if not offered.is_empty() else String(row.get("pattern", ""))
+			pattern = String(Roll.pick(offered, pseed, "pattern")) if not offered.is_empty() else String(row.get("pattern", ""))
 		if pattern == "reference" and not has and part != "vocal" and ref.get("parts") is Array:
 			pattern = String(row.get("pattern", ""))
 	var inst := String(cfg.get("instrument", ""))
 	if inst.is_empty() and part != "vocal":
 		var rows := Instruments.for_part(part)
-		var rng2 := _rng(seed, "instrument:" + part)
-		inst = String(rows[rng2.randi_range(0, rows.size() - 1)]) if not rows.is_empty() else String(row.get("instrument", ""))
+		inst = String(Roll.pick(rows, pseed, "instrument")) if not rows.is_empty() else String(row.get("instrument", ""))
 	return {"pattern": pattern, "instrument": inst}
 
 
@@ -330,17 +333,16 @@ static func _arrange(form: Array, band: Array, seed: int) -> void:
 	for s in form:
 		var kind := String(s["kind"])
 		if not lineups.has(kind):
-			var rng := _rng(seed, "arrange:" + kind)
 			var parts: Array = (s["parts"] as Array).duplicate()
 			for k in SongParts.PARTS:
-				if k == "vocal" or rng.randf() >= ARRANGE:
+				if k == "vocal" or Roll.unit(seed, "arrange:%s:%s" % [kind, k]) >= ARRANGE:
 					continue
 				if parts.has(k):
 					parts.erase(k)
 				else:
 					parts.append(k)
 			if not band.is_empty() and not parts.any(func(k: String) -> bool: return band.has(k)):
-				parts.append(band[rng.randi_range(0, band.size() - 1)])
+				parts.append(Roll.pick(band, seed, "arrange:" + kind))
 			lineups[kind] = parts
 		s["parts"] = (lineups[kind] as Array).duplicate()
 
@@ -425,11 +427,10 @@ static func _harmony(block: Dictionary, ref: Dictionary, form: Array, key: Dicti
 	for s in form:
 		var kind := String(s["kind"])
 		if not picks.has(kind):
-			var rng := _rng(seed, "harmony:" + kind)
 			var keys: Array = SongParts.PROGRESSIONS.keys()
 			if String(key["scale"]) in ["minor", "dorian", "phrygian", "harmonic_minor", "minor_pentatonic"]:
 				keys = keys.filter(func(k: String) -> bool: return k != "pop" and k != "fifties")
-			picks[kind] = keys[rng.randi_range(0, keys.size() - 1)]
+			picks[kind] = Roll.pick(keys, seed, "harmony:" + kind)
 			# a chord a bar mostly; now and then two bars a chord, or two chords a bar (a two-chord sway twice as long)
 			var u := _rng(seed, "rhythm:" + kind).randf()
 			var bars_a_chord := 1.0 if u < 0.55 else (2.0 if u < 0.8 else 0.5)
@@ -805,11 +806,10 @@ static func _vocal(cfg: Dictionary, ctx: Dictionary, _lyrics: Array) -> Dictiona
 	var ref: Dictionary = ctx["ref"]
 	if pattern == "reference" and (ref.get("voice", {}) as Dictionary).is_empty():
 		pattern = "composed"
-	# who sings is the roll's as an instrument is (the song's number), how they sing the voice's own number's with it;
-	# how it ornaments a note is its own number's alone
+	# who sings and how is the voice's number's, as a part's sound is (the song's and its own together)
 	var seed := part_seed(int(ctx.get("seed", 1)), "vocal", cfg)
 	var singer: Dictionary = cfg["singer"] if cfg.get("singer") is Dictionary and not (cfg["singer"] as Dictionary).is_empty() \
-		else SINGERS[_rng(int(ctx.get("seed", 1)), "singer").randi_range(0, SINGERS.size() - 1)]
+		else _singer(seed)
 	var style: Dictionary = STYLE.duplicate()
 	var rs := _rng(seed, "style")
 	for k in STYLE_DRAWN:
@@ -1196,9 +1196,16 @@ static func _words_on_notes(line: Dictionary, notes: Array) -> Array:
 # --- helpers ----------------------------------------------------------------------------------------
 
 static func _rng(seed: int, salt: String) -> RandomNumberGenerator:
-	var r := RandomNumberGenerator.new()
-	r.seed = hash(["sound", seed, salt])
-	return r
+	return Roll.rng(seed, "sound|" + salt)
+
+
+## The singer a voice's number [param seed] draws, picked by name ([method Roll.pick]).
+static func _singer(seed: int) -> Dictionary:
+	var name := String(Roll.pick(SINGERS.map(func(s: Dictionary) -> String: return String(s["name"])), seed, "singer"))
+	for s in SINGERS:
+		if String(s["name"]) == name:
+			return s
+	return SINGER
 
 
 static func _ref_key(ref: Dictionary) -> Dictionary:

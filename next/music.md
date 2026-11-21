@@ -59,7 +59,19 @@ the ear. The design below is the plan; this says what of it stands.
   reference has - its tempo, key, form, chords, drums, bass line and tune, each by a draw of its own; the chords, drums,
   bass and tune lie on its bars, so they are kept only with its form, and a part pinned to the reference keeps it.
   Every picker has Auto, the roll's; the card says what this roll drew and kept. A Key over a reference moves the
-  whole song - its chords, tune and bass - by the nearest interval from the reference's key.
+  whole song - its chords, tune and bass - by the nearest interval from the reference's key. A part's number draws
+  its own pattern and sound (the voice its singer and manner), so a part's Roll is that part drawn again alone.
+- **The song's code** (`SongCode`, `BlockCode` in `data/`): every setting of the block - the roll, Likeness, tempo,
+  key, pins, each part and all set on it - as one code of letters and digits on the card's Code row, changing as
+  anything on the card does; entered there (or pasted, then Enter), the settings come back. Reversible, not a hash, so
+  it is as long as what is set: a fresh roll about 11 letters, a song tuned part by part 60-100. The note's words, the
+  reference and the source are not in it. Words the card offers are a byte each (`SongCode.WORDS`, which only grow);
+  a name of the author's own is written out. A check byte refuses a code mistyped or cut short. The song's Roll drops
+  each part's own number (it is the song's again); no part shows a number, only its Roll.
+- **A draw stays put as the rows grow**: every draw is keyed by a salt of its own and a SHA-256 (`Roll.rng`,
+  `Roll.unit`), and a pick among rows - a pattern, an instrument, a singer, a mode, a progression - scores each row by
+  its own name (`Roll.pick`, as the show picks its scenes), so a row added takes only the rolls it wins (about one in
+  seven when a seventh is added, `song_code_check`) and a code keeps its song.
 - **The words as subtitles**: beside the mix, every word sung and when (`SongBake.write_sidecar`), in the file's own
   seconds; a song's session clock runs ahead of the file by the held intro, so its subtitles start from it.
 - **Heard as it is made** (`SongStream`, hosts/music/host.py and stream.py): Play on a composed song in a session a
@@ -113,6 +125,8 @@ the ear. The design below is the plan; this says what of it stands.
 2. Whether the instruments are the right first set (every one synthesized; no samples).
 3. The bet: a song made by choosing among seeded parts feels like the author's own.
 4. Rolls by ear: whether Likeness at its default (0.5) is the right family resemblance, and 0 wild enough.
+5. The song's code: whether its length is livable for a song tuned part by part, and whether a code should also be
+   kept for you (a list of the songs you liked on the card) rather than copied out by hand.
 
 **Open:** what "Next" lists below; MIDI and stem export; a loop of the section being rolled heard at once; the bed
 under a reading; a Sound linked from another note (Targeting Individuality ends on this song); the stream's held

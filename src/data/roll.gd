@@ -7,12 +7,41 @@ class_name Roll
 ## number's again ([SchemaForm] shows it dimmed). A field with no `roll` is its `default` until set.
 ##
 ## `roll` is `[least, most]` for a number, a list of the choices drawn among for an `enum` or a `color`, or a chance for a `bool`.
-## Pure: the same fields, set values and number give the same values on any machine.
+## Pure: the same fields, set values and number give the same values on any machine. A draw that must stay put as a list
+## of choices grows - a code kept for later, a row added - is [method pick] and [method rng], keyed by name and salt.
 
 
-## A new number for a thing, to draw its unset fields from.
-static func fresh() -> int:
-	return randi() % 1000000
+## A new number for a thing, to draw its unset fields from: under [param most].
+static func fresh(most := 1000000) -> int:
+	return randi() % most
+
+
+## A number in [0, 1) for [param seed] and [param salt], the same on any machine and any engine (a SHA-256, not the
+## engine's own hash).
+static func unit(seed: int, salt: String) -> float:
+	return float(("%d|%s" % [seed, salt]).sha256_text().substr(0, 8).hex_to_int()) / 4294967296.0
+
+
+## A generator for [param seed] and [param salt], as [method unit] keys it: each thing drawn from a salt of its own, so a
+## draw added never moves another.
+static func rng(seed: int, salt: String) -> RandomNumberGenerator:
+	var r := RandomNumberGenerator.new()
+	r.seed = ("%d|%s" % [seed, salt]).sha256_text().substr(0, 15).hex_to_int()
+	return r
+
+
+## THE CHOICE AMONG NAMES THAT A NEW NAME NEVER RESHUFFLES: each of [param names] scored by itself ([method unit] of
+## [param seed], [param salt] and the name), the highest taken - so a name added takes only the draws it wins and every
+## other keeps its own, as the show picks its scenes. Null for none.
+static func pick(names: Array, seed: int, salt: String) -> Variant:
+	var best: Variant = null
+	var top := -1.0
+	for n in names:
+		var u := unit(seed, salt + "|" + str(n))
+		if u > top:
+			top = u
+			best = n
+	return best
 
 
 ## Every field of [param fields] for a thing of number [param seed] with [param set] pinned: what is set where it is, the rest drawn

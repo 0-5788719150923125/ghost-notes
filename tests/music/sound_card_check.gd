@@ -10,6 +10,10 @@ extends Node
 ## - What it keeps is what it shows: `capture` hands back the block it was given, a part's pattern set is written into
 ##   `parts`, and `apply` of another block shows it (Source, Key).
 ## - Its parts are entries: one a part, the voice's among them; a part taken off is gone from the block.
+## - ITS CODE IS EVERY SETTING ([SongCode]): the Code row shows it and it changes as a dial moves; Roll is a new song
+##   (each part's own number dropped, what is set kept), a part's Roll gives that part alone a number, and a code entered
+##   brings its settings back, the source kept - the control, a bad code, is refused and changes nothing. A part shows a
+##   Roll and no number.
 ## - What it makes is the Pipeline's: composed, its section lists the mix as missing and the sung lines; given a mix
 ##   and its record, the mix is made - the control, the block changed after, is stale. Its ⤓ (the song exported, from the
 ##   bottom-right row where the note exports no video) stands grayed until there is a mix, and lit once there is; a note
@@ -54,6 +58,7 @@ func _ready() -> void:
 	var folder := ProjectSettings.globalize_path(ROOT).path_join("folder")
 	_old_block(note, folder)
 	_keeps(note, folder)
+	_code(note, folder)
 	await _pipeline(note, folder)
 	await _export(note, folder)
 	_placed(note, folder)
@@ -106,6 +111,47 @@ func _keeps(note: String, folder: String) -> void:
 	c._block["parts"] = parts
 	c._changed()
 	_ok(not (c.capture()["parts"] as Dictionary).has("bass"), "a part taken off is gone from the block")
+	c.queue_free()
+
+
+func _code(note: String, folder: String) -> void:
+	var block := {"source": "composed", "seed": 4, "key": "D dorian", "parts": {"drums": {"seed": 2}, "bass": {}, "vocal": {}}}
+	var c := _card({"sound": block}, note, folder)
+	_ok(c._code.text == SongCode.of(block), "its Code row shows the song's code: %s" % c._code.text)
+	c._tempo.value = 120.0
+	_ok(c._code.text == SongCode.of(c.capture()) and c._code.text != SongCode.of(block), "...which changes as a dial moves")
+	var kept := c._code.text
+	var kept_settings := JSON.stringify(SongCode.settings(c.capture()))
+	c.roll_song()
+	var after: Dictionary = c.capture()
+	_ok(c._code.text != kept and int(after["seed"]) != 4, "Roll is a new song, a new code")
+	_ok(not (after["parts"]["drums"] as Dictionary).has("seed") and String(after["key"]) == "D dorian" and float(after["tempo"]) == 120.0,
+		"...each part's own number back to the song's, what is set kept (the key, the tempo)")
+	var song_code := c._code.text
+	c.roll_part("bass")
+	var rolled: Dictionary = c.capture()["parts"]
+	_ok(rolled["bass"].has("seed") and not rolled["drums"].has("seed") and not rolled["vocal"].has("seed") and c._code.text != song_code,
+		"a part's Roll gives it a number of its own alone, and moves the code")
+	var why := c.enter_code(kept)
+	_ok(why.is_empty() and JSON.stringify(SongCode.settings(c.capture())) == kept_settings and c._code.text == kept,
+		"a code entered brings its settings back: %s" % (why if not why.is_empty() else c._code.text))
+	_ok(String(c.capture()["source"]) == "composed", "...the source kept")
+	var before := JSON.stringify(c.capture())
+	why = c.enter_code("1zzzzz")
+	_ok(not why.is_empty() and JSON.stringify(c.capture()) == before and c._code.text == kept,
+		"a bad code is refused, nothing changed (%s)" % why)
+	var drums: EntryCard = null
+	for e in c._parts_box.get_children():
+		if e is EntryCard and not e.is_queued_for_deletion() and (e as EntryCard).name_label.text == "Drums":
+			drums = e
+	var labels: Array = []
+	var rolls := 0
+	if drums != null:
+		for n in drums.options.find_children("*", "Label", true, false):
+			labels.append((n as Label).text)
+		for n in drums.options.find_children("*", "Button", true, false):
+			rolls += 1 if (n as Button).text == "Roll" else 0
+	_ok(drums != null and rolls == 1 and not labels.has("Number"), "a part has a Roll and no number of its own shown")
 	c.queue_free()
 
 
