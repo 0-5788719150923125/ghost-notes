@@ -882,10 +882,11 @@ class PuppetActor extends Actor:
 		lens.prepare()
 		var pj := lens.project(pos)
 		state["depth"] = pj.z
-		if pj.z <= lens.near:
+		var u: float = stage.unit()
+		# behind the lens, or a stage with no size yet (warmed before it is up): nothing to place it by
+		if pj.z <= lens.near or u <= 0.0:
 			pb.node.visible = false
 			return
-		var u: float = stage.unit()
 		var px := scale * lens._focal / pj.z * u / pb.rig.height()
 		var dark := 1.0 - 0.94 * clampf(float(state.get("shade", 0.0)), 0.0, 1.0)
 		pb.node.modulate = Color(dark, dark, dark * 1.04, fade)

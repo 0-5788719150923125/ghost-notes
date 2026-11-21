@@ -110,6 +110,9 @@ func begin_morph(from: GhostScene) -> void:
 		old.spec = fresh.spec
 		_actors[id] = old
 		old.moved_to(self)
+		# the fresh one's node (a puppet's, made as this stage was warmed) goes with it, or it stays here unplaced
+		if fresh.body is PuppetBody:
+			(fresh.body as PuppetBody).free_node()
 	# A swarm may continue a carried prism as its lead (cfg `lead: <actor id>`): the live body
 	# becomes member 0 and its last screen slot (projected through the old stage's lens) becomes
 	# the fly-in origin.

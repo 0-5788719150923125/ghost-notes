@@ -135,27 +135,34 @@ func _init(conversation: WriterChat, what: String) -> void:
 	_redraw()
 
 
-## Shown beside [param host] (the window the text is written in): to its right where there is room, else with [param host]
-## moved left, narrowed as far as its own least width, to make it.
-func open_beside(host: Window) -> void:
-	_pick.mark_available()
-	var screen := Vector2i(get_tree().root.get_visible_rect().size) if is_inside_tree() else Vector2i(1600, 900)
-	var w := clampi(int(screen.x * 0.3), min_size.x, 640)
+## Where [param win] stands beside [param host]: to its right where there is room, else with [param host] moved left and narrowed
+## as far as its own least width to make it; as tall as [param host], and a third of the screen wide, at most [param widest].
+static func beside(win: Window, host: Window, widest: int) -> Rect2i:
+	var screen := Vector2i(win.get_tree().root.get_visible_rect().size) if win.is_inside_tree() else Vector2i(1600, 900)
+	var w := clampi(int(screen.x * 0.3), win.min_size.x, widest)
 	var h := screen.y - 2 * GAP
 	var y := GAP
 	var x := screen.x - w - GAP
 	if host != null and host.visible:
-		h = maxi(min_size.y, host.size.y)
+		h = maxi(win.min_size.y, host.size.y)
 		y = host.position.y
 		if host.position.x + host.size.x + GAP + w > screen.x - GAP:
 			var host_w := maxi(host.min_size.x, mini(host.size.x, screen.x - w - 3 * GAP))
 			host.position = Vector2i(GAP, host.position.y)
 			host.size = Vector2i(host_w, host.size.y)
 		x = mini(host.position.x + host.size.x + GAP, screen.x - w - GAP)
+	return Rect2i(x, y, w, h)
+
+
+## Shown beside [param host] (the window the text is written in): to its right where there is room, else with [param host]
+## moved left, narrowed as far as its own least width, to make it.
+func open_beside(host: Window) -> void:
+	_pick.mark_available()
+	var r := beside(self, host, 640)
 	if not visible:
-		popup(Rect2i(x, y, w, h))
-	position = Vector2i(x, y)
-	size = Vector2i(w, h)
+		popup(r)
+	position = r.position
+	size = r.size
 	_scroll_down()
 	_box.grab_focus()
 

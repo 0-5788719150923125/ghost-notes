@@ -19,13 +19,15 @@ extends Node
 ## (a video by hand, each `=`-parted). `--voice <wav>` stands in for the heard audio (the SDR screen reads a voice's bands off it, the
 ## scope its waveform): the recording's bands, through the receiver's band, and its waveform, whenever any word is said - the
 ## screens show only the receiver's.
-## `--sdr 1` also writes that screen's own picture beside each photograph (`_sdr.png`).
-## It prints where each action falls, and asserts
-## only that a frame is not uniform.
+## `--sdr 1` also writes that screen's own picture beside each photograph (`_sdr.png`). `--looks FROM,TO` draws nothing: it prints
+## where the camera looks every half second over that stretch, and the word then said, as the whole plan has it.
+## It prints where each action falls, and each step of the desk that holds the app's thread over [constant LONG_STEP] ms (a live
+## desk snaps its camera past a stall of a second), and asserts only that a frame is not uniform.
 
 const W := 1280
 const H := 720
 const DT := 1.0 / 30.0
+const LONG_STEP := 150
 
 var _out := "user://dispatch"
 var _note := ""
@@ -46,6 +48,7 @@ var _aim := Vector3.ZERO
 var _films := {}                   # what each `play` plays -> what it is ([ScreenPlays]), or --film WHAT=PATH=SECS
 var _voice := ""                   # --voice: a recording whose bands stand in for the heard audio's
 var _sdr := false                  # --sdr 1: the SDR screen's own picture written too
+var _looks := Vector2(-1, -1)      # --looks FROM,TO: where the camera looks over that stretch, nothing drawn
 
 const EnvFlags := preload("res://tests/table/environment_flags.gd")
 
@@ -70,6 +73,10 @@ func _run() -> void:
 			"--sound": _sound = args[i + 1]
 			"--voice": _voice = args[i + 1]
 			"--sdr": _sdr = args[i + 1] == "1"
+			"--looks":
+				var lv := String(args[i + 1]).split_floats(",")
+				if lv.size() == 2:
+					_looks = Vector2(lv[0], lv[1])
 			"--opening": _opening = args[i + 1]
 			"--lead": _lead = float(args[i + 1])
 			"--light", "--bright", "--shafts", "--fog", "--air", "--heard": EnvFlags.take(_environment, args[i], args[i + 1])
@@ -155,6 +162,28 @@ func _run() -> void:
 	var fed := 0
 	var audio := PackedVector2Array()
 	var desk := medium as DispatchMedium
+	if _looks.y > _looks.x:
+		Spectrum.virtual_clock = DT
+		Spectrum.current.time = DT
+		medium.advance(Spectrum.current, DT, 1.0)
+		var was := ""
+		var tt := _looks.x
+		while tt <= _looks.y:
+			var on := desk.looking_at(tt)
+			var said := ""
+			for w in words:
+				if float((w as Dictionary)["t0"]) <= tt and float(w["t1"]) >= tt - 0.3:
+					said = String(w["text"])
+			print("dispatch_look_probe: looks t=%.1f %-9s %s%s" % [tt, on, "<- turns  " if on != was else "", said])
+			was = on
+			tt += 0.5
+		Spectrum.virtual_clock = -1.0
+		Director.hold(false)
+		Director.detach()
+		stage.queue_free()
+		await get_tree().process_frame
+		get_tree().quit(0)
+		return
 	var heard := DispatchSounds.new(desk)
 	var voiced: Array = SpectrumBake.bake(_voice, 30, AudioFeatures.BAND_COUNT, AudioFeatures.FREQ_MIN, AudioFeatures.FREQ_MAX,
 		AudioFeatures.DB_FLOOR) if not _voice.is_empty() else []
@@ -180,11 +209,17 @@ func _run() -> void:
 				heard_now.bands = _voice_bands(words, desk._now, voiced)
 				if _saying(words, desk._now):
 					heard_now.hear_from(HeardWave.of_wav.bind(_voice, voice_info, fmod(desk._now, float(voiced.size()) / 30.0)))
+			var began := Time.get_ticks_msec()
 			medium.advance(heard_now, DT, 1.0)
+			if Time.get_ticks_msec() - began > LONG_STEP:
+				print("dispatch_look_probe: a step at t=%.2f held the thread %d ms" % [t, Time.get_ticks_msec() - began])
 			if not _sound.is_empty():
 				audio.append_array(heard.render(int(round(t * DispatchSounds.RATE)) - audio.size()))
 			if float(want) - t < 1.6 or int(round(t / DT)) % 300 == 0:
+				began = Time.get_ticks_msec()
 				await get_tree().process_frame
+				if Time.get_ticks_msec() - began > LONG_STEP:
+					print("dispatch_look_probe: a frame at t=%.2f took %d ms" % [t, Time.get_ticks_msec() - began])
 		# (set as each frame is drawn: the Director advances the desk every frame, which turns its camera back to its spot)
 		var put := func() -> void: desk._cam.look_at_from_position(_eye, _aim, Vector3.UP)
 		if _eye is Vector3:

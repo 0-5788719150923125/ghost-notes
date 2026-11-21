@@ -7,7 +7,10 @@ extends Node
 ##
 ## - Begun at a moment, it has its own Director, song and viewport: a scene of its own in its own viewport; the session's Director is
 ##   still the show that is up, nothing added to the Master bus (the control: a session's Spectrum adds its analyzer there).
-## - Its clock is the one handed; a clock gone back past BACK starts it again (a new Director), one going on keeps it.
+## - Its clock is the one handed; a clock gone back past BACK starts a seeded show again (a new Director) and walks a written one there
+##   (the same Director), one going on keeps it, and one a little behind the last holds it where it is (the control: on again, it
+##   goes on); its Director and song are stepped by its host alone (the control: a Director told not to process before it enters
+##   the tree is set processing as it does).
 ## - Its song plays while it is asked for and heard, holds while held, and falls silent once its host stops asking (Stop under it),
 ##   the control: asked every frame, it plays on; stopped, nothing of it is left.
 ## - Its words are over the frame it is played in, on its own clock, in the credits where the note names no way of showing them.
@@ -61,6 +64,36 @@ func _run() -> void:
 	show.call("play_at", 0.5, 1.0 / 30.0, true, true, false)
 	_ok(same and show.get("_show") != inner and absf(float(show.get("_show").show_time()) - 0.5) < 0.01,
 		"a clock going on keeps its show; gone back, it starts again from there")
+	_ok(not show.get("_show").is_processing() and not show.get("_song").is_processing(),
+		"its Director and song are stepped by its host alone, never on their own")
+	var loose: Node = (load("res://src/show/director.gd") as GDScript).new()
+	loose.set_process(false)
+	add_child(loose)
+	_ok(loose.is_processing(), "the control: a Director told not to process before it enters the tree is set processing as it does")
+	loose.free()
+	# a clock read a little behind the last (a reading's, re-based as its audio is mixed) holds it where it is
+	show.call("play_at", 1.0, 1.0 / 30.0, true, true, false)
+	var at_one := float(show.get("_show").show_time())
+	show.call("play_at", 0.98, 1.0 / 30.0, true, true, false)
+	var behind := float(show.get("_show").show_time())
+	show.call("play_at", 1.02, 1.0 / 30.0, true, true, false)
+	_ok(is_equal_approx(behind, at_one) and absf(float(show.get("_show").show_time()) - 1.02) < 0.001,
+		"a clock a little behind the last holds it where it is (%.3f), and on again it goes on (the control, %.3f)" % [behind, float(show.get("_show").show_time())])
+	# a written show gone back (round again on a loop) is walked there: the same Director, the entry then
+	var board := Storyboard.from_data({"loop": true, "bookend": false, "sequence": [
+		{"scene": "stage", "hold": 2.0, "cast": []}, {"scene": "stage", "hold": 2.0, "cast": []}]}, "loop")
+	var written: Node = nested_script.new(nested_script.call("prepared", {"song": "", "title": "loop", "medium": "full", "storyboard": board, "secs": 4.0}))
+	add_child(written)
+	var t := 0.0
+	while t < 2.5:
+		written.call("play_at", t, 1.0 / 30.0, true, true, false)
+		t += 1.0 / 30.0
+	var walker = written.get("_show")
+	var second := int(walker.get("_manual_i"))
+	written.call("play_at", 0.3, 1.0 / 30.0, true, true, false)
+	_ok(second == 1 and written.get("_show") == walker and int(walker.get("_manual_i")) == 0,
+		"a written show gone back is walked there by its own Director (entry %d -> %d)" % [second, int(walker.get("_manual_i"))])
+	written.free()
 	# its song: heard while asked, held while held, silent once nobody asks
 	var player: AudioStreamPlayer = show.get("_song").get("_player")
 	_ok(player.playing, "its song plays while it is asked for and heard")

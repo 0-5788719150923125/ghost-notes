@@ -15,7 +15,9 @@ Held, each with the case that must not change:
   scale is the control);
   3. no rest is floored; the word before a rest has its last vowel held at HOLD_LEAST, less at a weaker
   boundary, none without the trail; a rest is cut in its window after a stop's release, never in its
-  closure; the trail fades a vowel held into the next word and comes back up without a step;
+  closure; the trail fades a vowel held into the next word and comes back up without a step; above speed 1.0
+  every vowel keeps its frames at speed 1.0 up to VOWEL_LEAST, a consonant and a vowel one frame long at speed
+  1.0 keep the pace, and at speed 1.0 no plan is made beside the call (a graph that takes no floor is the control);
   4. a leaned-on word scales its stressed syllable alone, and an unmarked one feeds no scale;
   5. spans and phones are the plan's frames of 600 samples at 24 kHz (phones in eSpeak's symbols), the take
   is handed back at 22,050 with its seconds kept, its head trimmed to SEAM_LEAD before the first sound;
@@ -123,6 +125,7 @@ class _Session:
         self.fed.append(
             {
                 "ids": ids,
+                "speed": speed,
                 "style": np.array(feeds["style"]),
                 "scale": None if scale is None else np.array(scale),
                 "floor": None if floor is None else np.array(floor),
@@ -219,6 +222,12 @@ def _render(tokens, params=None, sess=None, british=False):
 
 def _syms(text: str, src: int = 0):
     return [(ch, src) for ch in text]
+
+
+def _read_at(sess, pace: float) -> list:
+    """What `sess` was fed for the reading's own calls at `pace`: never the plan at speed 1.0 a faster pace is
+    floored by (the backend's header, "The pace never squashes a vowel")."""
+    return [f for f in sess.fed if abs(float(f["speed"]) - pace) < 1e-4]
 
 
 # -- 1. the symbols -----------------------------------------------------------
@@ -320,7 +329,7 @@ def test_first_pad_keeps_its_length_at_every_pace():
     words = {}
     for pace in (0.85, 1.0, 1.6):
         _res, sess, _rate, _n = _render(SENTENCE, {"length_scale": 1.0 / pace}, sess=_Session(lead=14.0))
-        fed = sess.fed[0]
+        fed = _read_at(sess, pace)[0]
         eq(int(fed["frames"][0]), 14, f"at Pace {pace} the first pad is its own 14 frames")
         words[pace] = int(np.sum(fed["frames"][1:-1]))
     ok(words[1.6] < words[1.0] < words[0.85], "and the words follow the pace", str(words))
@@ -474,6 +483,35 @@ def test_a_short_last_vowel_is_held():
     weak = dict(floored({"pause_scale": 1.0, "trail": 1.0}))
     ok(weak["A"] < whole, "a weaker boundary holds less", "%d frames" % weak["A"])
     eq(floored({"pause_scale": 6.5, "trail": 0.0}), [("Q", 2.0)], "control: no trail, no hold")
+
+
+@check
+def test_the_pace_never_squashes_a_vowel():
+    """Above speed 1.0 the piece is planned at speed 1.0 first and every vowel floored at its frames there, up to
+    VOWEL_LEAST: past about 1.3x the Round leaves a vowel one frame and its syllable is not heard. A consonant keeps
+    the pace, a vowel Kokoro plans one frame at speed 1.0 stays one, and at speed 1.0 no plan is made beside the
+    call. The control is a graph that takes no floor: at Pace 1.6 its vowels round to a frame."""
+    from backends.kokoro import VOWEL_LEAST
+
+    vowels = set("AIOQWYᵻaeiouæɑɒɔəɛɜɪʊʌ")
+    sounds = set(VOCAB) - set("$;:,.!?—… ˈˌː")
+
+    def said(pace, sess):
+        _res, sess, _rate, _n = _render(SENTENCE, {"length_scale": 1.0 / pace}, sess=sess)
+        fed = _read_at(sess, pace)[-1]
+        return [(VOCAB[i], int(f)) for i, f in zip(fed["ids"], fed["frames"])], sess
+
+    fast, sess = said(1.6, _Session(held={"ʌ": 1.0}))
+    ok(all(f >= VOWEL_LEAST for s, f in fast if s in vowels and s != "ʌ"),
+       "at Pace 1.6 every vowel keeps VOWEL_LEAST frames", str(fast))
+    eq([f for s, f in fast if s == "ʌ"], [1], "a vowel planned one frame at speed 1.0 stays one")
+    ok(any(f == 1 for s, f in fast if s in sounds - vowels), "a consonant keeps the pace", str(fast))
+    eq(len(_read_at(sess, 1.0)), 1, "one plan at speed 1.0 beside the call")
+    _slow, sess = said(1.0, _Session(held={"ʌ": 1.0}))
+    eq(len(sess.fed), 1, "at speed 1.0 the call alone")
+    squashed, _sess = said(1.6, _Session(takes=()))
+    ok(any(f == 1 for s, f in squashed if s in vowels),
+       "control: a graph that takes no floor rounds a vowel to one frame at Pace 1.6", str(squashed))
 
 
 @check

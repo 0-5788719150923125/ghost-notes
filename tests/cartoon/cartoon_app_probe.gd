@@ -6,11 +6,12 @@ extends Node
 ## For looking; nothing is held.
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/cartoon/cartoon_app_probe.gd 120 --board=<storyboard.json> [--out=<dir>] [--at=S]
-##       [--seek=S]
+##       [--seek=S] [--after=S]
 ##
 ## `--board` is a cartoon's storyboard (a note's `storyboard.json`), copied into the probe's note; its cast and sets must be on the
 ## library's shelves. Writes `app.png` under the out folder, and what came up to the log; `--seek` then moves the playhead there, as a
-## scrub does, and writes `seek.png`.
+## scrub does, and writes `seek.png`; `--after` lets it play that many seconds more (past its end, a loop's seam), printing each
+## entry the show comes to, and writes `after.png`.
 
 const ROOT := "user://cartoon_app_probe"
 
@@ -18,6 +19,7 @@ var _out := "user://cartoon_app_probe/look"
 var _board := ""
 var _at := 5.0
 var _seek := -1.0
+var _after := 0.0
 
 
 func _ready() -> void:
@@ -35,6 +37,8 @@ func _run() -> void:
 			_at = float(s.trim_prefix("--at="))
 		elif s.begins_with("--seek="):
 			_seek = float(s.trim_prefix("--seek="))
+		elif s.begins_with("--after="):
+			_after = float(s.trim_prefix("--after="))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_out))
 	NoteStore.root = ROOT + "/notes"
 	NoteUpload.root = ROOT + "/folders"
@@ -87,6 +91,19 @@ func _run() -> void:
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(ProjectSettings.globalize_path(_out).path_join("seek.png"))
 		print("cartoon_app_probe: sought to %.1f s: show time %.1f s, entry %d -> %d" % [_seek, Spectrum.current.time, before, int(Director.get("_manual_i"))])
+	# played on: each entry it comes to, at the show time it comes
+	if _after > 0.0:
+		var was := int(Director.get("_manual_i"))
+		var t1 := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - t1 < int(_after * 1000.0):
+			await get_tree().process_frame
+			var now := int(Director.get("_manual_i"))
+			if now != was:
+				print("cartoon_app_probe: entry %d -> %d at show time %.2f s" % [was, now, Spectrum.current.time])
+				was = now
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(ProjectSettings.globalize_path(_out).path_join("after.png"))
+		print("cartoon_app_probe: %.1f s on: show time %.1f s, entry %d" % [_after, Spectrum.current.time, int(Director.get("_manual_i"))])
 	Spectrum.transport_stop()
 	for i in 10:
 		await get_tree().process_frame

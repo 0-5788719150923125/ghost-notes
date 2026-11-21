@@ -167,8 +167,8 @@ static func _v2(a: Variant) -> Vector2:
 
 # --- the node -----------------------------------------------------------------------------------------------------------
 
-## Its node, made the first time it is asked for: a rig per drawing - its skeleton, its layers weighted to it, its lids - only the
-## one shown visible.
+## Its node, made the first time it is asked for: a rig per drawing - its skeleton, its layers weighted to it, its lids - each
+## built the first time it is shown ([method _built]), so a puppet comes up at the cost of one drawing.
 func build() -> Node2D:
 	if node != null and is_instance_valid(node):
 		return node
@@ -179,11 +179,18 @@ func build() -> Node2D:
 	_squash.name = "Squash"
 	node.add_child(_squash)
 	for key in _cels:
-		var cel: Cel = _cels[key]
-		cel.build()
-		cel.root.visible = cel == _cel
-		_squash.add_child(cel.root)
+		(_cels[key] as Cel).root = null
+	_built(_cel).root.visible = true
 	return node
+
+
+## Drawing [param cel] with its node built under the puppet's (hidden), where it is not yet.
+func _built(cel: Cel) -> Cel:
+	if cel.root == null:
+		cel.build()
+		cel.root.visible = false
+		_squash.add_child(cel.root)
+	return cel
 
 
 ## Its node let go (its stage is going and nothing carries it on).
@@ -499,11 +506,10 @@ func _choose(going: float) -> void:
 	if key.is_empty() or key == _cel.key:
 		return
 	var was := _cel
-	_cel = _cels[key]
+	_cel = _built(_cels[key])
 	if was.root != null:
 		was.root.visible = false
-	if _cel.root != null:
-		_cel.root.visible = true
+	_cel.root.visible = true
 	if was.view != _cel.view:
 		kick(-0.25)
 
@@ -530,6 +536,8 @@ class Cel extends RefCounted:
 	var talks := false
 
 	func build() -> void:
+		bones = {}
+		lids = []
 		root = Node2D.new()
 		root.name = "Rig_" + key
 		root.position = -rig.anchor()
@@ -553,39 +561,20 @@ class Cel extends RefCounted:
 				(bones[parent] as Bone2D).add_child(bone)
 				paths[n] = NodePath(String(paths[parent]) + "/" + String(n))
 			bones[n] = bone
+		# each layer's mesh and weights as the rig's reading packed them ([member PuppetRig.meshes])
 		for layer in rig.data.get("layers", []):
-			var ld: Dictionary = layer
+			var ln := String((layer as Dictionary)["name"])
+			var mesh: Dictionary = rig.meshes[ln]
 			var poly := Polygon2D.new()
-			poly.name = String(ld["name"])
-			var flat: Array = ld["points"]
-			var pts := PackedVector2Array()
-			pts.resize(flat.size() / 2)
-			for i in pts.size():
-				pts[i] = Vector2(float(flat[2 * i]), float(flat[2 * i + 1]))
-			poly.polygon = pts
-			poly.uv = pts
-			var tris: Array = ld["tris"]
-			var polys: Array = []
-			for i in range(0, tris.size() - 2, 3):
-				polys.append(PackedInt32Array([int(tris[i]), int(tris[i + 1]), int(tris[i + 2])]))
-			poly.polygons = polys
-			poly.texture = rig.texture(String(ld["name"]))
+			poly.name = ln
+			poly.polygon = mesh["points"]
+			poly.uv = mesh["points"]
+			poly.polygons = mesh["polygons"]
+			poly.texture = rig.texture(ln)
 			root.add_child(poly)
 			poly.skeleton = poly.get_path_to(skel)
-			# each bone's weight on every vertex, filled as plain arrays (a packed array read out of a dictionary is a copy), packed once
-			var per := {}
-			var ws: Array = ld["weights"]
-			for vi in ws.size():
-				for pair in ws[vi]:
-					var bi := int(pair[0])
-					if not per.has(bi):
-						var arr: Array = []
-						arr.resize(pts.size())
-						arr.fill(0.0)
-						per[bi] = arr
-					(per[bi] as Array)[vi] = float(pair[1])
-			for bi in per:
-				poly.add_bone(paths[order[int(bi)]], PackedFloat32Array(per[bi]))
+			for bw in mesh["bones"]:
+				poly.add_bone(paths[order[int(bw[0])]], bw[1])
 		for e in rig.data.get("eyes", []):
 			var ed: Dictionary = e
 			var bone: Bone2D = bones.get(String(ed.get("bone", "")))

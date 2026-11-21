@@ -94,7 +94,8 @@ class_name DispatchScript
 ##                                     the same silence happen while it plays; the voice waits for the rest of it where the
 ##                                     silence ends. `(terminal, mono)` shows it in the screen's own phosphor; `unwatched`
 ##                                     leaves the camera where it is; `loop` plays it round and round under all that follows,
-##                                     the voice never waiting for it, until something else is put on its screen (`off: tv`).
+##                                     the voice never waiting for it, until something else is put on its screen (`off: tv`),
+##                                     the camera on it as a `look:` holds, until something else turns it.
 ##     <!-- fade: to-black, 4 -->      the picture goes down to black over that many seconds (2 bare), the voice waiting.
 ##                                     In the black the desk is still heard; what is marked there happens unseen and at
 ##                                     once (a hesitation holds the black, a sound plays in it, a voice may speak in it).
@@ -155,7 +156,7 @@ const IMAGE := "^\\s*<!--\\s*image\\s*(?:\\(\\s*([a-z]+(?:\\s*,\\s*[a-z]+)*)\\s*
 ## camera left on what it was on.
 const UNWATCHED := "unwatched"
 ## ...and a film told `loop` (`play (tv, loop)`): round and round under what follows, the voice never waiting, until its screen is put
-## to something else.
+## to something else; watched as a `look:` holds, having no end to let the camera go at.
 const LOOP := "loop"
 ## In a page fence, on a line of its own: the room's words the page is brought to that place for. Group 1 the words.
 const SAID := "(?m)^[ \\t]*<!--\\s*said\\s*:\\s*([^>]*?)\\s*-->[ \\t]*$"
@@ -236,7 +237,7 @@ const TEXT_CHIME := 0.6
 const READ_LIFT := 0.9
 const READ_WORD := 0.32
 const READ_BEAT := 0.9
-const READ_DOWN := 0.9
+const READ_DOWN := 1.2
 const TEXT_AGAIN := 9.0
 ## A reply, typed into the phone in hand on its keypad before it is said: a beat before its first key, its keys at a practiced
 ## thumb's pace on a phone's keys (characters a second, on the whole: each letter takes as long as its presses, and a hand's

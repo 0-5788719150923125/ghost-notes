@@ -1210,7 +1210,12 @@ func _tick_schedule(dt: float) -> void:
 		_beat_prev = _song().current.beat
 		return                                      # re-localized: the cut is already underway
 	if _should_change():
+		# a fixed hold run past within this frame: what ran past is the next scene's once it is up at once (a cut, a morph),
+		# so a written board keeps to its clock rather than falling a frame behind at every cut
+		var over := _elapsed - float(_current.exit_spec["hold"]) if _current.exit_spec.has("hold") else 0.0
 		_begin_transition()
+		if not _transitioning:
+			_elapsed = clampf(over, 0.0, dt)
 	_beat_prev = _song().current.beat
 
 

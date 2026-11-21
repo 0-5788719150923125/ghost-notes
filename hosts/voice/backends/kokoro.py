@@ -55,6 +55,12 @@ So there is no lead-in: the ids are the model's own and the pad is planned at sp
 plan (median 1.00 at Pace 1 and 1.6) and a voice's speaking level moves at most 0.23 dB, so levels.json
 stands.
 
+The pace never squashes a vowel. `speed` divides every frame of the plan before its Round, so past about 1.3x
+a vowel of two frames rounds to one and its syllable is not heard (at 1.32x "needed it." is heard as "needed").
+Where the pace is above 1, each piece is planned at speed 1.0 first and every vowel floored at what it had there,
+up to VOWEL_LEAST frames (`_render_symbols`): what the pace takes comes from the consonants and the longer vowels,
+and a vowel Kokoro itself plans one frame long stays so.
+
 The end: a sentence's end is not the call's. At the end of a call Kokoro lets the last word go, so a sentence
 that ends on a full stop is read with its own first word after it and the take cut in the rest the model makes
 at the stop (AFTER_WORDS, `_after`, `_cut_after`). What is followed is planned faster, so the sentence is planned
@@ -127,12 +133,15 @@ GAP_BACK = 0.015
 # is wrong both ways (a 50 ms "oo" rounds back to two frames, "stays," held 1.6 times is drawn out). A floor
 # lengthens the short vowel alone and leaves a long one as planned.
 HOLD_LEAST = 0.09
+# The frames a vowel the pace shortens keeps at least, or what it has at speed 1.0 where that is fewer (the
+# module's header, "The pace never squashes a vowel"). A diphthong is one id.
+VOWEL_LEAST = 2
 STYLE = 256
 PAD_ID = 0
 # How this backend reads a request, said on every voice's row (`voices`): a row keys the takes kept in its voice
 # (TakeCache), so raising it has every sentence kept before said again. Raised when the same request comes out
 # another take.
-READS = 5
+READS = 6
 
 LICENSE = (
     "Apache-2.0 (hexgrad/Kokoro-82M). Its training data includes synthetic audio from closed "
@@ -1064,7 +1073,8 @@ class KokoroBackend(PiperBackend):
         (`PiperBackend._render_symbols`), on Kokoro's ids: one id a symbol, a pad at each end, no
         blanks between. What the plan is told: a stretch on a source's nucleus, a hold on its final
         rime and its last vowel floored at HOLD_LEAST (shared with its length mark), the opening vowel
-        floored, the first pad held at its own length (the module's header, THE OPENING) - and no rest (below).
+        floored, the first pad held at its own length (the module's header, THE OPENING), above speed 1.0
+        every vowel floored at its frames at speed 1.0 up to VOWEL_LEAST - and no rest (below).
 
         A sentence over MAX_TOKENS is read in pieces cut at a word-space - after a mark where one
         is in reach - each with its own pads and its own style, the pieces' plans laid end to end.
@@ -1113,6 +1123,7 @@ class KokoroBackend(PiperBackend):
         floor: list[float] = []
         scale: list[float] = []
         unit_of: list[int] = []  # which place in `units` each id is, -1 for a pad
+        vowel: list[bool] = []  # whether each id is a vowel (a diphthong is one): what the pace may not squash
         missing: list[str] = []
         opened = False
         for u, (ksym, src, at) in enumerate(units):
@@ -1142,6 +1153,7 @@ class KokoroBackend(PiperBackend):
             floor.append(rest)
             scale.append(mul)
             unit_of.append(u)
+            vowel.append(any(symbols[j][0] in _VOWELS for j in at))
         for sym in sorted(set(missing)):
             if sym in self._warned_symbols:
                 continue
@@ -1168,10 +1180,11 @@ class KokoroBackend(PiperBackend):
         # what was said before the sentence, read first and cut away (`before`)
         before = self._before_ids(params, kk) if told_plan and space is not None else []
 
-        def feeds_of(a: int, b: int, more: list, told=None, lead=()) -> dict:
-            """What a call of ids[a:b] is fed, `lead` said before them and `more` after. `told` is the frames of its
-            first ids, a pad first (None: the call's own plan): a told id's plan is scaled away and floored at them -
-            save the pad where words come before (theirs is the call's)."""
+        def feeds_of(a: int, b: int, more: list, told=None, lead=(), pace=None) -> dict:
+            """What a call of ids[a:b] is fed, `lead` said before them and `more` after, read at speed `pace` (None:
+            the request's). `told` is the frames of its first ids, a pad first (None: the call's own plan): a told
+            id's plan is scaled away and floored at them - save the pad where words come before (theirs is the call's)."""
+            at_speed = speed if pace is None else float(pace)
             body = ids[a:b]
             n = max(1, len(body))
             pack = kk["pack"]
@@ -1180,7 +1193,7 @@ class KokoroBackend(PiperBackend):
             feeds = {
                 "input_ids": np.array([[PAD_ID, *front, *body, *rest, PAD_ID]], dtype=np.int64),
                 "style": np.asarray(pack[min(n, pack.shape[0]) - 1], dtype=np.float32).reshape(1, STYLE),
-                "speed": np.array([speed], dtype=np.float32),
+                "speed": np.array([at_speed], dtype=np.float32),
             }
             if moving is not None:
                 # a row a token, each where it stands across the paragraph: its sentence's span laid over its ids
@@ -1194,7 +1207,7 @@ class KokoroBackend(PiperBackend):
                 feeds["style"] = blend.rows_along(moving["blend"], rows, places, float(moving["pos"]))
             floors = [0.0, *([0.0] * len(front)), *floor[a:b], *([0.0] * len(rest)), 0.0]
             # the first pad undoes `speed`: it is planned as at speed 1.0, where the first word meets the voice waking
-            scales = [speed, *([1.0] * len(front)), *scale[a:b], *([1.0] * len(rest)), 1.0]
+            scales = [at_speed, *([1.0] * len(front)), *scale[a:b], *([1.0] * len(rest)), 1.0]
             for k, f in enumerate(told or []):
                 if k == 0 and front:
                     continue
@@ -1233,6 +1246,13 @@ class KokoroBackend(PiperBackend):
 
         pieces = _pieces(ids, units, unit_of)
         for a, b in pieces:
+            # the pace never squashes a vowel: each floored at its frames at speed 1.0, up to VOWEL_LEAST
+            if speed > 1.0 and told_plan and any(vowel[a:b]):
+                at_one = np.asarray(self._planner(sess).run(None, feeds_of(a, b, [], pace=1.0))[-1]).reshape(-1)
+                for k in range(a, b):
+                    if vowel[k]:
+                        floor[k] = max(floor[k], min(float(VOWEL_LEAST), float(at_one[1 + k - a])))
+                fed_floor = fed_floor or any(floor[a:b])
             # the sentence's end is not the call's (AFTER_WORDS): words after it, and the take cut before them
             more = []
             heard = [k for k in range(a, b) if sound[k]]

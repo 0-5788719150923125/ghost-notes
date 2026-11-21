@@ -12,8 +12,9 @@ class_name NestedShow
 ## song's file and the song loaded, that song's bake, its storyboard in its loaded form or {}, its medium's key, how its words are
 ## shown, its length - [method prepared]). A note with no song is a silent show ([method Spectrum.hear_silence]): its storyboard
 ## times it, and what its stage names (a puppet's rig, a painted set) is read in [method prepared], so it is up at its first frame. The host moves its clock ([method play_at]) and shows its
-## picture ([method texture]); the clock gone back past where it was starts it again from there, and a jump forward is the
-## Director's own seek, as the session's is.
+## picture ([method texture]): it steps only forward on that clock, a clock gone back past where it was walks a written show there
+## (round again on a loop) or starts a seeded one again, and a leap forward is the Director's own seek, as the session's is. Its
+## Director and song are stepped by the host alone.
 
 ## The size it is drawn at: a 4:3 screen's.
 const SIZE := Vector2i(960, 720)
@@ -23,6 +24,9 @@ const _SongScript := preload("res://src/audio/spectrum.gd")
 ## before its song falls silent.
 const BACK := 0.5
 const QUIET_AFTER := 3
+## How far on the clock may move in one frame before the show is sought there (s): its Director takes a longer step for a seek and
+## would not move on by it.
+const LEAP := 2.0
 
 var _note := {}
 var _vp: SubViewport = null
@@ -76,13 +80,25 @@ func length() -> float:
 ## drawn while [param shown]; its sound heard while [param heard] (held while [param held]).
 func play_at(t: float, dt: float, shown: bool, heard: bool, held: bool) -> void:
 	_asked = Engine.get_process_frames()
-	if _show == null or t < _at - BACK:
+	if _show == null:
 		_begin()
+	elif t < _at - BACK:
+		# gone back (round again on a loop, a scrub back): a written show is walked there, as a seek is; one drawn from its seed
+		# starts again from nothing
+		if _show.is_manual():
+			_show.seek_show(maxf(t, 0.0))
+			_at = -INF
+		else:
+			_begin()
 	if _vp != null:
 		_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if shown else SubViewport.UPDATE_DISABLED
 	_song.follow(t, heard, held)
-	if held or (shown and is_equal_approx(t, _at)):
+	# held, or its clock no further on than at the last step: where it is. A host's clock may read a little behind the last (a
+	# reading's, re-based as its audio is mixed), and a step back the Director would take for a seek, moving on a frame each time
+	if held or t <= _at:
 		return
+	if _at > -INF and t - _at > LEAP:
+		_show.seek_show(t)
 	_song.virtual_clock = maxf(t, 0.0)
 	_song._process(dt)
 	_show.step(dt)
@@ -120,8 +136,8 @@ func _begin() -> void:
 	_song = _SongScript.new()
 	_song.name = "Song"
 	_song.nested = true
-	_song.set_process(false)
 	add_child(_song)
+	_song.set_process(false)             # stepped by its host alone (a node with `_process` is set processing as it enters the tree)
 	if String(_note.get("song", "")).is_empty():
 		_song.hear_silence(String(_note.get("title", "")))
 	else:
@@ -130,12 +146,12 @@ func _begin() -> void:
 	_show.name = "Director"
 	_show.nested = true
 	_show.song = _song
-	_show.set_process(false)
 	_show.intro_hold = 0.0
 	_show.outro_hold = 0.0
 	var key := String(_note.get("medium", "auto"))
 	_show.medium = key if Medium.REGISTRY.has(key) and Medium.mode_of(key).is_empty() else "full"
 	add_child(_show)
+	_show.set_process(false)
 	var board: Dictionary = _note.get("storyboard", {}) if _note.get("storyboard") is Dictionary else {}
 	if not board.is_empty():
 		_show.load_board(board, "")

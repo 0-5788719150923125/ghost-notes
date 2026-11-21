@@ -7,7 +7,8 @@ class_name IllustrationPanel
 ## Top to bottom: which painter, its model and effort ([AgentPick]); the style every picture shares; the
 ## reference images that show that style; Generate all (every picture with none yet); and the note's pictures,
 ## an entry each ([EntryCard]): what exists, and a × deleting the picture shown; opened, its versions, buttons to make
-## or remake it or import a file instead (Import…), and Flip, which shows it mirrored ([method Illustrations.set_flipped]). The same
+## or remake it or import a file instead (Import…), Refine…, which has the painter change only what the author says in the
+## picture shown ([PropRefine], [method Illustrations.refine]), and Flip, which shows it mirrored ([method Illustrations.set_flipped]). The same
 ## pictures are rows of the note's Pipeline card ([Section]; next/pipeline.md). A picture that stands for a clip (its
 ## row has `clip`, the video the script names) is painted as a short loop (Generate) or imported from a video (Import…),
 ## owed like any picture until it has one.
@@ -49,6 +50,11 @@ var _thumbs := {}                  # path|mtime|px -> ImageTexture, so a rebuild
 var _seen := ""                    # what the list last drew, so it rebuilds only on change
 var _live := {}                    # key -> [its status label, the line under the status] while it paints
 var _open := {}                    # key -> true: a picture's entry opened
+var _refine: PropRefine = null     # the Refine window, beside the picture it refines
+var _refine_im := {}               # the picture it is open on
+var _refining := ""                # the picture being refined, while its painter works
+var _refine_at := 0                # which version it is refined from
+var _refine_n := 0                 # how many versions it had when asked
 
 
 func _ready() -> void:
@@ -199,6 +205,7 @@ func set_script_text(body: String) -> void:
 func _process(_delta: float) -> void:
 	Illustrations.pump()
 	_refresh()
+	_follow_refine()
 
 
 ## Rebuild the rows only when something a row shows has changed (a status, a version, the look): a list
@@ -354,6 +361,8 @@ func _row(im: Dictionary) -> Control:
 	go.disabled = st in ["queued", "running"] or Illustrations.read_only()
 	go.pressed.connect(func() -> void: _ask(im))
 	acts.add_child(go)
+	if _refinable(im):
+		acts.add_child(_refine_button(im, not path.is_empty()))
 	acts.add_child(_import_button(im))
 	if _paintable(im):
 		acts.add_child(_flip_check(im, not path.is_empty()))
@@ -450,6 +459,8 @@ func _open_preview(im: Dictionary) -> void:
 			_ask(im)
 			_preview.hide())
 		extras.append(again)
+	if _refinable(im) and at >= 0:
+		extras.append(_refine_button(im, true))
 	var imp := _import_button(im)
 	imp.pressed.connect(func() -> void: _preview.hide())
 	extras.append(imp)
@@ -462,6 +473,96 @@ func _open_preview(im: Dictionary) -> void:
 		extras)
 	if not _preview.visible:
 		_preview.open_over(self)
+
+
+## Whether [param im] can be refined: a painted still (a page is captured, a clip is a loop of frames).
+static func _refinable(im: Dictionary) -> bool:
+	return _paintable(im) and not im.has("clip")
+
+
+## Refine…, on [param im]'s entry and in its preview: the Refine window opened on it, beside the picture. Grayed with no picture
+## ([param has_one]) to refine.
+func _refine_button(im: Dictionary, has_one: bool) -> Button:
+	var b := Button.new()
+	b.text = "Refine…"
+	b.focus_mode = Control.FOCUS_NONE
+	b.tooltip_text = ("Have the painter change only what you say in the picture shown - a hand, a face, a thing held - and keep "
+		+ "the rest. It makes a new version, shown at once; the one it was made from stays a version before it.")
+	if not has_one:
+		b.tooltip_text = "Nothing painted yet, so nothing to refine."
+	b.disabled = not has_one or Illustrations.read_only()
+	b.pressed.connect(func() -> void: _open_refine(im))
+	return b
+
+
+## The Refine window ([PropRefine]) opened on [param im], beside its picture at full size; its painter starts as the note's.
+func _open_refine(im: Dictionary) -> void:
+	if _refine == null or not is_instance_valid(_refine):
+		_refine = PropRefine.new("picture", {"agent": Illustrations.backend(), "model": Illustrations.painter_model(),
+			"effort": Illustrations.painter_effort()})
+		add_child(_refine)
+		_refine.asked.connect(_refine_asked)
+		_refine.stopped.connect(func() -> void:
+			if _refining.is_empty():
+				return
+			Illustrations.stop([_refining])
+			_refining = ""
+			_refine.working(false)
+			_refine.say("Stopped: nothing was added.")
+			_seen = "")
+	var key := String(im["key"])
+	if String(_refine_im.get("key", "")) != key and _refining.is_empty():
+		_refine.say("")
+	_refine_im = im
+	_open_preview(im)
+	_refine.open_for(_short(String(im.get("prompt", ""))), _preview)
+	_refine.working(_refining == key)
+
+
+## Refining asked for: the picture shown handed to the painter picked, with the author's words.
+func _refine_asked(direction: String, pick: Dictionary) -> void:
+	if not _refining.is_empty():
+		return
+	var key := String(_refine_im.get("key", ""))
+	var at := Illustrations.current_index(key)
+	var err := Illustrations.refine(_refine_im, direction, pick)
+	if not err.is_empty():
+		_refine.say("Not refined: %s." % err)
+		return
+	_refining = key
+	_refine_at = at
+	_refine_n = Illustrations.versions(key).size()
+	_refine.working(true)
+	_refine.say("Starting…")
+	_seen = ""
+
+
+## While a picture is refined, its painter's line in the window; once it ends, what came of it, and the new version shown in the
+## preview where that picture is open.
+func _follow_refine() -> void:
+	if _refining.is_empty() or _refine == null or not is_instance_valid(_refine):
+		return
+	var key := _refining
+	if Illustrations.status(key) in ["queued", "running"]:
+		var doing := Illustrations.activity(key)
+		_refine.say((doing.capitalize() if doing == "waiting its turn" else "Painter: " + doing) + "…" if not doing.is_empty() else "Working…")
+		return
+	_refining = ""
+	_refine.working(false)
+	var n := Illustrations.versions(key).size()
+	if n > _refine_n:
+		_refine.say("Made version %d from version %d. It is shown now; ‹ previous steps back to the one before." % [n, _refine_at + 1])
+		if _preview != null and is_instance_valid(_preview) and _preview.visible and String(_refine_im.get("key", "")) == key:
+			_open_preview(_refine_im)
+	else:
+		var why := Illustrations.error_of(key)
+		_refine.say("Not refined: %s." % (why if not why.is_empty() else "the painter made nothing"))
+
+
+## [param words] cut to a title's length.
+static func _short(words: String) -> String:
+	var w := words.strip_edges()
+	return w if w.length() <= 48 else w.left(47).strip_edges() + "…"
 
 
 ## Delete takes two clicks ([ArmedDelete]): version [param version] of [param key]'s picture, its file

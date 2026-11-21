@@ -1,0 +1,39 @@
+# A PICTURE REFINED - the Pictures card's Refine… (IllustrationPanel, PropRefine; Illustrations.refine): a picture that is mostly
+# right is painted again with only what the author asks changed - a hand, a face, a thing held - and the rest kept as it is. It
+# lands as a new version of the picture, shown at once; the one it was made from stays a version before it.
+#
+# THE AUTHOR'S ASK IS KEPT AND NOTHING ELSE CHANGES: the composition, the framing, the light, the colors, the style and every
+# thing the ask does not touch stay as they are in the picture attached, so two versions differ only where they were asked to.
+#
+# The code gives: {{target}} (where the painter saves it), {{description}} (the words the picture was made from), {{direction}}
+# (the author's ask, as written), and the flag `sketch` (a hand-drawn sketch: words may be written where its words ask).
+prompt:
+  - "Use your built-in image generation tool to make exactly ONE image, then save it as a PNG at this exact path: {{target}}"
+  - "Do not create or modify any other file. Reply with the saved path only."
+  - ""
+  - >-
+      The attached image is a picture that is right in almost every way. Paint it again with ONLY the change asked below: the same
+      picture, edited where it is asked and nowhere else.
+  - ""
+  - "WHAT TO CHANGE, as the author asks:"
+  - ""
+  - "<direction>"
+  - "{{direction}}"
+  - "</direction>"
+  - ""
+  - "What the picture was made from, for what each thing in it is:"
+  - ""
+  - "<description>"
+  - "{{description}}"
+  - "</description>"
+  - ""
+  - >-
+      Change what the author asks, and only what that change needs to look right where it meets the rest. Everything else stays
+      exactly as it is in the attached picture: the composition and framing, the camera's angle, the light, every color, the
+      drawing style and its texture, and every person and thing the ask does not name, in the same place and pose. Where people
+      are in it, each has the anatomy a person has - two hands, a left and a right, with five fingers each - unless the
+      description says otherwise. Keep the attached picture's size and shape.
+  - when: sketch
+    say: "No borders, no frames, no watermark, no signature; words only where the description asks for them."
+  - when: "!sketch"
+    say: "No text, no captions, no lettering, no borders, no frames, no watermark, no signature."

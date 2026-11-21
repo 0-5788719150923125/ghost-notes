@@ -15,7 +15,8 @@ class_name Illustrations
 ## Generation is explicit: nothing starts a job on its own; the panel's buttons are the only callers of
 ## [method generate].
 ##
-## A reroll is a new version, never a replacement; earlier ones stay and the panel can step back.
+## A reroll is a new version, never a replacement; earlier ones stay and the panel can step back. So is a refine
+## ([method refine]): the picture shown painted again with only the author's words changed.
 ##
 ## Stale, not invalid: each version records the signature of the look it was made under
 ## ([method look_signature]); one made under a different look is flagged stale and still used until
@@ -726,6 +727,54 @@ static func generate(image: Dictionary) -> String:
 	return ""
 
 
+## Paint [param image]'s picture again as it is shown, with only [param direction] (the author's words) changed: the
+## picture shown is the painter's one reference ([constant REFINE_RULES]), and what it makes lands as a new version, chosen,
+## the one it was made from kept before it. [param pick] (`{agent, model, effort}`) is who paints it, this once; empty, the
+## note's painter. A clip and a page captured are not refined. "" when queued, else why not.
+static func refine(image: Dictionary, direction: String, pick := {}) -> String:
+	var req := refine_request(image, direction, pick)
+	if req.has("error"):
+		return String(req["error"])
+	_errors.erase(String(req["key"]))
+	_queue.append(req)
+	pump()
+	return ""
+
+
+## What [method refine] queues for [param image]: the request, its `from` the file shown now; or `{error}`, why not.
+static func refine_request(image: Dictionary, direction: String, pick := {}) -> Dictionary:
+	if read_only():
+		return {"error": "this session is read-only (a render or a probe) - nothing is refined here"}
+	var key := String(image.get("key", ""))
+	if image.has("clip") or image.has("url"):
+		return {"error": "only a painted picture is refined"}
+	var i := current_index(key)
+	if key.is_empty() or i < 0:
+		return {"error": "there is no picture to refine"}
+	if direction.strip_edges().is_empty():
+		return {"error": "say what to change"}
+	if status(key) in ["queued", "running"]:
+		return {"error": "it is being painted already"}
+	var agent := String(pick.get("agent", ""))
+	var who := agent if not agent.is_empty() else backend()
+	if not ImageGen.make(who).available():
+		return {"error": "%s is not installed" % Registry.label(ImageGen.REGISTRY, who)}
+	var v: Dictionary = versions(key)[i]
+	var req := request_of(image)
+	req["refine"] = direction.strip_edges()
+	req["from"] = ProjectSettings.globalize_path(_shown(v))
+	req["sig"] = String(v.get("sig", ""))
+	if v.has("imported"):
+		req["imported"] = v["imported"]
+	if not agent.is_empty():
+		req["painter"] = pick.duplicate()
+	return req
+
+
+## What a refine is told ([Rules], rules/agents/picture_refine.yaml).
+const REFINE_RULES := "agents/picture_refine.prompt"
+
+
 ## What painting [param image] asks the painter for: `{key, prompt, placement}` - a clip painted as a loop, one sheet of
 ## cells cut into its frames as it lands ([method _keep_loop]).
 static func request_of(image: Dictionary) -> Dictionary:
@@ -840,11 +889,45 @@ static func chain_refs(key: String) -> Array:
 
 static func _start(req: Dictionary) -> void:
 	var key := String(req["key"])
-	var gen := ImageGen.make(backend())
+	var job := job_of(req)
+	var gen: ImageGen.Backend = job["gen"]
+	var pid := gen.start(job)
+	if pid <= 0:
+		_errors[key] = gen.failure(job)
+		return
+	job["pid"] = pid
+	_jobs[key] = job
+	print("ghost: %s %s (%s, %d reference%s)" % ["refining" if job.has("refine") else "painting", key, job["placement"],
+		(job["refs"] as Array).size(), "" if (job["refs"] as Array).size() == 1 else "s"])
+
+
+## The job a queued [param req] starts, not yet started: its painter (`gen`), folder, target, references and prompt. A
+## refine's one reference is the picture it is made from, and its painter may be its own ([method refine]).
+static func job_of(req: Dictionary) -> Dictionary:
+	var key := String(req["key"])
+	var painter: Dictionary = req.get("painter", {})
+	var agent := String(painter.get("agent", backend()))
 	var stamp := Time.get_ticks_msec()
 	var dir := ProjectSettings.globalize_path(_root.path_join("jobs").path_join("%s_%d" % [key, stamp]))
 	var target := dir.path_join("image.png")
 	var kind := kind_of(String(req["placement"]))
+	var job := {
+		"key": key, "dir": dir, "target": target,
+		"placement": String(req["placement"]), "description": String(req["prompt"]), "backend": agent,
+		"model": String(painter.get("model", painter_model())), "effort": String(painter.get("effort", painter_effort())),
+		# A second of slack: file mtimes are whole seconds and the clock read is not.
+		"started": int(Time.get_unix_time_from_system()) - 1,
+		"gen": ImageGen.make(agent),
+	}
+	if req.has("refine"):
+		job["refs"] = [String(req["from"])]
+		job["sig"] = String(req["sig"])
+		job["refine"] = String(req["refine"])
+		job["prompt"] = Rules.say(REFINE_RULES, {"target": target, "description": String(req["prompt"]),
+			"direction": String(req["refine"]), "sketch": kind == "sketch"})
+		if req.has("imported"):
+			job["imported"] = req["imported"]
+		return job
 	var refs: Array = []
 	for r in references(kind):
 		refs.append(ProjectSettings.globalize_path(String(r)))
@@ -852,26 +935,11 @@ static func _start(req: Dictionary) -> void:
 	var chain: Array = chain_refs(key) if self_reference(kind) else []
 	var n_static := refs.size()
 	refs.append_array(chain)
-	var job := {
-		"key": key, "dir": dir, "target": target, "refs": refs,
-		"placement": String(req["placement"]), "description": String(req["prompt"]),
-		"sig": current_signature(kind), "backend": backend(),
-		"model": painter_model(), "effort": painter_effort(),
-		# A second of slack: file mtimes are whole seconds and the clock read is not.
-		"started": int(Time.get_unix_time_from_system()) - 1,
-		"prompt": build_prompt(String(req["prompt"]), String(req["placement"]), style(kind),
-			n_static, target, chain.size(), ref_prompt("references", kind),
-			ref_prompt("self_reference", kind)),
-	}
-	job["gen"] = gen
-	var pid := gen.start(job)
-	if pid <= 0:
-		_errors[key] = gen.failure(job)
-		return
-	job["pid"] = pid
-	_jobs[key] = job
-	print("ghost: painting %s (%s, %d reference%s)" % [key, job["placement"], refs.size(),
-		"" if refs.size() == 1 else "s"])
+	job["refs"] = refs
+	job["sig"] = current_signature(kind)
+	job["prompt"] = build_prompt(String(req["prompt"]), String(req["placement"]), style(kind), n_static, target, chain.size(),
+		ref_prompt("references", kind), ref_prompt("self_reference", kind))
+	return job
 
 
 ## A job ended. Take its picture into the library as a new version, or record why not.
@@ -891,8 +959,12 @@ static func _land(key: String, job: Dictionary) -> void:
 		print("ghost: illustration %s is a painted loop (v%d)" % [key, versions(key).size()])
 		_remove_tree(String(job.get("dir", "")))
 		return
-	var err := _add_version(key, img, {"sig": String(job["sig"]), "backend": String(job["backend"])},
-		String(job["description"]), String(job["placement"]))
+	var rec := {"sig": String(job["sig"]), "backend": String(job["backend"])}
+	if job.has("refine"):
+		rec["refined"] = String(job["refine"])
+	if job.has("imported"):
+		rec["imported"] = job["imported"]
+	var err := _add_version(key, img, rec, String(job["description"]), String(job["placement"]))
 	if not err.is_empty():
 		_errors[key] = err
 		return

@@ -6,8 +6,8 @@ class_name PuppetRig
 ## ([method Library.shelf]) by its name, or a folder by its path.
 ##
 ## Read once and held ([method held]): the pictures are read and mipmapped on a worker ([method read_away]) or by whoever may wait
-## ([method read_now]: a worker, a render, [method NestedShow.prepared]); the app's thread only makes their textures. A rig's file
-## changed on disk is read again at its next ask.
+## ([method read_now]: a worker, a render, [method NestedShow.prepared]), each layer's mesh and bone weights packed there too
+## ([member meshes]); the app's thread only makes their textures and nodes. A rig's file changed on disk is read again at its next ask.
 ##
 ## `rig.json`: `size` [w, h] of the cut, `top` and `ground` (rows of its highest pixel and of its feet), `faces` (front, left,
 ## right), `bones` [{name, parent, head, tail, role, side}] parents first, `layers` [{name, image, points (flat x, y), tris (flat),
@@ -30,6 +30,9 @@ var folder := ""
 var data := {}
 var stamp := 0
 var images := {}                     # layer name -> Image (mipmapped)
+## Each layer's mesh as a Polygon2D takes it, packed on the reading's thread: layer name -> {points (PackedVector2Array, the uv
+## too), polygons [PackedInt32Array], bones [[bone index, PackedFloat32Array of its weight on each point]]}.
+var meshes := {}
 ## Its drawings by sheet key ([PuppetSheet]), each a rig of its own read with it; a puppet of one drawing is its own front.
 var drawings := {}
 var _textures := {}                  # layer name -> ImageTexture, made on the app's thread
@@ -242,6 +245,36 @@ func _read_one() -> void:
 		img.convert(Image.FORMAT_RGBA8)
 		img.generate_mipmaps()
 		images[String(layer["name"])] = img
+		meshes[String(layer["name"])] = _mesh_of(layer)
+
+
+## Layer [param layer]'s points, triangles and weights packed as a Polygon2D takes them ([member meshes]). Each bone's weights are
+## filled as a plain array and packed once: a packed array read out of a dictionary is a copy, and a write into it is lost.
+static func _mesh_of(layer: Dictionary) -> Dictionary:
+	var flat: Array = layer.get("points", [])
+	var pts := PackedVector2Array()
+	pts.resize(flat.size() / 2)
+	for i in pts.size():
+		pts[i] = Vector2(float(flat[2 * i]), float(flat[2 * i + 1]))
+	var tris: Array = layer.get("tris", [])
+	var polys: Array = []
+	for i in range(0, tris.size() - 2, 3):
+		polys.append(PackedInt32Array([int(tris[i]), int(tris[i + 1]), int(tris[i + 2])]))
+	var per := {}
+	var ws: Array = layer.get("weights", [])
+	for vi in mini(ws.size(), pts.size()):
+		for pair in ws[vi]:
+			var bi := int(pair[0])
+			if not per.has(bi):
+				var arr: Array = []
+				arr.resize(pts.size())
+				arr.fill(0.0)
+				per[bi] = arr
+			(per[bi] as Array)[vi] = float(pair[1])
+	var bones: Array = []
+	for bi in per:
+		bones.append([int(bi), PackedFloat32Array(per[bi])])
+	return {"points": pts, "polygons": polys, "bones": bones}
 
 
 ## Whether it was read whole.

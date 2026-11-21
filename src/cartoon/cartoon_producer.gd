@@ -579,12 +579,13 @@ func _width_of(rig: String, tall: float) -> float:
 
 
 ## [param data] (a storyboard that plays) as a cartoon plays it: every stage shot framed still (`shot: centered`, `behavior: static`)
-## where it names nothing else, so the camera moves only where the director moved it on purpose, never drifting or pushing in; and no
+## where it names nothing else, so the camera moves only where the director moved it on purpose, never drifting or pushing in; no
 ## fade up from black or down to it at its ends (`bookend: false`): a screen may come on in the middle of it, and a loop's end meets
-## its start.
-static func settled(data: Dictionary) -> Dictionary:
+## its start; and, where it [param loops], its last shot followed by its first (`loop`), else its last held.
+static func settled(data: Dictionary, loops: bool) -> Dictionary:
 	var out := data.duplicate(true)
 	out["bookend"] = false
+	out["loop"] = loops
 	for key in ["sequence", "tail"]:
 		for e in out.get(key, []):
 			if e is Dictionary and String((e as Dictionary).get("scene", "")) == "stage":
@@ -662,7 +663,7 @@ func pump() -> void:
 			var data: Variant = parse_board(String(res.get("text", "")))
 			var why := check(data)
 			if why.is_empty():
-				var err := NoteStoryboard.write(folder, CartoonProducer.settled(data))
+				var err := NoteStoryboard.write(folder, CartoonProducer.settled(data, bool(block.get("loops", false))))
 				if not err.is_empty():
 					_fail(key, err)
 			elif int(w.get("tries", 0)) < 1:

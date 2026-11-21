@@ -70,12 +70,23 @@ thumbnail had also grown its own two-press delete and its own full-size window w
 - Each version is flipped by itself; unticked, the copy is gone; a deleted version takes its copy. A page captured has no
   Flip.
 
+## A picture refined
+
+- **Refine…** (on a picture's opened entry and in its full-size window) is the props' Refine window (`PropRefine`, built for a
+  picture: a painter as its agent, its own words) standing beside the picture: what to change, who repaints it, a moving bar
+  and the painter's line, Stop. `Illustrations.refine` sends the picture shown (its mirrored copy where flipped) as the
+  painter's one reference with the author's words (rules/agents/picture_refine.yaml): only what is asked changes.
+- What lands is a new version, shown at once, the one it came from kept before it; it keeps the words (`refined`), the look
+  it was made under and the picture's description, so it is stale only where its source was. A painter picked there paints
+  that refine alone; the note's painter is unchanged. A clip and a page captured have no Refine.
+
 ## Gates
 
 `tests/show/pictures_card_check.gd`: which marks each medium shows (with controls); the card comes with its hosts and never
 alone; one card on a letter's panel and no list on the Letter, Dispatch desk or Picture card; it stands and goes with the
 medium, its section with it; Generate all's count and read-only refusal; a captured page is never counted; an entry's Flip.
-`tests/media/illustrations_check.gd` holds the flip itself (a picture, a clip, the copy's coming and going). Related:
+`tests/media/illustrations_check.gd` holds the flip itself (a picture, a clip, the copy's coming and going) and a refine (its one
+reference, its prompt, the version it lands as, and what is refused). Related:
 pictures_rows_check (the widget), doc_sync_check (the look kept by the Pictures card), panel_fit_check, youtube_check (the
 note's pictures as its presentation shows them, a medium with none as the control).
 
@@ -88,4 +99,4 @@ note's pictures as its presentation shows them, a medium with none as the contro
 - Each picture is an entry (`EntryCard`, the look every card's list shares): its thumbnail, what it shows and its status, and a
   × top-right deleting the picture shown (pressed twice; grayed with nothing painted). A click opens it: its versions, Regenerate,
   Import…, Flip. What the episode's agents made (`MadePictures`) are entries too, their × grayed: a step is kept, never deleted.
-- Open: the author has not yet seen it in the app, Flip included (seen only in an offscreen capture of the list).
+- Open: a first real Refine judged (the window's place beside the picture has not been seen); the author has not yet seen it in the app, Flip included (seen only in an offscreen capture of the list).

@@ -14,7 +14,9 @@ them are the stage's (`src/stage/`: `PuppetRig`, `PuppetBody`, `CartoonFx`, the 
   profile at every step, a wind-up, a reeling a blow brings); a character nobody drew (`describe`: painted from words in the cast's
   style, a sheet of only the drawings it names, `drawings`); silhouettes (`shade`); a check that refuses puppets started on each
   other; a film told `loop` on the desk (`play (tv, loop): NOTE`: round and round under the narration until its screen is put to
-  something else); scrubbing a written show (the Director re-walks a storyboard to wherever the playhead is moved,
+  something else) and a note whose block says `loops` written as a loop (`CartoonProducer.settled`: `loop`), its own Play wrapping
+  as its silent track does; a written board kept to its clock (a nested show steps only forward on its host's clock, its Director
+  carrying what a hold ran past into the next shot); scrubbing a written show (the Director re-walks a storyboard to wherever the playhead is moved,
   `Spectrum.sought`); cartoon shots framed still and no fade at either end (`CartoonProducer.settled`: `shot: centered`, `behavior:
   static`, `bookend: false`), no holds on a cartoon note; a puppet with a sheet bends a third as far, its poses shown as drawings
   (`PuppetBody.POSE_DRAWINGS`); a character in its own setting (`rigid`, `asks`, `align: width`: the sleeper in their bed, asleep,
@@ -26,10 +28,9 @@ them are the stage's (`src/stage/`: `PuppetRig`, `PuppetBody`, `CartoonFx`, the 
   `--cartoon <note>`; a silent note played on a screen (`ScreenPlays`, `NestedShow`, `Spectrum.hear_silence`).
 - **In Targeting Individuals:** "Demons of Modern Life" loops on the desk's TV in the hypnosis section, in place of the empty stage
   picture (`play (tv, loop)`), until the section's `off: tv`.
-- **Made with it:** the note "Demons of Modern Life" (three demons from their artist's drawings, each a model sheet of nine drawings
-  painted by Codex and rigged by the rigger, a bedroom painted in their style, a 30-second storyboard written by the director agent
-  with turns and moods). It goes into Targeting Individuals only once it is judged good
-  enough on its own, and then on the desk's TV in place of the empty stage picture (`play (tv): Demons of Modern Life`).
+- **Made with it:** the note "Demons of Modern Life" (three demons from their artist's drawings, each a model sheet painted by Codex
+  and rigged by the rigger, a sleeper and their soul painted from words, five sets painted in their style, a 76-second looping
+  storyboard written by the director agent: the den, a prowl over the hills and through town, a soul scared out of a sleeper, home).
 - **Looked at:** each rig's look (the bones, what each moves, the puppet bent); the three sheets side by side (likeness held across
   all nine drawings); frames of each verb and of the whole storyboard through `tests/stage/cartoon_look_probe.gd` (the nested show, as
   the desk plays it); the note opened on main and played (`tests/cartoon/cartoon_app_probe.gd`).
@@ -72,7 +73,10 @@ color, and the puppet bent (every bone turned, the jaw open), where a wrong weig
 ## Traps
 
 - A packed array read out of a Dictionary is a copy: weights filled through `per[bone][i] = w` stay zero, and every vertex skins to
-  the origin (`PuppetBody.build` fills plain arrays and packs them once).
+  the origin (`PuppetRig._mesh_of` fills plain arrays and packs them once).
+- Every drawing of a sheet built at once (or its weights packed on the app's thread) stalls whatever plays the cartoon at each shot
+  it comes up in - a desk's camera, a note's own frame: the rig's reading packs each layer's mesh on its worker, and a puppet builds
+  a drawing only when it is first shown.
 - A drawing's held thing touching another part (a hammer drawn against the head) joins them through the mesh: lift it as a part.
 - A color tolerance too wide for a part behind takes in other parts of a near hue (a lime ear in a yellow aura).
 - A painter told to draw nothing round a character drops what is its own (an aura): rules/cartoon/sheet.yaml keeps what belongs to it.

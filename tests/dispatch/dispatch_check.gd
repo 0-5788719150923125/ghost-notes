@@ -14,6 +14,8 @@ extends SceneTree
 ##   hidden over the frame by one box round them as the camera sees them, and covered whole from their first key; a typed
 ##   line is said behind its keys under the panel up; a strike removes it; after a block the camera stays on the glass while
 ##   the voice talks of it, however long, through to what comes next (control: a linger of 8 s goes home before it);
+## - the camera cut across a seek and eased out of a stall of the app's thread as far as the clock ran (the control: the same move in no
+##   time is a seek);
 ## - the black and the clock: fades down and up; in the black the camera is on the clock, its cards turned over to the time
 ##   given and running on a minute a minute, a later fade up turning from a minute before its own time (control: the clock as it
 ##   ran, before the black), and a reading started past the fade turns it where a whole reading does
@@ -999,6 +1001,10 @@ func _black_tablet_clip(md: DispatchMedium, actions: Array, t0: PackedFloat32Arr
 	var held_t := t0[up] + float(actions[up]["rest"]) / md._sp[up]
 	_ok(md.looking_at(black0 + 0.5) == "clock" and md.looking_at(turn + 0.3) == "clock" and md.looking_at(held_t + 1.5) != "clock" and flips == 2,
 		"in the black the camera is on the clock, held while two cards turn and a beat, then eases away (%s, %s, %d flips)" % [md.looking_at(turn + 0.3), md.looking_at(held_t + 1.5), flips])
+	# the camera is put across a seek, and eased out of a stall of the app's thread (a note coming up on a screen)
+	_ok(not DispatchMedium.jumped(1.6, 1.6) and DispatchMedium.jumped(30.0, 0.016) and DispatchMedium.jumped(-5.0, 0.016),
+		"a stall that moved the clock as far as the time it took is eased out of; a seek forward or back is cut across")
+	_ok(DispatchMedium.jumped(1.6, 0.0), "the control: the same move of the clock in no time is a seek")
 	var thrown := actions.filter(func(a: Dictionary) -> bool: return String(a["kind"]) == "switch" and bool(a.get("dark", false)))
 	var switch_looks := md._attn.filter(func(w: Dictionary) -> bool: return w["spot"] == md._spot("switch") and float(w["t0"]) > black0 - 0.1 and float(w["t0"]) < turn)
 	_ok(thrown.size() == 1 and switch_looks.is_empty(), "what is marked in the black happens unseen: no look for it")

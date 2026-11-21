@@ -8,13 +8,15 @@ extends Node
 ## What it holds, on a rig made here (a body and a jaw on six bones) and a stage made here that steps as the real one does:
 ##   - the rig reads whole: its bones parents first, its layers' pictures, its anchor (the root over its feet) and height;
 ##   - its node skins: every vertex of every layer weighs 1 across its bones as the [Polygon2D] holds them (a packed array filled
-##     through a dictionary is a copy, and would leave every weight 0 - the control: a layer built that way is found);
+##     through a dictionary is a copy, and would leave every weight 0 - the control: a layer built that way is found); a puppet of a
+##     model sheet builds only the drawing it shows, and another when it swaps to it (the control);
 ##   - a pose turns an arm toward where it points, never past [constant PuppetBody.REACH]; `rest` takes it back;
 ##   - `move` carries a puppet to its place along the window; `strike` lands its blow at the swing's end and not before (the victim
 ##     recoils only then); `hop` is off the ground mid-way and down at the end; `talk` opens the jaw and closing it shuts it;
 ##   - the producer's check passes a storyboard that plays, and names each fault in one that does not: a rig not in the cast, a
 ##     backdrop not among the sets, a span aimed at someone not in the shot, a verb there is none of, a length far off (controls);
-##   - a director's reply is read through words and fences round its JSON;
+##   - a director's reply is read through words and fences round its JSON; a board written for a cartoon that loops loops, one that
+##     does not holds its last shot (the control);
 ##   - a model sheet ([PuppetSheet]): each drawing is painted after the one it is painted from, and the drawing shown is the mood's,
 ##     else the view's with that mouth (wide falling back to open, open to closed), else the front.
 
@@ -89,6 +91,20 @@ func _skins(r: PuppetRig) -> void:
 	_ok(not _sums_to_one(bad), "control: weights written into a copy are found to be 0")
 	bad.free()
 	node.free()
+	# a puppet of a model sheet comes up with the drawing it shows built, and builds another when it swaps to it
+	var sheet := PuppetRig.new()
+	sheet.data = r.data
+	sheet.drawings = {"front": r, "scared": r}
+	var two := PuppetBody.new(sheet, 1, 1.0)
+	var shown := two.build()
+	var before := shown.find_children("Rig_*", "Node2D", true, false).map(func(n: Node) -> String: return n.name)
+	two.mood = "scared"
+	two.show_at(Transform2D.IDENTITY)
+	var after := shown.find_children("Rig_*", "Node2D", true, false).filter(func(n: Node2D) -> bool: return n.visible) \
+		.map(func(n: Node) -> String: return n.name)
+	_ok(before == ["Rig_front"], "a sheet's puppet comes up with only the drawing it shows built (%s)" % str(before))
+	_ok(after == ["Rig_scared"], "the control: swapped to another drawing, that one is built and shown alone (%s)" % str(after))
+	shown.free()
 
 
 func _sums_to_one(p: Polygon2D) -> bool:
@@ -200,6 +216,9 @@ func _checks() -> void:
 	var got: Variant = CartoonProducer.parse_board(said)
 	_ok(got is Dictionary and (got as Dictionary).get("sequence", []).size() == 2, "a reply's JSON is read through the words and fences round it")
 	_ok(is_equal_approx(Storyboard.silent_length(Storyboard.from_data(good, "test")), 10.0), "a silent note runs as long as its storyboard's holds")
+	var round_and_round := CartoonProducer.settled(good, true)
+	_ok(bool(round_and_round["loop"]) and not bool(round_and_round["bookend"]), "a cartoon that loops is written to follow its last shot with its first, no fade at its ends")
+	_ok(not bool(CartoonProducer.settled(good, false)["loop"]), "the control: one that does not loop holds its last shot")
 
 
 func _sheet() -> void:

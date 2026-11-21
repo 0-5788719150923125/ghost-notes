@@ -9,6 +9,11 @@ extends SceneTree
 ## version; an output resolver that picks up a png from a different run; and a read-only process (a render, a
 ## probe) that starts jobs or writes the index.
 ##
+## A refine ([method Illustrations.refine]) paints the picture shown again with only the author's words changed: its one
+## reference is the file shown (the mirrored copy where flipped), its prompt holds the words and the description whole, a
+## painter picked is used this once, and what lands is a new version carrying the words and the look it was made under, its
+## description unchanged; a clip, a page, nothing painted, empty words and a read-only session are refused (controls).
+##
 ## A flip is a post-process ([method Illustrations.set_flipped]): the picture served is a mirrored copy written away
 ## from the app's thread, served only once it is whole; what was made is byte for byte as it was (control: its left is
 ## still its left); a version is flipped by itself; unflipped, the copy is gone; a clip's every frame is mirrored; a
@@ -228,6 +233,39 @@ func _init() -> void:
 	_check(I.current_index(k1) == 2, "...and selects it")
 	_check(I.revision > rev, "...and bumps the revision")
 
+	print("-- refining")
+	var ask := "the left hand is a left hand"
+	var rq: Dictionary = I.refine_request({"key": k1, "prompt": desc, "placement": "full"}, ask, {"agent": "grok", "model": "m", "effort": ""})
+	var shown: String = I.path_for(k1)
+	if rq.has("error") and String(rq["error"]).ends_with("not installed"):
+		print("  (grok is not installed here: the request's shape is checked with the note's painter)")
+		rq = I.refine_request({"key": k1, "prompt": desc, "placement": "full"}, ask)
+	if rq.has("error") and String(rq["error"]).ends_with("not installed"):
+		print("  (no painter is installed here: the request is built by hand)")
+		rq = {"key": k1, "prompt": desc, "placement": "full", "refine": ask, "from": shown, "sig": "s"}
+	_check(not rq.has("error") and String(rq["from"]) == shown and String(rq["refine"]) == ask,
+		"a refine is made from the picture shown, with the author's words")
+	var rj: Dictionary = I.job_of(rq)
+	_check(rj["refs"] == [shown], "a refine's one reference is the picture it is made from")
+	var askp := String(rj["prompt"])
+	_check(askp.contains(ask) and askp.contains(desc) and askp.contains(String(rj["target"])) and not askp.contains("{{"),
+		"a refine's prompt holds the words, the description and the save path, whole")
+	var newp := String(I.job_of({"key": k1, "prompt": desc, "placement": "full"})["prompt"])
+	_check(newp.contains("THE PICTURE (") and not askp.contains("THE PICTURE ("), "...and not a new picture's prompt (control: that one is)")
+	if rq.has("painter"):
+		_check(String(rj["backend"]) == "grok" and String(rj["model"]) == "m", "a painter picked paints it this once")
+	var rn: int = I.versions(k1).size()
+	rj["target"] = files[0]
+	I._land(k1, rj)
+	var rv2: Dictionary = I.versions(k1)[I.current_index(k1)]
+	_check(I.versions(k1).size() == rn + 1 and String(rv2.get("refined", "")) == ask, "a refine lands as a new version, its words kept")
+	_check(String(rv2.get("sig", "")) == String(rq["sig"]) and String(I.entry(k1)["prompt"]) == desc,
+		"...made under the look it came from, its description unchanged")
+	_check(I.refine_request({"key": k1, "prompt": desc, "clip": "a.webm"}, ask).has("error"), "a clip is not refined")
+	_check(I.refine_request({"key": k1, "prompt": desc, "url": "x.example"}, ask).has("error"), "a page is not refined")
+	_check(I.refine_request({"key": "nope", "prompt": desc}, ask).has("error"), "nothing painted is not refined")
+	_check(I.refine_request({"key": k1, "prompt": desc}, "  ").has("error"), "empty words are not a refine")
+
 	print("-- output resolution")
 	var home := dir.path_join("codex_home")
 	var tid := "01test-thread"
@@ -367,6 +405,8 @@ func _init() -> void:
 	I.add_references([files[0]])
 	_check(I.import_file({"key": "k"}, files[0]) != "", "a read-only session refuses an import")
 	_check(I.set_flipped(ik, true) != "" and not I.flipping(ik), "a read-only session refuses a flip")
+	_check(I.refine({"key": ik, "prompt": "a picture from the book", "placement": "inline"}, "bluer") != "" and I.busy() == 0,
+		"a read-only session refuses a refine")
 	_check(ro.is_empty(), "...and writes nothing")
 
 	print("illustrations_check: %s" % ("PASS" if _fails == 0 else "%d FAILED" % _fails))

@@ -752,6 +752,31 @@ reads on from, a comma, a graph that takes no plan, a rest too short or among th
 
 **Open:** the ear, on whole readings.
 
+### The pace never squashes a vowel
+
+Kokoro plans in whole frames of 25 ms and `speed` divides the plan before its Round, so a fast pace leaves vowels a
+single frame and their syllables go unheard: in Control's voice (Pace 1.2 with Fierce's 1.10, 1.32x) "needed" keeps
+one frame each for its two vowels and "I have never once needed it." is heard as "...needed." (Whisper small.en,
+matching the ear). A one-frame vowel is 10% of a passage's vowels at 1.0x, 17% at 1.2x and 47% at 1.32x.
+
+**Built** (`VOWEL_LEAST`, `_render_symbols` in backends/kokoro.py; `READS` 6): above model speed 1.0, each piece is
+planned at speed 1.0 first (the plan graph, a fraction of a call) and every vowel (a diphthong one id) floored at its
+frames there, up to two. What the pace takes comes from the consonants and the longer vowels; a vowel the model plans
+one frame long at speed 1.0 stays so. At or under speed 1.0 no plan is made beside the call. A floored vowel counts as
+fixed in the pitch move's nominal length (`_nominal`), so a Tone that lowers the pitch (the model read a few percent
+fast) plays a take back up to 0.3% shorter than before.
+
+**Measured** on the note's passage in Control's voice: the sentence heard whole at 1.32x, 1.45x and 1.6x; the
+passage 4.7% longer at 1.32x, unchanged at 1.2x (-0.15%), -0.3% at 1.0x.
+
+**Heard:** on that sentence, its vowels at two frames at 1.32x and the whole at 1.25x both sound good. A slower Pace
+changes every sentence of a reading, so the floor is the fix and the Pace stays the note's own.
+
+Gate: `hosts/voice/test_kokoro.py` (3: every vowel keeps its frames at speed 1.0 up to `VOWEL_LEAST`; a consonant and a
+one-frame vowel keep the pace; no plan at speed 1.0; control: a graph that takes no floor rounds vowels to a frame).
+
+**Open:** the ear, on a whole fast reading.
+
 ### It comes out hot
 
 Kokoro voices come out loud: speaking RMS Puck (13) 0.141 with the note's dials, its takes at full scale (most

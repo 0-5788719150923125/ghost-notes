@@ -159,7 +159,7 @@ A painted set hung behind a cartoon's puppets (`PuppetRig.backdrop`): a flat pic
 | `picture` | Picture | text | The painted set: its name on the library's sets shelf, or a picture's path. |
 | `width` | Width | num | How wide it hangs, in the stage's units. 0 covers the frame at its distance, with room for the camera to move. |
 
-Source: [src/stage/cast.gd:938](../src/stage/cast.gd#L938)
+Source: [src/stage/cast.gd:939](../src/stage/cast.gd#L939)
 
 ## Actions (verb registry)
 

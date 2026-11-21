@@ -329,6 +329,7 @@ var _sound_rev := 0
 var _open: Array = []                   # where the receiver is open ([method _build_receiver])
 var _now := 0.0
 var _last_now := -1.0
+var _last_tick := 0                     # when the desk last advanced (the machine's clock, usec): a stall told from a seek
 var _snap := true
 var _labels := PackedStringArray()
 var _built_for := ""
@@ -838,7 +839,9 @@ func advance(features, delta: float, _bookend: float) -> void:
 		_pic_task = -1
 		_land_pictures()
 	_now = _subs.now() if _subs != null and is_instance_valid(_subs) else t
-	if absf(_now - _last_now) > 1.0:
+	var waited := float(Time.get_ticks_usec() - _last_tick) / 1e6 if _last_tick > 0 else 0.0
+	_last_tick = Time.get_ticks_usec()
+	if jumped(_now - _last_now, waited):
 		_snap = true
 	if _now < _last_now - 1.0:
 		_held = {}
@@ -1580,7 +1583,11 @@ func _build_attention() -> void:
 			"play":
 				if bool(a.get(DispatchScript.UNWATCHED, false)) or not SPOTS.has(String(a["screen"])):
 					continue
-				_attn.append({"t0": t, "t1": e + FILM_WAKE + FILM_HOLD, "spot": _spot(String(a["screen"]))})
+				# a film round and round has no end to let the camera go at: it holds it as a `look:` does, until something else turns it
+				if bool(a.get(DispatchScript.LOOP, false)):
+					_attn.append({"t0": t, "t1": INF, "spot": _spot(String(a["screen"])), "sticky": true})
+				else:
+					_attn.append({"t0": t, "t1": e + FILM_WAKE + FILM_HOLD, "spot": _spot(String(a["screen"]))})
 			"fade":
 				# up from the black on the clock: the camera is there in the dark, holds while its cards turn and a beat,
 				# then eases to the desk
@@ -4074,6 +4081,13 @@ func _clip_frame(key: String, secs: float) -> Texture2D:
 
 
 # --- the camera --------------------------------------------------------------------------------------------------------
+
+## Whether the clock moving [param moved] seconds while [param waited] went by on the machine's clock is a jump the camera is put
+## across (a seek, a reading begun elsewhere) - not a stall of the app's thread (a heavy frame, a note coming up on a screen), which
+## moves the clock as far as the time it took and is eased out of.
+static func jumped(moved: float, waited: float) -> bool:
+	return moved > waited + 1.0 or moved < -1.0
+
 
 ## What the camera looks at, at [param t]: the latest thing begun that still holds it; with none, what it looked at last,
 ## until [constant HOME_AFTER] has gone by, then the whole desk.
