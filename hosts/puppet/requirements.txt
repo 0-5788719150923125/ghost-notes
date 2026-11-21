@@ -1,0 +1,5 @@
+# ghost's puppet environment (user://puppet_venv): a drawing cut off its paper, meshed and weighted to a skeleton (hosts/puppet/rig.py,
+# next/cartoon.md) - arrays, labels and shortest paths, and pictures.
+numpy>=2.3
+scipy>=1.16
+pillow>=11.3

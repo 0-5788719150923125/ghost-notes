@@ -8,9 +8,10 @@ class_name NestedShow
 ## show it plays in (its song's sidecar, in its own Look's way of showing them - the credits where it names none). Nothing is rendered
 ## ahead: what the note is now is what plays.
 ##
-## It is handed what the host found of the note (`{song, stream, frames, storyboard, medium, reveal, secs}`: its song's file and the
-## song loaded, that song's bake, its storyboard in its loaded form or {}, its medium's key, how its words are shown, its length -
-## [method prepared]). The host moves its clock ([method play_at]) and shows its
+## It is handed what the host found of the note (`{title, song, stream, frames, storyboard, medium, reveal, secs}`: its title, its
+## song's file and the song loaded, that song's bake, its storyboard in its loaded form or {}, its medium's key, how its words are
+## shown, its length - [method prepared]). A note with no song is a silent show ([method Spectrum.hear_silence]): its storyboard
+## times it, and what its stage names (a puppet's rig, a painted set) is read in [method prepared], so it is up at its first frame. The host moves its clock ([method play_at]) and shows its
 ## picture ([method texture]); the clock gone back past where it was starts it again from there, and a jump forward is the
 ## Director's own seek, as the session's is.
 
@@ -44,6 +45,8 @@ func _init(note: Dictionary) -> void:
 static func prepared(note: Dictionary) -> Dictionary:
 	var out := note.duplicate()
 	var path := String(note.get("song", ""))
+	var board: Dictionary = note.get("storyboard", {}) if note.get("storyboard") is Dictionary else {}
+	PuppetRig.warm(board)
 	var stream: AudioStream = null
 	match path.get_extension().to_lower():
 		"wav":
@@ -119,7 +122,10 @@ func _begin() -> void:
 	_song.nested = true
 	_song.set_process(false)
 	add_child(_song)
-	_song.hear_baked(String(_note.get("song", "")), _note.get("stream") as AudioStream, _note.get("frames", []))
+	if String(_note.get("song", "")).is_empty():
+		_song.hear_silence(String(_note.get("title", "")))
+	else:
+		_song.hear_baked(String(_note.get("song", "")), _note.get("stream") as AudioStream, _note.get("frames", []))
 	_show = _ShowScript.new()
 	_show.name = "Director"
 	_show.nested = true

@@ -34,12 +34,22 @@ static func rng(seed: int, salt: String) -> RandomNumberGenerator:
 ## [param seed], [param salt] and the name), the highest taken - so a name added takes only the draws it wins and every
 ## other keeps its own, as the show picks its scenes. Null for none.
 static func pick(names: Array, seed: int, salt: String) -> Variant:
+	return pick_weighted(names, {}, seed, salt)
+
+
+## [method pick] with a weight a name ([param weights]: name -> weight, 1 where it has none, 0 never): a name twice as
+## heavy wins about twice as often (Efraimidis-Spirakis: each name's [method unit] raised to one over its weight), and
+## still a name added takes only the draws it wins. With no weights it is [method pick]. Null for none.
+static func pick_weighted(names: Array, weights: Dictionary, seed: int, salt: String) -> Variant:
 	var best: Variant = null
-	var top := -1.0
+	var top := -INF
 	for n in names:
-		var u := unit(seed, salt + "|" + str(n))
-		if u > top:
-			top = u
+		var w := float(weights.get(n, 1.0))
+		if w <= 0.0:
+			continue
+		var score := log(maxf(unit(seed, salt + "|" + str(n)), 1e-12)) / w
+		if score > top:
+			top = score
 			best = n
 	return best
 

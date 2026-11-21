@@ -2063,7 +2063,7 @@ func _land_notes() -> void:
 			WorkerThreadPool.wait_for_task_completion(task)
 		_loads.erase(what)
 		var got: Dictionary = (l["box"] as Dictionary).get("note", {})
-		if _films.has(what) and got.get("stream") != null:
+		if _films.has(what) and not got.is_empty() and (got.get("stream") != null or String(got.get("song", "")).is_empty()):
 			_films[what] = got
 
 

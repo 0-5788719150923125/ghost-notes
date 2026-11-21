@@ -1,0 +1,20 @@
+# THE SET PAINTER - a cartoon's backdrop (next/cartoon.md): an empty place painted in its characters' own drawing style, their drawings
+# handed in as references for the style alone, laid out as a stage the puppets stand in front of (the floor across the bottom third, the
+# middle left open), with nothing a puppet would be mistaken for and no words.
+#
+# The code gives: {{place}}, {{file}}.
+prompt:
+  - "Use your image generation tool to make one picture, then save it in the current directory as {{file}}."
+  - ""
+  - >-
+      The attached drawings are references for the DRAWING STYLE only - their outlines, how they are colored, the paper they are on, how
+      sure or wobbly the hand is. Draw nothing from them: no creature or character of any kind.
+  - ""
+  - >-
+      The picture: a wide, empty stage backdrop for a cartoon, seen straight on from the front, as if the place were a theater stage;
+      landscape, wider than tall. The floor or ground fills the bottom third, and the middle of it is left open and uncluttered, since
+      characters will stand there. The place:
+  - "{{place}}"
+  - ""
+  - >-
+      No people visible, no faces, no creatures, no text or writing anywhere, no signature, no border.

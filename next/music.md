@@ -51,16 +51,34 @@ the ear. The design below is the plan; this says what of it stands.
 - **What the reference has is what the song has**: the importer hears which parts a song has (`parts`: drums, bass,
   keys or pad, a lead, a voice) and the Sound starts with those; its drum pattern, its bass line (an eighth at a time,
   harmonic summation) and its sung tune are the parts' patterns where it has them (`Composer.choice_of`).
-- **A roll draws everything left on Auto** (`Composer.drawn`): the tempo, key and mode, swing, the form and how its
-  lines are paced (as many bars a line as keep it singable at that tempo), the chords and how often they change, who
-  plays in each section, every part's pattern, sound and notes, the tune (now and then recited), the singer (Puck or
-  Heart) and how they sing. Every part's number is the song's and its own (`Composer.part_seed`), so rolling a part
-  moves it alone. With a reference, LIKENESS (the card's dial, 0.5 unset) is the chance a roll keeps each thing the
-  reference has - its tempo, key, form, chords, drums, bass line and tune, each by a draw of its own; the chords, drums,
-  bass and tune lie on its bars, so they are kept only with its form, and a part pinned to the reference keeps it.
-  Every picker has Auto, the roll's; the card says what this roll drew and kept. A Key over a reference moves the
-  whole song - its chords, tune and bass - by the nearest interval from the reference's key. A part's number draws
-  its own pattern and sound (the voice its singer and manner), so a part's Roll is that part drawn again alone.
+- **A roll draws every setting** (`Composer.drawn`, `Composer.rolled`): the song's Roll keeps only the reference,
+  which parts the song has, what is muted and where the words are pinned; everything else is drawn - Likeness, the
+  tempo, key and mode, swing, the form and how its lines are paced (as many bars a line as keep it singable at that
+  tempo), the chords and how often they change, who plays in each section, every part's pattern, sound, level and
+  notes, the tune (now and then recited), the singer (Puck or Heart), how they sing and the vocoder. Every part's
+  number is the song's and its own (`Composer.part_seed`), and a part's Roll draws all of that part but its mute, so
+  it moves alone. A setting the roll drew shows what it drew, dimmed (a picker's "Auto · Funk"); moved by hand it is
+  set. Back (‹) walks to the song before each roll or code entered. With a reference, LIKENESS is the chance a roll
+  keeps each thing the reference has - its tempo, key, form, chords, drums, bass line and tune, each by a draw of its
+  own; the chords, drums, bass and tune lie on its bars, so they are kept only with its form, and a part pinned to the
+  reference keeps it. A Key over a reference moves the whole song - its chords, tune and bass - by the nearest
+  interval from the reference's key.
+- **The groove leads** (`SongParts` `styles`, `Composer.fits`): the song draws a drum pattern of its own, or takes the
+  drums' pattern where it is set, and from it its styles (pop, rock, blues, edm, funk, hiphop, ballad, folk, latin),
+  the range its tempo is drawn in and its feel (a shuffle swings, four on the floor is straight). Every pattern, sound
+  and progression naming a style it has is five times as likely (`STYLE_WEIGHT`), and the drums play a pattern that
+  fits the tempo and feel - so a song drawn hangs together, pinning the drums steers the rest, and rolling the drums
+  moves the drums alone (under trap drums half the basses drawn are hip hop's, under a shuffle a tenth).
+- **The bank**: 17 drum patterns (four on the floor, disco, pop sixteenths, driving rock, punk, shuffle, trap with hat
+  rolls, two-step, dembow, funk, breakbeat, ballad, train beat and the first five), 12 bass lines (octaves, offbeat,
+  boogie, gallop, slap, 808 glide, rolling), 8 keys rhythms (quarter chords, anthem, broken chords, shuffle comp), a
+  gated pad, 8 guitar parts (palm-muted, held power chords, shuffle riff, funk scratch, picked, skank), 3 leads (a
+  pentatonic riff, an arpeggiator), 19 progressions (I-IV-V, I-bVII-IV, the epic minor loop, twelve-bar and minor
+  blues in dominant and minor sevenths, ii-V-I, the royal road, the circle), each written for the modes it suits. 35
+  sounds: rock, festival and trap kits, finger, Reese, 808 and acid basses, piano, supersaw, synth pluck, clavinet,
+  synth brass, strings, flute, crunch, high-gain and acoustic guitars, glockenspiel - all from the host's existing
+  methods, every stem brought to one loudness in the mix. The densest band (supersaw stabs, gated pad and
+  arpeggiator, Reese, a high-gain guitar) renders at a quarter of real time on one core.
 - **The song's code** (`SongCode`, `BlockCode` in `data/`): every setting of the block - the roll, Likeness, tempo,
   key, pins, each part and all set on it - as one code of letters and digits on the card's Code row, changing as
   anything on the card does; entered there (or pasted, then Enter), the settings come back. Reversible, not a hash, so
@@ -124,7 +142,8 @@ the ear. The design below is the plan; this says what of it stands.
    roll heard while it plays; with a Medium on Auto, whether the scenes move with it.
 2. Whether the instruments are the right first set (every one synthesized; no samples).
 3. The bet: a song made by choosing among seeded parts feels like the author's own.
-4. Rolls by ear: whether Likeness at its default (0.5) is the right family resemblance, and 0 wild enough.
+4. Rolls by ear: whether a roll now varies enough and still hangs together (the groove's styles, STYLE_WEIGHT 5);
+   each new sound and pattern alone, kept or cut.
 5. The song's code: whether its length is livable for a song tuned part by part, and whether a code should also be
    kept for you (a list of the songs you liked on the card) rather than copied out by hand.
 
@@ -162,9 +181,9 @@ it is made again.
   make each new part's stem whole beside the stream, so the rest of the song is read from it.
 - **The band by ear**: every instrument's sound is a guess never heard by whoever wrote it; each rendered alone, kept
   or cut by the author, is the shortest way to a band worth drawing from.
-- **Wider banks to roll from**: a roll is as varied as what it draws among - five drum patterns, five bass, four
-  keys, one lead (its motif), seven progressions, two singers. More rows of each (a lead that answers the voice, a
-  riff, more grooves, more singers heard to hold a melody) and a meter other than 4/4 widen every roll at once.
+- **Wider banks to roll from**: a lead that answers the voice, more singers heard to hold a melody, a meter other
+  than 4/4 (a waltz, a 6/8 ballad), sections that build and drop (a riser, a filter opening, the drums cut before a
+  chorus), a blues scale for the voice under a twelve-bar.
 
 **A note on what is taken:** the importer reads a song's melody for the author's own use. A melody is what copyright
 protects most strongly, so a song published with another's tune is a cover, and needs its license.

@@ -64,7 +64,7 @@ What a storyboard can say, read from the tables its editor builds its rows from 
 | Key | In the editor | Type | What it is |
 | --- | --- | --- | --- |
 | `id` | Name | text | What the timeline calls this actor. One name, one body: the same name in the next stage entry is the same actor, carried across. |
-| `kind` | Kind | enum: `eye`, `prism`, `swarm` | What it is. |
+| `kind` | Kind | enum: `eye`, `prism`, `swarm`, `puppet`, `backdrop` | What it is. |
 | `at` | Place | vec3 | Where it stands: right, up and toward the camera. With the camera at its default, 0.62 to either side are the two side-by-side places. |
 | `hidden` | Starts hidden | bool | It is there but unseen until something on the timeline reveals it. |
 | `seed` | Seed | int | Pins what this actor rolls for itself. Unset, it comes from the entry's seed. |
@@ -73,7 +73,7 @@ What a storyboard can say, read from the tables its editor builds its rows from 
 
 | Key | In the editor | Type | What it is |
 | --- | --- | --- | --- |
-| `action` | Does | enum: `look`, `blink`, `arrive`, `sprout`, `split`, `crystallize`, `tremble`, `burst`, `lock`, `desync`, `hold_still`, `sway`, `counterflow`, `specialize`, `form`, `leave`, `gather`, `fly`, `helix_split`, `lane_jump`, `set`, `ramp`, `pulse`, `flash` | What happens. |
+| `action` | Does | enum: `look`, `blink`, `arrive`, `sprout`, `split`, `crystallize`, `tremble`, `burst`, `lock`, `desync`, `hold_still`, `sway`, `counterflow`, `specialize`, `form`, `leave`, `gather`, `fly`, `helix_split`, `lane_jump`, `set`, `ramp`, `pulse`, `flash`, `move`, `pose`, `talk`, `face`, `strike`, `hit`, `hop`, `shake`, `fx`, `feel` | What happens. |
 | `target` | Who | targets | The actors it happens to. None chosen means everyone on the stage. |
 | `ease` | Ease | enum: `smooth`, `linear`, `in`, `out`, `spike` | The shape of its progress across the window. A verb with phases of its own wants linear. |
 | `on` | Waits for | enum: `beat`, `movement`, `lull` | A cue in the music the span waits for once its time has come, so a drop lands on the drop. |
@@ -90,7 +90,7 @@ An actor is a RefCounted, so a stage hands its live actors to the next stage thr
 
 Verbs communicate with actors through `state` (a plain Dictionary): `state.tremble` (0..1 riser vibration), `state.lock_to` (pose-lock source id), `state.still` (spin damping), `state.pulse` ({amp, rate} scale breathing), `state.focus` (a world point the eye looks at), `state.mit` (a split under way, drawn as the eye's membrane or the prism's bond), `state.form` (its place in a formation, held by the stage - `Actions.Form.hold`), `state.upright` (a slow righting under way, held by the stage - `Actions.right`). Kind classes read what they understand; unknown keys are inert, so a misspelled verb cannot crash a show.
 
-Registry: `Cast.REGISTRY` in [src/stage/cast.gd](../src/stage/cast.gd) (3 kinds)
+Registry: `Cast.REGISTRY` in [src/stage/cast.gd](../src/stage/cast.gd) (5 kinds)
 
 ### `eye` - EyeActor
 
@@ -101,7 +101,7 @@ A human eye (`EyeBody`) on a slot. Gaze is driven by a look verb feeding `state.
 | `radius` | Size | num | How large the eye is. Unset, drawn between 0.24 and 0.34. |
 | `hue` | Hue | num | The iris's color, around the wheel from 0 to 1. Unset, drawn from the seed. |
 
-Source: [src/stage/cast.gd:165](../src/stage/cast.gd#L165)
+Source: [src/stage/cast.gd:190](../src/stage/cast.gd#L190)
 
 ### `prism` - PrismActor
 
@@ -112,7 +112,7 @@ A living wireframe prism (`PrismBody`) on a slot, drawn through the projected-sl
 | `scale` | Size | num | How large the prism is. Unset, drawn between 0.24 and 0.30. |
 | `hue` | Hue | num | Its color, around the wheel from 0 to 1: blue near 0.6, red at 0. |
 
-Source: [src/stage/cast.gd:521](../src/stage/cast.gd#L521)
+Source: [src/stage/cast.gd:546](../src/stage/cast.gd#L546)
 
 ### `swarm` - SwarmActor
 
@@ -134,7 +134,30 @@ A formation of prisms streaming along an invisible track into the void: a group 
 | `lead` | Lead | actor | An actor carried in from the entry before whose prism becomes the first blue member. |
 | `lead_red` | Red lead | actor | An actor carried in whose prism becomes the red strand's lead, waiting until the helix opens. |
 
-Source: [src/stage/cast.gd:621](../src/stage/cast.gd#L621)
+Source: [src/stage/cast.gd:646](../src/stage/cast.gd#L646)
+
+### `puppet` - PuppetActor
+
+A drawing made a puppet (`PuppetBody` on a `PuppetRig`, next/cartoon.md): its own pictures bent on its own skeleton, its feet on its place, drawn as a node over the stage in depth order with a soft shadow under it. Its rig is read on a worker the first time it is named, and it shows once read. The verbs `move`, `pose`, `talk`, `face`, `strike`, `hit`, `hop`, `shake` and `fx` steer it; `blink`, `set` and `ramp` (`fade`, `scale` its height) reach it as they reach any actor.
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `rig` | Rig | text | Which puppet: its name on the library's puppets shelf, or the folder of a rig by its path. |
+| `height` | Height | num | How tall it stands, feet to top, in the stage's units (the frame is about 1.8 tall at the default camera's distance). |
+| `facing` | Faces | enum: `left`, `right` | Which way it looks. Unset, as it is drawn (one drawn from the front counts as facing right). |
+
+Source: [src/stage/cast.gd:837](../src/stage/cast.gd#L837)
+
+### `backdrop` - BackdropActor
+
+A painted set hung behind a cartoon's puppets (`PuppetRig.backdrop`): a flat picture at its place, as wide as it is told or wide enough to cover the frame at its distance, read on a worker the first time it is named.
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `picture` | Picture | text | The painted set: its name on the library's sets shelf, or a picture's path. |
+| `width` | Width | num | How wide it hangs, in the stage's units. 0 covers the frame at its distance, with room for the camera to move. |
+
+Source: [src/stage/cast.gd:924](../src/stage/cast.gd#L924)
 
 ## Actions (verb registry)
 
@@ -146,7 +169,7 @@ Lifecycle: `begin(stage, actors)` once when the window is entered, `apply(stage,
 
 Verbs receive their args raw (ranges intact) plus a seeded rng: values meant to be fixed per instance are sampled in begin() ("cattle, not pets"); per-event values (a gaze fixation's distance) are re-drawn as they happen. Same seed, same show.
 
-Registry: `Actions.REGISTRY` in [src/stage/actions.gd](../src/stage/actions.gd) (24 verbs)
+Registry: `Actions.REGISTRY` in [src/stage/actions.gd](../src/stage/actions.gd) (34 verbs)
 
 ### `look` - Look
 
@@ -158,7 +181,7 @@ look - aim eyes at a wandering 3D focus point. All targets share one focus, so t
 | `lateral` | Sideways | num | How far a fixation strays to the side. |
 | `stray` | Stray | num | The chance that one eye wanders off the shared focus for a fixation. |
 
-Source: [src/stage/actions.gd:265](../src/stage/actions.gd#L265)
+Source: [src/stage/actions.gd:328](../src/stage/actions.gd#L328)
 
 ### `blink` - Blink
 
@@ -168,7 +191,7 @@ blink - close and reopen the eyelids once. args: duration (s).
 | --- | --- | --- | --- |
 | `duration` | Seconds | num | How long the lids take to close and open again. |
 
-Source: [src/stage/actions.gd:284](../src/stage/actions.gd#L284)
+Source: [src/stage/actions.gd:347](../src/stage/actions.gd#L347)
 
 ### `arrive` - Arrive
 
@@ -180,7 +203,7 @@ arrive - the actor flies in from off the frame, fast, and lands on its place lik
 | `wobble` | Swing | num | How far past its place it swings as it lands. Unset, as far as the speed it came in with carries it. |
 | `upright` | Rights in | num | Seconds it takes, once landed, to turn gently from the way it flew in to upright, while whatever comes next goes on. 0 keeps it pointing the way it came. |
 
-Source: [src/stage/actions.gd:299](../src/stage/actions.gd#L299)
+Source: [src/stage/actions.gd:364](../src/stage/actions.gd#L364)
 
 ### `sprout` - Sprout
 
@@ -190,7 +213,7 @@ sprout - a standing rose beside the anchor: the stem grows up from below the fra
 | --- | --- | --- | --- |
 | `side` | Side | num | Which side of its place the stem grows on: -1 left, 1 right. Unset, by the seed. |
 
-Source: [src/stage/actions.gd:373](../src/stage/actions.gd#L373)
+Source: [src/stage/actions.gd:438](../src/stage/actions.gd#L438)
 
 ### `split` - Split
 
@@ -204,7 +227,7 @@ A prism divides by CLONING: the twin is the same size, shape and pose, in its ow
 | `hue` | Its hue | num | The color the newborn warms to as it pulls away. Unset, its parent's. |
 | `slots` | Places | data | Where the two come to rest, as two places: `[[x, y, z], [x, y, z]]`. |
 
-Source: [src/stage/actions.gd:499](../src/stage/actions.gd#L499)
+Source: [src/stage/actions.gd:564](../src/stage/actions.gd#L564)
 
 ### `crystallize` - Crystallize
 
@@ -214,13 +237,13 @@ crystallize - the eye freezes over into the prism (a staged physical transition,
 | --- | --- | --- | --- |
 | `into` | Into | actor | The hidden prism the eye freezes over into. |
 
-Source: [src/stage/actions.gd:766](../src/stage/actions.gd#L766)
+Source: [src/stage/actions.gd:831](../src/stage/actions.gd#L831)
 
 ### `tremble` - Tremble
 
 tremble - the riser: the eye vibrates harder as k rises, light building around it (drawn in `Cast.EyeActor`). Latches at its final level; the burst that replaces the eye ends it.
 
-Source: [src/stage/actions.gd:835](../src/stage/actions.gd#L835)
+Source: [src/stage/actions.gd:900](../src/stage/actions.gd#L900)
 
 ### `burst` - Burst
 
@@ -230,7 +253,7 @@ burst - the target bursts into being in a flash (the drop): revealed at full fad
 | --- | --- | --- | --- |
 | `replaces` | Replaces | actor | An actor that goes as this one bursts into being. |
 
-Source: [src/stage/actions.gd:845](../src/stage/actions.gd#L845)
+Source: [src/stage/actions.gd:910](../src/stage/actions.gd#L910)
 
 ### `lock` - Lock
 
@@ -241,19 +264,19 @@ lock - phase-lock the target's pose to another prism (they turn as one), with a 
 | `to` | To | actor | The prism whose turning it locks onto. |
 | `snap` | Snap | num | How quickly it snaps into step, as a share of the window. |
 
-Source: [src/stage/actions.gd:859](../src/stage/actions.gd#L859)
+Source: [src/stage/actions.gd:924](../src/stage/actions.gd#L924)
 
 ### `desync` - Desync
 
 desync - break a phase-lock: the target resumes its own rotation.
 
-Source: [src/stage/actions.gd:880](../src/stage/actions.gd#L880)
+Source: [src/stage/actions.gd:945](../src/stage/actions.gd#L945)
 
 ### `hold_still` - HoldStill
 
 hold_still - damp the target's own spin toward rest (it keeps breathing). Latches.
 
-Source: [src/stage/actions.gd:887](../src/stage/actions.gd#L887)
+Source: [src/stage/actions.gd:952](../src/stage/actions.gd#L952)
 
 ### `sway` - Sway
 
@@ -263,7 +286,7 @@ sway - slip the anchor and drift weightlessly around it, pushing and pulling. Ea
 | --- | --- | --- | --- |
 | `amp` | Reach | num | How far it drifts from its place. Unset, a little, by the seed. |
 
-Source: [src/stage/actions.gd:896](../src/stage/actions.gd#L896)
+Source: [src/stage/actions.gd:961](../src/stage/actions.gd#L961)
 
 ### `counterflow` - Counterflow
 
@@ -275,7 +298,7 @@ counterflow - the pair take opposite highways: each merges onto its own lane and
 | `speed` | Speed | num | How fast they cruise. |
 | `loop_k` | Loop at | num | How far through the window each pulls its closing loop, from 0 to 1. |
 
-Source: [src/stage/actions.gd:924](../src/stage/actions.gd#L924)
+Source: [src/stage/actions.gd:989](../src/stage/actions.gd#L989)
 
 ### `specialize` - Specialize
 
@@ -287,7 +310,7 @@ specialize - diverge in character: scale eases to size x, the body's whole tempo
 | `tempo` | Tempo | num | How many times its own speed it runs at. |
 | `pulse` | Pulse | data | A breathing of its size it keeps afterward: `{"amp": 0.06, "rate": 6.5}`. |
 
-Source: [src/stage/actions.gd:988](../src/stage/actions.gd#L988)
+Source: [src/stage/actions.gd:1053](../src/stage/actions.gd#L1053)
 
 ### `form` - Form
 
@@ -303,7 +326,7 @@ form - the targets fly to the places of a shape and turn to one heading as they 
 | `turn` | Turns | num | How fast the whole turns about its upright once formed, in turns a minute. |
 | `stagger` | Stagger | num | How much later each member sets off than the one before, as a share of the window. |
 
-Source: [src/stage/actions.gd:1020](../src/stage/actions.gd#L1020)
+Source: [src/stage/actions.gd:1085](../src/stage/actions.gd#L1085)
 
 ### `leave` - Leave
 
@@ -314,13 +337,13 @@ leave - the reverse of arrive: a brief wind-up (it draws back a little, turning 
 | `to` | Toward | vec3 | Which way it goes, right, up and toward the camera. Toward the camera it grows and leaves the frame's edge, never coming near the lens; away it shrinks and fades out. Unset, away from the others on the stage, by the seed. |
 | `force` | Force | num | How hard it goes, from 0 to 1: low winds up slowly and eases away, high snaps back and throws, rolling fast and shedding shards. |
 
-Source: [src/stage/actions.gd:1204](../src/stage/actions.gd#L1204)
+Source: [src/stage/actions.gd:1269](../src/stage/actions.gd#L1269)
 
 ### `gather` - Gather
 
 gather - the swarm's members ease in one at a time and form up (k plays the staggered joins through; see `Cast.SwarmActor`).
 
-Source: [src/stage/actions.gd:1355](../src/stage/actions.gd#L1355)
+Source: [src/stage/actions.gd:1420](../src/stage/actions.gd#L1420)
 
 ### `fly` - Fly
 
@@ -331,19 +354,19 @@ fly - the formation flies forward along its track, the stage camera following a 
 | `speed` | Speed | num | How fast the swarm flies its track. |
 | `follow` | Camera | num | How closely the camera keeps up: 1 holds the swarm still in frame, less lets it pull away. |
 
-Source: [src/stage/actions.gd:1363](../src/stage/actions.gd#L1363)
+Source: [src/stage/actions.gd:1428](../src/stage/actions.gd#L1428)
 
 ### `helix_split` - HelixSplit
 
 helix_split - the single track opens into a double helix: the spread widens and the counter-winding red strand fades in (see `Cast.SwarmActor`).
 
-Source: [src/stage/actions.gd:1384](../src/stage/actions.gd#L1384)
+Source: [src/stage/actions.gd:1449](../src/stage/actions.gd#L1449)
 
 ### `lane_jump` - LaneJump
 
 lane_jump - the swarm banks to its side and leaps across to the other strand, then holds there (k rides the bank's arc through the crossing).
 
-Source: [src/stage/actions.gd:1392](../src/stage/actions.gd#L1392)
+Source: [src/stage/actions.gd:1457](../src/stage/actions.gd#L1457)
 
 ### `set` - SetParam
 
@@ -354,7 +377,7 @@ set - set one actor parameter instantly. args: param, value.
 | `param` | What | enum | What is set. |
 | `value` | To | num | Its new value, at once. |
 
-Source: [src/stage/actions.gd:1399](../src/stage/actions.gd#L1399)
+Source: [src/stage/actions.gd:1464](../src/stage/actions.gd#L1464)
 
 ### `ramp` - Ramp
 
@@ -366,7 +389,7 @@ ramp - ease one actor parameter from its current value (or `from`) to `to`.
 | `from` | From | num | Where it starts. Unset, from where it is. |
 | `to` | To | num | Where it ends up, across the window. |
 
-Source: [src/stage/actions.gd:1407](../src/stage/actions.gd#L1407)
+Source: [src/stage/actions.gd:1472](../src/stage/actions.gd#L1472)
 
 ### `pulse` - Pulse
 
@@ -378,7 +401,7 @@ pulse - a scale breathing on the target while the span runs ({amp, rate}); latch
 | `rate` | Rate | num | How many breaths a second. |
 | `latch` | Keeps on | bool | The breathing carries on after the window closes. |
 
-Source: [src/stage/actions.gd:1423](../src/stage/actions.gd#L1423)
+Source: [src/stage/actions.gd:1488](../src/stage/actions.gd#L1488)
 
 ### `flash` - Flash
 
@@ -388,7 +411,119 @@ flash - a bright burst overlay on the target (a stinger accent).
 | --- | --- | --- | --- |
 | `hue` | Hue | num | The flash's color. Unset, the actor's own. |
 
-Source: [src/stage/actions.gd:1442](../src/stage/actions.gd#L1442)
+Source: [src/stage/actions.gd:1507](../src/stage/actions.gd#L1507)
+
+### `move` - Move
+
+move - a puppet goes to a place across the window: its gait (walk, run, tiptoe, hop, float, slide) swings its legs and arms at the pace it actually goes, and it turns to face the way it goes first. The default ease sets off and pulls up; `ease: linear` keeps an even pace. Running kicks up dust as it sets off. args: to ([x, y, z]) or by (an offset), gait, turn.
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `to` | To | vec3 | Where it goes: right, up and toward the camera. Unset, where `by` takes it. |
+| `by` | By | vec3 | How far it goes from where it is, when `to` is not given: every actor named goes as far. |
+| `gait` | Gait | enum | How it goes: walking, running, tiptoeing, hopping, floating off the ground, or sliding with its feet still. |
+| `turn` | Turns | bool | It turns to face the way it goes first. |
+
+Source: [src/stage/actions.gd:1555](../src/stage/actions.gd#L1555)
+
+### `pose` - Pose
+
+pose - a puppet takes a pose over the window and holds it: one every rig has (arms up, out or down, cowering, a shrug, spooky arms, a cheer, a windup, a kick, pointing at someone) or one of its own rig's by name, with any bones turned by `angles` over it. The pose replaces the one held before; `rest` goes back to the drawing. With `ease: spike` it strikes the pose and comes back. args: pose, angles ({bone: degrees}), toward (who `point` points at).
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `pose` | Pose | enum | The pose it takes and holds: one every rig has, or one of its own rig's by name. `rest` is as it is drawn; `point` points the arm nearer `toward` at it. |
+| `angles` | Angles | data | Bones turned by name, in degrees about each one's joint (clockwise on the screen), over the pose: `{"arm_l": -40}`. |
+| `toward` | Toward | actor | The actor `point` points at. |
+
+Source: [src/stage/actions.gd:1591](../src/stage/actions.gd#L1591)
+
+### `talk` - Talk
+
+talk - a puppet talks for the window: its jaw chatters in syllables and words and its head nods, though nothing is heard. args: loud (0.3 a mumble, 1 a shout).
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `loud` | How hard | num | How wide and fast its mouth goes, from a mumble at 0.3 to a shout at 1. Silent: only the mouth and the nods are seen. |
+
+Source: [src/stage/actions.gd:1642](../src/stage/actions.gd#L1642)
+
+### `face` - Face
+
+face - a puppet turns: left or right (to its profile where its model sheet has one, else its drawing mirrored), toward another actor, to us (front) or away (back). It holds that view until turned again; going across always shows its profile. args: to.
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `to` | To | text | Which way it turns: left or right (in profile, where it has a profile drawn), toward an actor by name, or front (to us) or back (away). |
+
+Source: [src/stage/actions.gd:1659](../src/stage/actions.gd#L1659)
+
+### `strike` - Strike
+
+strike - a puppet hits another: it winds up (the arm nearer them up and back, crouching), swings through fast and lunges, and where the blow lands they are hit (recoil, spin, squash, eyes popping) with a star burst or dizzy stars; then it settles back. Give the span `ease: linear`; a second or so reads well. args: at (who), force, mark.
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `at` | At | actor | Who is struck. |
+| `force` | Force | num | How hard, from a tap at 0.2 to a blow that spins them at 1. |
+| `mark` | Mark | enum: `pow`, `stars` | What is drawn where it lands: a star burst, dizzy stars round their head, or nothing. |
+
+Source: [src/stage/actions.gd:1696](../src/stage/actions.gd#L1696)
+
+### `hit` - Hit
+
+hit - a puppet is hit, from another actor's side or from the left or right: it recoils, spins, squashes and its eyes pop, with a star burst or dizzy stars if asked. A point in time (`at`). args: from, force, mark.
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `from` | From | text | Where the blow comes from: an actor's name, left or right. |
+| `force` | Force | num | How hard, 0 to 1. |
+| `mark` | Mark | enum: `pow`, `stars` | What is drawn on them: a star burst, dizzy stars round their head, or nothing. |
+
+Source: [src/stage/actions.gd:1770](../src/stage/actions.gd#L1770)
+
+### `hop` - Hop
+
+hop - a puppet crouches, springs up (stretching), flies and lands (squashing, dust kicked up), in place or to a place. Give the span `ease: linear`. args: height (shares of its own), to or by.
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `height` | Height | num | How high, in shares of its own height. |
+| `to` | To | vec3 | Where it lands. Unset, where it stood (or where `by` takes it). |
+| `by` | By | vec3 | How far it hops from where it is. |
+
+Source: [src/stage/actions.gd:1790](../src/stage/actions.gd#L1790)
+
+### `shake` - Shake
+
+shake - a puppet shakes for the window: fear, rage, a chill. args: amount.
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `amount` | How hard | num | How hard it shakes, 0 to 1: fear, rage, a chill. |
+
+Source: [src/stage/actions.gd:1834](../src/stage/actions.gd#L1834)
+
+### `fx` - Fx
+
+fx - a mark drawn on a puppet: a star burst, dizzy stars round its head, dust at its feet, sweat flying, an alarm over its head, or speed lines - each lasts a moment. A point in time. args: kind, bone (where; the top of its head unset).
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `kind` | Mark | enum | A star burst, dizzy stars, dust, sweat flying, an alarm over the head, or speed lines. |
+| `bone` | At | text | The bone it is drawn at (its tip). Unset, the top of the head. |
+
+Source: [src/stage/actions.gd:1847](../src/stage/actions.gd#L1847)
+
+### `feel` - Feel
+
+feel - a puppet's mood from now on: its model sheet's drawing of it (scared, angry, laughing), or none. A point in time. args: mood.
+
+| Key | In the editor | Type | What it is |
+| --- | --- | --- | --- |
+| `mood` | Mood | enum | The mood it shows from now on, where its model sheet has that drawing: scared, angry, laughing, or none. |
+
+Source: [src/stage/actions.gd:1684](../src/stage/actions.gd#L1684)
 
 ## Track (the timeline runner)
 

@@ -10,10 +10,13 @@ extends Node
 ## - What it keeps is what it shows: `capture` hands back the block it was given, a part's pattern set is written into
 ##   `parts`, and `apply` of another block shows it (Source, Key).
 ## - Its parts are entries: one a part, the voice's among them; a part taken off is gone from the block.
-## - ITS CODE IS EVERY SETTING ([SongCode]): the Code row shows it and it changes as a dial moves; Roll is a new song
-##   (each part's own number dropped, what is set kept), a part's Roll gives that part alone a number, and a code entered
-##   brings its settings back, the source kept - the control, a bad code, is refused and changes nothing. A part shows a
-##   Roll and no number.
+## - ITS CODE IS EVERY SETTING ([SongCode]): the Code row shows it and it changes as a dial moves; ROLL DRAWS EVERY
+##   SETTING (the key and tempo set drawn again, the parts and what is muted kept) and the dials it drew show dimmed,
+##   their value the score's - the control, a dial set, lit; a part's Roll draws that part alone (its pattern gone, its
+##   mute kept), and a code entered brings its settings back, the source kept - the control, a bad code, is refused
+##   and changes nothing; Back walks to the song before each. THE FIELD NEVER HOLDS A STALE CODE: focused, a roll still
+##   writes it there and letting it go changes nothing; typed into, it is entered when let go (a bad one refused); a
+##   press outside lets it go - the control, a press on it, keeps it. A part shows a Roll and no number.
 ## - What it makes is the Pipeline's: composed, its section lists the mix as missing and the sung lines; given a mix
 ##   and its record, the mix is made - the control, the block changed after, is stale. Its ⤓ (the song exported, from the
 ##   bottom-right row where the note exports no video) stands grayed until there is a mix, and lit once there is; a note
@@ -120,18 +123,25 @@ func _code(note: String, folder: String) -> void:
 	_ok(c._code.text == SongCode.of(block), "its Code row shows the song's code: %s" % c._code.text)
 	c._tempo.value = 120.0
 	_ok(c._code.text == SongCode.of(c.capture()) and c._code.text != SongCode.of(block), "...which changes as a dial moves")
+	_ok(c._tempo.get_parent().modulate.a == 1.0, "...the tempo set shows lit")
+	c._set_part("bass", "mute", true)
+	c._set_part("bass", "pattern", "walking")
 	var kept := c._code.text
 	var kept_settings := JSON.stringify(SongCode.settings(c.capture()))
 	c.roll_song()
 	var after: Dictionary = c.capture()
 	_ok(c._code.text != kept and int(after["seed"]) != 4, "Roll is a new song, a new code")
-	_ok(not (after["parts"]["drums"] as Dictionary).has("seed") and String(after["key"]) == "D dorian" and float(after["tempo"]) == 120.0,
-		"...each part's own number back to the song's, what is set kept (the key, the tempo)")
+	_ok(not after.has("key") and not after.has("tempo") and not (after["parts"]["drums"] as Dictionary).has("seed")
+		and JSON.stringify(after["parts"]["bass"]) == JSON.stringify({"mute": true}) and (after["parts"] as Dictionary).size() == 3,
+		"...every setting drawn again (the key and tempo set gone, the bass's pattern), the parts and the bass's mute kept")
+	_ok(c._tempo.get_parent().modulate.a < 1.0 and int(c._tempo.value) == int(roundf(float(c.score()["tempo"]))),
+		"...the tempo it drew shows dimmed: %d BPM" % int(c._tempo.value))
 	var song_code := c._code.text
 	c.roll_part("bass")
 	var rolled: Dictionary = c.capture()["parts"]
-	_ok(rolled["bass"].has("seed") and not rolled["drums"].has("seed") and not rolled["vocal"].has("seed") and c._code.text != song_code,
-		"a part's Roll gives it a number of its own alone, and moves the code")
+	_ok(rolled["bass"].has("seed") and bool(rolled["bass"]["mute"]) and not rolled["drums"].has("seed") and not rolled["vocal"].has("seed")
+		and c._code.text != song_code, "a part's Roll draws it alone, its mute kept, and moves the code")
+	var part_code := c._code.text
 	var why := c.enter_code(kept)
 	_ok(why.is_empty() and JSON.stringify(SongCode.settings(c.capture())) == kept_settings and c._code.text == kept,
 		"a code entered brings its settings back: %s" % (why if not why.is_empty() else c._code.text))
@@ -140,6 +150,35 @@ func _code(note: String, folder: String) -> void:
 	why = c.enter_code("1zzzzz")
 	_ok(not why.is_empty() and JSON.stringify(c.capture()) == before and c._code.text == kept,
 		"a bad code is refused, nothing changed (%s)" % why)
+	c.back()
+	var stepped := c._code.text
+	c.back()
+	_ok(stepped == part_code and c._code.text == song_code and not c._back.disabled,
+		"Back walks to the song before the code entered, then before the part's roll")
+	c._code.grab_focus()
+	var held := JSON.stringify(c.capture())
+	c.roll_song()
+	var rolled_code := SongCode.of(c.capture())
+	_ok(c._code.has_focus() and c._code.text == rolled_code and JSON.stringify(c.capture()) != held,
+		"focused, the field still shows the code a roll made")
+	c._code.release_focus()
+	_ok(SongCode.of(c.capture()) == rolled_code, "...and letting it go changes nothing")
+	c._code.grab_focus()
+	c._code.text = "1zzzzz"
+	c._code.text_changed.emit("1zzzzz")
+	c._code.release_focus()
+	_ok(SongCode.of(c.capture()) == rolled_code and c._code.text == rolled_code, "typed into and let go, a bad code is refused and the code shown again")
+	c._code.grab_focus()
+	var on := InputEventMouseButton.new()
+	on.button_index = MOUSE_BUTTON_LEFT
+	on.pressed = true
+	on.position = c._code.get_global_rect().get_center()
+	c._input(on)
+	var stays := c._code.has_focus()
+	var off := on.duplicate() as InputEventMouseButton
+	off.position = c._code.get_global_rect().position + Vector2(-40.0, -40.0)
+	c._input(off)
+	_ok(stays and not c._code.has_focus(), "a press outside the field lets it go; the control, a press on it, keeps it")
 	var drums: EntryCard = null
 	for e in c._parts_box.get_children():
 		if e is EntryCard and not e.is_queued_for_deletion() and (e as EntryCard).name_label.text == "Drums":

@@ -109,6 +109,7 @@ func begin_morph(from: GhostScene) -> void:
 		old.home = fresh.home
 		old.spec = fresh.spec
 		_actors[id] = old
+		old.moved_to(self)
 	# A swarm may continue a carried prism as its lead (cfg `lead: <actor id>`): the live body
 	# becomes member 0 and its last screen slot (projected through the old stage's lens) becomes
 	# the fly-in origin.
@@ -170,6 +171,8 @@ func update(f: AudioFeatures, delta: float) -> void:
 	# ...and so do what verbs latch: a formation's places, a righting under way ([method Actions.hold])
 	for a in _actors.values():
 		Actions.hold(a, delta)
+	# puppets drawn as nodes of their own, in depth order, a cartoon's marks over them ([PuppetBody], [CartoonFx])
+	PuppetBody.arrange(self, _actors.values(), delta)
 	for fl in _flashes:
 		fl.k -= delta * 2.4
 	_flashes = _flashes.filter(func(x): return x.k > 0.001)

@@ -53,6 +53,7 @@ var _blocks := {}             # the note's blocks, as it opened
 var _attached: Array = []     # the components it has (Components.attached_of)
 var _cards := {}              # block key -> a card with capture() / apply()
 var _sound: SoundCard
+var _cartoon: Object = null                  # the Cartoon card, by what it answers (its class named here would compile it with every note)
 var _pipeline: PipelineCard
 var _medium: MediumCard
 var _story: NoteStoryboard
@@ -64,10 +65,11 @@ func _ready() -> void:
 	_blocks = NoteStore.blocks_of(path) if not path.is_empty() else {}
 	_attached = Components.attached_of(_blocks)
 	var has_song := _attached.has("sound")
+	var has_show := _attached.has("medium") or _attached.has("cartoon")
 	#Nothing to render without a show: a plain note, or a song with no medium yet, has no ⤓ (released on the
 	#way out, keyed - see Chrome._export_claims)
 	var ch := Chrome.of(self)
-	if ch != null and not _attached.has("medium"):
+	if ch != null and not has_show:
 		ch.suppress_export(&"note_panel")
 	_panel = preload("res://src/ui/side_panel.gd").new(380.0)
 	_panel.title = "Note"
@@ -104,8 +106,9 @@ func _ready() -> void:
 	#...the timeline open, as a list ([TimelineList]): a card shown only while a timeline editor is open
 	_panel.add_card("timeline", "Timeline", &"picture", "", TimelineList.BLURB).add_child(TimelineList.new())
 	_medium = _cards.get("medium") as MediumCard
-	#...the storyboard, kept in the note's folder and opened from beside Play: on a note shown in a Medium
-	if _medium != null:
+	#...the storyboard, kept in the note's folder and opened from beside Play: on a note shown in a Medium, and on a cartoon
+	_cartoon = _cards.get("cartoon")
+	if _medium != null or _cartoon != null:
 		_story = NoteStoryboard.new()
 		_story.folder = func() -> String: return NoteUpload.folder_of(path)
 		_story.noted.connect(_note)
@@ -119,6 +122,9 @@ func _ready() -> void:
 	if _sound != null:
 		_sound.chosen.connect(_choose_song)
 		_sound.baked.connect(_sound_made)
+	# a cartoon's storyboard written anew opens the note again around it, its silent track as long as it now is
+	if _cartoon != null and _cartoon.has_signal("made"):
+		_cartoon.connect("made", _sound_made)
 	#...and everything the cards make, one list, last in the deck: there while a card has something to make
 	for key in _cards:
 		if (_cards[key] as Object).has_method("pipeline"):
@@ -146,6 +152,9 @@ func _ready() -> void:
 	# a composed song conducts itself, heard as it is made ([SongStream]); a file, or a render's mix, plays as a song does
 	if has_song and _sound != null and not _sound.streams() and _sound.ready_to_play() and begin_song.is_valid():
 		begin_song.call(_sound.playable(), show_plan())
+	# a silent cartoon is timed by its storyboard: a silent track as long as it ([CartoonCard], next/cartoon.md)
+	elif not has_song and _cartoon != null and bool(_cartoon.call("ready_to_play")) and begin_song.is_valid():
+		begin_song.call(String(_cartoon.call("playable")), show_plan())
 
 
 func _exit_tree() -> void:
@@ -176,7 +185,7 @@ func _note(msg: String) -> void:
 ## What the note's show is, for main ([method main._attach_show]): whether it has a Medium (`picture`) and
 ## the storyboard it walks - {} where the note has none or has written nothing in it.
 func show_plan() -> Dictionary:
-	var plan := {"picture": _medium != null, "board": {}, "source": ""}
+	var plan := {"picture": _medium != null or _cartoon != null, "board": {}, "source": ""}
 	if _story != null:
 		plan.merge(_story.plan(), true)
 	return plan

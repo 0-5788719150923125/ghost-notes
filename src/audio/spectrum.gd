@@ -231,6 +231,14 @@ func hear_baked(path: String, stream: AudioStream, frames: Array) -> void:
 		virtual_clock = 0.0
 
 
+## A nested show with no sound at all ([member nested]: a silent note played on a screen, timed by its storyboard): nothing heard,
+## the bands quiet, its clock [member virtual_clock] as its host sets it, its seed the note's [param name]'s - the same note plays the
+## same show.
+func hear_silence(name: String) -> void:
+	hear_baked("", null, [])
+	song_hash = hash("silent:" + name)
+
+
 ## A nested song's sound at [param t] seconds into it while [param on], held while [param held]: its player started
 ## there, sought where it strays more than [param drift] seconds.
 func follow(t: float, on: bool, held: bool, drift := 0.12) -> void:

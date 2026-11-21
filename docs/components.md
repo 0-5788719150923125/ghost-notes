@@ -17,7 +17,7 @@ A row's `script` is the path of the script that builds the component's card, loa
 
 Static and free of autoload names, like `Capabilities`, so a gate can read it under `--script`.
 
-Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (16 components, 2 slots, 4 workspaces).
+Registry: `Components.REGISTRY` in [src/notes/components.gd](../src/notes/components.gd) (17 components, 2 slots, 4 workspaces).
 
 ## Slots
 
@@ -25,7 +25,7 @@ Where a note has room for exactly one. Components that take the same slot are al
 
 | Slot | What it is | Taken by |
 | --- | --- | --- |
-| `clock` | What the show is timed by, and how long it is: a sound (a song from a file, or composed), a voice reading the text, or a clip. | Sound, Voice, Clip |
+| `clock` | What the show is timed by, and how long it is: a sound (a song from a file, or composed), a voice reading the text, or a clip. | Sound, Voice, Cartoon, Clip |
 | `presentation` | What the show is seen in: the Medium and the format it names, a card table, an actor's room, or a clip's own frame. | Medium, Actor, Clip |
 
 ## Workspaces
@@ -56,6 +56,8 @@ By family - the color a component's card, chip and marks are drawn in.
 
 - **Table** (`table`) - Agents plan, build, paint and write a show at a table, one beat at a time, and a voice reads it. The note's words are the brief they all work from.
   - needs text; gives text, picture, moments, episode; brings Voice, Medium; asks for `forward_plus`, `subprocess`, `agent:writer`, `agent:painter`; kept in `table:`
+- **Cartoon** (`cartoon`) - A cartoon made from drawings: each character a puppet rigged from its maker's drawing, each set painted in their style, and the shots written by a director agent - played silent, mouths moving as they talk.
+  - gives picture, moments, audio; takes the clock; asks for `forward_plus`, `subprocess`, `python:puppet`, `agent:writer`, `agent:painter`; kept in `cartoon:`
 
 ### Voice
 
@@ -119,6 +121,7 @@ What a component may ask of the platform. Each is possible somewhere or not at a
 | `tex` | TeX | the desktop |
 | `python:math` | the math environment | the desktop |
 | `python:music` | the music environment | the desktop |
+| `python:puppet` | the puppet environment | the desktop |
 | `agent:writer` | an AI writer | the desktop |
 | `agent:painter` | an AI painter | the desktop |
 | `movie_export` | rendering a video | the desktop |

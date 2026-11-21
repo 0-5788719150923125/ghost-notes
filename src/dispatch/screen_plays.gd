@@ -5,7 +5,8 @@ class_name ScreenPlays
 ## NOTE by its title, played live inside the desk ([NestedShow]: its own scenes and song, nothing rendered ahead), or a VIDEO FILE by
 ## its path, decoded as it plays ([ScreenFilm]).
 ##
-## A note plays as its own show is made: its song as its Sound card made it (the composed mix, or the file it plays), its words as its
+## A note plays as its own show is made: its song as its Sound card made it (the composed mix, or the file it plays) - or silent, timed
+## by its storyboard, where it has no sound (a cartoon, next/cartoon.md) - its words as its
 ## Look shows them (the credits where it names none), heard through that song's bake ([SpectrumBake], taken by the bake runner once, where it has none, as an export takes it), in its medium (one
 ## that plays scenes: Auto, Full frame, Comic), walking its storyboard where it keeps one. A video file has its size, rate and length
 ## probed and its sound taken out into a WAV, once, kept under `user://screen_films/`. Both are begun on their own the first time a
@@ -63,9 +64,19 @@ static func _note_record(what: String) -> Dictionary:
 	if not NoteStoryboard.plays_scenes(med):
 		out["why"] = "it is shown as %s - a note played on a screen is one shown in scenes (Auto, Full frame, Comic)" % Registry.label(Medium.REGISTRY, med)
 		return out
+	out["title"] = what
 	var song := song_of(note)
 	if song.is_empty():
-		out["why"] = "its song is not made yet (Generate on its own Pipeline card)"
+		# a note with no sound plays silent, timed by its storyboard
+		var board := storyboard_of(note)
+		if board.is_empty():
+			out["why"] = "its song is not made yet (Generate on its own Pipeline card), and it keeps no storyboard to play silent"
+			return out
+		out["song"] = ""
+		out["storyboard"] = board
+		out["reveal"] = reveal_of(note)
+		out["secs"] = Storyboard.silent_length(board)
+		out["ready"] = true
 		return out
 	out["song"] = song
 	out["bake"] = ProjectSettings.globalize_path(Bake.cache_path(song))

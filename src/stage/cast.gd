@@ -22,6 +22,8 @@ const REGISTRY := {
 	"eye": "eye",
 	"prism": "prism",
 	"swarm": "swarm",
+	"puppet": "puppet",
+	"backdrop": "backdrop",
 }
 
 ## What each kind can be told, as data: its own settings in a storyboard's cast, beside the ones every
@@ -63,6 +65,20 @@ const PARAMS := {
 		"lead_red": {"label": "Red lead", "type": "actor", "default": null,
 			"blurb": "An actor carried in whose prism becomes the red strand's lead, waiting until the helix opens."},
 	},
+	"puppet": {
+		"rig": {"label": "Rig", "type": "text", "default": "",
+			"blurb": "Which puppet: its name on the library's puppets shelf, or the folder of a rig by its path."},
+		"height": {"label": "Height", "type": "num", "default": 1.2,
+			"blurb": "How tall it stands, feet to top, in the stage's units (the frame is about 1.8 tall at the default camera's distance)."},
+		"facing": {"label": "Faces", "type": "enum", "options": ["", "left", "right"], "default": "",
+			"blurb": "Which way it looks. Unset, as it is drawn (one drawn from the front counts as facing right)."},
+	},
+	"backdrop": {
+		"picture": {"label": "Picture", "type": "text", "default": "",
+			"blurb": "The painted set: its name on the library's sets shelf, or a picture's path."},
+		"width": {"label": "Width", "type": "num", "default": 0.0,
+			"blurb": "How wide it hangs, in the stage's units. 0 covers the frame at its distance, with room for the camera to move."},
+	},
 }
 
 
@@ -81,6 +97,10 @@ static func make(kind: String, rng: RandomNumberGenerator, raw_cfg: Dictionary) 
 			a = PrismActor.new()
 		"swarm":
 			a = SwarmActor.new()
+		"puppet":
+			a = PuppetActor.new()
+		"backdrop":
+			a = BackdropActor.new()
 	a.id = String(cfg.get("id", kind))
 	a.kind = kind
 	a.spec = cfg
@@ -125,6 +145,11 @@ class Actor extends RefCounted:
 	## collects every actor's items, sorts far-first, and runs the callables.
 	func draw_items(_stage, _lens: Lens3D, _u: float) -> Array:
 		return []
+
+	## Carried into [param _stage] by a cut ([method Stage.begin_morph]), before the stage it came from goes: an actor drawn as a
+	## node of its own moves it there.
+	func moved_to(_stage) -> void:
+		pass
 
 	## The drawn size: `scale` breathing with a latched pulse ({amp, rate}), if any.
 	func draw_scale() -> float:
@@ -803,3 +828,138 @@ class FocusSampler extends RefCounted:
 		if typeof(v) == TYPE_ARRAY and (v as Array).size() == 2:
 			return _rng.randf_range(float(v[0]), float(v[1]))
 		return float(v)
+
+
+## A drawing made a puppet ([PuppetBody] on a [PuppetRig], next/cartoon.md): its own pictures bent on its own skeleton, its feet on
+## its place, drawn as a node over the stage in depth order with a soft shadow under it. Its rig is read on a worker the first
+## time it is named, and it shows once read. The verbs `move`, `pose`, `talk`, `face`, `strike`, `hit`, `hop`, `shake` and `fx`
+## steer it; `blink`, `set` and `ramp` (`fade`, `scale` its height) reach it as they reach any actor.
+class PuppetActor extends Actor:
+	var rig_name := ""
+	var _seed := 0
+
+	func setup(seed_value: int, cfg: Dictionary, _rng: RandomNumberGenerator) -> void:
+		rig_name = String(cfg.get("rig", ""))
+		scale = maxf(0.05, float(cfg.get("height", 1.2)))
+		_seed = seed_value
+		_body()
+
+	## Its body, made once its rig is read.
+	func _body() -> PuppetBody:
+		if body != null:
+			return body as PuppetBody
+		var r := PuppetRig.held(rig_name)
+		if r == null or not r.ok():
+			return null
+		var pb := PuppetBody.new(r, _seed, scale)
+		var want := String(spec.get("facing", ""))
+		var drawn := "left" if String(r.data.get("faces", "front")) == "left" else "right"
+		pb.facing = -1.0 if (not want.is_empty() and want != drawn) else 1.0
+		body = pb
+		return pb
+
+	## Its way across the screen, as it is drawn now: 1 right, -1 left.
+	func looks() -> float:
+		var pb := _body()
+		if pb == null:
+			return 1.0
+		var drawn := -1.0 if String(pb.rig.data.get("faces", "front")) == "left" else 1.0
+		return drawn * pb.facing
+
+	func update(_f: AudioFeatures, dt: float, stage) -> void:
+		_t += dt
+		var pb := _body()
+		if pb == null:
+			return
+		pb.height = scale
+		pb.tremble = maxf(float(state.get("tremble", 0.0)), float(state.get("shake", 0.0)))
+		pb.step(dt * time_scale, pos)
+		pb.adopt(stage)
+		var lens: Lens3D = stage.lens
+		lens.prepare()
+		var pj := lens.project(pos)
+		state["depth"] = pj.z
+		if pj.z <= lens.near:
+			pb.node.visible = false
+			return
+		var u: float = stage.unit()
+		var px := scale * lens._focal / pj.z * u / pb.rig.height()
+		pb.node.modulate.a = fade
+		pb.shown = fade > 0.003
+		pb.show_at(stage.view.matrix(stage.size) * Transform2D(0.0, Vector2(px, px), 0.0, Vector2(pj.x, pj.y) * u))
+
+	func moved_to(stage) -> void:
+		if body != null:
+			(body as PuppetBody).adopt(stage)
+
+	func draw_scale() -> float:
+		return scale * 0.45
+
+	func draw_pos() -> Vector3:
+		return pos + Vector3(0, scale * 0.5, 0)
+
+	func draw_items(stage, lens: Lens3D, u: float) -> Array:
+		var pb := body as PuppetBody
+		if pb == null or fade <= 0.003:
+			return []
+		var at := pos
+		var h := scale
+		var a := fade * (1.0 - clampf(pb.lift * 2.0 + pb._float, 0.0, 0.8))
+		return [{"d": lens.depth(pos) + 0.05, "call": func() -> void:
+			var pj := lens.project(at)
+			if pj.z <= lens.near:
+				return
+			var px: float = h * lens._focal / pj.z * u
+			var c := Vector2(pj.x, pj.y) * u
+			var r := Vector2(0.3, 0.055) * px
+			var ring := PackedVector2Array()
+			for i in 24:
+				var t := TAU * float(i) / 24.0
+				ring.append(c + Vector2(cos(t) * r.x, sin(t) * r.y))
+			stage.draw_colored_polygon(ring, Color(0.0, 0.0, 0.0, 0.22 * a))}]
+
+
+## A painted set hung behind a cartoon's puppets ([method PuppetRig.backdrop]): a flat picture at its place, as wide as it is told
+## or wide enough to cover the frame at its distance, read on a worker the first time it is named.
+class BackdropActor extends Actor:
+	var picture := ""
+	var width := 0.0
+
+	## How wide a picture of [param aspect] (height over width) hung at [param at] must be to fill the frame through [param lens], whose
+	## half-extent is [param half] (unit fractions): wide enough to reach where each corner of the frame meets its plane, with room
+	## for the camera's small moves - wherever the camera looks.
+	static func cover(lens: Lens3D, half: Vector2, at: Vector3, aspect: float) -> float:
+		var reach := Vector2.ZERO
+		for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+			var d: Vector3 = lens._f + lens._r * (c.x * half.x / lens._focal) - lens._u * (c.y * half.y / lens._focal)
+			if absf(d.z) < 1e-4:
+				continue
+			var t := (at.z - lens.eye.z) / d.z
+			if t <= 0.0:
+				continue
+			var p: Vector3 = lens.eye + d * t
+			reach = Vector2(maxf(reach.x, absf(p.x - at.x)), maxf(reach.y, absf(p.y - at.y)))
+		return maxf(reach.x * 2.0, reach.y * 2.0 / maxf(0.05, aspect)) * 1.12
+
+	func setup(_seed_value: int, cfg: Dictionary, _rng: RandomNumberGenerator) -> void:
+		picture = String(cfg.get("picture", ""))
+		width = float(cfg.get("width", 0.0))
+		PuppetRig.backdrop(picture)
+
+	func draw_items(stage, lens: Lens3D, u: float) -> Array:
+		var tex := PuppetRig.backdrop(picture)
+		if tex == null or fade <= 0.003:
+			return []
+		var at := pos
+		return [{"d": lens.depth(pos) + 100.0, "call": func() -> void:
+			var pj := lens.project(at)
+			if pj.z <= lens.near:
+				return
+			var px: float = lens._focal / pj.z * u
+			var aspect := float(tex.get_height()) / maxf(1.0, float(tex.get_width()))
+			var w := width
+			if w <= 0.0:
+				w = BackdropActor.cover(lens, stage.size * 0.5 / u, at, aspect)
+			var sz := Vector2(w, w * aspect) * px
+			var c := Vector2(pj.x, pj.y) * u
+			stage.draw_texture_rect(tex, Rect2(c - sz * 0.5, sz), false, Color(1, 1, 1, fade))}]

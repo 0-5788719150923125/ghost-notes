@@ -9,11 +9,13 @@ class_name SoundCard
 ## Composed, the card is choices, not a DAW: a REFERENCE (a song file the importer reads for its grid, key, chords,
 ## form, drums and melody - never its sound), the tempo and key (the reference's, or drawn), and its PARTS as entries
 ## ([EntryCard]): each its pattern and instrument (rows of [SongParts] and [Instruments]), its level, muted or not, and
-## a Roll that draws again what of it is on Auto. The Voice entry sings the note's words ([Lyrics]): its melody (the
-## reference's, composed for the words, or recited), its singer (a Kokoro reader, or a voice kept in the library) and
-## how tuned it is (0 a singer's glides and vibrato, 1 every note a hard step). THE SONG'S CODE is every setting at
-## once ([SongCode]): it changes as anything on the card does, its Roll draws a new song, and a code entered there
-## brings that song's settings back.
+## a Roll that draws the part again. The Voice entry sings the note's words ([Lyrics]): its melody (the reference's,
+## composed for the words, or recited), its singer (a Kokoro reader, or a voice kept in the library) and how tuned it
+## is (0 a singer's glides and vibrato, 1 every note a hard step). THE SONG'S CODE is every setting at once
+## ([SongCode]): it changes as anything on the card does, and a code entered there brings that song's settings back.
+## A ROLL DRAWS EVERY SETTING ([method Composer.rolled]): the song's Roll leaves only the reference, the parts, what is
+## muted and where the words are pinned; a part's Roll draws that part alone. A setting the roll drew shows what it
+## drew, dimmed; moved by hand it is set. Back (‹) walks to the song before each roll or code entered.
 ##
 ## What is made is the Pipeline card's ([method pipeline]): the reference read, the lines sung, the mix rendered
 ## ([SongBake]), each a row; Generate makes what is missing. A new mix is the note's song: the panel loads it
@@ -37,6 +39,10 @@ const FOLDER := "sound"
 const TIMELINE_RANK := 1
 ## Seconds a change waits before the stream takes it: a dial dragged is many changes.
 const STREAM_SETTLE := 0.3
+## The most songs Back keeps.
+const HISTORY_MOST := 64
+## How faint a setting the roll drew is, beside one set by hand.
+const DRAWN_ALPHA := 0.55
 
 ## A file was picked for the file source: its path. The panel writes it into the note and opens the note again.
 signal chosen(path: String)
@@ -90,6 +96,9 @@ var _live := false             # this panel is a session a person plays, not an 
 var _begin_stream := Callable()
 var _end_stream := Callable()
 var _settle := 0               # the last change's number: the stream takes the score once no later one comes
+var _typed := false            # the code field holds what a person typed, not the code as the settings stand
+var _history: Array = []       # the codes before each roll or code entered, the latest last (Back walks them)
+var _back: Button
 var _saving_as := ""           # the file the mix is being exported to
 
 
@@ -299,17 +308,19 @@ func _build() -> void:
 		_changed()))
 	_ref_info = _small("")
 	_composed_box.add_child(_ref_info)
-	_likeness = Card.slider_row(_composed_box, "Likeness", 0.0, 1.0, 0.05, float(_block.get("likeness", Composer.LIKENESS)),
-		"How much of the reference a roll keeps: each thing it has - its tempo, key, form, chords, drums, bass line and tune - kept with this chance, each drawn again at every roll. At 1 the reference's own song in a new band; at 0 everything drawn afresh, only the words the same.",
+	_likeness = Card.slider_row(_composed_box, "Likeness", 0.0, 1.0, 0.05, 0.5,
+		"How much of the reference a roll keeps: each thing it has - its tempo, key, form, chords, drums, bass line and tune - kept with this chance, each drawn again at every roll. At 1 the reference's own song in a new band; at 0 everything drawn afresh, only the words the same. Dimmed, the roll drew it; moved, it is set.",
 		func(v: float) -> void:
 			_block["likeness"] = v
+			_likeness.get_parent().modulate = Color.WHITE
 			_changed(false))
-	_tempo = Card.slider_row(_composed_box, "Tempo", 0.0, 200.0, 1.0, float(_block.get("tempo", 0.0)),
-		"Beats a minute; at 0, drawn by the roll (the reference's, as often as Likeness says).", func(v: float) -> void:
+	_tempo = Card.slider_row(_composed_box, "Tempo", 0.0, 200.0, 1.0, 0.0,
+		"Beats a minute. Dimmed, the roll drew it (in the range the drums' pattern is played at, or the reference's, as often as Likeness says); moved, it is set; at 0, drawn again.", func(v: float) -> void:
 			if v <= 0.0:
 				_block.erase("tempo")
 			else:
 				_block["tempo"] = v
+			_tempo.get_parent().modulate = Color(1, 1, 1, DRAWN_ALPHA) if v <= 0.0 else Color.WHITE
 			_changed(false))
 	var kr := _row("Key", _composed_box)
 	_key = OptionButton.new()
@@ -335,16 +346,29 @@ func _build() -> void:
 	_code.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_code.select_all_on_focus = true
 	_code.add_theme_font_size_override("font_size", 12)
-	_code.tooltip_text = "Every setting of this song as one code: it changes as anything on the card does. Keep a code to come back to a song - enter it here and its settings come back. The note's words and the reference are not in it, so a code on another note is the same choices over its words."
-	_code.text_submitted.connect(func(t: String) -> void: enter_code(t))
+	_code.tooltip_text = "Every setting of this song as one code: it changes as anything on the card does. Keep a code to come back to a song - paste it here and press Enter, and its settings come back (Escape lets it be). The note's words and the reference are not in it, so a code on another note is the same choices over its words."
+	_code.text_changed.connect(func(_t: String) -> void: _typed = true)
+	_code.text_submitted.connect(func(t: String) -> void:
+		enter_code(t)
+		_code.release_focus())
 	_code.focus_exited.connect(func() -> void:
-		if _code.text.strip_edges() != SongCode.of(_block):
-			enter_code(_code.text))
+		if _typed:
+			enter_code(_code.text)
+		_typed = false
+		_show_code())
+	_code.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev.is_action_pressed("ui_cancel"):
+			_typed = false
+			_show_code()
+			_code.release_focus()
+			_code.accept_event())
 	sr.add_child(_code)
 	sr.add_child(_button("Copy", "Copy the song's code.", func() -> void:
 		DisplayServer.clipboard_set(SongCode.of(_block))
 		_say("The song's code is copied.")))
-	sr.add_child(_button("Roll", "A new song: everything left on Auto drawn again - the tempo, key and swing, the form and its pace, the chords, who plays where, every part's pattern, sound and notes, the tune, the singer. What is set stays set.", roll_song))
+	_back = _button("‹", "Back: the song before the last roll or code entered.", back)
+	sr.add_child(_back)
+	sr.add_child(_button("Roll", "A new song: every setting drawn again - Likeness, the tempo, key and swing, the form, the chords, who plays where, every part's pattern, sound, level and notes, the singer and how they sing. Kept: the reference, which parts the song has, what is muted, and where the words are pinned. ‹ brings the song before back.", roll_song))
 	_roll_info = _small("")
 	_composed_box.add_child(_roll_info)
 	_form_box = VBoxContainer.new()
@@ -414,10 +438,14 @@ func _refresh() -> void:
 		_ref_info.text = "%.1f BPM · %s · %d bars · %d chords · %d bars sung" % [float(ref.get("tempo", 0.0)),
 			String((ref.get("key", {}) as Dictionary).get("name", "")), int(ref.get("bars", 0)),
 			(ref.get("chords", []) as Array).size(), (ref.get("voice", {}) as Dictionary).size()]
-	_likeness.set_value_no_signal(float(_block.get("likeness", Composer.LIKENESS)))
+	var sc := score()
+	var like: Variant = _block.get("likeness")
+	_show_dial(_likeness, float(like) if _number(like) else float((sc.get("roll", {}) as Dictionary).get("likeness", 0.5)), not _number(like))
 	_likeness.get_parent().visible = not ref_path.is_empty()
 	_roll_info.text = _roll_line()
-	_tempo.set_value_no_signal(float(_block.get("tempo", 0.0)))
+	var tempo := float(_block.get("tempo", 0.0)) if _number(_block.get("tempo")) else 0.0
+	_show_dial(_tempo, tempo if tempo > 0.0 else float(sc.get("tempo", 0.0)), tempo <= 0.0)
+	_show_back()
 	var key := String(_block.get("key", ""))
 	for i in _key.item_count:
 		if String(_key.get_item_metadata(i)) == key:
@@ -532,7 +560,7 @@ func _part_entry(k: String, cfg: Dictionary) -> EntryCard:
 		% ("its melody, its singer and how they sing" if k == "vocal" else "its pattern and its sound"), func() -> void: roll_part(k))
 	roll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	o.add_child(roll)
-	Card.slider_row(o, "Level", -24.0, 6.0, 0.5, float(cfg.get("level", row["level"])),
+	_drawn_dial(o, "Level", -24.0, 6.0, 0.5, cfg.get("level"), float(_sounded(k).get("level", row["level"])),
 		"How loud this part is in the mix, in decibels.", func(v: float) -> void: _set_part(k, "level", v, false))
 	var mute := CheckBox.new()
 	mute.text = "Muted"
@@ -628,12 +656,12 @@ func _voice_rows(o: VBoxContainer, k: String, cfg: Dictionary) -> void:
 	who.item_selected.connect(func(i: int) -> void: _set_part(k, "singer", who.get_item_metadata(i)))
 	sr.add_child(who)
 	var style: Dictionary = sung.get("style", Composer.STYLE)
-	Card.slider_row(o, "Tune", 0.0, 1.0, 0.05, float(cfg.get("tune", style.get("tune", Composer.STYLE["tune"]))),
+	_drawn_dial(o, "Tune", 0.0, 1.0, 0.05, cfg.get("tune"), float(style.get("tune", Composer.STYLE["tune"])),
 		"How tuned the voice is: at 0 a singer's own glides into each note, its vibrato and drift; at 1 every note a hard step, the tuned sound of a vocoder or a pitch corrector.",
 		func(v: float) -> void: _set_part(k, "tune", v, false))
-	Card.slider_row(o, "Vibrato", 0.0, 1.0, 0.05, float(cfg.get("vibrato", style.get("vibrato", Composer.STYLE["vibrato"]))),
+	_drawn_dial(o, "Vibrato", 0.0, 1.0, 0.05, cfg.get("vibrato"), float(style.get("vibrato", Composer.STYLE["vibrato"])),
 		"How far a held note's pitch sways, in semitones, once it has held a while.", func(v: float) -> void: _set_part(k, "vibrato", v, false))
-	Card.slider_row(o, "Vocoder", 0.0, 1.0, 0.05, float(cfg.get("vocoder", 0.0)),
+	_drawn_dial(o, "Vocoder", 0.0, 1.0, 0.05, cfg.get("vocoder"), float(sung.get("vocoder", 0.0)),
 		"How much of the voice is heard through a vocoder: a synth playing the melody's own notes, given the voice's words. At 1 the robot alone, every note exactly in tune; at 0 the voice as it sings.",
 		func(v: float) -> void: _set_part(k, "vocoder", v, false))
 
@@ -668,25 +696,41 @@ func _parts() -> Dictionary:
 	return out
 
 
-## A new song: a new roll, each part's own back to the song's, what is set kept.
+## A new song: every setting drawn again but what a roll keeps ([method Composer.rolled]); Back brings this one back.
 func roll_song() -> void:
-	_block["seed"] = SongCode.fresh(int(_block.get("seed", 1)))
-	if _block.get("parts") is Dictionary:
-		for k in _block["parts"]:
-			if _block["parts"][k] is Dictionary:
-				(_block["parts"][k] as Dictionary).erase("seed")
+	_remember()
+	_block = Composer.rolled(_block, SongCode.fresh(int(_block.get("seed", 1))))
 	_changed()
 
 
-## Part [param k] drawn again alone: a new number of its own.
+## Part [param k] drawn again alone: a number of its own, every setting of it drawn but whether it is muted.
 func roll_part(k: String) -> void:
-	_set_part(k, "seed", SongCode.fresh(int((_parts().get(k, {}) as Dictionary).get("seed", 1))))
+	_remember()
+	var parts := _parts()
+	var cfg: Dictionary = parts.get(k, {}) if parts.get(k, {}) is Dictionary else {}
+	parts[k] = Composer.part_rolled(cfg, SongCode.fresh(int(cfg.get("seed", 1))))
+	_block["parts"] = parts
+	_changed()
 
 
 ## The song's settings from [param code] ([SongCode]), the note's words, source and reference kept: "" when it read,
-## else what is wrong with it - said, and nothing changed.
+## else what is wrong with it - said, and nothing changed. Back brings the song before back.
 func enter_code(code: String) -> String:
 	var got := SongCode.applied(_block, code)
+	if String(got["why"]).is_empty() and SongCode.of(got["block"]) != SongCode.of(_block):
+		_remember()
+	return _put_code(got, "The song's settings are back from its code.")
+
+
+## The song before the last roll or code entered.
+func back() -> void:
+	if not _history.is_empty():
+		_put_code(SongCode.applied(_block, String(_history.pop_back())), "The song before is back.")
+	_show_back()
+
+
+func _put_code(got: Dictionary, said: String) -> String:
+	_typed = false
 	if not String(got["why"]).is_empty():
 		_say("That code is %s." % String(got["why"]))
 		_show_code(true)
@@ -695,15 +739,75 @@ func enter_code(code: String) -> String:
 		_block = got["block"]
 		_load_ref()
 		_changed()
-		_say("The song's settings are back from its code.")
+		_say(said)
 	_show_code(true)
 	return ""
 
 
-## The code as the settings stand, unless it is being typed into ([param now] true writes it anyway).
+## This song's code kept for Back.
+func _remember() -> void:
+	var c := SongCode.of(_block)
+	if _history.is_empty() or String(_history.back()) != c:
+		_history.append(c)
+		if _history.size() > HISTORY_MOST:
+			_history.pop_front()
+	_show_back()
+
+
+func _show_back() -> void:
+	if _back != null:
+		_back.disabled = _history.is_empty()
+
+
+## The code as the settings stand, unless a person is typing one ([param now] true writes it anyway).
 func _show_code(now := false) -> void:
-	if _code != null and (now or not _code.has_focus()):
+	if _code != null and (now or not _typed):
 		_code.text = SongCode.of(_block)
+
+
+## A press anywhere outside the code field lets it go: a line edit keeps the keyboard until something else takes it,
+## and most of the card takes nothing.
+func _input(event: InputEvent) -> void:
+	if _code == null or not _code.has_focus() or not (event is InputEventMouseButton) or not (event as InputEventMouseButton).pressed:
+		return
+	var local := _code.make_input_local(event) as InputEventMouseButton
+	if local != null and not Rect2(Vector2.ZERO, _code.size).has_point(local.position):
+		_code.release_focus()
+
+
+## Dial [param sl] showing [param v], its readout with it: dimmed where the roll drew it ([param drawn]).
+static func _show_dial(sl: HSlider, v: float, drawn: bool) -> void:
+	var row := sl.get_parent() as Control
+	sl.set_value_no_signal(v)
+	var i := sl.get_index() + 1
+	if i < row.get_child_count() and row.get_child(i) is Label:
+		(row.get_child(i) as Label).text = "%.2f" % v
+	row.modulate = Color(1, 1, 1, DRAWN_ALPHA) if drawn else Color.WHITE
+
+
+## A dial on [param box] for a setting [param set] (null where unset), showing [param drawn] dimmed where it is unset;
+## moved by hand, it is set and lit.
+func _drawn_dial(box: Container, label: String, lo: float, hi: float, step: float, set: Variant, drawn: float, tip: String,
+		apply: Callable) -> HSlider:
+	var sl := Card.slider_row(box, label, lo, hi, step, drawn, tip + " Dimmed, the roll drew it; moved, it is set.", apply)
+	_show_dial(sl, float(set) if _number(set) else drawn, not _number(set))
+	sl.value_changed.connect(func(_v: float) -> void: (sl.get_parent() as Control).modulate = Color.WHITE)
+	return sl
+
+
+## What the score made of part [param k] ([member score]): its part, or the voice.
+func _sounded(k: String) -> Dictionary:
+	var s := score()
+	if k == "vocal":
+		return s.get("vocal", {})
+	for p in s.get("parts", []):
+		if String(p["key"]) == k:
+			return p
+	return {}
+
+
+static func _number(v: Variant) -> bool:
+	return typeof(v) in [TYPE_INT, TYPE_FLOAT]
 
 
 ## The block changed: shown again ([param rebuild] false for a dial, whose own row is under the hand), the timeline if it

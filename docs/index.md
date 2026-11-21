@@ -36,13 +36,13 @@ core. The commitments:
 
 ## Feature registries
 
-- [Components](components.md) (16 components, 4 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
+- [Components](components.md) (17 components, 4 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
 - [Media](media.md) (11) - what the show is carried on.
 - [Look filters](filters.md) (8) - the post-process over the whole picture.
 - [Layers](layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](forces.md) (8) - the physics primitives particles compose.
-- [Stage actors and verbs](stage.md) (3 actors, 24 verbs) - what a storyboard's `stage` entries are made of.
+- [Stage actors and verbs](stage.md) (5 actors, 34 verbs) - what a storyboard's `stage` entries are made of.
 - [Table](table.md) (17 laws) - a table show's data as rows: what a person may set of an act, a thing and a part, and every law a track may move its thing by.
 - [Props and the library](props.md) (21 shapes, 18 materials, 20 roles) - the library of props and voices, the Dex, the Props card, roles any make can play, refining a prop into versions, and what every prop is made of.
 - [The Environment](surroundings.md) (17 kinds, 6 lights) - what is round the scene a note is shown in, a list of elements: its light, shafts through its haze, what drifts in its air, what is heard - each with properties a person sets or Roll draws - and how strongly each lit thing shines.
@@ -201,7 +201,11 @@ What every scene is built on: the `GhostScene` base and its 3D sibling, the came
 A show written down, as data: the storyboard's spec and its field tables, and the Cast/Actions/Track stack that renders a described scene. [stage.md](stage.md) is the data spec: how one is written, its fields and the actor/verb registries.
 
 - [`actions.gd`](../src/stage/actions.gd) **Actions** - the verb registry for data-driven scenes (see scenes/stage.gd).
+- [`cartoon_fx.gd`](../src/stage/cartoon_fx.gd) **CartoonFx** - the marks a cartoon draws over its puppets (next/cartoon.md): a star burst where a blow lands, dizzy stars round a head, dust kicked up at the feet, sweat flying, an alarm over a head, speed lines behind a runner. Flat color inked black, as the drawings are. One node over a stage's puppets ([method ...
 - [`cast.gd`](../src/stage/cast.gd) **Cast** - the actor registry for data-driven scenes (see scenes/stage.gd).
+- [`puppet_body.gd`](../src/stage/puppet_body.gd) **PuppetBody** - a rigged drawing alive on the stage (next/cartoon.md): the `PuppetRig`'s pictures on its skeleton, drawn by the engine's own 2D skinning (a `Skeleton2D` of `Bone2D`s and a `Polygon2D` per layer, weighted as the rig says), and the motion the verbs steer (`Actions`: move, pose, talk, face, strike, ...
+- [`puppet_rig.gd`](../src/stage/puppet_rig.gd) **PuppetRig** - a drawing made a puppet (next/cartoon.md), as the stage's puppet reads it: `rig.json` and its layers' pictures from a folder `hosts/puppet/rig.py build` wrote. A rig is named as a storyboard names it: a folder on the library's `puppets` shelf (`Library.shelf`) by its name, or a folder by its ...
+- [`puppet_sheet.gd`](../src/stage/puppet_sheet.gd) **PuppetSheet** - the drawings a puppet is made of (next/cartoon.md, "The model sheet"), as a cartoon's model sheet is: the character facing us with its mouth closed, open and wide, in profile, from behind, and in a few moods - each painted by an image model from the maker's drawing (or from another drawing of the ...
 - [`stage_keys.gd`](../src/stage/stage_keys.gd) **StageKeys** - a stage's flags: a value that changes at a moment, eased before or after it, and holds (next/editing.md). Masking's marker is the model, its ramp and damp the same two eases: a ramp arrives at its moment, eased in over the seconds before it (anticipation); a damp begins at it, eased out over the ...
 - [`storyboard.gd`](../src/stage/storyboard.gd) **Storyboard** - a show's scenes written down: the data spec, and its one owner.
 - [`track.gd`](../src/stage/track.gd) **Track** - the timeline runner for data-driven scenes (see scenes/stage.gd).
@@ -412,6 +416,15 @@ The panels a voice runs in: the reading (script, cast, voice, stream, export), t
 - [`voice_fishing.gd`](../src/reading/voice_fishing.gd) **VoiceFishing** - the fishing game that breeds Ghost Notes' own voices (`FormantVoice`): the Lab's pane on a tab that reads in it (`ReaderBrowser`). The loop is a fishing trip:
 - [`voice_keep.gd`](../src/reading/voice_keep.gd) **VoiceKeep** - the Voice card's kept voices, a part of `ReadingCast`: Keep… on the voice on screen, which asks a name and keeps it in the library (`VoiceLibrary`, `ReadingCast.keep_shown`), and "Make it this note's own" on a tab that reads one by name. A tab reading a kept voice is that voice: a dial of ...
 - [`voice_shape.gd`](../src/reading/voice_shape.gd) **VoiceShape** - a voice across a paragraph, drawn and dragged (`ReaderBrowser`): the mix as bands, one a reader, their edges curves through `VoiceBlend.POINTS` points, and a lane for each of `VoiceBlend.LANES`, a curve from -1 (bottom) to 1 (top). Left to right is a paragraph, its first word to ...
+
+### `cartoon/` - Cartoon
+
+A cartoon made from drawings (next/cartoon.md): the card that lists its characters and sets, the rigger's tools (a drawing cut, rigged and looked at through `hosts/puppet/`), and the producer whose agents rig each character, paint each set and write the storyboard the stage plays silent.
+
+- [`cartoon_card.gd`](../src/cartoon/cartoon_card.gd) **CartoonCard** - the Cartoon's card (next/cartoon.md): the characters a cartoon is made of, each from its maker's drawing; the places it is set in, each a line saying what is there; and how long it runs. What is made of them is the Pipeline card's (`PipelineSection`): each character rigged by the rigger, each set ...
+- [`cartoon_producer.gd`](../src/cartoon/cartoon_producer.gd) **CartoonProducer** - what agents make for a cartoon (next/cartoon.md), one note's: each character RIGGED from its drawing by the rigger (`RiggerTools`, rules/cartoon/rigger.yaml) onto the library's `puppets` shelf, each set PAINTED in the cast's own drawing style (rules/cartoon/set_painter.yaml, the cast's drawings its ...
+- [`cartoon_tool.gd`](../src/cartoon/cartoon_tool.gd) **cartoon_tool** - CartoonTool - a cartoon's agents run from the command line (next/cartoon.md): the same `CartoonProducer` the Cartoon card runs, on the note at a path, each step it is asked for waited for and said as it lands, then the app quits. It writes what the card would (puppets and sets on the library's ...
+- [`rigger_tools.gd`](../src/cartoon/rigger_tools.gd) **RiggerTools** - the rigger's tools (next/cartoon.md, rules/cartoon/rigger.yaml): a drawing cut off its paper, its skeleton, jaw, eyes and parts built into a puppet, each answered with the picture the puppet host draws of it, and the puppet handed in. Served over ghost's MCP server (`AgentTools`) to a writer that ...
 
 ### `table/` - The set
 

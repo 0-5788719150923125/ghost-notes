@@ -22,8 +22,15 @@ const REGISTRY := {
 	"specialize": Specialize, "form": Form, "leave": Leave,
 	"gather": Gather, "fly": Fly, "helix_split": HelixSplit, "lane_jump": LaneJump,
 	"set": SetParam, "ramp": Ramp, "pulse": Pulse, "flash": Flash,
+	"move": Move, "pose": Pose, "talk": Talk, "face": Face, "strike": Strike, "hit": Hit, "hop": Hop, "shake": Shake, "fx": Fx,
+	"feel": Feel,
 }
 
+## How a puppet goes ([constant PuppetBody.GAITS]), the poses every rig has ([constant PuppetBody.POSES]) and the marks a cartoon
+## draws ([constant CartoonFx.KINDS]).
+const GAITS := ["walk", "run", "tiptoe", "hop", "float", "slide"]
+const POSE_NAMES := ["rest", "arms_up", "arms_out", "arms_down", "cower", "shrug", "spooky", "cheer", "windup", "kick", "point"]
+const FX_KINDS := ["pow", "stars", "dust", "sweat", "alarm", "lines"]
 ## What `set` and `ramp` can move on an actor: the ones every kind has, then the eye's own.
 const PARAM_NAMES := ["scale", "fade", "hue", "time_scale", "drive", "tremble", "dilate", "lid", "iris"]
 ## The shapes `form` makes ([method Form.slots]).
@@ -138,6 +145,62 @@ const ARGS := {
 	},
 	"flash": {
 		"hue": {"label": "Hue", "type": "num", "default": null, "blurb": "The flash's color. Unset, the actor's own."},
+	},
+	"move": {
+		"to": {"label": "To", "type": "vec3", "default": null,
+			"blurb": "Where it goes: right, up and toward the camera. Unset, where `by` takes it."},
+		"by": {"label": "By", "type": "vec3", "default": null,
+			"blurb": "How far it goes from where it is, when `to` is not given: every actor named goes as far."},
+		"gait": {"label": "Gait", "type": "enum", "options": GAITS, "default": "walk",
+			"blurb": "How it goes: walking, running, tiptoeing, hopping, floating off the ground, or sliding with its feet still."},
+		"turn": {"label": "Turns", "type": "bool", "default": true, "blurb": "It turns to face the way it goes first."},
+	},
+	"pose": {
+		"pose": {"label": "Pose", "type": "enum", "options": POSE_NAMES, "default": "rest",
+			"blurb": "The pose it takes and holds: one every rig has, or one of its own rig's by name. `rest` is as it is drawn; `point` points the arm nearer `toward` at it."},
+		"angles": {"label": "Angles", "type": "data", "default": null,
+			"blurb": "Bones turned by name, in degrees about each one's joint (clockwise on the screen), over the pose: `{\"arm_l\": -40}`."},
+		"toward": {"label": "Toward", "type": "actor", "default": null, "blurb": "The actor `point` points at."},
+	},
+	"talk": {
+		"loud": {"label": "How hard", "type": "num", "default": 1.0,
+			"blurb": "How wide and fast its mouth goes, from a mumble at 0.3 to a shout at 1. Silent: only the mouth and the nods are seen."},
+	},
+	"face": {
+		"to": {"label": "To", "type": "text", "default": "",
+			"blurb": "Which way it turns: left or right (in profile, where it has a profile drawn), toward an actor by name, or front (to us) or back (away)."},
+	},
+	"feel": {
+		"mood": {"label": "Mood", "type": "enum", "options": PuppetSheet.MOODS, "default": "",
+			"blurb": "The mood it shows from now on, where its model sheet has that drawing: scared, angry, laughing, or none."},
+	},
+	"strike": {
+		"at": {"label": "At", "type": "actor", "default": null, "blurb": "Who is struck."},
+		"force": {"label": "Force", "type": "num", "default": 0.7,
+			"blurb": "How hard, from a tap at 0.2 to a blow that spins them at 1."},
+		"mark": {"label": "Mark", "type": "enum", "options": ["pow", "stars", ""], "default": "pow",
+			"blurb": "What is drawn where it lands: a star burst, dizzy stars round their head, or nothing."},
+	},
+	"hit": {
+		"from": {"label": "From", "type": "text", "default": "",
+			"blurb": "Where the blow comes from: an actor's name, left or right."},
+		"force": {"label": "Force", "type": "num", "default": 0.6, "blurb": "How hard, 0 to 1."},
+		"mark": {"label": "Mark", "type": "enum", "options": ["pow", "stars", ""], "default": "",
+			"blurb": "What is drawn on them: a star burst, dizzy stars round their head, or nothing."},
+	},
+	"hop": {
+		"height": {"label": "Height", "type": "num", "default": 0.35, "blurb": "How high, in shares of its own height."},
+		"to": {"label": "To", "type": "vec3", "default": null, "blurb": "Where it lands. Unset, where it stood (or where `by` takes it)."},
+		"by": {"label": "By", "type": "vec3", "default": null, "blurb": "How far it hops from where it is."},
+	},
+	"shake": {
+		"amount": {"label": "How hard", "type": "num", "default": 0.6, "blurb": "How hard it shakes, 0 to 1: fear, rage, a chill."},
+	},
+	"fx": {
+		"kind": {"label": "Mark", "type": "enum", "options": FX_KINDS, "default": "alarm",
+			"blurb": "A star burst, dizzy stars, dust, sweat flying, an alarm over the head, or speed lines."},
+		"bone": {"label": "At", "type": "text", "default": "",
+			"blurb": "The bone it is drawn at (its tip). Unset, the top of the head."},
 	},
 }
 
@@ -287,6 +350,8 @@ class Blink extends Action:
 		for a in actors:
 			if a.body is EyeBody:
 				(a.body as EyeBody).blink(dur)
+			elif a.body is PuppetBody:
+				(a.body as PuppetBody).blink(dur)
 
 
 ## arrive - the actor flies in from off the frame, fast, and lands on its place like a rubber band coming home: past
@@ -1445,3 +1510,386 @@ class Flash extends Action:
 		var col := Color(1, 1, 1) if h < 0.0 else Color.from_hsv(h, 0.45, 1.0)
 		for a in actors:
 			stage.flash(a, col)
+
+
+# --- a puppet's verbs (next/cartoon.md): each steers its [PuppetBody] -------------------------------------------------------
+
+## The puppet's body of [param a], or null for an actor that is no puppet (or whose rig is not read yet).
+static func puppet(a) -> PuppetBody:
+	return a.body as PuppetBody if a != null and a.body is PuppetBody else null
+
+
+## Where [param a] would be heading to reach [param x]: 1 right, -1 left, 0 there.
+static func _toward(a, x: float) -> float:
+	return 0.0 if absf(x - a.pos.x) < 0.01 else signf(x - a.pos.x)
+
+
+## [param a] turned to look [param way] across the screen (1 right, -1 left).
+static func turn_puppet(a, way: float) -> void:
+	var pb := puppet(a)
+	if pb == null or way == 0.0:
+		return
+	var drawn := -1.0 if String(pb.rig.data.get("faces", "front")) == "left" else 1.0
+	pb.facing = way * drawn
+
+
+## Where a mark goes on [param a]: the tip of [param bone], or the top of its head.
+static func mark_point(a, bone := "") -> Vector2:
+	var pb := puppet(a)
+	if pb == null or pb.node == null or not is_instance_valid(pb.node):
+		return Vector2.ZERO
+	return pb.top_point() if bone.is_empty() else pb.point_of(bone)
+
+
+## How tall [param a] is drawn now (px of the stage).
+static func drawn_height(a) -> float:
+	var pb := puppet(a)
+	if pb == null or pb.node == null or not is_instance_valid(pb.node):
+		return 100.0
+	return absf(pb.node.transform.get_scale().y) * pb.rig.height()
+
+
+## move - a puppet goes to a place across the window: its gait (walk, run, tiptoe, hop, float, slide) swings its legs and arms at
+## the pace it actually goes, and it turns to face the way it goes first. The default ease sets off and pulls up; `ease: linear`
+## keeps an even pace. Running kicks up dust as it sets off. args: to ([x, y, z]) or by (an offset), gait, turn.
+class Move extends Action:
+	var _from := {}
+	var _to := {}
+
+	func begin(stage, actors: Array) -> void:
+		var gait := String(args.get("gait", "walk"))
+		for a in actors:
+			_from[a] = a.pos
+			_to[a] = Storyboard.sample_vec3(args.get("to"), rng, a.pos + Storyboard.sample_vec3(args.get("by"), rng, Vector3.ZERO))
+			var pb := Actions.puppet(a)
+			if pb == null:
+				continue
+			pb.gait = gait if GAITS.has(gait) else "walk"
+			if bool(args.get("turn", true)):
+				Actions.turn_puppet(a, Actions._toward(a, (_to[a] as Vector3).x))
+			if gait == "run" and pb.node != null:
+				CartoonFx.of(stage).add("dust", pb.node.position, Actions.drawn_height(a) * 0.5, null, "",
+					Vector2(signf((_to[a] as Vector3).x - a.pos.x), 0))
+
+	func apply(_stage, actors: Array, k: float, _f: AudioFeatures, _dt: float) -> void:
+		for a in actors:
+			if _from.has(a):
+				a.pos = (_from[a] as Vector3).lerp(_to[a], k)
+				a.home = a.pos
+
+	func finish(_stage, actors: Array) -> void:
+		for a in actors:
+			var pb := Actions.puppet(a)
+			if pb != null:
+				pb.gait = ""
+
+
+## pose - a puppet takes a pose over the window and holds it: one every rig has (arms up, out or down, cowering, a shrug, spooky
+## arms, a cheer, a windup, a kick, pointing at someone) or one of its own rig's by name, with any bones turned by `angles` over it.
+## The pose replaces the one held before; `rest` goes back to the drawing. With `ease: spike` it strikes the pose and comes back.
+## args: pose, angles ({bone: degrees}), toward (who `point` points at).
+class Pose extends Action:
+	var _from := {}
+	var _to := {}
+
+	func begin(stage, actors: Array) -> void:
+		for a in actors:
+			var pb := Actions.puppet(a)
+			if pb == null:
+				continue
+			var name := String(args.get("pose", "rest"))
+			var to := {}
+			if name == "point":
+				var other = stage.actor(String(args.get("toward", "")))
+				var side := pb.arm_toward(a.pos.x, other.pos.x if other != null else a.pos.x + 1.0)
+				var way := Actions._toward(a, other.pos.x if other != null else a.pos.x + 1.0)
+				var screen := 0.0 if way >= 0.0 else 180.0
+				to = pb.pose_angles("rest", screen if pb.facing > 0.0 else 180.0 - screen, side)
+			else:
+				to = pb.pose_angles(name)
+			var extra: Variant = args.get("angles")
+			if extra is Dictionary:
+				for b in extra:
+					to[String(b)] = float(Storyboard.sample(extra[b], rng))
+			var from := pb.pose.duplicate()
+			from["_sq"] = pb.squash_hold
+			if not to.has("_sq"):
+				to["_sq"] = 1.0
+			_from[a] = from
+			_to[a] = to
+
+	func apply(_stage, actors: Array, k: float, _f: AudioFeatures, _dt: float) -> void:
+		for a in actors:
+			var pb := Actions.puppet(a)
+			if pb == null or not _from.has(a):
+				continue
+			var f: Dictionary = _from[a]
+			var t: Dictionary = _to[a]
+			var keys := f.keys()
+			for b in t:
+				if not keys.has(b):
+					keys.append(b)
+			for b in keys:
+				var v := lerpf(float(f.get(b, 1.0 if b == "_sq" else 0.0)), float(t.get(b, 1.0 if b == "_sq" else 0.0)), k)
+				if b == "_sq":
+					pb.squash_hold = v
+				else:
+					pb.pose[b] = v
+
+
+## talk - a puppet talks for the window: its jaw chatters in syllables and words and its head nods, though nothing is heard.
+## args: loud (0.3 a mumble, 1 a shout).
+class Talk extends Action:
+	func apply(_stage, actors: Array, _k: float, _f: AudioFeatures, _dt: float) -> void:
+		var loud := clampf(num("loud", 1.0), 0.0, 1.5)
+		for a in actors:
+			var pb := Actions.puppet(a)
+			if pb != null:
+				pb.talking = loud
+
+	func finish(_stage, actors: Array) -> void:
+		for a in actors:
+			var pb := Actions.puppet(a)
+			if pb != null:
+				pb.talking = 0.0
+
+
+## face - a puppet turns: left or right (to its profile where its model sheet has one, else its drawing mirrored), toward another
+## actor, to us (front) or away (back). It holds that view until turned again; going across always shows its profile. args: to.
+class Face extends Action:
+	func begin(stage, actors: Array) -> void:
+		var to := String(args.get("to", ""))
+		for a in actors:
+			var pb := Actions.puppet(a)
+			if to in ["front", "back"]:
+				if pb != null:
+					pb.view = to if pb.has_view(to) else "front"
+				continue
+			var way := 0.0
+			match to:
+				"left":
+					way = -1.0
+				"right":
+					way = 1.0
+				_:
+					var other = stage.actor(to)
+					if other != null:
+						way = Actions._toward(a, other.pos.x)
+			Actions.turn_puppet(a, way)
+			if pb != null and way != 0.0 and pb.has_view("side"):
+				pb.view = "side"
+
+
+## feel - a puppet's mood from now on: its model sheet's drawing of it (scared, angry, laughing), or none. A point in time. args: mood.
+class Feel extends Action:
+	func begin(_stage, actors: Array) -> void:
+		var m := String(args.get("mood", ""))
+		for a in actors:
+			var pb := Actions.puppet(a)
+			if pb != null:
+				pb.mood = m if PuppetSheet.MOODS.has(m) else ""
+
+
+## strike - a puppet hits another: it winds up (the arm nearer them up and back, crouching), swings through fast and lunges, and
+## where the blow lands they are hit (recoil, spin, squash, eyes popping) with a star burst or dizzy stars; then it settles back.
+## Give the span `ease: linear`; a second or so reads well. args: at (who), force, mark.
+class Strike extends Action:
+	var _from := {}
+	var _wind := {}
+	var _swing := {}
+	var _home := {}
+	var _landed := false
+
+	func begin(stage, actors: Array) -> void:
+		var victim = stage.actor(String(args.get("at", "")))
+		for a in actors:
+			var pb := Actions.puppet(a)
+			if pb == null:
+				continue
+			var vx: float = victim.pos.x if victim != null else a.pos.x + Actions.turn_way(a)
+			var way := Actions._toward(a, vx)
+			if way == 0.0:
+				way = 1.0
+			Actions.turn_puppet(a, way)
+			var side := pb.arm_toward(a.pos.x, vx)
+			var wind := -90.0 - 30.0 * way
+			var swing := 90.0 - 60.0 * way
+			if pb.facing < 0.0:
+				wind = 180.0 - wind
+				swing = 180.0 - swing
+			_from[a] = pb.pose.duplicate()
+			_wind[a] = pb.pose_angles("rest", wind, side)
+			_swing[a] = pb.pose_angles("rest", swing, side)
+			_home[a] = a.pos
+
+	func apply(stage, actors: Array, k: float, _f: AudioFeatures, _dt: float) -> void:
+		var victim = stage.actor(String(args.get("at", "")))
+		for a in actors:
+			var pb := Actions.puppet(a)
+			if pb == null or not _from.has(a):
+				continue
+			var f: Dictionary = _from[a]
+			var w: Dictionary = _wind[a]
+			var s: Dictionary = _swing[a]
+			var pose := {}
+			var lunge := 0.0
+			if k < 0.45:
+				pose = Actions._mix(f, w, smoothstep(0.0, 1.0, k / 0.45))
+				pb.squash_hold = lerpf(1.0, 0.9, k / 0.45)
+			elif k < 0.6:
+				var q := (k - 0.45) / 0.15
+				pose = Actions._mix(w, s, q * q)
+				lunge = q
+				pb.squash_hold = lerpf(0.9, 1.08, q)
+			else:
+				var q := (k - 0.6) / 0.4
+				pose = Actions._mix(s, f, smoothstep(0.0, 1.0, q))
+				lunge = 1.0 - smoothstep(0.0, 1.0, q)
+				pb.squash_hold = lerpf(1.08, 1.0, q)
+			for b in pose:
+				pb.pose[b] = pose[b]
+			pb.snap = 2.8 if k < 0.65 else 1.0
+			var vx: float = victim.pos.x if victim != null else a.pos.x
+			a.pos = (_home[a] as Vector3) + Vector3(signf(vx - (_home[a] as Vector3).x) * 0.12 * a.scale * lunge, 0, 0)
+			if k >= 0.6 and not _landed and victim != null:
+				_landed = true
+				var force := clampf(num("force", 0.7), 0.0, 1.5)
+				Actions.land_blow(stage, victim, Vector2(signf(victim.pos.x - a.pos.x), 0.1), force, String(args.get("mark", "pow")))
+
+	func finish(_stage, actors: Array) -> void:
+		for a in actors:
+			var pb := Actions.puppet(a)
+			if pb != null and _home.has(a):
+				a.pos = _home[a]
+				pb.squash_hold = 1.0
+				pb.snap = 1.0
+
+
+## hit - a puppet is hit, from another actor's side or from the left or right: it recoils, spins, squashes and its eyes pop, with a
+## star burst or dizzy stars if asked. A point in time (`at`). args: from, force, mark.
+class Hit extends Action:
+	func begin(stage, actors: Array) -> void:
+		var from := String(args.get("from", ""))
+		var force := clampf(num("force", 0.6), 0.0, 1.5)
+		for a in actors:
+			var way := 1.0
+			match from:
+				"left":
+					way = 1.0
+				"right":
+					way = -1.0
+				_:
+					var other = stage.actor(from)
+					if other != null:
+						way = signf(a.pos.x - other.pos.x) if absf(a.pos.x - other.pos.x) > 0.01 else 1.0
+			Actions.land_blow(stage, a, Vector2(way, 0.1), force, String(args.get("mark", "")))
+
+
+## hop - a puppet crouches, springs up (stretching), flies and lands (squashing, dust kicked up), in place or to a place. Give the
+## span `ease: linear`. args: height (shares of its own), to or by.
+class Hop extends Action:
+	var _from := {}
+	var _to := {}
+	var _landed := {}
+
+	func begin(_stage, actors: Array) -> void:
+		for a in actors:
+			_from[a] = a.pos
+			_to[a] = Storyboard.sample_vec3(args.get("to"), rng, a.pos + Storyboard.sample_vec3(args.get("by"), rng, Vector3.ZERO))
+			Actions.turn_puppet(a, Actions._toward(a, (_to[a] as Vector3).x))
+
+	func apply(stage, actors: Array, k: float, _f: AudioFeatures, _dt: float) -> void:
+		var hh := num("height", 0.35)
+		for a in actors:
+			var pb := Actions.puppet(a)
+			if pb == null or not _from.has(a):
+				continue
+			if k < 0.18:
+				pb.squash_hold = lerpf(1.0, 0.78, k / 0.18)
+				pb.lift = 0.0
+			elif k < 0.85:
+				var t := (k - 0.18) / 0.67
+				pb.lift = 4.0 * t * (1.0 - t) * hh
+				pb.squash_hold = lerpf(1.18, 1.0, t)
+				a.pos = (_from[a] as Vector3).lerp(_to[a], t)
+			else:
+				pb.lift = 0.0
+				a.pos = _to[a]
+				if not _landed.has(a):
+					_landed[a] = true
+					pb.squash_hold = 1.0
+					pb.kick(-0.9)
+					if pb.node != null:
+						CartoonFx.of(stage).add("dust", pb.node.position, Actions.drawn_height(a) * 0.45)
+
+	func finish(_stage, actors: Array) -> void:
+		for a in actors:
+			var pb := Actions.puppet(a)
+			if pb != null:
+				pb.lift = 0.0
+				pb.squash_hold = 1.0
+
+
+## shake - a puppet shakes for the window: fear, rage, a chill. args: amount.
+class Shake extends Action:
+	func apply(_stage, actors: Array, k: float, _f: AudioFeatures, _dt: float) -> void:
+		var amt := clampf(num("amount", 0.6), 0.0, 1.0)
+		for a in actors:
+			a.state["shake"] = amt * minf(1.0, minf(k, 1.0 - k) * 8.0 + 0.2)
+
+	func finish(_stage, actors: Array) -> void:
+		for a in actors:
+			a.state.erase("shake")
+
+
+## fx - a mark drawn on a puppet: a star burst, dizzy stars round its head, dust at its feet, sweat flying, an alarm over its head,
+## or speed lines - each lasts a moment. A point in time. args: kind, bone (where; the top of its head unset).
+class Fx extends Action:
+	func begin(stage, actors: Array) -> void:
+		var kind := String(args.get("kind", "alarm"))
+		var bone := String(args.get("bone", ""))
+		for a in actors:
+			var pb := Actions.puppet(a)
+			if pb == null or pb.node == null:
+				continue
+			var h := Actions.drawn_height(a)
+			match kind:
+				"dust":
+					CartoonFx.of(stage).add(kind, pb.node.position, h * 0.5)
+				"lines":
+					CartoonFx.of(stage).add(kind, pb.node.position - Vector2(0, h * 0.5), h * 0.6, pb, bone,
+						Vector2(Actions.turn_way(a), 0))
+				_:
+					CartoonFx.of(stage).add(kind, Actions.mark_point(a, bone), h * 0.45, pb, bone)
+
+
+## [param a]'s way across the screen as it is drawn now (1 right, -1 left; 1 for an actor that is no puppet).
+static func turn_way(a) -> float:
+	return float(a.call("looks")) if a != null and a.has_method("looks") else 1.0
+
+
+## A blow landing on [param victim] from screen direction [param dir], [param force] hard, with [param mark] drawn there.
+static func land_blow(stage, victim, dir: Vector2, force: float, mark: String) -> void:
+	var pb := Actions.puppet(victim)
+	if pb == null:
+		return
+	pb.hit(dir, force)
+	var h := Actions.drawn_height(victim)
+	match mark:
+		"pow":
+			CartoonFx.of(stage).add("pow", Actions.mark_point(victim, "") + Vector2(-dir.x * h * 0.12, h * 0.1), h * 0.32)
+		"stars":
+			CartoonFx.of(stage).add("pow", Actions.mark_point(victim, "") + Vector2(-dir.x * h * 0.12, h * 0.1), h * 0.26)
+			CartoonFx.of(stage).add("stars", Actions.mark_point(victim, ""), h * 0.5, pb)
+
+
+## Two poses mixed: [param a] toward [param b] by [param k], every bone either names.
+static func _mix(a: Dictionary, b: Dictionary, k: float) -> Dictionary:
+	var out := {}
+	for n in a:
+		if String(n) != "_sq":
+			out[n] = lerpf(float(a[n]), float(b.get(n, 0.0)), k)
+	for n in b:
+		if String(n) != "_sq" and not out.has(n):
+			out[n] = lerpf(float(a.get(n, 0.0)), float(b[n]), k)
+	return out

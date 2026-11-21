@@ -158,6 +158,10 @@ FOLDERS: List[Tuple[str, str, str]] = [
     ("reading", "The voice's workspaces",
      "The panels a voice runs in: the reading (script, cast, voice, stream, export), the Voice card and its Lab (who "
      "reads, a blend of readers, and the fishing game that breeds the formant voice)."),
+    ("cartoon", "Cartoon",
+     "A cartoon made from drawings (next/cartoon.md): the card that lists its characters and sets, the rigger's tools "
+     "(a drawing cut, rigged and looked at through `hosts/puppet/`), and the producer whose agents rig each character, "
+     "paint each set and write the storyboard the stage plays silent."),
     ("table", "The set",
      "A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), "
      "its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), "
@@ -282,6 +286,11 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
      "Print what is wrong with a table show's episode as it stands (a step's data that does not parse, what the acts' "
      "sanitizer says, the faults of its Timeline and every cue naming nothing, each stale step), then exit - non-zero when "
      "anything is. Reads only: for an edit made in a terminal, in seconds. Pairs with `--headless`.", False),
+    ("--cartoon", "<note>",
+     "Run a cartoon's agents on the note at that path (next/cartoon.md), as its card's Generate does, each step waited for "
+     "and said as it lands, then exit: with `--make` whatever is not made yet, or `--rig NAME`, `--paint NAME`, `--direct`; "
+     "`--writer` and `--model` pick who writes. Writes the puppets and sets on the library's shelves and the storyboard in "
+     "the note's folder. Pairs with `--headless`.", False),
     ("--seed", "<N>",
      "Override the session seed (default derives from the audio's own content fingerprint, so the same song replays "
      "the same show).", False),

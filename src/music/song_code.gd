@@ -13,8 +13,9 @@ class_name SongCode
 
 ## What the code leaves to the note.
 const LEFT_OUT := ["source", "path", "reference"]
-## What the block's own keys mean when they are not set: a value equal to one is left out of the code.
-const DEFAULTS := {"seed": 1, "likeness": 0.5, "tempo": 0.0, "key": ""}
+## What the block's own keys mean when they are not set: a value equal to one is left out of the code. (A setting a
+## roll draws where it is unset - Likeness, a level, the vocoder - has none: set to any value, it is in.)
+const DEFAULTS := {"seed": 1, "tempo": 0.0, "key": ""}
 const PART_DEFAULTS := {"seed": 1, "mute": false}
 ## A roll's numbers: under this, so each costs a code two bytes.
 const ROLL_MOST := 16384
@@ -46,6 +47,13 @@ const WORDS := [
 	"C dorian", "C# dorian", "D dorian", "Eb dorian", "E dorian", "F dorian", "F# dorian", "G dorian", "Ab dorian", "A dorian", "Bb dorian", "B dorian",
 	"C mixolydian", "C# mixolydian", "D mixolydian", "Eb mixolydian", "E mixolydian", "F mixolydian", "F# mixolydian", "G mixolydian", "Ab mixolydian", "A mixolydian", "Bb mixolydian", "B mixolydian",
 	"C lydian", "C# lydian", "D lydian", "Eb lydian", "E lydian", "F lydian", "F# lydian", "G lydian", "Ab lydian", "A lydian", "Bb lydian", "B lydian",
+	# patterns
+	"pop_sixteenths", "rock_drive", "punk", "shuffle", "trap", "two_step", "dembow", "funk", "disco", "breakbeat", "ballad",
+	"train", "octaves", "offbeat", "boogie", "gallop", "slap", "glide", "rolling", "pounding", "anthem", "broken", "comp",
+	"gated", "palm_mute", "power_held", "shuffle_riff", "scratch", "picked", "skank", "riff", "arp_lead",
+	# instruments
+	"kit_rock", "kit_edm", "kit_trap", "finger_bass", "reese", "bass_808", "acid", "piano", "supersaw", "synth_pluck",
+	"clav", "brass", "strings", "flute", "crunch_guitar", "metal_guitar", "acoustic_guitar", "glock",
 ]
 
 

@@ -20,10 +20,16 @@ class_name Composer
 ##   put. Without one, the words' sections in order, an intro and an outro around them.
 ## - THE HARMONY IS THE SPINE: one chord a beat every pitched part reads - the reference's, or each kind of section's
 ##   progression ([constant SongParts.PROGRESSIONS]) drawn from the seed.
-## - A ROLL DRAWS EVERYTHING THE BLOCK LEAVES OPEN ([method drawn]): the tempo, key and mode, the swing, the form and
-##   how its lines are paced, the chords and how often they change, who plays in each section, every part's pattern,
-##   sound and notes, the tune, the singer and how they sing. With a reference, `likeness` is the chance each thing it
-##   has is kept instead (its tempo, key, form, chords, drums, bass line and tune), each by a draw of its own.
+## - A ROLL DRAWS EVERYTHING THE BLOCK LEAVES OPEN ([method drawn]): Likeness, the tempo, key and mode, the swing, the
+##   form and how its lines are paced, the chords and how often they change, who plays in each section, every part's
+##   pattern, sound, level and notes, the tune, the singer and how they sing, the vocoder. With a reference, `likeness`
+##   is the chance each thing it has is kept instead (its tempo, key, form, chords, drums, bass line and tune), each by
+##   a draw of its own. A roll on the card leaves only what [method rolled] keeps, so it draws every setting.
+## - THE GROOVE LEADS: the song draws a drum pattern of its own (or takes the drums' pattern where it is set) and from
+##   it its styles, the range its tempo is drawn in and its feel; every pattern, every sound and the progressions favor
+##   the rows sharing a style with it (STYLE_WEIGHT, [method style_weights]), and the drums play a pattern that fits the
+##   tempo and feel ([method fits]). So a song drawn hangs together, pinning the drums' pattern steers the rest, and
+##   rolling the drums moves the drums alone.
 ## - EACH PART draws from the song's seed and its own number together (`part_seed`) - its pattern, its sound, its notes;
 ##   the voice its singer and manner too: rolling the song is a new song, every part moved; rolling a part moves it
 ##   alone, so muting or rolling a part is a fair comparison.
@@ -57,10 +63,23 @@ const REF_GAP := 8
 const LEAP_MOST := 7
 ## A reference's bass starts a new note where its low band rises this much (0-1), even on the same pitch.
 const BASS_ONSET := 0.45
-## The chance a roll keeps each thing the reference has, where the block says nothing (`likeness`).
-const LIKENESS := 0.5
-## A tempo drawn free of a reference (beats a minute), and one drawn over a reference's form, as a share of its tempo:
-## near enough that the lines laid on its bars are still sung at a pace a voice can carry.
+## What a roll on the card leaves of a song's settings: the note's own and where its words were pinned; of each part,
+## whether it is muted. Every other setting is the new roll's to draw ([method rolled]).
+const ROLL_KEEPS := ["source", "path", "reference", "place", "follow_reference"]
+const PART_ROLL_KEEPS := ["mute"]
+## How much more often a roll picks a row sharing a style with the drums' pattern than one that does not.
+const STYLE_WEIGHT := 5.0
+## A part's level drawn this many dB either side of its row's; the voice's, VOCAL_LEVEL_DRAWN.
+const LEVEL_DRAWN := 3.0
+const VOCAL_LEVEL_DRAWN := 1.5
+## The chance a roll puts the voice through the vocoder, and how far: [least, most].
+const VOCODER_CHANCE := 0.3
+const VOCODER := [0.3, 1.0]
+## How far the kick ducks the pad, bass and keys where the drums' pattern says nothing.
+const DUCK := 0.3
+## A tempo drawn free of a reference (beats a minute) where the drums' pattern names no range, and one drawn over a
+## reference's form, as a share of its tempo: near enough that the lines laid on its bars are still sung at a pace a
+## voice can carry.
 const TEMPO_FREE := [68, 160]
 const TEMPO_OVER_FORM := [0.75, 1.35]
 ## The modes a key is drawn in.
@@ -75,7 +94,7 @@ const SUNG_MOST := 4.2
 ## The singers a roll draws from where the author picked none: Kokoro readers heard holding a melody.
 const SINGERS := [{"voice": "kokoro", "speaker": 13, "name": "am_puck"}, {"voice": "kokoro", "speaker": 0, "name": "af_heart"}]
 ## How a roll draws the voice's manner where the author set none: [least, most].
-const STYLE_DRAWN := {"tune": [0.0, 0.8], "vibrato": [0.05, 0.35], "drift": [0.01, 0.06]}
+const STYLE_DRAWN := {"tune": [0.0, 0.8], "vibrato": [0.05, 0.35], "drift": [0.01, 0.06], "vibrato_rate": [4.6, 6.2]}
 
 
 ## The score of [param block] for [param ctx] (`lyrics`, `reference`).
@@ -104,29 +123,32 @@ static func score(block: Dictionary, ctx: Dictionary) -> Dictionary:
 		bars = maxi(bars, int(s["bar"]) + int(s["bars"]))
 	var start := float(ref.get("offset", 0.0)) if bool(roll["form"]) and bool(block.get("follow_reference", true)) else 0.0
 	var swing := float(roll["swing"])
-	var chords := _harmony(block, ref if bool(roll["harmony"]) else {}, form, key, seed, shift)
+	var styles: Array = roll["styles"]
+	var chords := _harmony(block, ref if bool(roll["harmony"]) else {}, form, key, seed, shift, styles)
 	var per_beat := _chord_track(chords, bars)
 	var has_vocal := parts_cfg.has("vocal") and not lyrics.is_empty()
 	var ctx2 := {"form": form, "per_beat": per_beat, "key": key, "beat": beat, "start": start, "bars": bars,
 		"ref": ref, "has_vocal": has_vocal, "shift": shift, "seed": seed, "swing": swing}
 	var parts: Array = []
 	var kick: Array = []
+	var duck := DUCK
 	for k in SongParts.PARTS:
 		if k == "vocal" or not parts_cfg.has(k):
 			continue
 		var cfg: Dictionary = parts_cfg[k] if parts_cfg[k] is Dictionary else {}
 		var row: Dictionary = SongParts.PARTS[k]
-		var chose := choice_of(k, cfg, seed, ref, bool((roll["follow"] as Dictionary).get(k, false)))
+		var chose := choice_of(k, cfg, seed, ref, bool((roll["follow"] as Dictionary).get(k, false)), roll)
 		var pattern := String(chose["pattern"])
 		var inst := String(chose["instrument"])
 		var pseed := part_seed(seed, k, cfg)
 		var notes := _part_notes(k, pattern, _rng(pseed, k), ctx2, kick)
 		if k == "drums":
+			duck = float(Registry.field(SongParts.PATTERNS, pattern, "duck", DUCK))
 			for n in notes:
 				if String(n.get("hit", "")) == "kick":
 					kick.append(float(n["t"]))
-		parts.append({"key": k, "instrument": Instruments.resolve(inst, pseed), "notes": _to_seconds(notes, beat, start, swing),
-			"level": float(cfg.get("level", row["level"])), "pan": float(cfg.get("pan", row["pan"])),
+		parts.append({"key": k, "instrument": _played(Instruments.resolve(inst, pseed), pattern),
+			"notes": _to_seconds(notes, beat, start, swing), "level": _level(cfg, row, pseed, LEVEL_DRAWN), "pan": float(cfg.get("pan", row["pan"])),
 			"fx": (row["fx"] as Dictionary).duplicate(true), "mute": bool(cfg.get("mute", false)),
 			"pattern": pattern, "instrument_key": inst, "seed": pseed})
 	var vocal := {}
@@ -143,19 +165,23 @@ static func score(block: Dictionary, ctx: Dictionary) -> Dictionary:
 		sections.append(d)
 	return {"tempo": tempo, "beat": beat, "meter": METER, "key": key, "bars": bars, "start": start,
 		"length": start + bars * METER * beat + TAIL, "sections": sections, "chords": chords, "parts": parts,
-		"vocal": vocal, "seed": seed, "kicks": _beats_to_s(kick, beat, start, swing), "roll": roll}
+		"vocal": vocal, "seed": seed, "kicks": _beats_to_s(kick, beat, start, swing), "roll": roll, "duck": duck}
 
 
 ## WHAT A ROLL DRAWS of the song as a whole, where [param block] leaves it open: `{likeness, form, harmony, follow: {part:
-## bool}, tempo, key, swing, arrange, kept}` (`kept`: what of the song as a whole is the reference's - tempo, key,
-## form, chords). Each thing [param ref] has - its tempo, key, form, chords, each part's pattern
-## (drums, bass line, tune), its straight feel and its line-ups - is kept with the chance `likeness` ([constant
-## LIKENESS] where unset), each by a draw of its own; what is not kept is drawn. The reference's chords, drums, bass
-## and tune lie on its bars, so they are kept only with its form, and a part pinned to the reference keeps the form.
+## bool}, beat, styles, tempo, key, swing, arrange, kept}` (`beat`: its groove, a drum pattern; `kept`: what of the song
+## as a whole is the reference's - tempo, key, form, chords). Each thing [param ref] has - its tempo, key, form, chords,
+## each part's pattern (drums, bass line, tune), its straight feel and its line-ups - is kept with the chance
+## `likeness` (itself drawn where unset), each by a draw of its own; what is not kept is drawn, the tempo in the beat's
+## range and the swing its feel. The reference's chords, drums, bass and tune lie on its bars, so they are kept only
+## with its form, and a part pinned to the reference keeps the form.
 static func drawn(block: Dictionary, ref: Dictionary, parts_cfg: Dictionary) -> Dictionary:
 	var seed := int(block.get("seed", 1))
 	var has_ref := not ref.is_empty() and int(ref.get("bars", 0)) > 0
-	var like := clampf(float(block.get("likeness", LIKENESS)), 0.0, 1.0) if has_ref else 0.0
+	var like := 0.0
+	if has_ref:
+		like = clampf(float(block["likeness"]), 0.0, 1.0) if typeof(block.get("likeness")) in [TYPE_INT, TYPE_FLOAT] \
+			else snappedf(Roll.unit(seed, "likeness"), 0.05)
 	var keeps := func(what: String) -> bool: return has_ref and _rng(seed, "keep:" + what).randf() < like
 	var pinned := false
 	for k in parts_cfg:
@@ -166,6 +192,12 @@ static func drawn(block: Dictionary, ref: Dictionary, parts_cfg: Dictionary) -> 
 	var follow := {}
 	for k in ["drums", "bass", "vocal"]:
 		follow[k] = form and keeps.call("pattern:" + k)
+	# the groove leads: the drums' pattern where it is set, else one drawn for the song by its own number
+	var dcfg: Dictionary = parts_cfg["drums"] if parts_cfg.get("drums") is Dictionary else {}
+	var beat := String(dcfg.get("pattern", ""))
+	if not SongParts.PATTERNS.has(beat) or beat == "reference":
+		beat = String(Roll.pick(SongParts.patterns_for("drums"), seed, "groove"))
+	var styles: Array = (Registry.field(SongParts.PATTERNS, beat, "styles", []) as Array).duplicate()
 	var kept: Array = []
 	var tempo := float(block.get("tempo", 0.0))
 	if tempo <= 0.0:
@@ -176,7 +208,8 @@ static func drawn(block: Dictionary, ref: Dictionary, parts_cfg: Dictionary) -> 
 		elif form:
 			tempo = roundf(float(ref["tempo"]) * lerpf(float(TEMPO_OVER_FORM[0]), float(TEMPO_OVER_FORM[1]), rt.randf()))
 		else:
-			tempo = float(rt.randi_range(int(TEMPO_FREE[0]), int(TEMPO_FREE[1])))
+			var span: Array = Registry.field(SongParts.PATTERNS, beat, "tempo", TEMPO_FREE)
+			tempo = float(rt.randi_range(int(span[0]), int(span[1])))
 	var key := MusicTheory.parse_key(String(block.get("key", "")))
 	if key.is_empty():
 		var rk := _rng(seed, "key")
@@ -189,15 +222,91 @@ static func drawn(block: Dictionary, ref: Dictionary, parts_cfg: Dictionary) -> 
 			key = {"tonic": tonic, "scale": _ref_key(ref)["scale"] if harmony else String(Roll.pick(MODES, seed, "mode"))}
 	var swing := 0.5
 	if not (has_ref and keeps.call("feel")):
-		var rs := _rng(seed, "swing")
-		if rs.randf() < SWING_CHANCE:
-			swing = lerpf(float(SWING[0]), float(SWING[1]), rs.randf())
+		var own := float(Registry.field(SongParts.PATTERNS, beat, "swing", 0.5))
+		if own > 0.5:
+			swing = own
+		elif not bool(Registry.field(SongParts.PATTERNS, beat, "straight", false)):
+			var rs := _rng(seed, "swing")
+			if rs.randf() < SWING_CHANCE:
+				swing = lerpf(float(SWING[0]), float(SWING[1]), rs.randf())
 	if form:
 		kept.append("form")
 	if harmony:
 		kept.append("chords")
-	return {"likeness": like, "form": form, "harmony": harmony, "follow": follow, "tempo": tempo, "key": key,
-		"swing": swing, "arrange": not (has_ref and keeps.call("arrange")), "kept": kept}
+	return {"likeness": like, "form": form, "harmony": harmony, "follow": follow, "beat": beat, "styles": styles,
+		"tempo": tempo, "key": key, "swing": swing, "arrange": not (has_ref and keeps.call("arrange")), "kept": kept}
+
+
+## [param block] rolled: what ROLL_KEEPS names kept, each part kept with only what PART_ROLL_KEEPS names, and
+## [param seed] the song's - every other setting left for the roll to draw.
+static func rolled(block: Dictionary, seed: int) -> Dictionary:
+	var out := {}
+	for k in ROLL_KEEPS:
+		if block.has(k):
+			out[k] = block[k]
+	if block.get("parts") is Dictionary:
+		var parts := {}
+		for p in block["parts"]:
+			parts[p] = part_rolled(block["parts"][p] if block["parts"][p] is Dictionary else {})
+		out["parts"] = parts
+	out["seed"] = seed
+	return out.duplicate(true)
+
+
+## A part's settings [param cfg] rolled: only what PART_ROLL_KEEPS names kept, and [param seed] its own where one is
+## handed (a part rolled alone).
+static func part_rolled(cfg: Dictionary, seed := -1) -> Dictionary:
+	var out := {}
+	for k in PART_ROLL_KEEPS:
+		if cfg.has(k):
+			out[k] = cfg[k]
+	if seed >= 0:
+		out["seed"] = seed
+	return out
+
+
+## Whether drum pattern [param pattern] suits a song at [param tempo] with eighths swung to [param swing]: its tempo
+## range (a tenth either way) holds it, a pattern that swings is in a swung song and a straight one in a straight song.
+static func fits(pattern: String, tempo: float, swing: float) -> bool:
+	var span: Array = Registry.field(SongParts.PATTERNS, pattern, "tempo", [])
+	if span.size() == 2 and (tempo < float(span[0]) * 0.9 or tempo > float(span[1]) * 1.1):
+		return false
+	if float(Registry.field(SongParts.PATTERNS, pattern, "swing", 0.5)) > 0.5 and swing < 0.55:
+		return false
+	return not (bool(Registry.field(SongParts.PATTERNS, pattern, "straight", false)) and swing > 0.5)
+
+
+## Each of [param names] (rows of [param rows]) weighed for a song of [param styles]: STYLE_WEIGHT where its own
+## `styles` share one, else 1 ([method Roll.pick_weighted]); no weights where the song has no styles.
+static func style_weights(names: Array, rows: Dictionary, styles: Array) -> Dictionary:
+	var out := {}
+	if styles.is_empty():
+		return out
+	for n in names:
+		var own: Array = Registry.field(rows, String(n), "styles", [])
+		out[n] = STYLE_WEIGHT if own.any(func(s: Variant) -> bool: return styles.has(s)) else 1.0
+	return out
+
+
+## Part [param cfg]'s level: the one set, else drawn [param spread] dB either side of its [param row]'s by its number.
+static func _level(cfg: Dictionary, row: Dictionary, pseed: int, spread: float) -> float:
+	if typeof(cfg.get("level")) in [TYPE_INT, TYPE_FLOAT]:
+		return float(cfg["level"])
+	return snappedf(float(row["level"]) + (Roll.unit(pseed, "level") * 2.0 - 1.0) * spread, 0.5)
+
+
+## Instrument [param inst] as [param pattern] plays it: a `snappy` pattern's notes struck and let go at once, unglided.
+static func _played(inst: Dictionary, pattern: String) -> Dictionary:
+	if not bool(Registry.field(SongParts.PATTERNS, pattern, "snappy", false)):
+		return inst
+	var out := inst.duplicate(true)
+	if out.get("amp") is Dictionary:
+		out["amp"]["a"] = minf(float(out["amp"].get("a", 0.005)), 0.008)
+		out["amp"]["r"] = minf(float(out["amp"].get("r", 0.2)), 0.12)
+	if out.get("fenv") is Dictionary:
+		out["fenv"]["a"] = minf(float(out["fenv"].get("a", 0.005)), 0.01)
+	out.erase("glide")
+	return out
 
 
 ## A PART'S NUMBER, as it is drawn from: the song's [param seed] and the part's own number together, so rolling the song
@@ -209,9 +318,12 @@ static func part_seed(seed: int, part: String, cfg: Dictionary) -> int:
 
 ## THE BAND: a part's pattern and instrument where the block names none. The reference's own where the roll keeps it
 ## ([param follow]) and the reference has the part (its drum pattern, its bass line, its sung tune); otherwise picked by
-## the part's number ([method part_seed]) among the rows the part can play ([method Roll.pick]) - so rolling the song or
-## the part draws another, a row added takes only the rolls it wins, and a part the author set stays set.
-static func choice_of(part: String, cfg: Dictionary, seed: int, ref: Dictionary, follow := true) -> Dictionary:
+## the part's number ([method part_seed]) among the rows the part can play ([method Roll.pick_weighted]), those sharing
+## one of the styles of the song's roll ([param song], [method drawn]) favored, a sound by its own pattern's styles too,
+## and the drums among the patterns that fit the song's tempo and feel ([method fits]). So rolling the song or the part
+## draws another, a row added takes only the rolls it wins, and a part the author set stays set.
+static func choice_of(part: String, cfg: Dictionary, seed: int, ref: Dictionary, follow := true, song: Dictionary = {}) -> Dictionary:
+	var styles: Array = song.get("styles", [])
 	var row: Dictionary = SongParts.PARTS.get(part, {})
 	var pseed := part_seed(seed, part, cfg)
 	var pattern := String(cfg.get("pattern", ""))
@@ -227,13 +339,20 @@ static func choice_of(part: String, cfg: Dictionary, seed: int, ref: Dictionary,
 				else ("recite" if Roll.unit(pseed, "recite") < 0.15 else "composed")
 		else:
 			var offered := SongParts.patterns_for(part, false)
-			pattern = String(Roll.pick(offered, pseed, "pattern")) if not offered.is_empty() else String(row.get("pattern", ""))
+			if part == "drums" and song.has("tempo"):
+				var fit := offered.filter(func(p: String) -> bool: return fits(p, float(song["tempo"]), float(song.get("swing", 0.5))))
+				if not fit.is_empty():
+					offered = fit
+			pattern = String(Roll.pick_weighted(offered, style_weights(offered, SongParts.PATTERNS, styles), pseed, "pattern")) \
+				if not offered.is_empty() else String(row.get("pattern", ""))
 		if pattern == "reference" and not has and part != "vocal" and ref.get("parts") is Array:
 			pattern = String(row.get("pattern", ""))
 	var inst := String(cfg.get("instrument", ""))
 	if inst.is_empty() and part != "vocal":
 		var rows := Instruments.for_part(part)
-		inst = String(Roll.pick(rows, pseed, "instrument")) if not rows.is_empty() else String(row.get("instrument", ""))
+		var own: Array = styles + (Registry.field(SongParts.PATTERNS, pattern, "styles", []) as Array)
+		inst = String(Roll.pick_weighted(rows, style_weights(rows, Instruments.ROWS, own), pseed, "instrument")) \
+			if not rows.is_empty() else String(row.get("instrument", ""))
 	return {"pattern": pattern, "instrument": inst}
 
 
@@ -414,8 +533,10 @@ static func _place_sections(lyrics: Array, sung: Array, total: int, beat: float,
 
 # --- the harmony ----------------------------------------------------------------------------------
 
-## The chords, each where it begins: `[{bar, beat, root, quality}]`.
-static func _harmony(block: Dictionary, ref: Dictionary, form: Array, key: Dictionary, seed: int, shift := 0) -> Array:
+## The chords, each where it begins: `[{bar, beat, root, quality}]` - the reference's, or each kind of section's
+## progression among those written for the key's mode, those sharing one of the song's [param styles] favored.
+static func _harmony(block: Dictionary, ref: Dictionary, form: Array, key: Dictionary, seed: int, shift := 0,
+		styles: Array = []) -> Array:
 	var out: Array = []
 	if not ref.is_empty() and String(block.get("harmony", "reference")) == "reference" and not (ref.get("chords", []) as Array).is_empty():
 		for c in ref["chords"]:
@@ -427,23 +548,28 @@ static func _harmony(block: Dictionary, ref: Dictionary, form: Array, key: Dicti
 	for s in form:
 		var kind := String(s["kind"])
 		if not picks.has(kind):
-			var keys: Array = SongParts.PROGRESSIONS.keys()
-			if String(key["scale"]) in ["minor", "dorian", "phrygian", "harmonic_minor", "minor_pentatonic"]:
-				keys = keys.filter(func(k: String) -> bool: return k != "pop" and k != "fifties")
-			picks[kind] = Roll.pick(keys, seed, "harmony:" + kind)
+			var keys: Array = SongParts.progressions_for(String(key["scale"]))
+			if keys.is_empty():
+				keys = SongParts.PROGRESSIONS.keys()
+			picks[kind] = Roll.pick_weighted(keys, style_weights(keys, SongParts.PROGRESSIONS, styles), seed, "harmony:" + kind)
 			# a chord a bar mostly; now and then two bars a chord, or two chords a bar (a two-chord sway twice as long)
 			var u := _rng(seed, "rhythm:" + kind).randf()
 			var bars_a_chord := 1.0 if u < 0.55 else (2.0 if u < 0.8 else 0.5)
 			if (SongParts.PROGRESSIONS[picks[kind]]["degrees"] as Array).size() <= 2:
 				bars_a_chord *= 2.0
-			lengths[kind] = int(bars_a_chord * METER)
-		var degrees: Array = SongParts.PROGRESSIONS[picks[kind]]["degrees"]
+			var fixed := float(Registry.field(SongParts.PROGRESSIONS, String(picks[kind]), "bars", 0.0))
+			lengths[kind] = int((fixed if fixed > 0.0 else bars_a_chord) * METER)
+		var prog: Dictionary = SongParts.PROGRESSIONS[picks[kind]]
+		var degrees: Array = prog["degrees"]
 		var span: int = lengths[kind]
 		var c := 0
 		while c * span < int(s["bars"]) * METER:
 			var at := c * span
 			var d := int(degrees[c % degrees.size()])
-			var ch := MusicTheory.diatonic(int(key["tonic"]), String(key["scale"]), d, kind in ["verse", "bridge"])
+			var ch := MusicTheory.diatonic(int(key["tonic"]), String(key["scale"]), d,
+				bool(prog.get("sevenths", false)) or kind in ["verse", "bridge"])
+			if prog.has("quality"):
+				ch["quality"] = String(prog["quality"])
 			out.append({"bar": int(s["bar"]) + at / METER, "beat": at % METER, "root": int(ch["root"]), "quality": String(ch["quality"])})
 			c += 1
 	return out
@@ -500,10 +626,15 @@ static func _part_notes(part: String, pattern: String, rng: RandomNumberGenerato
 		"keys":
 			return _keys(pattern, rng, ctx)
 		"pad":
-			return _pad(rng, ctx)
+			return _pad(pattern, rng, ctx)
 		"guitar":
 			return _guitar(pattern, rng, ctx)
 		"lead":
+			match pattern:
+				"riff":
+					return _riff(rng, ctx)
+				"arp_lead":
+					return _arp_lead(ctx)
 			return _lead(rng, ctx)
 		"bells":
 			return _bells(rng, ctx)
@@ -514,7 +645,8 @@ static func _drums(pattern: String, rng: RandomNumberGenerator, ctx: Dictionary)
 	var out: Array = []
 	var ref: Dictionary = ctx["ref"]
 	var own := SongParts.drum_steps(pattern if pattern != "reference" else "backbeat")
-	var swing := float(Registry.field(SongParts.PATTERNS, pattern, "swing", 0.5))
+	var swing := float(Registry.field(SongParts.PATTERNS, pattern, "swing16", 0.5))
+	var rolls := bool(Registry.field(SongParts.PATTERNS, pattern, "rolls", false))
 	var ghost := 0.25
 	var playing := _playing("drums", ctx)
 	for si in playing.size():
@@ -525,6 +657,8 @@ static func _drums(pattern: String, rng: RandomNumberGenerator, ctx: Dictionary)
 			if pattern == "reference":
 				steps = _ref_drums(ref, b, own)
 			var last := b == int(s["bar"]) + int(s["bars"]) - 1 and int(s["bars"]) >= 4
+			# a hat roll through the second half of one beat, now and then, where the pattern rolls
+			var roll_at := rng.randi_range(0, 3) if rolls and energy >= 0.6 and rng.randf() < 0.4 else -1
 			for hit in steps:
 				var row: Array = steps[hit]
 				for k in row.size():
@@ -535,7 +669,13 @@ static func _drums(pattern: String, rng: RandomNumberGenerator, ctx: Dictionary)
 						continue  # the fill takes the bar's second half
 					if energy < 0.5 and hit in ["snare", "clap", "open_hat"]:
 						continue
+					if roll_at >= 0 and hit == "hat" and k >= roll_at * 4 + 2 and k < roll_at * 4 + 4:
+						continue
 					out.append(_hit(hit, b, k, v * (0.75 + 0.25 * energy), swing, rng))
+			if roll_at >= 0:
+				var n: int = [6, 8][rng.randi_range(0, 1)]  # triplet thirty-seconds or thirty-seconds
+				for i in n:
+					out.append({"t": b * METER + roll_at + 0.5 + 0.5 * i / n, "hit": "hat", "vel": 0.45 + 0.4 * i / n})
 			if energy >= 0.6 and rng.randf() < ghost:
 				out.append(_hit("ghost", b, [6, 10, 14, 15][rng.randi_range(0, 3)], 0.8, swing, rng))
 			if last and energy >= 0.6:
@@ -615,6 +755,53 @@ static func _bass(pattern: String, rng: RandomNumberGenerator, ctx: Dictionary, 
 							var nxt := _chord_at(ctx, beat + 1)
 							m = MusicTheory.nearest(int(nxt["root"]), root) + (1 if rng.randf() < 0.5 else -1)
 					out.append({"t": float(beat), "len": 0.9, "midi": m, "vel": 0.8})
+			"octaves":
+				for e in range((b1 - b0) * 2):
+					var t := b0 + e * 0.5
+					var root := MusicTheory.nearest(int(_chord_at(ctx, t)["root"]), center - 3)
+					out.append({"t": t, "len": 0.4, "midi": root + (12 if e % 2 == 1 else 0), "vel": 0.9 if e % 2 == 0 else 0.8})
+			"offbeat":
+				for beat in range(b0, b1):
+					var t := beat + 0.5
+					out.append({"t": t, "len": 0.4, "midi": MusicTheory.nearest(int(_chord_at(ctx, t)["root"]), center), "vel": 0.9})
+			"boogie":
+				for e in range((b1 - b0) * 2):
+					var t := b0 + e * 0.5
+					var ch := _chord_at(ctx, t)
+					var root := MusicTheory.nearest(int(ch["root"]), center - 3)
+					var third := 3 if String(ch["quality"]) in ["m", "m7", "dim"] else 4
+					var up := [0, third, 7, 9, 10, 9, 7, third]
+					var i := int(roundf((t - float(ch["since"])) * 2.0)) % 8
+					out.append({"t": t, "len": 0.42, "midi": root + int(up[i]), "vel": 0.9 if e % 2 == 0 else 0.75})
+			"gallop":
+				for beat in range(b0, b1):
+					var root := MusicTheory.nearest(int(_chord_at(ctx, beat)["root"]), center - 3)
+					for g in [[0.0, 0.45, 0.95], [0.5, 0.2, 0.75], [0.75, 0.2, 0.75]]:
+						out.append({"t": beat + float(g[0]), "len": float(g[1]), "midi": root, "vel": float(g[2])})
+			"slap":
+				# [sixteenth, interval over the root, velocity]
+				var licks := [[0, 0, 0.95], [3, 0, 0.7], [4, 12, 0.85], [7, 0, 0.75], [10, 12, 0.85], [11, 7, 0.7], [14, 0, 0.8]]
+				for bar in range(b0 / METER, b1 / METER):
+					for l in licks:
+						var t := bar * METER + int(l[0]) / 4.0
+						var root := MusicTheory.nearest(int(_chord_at(ctx, t)["root"]), center - 3)
+						out.append({"t": t, "len": 0.2, "midi": root + int(l[1]), "vel": float(l[2])})
+			"glide":
+				var hits: Array = kick.filter(func(t: float) -> bool: return t >= b0 and t < b1)
+				if hits.is_empty():
+					for beat in range(b0, b1, 2):
+						hits.append(float(beat))
+				for i in hits.size():
+					var t := float(hits[i])
+					var nxt := float(hits[i + 1]) if i + 1 < hits.size() else float(b1)
+					var root := MusicTheory.nearest(int(_chord_at(ctx, t)["root"]), center - 5)
+					var up := i % 4 == 3 and rng.randf() < 0.35
+					out.append({"t": t, "len": maxf(nxt - t - 0.05, 0.3), "midi": root + (12 if up else 0), "vel": 0.95})
+			"rolling":
+				for step in range((b1 - b0) * 4):
+					var t := b0 + step / 4.0
+					var root := MusicTheory.nearest(int(_chord_at(ctx, t)["root"]), center - 3)
+					out.append({"t": t, "len": 0.2, "midi": root, "vel": 0.95 if step % 4 == 0 else 0.65})
 			"drone":
 				var beat := b0
 				while beat < b1:
@@ -696,6 +883,26 @@ static func _keys(pattern: String, rng: RandomNumberGenerator, ctx: Dictionary) 
 					var up := [0, 1, 2, 1]
 					out.append({"t": t, "len": 0.3, "midi": int(v[up[step % 4]]) + (12 if (step / 4) % 2 == 1 else 0), "vel": 0.65})
 					continue
+				"pounding":
+					on = step % 4 == 0
+					length = 0.8
+				"anthem":
+					on = step % 8 in [0, 3, 6]
+					length = 0.35
+				"comp":
+					on = step % 16 in [6, 14] or (step % 16 == 0 and rng.randf() < 0.3)
+					length = 0.3
+				"broken":
+					if step % 2 == 1:
+						continue
+					var v := _voicing(ctx, t, prev, 3, reg)
+					prev = v
+					var ch := _chord_at(ctx, t)
+					if step % 4 == 0 and int(ch["since"]) == int(floor(t)):
+						out.append({"t": t, "len": maxf(float(ch["until"]) - t - 0.1, 0.5),
+							"midi": MusicTheory.nearest(int(ch["root"]), int(reg[0]) - 6), "vel": 0.7})
+					out.append({"t": t, "len": 0.9, "midi": int(v[[0, 1, 2, 1][(step / 2) % 4]]), "vel": 0.6})
+					continue
 				_:  # offbeat stabs
 					on = step % 4 == 2
 			if on:
@@ -705,11 +912,22 @@ static func _keys(pattern: String, rng: RandomNumberGenerator, ctx: Dictionary) 
 	return out
 
 
-static func _pad(rng: RandomNumberGenerator, ctx: Dictionary) -> Array:
+static func _pad(pattern: String, rng: RandomNumberGenerator, ctx: Dictionary) -> Array:
 	var out: Array = []
 	var reg: Array = SongParts.PARTS["pad"]["register"]
 	var prev: Array = []
+	# gated: the chord on the sixteenths of an even spread drawn from the seed, where the section has the energy
+	var gate := MusicTheory.euclid([5, 7, 9, 11][rng.randi_range(0, 3)], 16, rng.randi_range(0, 3)) if pattern == "gated" else []
 	for s in _playing("pad", ctx):
+		if not gate.is_empty() and float(Registry.field(SongParts.SECTIONS, String(s["kind"]), "energy", 0.7)) >= 0.5:
+			for step in range(int(s["bars"]) * 16):
+				if not bool(gate[step % 16]):
+					continue
+				var t := int(s["bar"]) * METER + step / 4.0
+				prev = _voicing(ctx, t, prev, 4, reg)
+				for m in prev:
+					out.append({"t": t, "len": 0.2, "midi": int(m), "vel": 0.6})
+			continue
 		var beat := int(s["bar"]) * METER
 		var b1 := beat + int(s["bars"]) * METER
 		while beat < b1:
@@ -733,15 +951,54 @@ static func _guitar(pattern: String, rng: RandomNumberGenerator, ctx: Dictionary
 			var t := b0 + step / 4.0
 			var ch := _chord_at(ctx, t)
 			var root := MusicTheory.nearest(int(ch["root"]), int(reg[0]) + 6)
-			if pattern == "strum":
-				if strum[step % 16] != "x":
-					continue
-				var v := MusicTheory.voice_lead([], MusicTheory.chord_pcs(int(ch["root"]), String(ch["quality"])), 5, root, int(reg[1]))
-				for i in v.size():
-					out.append({"t": t + i * 0.012 / 0.6, "len": 0.45, "midi": int(v[i]), "vel": 0.6 + rng.randf() * 0.2})
-			elif step % 2 == 0:
-				for m in [root, root + 7, root + 12]:
-					out.append({"t": t, "len": 0.38, "midi": m, "vel": 0.85 if step % 8 == 0 else 0.7})
+			var pcs := MusicTheory.chord_pcs(int(ch["root"]), String(ch["quality"]))
+			match pattern:
+				"strum":
+					if strum[step % 16] != "x":
+						continue
+					var v := MusicTheory.voice_lead([], pcs, 5, root, int(reg[1]))
+					for i in v.size():
+						out.append({"t": t + i * 0.012 / 0.6, "len": 0.45, "midi": int(v[i]), "vel": 0.6 + rng.randf() * 0.2})
+				"palm_mute":
+					var accent := step % 4 == 0
+					for m in [root, root + 7]:
+						out.append({"t": t, "len": 0.2 if accent else 0.12, "midi": m, "vel": 0.85 if accent else 0.6})
+				"power_held":
+					if step % 4 == 0 and (int(ch["since"]) == int(floor(t)) or step % 16 == 0):
+						var bar_end := b0 + (step / 16 + 1) * METER
+						for m in [root, root + 7, root + 12]:
+							out.append({"t": t, "len": maxf(minf(float(ch["until"]), float(bar_end)) - t - 0.05, 0.4), "midi": m, "vel": 0.9})
+				"shuffle_riff":
+					if step % 2 == 1:
+						continue
+					var e := step / 2
+					var top := 7 if e % 4 < 2 else 9
+					if e % 8 == 7 and rng.randf() < 0.4:
+						top = 10
+					for m in [root, root + top]:
+						out.append({"t": t, "len": 0.4, "midi": m, "vel": 0.85 if e % 2 == 0 else 0.7})
+				"scratch":
+					if step % 16 in [3, 6, 11, 14]:
+						for m in MusicTheory.voice_lead([], pcs, 3, root + 12, int(reg[1]) + 6):
+							out.append({"t": t, "len": 0.14, "midi": int(m), "vel": 0.8})
+					elif rng.randf() < 0.7:
+						out.append({"t": t, "len": 0.04, "midi": root + 12, "vel": 0.3})
+				"picked":
+					if step % 2 == 1:
+						continue
+					var v := MusicTheory.voice_lead([], pcs, 4, root, int(reg[1]) + 5)
+					var order := [0, 2, 1, 3, 2, 1, 3, 2]
+					out.append({"t": t, "len": 1.2, "midi": int(v[int(order[(step / 2) % 8]) % v.size()]), "vel": 0.65 + rng.randf() * 0.1})
+				"skank":
+					if step % 4 != 2:
+						continue
+					var v := MusicTheory.voice_lead([], pcs, 3, root + 12, int(reg[1]) + 6)
+					for i in v.size():
+						out.append({"t": t + i * 0.008, "len": 0.15, "midi": int(v[i]), "vel": 0.75})
+				_:  # power eighths
+					if step % 2 == 0:
+						for m in [root, root + 7, root + 12]:
+							out.append({"t": t, "len": 0.38, "midi": m, "vel": 0.85 if step % 8 == 0 else 0.7})
 	return out
 
 
@@ -785,6 +1042,58 @@ static func _lead(rng: RandomNumberGenerator, ctx: Dictionary) -> Array:
 	return out
 
 
+## THE LEAD'S RIFF: one bar on the key's five notes (its minor pentatonic where the key is minor, its major one where it
+## is major), the rhythm an even spread and the steps drawn from the seed, moved with each bar's chord root and
+## repeated, every fourth bar's end left open.
+static func _riff(rng: RandomNumberGenerator, ctx: Dictionary) -> Array:
+	var out: Array = []
+	var reg: Array = SongParts.PARTS["lead"]["register"]
+	var key: Dictionary = ctx["key"]
+	var minor := String(key["scale"]) in ["minor", "dorian", "phrygian", "harmonic_minor", "minor_pentatonic"]
+	var five: Array = [0, 3, 5, 7, 10] if minor else [0, 2, 4, 7, 9]
+	var hits := MusicTheory.euclid([5, 6, 7][rng.randi_range(0, 2)], 16, rng.randi_range(0, 2))
+	var line: Array = []  # a step of the five a sixteenth, -99 for none
+	var at := 0
+	for i in 16:
+		if bool(hits[i]):
+			at = clampi(at + rng.randi_range(-2, 2), -2, 6)
+			line.append(at)
+		else:
+			line.append(-99)
+	var home := MusicTheory.nearest(int(key["tonic"]), float(int(reg[0]) + 2))
+	for s in _playing("lead", ctx):
+		for bar in range(int(s["bar"]), int(s["bar"]) + int(s["bars"])):
+			var ch := _chord_at(ctx, bar * METER)
+			var shift := posmod(int(ch["root"]) - int(key["tonic"]) + 6, 12) - 6
+			var open := (bar - int(s["bar"])) % 4 == 3
+			for i in 16:
+				if int(line[i]) == -99 or (open and i >= 12):
+					continue
+				var st := int(line[i])
+				var nxt := i + 1
+				while nxt < 16 and int(line[nxt]) == -99:
+					nxt += 1
+				out.append({"t": bar * METER + i / 4.0, "len": minf((nxt - i) / 4.0 - 0.05, 0.75),
+					"midi": home + shift + int(five[posmod(st, 5)]) + 12 * floori(st / 5.0), "vel": 0.8 if i % 4 == 0 else 0.68})
+	return out
+
+
+## THE ARPEGGIATOR: each chord's notes on the sixteenths, up through two octaves and back.
+static func _arp_lead(ctx: Dictionary) -> Array:
+	var out: Array = []
+	var reg: Array = SongParts.PARTS["lead"]["register"]
+	var prev: Array = []
+	var order := [0, 1, 2, 3, 4, 5, 4, 3]
+	for s in _playing("lead", ctx):
+		var b0 := int(s["bar"]) * METER
+		for step in range(int(s["bars"]) * 16):
+			var t := b0 + step / 4.0
+			prev = _voicing(ctx, t, prev, 3, [int(reg[0]) - 3, int(reg[0]) + 15])
+			var i := int(order[step % 8])
+			out.append({"t": t, "len": 0.2, "midi": int(prev[i % 3]) + 12 * (i / 3), "vel": 0.8 if step % 4 == 0 else 0.6})
+	return out
+
+
 static func _bells(rng: RandomNumberGenerator, ctx: Dictionary) -> Array:
 	var out: Array = []
 	var reg: Array = SongParts.PARTS["bells"]["register"]
@@ -811,9 +1120,8 @@ static func _vocal(cfg: Dictionary, ctx: Dictionary, _lyrics: Array) -> Dictiona
 	var singer: Dictionary = cfg["singer"] if cfg.get("singer") is Dictionary and not (cfg["singer"] as Dictionary).is_empty() \
 		else _singer(seed)
 	var style: Dictionary = STYLE.duplicate()
-	var rs := _rng(seed, "style")
 	for k in STYLE_DRAWN:
-		style[k] = snappedf(lerpf(float(STYLE_DRAWN[k][0]), float(STYLE_DRAWN[k][1]), rs.randf()), 0.01)
+		style[k] = snappedf(lerpf(float(STYLE_DRAWN[k][0]), float(STYLE_DRAWN[k][1]), Roll.unit(seed, "style:" + k)), 0.01)
 	for k in ["tune", "vibrato", "vibrato_rate", "drift"]:
 		if cfg.has(k):
 			style[k] = float(cfg[k])
@@ -856,10 +1164,14 @@ static func _vocal(cfg: Dictionary, ctx: Dictionary, _lyrics: Array) -> Dictiona
 				n["t"] = (warp(b0 + t, swing) - warp(b0 + t0, swing)) * beat
 		out_phrases.append({"at": at, "text": p["text"], "words": words, "bar": p["bar"]})
 	var row: Dictionary = SongParts.PARTS["vocal"]
-	return {"key": "vocal", "singer": singer, "style": style, "level": float(cfg.get("level", row["level"])),
+	var vocoder := 0.0
+	if typeof(cfg.get("vocoder")) in [TYPE_INT, TYPE_FLOAT]:
+		vocoder = clampf(float(cfg["vocoder"]), 0.0, 1.0)
+	elif Roll.unit(seed, "vocoder") < VOCODER_CHANCE:
+		vocoder = snappedf(lerpf(float(VOCODER[0]), float(VOCODER[1]), Roll.unit(seed, "vocoder:amount")), 0.05)
+	return {"key": "vocal", "singer": singer, "style": style, "level": _level(cfg, row, seed, VOCAL_LEVEL_DRAWN),
 		"pan": float(cfg.get("pan", row["pan"])), "fx": (row["fx"] as Dictionary).duplicate(true),
-		"mute": bool(cfg.get("mute", false)), "pattern": pattern, "phrases": out_phrases,
-		"vocoder": clampf(float(cfg.get("vocoder", 0.0)), 0.0, 1.0)}
+		"mute": bool(cfg.get("mute", false)), "pattern": pattern, "phrases": out_phrases, "vocoder": vocoder}
 
 
 ## A LINE ON THE REFERENCE'S TUNE: its syllables placed on the sixteenths of its bars where the reference's voice begins
@@ -1267,5 +1579,5 @@ static func render_spec(score: Dictionary, takes: Array, out_dir: String, mix_na
 		vocals.append(voc)
 	return {"out": out_dir, "mix": mix_name, "length": score["length"], "seed": score["seed"], "beat": score["beat"],
 		"parts": parts, "vocals": vocals,
-		"duck": {"hits": score.get("kicks", []), "depth": 0.3, "release": 0.14, "parts": ["pad", "bass", "keys"]},
+		"duck": {"hits": score.get("kicks", []), "depth": float(score.get("duck", DUCK)), "release": 0.14, "parts": ["pad", "bass", "keys"]},
 		"master": {"reverb": {"seconds": 1.9, "damp": 0.5, "predelay": 0.018}, "ceiling": -1.0}}

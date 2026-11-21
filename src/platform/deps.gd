@@ -328,6 +328,18 @@ const MANAGED := [
 			+ "table show paints its layers.",
 	},
 	{
+		"key": "puppet_venv",
+		"name": "Puppet environment",
+		"kind": KIND_MANAGED,
+		"path": "user://puppet_venv",
+		"requirements": "res://hosts/puppet/requirements.txt",
+		"imports": "numpy, scipy, PIL",
+		"size": "~150 MB",
+		"used_for": "numpy, SciPy and Pillow, for making a drawing a puppet (hosts/puppet/rig.py, next/cartoon.md): "
+			+ "cut off its paper, meshed, and weighted to the skeleton an agent placed on it. Built the first "
+			+ "time a cartoon rigs a character.",
+	},
+	{
 		"key": "music_venv",
 		"name": "Music environment",
 		"kind": KIND_MANAGED,

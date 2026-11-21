@@ -113,7 +113,7 @@ const CAMERA := {
 const ACTOR := {
 	"id": {"label": "Name", "type": "text", "default": "",
 		"blurb": "What the timeline calls this actor. One name, one body: the same name in the next stage entry is the same actor, carried across."},
-	"kind": {"label": "Kind", "type": "enum", "options": ["eye", "prism", "swarm"], "default": "eye",
+	"kind": {"label": "Kind", "type": "enum", "options": ["eye", "prism", "swarm", "puppet", "backdrop"], "default": "eye",
 		"blurb": "What it is."},
 	"at": {"label": "Place", "type": "vec3", "default": [0, 0, 0],
 		"blurb": "Where it stands: right, up and toward the camera. With the camera at its default, 0.62 to either side are the two side-by-side places."},
@@ -127,7 +127,7 @@ const SPAN := {
 	"action": {"label": "Does", "type": "enum", "default": "set",
 		"options": ["look", "blink", "arrive", "sprout", "split", "crystallize", "tremble", "burst", "lock",
 			"desync", "hold_still", "sway", "counterflow", "specialize", "form", "leave", "gather", "fly", "helix_split",
-			"lane_jump", "set", "ramp", "pulse", "flash"],
+			"lane_jump", "set", "ramp", "pulse", "flash", "move", "pose", "talk", "face", "strike", "hit", "hop", "shake", "fx", "feel"],
 		"blurb": "What happens."},
 	"target": {"label": "Who", "type": "targets", "default": null,
 		"blurb": "The actors it happens to. None chosen means everyone on the stage."},
@@ -272,6 +272,13 @@ static func schedule(sequence: Array, sensitivity: float, unauthored: float) -> 
 		lengths.append(n)
 		acc += n
 	return {"starts": starts, "lengths": lengths, "end": acc}
+
+
+## How long the storyboard [param board] (its loaded form) plays with no sound (a silent note, next/cartoon.md): its entries' holds
+## end to end, one timed by the music counted as [method schedule] counts it.
+static func silent_length(board: Dictionary) -> float:
+	var sens := float(board.get("sensitivity", -1.0))
+	return float(schedule(board.get("sequence", []), sens if sens > 0.0 else 1.0, 8.0)["end"])
 
 
 ## The storyboard [param data] (a raw tree, defs and all) as a [Timeline] on the song's clock: an entry a

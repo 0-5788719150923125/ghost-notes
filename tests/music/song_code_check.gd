@@ -10,12 +10,14 @@ extends SceneTree
 ##   appended).
 ## - A tuned song's code entered on a note brings back every setting, the note's own source and reference kept; the
 ##   song it scores is the same song. Bad codes are refused and change nothing.
-## - A value at its default is left out (control: one off its default is in); every setting moves the code (control:
-##   the same block is the same code); a fresh roll is a short code, a tuned song a longer one.
+## - A value at its default is left out (control: one off its default is in) - but a setting a roll draws where it is
+##   unset, Likeness, is in at any value; every setting moves the code (control: the same block is the same code); a
+##   fresh roll is a short code, a tuned song a longer one.
 ## - A name no word covers (a pattern of the author's own) is written out and still comes back.
 ## - A ROW ADDED MOVES ONLY THE ROLLS IT WINS: over 2000 rolls a seventh name takes about a seventh of the picks, every
-##   pick that changed going to it (control: a pick by place in the list moves most of them); the composer's own picks
-##   of a part's pattern are these.
+##   pick that changed going to it (control: a pick by place in the list moves most of them); weighted, a heavier name
+##   wins about as many times more often and a name added still takes only what it wins; the composer's own picks of a
+##   part's pattern and sound are these.
 ## - A roll is never the number it replaces.
 
 ## The first words' count and the hash of them joined by newlines: grows only when a word is appended and this pinned.
@@ -105,8 +107,10 @@ func _round_trip() -> void:
 
 func _defaults() -> void:
 	var bare := SongCode.of({})
-	_ok(SongCode.of({"seed": 1, "likeness": 0.5, "tempo": 0.0, "key": "", "parts": {}, "source": "composed"}) == bare,
+	_ok(SongCode.of({"seed": 1, "tempo": 0.0, "key": "", "parts": {}, "source": "composed"}) == bare,
 		"a value at its default is left out: %s" % bare)
+	var like := SongCode.of({"likeness": 0.5})
+	_ok(like != bare and SongCode.applied({}, like)["block"].has("likeness"), "...but Likeness, which a roll draws where it is unset, is in at one half")
 	_ok(SongCode.of({"parts": {"drums": {"seed": 1, "mute": false}}}) == SongCode.of({"parts": {"drums": {}}}),
 		"...a part's too, the part kept")
 	_ok(SongCode.of({"seed": 2}) != bare and SongCode.of({"parts": {"drums": {}}}) != bare, "the control: one off its default is in")
@@ -160,11 +164,29 @@ func _stable() -> void:
 	_ok(moved == to_new and moved > 160 and moved < 440,
 		"a row added takes only the rolls it wins: %d of 2000 moved, all to it" % moved)
 	_ok(by_place > 1000, "the control: a pick by place in the list moves %d of 2000" % by_place)
+	var heavy := {"a": 4.0}
+	var won := 0
+	var w_moved := 0
+	var w_to_new := 0
+	for seed in 4000:
+		var was: Variant = Roll.pick_weighted(names, heavy, seed, "w")
+		won += 1 if was == "a" else 0
+		var now: Variant = Roll.pick_weighted(grown, heavy, seed, "w")
+		if was != now:
+			w_moved += 1
+			w_to_new += 1 if now == "g" else 0
+	# "a" weighs 4 among five of 1: it should win 4/9 of the draws
+	_ok(won > 1600 and won < 1950 and w_moved == w_to_new and w_moved > 0,
+		"weighted, a name four times as heavy wins %d of 4000 (about 1778), and a name added takes only what it wins (%d)" % [won, w_moved])
+	_ok(Roll.pick_weighted(names, {}, 7, "pattern") == Roll.pick(names, 7, "pattern"), "...and with no weights it is the plain pick")
 	var same := 0
 	for seed in range(1, 51):
 		var c := Composer.choice_of("keys", {}, seed, {})
-		if String(c["pattern"]) == String(Roll.pick(SongParts.patterns_for("keys"), Composer.part_seed(seed, "keys", {}), "pattern")) \
-				and String(c["instrument"]) == String(Roll.pick(Instruments.for_part("keys"), Composer.part_seed(seed, "keys", {}), "instrument")):
+		var pseed := Composer.part_seed(seed, "keys", {})
+		var pattern := String(Roll.pick(SongParts.patterns_for("keys"), pseed, "pattern"))
+		var rows := Instruments.for_part("keys")
+		var weights := Composer.style_weights(rows, Instruments.ROWS, Registry.field(SongParts.PATTERNS, pattern, "styles", []))
+		if String(c["pattern"]) == pattern and String(c["instrument"]) == String(Roll.pick_weighted(rows, weights, pseed, "instrument")):
 			same += 1
 	_ok(same == 50, "the composer picks a part's pattern and sound so: %d of 50" % same)
 

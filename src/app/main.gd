@@ -24,6 +24,7 @@ const NOTE_UPLOAD := "res://src/reading/note_upload.gd"
 const MASK_EDITOR := "res://src/masking/mask_editor.gd"
 const CARD_TABLE := "res://src/table/card_table.gd"
 const TABLE_EPISODE := "res://src/table_show/table_episode.gd"
+const CARTOON_TOOL := "res://src/cartoon/cartoon_tool.gd"
 const LETTER_SKETCHES := "res://src/letter/letter_sketches.gd"
 
 ## How long the show clock may stand still in a render before it is reported, in seconds of render time.
@@ -157,6 +158,10 @@ func _ready() -> void:
 			print("ghost: episode - " + p)
 		print("ghost: episode - %s" % ("nothing wrong" if said.is_empty() else "%d problem(s)" % said.size()))
 		get_tree().quit(0 if said.is_empty() else 1)
+		return
+	#`--cartoon <note>`: a cartoon's agents run on that note, each step waited for, then exit (next/cartoon.md).
+	if args.has("--cartoon"):
+		add_child(_script(CARTOON_TOOL).new())
 		return
 	if args.has("--showcase-now"):
 		add_child(_script(SHOWCASE).new())

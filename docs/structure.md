@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 726 references inside a folder, 1349 down the stack, 0 up it.
+Between scripts today: 741 references inside a folder, 1375 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -19,6 +19,7 @@ Between scripts today: 726 references inside a folder, 1349 down the stack, 0 up
 | `desk/` | The desk | 15 | `table_show`, `table`, `reading`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `render`, `data` |
 | `table_show/` | The table's show | 25 | `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `geometry`, `audio`, `platform`, `data` |
 | `table/` | The set | 75 | `reading`, `media`, `ui`, `agents`, `scene_kit`, `geometry`, `render`, `audio`, `platform`, `data` |
+| `cartoon/` | Cartoon | 4 | `reading`, `timeline`, `ui`, `notes`, `agents`, `stage`, `platform`, `data` |
 | `reading/` | The voice's workspaces | 17 | `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
 | `export/` | Export | 6 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `music/` | Music | 10 | `timeline`, `show`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
@@ -30,7 +31,7 @@ Between scripts today: 726 references inside a folder, 1349 down the stack, 0 up
 | `notes/` | Notes | 13 | `agents`, `platform`, `data` |
 | `agents/` | Agents | 9 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
-| `stage/` | Storyboards & stage | 5 | `scene_kit`, `geometry`, `render`, `audio`, `data` |
+| `stage/` | Storyboards & stage | 9 | `scene_kit`, `geometry`, `render`, `audio`, `platform`, `data` |
 | `scene_kit/` | Scene substrate | 9 | `geometry`, `motion`, `render`, `audio`, `data` |
 | `geometry/` | Generative form | 14 | `motion`, `render` |
 | `motion/` | Motion & simulation | 13 | `render`, `audio` |
@@ -87,7 +88,7 @@ What every scene is built on: the `GhostScene` base and its 3D sibling, the came
 
 A show written down, as data: the storyboard's spec and its field tables, and the Cast/Actions/Track stack that renders a described scene. [stage.md](stage.md) is the data spec: how one is written, its fields and the actor/verb registries.
 
-[`actions`](../src/stage/actions.gd), [`cast`](../src/stage/cast.gd), [`stage_keys`](../src/stage/stage_keys.gd), [`storyboard`](../src/stage/storyboard.gd), [`track`](../src/stage/track.gd)
+[`actions`](../src/stage/actions.gd), [`cartoon_fx`](../src/stage/cartoon_fx.gd), [`cast`](../src/stage/cast.gd), [`puppet_body`](../src/stage/puppet_body.gd), [`puppet_rig`](../src/stage/puppet_rig.gd), [`puppet_sheet`](../src/stage/puppet_sheet.gd), [`stage_keys`](../src/stage/stage_keys.gd), [`storyboard`](../src/stage/storyboard.gd), [`track`](../src/stage/track.gd)
 
 ### `scenes/` - Scenes
 
@@ -153,6 +154,12 @@ The panels a voice runs in: the reading (script, cast, voice, stream, export), t
 
 [`note_upload`](../src/reading/note_upload.gd), [`reader_browser`](../src/reading/reader_browser.gd), [`reading_audition`](../src/reading/reading_audition.gd), [`reading_bed`](../src/reading/reading_bed.gd), [`reading_cast`](../src/reading/reading_cast.gd), [`reading_join`](../src/reading/reading_join.gd), [`reading_panel`](../src/reading/reading_panel.gd), [`reading_plan`](../src/reading/reading_plan.gd), [`reading_publish`](../src/reading/reading_publish.gd), [`reading_stream`](../src/reading/reading_stream.gd), [`reading_timeline`](../src/reading/reading_timeline.gd), [`take_cache`](../src/reading/take_cache.gd), [`text_walk`](../src/reading/text_walk.gd), [`voice_card`](../src/reading/voice_card.gd), [`voice_fishing`](../src/reading/voice_fishing.gd), [`voice_keep`](../src/reading/voice_keep.gd), [`voice_shape`](../src/reading/voice_shape.gd)
 
+### `cartoon/` - Cartoon
+
+A cartoon made from drawings (next/cartoon.md): the card that lists its characters and sets, the rigger's tools (a drawing cut, rigged and looked at through `hosts/puppet/`), and the producer whose agents rig each character, paint each set and write the storyboard the stage plays silent.
+
+[`cartoon_card`](../src/cartoon/cartoon_card.gd), [`cartoon_producer`](../src/cartoon/cartoon_producer.gd), [`cartoon_tool`](../src/cartoon/cartoon_tool.gd), [`rigger_tools`](../src/cartoon/rigger_tools.gd)
+
 ### `table/` - The set
 
 A place, seen and heard, built from a written description: the table itself (Tables), the things on it (Props), its air (Effects, and what the wind carries: Drifts), its light (Lights) and the one wind both share (Winds), its sound (Soundscape), where cards go on it, what can be done with them and how a reading says so, the faces printed on them, what a pen writes on a page (words, and formulas and drawings TeX lays out, written stroke by stroke in a seeded hand from the Hershey stroke fonts) - and the medium that puts it all on the stage (`table.gd`, a row of `Medium.REGISTRY`).
@@ -211,5 +218,5 @@ Godot compiles a script with every script it names by class or preload, wherever
 
 | launch | builds | scripts | lines | budget |
 | --- | --- | --- | --- | --- |
-| the phone shell | `app/main`, `app/phone_shell` | 74 | 30,325 | 40,000 |
-| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 111 | 48,319 | 65,000 |
+| the phone shell | `app/main`, `app/phone_shell` | 74 | 30,366 | 40,000 |
+| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 116 | 50,124 | 65,000 |

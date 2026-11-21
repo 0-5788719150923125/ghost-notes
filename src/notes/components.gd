@@ -159,6 +159,14 @@ const REGISTRY := {
 		"script": "res://src/table_show/episode_card.gd",
 		"intro_tip": "Seconds the table holds with the channel's name and the episode's title over it; then the table itself, a few seconds more, before the reader speaks. The deck starts shuffling a beat before the first word.",
 		"outro_tip": "Seconds held after the last word, the spread on the table and the channel's name over it, fading picture and sound out together."},
+	# A cartoon (next/cartoon.md): its characters puppets rigged from their makers' drawings, its sets painted in their style, its shots
+	# written by a director agent into the note's storyboard - played silent, timed by that storyboard, so it is the note's clock: its
+	# `audio` is a silent track as long as the storyboard (CartoonCard.playable), what the show, the transport and an export run on.
+	"cartoon": {"label": "Cartoon", "family": &"producer",
+		"blurb": "A cartoon made from drawings: each character a puppet rigged from its maker's drawing, each set painted in their style, and the shots written by a director agent - played silent, mouths moving as they talk.",
+		"needs": [], "provides": ["picture", "moments", "audio"], "requires": [], "slots": ["clock"], "workspace": "",
+		"capabilities": ["forward_plus", "subprocess", "python:puppet", "agent:writer", "agent:painter"], "marks": [],
+		"block": "cartoon", "card": "cartoon", "script": "res://src/cartoon/cartoon_card.gd"},
 	# An actor reads the note (next/likeness.md): its card builds them from their own videos - the footage surveyed and
 	# cut into sets, a still of the set in use, a model of them and their voice - and puts them on the stage, the still
 	# moved by their own motion, the mouth and eyes drawn as the voice's phones say. It brings a Voice.

@@ -27,6 +27,15 @@ extends SceneTree
 ##     keeps the reference's tempo, key, chords and form in every roll; at one half, some rolls keep the form and some
 ##     do not; a part pinned to the reference keeps its form, and a tempo set stays. Swing moves an offbeat eighth to
 ##     its swing and leaves the beats: a swung score's offbeat hats land there, a straight one's on the half beat.
+##   - A ROLL ON THE CARD DRAWS EVERY SETTING: `rolled` keeps the note's own, the words' pins, the parts and what is
+##     muted, nothing else; rolls draw Likeness, each part's level and the vocoder on some voices - the control, each
+##     set, stays set.
+##   - THE BANK: every pattern of every part plays notes; every sound is made by a method the music host has; every
+##     mode a key is drawn in has progressions written for it.
+##   - THE GROOVE LEADS: the drums' pattern set is the song's groove - drum and bass drawn at its fast tempo, a shuffle
+##     swinging, the control a song left to roll ranging far wider; the band follows it (under trap drums far more of
+##     the basses are hip hop's than under a shuffle); a twelve-bar blues, its chords dominant sevenths, comes up
+##     under a shuffle.
 
 var _fails := 0
 
@@ -54,6 +63,8 @@ func _init() -> void:
 	_voice()
 	_band()
 	_roll()
+	_rolled()
+	_bank()
 	if _fails == 0:
 		print("composer_check: ALL OK")
 		quit(0)
@@ -319,6 +330,98 @@ func _roll() -> void:
 			straight_at = absf(off - 0.5)
 	_ok(swung_at >= 0.0 and swung_at < 0.02 and straight_at >= 0.0 and straight_at < 0.02,
 		"a swung score's offbeat hats land at its swing (off by %.3f), a straight one's on the half beat (%.3f)" % [swung_at, straight_at])
+
+
+func _rolled() -> void:
+	var words := Lyrics.parse(SONG)
+	var tuned := {"source": "composed", "reference": {"path": "/x.mp3"}, "place": {"1": 8}, "seed": 9, "tempo": 120.0,
+		"key": "C major", "likeness": 0.8, "harmony": "reference",
+		"parts": {"drums": {"pattern": "trap", "instrument": "kit_808", "seed": 4, "level": -3.0},
+			"vocal": {"singer": {"name": "af_heart"}, "tune": 0.5, "vocoder": 1.0, "mute": true}}}
+	var r := Composer.rolled(tuned, 77)
+	var want := {"source": "composed", "reference": {"path": "/x.mp3"}, "place": {"1": 8}, "seed": 77,
+		"parts": {"drums": {}, "vocal": {"mute": true}}}
+	_ok(JSON.stringify(r) == JSON.stringify(want),
+		"a roll keeps the note's own, its words' pins, its parts and what is muted, and nothing else: %s" % JSON.stringify(r))
+	_ok(JSON.stringify(Composer.part_rolled(tuned["parts"]["vocal"], 5)) == JSON.stringify({"mute": true, "seed": 5}),
+		"...a part rolled alone keeps only whether it is muted, with a number of its own")
+	var ref := _reference([[8, 16], [24, 32]])
+	var likes := {}
+	var levels := {}
+	var vocoded := 0
+	for seed in range(1, 25):
+		var sc := Composer.score({"seed": seed, "parts": {"drums": {}, "bass": {}, "vocal": {}}}, {"lyrics": words, "reference": ref})
+		likes[float(sc["roll"]["likeness"])] = true
+		levels[float(_part(sc, "bass")["level"])] = true
+		vocoded += 1 if float(sc["vocal"]["vocoder"]) > 0.0 else 0
+	_ok(likes.size() >= 8 and levels.size() >= 6 and vocoded > 0 and vocoded < 24,
+		"rolls draw Likeness (%d values in 24), each part's level (%d), the vocoder on some voices (%d of 24)" % [likes.size(), levels.size(), vocoded])
+	var set := Composer.score({"seed": 3, "likeness": 0.8, "parts": {"bass": {"level": -7.0}, "vocal": {"vocoder": 0.0}}},
+		{"lyrics": words, "reference": ref})
+	_ok(float(set["roll"]["likeness"]) == 0.8 and float(_part(set, "bass")["level"]) == -7.0 and float(set["vocal"]["vocoder"]) == 0.0,
+		"...the control: each set, stays set")
+
+
+func _bank() -> void:
+	var words := Lyrics.parse(SONG)
+	var silent: Array = []
+	for k in SongParts.PARTS:
+		if k == "vocal":
+			continue
+		for p in SongParts.patterns_for(k):
+			var parts := {"drums": {"pattern": "backbeat"}}
+			parts[k] = {"pattern": p}
+			var plays := false
+			for seed in range(3, 9):  # a roll's line-up may leave the part out of a short song
+				var sc := Composer.score({"seed": seed, "tempo": 120.0, "parts": parts}, {"lyrics": words})
+				plays = plays or not (_part(sc, k).get("notes", []) as Array).is_empty()
+			if not plays:
+				silent.append("%s/%s" % [k, p])
+	_ok(silent.is_empty(), "every pattern of every part plays notes (silent: %s)" % str(silent))
+	var py := FileAccess.get_file_as_string("res://hosts/music/instruments.py")
+	var at := py.find("METHODS = {")
+	var methods := py.substr(at, py.find("}", at) - at) if at >= 0 else ""
+	var unmade: Array = []
+	for key in Instruments.ROWS:
+		if not methods.contains("\"%s\"" % String(Instruments.ROWS[key]["method"])) or (Instruments.ROWS[key]["parts"] as Array).is_empty():
+			unmade.append(key)
+	_ok(not methods.is_empty() and unmade.is_empty(), "every sound is made by a method the music host has (not: %s)" % str(unmade))
+	var bare: Array = Composer.MODES.filter(func(m: String) -> bool: return SongParts.progressions_for(m).is_empty())
+	_ok(bare.is_empty(), "every mode a key is drawn in has progressions (none for %s)" % str(bare))
+	var fast := true
+	var shuffled := true
+	var lo := 999.0
+	var hi := 0.0
+	for seed in range(1, 25):
+		var a := Composer.score({"seed": seed, "parts": {"drums": {"pattern": "two_step"}, "bass": {}}}, {"lyrics": words})
+		fast = fast and float(a["tempo"]) >= 164.0 and float(a["tempo"]) <= 178.0
+		var b := Composer.score({"seed": seed, "parts": {"drums": {"pattern": "shuffle"}, "bass": {}}}, {"lyrics": words})
+		shuffled = shuffled and is_equal_approx(float(b["roll"]["swing"]), 0.67)
+		var c := Composer.score({"seed": seed, "parts": {"drums": {}, "bass": {}}}, {"lyrics": words})
+		lo = minf(lo, float(c["tempo"]))
+		hi = maxf(hi, float(c["tempo"]))
+	_ok(fast and shuffled, "the drums' pattern set is the song's groove: drum and bass drawn at 164-178 BPM, a shuffle swinging")
+	_ok(hi - lo > 60.0, "...the control: a song left to roll ranges %d-%d BPM" % [int(lo), int(hi)])
+	var share := func(beat: String) -> float:
+		var hits := 0
+		for seed in range(1, 61):
+			var song := Composer.drawn({"seed": seed}, {}, {"drums": {"pattern": beat}, "bass": {}})
+			var c := Composer.choice_of("bass", {}, seed, {}, false, song)
+			hits += 1 if (Registry.field(SongParts.PATTERNS, String(c["pattern"]), "styles", []) as Array).has("hiphop") else 0
+		return hits / 60.0
+	var trap: float = share.call("trap")
+	var shuffle: float = share.call("shuffle")
+	_ok(trap > 0.3 and trap > shuffle * 3.0,
+		"the band follows the groove: under trap drums %d%% of the basses are hip hop's, under a shuffle %d%%" % [int(trap * 100), int(shuffle * 100)])
+	var blues := 0
+	for seed in range(1, 41):
+		var sc := Composer.score({"seed": seed, "key": "E major", "tempo": 100.0, "parts": {"drums": {"pattern": "shuffle"}, "bass": {}}},
+			{"lyrics": words})
+		for ch in sc["chords"]:
+			if int(ch["root"]) == 4 and String(ch["quality"]) == "7":
+				blues += 1
+				break
+	_ok(blues > 0, "a twelve-bar blues, its home chord a dominant seventh, comes up under a shuffle (%d of 40 songs)" % blues)
 
 
 ## Where in the beat a score's offbeat hats fall (the most common fraction past the half beat's neighborhood).
