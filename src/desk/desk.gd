@@ -573,6 +573,7 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	var opening := _opening()
 	ShowOpening.lens(ShowOpening.pull(feed.opening, _now, opening, _built_n > 0), _blur, _attrs)
 	_title.alpha = ShowOpening.title_alpha(feed.opening, _now, opening, _built_n > 0)
+	_title.fisheye = feed.fisheye()
 	_title.queue_redraw()
 	_show_pages()
 	_place_pen()

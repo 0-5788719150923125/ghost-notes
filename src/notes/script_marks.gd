@@ -43,6 +43,8 @@ const DECK_HEADING := "(?i)^(#{1,6})\\s*(?:the\\s+)?cards\\s*:?\\s*$"
 ## The regions a mark can be `within`: a section of the script, named, with the pattern of the heading that opens it
 ## ([method Manuscript.section_span] finds where it is).
 const REGIONS := {"deck": DECK_HEADING}
+## The dates a note's words carry ([method Macros.dated]): the date mark's pattern.
+const Macros := preload("res://src/data/macros.gd")
 
 const REGISTRY := {
 	"section": {
@@ -212,6 +214,14 @@ const REGISTRY := {
 		"modes": ["generative", "table"],
 		"blurbs": {"table": "A placeholder for a fact only the build knows. The agents are handed the default after the colon, never the macro itself; one with no default is left out."},
 		"pattern": "\\$\\{[A-Za-z_][A-Za-z0-9_.]*(?::(?:[^{}]|\\{[^{}]*\\})*)?\\}",
+	},
+	"date": {
+		"label": "Date",
+		"group": "text",
+		"blurb": "The night it is made on, filled wherever the words are read or shown: %tonight% is the evening the night began (the day before until noon), %date% today's date. A form after the name writes it so (YYYY, YY, MM, DD, MON for NOV); %nights since 2019-11-20% (or %days since ...) counts up to it, written 2,557.",
+		"before": "%", "fill": "tonight MM/DD/YYYY", "after": "%", "line": "",
+		"modes": ["generative"],
+		"pattern": Macros.DATES,
 	},
 	"deck": {
 		"label": "The deck",

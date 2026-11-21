@@ -7,18 +7,20 @@ shader_type canvas_item;
 // layer, the medium's comic page - and nothing above it on a CanvasLayer is touched, so the karaoke line and the panels
 // stay readable.
 //
-// Eight filters, one fragment, in a fixed order, each with its own 0..1 amount and each an exact no-op at 0. The order
+// Nine filters, one fragment, in a fixed order, each with its own 0..1 amount and each an exact no-op at 0. The order
 // is the one in Filters.REGISTRY:
 //
-//   0. Gate slip moves where the picture is sampled, so it comes before anything reads it.
-//   1. Pointillism re-samples the picture into dots, so everything below grades the dots.
-//   2. Bloom is what a lens does, so it goes before the grade.
-//   3. Monochrome, then 4. noir: noir grades whatever it is handed, so monochrome above it is black-and-white noir.
-//   5. Static is the emulsion's own noise the graded light is exposed onto.
-//   6. Dust is dirt on the print - specks, hairs, scratches - so it goes over the image.
-//   7. Vignette is the frame, last because it darkens everything including the dust.
+//   0. Gate slip moves where the print is sampled, so it comes before anything reads it.
+//   1. Fisheye is the lens the picture was taken through: every read of the picture (the frame's own, the dots', the
+//      bloom's) goes through it, while the grain, the dust and the vignette stay on the flat film.
+//   2. Pointillism re-samples the picture into dots, so everything below grades the dots.
+//   3. Bloom is what a lens does, so it goes before the grade.
+//   4. Monochrome, then 5. noir: noir grades whatever it is handed, so monochrome above it is black-and-white noir.
+//   6. Static is the emulsion's own noise the graded light is exposed onto.
+//   7. Dust is dirt on the print - specks, hairs, scratches - so it goes over the image.
+//   8. Vignette is the frame, last because it darkens everything including the dust.
 //
-// Cost: the only filter with real fill cost is pointillism (nine taps for the neighborhood).
+// Cost: pointillism is nine taps for the neighborhood, bloom eight, the fisheye four.
 // Nothing here reads the audio: a look is a decision about the photograph, and a look that pumped on the beat would be
 // a scene effect.
 
@@ -27,6 +29,7 @@ shader_type canvas_item;
 uniform vec2 u_size = vec2(1920.0, 1080.0);
 
 uniform float u_slip : hint_range(0.0, 1.0) = 0.0;
+uniform float u_fisheye : hint_range(0.0, 1.0) = 0.0;
 uniform float u_pointillism : hint_range(0.0, 1.0) = 0.0;
 uniform float u_bloom : hint_range(0.0, 1.0) = 0.0;
 uniform float u_monochrome : hint_range(0.0, 1.0) = 0.0;
@@ -100,7 +103,30 @@ vec2 gate_slip(vec2 uv, float amount) {
 	return vec2(clamp(uv.x + shift, 0.0, 1.0), uv.y);
 }
 
-// --- 1. POINTILLISM ----------------------------------------------------------------------
+// --- 1. FISHEYE ---------------------------------------------------------------------------
+//
+// The curve is fisheye.gdshaderinc's. Where the edges are taken in (up to five pixels to one at the top of the dial)
+// one tap a pixel would crawl as the picture moves, so the frame's own read is four taps on a rotated grid a pixel
+// across; the dots and the bloom are soft already and read one.
+
+#include "res://shaders/fisheye.gdshaderinc"
+
+vec2 lens(vec2 uv) {
+	return u_fisheye > 0.0 ? fisheye_lens(uv, u_fisheye, u_size.x / max(u_size.y, 1.0)) : uv;
+}
+
+// The picture at film point [param uv], as the lens took it: one tap, for the filters that read it again.
+vec3 picture(sampler2D tex, vec2 uv) {
+	return texture(tex, lens(uv)).rgb;
+}
+
+vec4 picture_whole(sampler2D tex, vec2 uv) {
+	vec2 px = 1.0 / max(u_size, vec2(1.0));
+	return (texture(tex, lens(uv + vec2(0.125, 0.375) * px)) + texture(tex, lens(uv + vec2(-0.375, 0.125) * px))
+		+ texture(tex, lens(uv + vec2(-0.125, -0.375) * px)) + texture(tex, lens(uv + vec2(0.375, -0.125) * px))) * 0.25;
+}
+
+// --- 2. POINTILLISM ----------------------------------------------------------------------
 //
 // The picture re-laid as overlapping dots of paint. The cell centers are jittered and the dots may overlap (a regular
 // lattice of discs reads as a halftone print); each dot takes its color from its own center and its radius from how
@@ -124,7 +150,7 @@ vec3 pointillism(sampler2D tex, vec2 uv, vec3 src, float amount) {
 			vec2 nid = id + vec2(float(i), float(j));
 			// +-0.35 of a cell: no row of dots lines up, and no dot leaves the cells this loop looks at
 			vec2 c = (nid + 0.5 + (hash2(nid) - 0.5) * 0.7) * cell;
-			vec3 tap = texture(tex, clamp(c / u_size, vec2(0.0), vec2(1.0))).rgb;
+			vec3 tap = picture(tex, clamp(c / u_size, vec2(0.0), vec2(1.0)));
 			if (i == 0 && j == 0) {
 				ground = tap * 0.22;
 			}
@@ -142,7 +168,7 @@ vec3 pointillism(sampler2D tex, vec2 uv, vec3 src, float amount) {
 	return mix(src, mix(ground, col, cover), amount);
 }
 
-// --- 2. BLOOM ----------------------------------------------------------------------------
+// --- 3. BLOOM ----------------------------------------------------------------------------
 //
 // Light bleeding out of the bright parts: only what is already above the picture's highlights blooms (a threshold, not
 // a blur added to everything).
@@ -156,18 +182,18 @@ vec3 bloom(sampler2D tex, vec2 uv, vec3 src, float amount) {
 		// two rings in one loop: the odd taps sit at twice the radius, spreading the falloff without more samples
 		float rr = radius * (float(i % 2) + 1.0);
 		vec2 off = vec2(cos(a), sin(a)) * rr * vec2(u_size.y / max(u_size.x, 1.0), 1.0);
-		vec3 tap = texture(tex, clamp(uv + off, vec2(0.0), vec2(1.0))).rgb;
+		vec3 tap = picture(tex, clamp(uv + off, vec2(0.0), vec2(1.0)));
 		sum += max(tap - vec3(0.62), vec3(0.0));
 	}
 	return src + sum * (amount * 0.55);
 }
 
-// --- 3. MONOCHROME ------------------------------------------------------------------------
+// --- 4. MONOCHROME ------------------------------------------------------------------------
 vec3 monochrome(vec3 src, float amount) {
 	return mix(src, vec3(luma(src)), amount);
 }
 
-// --- 4. NOIR ------------------------------------------------------------------------------
+// --- 5. NOIR ------------------------------------------------------------------------------
 //
 // The hard grade: an S-curve closes the blacks and burns the highlights; a little of the remaining color is pulled out;
 // and the shadows go cold against warm highlights (the split-tone).
@@ -186,7 +212,7 @@ vec3 noir(vec3 src, float amount) {
 	return mix(src, clamp(graded, vec3(0.0), vec3(4.0)), amount);
 }
 
-// --- 5. GRAIN ----------------------------------------------------------------------------
+// --- 6. GRAIN ----------------------------------------------------------------------------
 //
 // Film emulsion. Per-pixel white noise is television static, not film; four things make grain read as film:
 //
@@ -228,7 +254,7 @@ vec3 static_noise(vec2 uv, vec3 src, float amount) {
 	return src + vec3(sn * amount * GRAIN_GAIN * density * weight);
 }
 
-// --- 6. VIGNETTE -------------------------------------------------------------------------
+// --- 8. VIGNETTE -------------------------------------------------------------------------
 //
 // An oval fitted to the frame: the distance is `length` of the position scaled so the middle of every edge is 1 and the
 // corners are sqrt(2). It comes in from all four sides at once, heaviest in the corners, an oval on a widescreen frame
@@ -244,7 +270,7 @@ vec3 vignette(vec2 uv, vec3 src, float amount) {
 }
 
 
-// --- 6. DUST ------------------------------------------------------------------------------
+// --- 7. DUST ------------------------------------------------------------------------------
 //
 // Dirt on the print: specks of dust, the odd curled hair, and now and then a scratch running down the frame. All of it
 // re-rolls at the film's rate, because the dirt is on the frame going through the gate. Specks are mostly dark (dust on
@@ -338,12 +364,13 @@ vec3 dust(vec2 uv, vec3 src, float amount) {
 
 void fragment() {
 	// the gate slip moves the sampling position, so it happens before anything reads the texture (pointillism and
-	// bloom take their own taps); everything below works in `uv` rather than UV for that reason
+	// bloom take their own taps); everything below works in `uv` rather than UV for that reason, and reads the picture
+	// through the lens
 	vec2 uv = UV;
 	if (u_slip > 0.0) {
 		uv = gate_slip(uv, u_slip);
 	}
-	vec4 tex = texture(TEXTURE, uv);
+	vec4 tex = u_fisheye > 0.0 ? picture_whole(TEXTURE, uv) : texture(TEXTURE, uv);
 	vec3 c = tex.rgb;
 	// each filter is skipped outright at zero rather than multiplied by zero: pointillism and bloom are nine and eight taps
 	if (u_pointillism > 0.0) {

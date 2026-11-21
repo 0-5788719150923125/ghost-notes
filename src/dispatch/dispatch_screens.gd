@@ -49,6 +49,11 @@ const GAIN_SIZE := Vector2i(256, 256)
 const CLOCK_SIZE := Vector2i(448, 200)
 const DIGIT_CELL := Vector2i(96, 160)
 const TABLET_SIZE := Vector2i(1200, 1600)
+## The chart's rows, and how many of them are nights before tonight's.
+const CHART_ROWS := 11
+const CHART_BEFORE := 4
+## Tonight's date, as the chart writes it ([method Macros.tonight]).
+const Macros := preload("res://src/data/macros.gd")
 ## How many phone screens can be lit at once (the one in hand, the ones on the desk, one ringing or texting).
 const PHONE_FACES := 5
 ## The terminal's type: its face, its size (px), its line (px), where its first line and first column are.
@@ -72,6 +77,8 @@ var scope: SubViewport
 var spectrum: SubViewport
 var paper: SubViewport
 var chart: SubViewport
+## Tonight's date, {year, month, day}: the night the chart is printed round ([method set_night]); the clock's until handed.
+var night := {}
 var dial: SubViewport
 var gain: SubViewport
 var clock: SubViewport
@@ -164,6 +171,18 @@ func _vp(size: Vector2i, live: bool) -> SubViewport:
 
 
 # --- what the medium hands them ---------------------------------------------------------------------------------------
+
+## Tonight's date, `YYYY-MM-DD` (the clock's for anything else): the chart printed again round it where it changed.
+func set_night(written: String) -> void:
+	var d := Macros.date_of(written)
+	if d.is_empty():
+		d = Macros.tonight()
+	if d == night:
+		return
+	night = d
+	if chart != null:
+		(chart.get_child(0) as CanvasItem).queue_redraw()
+		chart.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 ## The terminal's text drawn in [param term], the radar in [param glow] and the receiver's oscilloscope in [param trace] from here,
 ## each dark going with it ([method tinted]): a screen drawn again where its color changed.
@@ -750,8 +769,9 @@ func _draw_handset(c: CanvasItem, at: Vector2, r: float, col: Color, down: bool)
 
 
 
-## The chart: the hobbyist's table printed out - dates and hours in three columns headed IO-A, IO-B and IO-C, some rows
-## circled in pen.
+## The chart: the hobbyist's table printed out - dates and hours in three columns headed IO-A, IO-B and IO-C, its rows
+## the nights round tonight's ([member night]), each date's hours drawn from the date itself. Tonight's Io-B always comes
+## (the receiver opens on its crackle) and is circled in pen, and now and then one on a night before it.
 func _draw_chart(c: CanvasItem) -> void:
 	var size := Vector2(840, 600)
 	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.94, 0.93, 0.89))
@@ -763,19 +783,22 @@ func _draw_chart(c: CanvasItem) -> void:
 	for k in 4:
 		c.draw_string(_mono, Vector2(cols[k], 136), heads[k], HORIZONTAL_ALIGNMENT_LEFT, -1, 22, ink)
 	c.draw_line(Vector2(36, 146), Vector2(size.x - 36, 146), ink, 2.0)
-	var r := RandomNumberGenerator.new()
-	r.seed = 2001
-	var circled := [1, 4, 6, 9]
-	for row in 11:
+	var tonight: Dictionary = night if not night.is_empty() else Macros.tonight()
+	for row in CHART_ROWS:
+		var day := Macros.shifted(tonight, row - CHART_BEFORE)
+		var r := RandomNumberGenerator.new()
+		r.seed = ("chart-" + Macros.written(day)).hash()
 		var y := 182.0 + float(row) * 36.0
-		c.draw_string(_mono, Vector2(cols[0], y), "NOV %02d" % (row + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 20, ink)
+		c.draw_string(_mono, Vector2(cols[0], y), Macros.written(day, "MON DD"), HORIZONTAL_ALIGNMENT_LEFT, -1, 20, ink)
+		var io_b := false
 		for k in 3:
-			if r.randf() < 0.55:
+			if r.randf() < 0.55 or (row == CHART_BEFORE and k == 1):
 				var h := r.randi_range(0, 23)
 				var m := r.randi_range(0, 59)
 				var s := "%02d:%02d-%02d:%02d" % [h, m, (h + r.randi_range(1, 3)) % 24, r.randi_range(0, 59)]
 				c.draw_string(_mono, Vector2(cols[k + 1], y), s, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, ink)
-		if row in circled:
+				io_b = io_b or k == 1
+		if io_b and (row == CHART_BEFORE or (row < CHART_BEFORE and r.randf() < 0.5)):
 			var pen := Color(0.12, 0.18, 0.55, 0.85)
 			var mid := Vector2(cols[2] + 70.0 + r.randf_range(-20, 20), y - 7.0)
 			var pts := PackedVector2Array()

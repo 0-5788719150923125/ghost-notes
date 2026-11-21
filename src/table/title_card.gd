@@ -20,13 +20,19 @@ var italic: Font = null
 var alpha := 0.0
 ## The name's color: the set dresser's, chosen to stand out from this table ([method CardTable.title_ink]).
 var ink := CardTable.color(CardTable.TITLE_INK)
+## How far the Look's fisheye bows the picture ([method ShowFeed.fisheye], handed by the medium): the card is laid where
+## the lens puts it back straight, as type over the picture is, never bent with it.
+var fisheye := 0.0
+const STRAIGHT := "res://shaders/fisheye_straight.gdshader"
 var _lay := {}
 var _lay_key := ""
+var _straight: ShaderMaterial = null
 
 func _draw() -> void:
 	if alpha <= 0.001 or face == null or channel.is_empty():
 		return
 	var vp := get_viewport_rect().size
+	_straighten(vp)
 	var key := "%s|%s|%s" % [channel, byline, str(vp)]
 	if key != _lay_key:
 		_lay_key = key
@@ -45,6 +51,19 @@ func _draw() -> void:
 			draw_string_outline(f, at, String(d["text"]), HORIZONTAL_ALIGNMENT_CENTER, vp.x, size,
 				maxi(int(size * (h as Vector2).x), 1), Color(shade, (h as Vector2).y * alpha))
 		draw_string(f, at, String(d["text"]), HORIZONTAL_ALIGNMENT_CENTER, vp.x, size, Color(ink, alpha))
+
+## The card through [constant STRAIGHT] while the fisheye is on, a viewport [param vp] across; no material while it is off.
+func _straighten(vp: Vector2) -> void:
+	if fisheye <= 0.0:
+		material = null
+		return
+	if _straight == null:
+		_straight = ShaderMaterial.new()
+		_straight.shader = load(STRAIGHT)
+	_straight.set_shader_parameter("u_size", vp)
+	_straight.set_shader_parameter("u_fisheye", fisheye)
+	material = _straight
+
 
 ## A band of [param shade] across [param r], clear at its top and bottom edges and [constant BAND]
 ## at its middle - a raised cosine, drawn as strips whose corners carry it, so it has no steps.

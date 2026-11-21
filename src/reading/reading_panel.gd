@@ -40,6 +40,9 @@ var _marks_dock: TimelineDock = null
 var _marks_btn: Button = null
 var _kept: NoteKept = null
 
+## The dates a note's words carry, filled as they are read ([method _reading_body]).
+const Macros := preload("res://src/data/macros.gd")
+
 const TAKE_DIR := "user://generative"
 ## Where an export's take is written, [constant TAKE_DIR] (a gate's seam: a test writes nothing of the author's).
 var take_dir := TAKE_DIR
@@ -847,9 +850,10 @@ var walk: TextWalk = TextWalk.new()
 
 
 ## The words to read, fresh: what Play, a scrub and an export read. Here the document's own body - in sync mode
-## the file as it is on disk right now (see [method DocSource.pull]).
+## the file as it is on disk right now (see [method DocSource.pull]) - with its dates filled ([method Macros.dated]): the
+## voice says, and the medium shows, the night it is made on.
 func _reading_body() -> String:
-	return walk.body(_doc.pull())
+	return Macros.dated(walk.body(_doc.pull()))
 
 
 ## What the voice reads of [param body] and the title it announces first: `{body, title}`. A tablet chapter is
@@ -972,7 +976,8 @@ func _script_text_changed(body: String) -> void:
 
 ## What [method export_take] hands the book medium, and what main gives a live one: the chapter as the author
 ## wrote it, so pages can be typeset from the same words being read. The title, the book's name and its author are
-## carried separately because in sync mode the body arrives without its frontmatter.
+## carried separately because in sync mode the body arrives without its frontmatter; `night` is the date its words were
+## filled for ([method Macros.tonight]), which a take's sidecar carries to the export's render.
 func book_document(body := "") -> Dictionary:
 	var src := body if not body.is_empty() else _reading_body()
 		# Each voice's pen, beside the text for the reason the title is: in sync mode the voices live in the frontmatter.
@@ -983,7 +988,7 @@ func book_document(body := "") -> Dictionary:
 		if not v.is_empty():
 			inks[who] = v
 	var d := publish.book({"source": src, "title": _doc_field(src, "title"), "book": _doc_field(src, "book"),
-		"author": _doc_field(src, "author"), "inks": inks, "start_words": _stream.start_words(),
+		"author": _doc_field(src, "author"), "inks": inks, "night": Macros.written(Macros.tonight()), "start_words": _stream.start_words(),
 		"start_index": _stream.start_index(), "start_time": _stream.start_time()}, body)
 	for k in document_parts:
 		d.merge((document_parts[k] as Callable).call(), true)
@@ -1309,7 +1314,7 @@ func _kept_copy(kept: String, body: String) -> String:
 func take_sig(body := "") -> String:
 		# ...the words as they stand, never pulled: a pull reads the file and lays its blocks over every card, and a row
 		# asks this at every refresh (panel_fit_check)
-	var b := (walk.body(_doc.shown() if _doc != null else "") if body.is_empty() else body).strip_edges()
+	var b := (Macros.dated(walk.body(_doc.shown() if _doc != null else "")) if body.is_empty() else body).strip_edges()
 	var cast := _cast.capture()
 	var records := {}
 	var voices: Dictionary = cast.get("voices", {}) if cast.get("voices") is Dictionary else {}

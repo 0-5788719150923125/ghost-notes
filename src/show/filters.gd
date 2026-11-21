@@ -14,10 +14,15 @@ class_name Filters
 ## every filter is at 0 the material is removed from the rect, so the default show runs the code it
 ## always ran.
 ##
-## The registry order is the pipeline order, top to bottom, and cannot be read off the shader: dots first
-## (they re-sample the picture, so anything after grades the dots), then the optics a lens adds, the
-## grade, the emulsion, the frame. Monochrome before Noir makes the pair read as black-and-white noir,
-## since Noir's split-tone is applied to whatever it is handed.
+## The registry order is the pipeline order, top to bottom, and cannot be read off the shader: the gate
+## slip and the fisheye first (they move where the picture is read), then dots (they re-sample the picture,
+## so anything after grades the dots), then the optics a lens adds, the grade, the emulsion, the frame.
+## Monochrome before Noir makes the pair read as black-and-white noir, since Noir's split-tone is applied
+## to whatever it is handed.
+##
+## The fisheye moves the picture under everything that maps the frame to it: a click on the stage goes
+## through [method lens] ([method Director.pick]), and a thing drawn into the stage that must read straight
+## (the opening's title) is laid with `shaders/fisheye_straight.gdshader`, told the amount by its medium.
 ##
 ## Adding a filter is a row of [constant REGISTRY], a `u_<key>` uniform and a block in
 ## [code]shaders/stage_filter.gdshader[/code]; the controls are built off the registry. A key with no
@@ -39,6 +44,8 @@ const SHADER := "res://shaders/stage_filter.gdshader"
 const REGISTRY := {
 	"slip": {"label": "Gate slip", "uniform": "u_slip", "default": 0.45,
 		"blurb": "Tearing: now and then a band of the picture jumps sideways for one frame and snaps back, the way a frame that does not seat squarely in a projector's gate is printed offset. The dial is how often and how far."},
+	"fisheye": {"label": "Fisheye", "uniform": "u_fisheye", "default": 0.45,
+		"blurb": "The picture as a fisheye lens takes it: the middle swells and the edges crowd in, so straight lines bow outward round the middle, while the corners stay put and the frame stays full. The subtitles and the opening's title stay straight over it. The dial is how wide the lens is."},
 	"pointillism": {"label": "Pointillism", "uniform": "u_pointillism", "default": 0.35,
 		"blurb": "The picture re-laid as overlapping dots of paint on a jittered lattice, each dot taking its color from where it sits and its size from how bright that is. The dial is the size of the dots, so a little is a canvas texture and a lot is a painting you have to stand back from."},
 	"bloom": {"label": "Bloom", "uniform": "u_bloom", "default": 0.45,
@@ -106,6 +113,23 @@ static func apply(rect: CanvasItem, amounts: Dictionary, size: Vector2) -> void:
 	# The dot lattice and the grain are sized in pixels, so they need the frame's real size; in UV a dot
 	# would get coarser as the window grows.
 	mat.set_shader_parameter("u_size", size)
+
+
+## The corners' angle off the axis at the top of the Fisheye dial: `FISHEYE_FIELD` in
+## `shaders/fisheye.gdshaderinc`, which [method lens] mirrors.
+const FISHEYE_FIELD := 1.309
+
+
+## Where the point [param uv] of the frame shown (0..1 across it) reads the picture through a fisheye of
+## [param amount] (0 is the point itself), on a frame [param aspect] wide to its one high:
+## `fisheye_lens` in `shaders/fisheye.gdshaderinc`, line for line.
+static func lens(uv: Vector2, amount: float, aspect: float) -> Vector2:
+	if amount <= 0.0:
+		return uv
+	var p := (uv - Vector2(0.5, 0.5)) * Vector2(aspect, 1.0)
+	var rho := maxf(p.length() / (0.5 * sqrt(aspect * aspect + 1.0)), 0.00001)
+	var field := FISHEYE_FIELD * sqrt(amount)
+	return Vector2(0.5, 0.5) + (uv - Vector2(0.5, 0.5)) * (tan(rho * field) / (tan(field) * rho))
 
 
 ## The one-run override: `--filter monochrome=1,static=0.3` (or `--filter none`). Like `--medium`, for a

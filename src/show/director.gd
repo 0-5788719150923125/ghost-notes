@@ -519,6 +519,12 @@ func look_amount(filter: String) -> float:
 	return float(Filters.sanitize(filters).get(filter, 0.0))
 
 
+## The fisheye the picture is shown through now, turned and overridden as [method resolved_filters] says; none for a
+## show inside the show, whose picture reaches the frame on a screen rather than through the stage's lens.
+func fisheye() -> float:
+	return 0.0 if nested else float(resolved_filters().get("fisheye", 0.0))
+
+
 ## Pin [param key] as the medium while [param by] is up ([member medium_override]): a mode's card that is
 ## its medium (the card table, the Actor), as it enters the tree. A Letter or Dispatch desk is the
 ## Medium card's format, so it is [member medium] itself.
@@ -602,14 +608,16 @@ func shown_medium() -> Medium:
 
 ## What is at [param at] on the frame (window pixels), as what shows it says (its own `pick`: a table names its
 ## thing and part, a stage its actor); {} for nothing there, a click off the frame, or nothing that picks (next/editing.md).
+## The point is followed through the Look's fisheye ([method Filters.lens]), so what is picked is what is seen there.
 func pick(at: Vector2) -> Dictionary:
 	if not frame_rect.has_point(at) or frame_rect.size.x <= 0.0:
 		return {}
+	var seen := Filters.lens((at - frame_rect.position) / frame_rect.size, fisheye(), frame_rect.size.aspect())
 	# what the medium shows first (a table names its things), then the scene
 	for who: Node in [_medium, _current]:
 		if who == null or not is_instance_valid(who) or not who.has_method("pick") or not who.is_inside_tree():
 			continue
-		var hit: Dictionary = who.call("pick", (at - frame_rect.position) / frame_rect.size * who.get_viewport().get_visible_rect().size)
+		var hit: Dictionary = who.call("pick", seen * who.get_viewport().get_visible_rect().size)
 		if not hit.is_empty():
 			return hit
 	return {}

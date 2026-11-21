@@ -17,9 +17,11 @@ extends SceneTree
 ## stressed word survive from a line the brief dictates into the reader's passage and the reader is told to keep them
 ## (italic and bold as two levels of stress), such a line is still known as the brief's own, and a card is colored as
 ## one only inside the deck. What is not offered is held too: a passage keeps no bracket, so the inline pronunciation
-## is left out.
+## is left out. A date mark is filled as the night it is made on (control: after noon, today's).
 ##
 ## Run: godot --headless --path . --script tests/notes/script_marks_check.gd
+
+const Macros := preload("res://src/data/macros.gd")
 
 var fails := 0
 var checks := 0
@@ -248,6 +250,13 @@ func _parsers_agree() -> void:
 				var dflt := fill.get_slice(":", 1)
 				_ok(TextNorm.normalize("Chapter %s." % ex) == TextNorm.normalize("Chapter %s." % dflt),
 					"a macro does not read as its default")
+			"date":
+				# filled as the reading reads it, on a pinned clock: half past one is still the night before
+				var late := {"year": 2026, "month": 11, "day": 21, "hour": 1}
+				_ok(Macros.dated("Tonight is %s." % ex, {}, late) == "Tonight is 11/20/2026.",
+					"a date mark is not filled as the night it is made on")
+				_ok(Macros.dated("Tonight is %s." % ex, {}, {"year": 2026, "month": 11, "day": 21, "hour": 13}) == "Tonight is 11/21/2026.",
+					"control: after noon, the date mark is not today's")
 			"deck", "suit", "card":
 				var body := "A show.\n\n%s\n\n%s\n%s\n\n## The host\n\n- quick with a joke\n" % [
 					ScriptMarks.example("deck"), ScriptMarks.example("suit"), ScriptMarks.example("card")]

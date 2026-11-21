@@ -39,7 +39,7 @@ core. The commitments:
 - [Components](components.md) (17 components, 4 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
 - [Media](media.md) (11) - what the show is carried on.
-- [Look filters](filters.md) (8) - the post-process over the whole picture.
+- [Look filters](filters.md) (9) - the post-process over the whole picture.
 - [Layers](layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](forces.md) (8) - the physics primitives particles compose.
 - [Stage actors and verbs](stage.md) (5 actors, 34 verbs) - what a storyboard's `stage` entries are made of.
@@ -47,7 +47,7 @@ core. The commitments:
 - [Props and the library](props.md) (21 shapes, 18 materials, 21 roles) - the library of props and voices, the Dex, the Props card, roles any make can play, refining a prop into versions, and what every prop is made of.
 - [The Environment](surroundings.md) (17 kinds, 6 lights) - what is round the scene a note is shown in, a list of elements: its light, shafts through its haze, what drifts in its air, what is heard - each with properties a person sets or Roll draws - and how strongly each lit thing shines.
 - [Masking effects](masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
-- [Script marks](script.md) (83) - every mark a script may carry - the script editor's palette.
+- [Script marks](script.md) (84) - every mark a script may carry - the script editor's palette.
 - [Agents](agents.md) (4 writers, 3 painters, 3 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
 
 ## Subsystems
@@ -89,7 +89,7 @@ Plain data in and out, at the bottom because it needs nothing: the YAML-subset p
 - [`clock.gd`](../src/data/clock.gd) **Clock** - how the app tells the time: m:ss, h:mm:ss past an hour, whole seconds. The transport's rail, every timeline's ruler and playhead (`TimelineView`), an episode's chapters and an agent's progress all say it this one way. Names no autoload, so a gate run without the app reads it too.
 - [`data_path.gd`](../src/data/data_path.gd) **DataPath** - edits of nested data (Dictionaries and Arrays) as pure functions, addressed by a path: the keys and indexes from the root down, `["sequence", 2, "track", "spans", 0, "from"]`.
 - [`front_matter.gd`](../src/data/front_matter.gd) **FrontMatter** - YAML frontmatter on a Markdown document, read and (carefully) written.
-- [`macros.gd`](../src/data/macros.gd) **macros** - Macros - the names a line of a note may carry (`%title%`, `%episode%`, `%author%`, `%book%`, `%seed%`, `%date%`), a row each (`ROWS`), and the line with them filled. One set for every place that takes them: the YouTube title and description, a show's Byline under its name on the title ...
+- [`macros.gd`](../src/data/macros.gd) **macros** - Macros - the names a line of a note may carry (`%title%`, `%episode%`, `%author%`, `%book%`, `%seed%`, and the dates `%date%`, `%tonight%`, `%days since 2019-11-20%`, `%nights since 2019-11-20%`), a row each (`ROWS`), and the line with them filled. One set for every place that takes them: ...
 - [`manuscript.gd`](../src/data/manuscript.gd) **Manuscript** - what a chapter file says about itself, beyond the words to be read.
 - [`registry.gd`](../src/data/registry.gd) **Registry** - reading any of ghost's registries, which are one shape: a Dictionary of rows, one per key, in the order they are offered, each row a Dictionary of fields. Every row has a `label` (what a person reads) and a `blurb` (a sentence or two: a tooltip, a line of the docs); the rest is its own kind's (a ...
 - [`roll.gd`](../src/data/roll.gd) **Roll** - a thing's properties as a person tunes them: each a field row (SchemaForm's shape - `label`, `blurb`, `type`, `default`, `min`/`max`/`step` or `options`), and the ones a person never set drawn from the thing's own number inside the field's `roll`, so a new number is another variant of the same ...

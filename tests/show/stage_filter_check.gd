@@ -26,6 +26,11 @@ extends SceneTree
 ##
 ##   They combine: two filters on together differ from either alone and keep each other's property.
 ##
+##   The fisheye moves the picture by [method Filters.lens], the curve a click on the stage goes through: the ramp's
+##   hue and brightness name the point of the picture each pixel shows, held to the curve (the control: the plain
+##   frame misses it). A thing laid with `fisheye_straight.gdshader` (the opening's title) is found where it was laid
+##   (the control: laid plainly, the lens moves it).
+##
 ## The test image is built here, since a measurement needs a picture whose answer is known: a color ramp
 ## to desaturate, a black, a mid-gray and a white patch for the grain weighting, and one small very bright
 ## spot on a dark field for the bloom threshold.
@@ -72,6 +77,8 @@ func _run() -> void:
 	await _check_noir()
 	await _check_combining()
 	await _check_slip()
+	await _check_fisheye()
+	await _check_straight()
 	if fails == 0:
 		print("stage_filter_check: ALL OK (%d checks, %d filters)"
 			% [checks, Filters_.REGISTRY.size()])
@@ -375,6 +382,112 @@ func _check_combining() -> void:
 	var l := _mean_luma(everything)
 	_ok(l > 0.03 and l < 0.9,
 		"every filter on at its default renders at mean luma %.3f - that is not a picture" % l)
+
+
+## The curve the shader draws is the curve [method Filters.lens] says, at the default and at the top of the dial; the
+## corners stay put and the middle swells.
+func _check_fisheye() -> void:
+	var aspect := float(W) / float(H)
+	var at_points := [Vector2(0.15, 0.12), Vector2(0.3, 0.3), Vector2(0.62, 0.2), Vector2(0.85, 0.36), Vector2(0.45, 0.08)]
+	for a in [float(Filters_.REGISTRY["fisheye"]["default"]), 1.0]:
+		var got := await _render({"fisheye": a})
+		var worst := 0.0
+		var control := INF
+		for at: Vector2 in at_points:
+			var px := Vector2i(at * Vector2(W, H))
+			var want := Filters_.lens((Vector2(px) + Vector2(0.5, 0.5)) / Vector2(W, H), a, aspect) * Vector2(W, H)
+			worst = maxf(worst, _ramp_point(got, px).distance_to(want))
+			control = minf(control, _ramp_point(_plain, px).distance_to(want))
+		_ok(worst < 1.5, "the fisheye at %.2f strays %.2f px from Filters.lens - a click on the stage would pick "
+			% [a, worst] + "beside what it shows")
+		_ok(control > 3.0, "the control is wrong - the plain frame lands within %.2f px of the fisheye's curve at %.2f"
+			% [control, a])
+		# the top corners read the pixels they always did (the frame stays full, nothing comes in from outside it)
+		for c in [Vector2i(0, 0), Vector2i(W - 1, 0)]:
+			var d := _max_channel(got.get_pixelv(c), _plain.get_pixelv(c))
+			_ok(d < 0.03, "the fisheye at %.2f moved the corner %s by %.3f - the frame is no longer full" % [a, c, d])
+		# ...and the middle swells: a point a fifth of the way in reads the picture well toward the middle
+		var mid := _ramp_point(got, Vector2i(W / 5, H / 4)).x - (float(W / 5) + 0.5)
+		_ok(mid > 8.0, "the fisheye at %.2f moved the picture at a fifth of the width in by only %.1f px" % [a, mid])
+
+
+## A mark laid with `fisheye_straight.gdshader` is found where it was laid once the frame goes through the fisheye.
+func _check_straight() -> void:
+	var a := float(Filters_.REGISTRY["fisheye"]["default"])
+	var laid := Vector2(64.0, 40.0)        # off the middle, where the lens moves things far
+	var straight := _centroid(await _render_mark(laid, a, true))
+	var plain := _centroid(await _render_mark(laid, a, false))
+	_ok(straight.distance_to(laid) < 1.0, "a mark laid straight at %s is shown at %s through the fisheye - the title would bend"
+		% [laid, straight])
+	_ok(plain.distance_to(laid) > 4.0, "the control is wrong - a mark laid plainly at %s is shown at %s, unmoved by the lens"
+		% [laid, plain])
+
+
+## The point of the picture pixel [param px] shows, in pixels, read off the hue ramp: hue is x / W and brightness
+## 0.25 + 0.55 y / (H / 2) at pixel (x, y), whose middle is half a pixel on.
+func _ramp_point(img: Image, px: Vector2i) -> Vector2:
+	var c := img.get_pixelv(px)
+	return Vector2(c.h * W + 0.5, (c.v - 0.25) / 0.55 * float(H / 2) + 0.5)
+
+
+func _max_channel(a: Color, b: Color) -> float:
+	return maxf(absf(a.r - b.r), maxf(absf(a.g - b.g), absf(a.b - b.b)))
+
+
+## A 10 px white square at [param laid] on black, [param straight] through `fisheye_straight.gdshader` or plain, the
+## frame put through a fisheye of [param a] as the stage view is.
+func _render_mark(laid: Vector2, a: float, straight: bool) -> Image:
+	var inner := SubViewport.new()
+	inner.size = Vector2i(W, H)
+	inner.disable_3d = true
+	inner.transparent_bg = false
+	inner.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	var ground := ColorRect.new()
+	ground.color = Color.BLACK
+	ground.size = Vector2(W, H)
+	inner.add_child(ground)
+	var mark := Node2D.new()
+	mark.draw.connect(func() -> void: mark.draw_rect(Rect2(laid - Vector2(5, 5), Vector2(10, 10)), Color.WHITE))
+	if straight:
+		var mat := ShaderMaterial.new()
+		mat.shader = load("res://shaders/fisheye_straight.gdshader")
+		mat.set_shader_parameter("u_size", Vector2(W, H))
+		mat.set_shader_parameter("u_fisheye", a)
+		mark.material = mat
+	inner.add_child(mark)
+	root.add_child(inner)
+	var vp := SubViewport.new()
+	vp.size = Vector2i(W, H)
+	vp.disable_3d = true
+	vp.transparent_bg = false
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	var tr := TextureRect.new()
+	tr.texture = inner.get_texture()
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_SCALE
+	tr.size = Vector2(W, H)
+	Filters_.apply(tr, {"fisheye": a}, Vector2(W, H))
+	vp.add_child(tr)
+	root.add_child(vp)
+	for i in 4:
+		await process_frame
+	var got := vp.get_texture().get_image()
+	vp.queue_free()
+	inner.queue_free()
+	return got
+
+
+## The middle of what is lit in [param img], weighted by brightness, in pixels (pixel middles half a pixel on).
+func _centroid(img: Image) -> Vector2:
+	var sum := Vector2.ZERO
+	var w := 0.0
+	for y in img.get_height():
+		for x in img.get_width():
+			var l := _luma(img.get_pixel(x, y))
+			if l > 0.05:
+				sum += (Vector2(x, y) + Vector2(0.5, 0.5)) * l
+				w += l
+	return sum / w if w > 0.0 else Vector2(-1000, -1000)
 
 
 # --- rendering and measuring --------------------------------------------------

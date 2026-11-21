@@ -9,28 +9,37 @@ Scenes draw into one `SubViewport` that main presents through a single `TextureR
 
 Filters combine, so this is a registry of amounts, not a picker: every entry has its own 0..1 dial and all are applied in one fragment shader in one pass. A filter at 0 is arithmetically a no-op, and when every filter is at 0 the material is removed from the rect, so the default show runs the code it always ran.
 
-The registry order is the pipeline order, top to bottom, and cannot be read off the shader: dots first (they re-sample the picture, so anything after grades the dots), then the optics a lens adds, the grade, the emulsion, the frame. Monochrome before Noir makes the pair read as black-and-white noir, since Noir's split-tone is applied to whatever it is handed.
+The registry order is the pipeline order, top to bottom, and cannot be read off the shader: the gate slip and the fisheye first (they move where the picture is read), then dots (they re-sample the picture, so anything after grades the dots), then the optics a lens adds, the grade, the emulsion, the frame. Monochrome before Noir makes the pair read as black-and-white noir, since Noir's split-tone is applied to whatever it is handed.
+
+The fisheye moves the picture under everything that maps the frame to it: a click on the stage goes through `lens` (`Director.pick`), and a thing drawn into the stage that must read straight (the opening's title) is laid with `shaders/fisheye_straight.gdshader`, told the amount by its medium.
 
 Adding a filter is a row of `REGISTRY`, a `u_<key>` uniform and a block in `shaders/stage_filter.gdshader`; the controls are built off the registry. A key with no matching uniform is a silent no-op in `set_shader_parameter`; the gate reads the shader source and fails on it.
 
-Registry: `Filters.REGISTRY` in [src/show/filters.gd](../src/show/filters.gd) (8 entries), rendered by [shaders/stage_filter.gdshader](../shaders/stage_filter.gdshader). Select with `--filter key=amount,...` (or `--filter none`), or the Look rows in the Generative panel (persisted to `user://ghost.cfg`, `[director] filters`).
+Registry: `Filters.REGISTRY` in [src/show/filters.gd](../src/show/filters.gd) (9 entries), rendered by [shaders/stage_filter.gdshader](../shaders/stage_filter.gdshader). Select with `--filter key=amount,...` (or `--filter none`), or the Look rows in the Generative panel (persisted to `user://ghost.cfg`, `[director] filters`).
 
 | # | Key | Name | Uniform | Default |
 | - | --- | ---- | ------- | ------- |
 | 1 | `slip` | Gate slip | `u_slip` | 0.45 |
-| 2 | `pointillism` | Pointillism | `u_pointillism` | 0.35 |
-| 3 | `bloom` | Bloom | `u_bloom` | 0.45 |
-| 4 | `monochrome` | Monochrome | `u_monochrome` | 1.0 |
-| 5 | `noir` | Film noir | `u_noir` | 0.55 |
-| 6 | `static` | Static | `u_static` | 0.4 |
-| 7 | `dust` | Dust & scratches | `u_dust` | 0.45 |
-| 8 | `vignette` | Vignette | `u_vignette` | 0.45 |
+| 2 | `fisheye` | Fisheye | `u_fisheye` | 0.45 |
+| 3 | `pointillism` | Pointillism | `u_pointillism` | 0.35 |
+| 4 | `bloom` | Bloom | `u_bloom` | 0.45 |
+| 5 | `monochrome` | Monochrome | `u_monochrome` | 1.0 |
+| 6 | `noir` | Film noir | `u_noir` | 0.55 |
+| 7 | `static` | Static | `u_static` | 0.4 |
+| 8 | `dust` | Dust & scratches | `u_dust` | 0.45 |
+| 9 | `vignette` | Vignette | `u_vignette` | 0.45 |
 
 ## `slip` - Gate slip
 
 Tearing: now and then a band of the picture jumps sideways for one frame and snaps back, the way a frame that does not seat squarely in a projector's gate is printed offset. The dial is how often and how far.
 
 Uniform `u_slip`, default 0.45 when first switched on.
+
+## `fisheye` - Fisheye
+
+The picture as a fisheye lens takes it: the middle swells and the edges crowd in, so straight lines bow outward round the middle, while the corners stay put and the frame stays full. The subtitles and the opening's title stay straight over it. The dial is how wide the lens is.
+
+Uniform `u_fisheye`, default 0.45 when first switched on.
 
 ## `pointillism` - Pointillism
 

@@ -372,6 +372,7 @@ var _set_node: Node3D
 var _roots: DispatchRoots
 var _roots_node: Node3D
 var _screens: DispatchScreens
+var _night := "?"                # the document's night the chart was last handed ([method DispatchScreens.set_night]); none yet
 var _spectrum: DispatchSpectrum         # the receiver's SDR screen: its waterfall's rows as they are made
 var _bands := PackedFloat32Array()      # the heard audio's bands this frame ([AudioFeatures], handed to [method advance])
 var _heard: AudioFeatures               # ...and the whole frame, its waveform the scope's ([member _scope])
@@ -853,6 +854,7 @@ func advance(features, delta: float, _bookend: float) -> void:
 	var opening := _opening()
 	ShowOpening.lens(_pull(_now, opening), _blur, _attrs)
 	_title.alpha = ShowOpening.title_alpha(feed.opening, _now, opening, _built_n > 0)
+	_title.fisheye = feed.fisheye()
 	_title.queue_redraw()
 	if _set != null:
 		# the camera first: a phone at the ear and the mug lifted are held where it is this frame, never the last
@@ -901,6 +903,11 @@ func _ensure_doc() -> void:
 	if _subs == null or not is_instance_valid(_subs):
 		return
 	var d: Dictionary = _subs.document
+	# the night its words were filled for: the chart is printed round it
+	var night := String(d.get("night", ""))
+	if night != _night:
+		_night = night
+		_screens.set_night(night)
 	var env := Surroundings.sanitize(d.get("environment"))
 	var ek := JSON.stringify(env)
 	if ek != _surround_key:

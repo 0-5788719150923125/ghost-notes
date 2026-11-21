@@ -726,6 +726,7 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_light_part.tick(_now)
 	_tick_air(_now)
 	_title.alpha = _title_alpha(_now)
+	_title.fisheye = feed.fisheye()
 	_title.queue_redraw()
 
 

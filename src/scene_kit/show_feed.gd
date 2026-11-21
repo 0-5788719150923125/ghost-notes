@@ -144,6 +144,12 @@ func turn_look(_who: String, _dials: Dictionary) -> void:
 func look_amount(_filter: String) -> float:
 	return 0.0
 
+
+## How far the Look's fisheye bows the picture as it is shown, 0 off to 1: what a thing drawn into the picture undoes to
+## read straight over it (the opening's title, `shaders/fisheye_straight.gdshader`).
+func fisheye() -> float:
+	return 0.0
+
 ## The music's harmonic signature now (12 chroma bins and a coarse shape - [HarmonicSignature]),
 ## empty when nothing is heard: the continuous half of harmonic seeding, a scene's palette pulled
 ## toward the music's key.
