@@ -2435,6 +2435,8 @@ func _call_secs(label: String, t: float) -> float:
 ## The night's own time at [param t] (seconds since its midnight before): the time the last fade up set the clock to and how
 ## long since, as the clock shows it ([method clock_at]) - so a black jumps it the hours the story does. A set earlier in the
 ## day than the one before it is the next day. Before the first set, counted back from it; with none, the show's own time.
+## [param t] is on the reading's scale, so a fade is judged where it falls on it ([method _on_reading]): after a mid-way start
+## the fades before it lie in the far past, and a call begun before one of them would count it.
 func _night_at(t: float) -> float:
 	var first := Vector2(INF, 0.0)
 	var at := -INF
@@ -2451,7 +2453,7 @@ func _night_at(t: float) -> float:
 		var turn := _on_reading(i, _t0[i] + float(a["secs"]) / _sp[i])
 		if first.x == INF:
 			first = Vector2(turn, mins * 60.0)
-		if _t0[i] > t:
+		if _on_reading(i, _t0[i]) > t:
 			break
 		at = turn
 		night = mins * 60.0
@@ -3360,7 +3362,7 @@ func clock_at(t: float) -> Dictionary:
 		if String(a["kind"]) != "fade" or int(a.get("clock", -1)) < 0 or _t0[i] == INF:
 			continue
 		var turn := _on_reading(i, _t0[i] + float(a["secs"]) / _sp[i])
-		if _t0[i] > t:
+		if _on_reading(i, _t0[i]) > t:
 			break
 		# the black is a jump in the story's time: the cards come up a minute short of the time given and turn that minute,
 		# never from wherever the clock had run to before it

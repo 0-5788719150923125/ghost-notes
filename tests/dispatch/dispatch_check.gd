@@ -53,8 +53,9 @@ extends SceneTree
 ##   first word is said seconds before the whole line is typed);
 ## - a call's timer after a reading started mid-way: counted from where the call fell on the reading, as a whole reading
 ##   counts it (the control: from the far past the call is placed in, it is hours);
-## - a call held across a black has been on the hours the clock jumped, past midnight too, shown with its hours (the control:
-##   counted in the show's own time, it is a minute or two);
+## - a call held across a black has been on the hours the clock jumped, past midnight too, shown with its hours, a reading started
+##   past the black too (the controls: counted in the show's own time, it is a minute or two; the fades' own starts lie before
+##   the call began);
 ## - the camera turns to what is active (terminal typing, receiver in a storm, ringing phone) and a look holds while nothing else
 ##   is; it goes to the radar only at its sounds; the radar target moves in small steps under the voice, never a jump, with its
 ##   old place written beside it until it arrives; the receiver is open only in its storm;
@@ -1294,6 +1295,25 @@ func _call_across_black(md: DispatchMedium) -> void:
 		and DispatchScreens.call_time(2209) == "36:49",
 		"a call held across a black has been on the hours the clock jumped (%s; the control, in the show's own time, %.0f s)"
 			% [DispatchScreens.call_time(int(secs)), show_secs])
+	# the same reading started past the black: the fades before the start lie in the far past, behind the call's beginning
+	var words := DispatchScript.rehearsal(DispatchScript.parse(body), 0.32)
+	var k := spoken.find("morning")
+	var since := float((words[k] as Dictionary)["t0"])
+	var later: Array = []
+	for w in words.slice(k):
+		var d: Dictionary = (w as Dictionary).duplicate()
+		d["t0"] = float(d["t0"]) - since
+		d["t1"] = float(d["t1"]) - since
+		later.append(d)
+	md.load_note(body, {"seed": 3}, spoken.slice(k, k + 8), k, since)
+	md._now = 0.0
+	md.take_words(later)
+	var mid_secs := md._call_secs("VAN", late - since)
+	var began := md._call_began("VAN", late - since)
+	var raw_fade := md.starts()[_first(md._actions, "fade")]
+	_ok(md._follower.start_si == k and absf(mid_secs - secs) < 120.0 and raw_fade < began,
+		"a call held across a black, the reading started past it, has been on the hours the clock jumped (%s, whole %s; the control: the fades' own starts lie before the call began, %.0f s against %.0f s)"
+			% [DispatchScreens.call_time(int(mid_secs)), DispatchScreens.call_time(int(secs)), raw_fade, began])
 
 
 ## A call's timer after a reading started mid-way, past where the call began: counted from where the call fell on the reading, as a

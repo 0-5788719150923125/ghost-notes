@@ -169,9 +169,16 @@ func _work_rows() -> void:
 		_rows_found = {"id": id, "states": ActorBuilder.states_of(f) if f != null else {}})
 
 
-## What the worker found, once it is done: the rows drawn from it (for the actor shown alone).
-func _take_rows() -> void:
-	if _rows_task < 0 or not WorkerThreadPool.is_task_completed(_rows_task):
+## The worker's states once it has answered, waited for (one asked again while it worked included). For a gate: the
+## app never waits on it.
+func settle() -> void:
+	while _rows_task >= 0:
+		_take_rows(true)
+
+
+## What the worker found, once it is done ([param wait]: waited for): the rows drawn from it (for the actor shown alone).
+func _take_rows(wait := false) -> void:
+	if _rows_task < 0 or (not wait and not WorkerThreadPool.is_task_completed(_rows_task)):
 		return
 	WorkerThreadPool.wait_for_task_completion(_rows_task)
 	_rows_task = -1
