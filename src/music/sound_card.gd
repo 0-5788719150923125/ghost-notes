@@ -965,11 +965,33 @@ func score() -> Dictionary:
 		_voices_at = VoiceLibrary.version
 	var made_of := JSON.stringify([_block, _words_text, _ref_seen, _voices]).sha1_text()
 	if made_of != _score_of:
-		_score = Composer.score(_block, {"lyrics": Lyrics.parse(_words_text), "reference": _ref, "voices": _voices})
-		_score_hash = JSON.stringify(_score).sha1_text()
+		_score = score_of(_block, _words_text, _ref, _voices)
+		_score_hash = stamp(_score)
 		_score_of = made_of
 		_count_kept()
 	return _score
+
+
+## The score of composed Sound [param block] over the note's words [param words], its reference as read [param ref] and the kept
+## voices [param voices] ([method Singers.kept]): [method score]'s, and whoever plays the note's song without its card.
+static func score_of(block: Dictionary, words: String, ref: Dictionary, voices: Dictionary) -> Dictionary:
+	return Composer.score(block, {"lyrics": Lyrics.parse(words), "reference": ref, "voices": voices})
+
+
+## What a mix made from [param score] is stamped with (`made.json`'s `hash`, [constant SongBake.MADE]): its keys sorted, so the same
+## score read from the note or held by a card stamps alike.
+static func stamp(score: Dictionary) -> String:
+	return JSON.stringify(score, "", true).sha1_text()
+
+
+## The mix in [param folder] marked made from a score stamped [param hash]: what is written, `{hash, at}`.
+static func mark_made(folder: String, hash: String) -> Dictionary:
+	var made := {"hash": hash, "at": Time.get_unix_time_from_system()}
+	var mf := FileAccess.open(ProjectSettings.globalize_path(folder).path_join(SongBake.MADE), FileAccess.WRITE)
+	if mf != null:
+		mf.store_string(JSON.stringify(made))
+		mf.close()
+	return made
 
 
 func _words() -> String:
@@ -1064,12 +1086,8 @@ func _on_done(job: String, ok: bool, path: String, why: String) -> void:
 			make()
 		return
 	_count_kept()
-	_made = {"hash": _making_hash, "at": Time.get_unix_time_from_system()}
+	_made = mark_made(folder(), _making_hash)
 	_show_save()
-	var mf := FileAccess.open(ProjectSettings.globalize_path(folder()).path_join(SongBake.MADE), FileAccess.WRITE)
-	if mf != null:
-		mf.store_string(JSON.stringify(_made))
-		mf.close()
 	_say("✓  The song is made: %s" % path.get_file())
 	# a bake keeps only the takes its lines name: the stream reads what is there now
 	if _stream != null:
@@ -1109,13 +1127,14 @@ func pipeline_rows() -> Array:
 		m.state = "missing"
 	else:
 		m.state = "made" if String(_made.get("hash", "")) == _score_hash else "stale"
-	# heard as it is made, the song needs no mix until it is exported, which makes it
-	if streams() and m.state in ["missing", "stale"]:
+	# heard as it is made, the song needs no mix until it is exported or played on another note's screen, which make it; a mix made
+	# from what the song was is stale all the same, since that is what is played until then
+	if streams() and m.state == "missing":
 		m.state = "on_demand"
 	var voices := (s.get("voices", []) as Array).size()
 	m.said = _status if busy else ("%d parts%s, %s" % [(s.get("parts", []) as Array).size(),
 		(" and the voice" if voices == 1 else " and %d voices" % voices) if voices > 0 else "", Clock.text(float(s.get("length", 0.0)))]
-		+ (" - made by an export" if m.state == "on_demand" else ""))
+		+ (" - made by an export" if m.state == "on_demand" else (" - made from the song as it was" if m.state == "stale" else "")))
 	m.again = "Make the song again from its parts as they stand: what is kept is read back, the rest made."
 	m.redo = make
 	out.append(m)

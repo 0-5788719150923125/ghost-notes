@@ -1,6 +1,6 @@
 {
 	"name": "the lamp",
-	"line": "A gooseneck desk lamp, its hollow shade bent over toward the keyboard and a bulb lit in it.",
+	"line": "A gooseneck desk lamp, its hollow shade white inside and bent over toward the keyboard, a bulb lit in it.",
 	"thing": {
 		"name": "the lamp",
 		"parts": [
@@ -210,7 +210,7 @@
 					"color": "#ffd194",
 					"strength": 2.6,
 					"reach": 280.0,
-					"angle": 36.0,
+					"angle": 52.0,
 					"falloff": 1.4,
 					"aim": [
 						0,
@@ -225,6 +225,66 @@
 					"shadows": true,
 					"soft": 6.0,
 					"shade": 0.62
+				},
+				"runs": {
+					"law": "follow",
+					"feed": "lit",
+					"state": "light",
+					"rest": 1
+				}
+			},
+			{
+				"shape": "lathe",
+				"profile": [
+					[
+						0,
+						0.16
+					],
+					[
+						2.04,
+						0.16
+					],
+					[
+						5.84,
+						9.0
+					],
+					[
+						5.72,
+						9.0
+					],
+					[
+						1.93,
+						0.28
+					],
+					[
+						0,
+						0.28
+					]
+				],
+				"at": [
+					4.0,
+					44.0,
+					32.0
+				],
+				"turn": [
+					4.39,
+					-14.98,
+					-147.53
+				],
+				"material": "lining",
+				"name": "lining",
+				"light": {
+					"kind": "point",
+					"color": "#ffd194",
+					"strength": 0.06,
+					"reach": 12.0,
+					"falloff": 1.0,
+					"at": [
+						0.86,
+						3.95,
+						0.12
+					],
+					"shadows": false
 				},
 				"runs": {
 					"law": "follow",
@@ -280,6 +340,11 @@
 			"kind": "painted",
 			"color": "#ffdb9e",
 			"polish": 0.3
+		},
+		"lining": {
+			"kind": "painted",
+			"color": "#e6e0d2",
+			"polish": 0.45
 		}
 	}
 }

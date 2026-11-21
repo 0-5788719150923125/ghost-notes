@@ -101,6 +101,7 @@ A property set stays; one left unset is drawn from the element's own number insi
 | --- | --- | --- | --- | --- |
 | `preset` Light | The light the scene is in; its own, as the scene lights itself. | `enum` | `own`, `lamplight`, `candlelight`, `daylight`, `dusk`, `moonlight`, `darkness` | `lamplight`, `candlelight`, `daylight`, `dusk`, `moonlight` |
 | `brightness` Brightness | How bright the whole scene is, over its light's own: 1 as the light is. | `float` | 0.25 to 2.5 | 0.85 to 1.25 |
+| `lamp` Lamp | Whether the lamp at the work is on: as the light has it (moonlight, daylight and candlelight put it out), or switched on or off whatever the light. | `enum` | `light`, `on`, `off` | never: its default until set |
 
 ### Light shafts (`SHAFT_FIELDS`)
 

@@ -668,8 +668,8 @@ func _dress_environment() -> void:
 	_env.ambient_light_energy = AMBIENT_ENERGY * (1.0 if own else float(row["ambient_energy"]))
 	_fill.light_color = FILL_COLOR if own else FILL_COLOR.lerp(key, 0.5)
 	_fill.light_energy = FILL_ENERGY * (1.0 if own else float(row["ambient_energy"]))
-	_lamp_share = 1.0 if own else float(row["lamp"])
-	var candles := not own and int((row["candles"] as Array)[1]) > 0 and float(row["lamp"]) <= 0.0
+	_lamp_share = Surroundings.lamp_of(_surround, 1.0 if own else float(row["lamp"]))
+	var candles := not own and int((row["candles"] as Array)[1]) > 0 and _lamp_share <= 0.0
 	_candles.visible = candles
 	_candles.light_energy = CANDLES_ENERGY if candles else 0.0
 	Tonemaps.dress(_env, EXPOSURE * Surroundings.brightness(_surround))

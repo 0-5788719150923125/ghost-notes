@@ -98,13 +98,16 @@ const SHAFT_LOOKS := {
 		"set": {"count": 1, "width": 0.18, "inner": 1, "variety": 0.0, "flicker": 0.0, "spread": 0.0}},
 }
 
-## What a light can be told ([Roll]'s rows): its preset ("own" the scene's own) and how bright the whole scene is.
+## What a light can be told ([Roll]'s rows): its preset ("own" the scene's own), how bright the whole scene is, and whether the lamp at
+## the work is on ([method lamp_of]) - never drawn: as its light has it until it is set.
 const LIGHT_FIELDS := {
 	"preset": {"label": "Light", "blurb": "The light the scene is in; its own, as the scene lights itself.", "type": "enum",
 		"options": ["own", "lamplight", "candlelight", "daylight", "dusk", "moonlight", "darkness"], "default": "own",
 		"roll": ["lamplight", "candlelight", "daylight", "dusk", "moonlight"]},
 	"brightness": {"label": "Brightness", "blurb": "How bright the whole scene is, over its light's own: 1 as the light is.", "type": "float",
 		"min": 0.25, "max": 2.5, "step": 0.05, "default": 1.0, "roll": [0.85, 1.25]},
+	"lamp": {"label": "Lamp", "blurb": "Whether the lamp at the work is on: as the light has it (moonlight, daylight and candlelight put it out), or switched on or off whatever the light.",
+		"type": "enum", "options": ["light", "on", "off"], "labels": {"light": "As the light has it", "on": "On", "off": "Off"}, "default": "light"},
 }
 ## Looks of colored beams the Dex offers beside the kind as it rolls ([constant BEAM_FIELDS]).
 const BEAM_LOOKS := {
@@ -580,6 +583,20 @@ static func _heard_key(k: String) -> String:
 ## never that color itself, the dark a scene fades into far off, which a fog of would only darken the room.
 static func fog_albedo(fog: Color) -> Color:
 	return FOG_PALE.lerp(fog, FOG_TINT)
+
+
+## How much of the lamp at the work is on in what [param spec] chooses: [param share] as its light has it (a preset's `lamp`, or the
+## scene's own), unless its light switches the lamp on or off ([constant LIGHT_FIELDS] `lamp`).
+static func lamp_of(spec: Dictionary, share: float) -> float:
+	var el := light_element(spec)
+	if el.is_empty():
+		return share
+	match String(values_of(el).get("lamp", "light")):
+		"on":
+			return 1.0
+		"off":
+			return 0.0
+	return share
 
 
 ## Whether fog of any kind is in use in [param spec]: a bank of haze, or a fog.

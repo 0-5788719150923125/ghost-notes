@@ -5,7 +5,8 @@ class_name ScreenPlays
 ## NOTE by its title, played live inside the desk ([NestedShow]: its own scenes and song, nothing rendered ahead), or a VIDEO FILE by
 ## its path, decoded as it plays ([ScreenFilm]).
 ##
-## A note plays as its own show is made: its song as its Sound card made it (the composed mix, or the file it plays) - or silent, timed
+## A note plays as its own show is made: its song as it stands (the file it plays, or its composed mix - made again first, here, where
+## the song has changed since it was made or it was never made: nobody opens that note to make it) - or silent, timed
 ## by its storyboard, where it has no sound (a cartoon, next/cartoon.md) - its words as its
 ## Look shows them (the credits where it names none), heard through that song's bake ([SpectrumBake], taken by the bake runner once, where it has none, as an export takes it), in its medium (one
 ## that plays scenes: Auto, Full frame, Comic), walking its storyboard where it keeps one. A video file has its size, rate and length
@@ -29,6 +30,7 @@ static var _jobs := {}
 static var _failed := {}
 static var _titles := {}
 static var _titles_at := -INF
+static var _songs := {}        # a note's path -> {key, score, hash, current}: its composed song as it stands ([method _song_now])
 
 
 ## What [param what] names, as a screen plays it: `{what, kind ("note" or "file"), ready, secs, why}` and, ready, what plays it - a
@@ -65,6 +67,10 @@ static func _note_record(what: String) -> Dictionary:
 		out["why"] = "it is shown as %s - a note played on a screen is one shown in scenes (Auto, Full frame, Comic)" % Registry.label(Medium.REGISTRY, med)
 		return out
 	out["title"] = what
+	var making := _mix_now(what, note)
+	if not making.is_empty():
+		out["why"] = making
+		return out
 	var song := song_of(note)
 	if song.is_empty():
 		# a note with no sound plays silent, timed by its storyboard
@@ -110,6 +116,74 @@ static func note_of(title: String) -> String:
 				_titles[t] = String((n as Dictionary)["path"])
 	var p := String(_titles.get(want, ""))
 	return p if not p.is_empty() and FileAccess.file_exists(p) else ""
+
+
+## What stands in the way of the composed song of the note at [param note] (played for [param what]) as it stands: "" where its mix is
+## made from the song as it is now, where it has no composed song, or where this process writes nothing (a render, a gate: it plays
+## what is there); else the mix is made again ([method _make]), and this says so. Nobody opens the other note to make it.
+static func _mix_now(what: String, note: String) -> String:
+	var blocks := NoteStore.blocks_of(note)
+	var snd: Dictionary = blocks.get("sound", {}) if blocks.get("sound") is Dictionary else {}
+	if snd.is_empty() or String(snd.get("source", "composed")) != "composed" or Settings.is_read_only():
+		return ""
+	if _jobs.has(what) and String((_jobs[what] as Dictionary)["step"]) == "mix":
+		return "its song is being made, as it stands now"
+	if _failed.has(what):
+		return String(_failed[what])
+	var folder := NoteUpload.folder_of(note).path_join(SoundCard.FOLDER)
+	var now := _song_now(note, snd, folder)
+	if bool(now["current"]):
+		return ""
+	_make(what, now, folder)
+	return "its song is being made, as it stands now" if _jobs.has(what) else String(_failed.get(what, ""))
+
+
+## The composed song [param snd] of the note at [param note] as it stands (`{key, score, hash, current}`: its score, its stamp
+## ([method SoundCard.stamp]), and whether the mix in [param folder] was made from it): worked out again only when the note, its
+## reference, the mix, what the mix was made from or the kept voices change.
+static func _song_now(note: String, snd: Dictionary, folder: String) -> Dictionary:
+	var dir := ProjectSettings.globalize_path(folder)
+	var mix := SongBake.mix_of(folder)
+	var key := "%d|%d|%d|%d|%d" % [FileAccess.get_modified_time(note), FileAccess.get_modified_time(dir.path_join(SongBake.REFERENCE)),
+		FileAccess.get_modified_time(dir.path_join(SongBake.MADE)), FileAccess.get_modified_time(mix), VoiceLibrary.version]
+	var kept: Dictionary = _songs.get(note, {})
+	if String(kept.get("key", "")) == key:
+		return kept
+	var r: Variant = snd.get("reference")
+	var ref := SongBake.reference_of(folder) if r is Dictionary and not String((r as Dictionary).get("path", "")).is_empty() else {}
+	var words := String(FrontMatter.split(FileAccess.get_file_as_string(note)).get("body", ""))
+	var score := SoundCard.score_of(snd, words, ref, Singers.kept())
+	var hash := SoundCard.stamp(score)
+	var made_path := dir.path_join(SongBake.MADE)
+	var made: Variant = JSON.parse_string(FileAccess.get_file_as_string(made_path)) if FileAccess.file_exists(made_path) else null
+	var current := FileAccess.file_exists(mix) and made is Dictionary and String((made as Dictionary).get("hash", "")) == hash
+	kept = {"key": key, "score": score, "hash": hash, "current": current}
+	_songs[note] = kept
+	return kept
+
+
+## The mix of a composed song made again from [param now] ([method _song_now]) into [param folder], as its Sound card's Generate makes
+## it ([SongBake]: the lines not kept sung, the parts rendered, its words' sidecar beside it), and marked made from it.
+static func _make(what: String, now: Dictionary, folder: String) -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		_failed[what] = "its song is out of date, and there is nothing here to make it again"
+		return
+	var bake := SongBake.new()
+	var score: Dictionary = now["score"]
+	var hash := String(now["hash"])
+	bake.done.connect(func(job: String, ok: bool, _path: String, why: String) -> void:
+		if job != "bake":
+			return
+		if ok:
+			SoundCard.mark_made(folder, hash)
+		else:
+			_failed[what] = "its song could not be made: %s" % why
+		_jobs.erase(what)
+		bake.queue_free())
+	bake.ready.connect(func() -> void: bake.bake(score, folder), CONNECT_ONE_SHOT)
+	_jobs[what] = {"what": what, "step": "mix", "pid": -1}
+	tree.root.add_child.call_deferred(bake)
 
 
 ## The song of the note at [param note] as its Sound card made it: the composed mix, or the file it plays; "" where none is made.

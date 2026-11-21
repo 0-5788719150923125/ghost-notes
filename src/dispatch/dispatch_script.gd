@@ -684,10 +684,11 @@ static func _typed_theirs(glass: Dictionary, shown: String) -> Dictionary:
 
 
 ## A block's last `key:` lines (from [param lines], run [param bi] of [param all]) that the paragraph straight after it -
-## past a voice's cue - opens by saying ([method said_after]): `{at, text, spans, said}`, the line they begin on, the text as
-## the glass types it (each line wrapped at [param width], parted by line breaks), each word said with its characters
-## (`{c0, c1, word}`, `word` its place in the paragraph, the first from the text's start, a word's spaces after it with it),
-## and how many of the paragraph's words that runs through. {} where it says none of them or anything else comes between
+## past a voice's cue - opens by saying ([method said_after]), read on into the paragraphs after it that only a voice's cue
+## parts from it (a delivery, a hesitation: their words follow on in what is said): `{at, text, spans, said}`, the line they
+## begin on, the text as the glass types it (each line wrapped at [param width], parted by line breaks), each word said with
+## its characters (`{c0, c1, word}`, `word` its place in those words, the first from the text's start, a word's spaces after
+## it with it), and how many of those words that runs through. {} where it says none of them or anything else comes between
 ## (a picture: the typing stays where it is written, before it).
 static func said_keys(lines: PackedStringArray, all: Array, bi: int, width: int) -> Dictionary:
 	var at := lines.size()
@@ -712,7 +713,13 @@ static func said_keys(lines: PackedStringArray, all: Array, bi: int, width: int)
 	var tokens := PackedStringArray()
 	for sp in spans:
 		tokens.append(TabletScript.norm(shown.substr(int(sp["c0"]), int(sp["c1"]) - int(sp["c0"])).strip_edges()))
-	var pairs := said_after(tokens, words_of(String((all[j] as Dictionary)["text"])))
+	var words := words_of(String((all[j] as Dictionary)["text"]))
+	var q := j + 1
+	while q < all.size() and words.size() < tokens.size() * 2 + SAID_GAP * 2 and String((all[q] as Dictionary)["kind"]) in ["voice", "para"]:
+		if String((all[q] as Dictionary)["kind"]) == "para":
+			words.append_array(words_of(String((all[q] as Dictionary)["text"])))
+		q += 1
+	var pairs := said_after(tokens, words)
 	if pairs.is_empty():
 		return {}
 	var out: Array = []

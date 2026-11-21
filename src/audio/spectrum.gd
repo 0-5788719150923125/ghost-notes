@@ -285,18 +285,9 @@ func _bake() -> void:
 		push_warning("ghost: bake failed; the render will fall back to the live analyzer")
 
 
-# Cache key: the song's path + byte size (so replacing the file invalidates it).
+# The cache the exporter wrote for the loaded song ([method Bake.cache_path]).
 func _bake_cache_path() -> String:
-	var p := _loaded_path
-	if p.begins_with("res://") or p.begins_with("user://"):
-		p = ProjectSettings.globalize_path(p)
-	var sz := 0
-	if FileAccess.file_exists(p):
-		var fa := FileAccess.open(p, FileAccess.READ)
-		if fa != null:
-			sz = fa.get_length()
-			fa.close()
-	return "user://bake_%d.spec" % hash(p + "_" + str(sz))
+	return Bake.cache_path(_loaded_path)
 
 
 ## A COMPOSED SONG'S OWN GRID: `{beats: PackedFloat32Array, bar: int (beats a bar), beat: float (seconds), sections:

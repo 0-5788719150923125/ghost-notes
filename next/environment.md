@@ -66,6 +66,8 @@ Built:
   swirls out along the wind, a Sway in slow waves along the wind's way and its pace, a Breathe rising thinner and sinking
   thicker, a glow of its own, its color (unset, the light's fog). Its density is calibrated looked down through it (`sight`, its
   height and a half again), made up for its profile's thinning and its curve's gaps.
+- **The lamp at the work** is on as the light has it (moonlight, daylight and candlelight put it out) unless the light element's
+  Lamp row switches it on or off (`Surroundings.lamp_of`), read by both desks below; never drawn by a roll.
 - **The desk** (Letter, Desk, a table show at the desk): its mood is the light element's preset; brightness its exposure; the lamp
   and each kind of candle at their share (`lamp`, `taper`, `pillar`, `tealights`); shafts from the window's side over the pad
   (`Desk.RAYS_REACH`); the air over the pad and the room.

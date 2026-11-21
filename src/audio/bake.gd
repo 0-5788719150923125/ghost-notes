@@ -155,8 +155,8 @@ static func _load_samples(song_path: String) -> PackedFloat32Array:
 const CACHE_MAGIC := 0x42414B45     # "BAKE"
 
 
-## Where the bake for a given song is cached, keyed by its path + byte size so replacing the file invalidates
-## it. Written by the exporter, read by Spectrum (via --bake-file).
+## Where the bake for a given song is cached, keyed by its path, byte size and when it was written, so a file made again (a song
+## remade at the same length is the same size) is heard again. Written by the exporter and a screen's bake, read by Spectrum.
 static func cache_path(song_path: String) -> String:
 	var p := song_path
 	if p.begins_with("res://") or p.begins_with("user://"):
@@ -167,7 +167,7 @@ static func cache_path(song_path: String) -> String:
 		if fa != null:
 			sz = fa.get_length()
 			fa.close()
-	return "user://bake_%d.spec" % hash(p + "_" + str(sz))
+	return "user://bake_%d.spec" % hash(p + "_" + str(sz) + "_" + str(FileAccess.get_modified_time(p)))
 
 
 ## Write a baked timeline to a cache file, keyed by the caller (see Spectrum) on the song's path + size.

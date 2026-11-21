@@ -366,14 +366,22 @@ func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 	for k in lines.size():
 		var y := TERM_MARGIN.y + TERM_LINE * float(k)
 		var text := String(DispatchScript.unredacted(String(lines[k]))["text"])
-		var ink := _term_ink
 		var span := Vector2i(bar.x, bar.y) if k == 0 and bar.x >= 0 else (Vector2i(pick.y, pick.z) if k == pick.x else Vector2i(-1, -1))
-		if span.x >= 0:
-			var x0 := TERM_MARGIN.x + _advance(text.substr(0, span.x)) - 4.0
-			var x1 := TERM_MARGIN.x + _advance(text.substr(0, span.y)) + 4.0
-			c.draw_rect(Rect2(x0, y - TERM_LINE * 0.74, x1 - x0, TERM_LINE * 0.98), _term_ink)
-			ink = _term_dark
-		c.draw_string(_mono, Vector2(TERM_MARGIN.x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT, ink)
+		if span.x < 0:
+			c.draw_string(_mono, Vector2(TERM_MARGIN.x, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT, _term_ink)
+			continue
+		# only the cells inside the bar are dark; the rest of the row keeps its ink
+		var x0 := TERM_MARGIN.x + _advance(text.substr(0, span.x)) - 4.0
+		var x1 := TERM_MARGIN.x + _advance(text.substr(0, span.y)) + 4.0
+		c.draw_rect(Rect2(x0, y - TERM_LINE * 0.74, x1 - x0, TERM_LINE * 0.98), _term_ink)
+		var parts := [[0, span.x, _term_ink], [span.x, span.y, _term_dark], [span.y, text.length(), _term_ink]]
+		for part in parts:
+			var a: int = part[0]
+			var b: int = part[1]
+			if b <= a:
+				continue
+			c.draw_string(_mono, Vector2(TERM_MARGIN.x + _advance(text.substr(0, a)), y), text.substr(a, b - a),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, TERM_FONT, part[2])
 	if bool(st.get("cursor", false)):
 		var at: Vector2i = st.get("cursor_at", Vector2i(0, maxi(lines.size() - 1, 0)))
 		var cy := TERM_MARGIN.y + TERM_LINE * float(at.y)

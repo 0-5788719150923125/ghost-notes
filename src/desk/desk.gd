@@ -372,7 +372,7 @@ func _shine_lamp() -> void:
 	if look.is_empty() or _lamp == null:
 		return
 	var lamp: Dictionary = look["lamp"]
-	var share := float(lamp.get("share", 1.0)) * Surroundings.share_of(environment, "lamp")
+	var share := Surroundings.lamp_of(environment, float(lamp.get("share", 1.0))) * Surroundings.share_of(environment, "lamp")
 	_lamp.light_energy = float(lamp["energy"]) * share
 	_lamp.visible = share > 0.0
 
