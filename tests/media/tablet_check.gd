@@ -11,6 +11,10 @@ extends SceneTree
 ## So the voice's text ([method TabletScript.speakable]) is tokenized the way the voice would see
 ## it and compared, word for word, with the words the parse marks spoken. And a chapter that is
 ## NOT a tablet chapter must come back byte-identical, because this runs on every reading.
+##
+## A live chat ([constant TabletScript.CHAT]) is read whole and never aloud (control: the words after it are read); its
+## page is built to the screen with the message box at its foot; the stream is a pure function of the time (the same
+## twice), comes about as often as asked, and never shows a message before its time.
 
 var _fail := 0
 
@@ -80,6 +84,7 @@ func _initialize() -> void:
 	_check_list()
 	_check_table()
 	_check_notify()
+	_check_chat()
 	print("tablet_check: %s" % ("PASS" if _fail == 0 else "FAIL (%d)" % _fail))
 	quit(1 if _fail > 0 else 0)
 
@@ -382,6 +387,34 @@ func _check_list() -> void:
 	var say := TabletScript.speakable(src)
 	_ok(not say.contains("- One") and not say.contains("1. First") and say.contains("One thing.\n\nTwo things."),
 		"each item is read as its own short paragraph, without its dash")
+
+
+func _check_chat() -> void:
+	var src := ("<!-- url: live.test/a -->\n\n# A stream\n\n<!-- chat: 3 -->\nme: desk\ntip: $5\n$2 ann: say home\n"
+		+ "names: ann, bo, cy\nnames: di\n- first message\n- second message\n- third message\n<!-- /chat -->\n\nAfter the chat.\n")
+	var doc := TabletScript.parse(src)
+	var blocks: Array = (doc["pages"][0] as Dictionary)["blocks"]
+	var chat: Dictionary = {}
+	for b in blocks:
+		if String((b as Dictionary)["kind"]) == "chat":
+			chat = b
+	_ok(not chat.is_empty() and (chat["names"] as PackedStringArray).size() == 4 and (chat["said"] as PackedStringArray).size() == 3
+		and (chat["paid"] as Array).size() == 1 and String(chat["me"]) == "desk" and String(chat["tip"]) == "$5" and float(chat["rate"]) == 3.0,
+		"a chat's names, bank, paid message, name and tip are read: %s" % str(chat))
+	var say := TabletScript.speakable(src)
+	_ok(not say.contains("message") and not say.contains("names") and say.contains("After the chat."),
+		"a chat is never read aloud (control: the words after it are)")
+	var tp := TabletPage.new()
+	tp.build(doc, 0, 1200.0, 1400.0 * 2.4, 1400.0)
+	_ok(tp.height == 1400.0 and tp.reply_rect.end.y <= 1400.0 and tp.reply_rect.size.y > 0.0,
+		"a live page is the screen's height, its message box at the foot")
+	var a: Array = tp.chat_at(chat, 200.0, 400.0)
+	_ok(a == tp.chat_at(chat, 200.0, 400.0) and not a.is_empty(), "the stream is the same at the same time")
+	_ok(a.all(func(m: Dictionary) -> bool: return float(m["at"]) <= 200.0), "no message shows before its time")
+	var over: Array = tp.chat_at(chat, 300.0, 6000.0)
+	var span := float(over[0]["at"]) - float(over.back()["at"])
+	var rate := float(over.size() - 1) / maxf(span, 0.001)
+	_ok(rate > 2.0 and rate < 4.0, "messages come about as often as asked (3 a second): %.2f" % rate)
 
 
 func _check_table() -> void:

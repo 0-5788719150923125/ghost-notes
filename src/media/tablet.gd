@@ -491,7 +491,7 @@ func layout(p: int, o: int) -> TabletPage:
 	if not _lays.has(k):
 		var lp := TabletPage.new()
 		var L := logical(o)
-		lp.build(_doc, p, L.x, (L.y - TOP) * 2.4)
+		lp.build(_doc, p, L.x, (L.y - TOP) * 2.4, L.y - TOP)
 		_lays[k] = lp
 	return _lays[k]
 

@@ -854,7 +854,7 @@ static func label_of(s: String) -> String:
 
 ## The whole note, walked: `{speakable, spoken, actions, spans, phones, room, warnings, terminal (its config), pages (the
 ## tablet's fences), tablet (those pages as the tablet medium reads them, [method browsing]), dark (it opens in the black),
-## rings}`.
+## rings, heard (each run of words heard through something: `{band, from, to}` in spoken words)}`.
 ##
 ## `actions`, in order, are each `{kind, after, rest, len, fwd, back, ...}`: `after` the spoken word it comes before (its
 ## count of words before it), `rest` what the voice waits for it, `len` how long it moves, and where it falls in its
@@ -869,6 +869,7 @@ static func parse(body: String, films := {}) -> Dictionary:
 	var speak := PackedStringArray()      # the voice's text, a block a line apart
 	var actions: Array = []
 	var spans: Array = []
+	var heard_runs: Array = []            # the runs of words heard through something: {band, from, to}
 	var warnings := PackedStringArray()
 	var room := ""
 	var speaker := ""                     # whose turn the next words are
@@ -1155,6 +1156,12 @@ static func parse(body: String, films := {}) -> Dictionary:
 				var words := words_of(text)
 				spoken.append_array(words)
 				said_any = said_any or not words.is_empty()
+				if not heard.is_empty() and not words.is_empty():
+					var run: Dictionary = heard_runs.back() if not heard_runs.is_empty() else {}
+					if String(run.get("band", "")) == heard and int(run["to"]) == spoken.size() - words.size():
+						run["to"] = spoken.size()
+					else:
+						heard_runs.append({"band": heard, "from": spoken.size() - words.size(), "to": spoken.size()})
 				if not words.is_empty():
 					gap = []
 					ringing = ""
@@ -1457,7 +1464,7 @@ static func parse(body: String, films := {}) -> Dictionary:
 			(pg as Dictionary)["reply"] = true
 	var rings: Variant = desk_of(body).get("rings", SCOPE_RINGS)
 	return {"speakable": "\n\n".join(speak), "spoken": spoken, "actions": actions, "spans": spans,
-		"phones": phones, "room": room, "warnings": warnings, "terminal": term, "pages": pages, "tablet": tablet, "dark": _opens_dark(all),
+		"phones": phones, "room": room, "warnings": warnings, "terminal": term, "pages": pages, "tablet": tablet, "dark": _opens_dark(all), "heard": heard_runs,
 		"rings": maxf(float(rings), 1.0) if str(rings).is_valid_float() else float(SCOPE_RINGS)}
 
 

@@ -81,7 +81,8 @@ var _next_to_play := 0
 var _in_flight := 0
 var _req_chunk := {}           # request id -> {idx, epoch, sent}
 var _epoch := 0                # bumped on a pace change; stale replies are dropped
-var _cost := 0.0               # the host's seconds per estimated second of a chunk, 0 unmeasured
+var _cost := 0.0               # the host's seconds per estimated second of a chunk, 0 unmeasured: the host's, kept from reading to reading
+var _unmeasured := false       # the next reply waited on one let go of ([method _let_go]): it says nothing of the cost
 var _voices := PackedStringArray()     # who speaks in the plan, each once
 var _near_dials: Array = []    # each of their Near dials when the readers' moves were last planned ([method _plan_near])
 var _near_from := -1           # ...and the chunk they were planned from, -1 not yet
@@ -276,8 +277,8 @@ func plan(body: String) -> void:
 
 
 ## Every piece of state a reading owns, put back. Split out of [method plan] so that stopping and re-planning
-## cannot drift apart. The pending request map matters most: replies for chunks already asked for are still in
-## flight on the host, and dropping their ids here makes them discarded on arrival.
+## cannot drift apart. The pending request map matters most: what the host has still to make of it is taken out of its
+## line ([method _let_go]), and the reply to the one being made is discarded on arrival. The host's measured pace stays.
 func _reset_playback() -> void:
 	_planning = false
 	_plan_from = -1
@@ -285,11 +286,10 @@ func _reset_playback() -> void:
 	take_path = ""
 	take_done = false
 	_ready_takes = []
-	_req_chunk = {}
+	_let_go()
+	_epoch += 1                 # its takes are files of its own: the one being made for the last writes elsewhere
 	_next_to_request = 0
 	_next_to_play = 0
-	_in_flight = 0
-	_cost = 0.0
 	_voices = PackedStringArray()
 	_near_dials = []
 	_near_from = -1
@@ -448,8 +448,7 @@ func repace() -> void:
 		return
 	_epoch += 1                     # in-flight replies from the old pace are now stale
 	_ready_takes.clear()
-		# The host keeps computing what it was given (there is no cancel - see [method arrived]), so the accounting for
-		# it has to survive or the pump will pile more on top.
+	_let_go()
 	_next_to_request = _next_to_play
 	panel._set_status("%s at pace %.2fx, pause %.2fx - regenerating from chunk %d…"
 		% [panel._cast.tab_name(), panel._cast._rate.value, clampf(panel._cast._pause.value, 0.0, Delivery.MAX_PAUSE_SCALE), _next_to_play + 1])
@@ -546,6 +545,31 @@ func _buffered_seconds() -> float:
 	return float(maxi(_pending.size() - _read, 0) + in_room + queued) / float(maxi(panel._sr, 1))
 
 
+## Seconds of voice made but waiting on a sentence before it ([method _drain_ready]): not audio the playhead can reach
+## yet, but made, so the window counts it. Uncounted, a run of sentences kept ([TakeCache]) behind one the host has still
+## to make is pulled in whole, and lands at once when that one does.
+func _ready_seconds() -> float:
+	var n := 0
+	for t in _ready_takes:
+		n += ((t as Dictionary).get("pcm", PackedFloat32Array()) as PackedFloat32Array).size()
+	return float(n) / float(maxi(panel._sr, 1))
+
+
+## Let go of every request the host still has of this reading's ([method VoiceHost.cancel]): the host makes one at a time,
+## in order, so those in its line are taken out and never made, and the sentence asked next waits at most on the one being
+## made, never on a line of sentences nobody will hear. That one's reply is dropped on arrival ([method owns]); the first
+## reply after it waited on it too, so it is not measured ([method _measure]).
+func _let_go() -> void:
+	var ids := _req_chunk.keys()
+	_req_chunk = {}
+	_in_flight = 0
+	if ids.is_empty():
+		return
+	_unmeasured = true
+	if panel._host != null and panel._host.is_up():
+		panel._host.cancel(ids)
+
+
 ## Keep LOOKAHEAD chunks in flight and start playback as soon as the chunk we are waiting for exists.
 func _pump() -> void:
 	if panel._cast.voice_meta.is_empty():
@@ -557,7 +581,7 @@ func _pump() -> void:
 	var planned := false
 		# A take being decoded is in the window as one the host is making is: it is not in the queue yet
 	while _in_flight + _landing.size() < LOOKAHEAD and _next_to_request < chunks.size() \
-			and _buffered_seconds() - intro_left < _depth_now():
+			and _buffered_seconds() + _ready_seconds() - intro_left < _depth_now():
 		var idx := _next_to_request
 		if not planned:
 			planned = true
@@ -633,6 +657,9 @@ func _measure(meta: Dictionary) -> void:
 	var now := Time.get_ticks_msec()
 	var began := maxi(int(meta.get("sent", now)), _done_ms)
 	_done_ms = now
+	if _unmeasured:
+		_unmeasured = false
+		return
 	var k := int(meta["idx"])
 	if int(meta["epoch"]) != _epoch or k < 0 or k + 1 >= _chunk_t.size():
 		return
@@ -667,10 +694,8 @@ func arrived(id: int, result: Dictionary) -> void:
 	var meta: Dictionary = _req_chunk[id]
 	_req_chunk.erase(id)
 	_measure(meta)
-		# The slot is freed whether or not the result is wanted, and this must happen before the epoch check: an
-		# abandoned request still occupies the host (the stream does not cancel it; VoiceHost.cancel is for Test), so
-		# a jump that zeroed the counter would let _pump send a full lookahead on top of queued work, and the chunk
-		# waited for would be third or fourth in line.
+		# The slot is freed whether or not the result is wanted, before the epoch check: a reply this reading still
+		# owns held a slot. One let go of ([method _let_go]) is no longer owned and never reaches here.
 	_in_flight = maxi(0, _in_flight - 1)
 	if int(meta["epoch"]) != _epoch:
 				# Superseded by a pace change or a jump. Nothing to keep, but the pump may now have room.

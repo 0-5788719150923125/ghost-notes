@@ -18,6 +18,10 @@ class_name TabletScript
 ##                                             end of its sentence, or on its own line, the whole
 ##                                             paragraph below it
 ##     <!-- filler: 3 -->                      three placeholder stories (squiggles) here
+##     <!-- chat: 3 --> ... <!-- /chat -->     a live chat ([constant CHAT]): the page fits the screen and never
+##                                             scrolls, the chat filling what is left under what is written, its
+##                                             messages streaming in drawn from a bank, paid ones standing above
+##                                             them, a message box at the foot
 ##
 ## How a page is reached is inferred. The first url opens the browser from the home screen on a blank
 ## tab and is typed into it; a url linked from the page on screen (`[word](url)`) is scrolled to and
@@ -64,6 +68,18 @@ const NOTE_SLIDE := 0.35
 ## timed from the word read after it.
 const NOTIFY := "<!--\\s*notify\\s*:\\s*([\\s\\S]*?)\\s*-->"
 const NOTE_MARK := "\uE0F5"
+## A live chat on a page, its lines between this mark and [constant CHAT_END], never read aloud: `<!-- chat: 3 -->` (about
+## that many messages a second, [constant CHAT_RATE] without a number), then lines of
+##     names: owl_at_three, juniper.k, ...     the names messages are drawn from (as many lines as wanted)
+##     - lights off, headphones on             a message in the bank, drawn at random, each by a name drawn at random
+##     $2 juniper.k: could you say "home"?     a paid message standing above the stream from the start
+##     me: nightdesk                           the name a reply sent on this page goes out under ([TabletPage])
+##     tip: $5                                 what that reply pays: sent, it stands at the top of the paid ones, lit
+## The stream is a pure function of show time and the page's address, so it plays the same live and in an export.
+const CHAT := "^\\s*<!--\\s*chat\\s*(?::\\s*([0-9]*\\.?[0-9]+))?\\s*-->\\s*$"
+const CHAT_END := "^\\s*<!--\\s*/chat\\s*-->\\s*$"
+const CHAT_PAID := "^\\s*(\\S*\\d\\S*)\\s+([^:]+?)\\s*:\\s*(.+)$"
+const CHAT_RATE := 2.5
 ## Inline or own-line: stop reading here.
 const SKIP := "<!--\\s*skip\\s*-->"
 ## The rest the voice takes for a run of actions. Written by [method speakable] only.
@@ -380,10 +396,13 @@ class _Walk:
 	var _engine := ""            # the host of the search engine last searched on
 	var _marks := 0              # the url, search, new tab and back marks walked
 	var _mark := -1              # the one being walked, -1 outside one
+	var _chat := {}              # the live chat being read, {} outside one
 
 	func run(body: String) -> void:
 		for raw in body.split("\n"):
 			_line(String(raw))
+		if not _chat.is_empty():
+			_chat_line("<!-- /chat -->")
 		_flush()
 		if _hold > 0.0:
 			say.append("<!-- action-hold: %.2f -->" % _hold)
@@ -392,6 +411,19 @@ class _Walk:
 
 	func _line(line: String) -> void:
 		var s := line.strip_edges()
+		if not _chat.is_empty():
+			# a chat left open ends where the page does
+			if TabletScript._rx(TabletScript.MARKER).search(line) == null:
+				_chat_line(s)
+				return
+			_chat_line("<!-- /chat -->")
+		var cm := TabletScript._rx(TabletScript.CHAT).search(s)
+		if cm != null:
+			_flush()
+			var rate := float(cm.get_string(1)) if not cm.get_string(1).is_empty() else TabletScript.CHAT_RATE
+			_chat = {"kind": "chat", "rate": clampf(rate, 0.1, 20.0), "names": PackedStringArray(), "said": PackedStringArray(),
+				"paid": [], "me": "", "tip": ""}
+			return
 		if TabletScript._rx(TabletScript.TABLE_ROW).search(s) != null:
 			if _table.is_empty():
 				_flush()
@@ -452,6 +484,42 @@ class _Walk:
 			_para.append(li.get_string(2).strip_edges())
 			return
 		_para.append(s)
+
+	## A line of the live chat being read ([constant TabletScript.CHAT]): its end puts it on the page.
+	func _chat_line(s: String) -> void:
+		if TabletScript._rx(TabletScript.CHAT_END).search(s) != null:
+			var chat := _chat
+			_chat = {}
+			if (chat["names"] as PackedStringArray).is_empty():
+				chat["names"] = PackedStringArray(["viewer"])
+			_block(chat)
+			return
+		if s.is_empty():
+			return
+		var low := s.to_lower()
+		if low.begins_with("names:"):
+			var names: PackedStringArray = _chat["names"]
+			for n in s.substr(6).split(","):
+				if not n.strip_edges().is_empty():
+					names.append(n.strip_edges())
+			_chat["names"] = names
+		elif low.begins_with("me:"):
+			_chat["me"] = s.substr(3).strip_edges()
+		elif low.begins_with("tip:"):
+			_chat["tip"] = s.substr(4).strip_edges()
+		elif s.begins_with("- ") or s.begins_with("* "):
+			_said(s.substr(2).strip_edges())
+		else:
+			var pm := TabletScript._rx(TabletScript.CHAT_PAID).search(s)
+			if pm != null:
+				(_chat["paid"] as Array).append({"amount": pm.get_string(1), "name": pm.get_string(2), "text": pm.get_string(3)})
+			else:
+				_said(s)
+
+	func _said(words: String) -> void:
+		var said: PackedStringArray = _chat["said"]
+		said.append(words)
+		_chat["said"] = said
 
 	func _flush() -> void:
 		_flush_table()

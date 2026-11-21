@@ -505,6 +505,11 @@ The revised night (rift's `MEDIUM.md`, its design and what differs from it) is t
   and sends them (an action `post`); a page at an address that takes a reply has the box each time it comes up. What does
   nothing is warned of: `back` or `new tab` with the tablet down, `back` with nothing behind it, a reply with no page up.
   Not built on it: a tab switched back to, `landscape`, `notify:`, `redirect`.
+- **A live chat on a page** (`<!-- chat: N -->` ... `<!-- /chat -->` in a page fence, `TabletScript.CHAT`): the page fits the
+  screen and never scrolls (`TabletPage._live`): its picture (a LIVE badge, no taller than a third of the screen), what is
+  written, the paid messages, a stream of the bank's messages under names drawn at random, about N a second (a pure function
+  of show time and the address, `TabletPage.chat_at`), and the message box at the foot. A reply sent on it stands at the
+  top of the paid messages under the chat's `me:` and `tip:`, lit. Open: the author's eye on it at the desk.
 - **Clips on a screen**: `video (tv): file | words` is a picture whose slot on the Pictures card takes a clip: Generate
   paints it as a short loop (one sheet of six cells in the note's look, cut into frames at 8 fps: `Illustrations._keep_loop`),
   Import… decodes a video into frames (`Illustrations.import_clip`, FFmpeg), and the screen plays them by show time,

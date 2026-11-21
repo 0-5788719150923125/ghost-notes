@@ -53,6 +53,7 @@ extends SceneTree
 ## - a synced note's words, which come without their frontmatter, are read with the note's put back (control: alone, the
 ##   terminal's keys and the desk block are missing);
 ## - a command held with `{2}` is typed, held that long and then entered (the control: bare, at once);
+## - a run of dots before `{2}` fills across the pause unevenly, a progress bar ([method _progress]);
 ## - controls: a call to a phone not on the desk, and a call left open, are each said;
 ## - a text answering the room's reply comes no sooner than the other end could type it (the control: a text answering nothing),
 ##   and the room's reply waits for its own typing on the keypad;
@@ -425,8 +426,12 @@ func _init() -> void:
 	_ok(String((DispatchTerminal.up(mid_set)["body"] as PackedStringArray)[1]).begins_with("STATUS ...... ") and String((DispatchTerminal.up(mid_set)["body"] as PackedStringArray)[1]) != "STATUS ...... CONTAINED"
 		and String((DispatchTerminal.up(mid_set)["body"] as PackedStringArray)[1]) != "STATUS ...... LOOSE",
 		"the control: on a panel that has been up, a row changing is seen to change: what differs backspaced, then typed (%s)" % String((DispatchTerminal.up(mid_set)["body"] as PackedStringArray)[1]))
-	_ok(Array(DispatchTerminal.up(part)["body"]).back() == "SEARCHING ...." and Array(DispatchTerminal.up(whole)["body"]).back() == "SEARCHING .... DONE",
-		"{2} holds a line part-drawn for two seconds, then the rest of it (%s / %s)" % [Array(DispatchTerminal.up(part)["body"]).back(), Array(DispatchTerminal.up(whole)["body"]).back()])
+	var started := DispatchTerminal.at(again["glass"], again["ops"], float(line_op["t"]))
+	_ok(String(Array(DispatchTerminal.up(started)["body"]).back()).strip_edges() == "SEARCHING" and String(Array(DispatchTerminal.up(part)["body"]).back()).begins_with("SEARCHING")
+		and not String(Array(DispatchTerminal.up(part)["body"]).back()).contains("DONE") and Array(DispatchTerminal.up(whole)["body"]).back() == "SEARCHING .... DONE",
+		"{2} holds a line part-drawn for two seconds, then the rest of it (%s / %s / %s)"
+			% [Array(DispatchTerminal.up(started)["body"]).back(), Array(DispatchTerminal.up(part)["body"]).back(), Array(DispatchTerminal.up(whole)["body"]).back()])
+	_progress()
 	# a command that opens nothing; clear; the body scrolling; a print with nothing typed
 	var bad := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```terminal\n> zz\n```\n")
 	var bad_ops: Array = (bad["actions"] as Array)[0]["ops"]
@@ -672,6 +677,51 @@ func _init() -> void:
 ## never says; `play` takes the film's seconds from what it is handed, and the voice waits for the rest of the film where its silence
 ## ends, so what is written after it happens while it plays (controls: a film handed no seconds is warned of and not waited for; one
 ## shorter than what follows it adds nothing; a mark it cannot read is warned of and does nothing).
+## A run of dots before `{2}` fills across the two seconds a dot at a time, unevenly, the word after it at their end (controls:
+## dots with no pause drawn whole at once; a pause with no dots before it holds the line as it stands).
+func _progress() -> void:
+	var a: Array = DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n```terminal\n> x\npanel: run = RUN\nwait: 1\n"
+		+ "PULLING AUDIO ............ {2} DONE\nRESULT ....... NONE\nWAITING {2} OK\n```\n\nThere.\n")["actions"]
+	var act: Dictionary = a[_first(a, "session")]
+	var lines: Array = (act["ops"] as Array).filter(func(o: Dictionary) -> bool: return String(o["op"]) == "line")
+	var shown := func(op: Dictionary, dt: float) -> String:
+		var st := DispatchTerminal.at(act["glass"], act["ops"], float(op["t"]) + dt)
+		return String(Array(DispatchTerminal.up(st)["body"]).back())
+	var arrivals := PackedFloat32Array()
+	var dots := 0
+	var steady := true
+	var early_done := false
+	for i in 201:
+		var dt := 0.01 * float(i)
+		var row: String = shown.call(lines[0], dt)
+		var n := row.count(".")
+		if n < dots:
+			steady = false
+		while dots < n:
+			arrivals.append(dt)
+			dots += 1
+		early_done = early_done or (row.contains("DONE") and dt < 1.999)
+	var gaps := PackedFloat32Array()
+	for k in range(1, arrivals.size()):
+		gaps.append(arrivals[k] - arrivals[k - 1])
+	var longest := 0.0
+	var together := false
+	for g in gaps:
+		longest = maxf(longest, g)
+		together = together or g < 0.005
+	var even := 2.0 / 12.0
+	_ok(String(shown.call(lines[0], 0.0)).strip_edges() == "PULLING AUDIO" and steady and dots == 12 and not early_done
+		and String(shown.call(lines[0], 2.01)) == "PULLING AUDIO ............ DONE" and longest > 2.0 * even and together,
+		"the dots before {2} fill a dot at a time, never all at once, with a freeze (longest wait %.2f s, an even one %.2f s) and dots"
+			% [longest, even] + " come together, DONE after the last (arrivals %s)" % str(arrivals))
+	_ok(String(shown.call(lines[1], 0.0)) == "RESULT ....... NONE",
+		"the control: dots with no pause are drawn whole at once (%s)" % String(shown.call(lines[1], 0.0)))
+	_ok(String(shown.call(lines[2], 0.0)) == "WAITING" and String(shown.call(lines[2], 1.5)) == "WAITING"
+		and String(shown.call(lines[2], 2.01)) == "WAITING OK",
+		"the control: a pause with no dots before it holds the line as it stands (%s / %s)"
+			% [String(shown.call(lines[2], 1.5)), String(shown.call(lines[2], 2.01))])
+
+
 func _grid_down() -> void:
 	var note := "<!-- speaker: Control -->\n\nHi.\n\n<!-- power: off -->\n\n<!-- play (terminal): ERROR ME FOUND -->\n\n<!-- hesitation: 8 -->\n\n<!-- environment: Shafts off, beams ON, 2 -->\n"
 	var films := {"ERROR ME FOUND": {"kind": "note", "ready": true, "secs": 30.0}}

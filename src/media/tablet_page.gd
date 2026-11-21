@@ -10,6 +10,10 @@ class_name TabletPage
 ## [member min_height] (so there is something to scroll) and past its last written block by TAIL_SHARE
 ## at least (so the last lines are not read at the screen's foot).
 ##
+## A page with a live chat ([constant TabletScript.CHAT]) is built to the screen, never scrolled: what is written above
+## it, its picture no taller than [constant LIVE_PICTURE] of the screen, then the paid messages, the stream filling what
+## is left, and the message box at the foot ([method _live], [method _draw_chat]).
+##
 ## The site's look is its host: face, accent color and masthead are hashed off the address, so a site
 ## looks the same wherever the chapter visits it. Two kinds are recognized from what the chapter does
 ## with them: a page searched from that has little else on it is a search engine's home (a centered
@@ -42,6 +46,26 @@ const SANS_FAMILIES := [
 	["Segoe UI", "Noto Sans", "Open Sans"],
 ]
 
+## A live page's picture at most this share of the screen's height (cropped to it, as a player is).
+const LIVE_PICTURE := 0.36
+## A live chat's message: its size, its line's height, the room between messages; how long a new one takes to push the
+## stream up (s); how many paid messages stand above the stream, each this tall, this far apart.
+const CHAT_FS := 25
+const CHAT_LINE := 34.0
+const CHAT_GAP := 7.0
+const CHAT_IN := 0.18
+## How far down the stream fades in from under the paid messages (px), in so many bands.
+const CHAT_FADE := 46.0
+const CHAT_FADE_STEPS := 12
+const PAID_SLOTS := 2
+const PAID_H := 76.0
+const PAID_GAP := 10.0
+## How long a paid message takes to come in at the top, and how long a reply sent stays brighter than lit (s).
+const PAID_IN := 0.45
+const PAID_GLOW := 3.0
+## A live picture's sound button: its size (px), drawn muted until the page is told it is heard.
+const SOUND_BUTTON := 64.0
+
 var script_doc: Dictionary
 var index := -1
 var width := 1200.0
@@ -62,6 +86,8 @@ var serif := false
 var _serif_fam := 0                  # this site's families, see SERIF_FAMILIES / SANS_FAMILIES
 var _sans_fam := 0
 var title := ""               # what the tab says
+var live := false             # built to the screen around a live chat ([method _live]): it never scrolls of itself
+var sound_rect := Rect2()     # a live page's sound button, on its picture's corner
 
 var _x0 := 0.0
 var _col := 0.0
@@ -117,12 +143,16 @@ func _f(salt: String) -> float:
 
 
 ## Typeset page [param pi] of [param doc] at [param w] pixels wide.
-func build(doc: Dictionary, pi: int, w: float, min_h: float) -> void:
+## Page [param pi] of [param doc] set [param w] wide, padded to [param min_h]; a live page is [param view] tall (the screen
+## under the browser's bars).
+func build(doc: Dictionary, pi: int, w: float, min_h: float, view := 0.0) -> void:
 	script_doc = doc
 	index = pi
 	width = w
 	min_height = min_h
 	items = []
+	live = false
+	sound_rect = Rect2()
 	word_rect = {}
 	block_rect = {}
 	var page: Dictionary = doc["pages"][pi]
@@ -139,6 +169,10 @@ func build(doc: Dictionary, pi: int, w: float, min_h: float) -> void:
 	if bool(page.get("real", false)):
 		_real(page, w, min_h)
 		return
+	for b in blocks:
+		if String((b as Dictionary)["kind"]) == "chat":
+			_live(blocks, view if view > 0.0 else min_h / 2.4)
+			return
 	var engine := bool(page["search_box"]) and not bool(page["results"]) and _written(blocks) <= 3
 	if engine:
 		_engine_home(blocks)
@@ -207,6 +241,284 @@ func build(doc: Dictionary, pi: int, w: float, min_h: float) -> void:
 	items.append({"kind": "foot", "rect": Rect2(0.0, _y, w, 160.0)})
 	_y += 160.0
 	height = _y
+
+
+# --- a live page ------------------------------------------------------------------------
+
+## A page with a live chat, built to [param view] and no taller: its written blocks in order (its picture cropped to
+## [constant LIVE_PICTURE] of the screen), then the paid messages, the stream, and the message box at the foot. The stream
+## is set before the paid messages so they, and the box, are drawn over what runs past its edges.
+func _live(blocks: Array, view: float) -> void:
+	live = true
+	var chat := {}
+	for i in blocks.size():
+		var b: Dictionary = blocks[i]
+		match String(b["kind"]):
+			"chat":
+				if chat.is_empty():
+					chat = b
+			"heading":
+				_text(b, clampi(int(b["level"]) + 1, 2, 3), 2)
+				if title == String(script_doc["pages"][index]["host"]):
+					title = _plain(b)
+			"para", "item":
+				_text(b, 0, 0)
+				_y += BODY * 0.4
+			"image":
+				_image(b, i)
+				var r: Rect2 = block_rect[i]
+				var cap := view * LIVE_PICTURE
+				if r.size.y > cap:
+					r.size.y = cap
+					block_rect[i] = r
+					(items.back() as Dictionary)["rect"] = r
+					_y = r.end.y + 34.0
+				items.append({"kind": "live", "rect": Rect2(r.position + Vector2(18.0, 18.0), Vector2(104.0, 42.0))})
+				if sound_rect.size == Vector2.ZERO:
+					sound_rect = Rect2(Vector2(r.position.x + 18.0, r.end.y - 18.0 - SOUND_BUTTON), Vector2(SOUND_BUTTON, SOUND_BUTTON))
+					items.append({"kind": "sound", "rect": sound_rect})
+				_y -= 14.0
+			"rule":
+				items.append({"kind": "rule", "rect": Rect2(_x0, _y + 6.0, _col, 2.0)})
+				_y += 16.0
+	_y += 14.0
+	var foot := view - 76.0 - 26.0
+	var paid := Rect2(_x0, _y, _col, PAID_H * PAID_SLOTS + PAID_GAP * (PAID_SLOTS - 1))
+	var stream_top := paid.end.y + 16.0
+	items.append({"kind": "chat", "rect": Rect2(_x0, stream_top, _col, maxf(foot - 14.0 - stream_top, CHAT_LINE)), "chat": chat})
+	items.append({"kind": "paid", "rect": paid, "chat": chat, "cover": Rect2(0.0, paid.position.y - 6.0, width, stream_top - paid.position.y + 6.0)})
+	items.append({"kind": "cover", "rect": Rect2(0.0, foot - 14.0, width, view - foot + 14.0)})
+	reply_rect = Rect2(_x0, foot, _col, 76.0)
+	items.append({"kind": "reply", "rect": reply_rect})
+	height = view
+
+
+## The messages of [param chat] in the stream at [param now], newest first, until [param tall] is filled: `{at, name, said}`.
+## A pure function of the time and the page: each slot of 1 / rate seconds holds none, one or two (about one on average),
+## its words taken through the bank so none comes back until the bank has gone round, and its name drawn at random.
+func chat_at(chat: Dictionary, now: float, tall: float) -> Array:
+	var said: PackedStringArray = chat.get("said", PackedStringArray())
+	var names: PackedStringArray = chat.get("names", PackedStringArray(["viewer"]))
+	if said.is_empty():
+		return []
+	var rate := float(chat.get("rate", TabletScript.CHAT_RATE))
+	var n := said.size()
+	var stride := 1 + absi(_h("chat stride")) % maxi(n - 1, 1)
+	while _gcd(stride, n) != 1:
+		stride += 1
+	var out: Array = []
+	var used := 0.0
+	var k := int(floor(now * rate))
+	var guard := 0
+	while used < tall + CHAT_LINE * 3.0 and guard < 600:
+		var f := _f("chat slot %d" % k)
+		var many := 0 if f < 0.2 else (1 if f < 0.8 else 2)
+		for j in range(many - 1, -1, -1):
+			var at := (float(k) + (float(j) + lerpf(0.1, 0.9, _f("chat at %d %d" % [k, j]))) / float(many)) / rate
+			if at > now:
+				continue
+			var id := k * 2 + j
+			var lap := int(floor(float(id) / float(n)))
+			var m := {"at": at, "name": names[absi(_h("chat name %d %d" % [k, j])) % names.size()],
+				"said": said[posmod(id * stride + absi(_h("chat lap %d" % lap)), n)]}
+			out.append(m)
+			used += float(_chat_lines(m).size()) * CHAT_LINE + CHAT_GAP
+		k -= 1
+		guard += 1
+	return out
+
+
+static func _gcd(a: int, b: int) -> int:
+	while b != 0:
+		var t := b
+		b = a % b
+		a = t
+	return a
+
+
+var _wrapped := {}            # a message's name and words -> its lines as set in the stream
+
+
+## A message's lines in the stream: its name, then its words after it, wrapped to the column (`[[x, text], ...]` per line,
+## the first line's first entry the name).
+func _chat_lines(m: Dictionary) -> Array:
+	var key := String(m["name"]) + "\u0001" + String(m["said"])
+	if _wrapped.has(key):
+		return _wrapped[key]
+	var f := _face(false, 0)
+	var fb := _face(false, 2)
+	var sp := f.get_string_size(" ", HORIZONTAL_ALIGNMENT_LEFT, -1, CHAT_FS).x
+	var x := fb.get_string_size(String(m["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, CHAT_FS).x + sp * 2.0
+	var lines: Array = []
+	var cur := ""
+	var x0 := x
+	for w in String(m["said"]).split(" ", false):
+		var try := w if cur.is_empty() else cur + " " + w
+		if not cur.is_empty() and x0 + f.get_string_size(try, HORIZONTAL_ALIGNMENT_LEFT, -1, CHAT_FS).x > _col:
+			lines.append([x0, cur])
+			cur = w
+			x0 = 0.0
+		else:
+			cur = try
+	lines.append([x0, cur])
+	_wrapped[key] = lines
+	return lines
+
+
+## A name's color in the stream: its own hue, dark enough to read on the page.
+func _name_col(name: String) -> Color:
+	return Color.from_hsv(fposmod(float(hash(name) & 1023) / 1024.0, 1.0), 0.7, 0.62)
+
+
+## The stream in [param r] at [param now]: the newest at the foot, pushing the rest up as it comes in.
+func _draw_chat(ci: CanvasItem, r: Rect2, chat: Dictionary, now: float) -> void:
+	var ms := chat_at(chat, now, r.size.y)
+	if ms.is_empty():
+		return
+	var newest: Dictionary = ms[0]
+	var h0 := float(_chat_lines(newest).size()) * CHAT_LINE + CHAT_GAP
+	var y := r.end.y + h0 * (1.0 - _ease_out((now - float(newest["at"])) / CHAT_IN))
+	var f := _face(false, 0)
+	var fb := _face(false, 2)
+	for m in ms:
+		var lines := _chat_lines(m)
+		var h := float(lines.size()) * CHAT_LINE + CHAT_GAP
+		y -= h
+		if y + h < r.position.y - CHAT_LINE:
+			break
+		for li in lines.size():
+			var base := y + CHAT_LINE * float(li) + CHAT_FS * 1.0
+			if li == 0:
+				ci.draw_string(fb, Vector2(r.position.x, base), String(m["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, CHAT_FS,
+					_name_col(String(m["name"])))
+			ci.draw_string(f, Vector2(r.position.x + float((lines[li] as Array)[0]), base), String((lines[li] as Array)[1]),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, CHAT_FS, ink)
+
+
+## The sound button in [param r]: a speaker on a dark disc, its waves out when [param on], else crossed out.
+func _draw_sound(ci: CanvasItem, r: Rect2, on: bool) -> void:
+	var c := r.get_center()
+	var u := r.size.x / 64.0
+	ci.draw_circle(c, r.size.x * 0.5, Color(0.0, 0.0, 0.0, 0.55), true, -1.0, true)
+	var w := Color.WHITE
+	var body := PackedVector2Array([c + Vector2(-17, -7) * u, c + Vector2(-9, -7) * u, c + Vector2(1, -16) * u,
+		c + Vector2(1, 16) * u, c + Vector2(-9, 7) * u, c + Vector2(-17, 7) * u])
+	ci.draw_colored_polygon(body, w)
+	if on:
+		for k in 2:
+			var rad := (9.0 + 8.0 * float(k)) * u
+			ci.draw_arc(c + Vector2(3, 0) * u, rad, -0.9, 0.9, 16, w, 3.2 * u, true)
+	else:
+		ci.draw_line(c + Vector2(8, -8) * u, c + Vector2(20, 8) * u, w, 3.6 * u, true)
+		ci.draw_line(c + Vector2(8, 8) * u, c + Vector2(20, -8) * u, w, 3.6 * u, true)
+
+
+## A paid amount's color, by how much it is (the digits in it): from blue for the least to red for the most.
+static func paid_col(amount: String) -> Color:
+	var v := String(amount).to_float() if amount.is_valid_float() else 0.0
+	var digits := RegEx.create_from_string("[0-9]+(\\.[0-9]+)?").search(amount)
+	if digits != null:
+		v = digits.get_string().to_float()
+	if v < 2.0:
+		return Color(0.12, 0.53, 0.9)
+	if v < 5.0:
+		return Color(0.0, 0.72, 0.83)
+	if v < 10.0:
+		return Color(0.11, 0.85, 0.66)
+	if v < 20.0:
+		return Color(1.0, 0.79, 0.16)
+	if v < 50.0:
+		return Color(0.96, 0.49, 0.0)
+	if v < 100.0:
+		return Color(0.91, 0.12, 0.39)
+	return Color(0.9, 0.13, 0.13)
+
+
+## The paid messages in [param r]: the page's own, and above them each reply sent from it ([param sent]: `{text, at}`) once
+## sent, coming in at the top and lit, pushing the others down; as many as [constant PAID_SLOTS] show.
+func _draw_paid(ci: CanvasItem, r: Rect2, cover: Rect2, chat: Dictionary, now: float, sent: Array) -> void:
+	ci.draw_rect(cover, bg)
+	var cards: Array = []
+	for p in (chat.get("paid", []) as Array):
+		cards.append({"amount": String(p["amount"]), "name": String(p["name"]), "text": String(p["text"]), "at": -INF})
+	var tip := String(chat.get("tip", ""))
+	for s in sent:
+		var at := float((s as Dictionary)["at"])
+		if at <= now:
+			cards.push_front({"amount": tip if not tip.is_empty() else "$5", "name": String(chat.get("me", "")) if not String(chat.get("me", "")).is_empty() else "you",
+				"text": String((s as Dictionary)["text"]), "at": at, "mine": true})
+	if cards.is_empty():
+		var f := _face(false, 0)
+		ci.draw_string(f, Vector2(r.position.x, r.get_center().y + 9.0), "No paid messages yet", HORIZONTAL_ALIGNMENT_LEFT, -1, 24,
+			ink.lerp(bg, 0.6))
+		return
+	var step := PAID_H + PAID_GAP
+	var come := 1.0
+	if bool((cards[0] as Dictionary).get("mine", false)):
+		come = _ease_out((now - float((cards[0] as Dictionary)["at"])) / PAID_IN)
+	for k in mini(cards.size(), PAID_SLOTS + 1):
+		var c: Dictionary = cards[k]
+		var y := r.position.y + step * (float(k) - (1.0 - come))
+		var alpha := 1.0
+		if k == 0 and come < 1.0:
+			alpha = come
+		if k >= PAID_SLOTS:
+			alpha = 1.0 - come
+		if alpha <= 0.01:
+			continue
+		_paid_card(ci, Rect2(r.position.x, y, r.size.x, PAID_H), c, now, alpha)
+	ci.draw_rect(Rect2(0.0, r.end.y + 2.0, width, cover.end.y - r.end.y - 2.0), bg)
+	# the stream fades out under the paid messages rather than ending on a cut line
+	for k in CHAT_FADE_STEPS:
+		var u := float(k) / float(CHAT_FADE_STEPS)
+		ci.draw_rect(Rect2(0.0, cover.end.y + CHAT_FADE * u, width, CHAT_FADE / float(CHAT_FADE_STEPS) + 0.5),
+			Color(bg.r, bg.g, bg.b, 1.0 - u))
+
+
+func _paid_card(ci: CanvasItem, r: Rect2, c: Dictionary, now: float, alpha: float) -> void:
+	var col := paid_col(String(c["amount"]))
+	var dark := col.get_luminance() < 0.55
+	var text_col := Color(1, 1, 1, alpha) if dark else Color(0.08, 0.08, 0.1, alpha)
+	if _box == null:
+		_box = StyleBoxFlat.new()
+		_box.anti_aliasing = true
+	var mine := bool(c.get("mine", false))
+	if mine:
+		var glow := 1.0 - clampf((now - float(c["at"])) / PAID_GLOW, 0.0, 1.0)
+		for g in 3:
+			var grow := 4.0 + float(g) * 5.0 + glow * 6.0
+			_box.bg_color = Color(accent.r, accent.g, accent.b, (0.22 - float(g) * 0.06) * alpha * (0.6 + glow * 0.4))
+			_box.set_border_width_all(0)
+			_box.set_corner_radius_all(int(16.0 + grow))
+			ci.draw_style_box(_box, r.grow(grow))
+	_box.bg_color = Color(col.r, col.g, col.b, alpha)
+	_box.border_color = Color(1, 1, 1, alpha) if mine else Color(col.r, col.g, col.b, alpha)
+	_box.set_border_width_all(4 if mine else 0)
+	_box.set_corner_radius_all(16)
+	ci.draw_style_box(_box, r)
+	var f := _face(false, 0)
+	var fb := _face(false, 2)
+	var x := r.position.x + 22.0
+	ci.draw_string(fb, Vector2(x, r.position.y + 31.0), String(c["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 24, text_col)
+	var nw := fb.get_string_size(String(c["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x
+	ci.draw_string(fb, Vector2(x + nw + 16.0, r.position.y + 31.0), String(c["amount"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 24, text_col)
+	ci.draw_string(f, Vector2(x, r.position.y + 63.0), _fit(String(c["text"]), f, 24, r.size.x - 44.0), HORIZONTAL_ALIGNMENT_LEFT, -1, 24,
+		text_col)
+
+
+## [param text] cut with an ellipsis to fit [param w] at size [param fs].
+static func _fit(text: String, f: Font, fs: int, w: float) -> String:
+	if f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x <= w:
+		return text
+	var t := text
+	while t.length() > 1 and f.get_string_size(t + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > w:
+		t = t.substr(0, t.length() - 1)
+	return t.strip_edges() + "…"
+
+
+static func _ease_out(u: float) -> float:
+	var x := clampf(u, 0.0, 1.0)
+	return 1.0 - (1.0 - x) * (1.0 - x)
 
 
 static func _written(blocks: Array) -> int:
@@ -597,7 +909,8 @@ func _filler(salt: String) -> void:
 ## band [param clip_y0]..[param clip_y1]. [param lit] is the reading's highlight
 ## ([method TabletMedium._lit]).
 func draw(ci: CanvasItem, top: float, scroll: float, clip_y0: float, clip_y1: float,
-		lit: Dictionary, now: float, textures: Callable) -> void:
+		lit: Dictionary, now: float, textures: Callable, state := {}) -> void:
+	var sent: Array = state.get("sent", [])
 	ci.draw_rect(Rect2(0.0, clip_y0, width, clip_y1 - clip_y0), bg)
 	var dy := top - scroll
 	for it in items:
@@ -638,6 +951,19 @@ func draw(ci: CanvasItem, top: float, scroll: float, clip_y0: float, clip_y1: fl
 				_draw_search(ci, rr, String(d["query"]))
 			"reply":
 				_draw_reply(ci, rr)
+			"chat":
+				_draw_chat(ci, rr, d["chat"], now)
+			"paid":
+				var cv: Rect2 = d["cover"]
+				_draw_paid(ci, rr, Rect2(cv.position + Vector2(0.0, dy), cv.size), d["chat"], now, sent)
+			"cover":
+				ci.draw_rect(rr, bg)
+			"sound":
+				_draw_sound(ci, rr, bool(state.get("sound", false)))
+			"live":
+				_pill(ci, rr, Color(0.86, 0.1, 0.1), Color(0.86, 0.1, 0.1))
+				ci.draw_string(_face(false, 2), Vector2(rr.position.x, rr.get_center().y + 9.0), "LIVE", HORIZONTAL_ALIGNMENT_CENTER,
+					rr.size.x, 24, Color.WHITE)
 			"dot":
 				ci.draw_circle(rr.get_center(), rr.size.x * 0.5, d["col"], true, -1.0, true)
 			"pager":

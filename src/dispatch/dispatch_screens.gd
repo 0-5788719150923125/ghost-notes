@@ -932,7 +932,8 @@ func _draw_tablet(c: CanvasItem, st: Dictionary) -> void:
 	var down := Vector2(0.0, top - float(st.get("scroll", 0.0)))
 	if page != null:
 		page.draw(c, top, float(st.get("scroll", 0.0)), top, size.y, st.get("lit", {}), float(st.get("now", 0.0)),
-			st.get("textures", func(_k: String) -> Texture2D: return null))
+			st.get("textures", func(_k: String) -> Texture2D: return null),
+			{"sent": st.get("sent", []), "sound": st.get("sound", false)})
 		if st.has("box"):
 			TabletChrome.draw_typed(c, Rect2(page.search_rect.position + down, page.search_rect.size), String(st["box"]))
 		if st.has("post"):

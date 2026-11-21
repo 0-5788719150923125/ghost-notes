@@ -47,7 +47,8 @@ class_name DispatchTerminal
 ##     print, strike, clear       the printer; the last typed line backspaced away; the body emptied
 ##     <!-- static: 4 -->         any desk mark, at that point of the block
 ##     # words                    a note
-##     anything else              a body line as written; `{2}` in it stops the drawing there for two seconds
+##     anything else              a body line as written; `{2}` in it stops the drawing there for two seconds, and a run
+##                                of dots just before it fills over those seconds as a progress bar ([method _filled])
 ##
 ## After a panel is drawn the operator reads it before the next step ([method read_of]: a new one by its words, one come back
 ## to a glance), unless a `wait:` says how long; lines drawn onto a panel already up are read the same way, silently, at a
@@ -120,6 +121,14 @@ const LINE_KIND := "^(panel|keys|type|read|key|show|select|set|wait|alert|crash)
 const BARE_KIND := "^(print|clear|strike)\\b\\s*(?::\\s*(.*))?$"
 ## A pause inside a body line: `{2}`, a space before it taken with it.
 const PAUSE := " ?\\{\\s*([0-9]+(?:\\.[0-9]+)?)\\s*\\}"
+## A run of dots before a pause fills as a progress bar: the last dot down at FILL_END of the pause (give or take
+## FILL_END_SPREAD), what follows at its end. Each dot waits its own share; a share is a freeze FREEZE_MORE times as long
+## FREEZE_CHANCE of the time, or comes with the dot before it BURST_CHANCE of the time.
+const FILL_END := 0.88
+const FILL_END_SPREAD := 0.07
+const FREEZE_CHANCE := 0.12
+const FREEZE_MORE := 7.0
+const BURST_CHANCE := 0.22
 ## A kept panel's id, as `panel:` names one.
 const ID := "^[a-z0-9][a-z0-9_*-]*$"
 ## A cell of a body row, as a `select:` reads one: words parted by one or two spaces (three or more part two cells).
@@ -487,9 +496,11 @@ static func _line(g: Dictionary, ops: Array, raw: String, t: float, width: int, 
 	var at := 0
 	var pause := 0.0
 	for m in _rx(PAUSE).search_all(raw):
+		var from := text.length()
 		text += raw.substr(at, m.get_start() - at)
-		segs.append([text.length(), pause])
-		pause += float(m.get_string(1))
+		var held := float(m.get_string(1))
+		segs.append_array(_filled(text, from, pause, held, hash([raw, segs.size()])))
+		pause += held
 		at = m.get_end()
 	text += raw.substr(at)
 	segs.append([text.length(), pause])
@@ -497,6 +508,35 @@ static func _line(g: Dictionary, ops: Array, raw: String, t: float, width: int, 
 		warnings.append("terminal: a line wider than the panel (%d > %d): %s" % [text.length(), width, text.strip_edges()])
 	_step(g, ops, {"op": "line", "t": t, "text": text, "segs": segs}, t)
 	return t + pause + LINE_EACH
+
+
+## The steps of a body line drawn up to [param text]'s end from column [param from], [param start] seconds into the line,
+## with a pause of [param held] after it: `[column, seconds]` each. A run of dots ending it is drawn a dot at a time across
+## the pause, unevenly - spurts, freezes, a dot or two at once - by [param salt]; else the whole of it at once.
+static func _filled(text: String, from: int, start: float, held: float, salt: int) -> Array:
+	var m := _rx("\\.{2,}$").search(text.substr(from))
+	if m == null or held <= 0.0:
+		return [[text.length(), start]]
+	var first := from + m.get_start()
+	var n := text.length() - first
+	var waits := PackedFloat32Array()
+	var sum := 0.0
+	for k in n:
+		var w := 0.35 + DispatchSounds.hash01(salt, k)
+		var roll := DispatchSounds.hash01(salt, k + 1000)
+		if k > 0 and roll < BURST_CHANCE:
+			w = 0.0
+		elif roll > 1.0 - FREEZE_CHANCE:
+			w *= FREEZE_MORE
+		waits.append(w)
+		sum += w
+	var span := held * (FILL_END + FILL_END_SPREAD * (DispatchSounds.hash01(salt, -1) * 2.0 - 1.0))
+	var out: Array = [[first, start]]
+	var t := 0.0
+	for k in n:
+		t += waits[k] / maxf(sum, 1e-6) * span
+		out.append([first + k + 1, start + t])
+	return out
 
 
 ## A row changed in place: from where the two differ to where they agree again, the old backspaced (from its end back) and

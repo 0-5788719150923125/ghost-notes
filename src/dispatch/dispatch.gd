@@ -223,6 +223,12 @@ const TAP_KEEP := 0.4
 const BOX_KEEP := 0.3
 const TAP_MARGIN := 0.06
 const KEYBOARD := 0.45
+## How far above the keyboard a live page's message box stands while a reply is typed (px on the tablet's screen).
+const KEYBOARD_CLEAR := 18.0
+## A live page's sound is tapped on this long before a voice heard through the tablet begins, and off this long after it
+## ends (s).
+const SOUND_LEAD := 0.45
+const SOUND_TAIL := 0.5
 const KEY_SHOWN := 0.18
 ## How bright the tablet's screen glows lit (the tablet medium's own is 1.15, in a lighter room): a page read in the dark of
 ## the desk keeps its words' color, its white just under full at the hollow's exposure ([constant EXPOSURE]), never blown out.
@@ -3431,7 +3437,8 @@ func _tablet_page(pi: int) -> Dictionary:
 	var out := {}
 	if pi >= 0 and pi < (_tablet_doc.get("pages", []) as Array).size():
 		var tp := TabletPage.new()
-		tp.build(_tablet_doc, pi, float(DispatchScreens.TABLET_SIZE.x), (float(DispatchScreens.TABLET_SIZE.y) - TabletChrome.TOP) * 2.4)
+		var view := float(DispatchScreens.TABLET_SIZE.y) - TabletChrome.TOP
+		tp.build(_tablet_doc, pi, float(DispatchScreens.TABLET_SIZE.x), view * 2.4, view)
 		var words: Array = []
 		var links := {}
 		var all: Array = _tablet_doc["words"]
@@ -3532,7 +3539,8 @@ func _page_scroll(i: int, t: float) -> float:
 				break
 			from = lerpf(from, goal, _ease((at - since) / PAGE_EASE))
 			since = at
-			goal = float((m as Array)[1])
+			# held to the page here: the marks are kept as first worked out, which may be for the words lit, unbounded
+			goal = minf(float((m as Array)[1]), most)
 		return lerpf(from, goal, _ease((t - since) / PAGE_EASE))
 	var end := _page_end(i)
 	if end < INF:
@@ -3840,6 +3848,8 @@ func tablet_at(t: float) -> Dictionary:
 		elif float(pt["edit"]) < INF:
 			face["kb"] = snappedf(1.0 - _ease((t - load) * sp / KEYBOARD), 0.02)
 		_post_at(face, cur, t)
+		_sound_at(face, cur, t)
+		_clear_keyboard(face)
 		return {"lift": lift, "face": face}
 	# what was up before it, while the hand reaches this one
 	var blank := before >= 0 and String((_actions[before] as Dictionary)["how"]) == "tab"
@@ -3910,7 +3920,8 @@ static func _locking(lain: float) -> float:
 
 
 ## A reply typed into the message box of the page of page action [param i], at [param t], into [param face]: the box
-## tapped, the keyboard up, its words so far (`post`), and its Send pressed - then the box empty again.
+## tapped, the keyboard up, its words so far (`post`), and its Send pressed - then the box empty again, and what was sent
+## (`sent`: `{text, at}`) for a live page to show with its paid messages ([TabletPage]).
 func _post_at(face: Dictionary, i: int, t: float) -> void:
 	var page: TabletPage = face.get("page")
 	if page == null or page.reply_rect.size == Vector2.ZERO:
@@ -3925,9 +3936,13 @@ func _post_at(face: Dictionary, i: int, t: float) -> void:
 		var tapped := _t0[k] + (DispatchScript.TABLET_POST - 0.6) / sp
 		var sent := _sent_at(k)
 		var down := Vector2(0.0, TabletChrome.TOP - float(face.get("scroll", 0.0)))
+		if t >= tapped:
+			face["posting"] = true
 		if t >= sent:
-			# sent: the box empty again, the keyboard going down
+			# sent: the box empty again, the keyboard going down; on a live page it stands with the paid messages
 			face["kb"] = snappedf(1.0 - _ease((t - sent) * sp / KEYBOARD), 0.02)
+			var was: Array = face.get("sent", [])
+			face["sent"] = was + [{"text": String(b["text"]), "at": sent}]
 			_tap(face, page.send_rect().get_center() + down, sent - 0.15, t)
 			continue
 		_tap(face, page.reply_rect.get_center() + down, tapped, t)
@@ -3945,6 +3960,49 @@ func _post_at(face: Dictionary, i: int, t: float) -> void:
 		if n > 0 and (t - times[n - 1]) * sp < KEY_SHOWN:
 			face["key"] = text[n - 1]
 			face["key_k"] = snappedf(1.0 - (t - times[n - 1]) * sp / KEY_SHOWN, 0.05)
+
+
+## A live page's sound button at [param t], into [param face] (page action [param i]'s page): muted, and tapped on
+## [constant SOUND_LEAD] before each run of words heard through the tablet while the page is up, and off again
+## [constant SOUND_TAIL] after it (`sound`, and the finger's `tap`).
+func _sound_at(face: Dictionary, i: int, t: float) -> void:
+	var page: TabletPage = face.get("page")
+	if page == null or page.sound_rect.size == Vector2.ZERO:
+		return
+	var from := _t0[i]
+	var to := _page_end(i)
+	var at := page.sound_rect.get_center() + Vector2(0.0, TabletChrome.TOP - float(face.get("scroll", 0.0)))
+	for run in (_parsed.get("heard", []) as Array):
+		var r: Dictionary = run
+		if String(r["band"]) != "tablet":
+			continue
+		var on := _word_t0(int(r["from"])) - SOUND_LEAD
+		var off := _word_t1(int(r["to"]) - 1) + SOUND_TAIL
+		if on == INF or on < from or on >= to:
+			continue
+		if t >= on and t < off:
+			face["sound"] = true
+		if t >= on and t < on + 0.5:
+			_tap(face, at, on, t)
+		elif off < INF and t >= off and t < off + 0.5:
+			_tap(face, at, off, t)
+
+
+## A live page ([TabletPage], built to the screen) with a reply being typed into it pushed up by as much as the keyboard
+## covers of its message box, and down again as the keyboard goes: the words typed stay in sight. The finger's tap goes with it.
+func _clear_keyboard(face: Dictionary) -> void:
+	var page: TabletPage = face.get("page")
+	if page == null or not page.live or not bool(face.get("posting", false)):
+		return
+	var size := Vector2(DispatchScreens.TABLET_SIZE)
+	var keys_top := size.y - size.y * TabletChrome.KEYBOARD * float(face.get("kb", 0.0))
+	var scroll := float(face.get("scroll", 0.0))
+	var push := maxf(page.reply_rect.end.y + TabletChrome.TOP - scroll + KEYBOARD_CLEAR - keys_top, 0.0)
+	if push <= 0.0:
+		return
+	face["scroll"] = snappedf(scroll + push, 0.5)
+	if face.has("tap"):
+		face["tap"] = (face["tap"] as Vector2) - Vector2(0.0, push)
 
 
 ## The desk's time at [param t] in minutes into the day (the clock's, [method clock_at]; late evening before it is set):
