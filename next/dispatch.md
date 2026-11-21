@@ -488,9 +488,11 @@ The revised night (rift's `MEDIUM.md`, its design and what differs from it) is t
   first, before it is lifted any higher). Its screen is the tablet medium's: the pages `TabletScript` reads
   from the fences as one source, set by `TabletPage`, under the one browser every tablet draws (`TabletChrome`: the status
   bar with the desk's time, the tabs, back, the padlocked address bar, the load line, a blank tab's page, the keyboard).
-  A page is held to be looked at once it loads; shown and never said, it scrolls to what the room says that is on it - and
-  where the room reads on from the page, word after word, those words are lit as the tablet medium lights what its voice
-  reads (`_page_follow`, `_page_lit`) - else eases down. `<!-- player -->` is a picture slot that `live: tablet` fills with
+  A page is held to be looked at once it loads; shown and never said, it scrolls to what the room reads off it (a phrase
+  found there, never one stray word) - and where the room reads on from the page, word after word, those words are lit as
+  the tablet medium lights what its voice reads (`_page_follow`, `_page_lit`) - else eases down at a skim's pace, never past
+  where its writing ends. THE DESK'S PAGES DRAW NOTHING NOBODY WROTE (`TabletPage.placeholders` off): no squiggles, no
+  padding stories; a site's menu row only where its first page names one (`nav:`), a footer of its name to the screen's foot. `<!-- player -->` is a picture slot that `live: tablet` fills with
   the desk seen from behind the chair; the tablet in that picture shows the same picture. `replay: tablet | words` says the
   room's earlier words again through the tablet's speaker (`heard: tablet`).
 - **The tablet is browsed by the tablet medium's own walk** (`DispatchScript.browsing`): the page fences, and each `back`
@@ -505,6 +507,10 @@ The revised night (rift's `MEDIUM.md`, its design and what differs from it) is t
   and sends them (an action `post`); a page at an address that takes a reply has the box each time it comes up. What does
   nothing is warned of: `back` or `new tab` with the tablet down, `back` with nothing behind it, a reply with no page up.
   Not built on it: a tab switched back to, `landscape`, `notify:`, `redirect`.
+- **A forum on a page** (`<!-- post: name | rank · posts | when -->`, `> ` quotes, `TabletPage._post_begin`): each post a card,
+  the author's column (an avatar drawn from the name, the name, what the forum says of them) beside its body, its pictures
+  attachments; a board index or a thread list is a table (`<!-- pager: N -->` above and below it: Back, the pages to N, Next), a cell's detail after `<br>` set smaller, its columns of counts
+  centered, its rows banded. `tests/dispatch/tablet_pages_probe.gd` draws every page of a note whole. Open: the author's eye.
 - **A live chat on a page** (`<!-- chat: N -->` ... `<!-- /chat -->` in a page fence, `TabletScript.CHAT`): the page fits the
   screen and never scrolls (`TabletPage._live`): its picture (a LIVE badge, no taller than a third of the screen), what is
   written, the paid messages, a stream of the bank's messages under names drawn at random, about N a second (a pure function

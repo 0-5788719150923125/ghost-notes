@@ -22,6 +22,12 @@ uniform float seed = 0.0;
 
 #include "res://shaders/table_common.gdshaderinc"
 
+// How much of a lacquered coat a surface this polished has: none on a dull or oiled one (an old desk's worn top shows
+// no mirror), all of it on a finish polished to a shine.
+float coated(float p) {
+	return smoothstep(0.3, 0.9, p);
+}
+
 float hb(float x) {
 	return fract(sin(x * 91.7 + seed * 7.3) * 43758.5453);
 }
@@ -112,8 +118,9 @@ void fragment() {
 		vec4 b = board_at(q);
 		float fiber = fbm(vec3(b.x * 0.6, b.y * 6.0, b.z));
 		albedo = mix(color, color2, late * figure * 0.85) * (0.92 + 0.14 * fiber) * (0.92 + 0.16 * hb(b.z + 1.0));
-		rough = mix(0.8, 0.25, polish);
-		coat = polish * 0.5;
+		rough = mix(0.86, 0.25, polish);
+		coat = coated(polish) * 0.5;
+		spec = mix(0.3, 0.5, polish);
 	} else if (kind == 6) {
 		// STONE: veins running through it, flecks
 		float n1 = fbm(opos * 0.7);
@@ -121,7 +128,7 @@ void fragment() {
 		float vein = 1.0 - smoothstep(0.0, 0.06 + 0.12 * (1.0 - figure), abs(sin(t)));
 		albedo = mix(color * (0.88 + 0.24 * fbm(opos * 3.1)), color2, vein * figure);
 		rough = mix(0.85, 0.1, polish);
-		coat = polish * 0.4;
+		coat = coated(polish) * 0.4;
 	} else if (kind == 1) {
 		// METAL: tarnish gathering where noise says
 		metal = 1.0;
@@ -134,7 +141,7 @@ void fragment() {
 		albedo = color * (0.94 + 0.1 * fbm(opos));
 		albedo = mix(albedo, color2, smoothstep(0.55, 0.85, fbm(opos * 0.5 + vec3(3.0))) * 0.35);
 		rough = mix(0.8, 0.07, polish);
-		coat = polish * 0.8;
+		coat = coated(polish) * 0.8;
 	} else if (kind == 9) {
 		// LEATHER, worn paler where it is handled
 		albedo = color * (0.85 + 0.25 * fbm(opos * 3.1));
@@ -153,7 +160,7 @@ void fragment() {
 		albedo = color * (0.95 + 0.08 * fbm(opos));
 		albedo = mix(albedo, color2, (1.0 - smoothstep(0.0, 2.5, hem)) * wear);
 		rough = mix(0.85, 0.12, polish);
-		coat = polish * 0.6;
+		coat = coated(polish) * 0.6;
 	}
 	// An inlaid pattern takes the material's own grain and shading under its colors
 	float tone = clamp(lum(albedo) / max(lum(color), 0.02), 0.6, 1.4);
@@ -177,5 +184,5 @@ void fragment() {
 	SPECULAR = spec;
 	NORMAL = n;
 	CLEARCOAT = coat;
-	CLEARCOAT_ROUGHNESS = 0.15;
+	CLEARCOAT_ROUGHNESS = mix(0.55, 0.12, polish);
 }

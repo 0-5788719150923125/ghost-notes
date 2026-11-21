@@ -39,7 +39,8 @@ class_name DispatchMedium
 ## from the heard audio's bands while that voice speaks ([DispatchSpectrum]).
 ##
 ## The subtitles caption what cannot be read on the desk, as the letter's do: speech, never the words typed on the
-## terminal as they are said ([method _captioned]); a text is read on its phone and nowhere else.
+## terminal as they are said or lit on the tablet's page as they are read off it ([method _captioned]); a text is read on
+## its phone and nowhere else.
 ##
 ## Redacted words on the terminal are hidden over the frame ([DispatchCensor], [method _censor_at]): drawn after the 3D
 ## and before a picture over the whole screen, so a picture covers it.
@@ -211,13 +212,15 @@ const BLACK_LEAD := 0.6
 const BLACK_TAIL := 0.3
 ## The tablet's page: eased to what is said over EASE seconds, what is said kept this far down the view; with nothing said
 ## on it, eased down the page over the time it is up (GLIDE_LEAST seconds or more: a page left sooner stays where it is),
-## never faster than GLIDE pixels a second, or DRIFT pixels a second while how long it is up is not known. A word said is followed where it is this long, or where it reads on from the last word
+## never faster than GLIDE pixels a second (a reader's skim, never past where its writing ends: the desk's pages have no
+## padding), or DRIFT pixels a second while how long it is up is not known. A word said is followed where it is this long
+## and the word said after it is the next one there (a phrase, never one stray word), or where it reads on from the last word
 ## followed; a run of READ_RUN words read on lights them as the tablet medium lights what its voice reads; a word is looked
 ## for this many words on from the last. What the finger goes to is brought this far down the view (a link, a search box;
 ## a message box, which the keyboard rises under), unless it is in view already, this far from the view's edges. The
 ## keyboard rises and goes down over KEYBOARD seconds, a key under the finger shows for KEY_SHOWN seconds.
 const PAGE_EASE := 0.9
-const PAGE_GLIDE := 120.0
+const PAGE_GLIDE := 36.0
 const PAGE_GLIDE_LEAST := 2.0
 const TAP_KEEP := 0.4
 const BOX_KEEP := 0.3
@@ -237,7 +240,7 @@ const PAGE_KEEP := 0.32
 const PAGE_DRIFT := 18.0
 const FOLLOW_LETTERS := 5
 const READ_RUN := 3
-const FOLLOW_WINDOW := 120
+const FOLLOW_WINDOW := 400
 ## The live picture: its camera behind the chair, and its viewport's size.
 const LIVE_EYE := Vector3(0.32, 1.48, 1.95)
 const LIVE_AIM := Vector3(-0.05, 0.86, -0.15)
@@ -815,19 +818,39 @@ func on_stage_resized(_size: Vector2) -> void:
 			(n as CanvasItem).queue_redraw()
 
 
-## Is the line from subtitle word [param w0] to [param w1] captioned? Yes, unless every word of it is typed on the
-## terminal as it is said (read there); always while a picture covers the screen.
+## Is the line from subtitle word [param w0] to [param w1] captioned? Yes, unless every word of it is read where it is
+## shown as it is said: typed on the terminal, or lit on the tablet's page as the room reads it off ([method _page_follow]);
+## two places saying the same words leave the eye nowhere to go. Always while a picture covers the screen.
 func _captioned(w0: int, w1: int, _t: float) -> bool:
 	if LetterMedium.cover_of(_plate.layers) >= 0.5:
 		return true
 	var map: Array = _follower.map
+	var lit := {}
+	var looked := false
 	for w in range(w0, w1 + 1):
 		var si := int(map[w]) if w >= 0 and w < map.size() else -1
 		if si < 0:
 			continue
-		if si >= _typed_words.size() or _typed_words[si] == 0:
+		if si < _typed_words.size() and _typed_words[si] != 0:
+			continue
+		if not looked:
+			lit = _tablet_read()
+			looked = true
+		if not lit.has(si):
 			return true
 	return false
+
+
+## The spoken words read off the tablet's pages, each lit there as it is said: `{spoken word: true}`.
+func _tablet_read() -> Dictionary:
+	var out := {}
+	var view := float(DispatchScreens.TABLET_SIZE.y) - TabletChrome.TOP
+	for i in _actions.size():
+		if String((_actions[i] as Dictionary)["kind"]) != "page" or int((_actions[i] as Dictionary)["page"]) < 0:
+			continue
+		for pair in _page_follow(i, view, 1.0e9)["lit"]:
+			out[int((pair as Array)[1])] = true
+	return out
 
 
 func advance(features, delta: float, _bookend: float) -> void:
@@ -3439,6 +3462,7 @@ func _tablet_page(pi: int) -> Dictionary:
 	var out := {}
 	if pi >= 0 and pi < (_tablet_doc.get("pages", []) as Array).size():
 		var tp := TabletPage.new()
+		tp.placeholders = false
 		var view := float(DispatchScreens.TABLET_SIZE.y) - TabletChrome.TOP
 		tp.build(_tablet_doc, pi, float(DispatchScreens.TABLET_SIZE.x), view * 2.4, view)
 		var words: Array = []
@@ -3638,7 +3662,9 @@ func _page_end(i: int) -> float:
 
 ## How page action [param i] follows what is said while it is up: `{marks: [[when, to]], lit: [[page word, spoken word]]}`.
 ## A word said is found on the page reading on from the last one found (the next word there), or - one of
-## [constant FOLLOW_LETTERS] letters or more - further on within [constant FOLLOW_WINDOW] words; each found is a mark the
+## [constant FOLLOW_LETTERS] letters or more, the word said after it the next word there - further on within
+## [constant FOLLOW_WINDOW] words, its run starting back at the words said just before it that stand just before it there
+## (the short words a phrase is never found by); each found is a mark the
 ## page scrolls to, kept [constant PAGE_KEEP] down the view ([param view] high, [param most] the furthest down), and a run of
 ## [constant READ_RUN] or more read on in a row is read off the page, its words lit as they are said. A reply typed into the
 ## page is a mark too, its message box brought [constant BOX_KEEP] down the view, and its words are typed, never followed.
@@ -3663,6 +3689,7 @@ func _page_follow(i: int, view: float, most: float) -> Dictionary:
 		if String(b["kind"]) == "post":
 			posts.append(k)
 	var cursor := 0
+	var used := int(a["after"]) - 1       # the last spoken word followed or typed: a run reaches back no further
 	var run: Array = []                   # [page word, spoken word] read on in a row
 	var complete := true
 	var places: Array = a.get("said", []) if not pg.is_empty() else []
@@ -3682,6 +3709,7 @@ func _page_follow(i: int, view: float, most: float) -> Dictionary:
 			if run.size() >= READ_RUN:
 				lit.append_array(run)
 			run = []
+			used = si
 			continue
 		var w := String(spoken[si])
 		var t := _word_t0(si)
@@ -3691,11 +3719,18 @@ func _page_follow(i: int, view: float, most: float) -> Dictionary:
 		if not places.is_empty():
 			continue
 		var j := -1
-		if cursor < words.size() and String((words[cursor] as Array)[0]) == w and not run.is_empty():
+		# a mark with no letters on the page (a dash, an arrow) is read past, never said
+		while not run.is_empty() and cursor < words.size() and String((words[cursor] as Array)[0]).is_empty():
+			cursor += 1
+		if cursor < words.size() and String((words[cursor] as Array)[0]) == w and not run.is_empty() \
+				and (not _ends_sentence(words[cursor - 1]) or si + 1 >= spoken.size() or cursor + 1 >= words.size()
+				or String((words[cursor + 1] as Array)[0]) == String(spoken[si + 1])):
+			# reading on past a sentence's end there takes a phrase, as finding one does ("me. I moved" is not "I have")
 			j = cursor
-		elif w.length() >= FOLLOW_LETTERS:
-			for k in range(cursor, mini(cursor + FOLLOW_WINDOW, words.size())):
-				if String((words[k] as Array)[0]) == w:
+		elif w.length() >= FOLLOW_LETTERS and si + 1 < spoken.size():
+			# a phrase found further on: this word and the next said, one after the other there
+			for k in range(cursor, mini(cursor + FOLLOW_WINDOW, words.size() - 1)):
+				if String((words[k] as Array)[0]) == w and String((words[k + 1] as Array)[0]) == String(spoken[si + 1]):
 					j = k
 					break
 		if j < 0:
@@ -3707,9 +3742,26 @@ func _page_follow(i: int, view: float, most: float) -> Dictionary:
 			if run.size() >= READ_RUN:
 				lit.append_array(run)
 			run = []
+		if run.is_empty():
+			# a phrase found starts its run back at the words said just before it that stand just before it there (the
+			# short ones a phrase is never found by: "A woman in", "Same here. This one sat across"), so it is read whole
+			var back := 1
+			var pj := j - 1
+			while si - back > used and pj >= cursor:
+				if String((words[pj] as Array)[0]).is_empty():
+					pj -= 1
+					continue
+				if String((words[pj] as Array)[0]) != String(spoken[si - back]) or _word_t0(si - back) == INF:
+					break
+				run.push_front([int((words[pj] as Array)[2]), si - back])
+				back += 1
+				pj -= 1
+			if not run.is_empty():
+				t = _word_t0(int((run[0] as Array)[1]))
 		run.append([int((words[j] as Array)[2]), si])
 		marks.append([t, clampf(float((words[j] as Array)[1]) - view * PAGE_KEEP, 0.0, most)])
 		cursor = j + 1
+		used = si
 	if run.size() >= READ_RUN:
 		lit.append_array(run)
 	if not places.is_empty():
@@ -3724,6 +3776,12 @@ func _page_follow(i: int, view: float, most: float) -> Dictionary:
 	if complete:
 		_follow[i] = out
 	return out
+
+
+## Whether page word [param w] (`[norm, y, word]`, [method _tablet_page]) ends a sentence as written.
+func _ends_sentence(w: Array) -> bool:
+	var text := String((_tablet_doc["words"][int(w[2])] as Dictionary)["text"])
+	return TabletScript._rx("[.!?][\"')\\]”’*_]*$").search(text) != null
 
 
 ## Where the page [param pg] ([method _tablet_page]) is brought to for a `said` mark with [param before] of its words

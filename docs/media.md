@@ -135,7 +135,7 @@ A phone in hand is held to the ear: it rises out of its row, flips open and floa
 
 The receiver is open in its storms and under a voice that comes in on it (`_build_receiver`): the storm brought down while the voice is said over it, the needle swinging with the storm and each word, the scope tracing the receiver's own output as a scope across its speaker would (`DispatchScope`: its static, and the voice's real waveform). The SDR screen standing on the scope draws the band's spectrum and waterfall from the same stretches, and the voice's own spectrum from the heard audio's bands while that voice speaks (`DispatchSpectrum`).
 
-The subtitles caption what cannot be read on the desk, as the letter's do: speech, never the words typed on the terminal as they are said (`_captioned`); a text is read on its phone and nowhere else.
+The subtitles caption what cannot be read on the desk, as the letter's do: speech, never the words typed on the terminal as they are said or lit on the tablet's page as they are read off it (`_captioned`); a text is read on its phone and nowhere else.
 
 Redacted words on the terminal are hidden over the frame (`DispatchCensor`, `_censor_at`): drawn after the 3D and before a picture over the whole screen, so a picture covers it.
 

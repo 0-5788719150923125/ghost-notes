@@ -531,6 +531,10 @@ static func profile_inset(edge: String, t: float, th: float) -> float:
 	return e2 - sqrt(maxf(e2 * e2 - pow(e2 - minf(y, e2), 2.0), 0.0))
 
 
+## The outline turns at a point sharply enough to miter there when the normals either side of it are this far apart (the
+## cosine of the turn: about 45 degrees).
+const MITER_TURN := 0.7
+
 const _PROFILE_T := [0.0, 0.02, 0.05, 0.1, 0.16, 0.24, 0.32, 0.4, 0.45, 0.5, 0.6, 0.7, 0.75, 0.82, 0.9, 1.0]
 
 
@@ -811,18 +815,20 @@ static func _slope(img: Image, w: int, h: int) -> PackedFloat32Array:
 
 ## The top: its face (cut into a mesh fine enough to carry its hem's distance), and its edge cut to
 ## the profile, ring by ring - local to its middle. UV is centimeters from the middle, UV2 (how far in
-## from the edge, cm; 1 on the edge itself).
+## from the edge, cm; 1 on the edge itself). A square corner is mitered ([method _mitered]).
 static func _top_mesh(o: Dictionary, edge: String, th: float) -> ArrayMesh:
 	var g := Props.Tris.new()
-	var pts := edge_points(o)
-	var normals := PackedVector2Array()
-	for q in pts:
-		normals.append(_grad_local(o, q))
+	var m := _mitered(o, edge_points(o))
+	var pts: PackedVector2Array = m["points"]
+	var normals: PackedVector2Array = m["normals"]
+	var offs: PackedVector2Array = m["offsets"]
 	var in0 := profile_inset(edge, 0.0, th)
 	# The face: the outline drawn in by the profile's start, and a grid inside it
 	var ring0 := PackedVector2Array()
 	for i in pts.size():
-		ring0.append(pts[i] - normals[i] * in0)
+		if i > 0 and pts[i] == pts[i - 1]:
+			continue
+		ring0.append(pts[i] - offs[i] * in0)
 	var sheet := _sheet(ring0, func(q: Vector2) -> float: return sdf_local(o, q) + in0, TOP_STEP)
 	var up := Vector3.UP
 	var vs: PackedVector2Array = sheet["points"]
@@ -843,9 +849,10 @@ static func _top_mesh(o: Dictionary, edge: String, th: float) -> ArrayMesh:
 		var ring := PackedVector3Array()
 		var rn := PackedVector3Array()
 		for i in pts.size():
-			var q := pts[i] - normals[i] * inset
+			var q := pts[i] - offs[i] * inset
 			ring.append(Vector3(q.x, -float(t) * th, q.y))
-			rn.append((Vector3(normals[i].x, 0.0, normals[i].y) + Vector3.UP * slope).normalized())
+			# going down, a profile drawn in less steps out: its face tips up as much (the inset's slope, against the up)
+			rn.append((Vector3(normals[i].x, 0.0, normals[i].y) - Vector3.UP * slope).normalized())
 		rings.append(ring)
 		norms.append(rn)
 	var n := pts.size()
@@ -861,6 +868,34 @@ static func _top_mesh(o: Dictionary, edge: String, th: float) -> ArrayMesh:
 			g.tri(ra[i], rb[i], rb[j], na[i], nb[i], nb[j], ua, ua, ub, Vector2(0.0, 1.0), Vector2(0.0, 1.0), Vector2(0.0, 1.0))
 			g.tri(ra[i], rb[j], ra[j], na[i], nb[j], na[j], ua, ub, ub, Vector2(0.0, 1.0), Vector2(0.0, 1.0), Vector2(0.0, 1.0))
 	return g.mesh()
+
+
+## The outline's points [param pts] with how each is shaded and drawn in: `{points, normals, offsets}`. A point where the
+## outline turns sharply (a square corner, whose one normal would be the diagonal) is made two at the same place, each shaded
+## by its own side, both drawn in along the miter (`offsets`: an inset d puts it d in from both sides), so each side's
+## profile runs straight into the corner as a joiner's miter does; elsewhere a point is drawn in along its normal.
+static func _mitered(o: Dictionary, pts: PackedVector2Array) -> Dictionary:
+	var n := pts.size()
+	var raw := PackedVector2Array()
+	for q in pts:
+		raw.append(_grad_local(o, q))
+	var out_p := PackedVector2Array()
+	var out_n := PackedVector2Array()
+	var out_o := PackedVector2Array()
+	for i in n:
+		var a := raw[(i - 1 + n) % n]
+		var b := raw[(i + 1) % n]
+		if n >= 4 and a.dot(b) < MITER_TURN and absf(raw[i].dot(a)) < 0.99 and absf(raw[i].dot(b)) < 0.99:
+			var miter := (a + b) / maxf(1.0 + a.dot(b), 0.05)
+			for side in [a, b]:
+				out_p.append(pts[i])
+				out_n.append(side)
+				out_o.append(miter)
+		else:
+			out_p.append(pts[i])
+			out_n.append(raw[i])
+			out_o.append(raw[i])
+	return {"points": out_p, "normals": out_n, "offsets": out_o}
 
 
 ## A flat sheet over the outline [param ring] (local points, going round), whose inside is where

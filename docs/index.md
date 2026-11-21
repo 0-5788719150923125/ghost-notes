@@ -47,7 +47,7 @@ core. The commitments:
 - [Props and the library](props.md) (21 shapes, 18 materials, 21 roles) - the library of props and voices, the Dex, the Props card, roles any make can play, refining a prop into versions, and what every prop is made of.
 - [The Environment](surroundings.md) (17 kinds, 6 lights) - what is round the scene a note is shown in, a list of elements: its light, shafts through its haze, what drifts in its air, what is heard - each with properties a person sets or Roll draws - and how strongly each lit thing shines.
 - [Masking effects](masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
-- [Script marks](script.md) (84) - every mark a script may carry - the script editor's palette.
+- [Script marks](script.md) (87) - every mark a script may carry - the script editor's palette.
 - [Agents](agents.md) (4 writers, 3 painters, 3 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
 
 ## Subsystems

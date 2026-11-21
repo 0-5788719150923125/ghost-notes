@@ -18,6 +18,15 @@ class_name TabletScript
 ##                                             end of its sentence, or on its own line, the whole
 ##                                             paragraph below it
 ##     <!-- filler: 3 -->                      three placeholder stories (squiggles) here
+##     <!-- nav: Forums | Members | Rules -->  the site's own menu, in the row under its name (a later page of
+##                                             the site keeps it); with none, that row is squiggles
+##     <!-- post: nightlog | Member · 1,204 posts | Tue 22:14 -->   a forum post: who wrote it, what the forum
+##                                             says of them (parted by ·), and when; what follows is its body
+##                                             until the next post, a heading, a rule or the page's end - set
+##                                             beside an author's column with an avatar, as a forum sets it
+##     <!-- pager: 245 -->                     Back (grayed), the page numbers to 245 with the first marked, and Next:
+##                                             a listing's first page of many (a forum board's threads)
+##     > words                                 a quote, set in a tinted box (a forum reply quoting another)
 ##     <!-- chat: 3 --> ... <!-- /chat -->     a live chat ([constant CHAT]): the page fits the screen and never
 ##                                             scrolls, the chat filling what is left under what is written, its
 ##                                             messages streaming in drawn from a bank, paid ones standing above
@@ -29,7 +38,8 @@ class_name TabletScript
 ## nothing is added to go back to). A page grows a search box when a search is made on it; a search with
 ## no page up, or in a blank tab, is typed into the address bar. A heading with no text under it gets
 ## squiggles for a body, and every page is padded with placeholder stories so there is something to
-## scroll past.
+## scroll past ([member TabletPage.placeholders]). `<br>` in a line breaks it; in a table cell, what follows it is the
+## cell's detail, set smaller (a forum board's description under its name).
 ##
 ## Nothing is read off the screen: no title is announced, text before the first url is not spoken, and
 ## a page's own opening title (its first `#` heading) is shown and skipped.
@@ -49,7 +59,7 @@ class_name TabletScript
 ## written out as these marks, and each action says which mark made it (`mark`).
 
 ## Own-line actions. Group 1 is the verb, 2 its argument.
-const MARKER := "^\\s*<!--\\s*(url|search|new tab|back|landscape|portrait|rotate|filler|redirect|notify)\\s*(?::\\s*(.*?))?\\s*-->\\s*$"
+const MARKER := "^\\s*<!--\\s*(url|search|new tab|back|landscape|portrait|rotate|filler|redirect|notify|nav|post|pager)\\s*(?::\\s*(.*?))?\\s*-->\\s*$"
 ## A redirect: `<!-- redirect -->` before a page's url sends the tap (or typed address) through a chain
 ## of addresses the reader never asked for, each in the address bar for HOP_S with a blank
 ## "Redirecting…" page between. Bare, REDIRECT_HOPS hops made up from the page's own site
@@ -88,6 +98,11 @@ const LINK := "\\[([^\\]]+)\\]\\(([^)\\s]+)\\)"
 ## A list item: `- `, `* `, `+ ` or `1.` / `1)` at the start of a line. Each item is its own block (set
 ## with a bullet, read as its own short paragraph); a list ends on a pager.
 const LIST_ITEM := "^\\s*([-*+]|\\d+[.)])\\s+(.+)$"
+## A quote: `> ` at the start of a line; lines one after another are one quote.
+const QUOTE := "^\\s*>\\s?(.*)$"
+## A line break inside a line (`<br>`), and the token it leaves among the words: the word after it carries `brk`.
+const BREAK := "(?i)\\s*<br\\s*/?>\\s*"
+const BREAK_MARK := "\uE0F6"
 ## A table: lines that start with a pipe. With the `|---|---|` rule as its second line the first row is
 ## a header, shown and not read. The body is read row by row, cell by cell, each cell a sentence; a
 ## `<!-- skip -->` in a cell keeps the rest of that cell off the voice.
@@ -397,6 +412,8 @@ class _Walk:
 	var _marks := 0              # the url, search, new tab and back marks walked
 	var _mark := -1              # the one being walked, -1 outside one
 	var _chat := {}              # the live chat being read, {} outside one
+	var _posts := 0              # the forum posts on the page being written
+	var _in_post := 0            # the post the blocks being written belong to (1 the page's first), 0 outside one
 
 	func run(body: String) -> void:
 		for raw in body.split("\n"):
@@ -463,6 +480,7 @@ class _Walk:
 			return
 		if s == "---" or s == "***" or s == "* * *":
 			_flush()
+			_in_post = 0
 			_block({"kind": "rule"})
 			return
 		if s.begins_with("#"):
@@ -470,8 +488,19 @@ class _Walk:
 			var level := 0
 			while level < s.length() and s[level] == "#":
 				level += 1
+			_in_post = 0
 			_block({"kind": "heading", "level": level, "raw": s.substr(level).strip_edges()})
 			return
+		var qm := TabletScript._rx(TabletScript.QUOTE).search(line)
+		if qm != null:
+			if not bool(_item.get("quote", false)):
+				_flush()
+			_item = {"quote": true}
+			if not qm.get_string(1).strip_edges().is_empty():
+				_para.append(qm.get_string(1).strip_edges())
+			return
+		if bool(_item.get("quote", false)):
+			_flush()
 		var li := TabletScript._rx(TabletScript.LIST_ITEM).search(line)
 		if li != null:
 			_flush()
@@ -535,6 +564,8 @@ class _Walk:
 			return
 		if item.is_empty():
 			_block({"kind": "para", "raw": raw})
+		elif bool(item.get("quote", false)):
+			_block({"kind": "quote", "raw": raw})
 		else:
 			_block({"kind": "item", "raw": raw, "list": int(item["list"]), "mark": String(item["mark"])})
 
@@ -582,6 +613,8 @@ class _Walk:
 			return
 		var page: Dictionary = pages[_cur]
 		var bi := (page["blocks"] as Array).size()
+		if _in_post > 0 and String(b["kind"]) != "rule":
+			b["post"] = _in_post
 		# A page's opening title is shown, not read (a site's name, an article's title).
 		if bi == 0 and String(b["kind"]) == "heading" and int(b["level"]) == 1:
 			lead_skip = true
@@ -663,6 +696,8 @@ class _Walk:
 			inline_notes.append(_note_of(m.get_string(1)))
 		text = TabletScript._rx(TabletScript.NOTIFY).sub(text, " " + TabletScript.NOTE_MARK + " ", true)
 		text = _strip_other_notes(text)
+		text = TabletScript._rx(TabletScript.BREAK).sub(text, " " + TabletScript.BREAK_MARK + " ", true)
+		var brk := false
 		var segs: Array = []
 		var at := 0
 		for m in TabletScript._rx(TabletScript.LINK).search_all(text):
@@ -684,6 +719,9 @@ class _Walk:
 				if t == TabletScript.SKIP_MARK:
 					skipping = true
 					continue
+				if t == TabletScript.BREAK_MARK:
+					brk = true
+					continue
 				if t == TabletScript.NOTE_MARK:
 					if not inline_notes.is_empty():
 						var n: Dictionary = inline_notes.pop_front()
@@ -699,8 +737,13 @@ class _Walk:
 					lvl = 2 if open >= 2 else 1
 					emph = lvl
 					t = t.substr(open)
+				# a closing run may stand before the word's own punctuation (`members**,`)
+				var tail := TabletScript._rx("[*_]+([.,;:!?)\\]]+)$").search(t)
 				var close := _run_len(t, false)
-				if close > 0:
+				if tail != null and tail.get_start() > 0:
+					t = t.substr(0, tail.get_start()) + tail.get_string(1)
+					emph = 0
+				elif close > 0:
 					t = t.substr(0, t.length() - close)
 					emph = 0
 				if t.is_empty():
@@ -711,6 +754,9 @@ class _Walk:
 				if glue:
 					words[wi]["glue"] = true
 					glue = false
+				if brk:
+					words[wi]["brk"] = true
+					brk = false
 				out.append(wi)
 				if not skipping:
 					spoken.append(wi)
@@ -777,6 +823,8 @@ class _Walk:
 		var m := TabletScript._rx(TabletScript.SKIP).search(raw)
 		var t := raw.substr(0, m.get_start()) if m != null else raw
 		t = TabletScript._rx(TabletScript.LINK).sub(t, "$1", true)
+		t = TabletScript._rx("([^.!?:;\\s])" + TabletScript.BREAK).sub(t, "$1. ", true)
+		t = TabletScript._rx(TabletScript.BREAK).sub(t, " ", true)
 		var res := ""
 		var at := 0
 		for c in TabletScript._rx(Manuscript.COMMENT).search_all(t):
@@ -820,6 +868,8 @@ class _Walk:
 		return n
 
 	func _new_page(url: String) -> int:
+		_posts = 0
+		_in_post = 0
 		pages.append({"url": url, "host": TabletScript.host_of(url), "blocks": [], "links": {},
 			"search_box": false, "query": "", "results": false})
 		return pages.size() - 1
@@ -972,6 +1022,25 @@ class _Walk:
 			"filler":
 				if _cur >= 0:
 					_block({"kind": "filler", "n": maxi(1, int(arg)) if not arg.is_empty() else 1})
+			"pager":
+				if _cur >= 0:
+					_block({"kind": "pager", "n": maxi(2, int(arg)) if arg.is_valid_int() else 0})
+			"nav":
+				if _cur >= 0 and not _returned:
+					var labels := PackedStringArray()
+					for l in arg.split("|" if arg.contains("|") else ",", false):
+						if not String(l).strip_edges().is_empty():
+							labels.append(String(l).strip_edges())
+					(pages[_cur] as Dictionary)["nav"] = labels
+			"post":
+				if _cur >= 0:
+					var f := arg.split("|")
+					_in_post = 0
+					_posts += 1
+					_block({"kind": "post", "who": String(f[0]).strip_edges(),
+						"meta": String(f[1]).strip_edges() if f.size() > 1 else "",
+						"when": String(f[2]).strip_edges() if f.size() > 2 else "", "n": _posts})
+					_in_post = _posts
 
 	## A heading with nothing written under it before the next heading of its rank or above is a stub:
 	## the page draws squiggles for its body.

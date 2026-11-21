@@ -16,8 +16,8 @@ const FIELDS := {
 		"roll": ["#2a1810", "#3b2414", "#5a3820", "#6e4a2a", "#8a6440", "#24160e", "#4a3a2c", "#7a3e22"]},
 	"grain": {"label": "Grain", "blurb": "How fine the wood's grain is.", "type": "float", "min": 0.4, "max": 4.0, "step": 0.1, "default": 1.4,
 		"roll": [0.8, 2.4]},
-	"polish": {"label": "Polish", "blurb": "How much the top shines.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "default": 0.22,
-		"roll": [0.08, 0.55]},
+	"polish": {"label": "Polish", "blurb": "How much the top shines.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "default": 0.1,
+		"roll": [0.0, 0.3]},
 	"wear": {"label": "Wear", "blurb": "How worn the top is.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "default": 0.4,
 		"roll": [0.1, 0.75]},
 	"boards": {"label": "Boards", "blurb": "How wide its boards are (cm); 0 one slab.", "type": "float", "min": 0.0, "max": 40.0, "step": 1.0,
@@ -47,6 +47,11 @@ const PEDESTAL_IN := 0.03
 const LEG := 0.055
 const LEG_IN := 0.04
 const APRON := 0.09
+## How far what holds the top up reaches into it (m): never short of its underside, whatever its thickness, or the room shows
+## through the slit.
+const UNDER_INTO := 0.003
+## How far above the floor the modesty panel at the back starts (m).
+const PANEL_FOOT := 0.225
 
 
 ## What a desk kept as [param spec] (`{seed, <its fields set>}`, [method Roll.own_or_drawn]) is, every field.
@@ -85,23 +90,26 @@ static func build(v: Dictionary, seed: int) -> Node3D:
 	var metal := DispatchSet._std(Color.html(String(v["metal"])), 0.3, 0.85)
 	var near := DispatchSet.NEAR
 	var far := DispatchSet.FAR
+	var under := _under(v)
+	# the modesty panel at the back, from a hand above the floor up into the top
+	var panel_h := under - PANEL_FOOT
 	match String(v["base"]):
 		"pedestals":
 			for side in [-1.0, 1.0]:
 				_pedestal(root, side, v, frame, metal)
-			DispatchSet.put(root, DispatchSet.box(Vector3(w - 1.0, y - 0.25, 0.025)), frame, Vector3(0, y * 0.5 + 0.1, far + 0.08))
+			DispatchSet.put(root, DispatchSet.box(Vector3(w - 1.0, panel_h, 0.025)), frame, Vector3(0, PANEL_FOOT + panel_h * 0.5, far + 0.08))
 		"pedestal":
 			_pedestal(root, 1.0, v, frame, metal)
 			for z in [near - LEG_IN - LEG * 0.5, far + LEG_IN + LEG * 0.5]:
-				_leg(root, Vector2(-w * 0.5 + LEG_IN + LEG * 0.5, z), frame)
-			DispatchSet.put(root, DispatchSet.box(Vector3(w - 0.6, y - 0.25, 0.025)), frame, Vector3(-0.24, y * 0.5 + 0.1, far + 0.08))
+				_leg(root, Vector2(-w * 0.5 + LEG_IN + LEG * 0.5, z), frame, under)
+			DispatchSet.put(root, DispatchSet.box(Vector3(w - 0.6, panel_h, 0.025)), frame, Vector3(-0.24, PANEL_FOOT + panel_h * 0.5, far + 0.08))
 		_:
 			for sx in [-1.0, 1.0]:
 				for z in [near - LEG_IN - LEG * 0.5, far + LEG_IN + LEG * 0.5]:
-					_leg(root, Vector2(sx * (w * 0.5 - LEG_IN - LEG * 0.5), z), frame)
-			# the apron under the top, round all four sides
+					_leg(root, Vector2(sx * (w * 0.5 - LEG_IN - LEG * 0.5), z), frame, under)
+			# the apron under the top, round all four sides, hung from its underside
 			var inner := Vector2(w - 2.0 * LEG_IN, d - 2.0 * LEG_IN)
-			var ay := y - APRON * 0.5
+			var ay := under - APRON * 0.5
 			DispatchSet.put(root, DispatchSet.box(Vector3(inner.x, APRON, 0.02)), frame, Vector3(0, ay, near - LEG_IN - 0.01))
 			DispatchSet.put(root, DispatchSet.box(Vector3(inner.x, APRON, 0.02)), frame, Vector3(0, ay, far + LEG_IN + 0.01))
 			for sx in [-1.0, 1.0]:
@@ -109,13 +117,17 @@ static func build(v: Dictionary, seed: int) -> Node3D:
 	return root
 
 
+## Where what holds the top of [param v] up reaches to (m): a little into the top, past its underside.
+static func _under(v: Dictionary) -> float:
+	return DispatchSet.DESK_Y - float(v["thick"]) / 100.0 + UNDER_INTO
+
+
 ## A pedestal of drawers on [param side] of the desk (-1 its left end, 1 its right), as [param v] has them.
 static func _pedestal(root: Node3D, side: float, v: Dictionary, frame: Material, metal: Material) -> void:
 	var w := DispatchSet.DESK_W
-	var y := DispatchSet.DESK_Y
 	var near := DispatchSet.NEAR
 	var mid_z := (near + DispatchSet.FAR) * 0.5
-	var ped := Vector3(PEDESTAL, y - 0.05, DispatchSet.DESK_D - 0.08)
+	var ped := Vector3(PEDESTAL, _under(v), DispatchSet.DESK_D - 0.08)
 	var x := side * (w * 0.5 - ped.x * 0.5 - PEDESTAL_IN)
 	DispatchSet.put(root, DispatchSet.rbox(ped, 0.01), frame, Vector3(x, ped.y * 0.5, mid_z))
 	var n := int(v["drawers"])
@@ -135,9 +147,9 @@ static func _pedestal(root: Node3D, side: float, v: Dictionary, frame: Material,
 			DispatchSet.put(root, DispatchSet.cyl(0.006, 0.006, 0.07, 8), metal, Vector3(side * (w * 0.5 - 0.27), hy, near - 0.022), Vector3(0, 0, 90))
 
 
-## A leg standing at [param at] (x, z): square, a little narrower at its foot, the desk's height less its top.
-static func _leg(root: Node3D, at: Vector2, frame: Material) -> void:
-	var h := DispatchSet.DESK_Y - 0.03
+## A leg standing at [param at] (x, z): square, a little narrower at its foot, up to [param under] ([method _under]).
+static func _leg(root: Node3D, at: Vector2, frame: Material, under: float) -> void:
+	var h := under
 	var leg := CylinderMesh.new()
 	leg.top_radius = LEG * 0.62
 	leg.bottom_radius = LEG * 0.48

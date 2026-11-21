@@ -14,6 +14,14 @@ class_name TabletPage
 ## it, its picture no taller than [constant LIVE_PICTURE] of the screen, then the paid messages, the stream filling what
 ## is left, and the message box at the foot ([method _live], [method _draw_chat]).
 ##
+## A page set without [member placeholders] (the dispatch desk's) has no squiggles anywhere: no padding, no stub bodies,
+## no placeholder stories, its menu row only where the site names one (`<!-- nav: -->`), and a footer of the site's
+## name; it ends where its writing does.
+##
+## A forum is set as one ([method _post_begin]): each `<!-- post: -->` a card, the author's column (an avatar drawn from the
+## name, the name, what the forum says of them) beside the post's body, its quotes in tinted boxes, its pictures as
+## attachments; a table's columns of numbers centered, its rows banded, a cell's detail after `<br>` set smaller.
+##
 ## The site's look is its host: face, accent color and masthead are hashed off the address, so a site
 ## looks the same wherever the chapter visits it. Two kinds are recognized from what the chapter does
 ## with them: a page searched from that has little else on it is a search engine's home (a centered
@@ -74,6 +82,20 @@ var min_height := 0.0
 ## Placeholder stories after the last written block, at least, as a share of [member min_height]:
 ## about half a screen.
 const TAIL_SHARE := 0.2
+## Whether what nobody wrote is drawn as placeholders (squiggles, padding stories); see the class note.
+var placeholders := true
+## A table cell's detail (after `<br>`), a quote's words, a post's own furniture (px).
+const DETAIL_FS := 24
+const QUOTE_FS := 27
+## A forum post: the author's column, the strip across its top, its padding, the room after it, the avatar, an
+## attachment's widest and tallest.
+const POST_SIDE := 230.0
+const POST_HEAD := 50.0
+const POST_PAD := 22.0
+const POST_GAP := 26.0
+const AVATAR := 112.0
+const ATTACH_W := 640.0
+const ATTACH_H := 520.0
 var items: Array = []         # in page coordinates, in drawing order
 var word_rect := {}           # global word index -> Rect2
 var search_rect := Rect2()
@@ -96,6 +118,7 @@ var _line: Array = []         # word items waiting for their line to be finished
 var _line_x := 0.0
 var _line_h := 0.0
 var _center := false
+var _post := {}               # the forum post being set ([method _post_begin]), {} outside one
 
 static var _faces := {}
 
@@ -176,16 +199,23 @@ func build(doc: Dictionary, pi: int, w: float, min_h: float, view := 0.0) -> voi
 	var engine := bool(page["search_box"]) and not bool(page["results"]) and _written(blocks) <= 3
 	if engine:
 		_engine_home(blocks)
-		height = maxf(_y + 120.0, min_h * 0.6)
+		height = maxf(_y + 120.0, min_h * 0.6) if placeholders else _y + 120.0
 		return
 	if bool(page["results"]):
 		_search_box(String(page["query"]))
 		_y += 18.0
 		title = String(page["query"])
 	var boxed := not bool(page["search_box"]) or bool(page["results"])
+	_post = {}
 	for i in blocks.size():
 		var b: Dictionary = blocks[i]
+		if not _post.is_empty() and int(b.get("post", 0)) != int(_post["n"]):
+			_post_end()
 		match String(b["kind"]):
+			"post":
+				_post_begin(b)
+			"quote":
+				_quote(b)
 			"heading":
 				var lvl := int(b["level"])
 				if i == 0 and lvl == 1 and not bool(page["results"]) and _site_name().is_empty():
@@ -202,7 +232,7 @@ func build(doc: Dictionary, pi: int, w: float, min_h: float, view := 0.0) -> voi
 					_text(b, mini(lvl, 3), 2)
 				if title == String(page["host"]) and lvl <= 2:
 					title = _plain(b)
-				if bool(b.get("stub", false)):
+				if bool(b.get("stub", false)) and placeholders:
 					_squiggles(3, BODY, ink.lerp(bg, 0.72), "stub%d" % i)
 					_y += 26.0
 				if not boxed and i == 0:
@@ -220,25 +250,32 @@ func build(doc: Dictionary, pi: int, w: float, min_h: float, view := 0.0) -> voi
 					_pager("pager%d" % i)
 			"image":
 				_image(b, i)
+			"pager":
+				_pager("pager%d" % i, int(b["n"]))
 			"filler":
-				for k in int(b["n"]):
+				for k in int(b["n"]) if placeholders else 0:
 					_filler("f%d_%d" % [i, k])
 			"rule":
 				items.append({"kind": "rule", "rect": Rect2(_x0, _y + 10.0, _col, 2.0)})
 				_y += 24.0
+	if not _post.is_empty():
+		_post_end()
 	if not boxed:
 		_search_box("")
 	if bool(page.get("reply", false)):
 		_reply_box()
 	# A page goes on past its article (related stories, comments) so its last written lines can be
 	# scrolled up to where the rest were read.
-	var want := maxf(min_h, _y + min_h * TAIL_SHARE)
+	var want := maxf(min_h, _y + min_h * TAIL_SHARE) if placeholders else 0.0
 	var k := 0
 	while _y < want:
 		_filler("pad%d" % k)
 		k += 1
 	_y += 40.0
-	items.append({"kind": "foot", "rect": Rect2(0.0, _y, w, 160.0)})
+	var site := _site_name()
+	if site.is_empty() and not blocks.is_empty() and String((blocks[0] as Dictionary)["kind"]) == "heading":
+		site = _plain(blocks[0])
+	items.append({"kind": "foot", "rect": Rect2(0.0, _y, w, 160.0), "site": site})
 	_y += 160.0
 	height = _y
 
@@ -545,8 +582,12 @@ func _plain(b: Dictionary) -> String:
 
 ## Set block [param b]'s words: [param level] picks the size (0 body), [param emph] is added
 ## to every word's own emphasis (2 = bold, for headings).
-func _text(b: Dictionary, level: int, emph: int, col := Color(0, 0, 0, 0), centered := false) -> void:
-	var fs: int = SIZES.get(level, BODY)
+##
+## A word after a `<br>` starts a new line; with [param detail], it and the rest are set at [constant DETAIL_FS], muted
+## (a table cell's detail). [param size] sets the size outright.
+func _text(b: Dictionary, level: int, emph: int, col := Color(0, 0, 0, 0), centered := false, detail := false,
+		size := 0) -> void:
+	var fs: int = size if size > 0 else SIZES.get(level, BODY)
 	_center = centered
 	_y += fs * 0.25 if level > 0 else 0.0
 	_line_x = 0.0
@@ -554,6 +595,13 @@ func _text(b: Dictionary, level: int, emph: int, col := Color(0, 0, 0, 0), cente
 	_line_h = fs * LEAD
 	for wi in (b.get("words", PackedInt32Array()) as PackedInt32Array):
 		var w: Dictionary = script_doc["words"][wi]
+		if bool(w.get("brk", false)):
+			_end_line()
+			if detail:
+				fs = DETAIL_FS
+				emph = 0
+				_line_h = fs * LEAD
+				col = ink.lerp(bg, 0.42)
 		var lvl := int(w["emph"]) | emph
 		var f := _face(serif, lvl)
 		var ww := f.get_string_size(String(w["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
@@ -577,8 +625,13 @@ func _end_line() -> void:
 		return
 	var used: float = (_line.back() as Dictionary)["x"] + (_line.back() as Dictionary)["w"]
 	var shift := (_col - used) * 0.5 if _center else 0.0
-	for it in _line:
-		var d: Dictionary = it
+	for k in _line.size():
+		var d: Dictionary = _line[k]
+		# a link's underline runs on under the space to its next word, one line under the whole link
+		var nx: Dictionary = _line[k + 1] if k + 1 < _line.size() else {}
+		var same := bool(d["link"]) and not nx.is_empty() and bool(nx["link"]) \
+			and String(script_doc["words"][int(nx["wi"])]["link"]) == String(script_doc["words"][int(d["wi"])]["link"])
+		d["ul"] = float(nx["x"]) - float(d["x"]) if same else float(d["w"])
 		var fs := int(d["fs"])
 		var x := _x0 + shift + float(d["x"])
 		d["pos"] = Vector2(x, _y + fs * 1.08)
@@ -613,6 +666,97 @@ func _item(b: Dictionary) -> void:
 	_y += BODY * 0.35
 
 
+# --- a forum ---------------------------------------------------------------------------
+
+## A forum post opens ([param b], a `post` block): a strip across its top with when it was written and its number, and
+## the column its body is set in, beside the author's. [method _post_end] closes it.
+func _post_begin(b: Dictionary) -> void:
+	var top := _y + 6.0
+	_post = {"n": int(b["n"]), "who": String(b["who"]), "meta": String(b["meta"]), "when": String(b["when"]),
+		"top": top, "at": items.size(), "x0": _x0, "col": _col}
+	_x0 = _x0 + POST_SIDE + POST_PAD
+	_col = float(_post["col"]) - POST_SIDE - POST_PAD * 2.0
+	_y = top + POST_HEAD + POST_PAD
+
+
+## The post open closes: as tall as its body or its author's column, whichever is taller, with its card, strip and
+## column drawn under what was set in it, and Quote and Reply at its foot.
+func _post_end() -> void:
+	var p := _post
+	_post = {}
+	_x0 = float(p["x0"])
+	_col = float(p["col"])
+	var top := float(p["top"])
+	var under: Array = []                 # drawn first: the card, the column, the strip
+	var over: Array = []                  # the author's column and the strip's words
+	var f := _face(false, 0)
+	var fb := _face(false, 2)
+	var side_x := _x0
+	var cy := top + POST_HEAD + POST_PAD
+	over.append({"kind": "avatar", "rect": Rect2(side_x + (POST_SIDE - AVATAR) * 0.5, cy, AVATAR, AVATAR), "seed": hash(String(p["who"]))})
+	cy += AVATAR + 14.0
+	var lines: Array = [[String(p["who"]), fb, 26, accent]]
+	for m in String(p["meta"]).split("·", false):
+		if not String(m).strip_edges().is_empty():
+			lines.append([String(m).strip_edges(), f, 21, ink.lerp(bg, 0.45)])
+	for ln in lines:
+		var text := _fit(String(ln[0]), ln[1], int(ln[2]), POST_SIDE - 16.0)
+		var tw := (ln[1] as Font).get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, int(ln[2])).x
+		over.append({"kind": "label", "pos": Vector2(side_x + (POST_SIDE - tw) * 0.5, cy + float(ln[2])), "text": text, "fs": int(ln[2]),
+			"col": ln[3], "bold": ln[1] == fb})
+		cy += float(ln[2]) * 1.45
+	var foot := maxf(_y, cy) + 8.0
+	for k in 2:
+		var label: String = ["Quote", "Reply"][k]
+		var lw := f.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x
+		over.append({"kind": "label", "pos": Vector2(_x0 + _col - POST_PAD - lw - (0.0 if k == 1 else 110.0), foot + 26.0), "text": label,
+			"fs": 22, "col": ink.lerp(bg, 0.5)})
+	var bottom := foot + 26.0 + POST_PAD
+	under.append({"kind": "card", "rect": Rect2(_x0, top, _col, bottom - top)})
+	under.append({"kind": "band", "rect": Rect2(_x0, top + POST_HEAD, POST_SIDE, bottom - top - POST_HEAD), "col": accent.lerp(bg, 0.94)})
+	under.append({"kind": "band", "rect": Rect2(_x0, top, _col, POST_HEAD), "col": accent.lerp(bg, 0.84)})
+	over.append({"kind": "label", "pos": Vector2(_x0 + POST_PAD, top + 34.0), "text": String(p["when"]), "fs": 22, "col": ink.lerp(bg, 0.3)})
+	var num := "#%d" % int(p["n"])
+	over.append({"kind": "label", "pos": Vector2(_x0 + _col - POST_PAD - fb.get_string_size(num, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x, top + 34.0),
+		"text": num, "fs": 22, "col": ink.lerp(bg, 0.3), "bold": true})
+	var at := int(p["at"])
+	for k in under.size():
+		items.insert(at + k, under[k])
+	items.append_array(over)
+	_y = bottom + POST_GAP
+
+
+## A quote ([param b]): its words a little smaller in a tinted box with a bar down its left, as a forum quotes a post.
+func _quote(b: Dictionary) -> void:
+	var top := _y + 4.0
+	var at := items.size()
+	_x0 += 30.0
+	_col -= 48.0
+	_y = top + 14.0
+	_text(b, 0, 0, ink.lerp(bg, 0.2), false, false, QUOTE_FS)
+	_x0 -= 30.0
+	_col += 48.0
+	var r := Rect2(_x0, top, _col, _y - top + 14.0)
+	items.insert(at, {"kind": "band", "rect": Rect2(r.position, Vector2(6.0, r.size.y)), "col": accent.lerp(bg, 0.35)})
+	items.insert(at, {"kind": "band", "rect": r, "col": accent.lerp(bg, 0.92)})
+	_y = r.end.y + BODY * 0.6
+
+
+## An avatar nobody uploaded, as a forum draws one: a five by five pattern mirrored down its middle, in one color of the
+## name's own on a pale ground. Deterministic in [param seed].
+func _draw_avatar(ci: CanvasItem, r: Rect2, seed: int) -> void:
+	var col := Color.from_hsv(float(absi(seed) % 360) / 360.0, 0.55, 0.62)
+	ci.draw_rect(r, col.lerp(Color.WHITE, 0.88))
+	var cell := r.size.x / 6.0
+	var o := r.position + Vector2(cell * 0.5, cell * 0.5)
+	for y in 5:
+		for x in 3:
+			if (seed >> (y * 3 + x)) & 1 == 0:
+				continue
+			ci.draw_rect(Rect2(o + Vector2(x, y) * cell, Vector2(cell, cell)), col)
+			ci.draw_rect(Rect2(o + Vector2(4 - x, y) * cell, Vector2(cell, cell)), col)
+
+
 ## A table: the header on a tinted band, the rows ruled apart, each cell's words set in its own column,
 ## columns as wide as their longest cell asks, within reason.
 func _table(b: Dictionary) -> void:
@@ -636,6 +780,14 @@ func _table(b: Dictionary) -> void:
 				widest = maxf(widest, _widest(r[k], 2 if r == head else 0))
 		weights.append(clampf(float(longest), 6.0, 60.0))
 		mins.append(widest + TABLE_PAD * 2.0 + 4.0)
+	# a column of numbers (topics, replies, views) is set in the middle of its column, as a forum's counts are
+	var counts: Array = []
+	for k in n:
+		var all_counts := not rows.is_empty()
+		for r in rows:
+			if k < (r as Array).size() and not _is_count(r[k]):
+				all_counts = false
+		counts.append(all_counts)
 	var ws := _share(_col, weights, mins)
 	var xs: Array = []
 	var x := _x0
@@ -644,10 +796,21 @@ func _table(b: Dictionary) -> void:
 		x += float(ws[k])
 	_y += BODY * 0.4
 	if not head.is_empty():
-		_row(head, xs, ws, 2, true)
-	for r in rows:
-		_row(r, xs, ws, 0, false)
+		_row(head, xs, ws, 2, true, counts)
+	for ri in rows.size():
+		_row(rows[ri], xs, ws, 0, false, counts, ri % 2 == 1)
 	_y += BODY * 0.7
+
+
+## Whether a cell holds nothing but a count: digits, with their commas and points.
+func _is_count(cell: Variant) -> bool:
+	var ws := cell as PackedInt32Array
+	if ws.is_empty():
+		return false
+	for wi in ws:
+		if TabletScript._rx("^[0-9][0-9,.]*[KkMm%]?$").search(String(script_doc["words"][wi]["text"])) == null:
+			return false
+	return true
 
 
 ## [param total] shared by [param weights], no share under its floor in [param mins]: a column
@@ -692,7 +855,7 @@ func _widest(cell: Variant, emph: int) -> float:
 ## One row of a table: every cell from the same top, the row as tall as its tallest cell.
 const TABLE_PAD := 16.0
 
-func _row(cells: Array, xs: Array, ws: Array, emph: int, header: bool) -> void:
+func _row(cells: Array, xs: Array, ws: Array, emph: int, header: bool, counts := [], banded := false) -> void:
 	const PAD := TABLE_PAD
 	var top := _y
 	var bottom := top
@@ -703,7 +866,7 @@ func _row(cells: Array, xs: Array, ws: Array, emph: int, header: bool) -> void:
 		_x0 = float(xs[k]) + PAD
 		_col = float(ws[k]) - PAD * 2.0
 		_y = top + PAD * 0.7
-		_text({"words": cells[k]}, 0, emph)
+		_text({"words": cells[k]}, 0, emph, Color(0, 0, 0, 0), k < counts.size() and bool(counts[k]), not header)
 		bottom = maxf(bottom, _y)
 	_x0 = x0
 	_col = col
@@ -711,6 +874,8 @@ func _row(cells: Array, xs: Array, ws: Array, emph: int, header: bool) -> void:
 	var span := Rect2(_x0, top, _col, _y - top)
 	if header:
 		items.insert(at, {"kind": "band", "rect": span, "col": accent.lerp(bg, 0.86)})
+	elif banded:
+		items.insert(at, {"kind": "band", "rect": span, "col": ink.lerp(bg, 0.965)})
 	items.append({"kind": "rule", "rect": Rect2(_x0, _y - 1.0, _col, 1.5)})
 
 
@@ -722,11 +887,12 @@ func _chars(cell: Variant) -> int:
 	return n
 
 
-## The foot of a list: Back (grayed) and Next, a sample of a longer listing.
-func _pager(salt: String) -> void:
+## The foot of a list, or a `pager` mark's place: Back (grayed) and Next, a sample of a longer listing ([param pages] of
+## it, else a number drawn from the site).
+func _pager(salt: String, pages := 0) -> void:
 	_y += BODY * 0.3
 	var r := Rect2(_x0, _y, _col, 60.0)
-	items.append({"kind": "pager", "rect": r, "pages": 6 + absi(_h(salt)) % 19})
+	items.append({"kind": "pager", "rect": r, "pages": pages if pages > 0 else 6 + absi(_h(salt)) % 19})
 	_y = r.end.y + BODY * 0.7
 
 
@@ -771,8 +937,7 @@ func _band(name: String) -> void:
 	items.append({"kind": "label", "pos": Vector2(MARGIN, top + 62.0), "text": name, "fs": 34,
 		"col": Color.WHITE, "bold": true})
 	_y = top + 96.0
-	items.append({"kind": "nav", "rect": Rect2(0.0, _y, width, 58.0)})
-	_y += 58.0 + 30.0
+	_nav()
 
 
 ## A news site's name, in a band of its color.
@@ -790,9 +955,30 @@ func _masthead(b: Dictionary) -> void:
 	_y += 26.0
 	items.insert(n0, {"kind": "band",
 		"rect": Rect2(0.0, top, width, _y - top), "col": accent.darkened(0.25)})
-	# a row of section names under it, as squiggles
-	items.append({"kind": "nav", "rect": Rect2(0.0, _y, width, 58.0)})
+	_nav()
+
+
+## The row of the site's menu under its name: what it names ([method _site_nav]), else squiggles, else (no placeholders)
+## no row.
+func _nav() -> void:
+	var labels := _site_nav()
+	if labels.is_empty() and not placeholders:
+		_y += 30.0
+		return
+	items.append({"kind": "nav", "rect": Rect2(0.0, _y, width, 58.0), "labels": labels})
 	_y += 58.0 + 30.0
+
+
+## The site's menu: this page's `nav`, else the one an earlier page of its host named.
+func _site_nav() -> PackedStringArray:
+	var here: Dictionary = script_doc["pages"][index]
+	if not (here.get("nav", PackedStringArray()) as PackedStringArray).is_empty():
+		return here["nav"]
+	for k in range(index - 1, -1, -1):
+		var pg: Dictionary = script_doc["pages"][k]
+		if String(pg["host"]) == String(here["host"]) and not (pg.get("nav", PackedStringArray()) as PackedStringArray).is_empty():
+			return pg["nav"]
+	return PackedStringArray()
 
 
 ## A search engine's front page: its name as a logo, centered, and the box under it.
@@ -875,6 +1061,11 @@ func _image(b: Dictionary, bi: int) -> void:
 		if img != null and not img.is_empty():
 			aspect = float(img.get_height()) / float(img.get_width())
 	var r := Rect2(_x0, _y + 8.0, _col, _col * clampf(aspect, 0.4, 1.3))
+	if not _post.is_empty():
+		# an attachment: no wider or taller than a forum shows one
+		var aw := minf(_col, ATTACH_W)
+		var ah := minf(aw * clampf(aspect, 0.4, 1.3), ATTACH_H)
+		r = Rect2(_x0, _y + 8.0, ah / clampf(aspect, 0.4, 1.3), ah)
 	items.append({"kind": "image", "rect": r, "key": String(b["key"]), "prompt": String(b["prompt"]),
 		"seed": _h("img" + String(b["key"]))})
 	block_rect[bi] = r
@@ -931,6 +1122,16 @@ func draw(ci: CanvasItem, top: float, scroll: float, clip_y0: float, clip_y1: fl
 				ci.draw_rect(rr, d["col"])
 			"nav":
 				ci.draw_rect(rr, accent.darkened(0.45))
+				var labels: PackedStringArray = d.get("labels", PackedStringArray())
+				if not labels.is_empty():
+					var lx := MARGIN
+					for l in labels:
+						if lx > width - MARGIN - 40.0:
+							break
+						ci.draw_string(_face(false, 0), Vector2(lx, rr.get_center().y + 9.0), l, HORIZONTAL_ALIGNMENT_LEFT, -1, 25,
+							Color(1, 1, 1, 0.88))
+						lx += _face(false, 0).get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, 25).x + 44.0
+					continue
 				var x := MARGIN
 				var k := 0
 				while x < width - MARGIN - 60.0:
@@ -943,7 +1144,7 @@ func draw(ci: CanvasItem, top: float, scroll: float, clip_y0: float, clip_y1: fl
 			"rule":
 				ci.draw_rect(rr, ink.lerp(bg, 0.86))
 			"label":
-				ci.draw_string(_face(serif, 2) if d.has("bold") else _face(false, 0), d["pos"] + Vector2(0.0, dy), String(d["text"]),
+				ci.draw_string(_face(serif, 2) if bool(d.get("bold", false)) else _face(false, 0), d["pos"] + Vector2(0.0, dy), String(d["text"]),
 					HORIZONTAL_ALIGNMENT_LEFT, -1, int(d["fs"]), d["col"])
 			"image":
 				_draw_image(ci, rr, d, textures)
@@ -966,6 +1167,11 @@ func draw(ci: CanvasItem, top: float, scroll: float, clip_y0: float, clip_y1: fl
 					rr.size.x, 24, Color.WHITE)
 			"dot":
 				ci.draw_circle(rr.get_center(), rr.size.x * 0.5, d["col"], true, -1.0, true)
+			"card":
+				ci.draw_rect(rr, Color.WHITE.lerp(bg, 0.5))
+				ci.draw_rect(rr, ink.lerp(bg, 0.82), false, 2.0)
+			"avatar":
+				_draw_avatar(ci, rr, int(d["seed"]))
 			"pager":
 				_draw_pager(ci, rr, int(d["pages"]))
 			"snap":
@@ -982,7 +1188,18 @@ func draw(ci: CanvasItem, top: float, scroll: float, clip_y0: float, clip_y1: fl
 					ci.draw_string(f, c + Vector2(-width * 0.5, 110.0), "Capture it, or import a screenshot, on the Pictures card.",
 						HORIZONTAL_ALIGNMENT_CENTER, width, 22, ink.lerp(bg, 0.55))
 			"foot":
+				if not placeholders:
+					# the footer runs to the screen's foot: a short page ends on it, never on blank page
+					rr.size.y = maxf(rr.size.y, clip_y1 - rr.position.y)
 				ci.draw_rect(rr, ink.lerp(bg, 0.93))
+				if not placeholders:
+					var fo := _face(false, 0)
+					var site := String(d.get("site", ""))
+					ci.draw_string(fo, rr.position + Vector2(MARGIN, 64.0), ("© %s" % site) if not site.is_empty() else "",
+						HORIZONTAL_ALIGNMENT_LEFT, -1, 24, ink.lerp(bg, 0.45))
+					ci.draw_string(fo, rr.position + Vector2(MARGIN, 108.0), "About  ·  Contact  ·  Privacy  ·  Terms",
+						HORIZONTAL_ALIGNMENT_LEFT, -1, 22, ink.lerp(bg, 0.55))
+					continue
 				for j in 3:
 					squiggle(ci, rr.position + Vector2(MARGIN, 40.0 + j * 34.0),
 						width * (0.3 - j * 0.06), 8.0, ink.lerp(bg, 0.7), _h("foot%d" % j))
@@ -1037,7 +1254,7 @@ func _draw_word(ci: CanvasItem, d: Dictionary, dy: float, hl: Dictionary) -> voi
 				gc = col.lerp(Color.from_hsv(hue, sat, 0.55), g)
 		_ts.font_draw_glyph(gl["rid"], ci.get_canvas_item(), fs, p + (gl["pos"] as Vector2), int(gl["index"]), gc)
 	if bool(d["link"]):
-		ci.draw_line(p + Vector2(0.0, fs * 0.16), p + Vector2(float(d["w"]), fs * 0.16), Color(col, 0.6), 2.0)
+		ci.draw_line(p + Vector2(0.0, fs * 0.16), p + Vector2(float(d.get("ul", d["w"])), fs * 0.16), Color(col, 0.6), 2.0)
 
 
 ## A word's shaped glyphs, `[{index, rid, pos, start}]` - the book's [method BookMedium._glyphs],

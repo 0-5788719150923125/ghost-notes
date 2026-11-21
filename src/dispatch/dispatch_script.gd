@@ -49,12 +49,13 @@ class_name DispatchScript
 ##                                     back down unhurried, its screen left lit until it locks itself half a minute on, to
 ##                                     come back up on the page it was left on. Each ```page fence
 ##                                     while it is up is a page, in the tablet medium's own markdown ([TabletScript]), its
-##                                     first line `url: address` or `search: words`. It is browsed as the tablet medium
+##                                     first line `url: address` or `search: words`, then any `nav: A | B` (the site's menu);
+##                                     set with no placeholders ([member TabletPage.placeholders]). It is browsed as the tablet medium
 ##                                     browses ([method browsing]): a page the one up links to is tapped, any other address
 ##                                     typed into the bar; a search is typed into the box of a search engine's page (a page
 ##                                     that is little but its name), else into the bar; the address of the page up again
 ##                                     is that page reloaded. Shown and never said; it follows the room's words, scrolling
-##                                     what is said into view, else easing down the page. `<!-- player -->` on a page is a
+##                                     what is read off it into view, else easing slowly down to where its writing ends. `<!-- player -->` on a page is a
 ##                                     video player. `<!-- said: words -->` on a line of a page, over a picture or a
 ##                                     paragraph: the page is brought there as the room says those words, and stays;
 ##                                     a page with one goes only where they say, its top until the first (what is said
@@ -1529,13 +1530,19 @@ static func fade_of(arg: String) -> Dictionary:
 	return out
 
 
-## A page fence's words: `{url, search, text}` - its first line `url: address` (or `search: words`, the results page at a
-## search engine's address), the rest the page in the tablet medium's markdown.
+## A page fence's words: `{url, search, nav, text}` - its first line `url: address` (or `search: words`, the results page at
+## a search engine's address), then any `nav: Forums | Members | Rules` (the site's menu, [TabletScript]'s `nav`), the rest
+## the page in the tablet medium's markdown.
 static func page_of(text: String) -> Dictionary:
 	var lines := text.strip_edges().split("\n")
 	var head := String(lines[0]).strip_edges() if not lines.is_empty() else ""
-	var body := "\n".join(lines.slice(1)).strip_edges()
-	var out := {"url": "", "search": "", "text": body}
+	var from := 1
+	var nav := ""
+	while from < lines.size() and String(lines[from]).strip_edges().to_lower().begins_with("nav:"):
+		nav = String(lines[from]).strip_edges().substr(4).strip_edges()
+		from += 1
+	var body := "\n".join(lines.slice(from)).strip_edges()
+	var out := {"url": "", "search": "", "nav": nav, "text": body}
 	if head.to_lower().begins_with("url:"):
 		out["url"] = head.substr(4).strip_edges()
 	elif head.to_lower().begins_with("search:"):
@@ -1588,6 +1595,8 @@ static func browsing(all: Array) -> Dictionary:
 				blk["said"] = said_in(text)
 				text = _rx(SAID).sub(text, "", true)
 				src.append("<!-- search: %s -->" % pg["search"] if not String(pg["search"]).is_empty() else "<!-- url: %s -->" % pg["url"])
+				if not String(pg["nav"]).is_empty():
+					src.append("<!-- nav: %s -->" % pg["nav"])
 				src.append("")
 				src.append(text)
 				src.append("")

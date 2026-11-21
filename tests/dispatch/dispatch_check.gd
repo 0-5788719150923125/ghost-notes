@@ -30,7 +30,8 @@ extends SceneTree
 ##   it was, dimmed for the last seconds and locked dark half a minute on (the control: before it is woken it is dark); on
 ##   every desk it is carried clear of what stands under its way by each thing's outline, on most no higher than the hand
 ##   holds it (the control: straight and at its least height, something is in its way on some desk); an address typed into its bar, a
-##   link on the page tapped; a page following the words said on it, else easing down, the words read off it lit as said
+##   link on the page tapped; a page following the phrases read off it (control: a lone word said that is on it moves
+##   nothing), else easing down, the words read off it lit as said and never captioned (control: the room's own words)
 ##   (control: a page nothing is read off); its player dark until the desk is played live into it;
 ## - the tablet browsed (tests/fixtures/dispatch_browsing.md): a link at a page's foot brought into view and tapped; back by
 ##   its arrow to the page before, scrolled where it was left (the control: a page come up is at its top), and a link tapped
@@ -490,6 +491,17 @@ func _run() -> void:
 	# captions
 	md._follower.extend(words)
 	_ok(not md._captioned(mid, mid, 0.0) and md._captioned(hello, hello, 0.0), "a typed word is captioned, or a spoken one is not")
+	# a word read off the tablet's page as it lights there is not captioned (the control: the room's own words after it are)
+	var sp_all: PackedStringArray = md._parsed["spoken"]
+	var read_w := -1
+	var own_w := -1
+	for k in sp_all.size() - 1:
+		if read_w < 0 and sp_all[k] == "three" and sp_all[k + 1] == "nights":
+			read_w = md._follower.map.find(k + 1)
+		if own_w < 0 and sp_all[k] == "a" and sp_all[k + 1] == "word":
+			own_w = md._follower.map.find(k + 1)
+	_ok(read_w >= 0 and own_w >= 0 and not md._captioned(read_w, read_w, 0.0) and md._captioned(own_w, own_w, 0.0),
+		"a word read off the tablet as it lights is not captioned, the room's own words are (%d, %d)" % [read_w, own_w])
 	# live reading
 	var live := DispatchMedium.new()
 	live.feed = md.feed
@@ -812,6 +824,22 @@ func _browsing(st: SubViewport, feed: ShowFeed) -> void:
 	var left := md._reach_scroll(int(at[0]), int(at[1]))
 	_ok(words_tap.get("page") == forum and words_tap.has("tap") and left > view * 0.5 and is_equal_approx(float(words_tap["scroll"]), snappedf(left, 0.5)),
 		"a link at the page's foot is brought into view and tapped there (scrolled %.0f px)" % left)
+	# a lone word said that is on the page moves nothing; a phrase read off one does (the control: the words page, read)
+	var lone: Array = md._page_follow(int(at[0]), view, 99999.0)["marks"]
+	var on_page := false
+	for w in (md._tablet_page(int(acts[at[0]]["page"]))["words"] as Array):
+		on_page = on_page or String((w as Array)[0]) == "books"
+	var read_marks: Array = md._page_follow(int(at[1]), view, 99999.0)["marks"]
+	var opens := -1
+	var spk: PackedStringArray = md._parsed["spoken"]
+	for k in spk.size() - 3:
+		if spk[k] == "it" and spk[k + 1] == "was" and spk[k + 2] == "a" and spk[k + 3] == "white":
+			opens = k
+	var lit_si := (md._page_follow(int(at[1]), view, 99999.0)["lit"] as Array).map(func(p: Array) -> int: return int(p[1]))
+	_ok(opens >= 0 and lit_si.has(opens) and lit_si.has(opens + 3),
+		"a passage read off a page is lit from its first word, the short ones before the phrase it was found by (%s)" % str(lit_si.has(opens)))
+	_ok(on_page and lone.is_empty() and not read_marks.is_empty(),
+		"a lone word said that is on the page never moves it, a phrase read off a page does (%d, %d marks)" % [lone.size(), read_marks.size()])
 	var back_tap: Dictionary = face.call(float(times.call(2)["tap"]) + 0.05)
 	var back_up: Dictionary = up.call(2)
 	_ok(back_tap.get("tap") == TabletChrome.back_at() and back_tap.get("page") == up.call(1)["page"] and bool(back_tap["can_back"])

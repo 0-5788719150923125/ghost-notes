@@ -15,6 +15,12 @@ extends SceneTree
 ## A live chat ([constant TabletScript.CHAT]) is read whole and never aloud (control: the words after it are read); its
 ## page is built to the screen with the message box at its foot; the stream is a pure function of the time (the same
 ## twice), comes about as often as asked, and never shows a message before its time.
+##
+## A forum ([method TabletPage._post_begin]): each post's blocks are its own until a heading (control: the paragraph
+## after the heading is no post's), its quote a block, its body set beside the author's column inside its card; a
+## board's counts are centered in their column and a cell's detail after `<br>` set smaller; the site's `nav` labels its
+## menu row and a later page of the site keeps it; a `pager` mark sets a pager of its number of pages. Without placeholders a page draws no squiggles and ends where its
+## writing does (control: the same page with them is padded with squiggled stories).
 
 var _fail := 0
 
@@ -85,6 +91,7 @@ func _initialize() -> void:
 	_check_table()
 	_check_notify()
 	_check_chat()
+	_check_forum()
 	print("tablet_check: %s" % ("PASS" if _fail == 0 else "FAIL (%d)" % _fail))
 	quit(1 if _fail > 0 else 0)
 
@@ -415,6 +422,85 @@ func _check_chat() -> void:
 	var span := float(over[0]["at"]) - float(over.back()["at"])
 	var rate := float(over.size() - 1) / maxf(span, 0.001)
 	_ok(rate > 2.0 and rate < 4.0, "messages come about as often as asked (3 a second): %.2f" % rate)
+
+
+func _check_forum() -> void:
+	var src := "<!-- url: board.test -->\n<!-- nav: Forums | Members -->\n\n# Board\n\n" \
+		+ "<!-- pager: 245 -->\n\n| Board | Topics |\n|---|---|\n| [Street](board.test/f/street)<br>Strangers who perform | 4,112 |\n| Cars<br>On the road | 906 |\n\n" \
+		+ "<!-- filler: 2 -->\n\n<!-- url: board.test/t/one -->\n\n# One\n\n<!-- post: ann | Member · 12 posts | Tue -->\n\nFirst said.\n\n" \
+		+ "<!-- post: bo | Senior | Wed -->\n\n> **ann wrote:** First said.\n\nSecond said.\n\n## After\n\nNobody's post.\n"
+	var d := TabletScript.parse(src)
+	var p1: Dictionary = d["pages"][1]
+	var kinds := []
+	for b in p1["blocks"]:
+		var bd: Dictionary = b
+		kinds.append("%s:%d" % [bd["kind"], int(bd.get("post", 0))])
+	_ok(kinds == ["heading:0", "post:0", "para:1", "post:0", "quote:2", "para:2", "heading:0", "para:0"],
+		"a post's blocks are its own until a heading, its quote a block (control: the paragraph after the heading): %s" % str(kinds))
+	_ok((d["pages"][0]["nav"] as PackedStringArray) == PackedStringArray(["Forums", "Members"]), "a page's nav is read")
+	var detail := -1
+	for wi in d["words"].size():
+		if String(d["words"][wi]["text"]) == "Strangers":
+			detail = wi
+	_ok(detail >= 0 and bool(d["words"][detail].get("brk", false)), "a word after <br> carries the break")
+	_ok(String(d["speakable"]).contains("Street. Strangers who perform"), "a break is read as a sentence's end")
+	var tp := TabletPage.new()
+	tp.placeholders = false
+	tp.build(d, 1, 1200.0, 1400.0 * 2.4, 1400.0)
+	var card := Rect2()
+	var avatars := 0
+	var squiggles := 0
+	for it in tp.items:
+		var k := String((it as Dictionary)["kind"])
+		if k == "card" and card.size == Vector2.ZERO:
+			card = (it as Dictionary)["rect"]
+		avatars += 1 if k == "avatar" else 0
+		squiggles += 1 if k in ["squiggle", "image"] else 0
+	var first := -1
+	var nobody := -1
+	for wi in d["words"].size():
+		if int(d["words"][wi]["page"]) == 1 and String(d["words"][wi]["text"]) == "First" and first < 0:
+			first = wi
+		if String(d["words"][wi]["text"]) == "Nobody's":
+			nobody = wi
+	var fr: Rect2 = tp.word_rect.get(first, Rect2())
+	var nr: Rect2 = tp.word_rect.get(nobody, Rect2())
+	_ok(avatars == 2 and card.has_point(fr.get_center()) and fr.position.x > card.position.x + TabletPage.POST_SIDE
+		and not card.has_point(nr.get_center()) and nr.position.x < fr.position.x,
+		"a post's body is set in its card beside the author's column (control: the words after the heading are on the page's own column)")
+	_ok(squiggles == 0 and tp.height < 1400.0 * 2.4, "without placeholders a page draws none and ends where its writing does (%d px)" % int(tp.height))
+	var t0 := TabletPage.new()
+	t0.placeholders = false
+	t0.build(d, 0, 1200.0, 1400.0 * 2.4, 1400.0)
+	var pagers := t0.items.filter(func(it: Dictionary) -> bool: return String(it["kind"]) == "pager")
+	_ok(pagers.size() == 1 and int(pagers[0]["pages"]) == 245, "a pager mark sets Back, the pages to its number, and Next")
+	var navs := t0.items.filter(func(it: Dictionary) -> bool: return String(it["kind"]) == "nav")
+	var t1 := TabletPage.new()
+	t1.placeholders = false
+	t1.build(d, 1, 1200.0, 1400.0 * 2.4, 1400.0)
+	var navs1 := t1.items.filter(func(it: Dictionary) -> bool: return String(it["kind"]) == "nav")
+	_ok(navs.size() == 1 and (navs[0]["labels"] as PackedStringArray).size() == 2 and navs1.size() == 1 and (navs1[0]["labels"] as PackedStringArray).size() == 2,
+		"the site's menu row is labeled by its nav, and a later page of the site keeps it")
+	var count_r := Rect2()
+	var head_r := Rect2()
+	var small := 0
+	for it in t0.items:
+		var dd: Dictionary = it
+		if String(dd["kind"]) != "word":
+			continue
+		var txt := String(d["words"][int(dd["wi"])]["text"])
+		if txt == "906":
+			count_r = dd["rect"]
+		if txt == "Topics":
+			head_r = dd["rect"]
+		if txt == "Strangers":
+			small = int(dd["fs"])
+	_ok(absf(count_r.get_center().x - head_r.get_center().x) < 40.0 and small == TabletPage.DETAIL_FS,
+		"a column of counts is centered under its header, and a cell's detail set smaller (%.0f vs %.0f, %d px)" % [count_r.get_center().x, head_r.get_center().x, small])
+	var padded := TabletPage.new()
+	padded.build(d, 0, 1200.0, 1400.0 * 2.4, 1400.0)
+	var pad_squiggles := padded.items.filter(func(it: Dictionary) -> bool: return String(it["kind"]) == "squiggle").size()
+	_ok(pad_squiggles > 0 and padded.height >= 1400.0 * 2.4, "the control: with placeholders the same page is padded with squiggled stories")
 
 
 func _check_table() -> void:

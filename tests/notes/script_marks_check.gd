@@ -206,6 +206,27 @@ func _parsers_agree() -> void:
 					if b["kind"] == "filler":
 						n += int(b["n"])
 				_ok(n == int(fill), "a filler mark does not put %s stories in" % fill)
+			"post":
+				var d := TabletScript.parse("<!-- url: a.test -->\n\n# Thread\n\n%s\n\nIts body.\n" % ex)
+				var bl: Array = d["pages"][0]["blocks"]
+				_ok(bl.size() == 3 and String(bl[1]["kind"]) == "post" and String(bl[1]["who"]) == "nightlog"
+					and int(bl[2].get("post", 0)) == int(bl[1]["n"]), "a post mark makes no post, or its body is not its own")
+				_ok(not String(d["speakable"]).contains("nightlog"), "a post's author is read aloud")
+			"pager":
+				var d := TabletScript.parse("<!-- url: a.test -->\n\n# Board\n\n%s\n" % ex)
+				var tp := TabletPage.new()
+				tp.build(d, 0, 1200.0, 3000.0)
+				var pages := -1
+				for it in tp.items:
+					if String((it as Dictionary)["kind"]) == "pager":
+						pages = int((it as Dictionary)["pages"])
+				_ok(pages == int(fill), "a pager mark sets no pager of %s pages (%d)" % [fill, pages])
+			"nav":
+				var d := TabletScript.parse("<!-- url: a.test -->\n%s\n\n# Site\n" % ex)
+				_ok((d["pages"][0].get("nav", PackedStringArray()) as PackedStringArray).size() == 4, "a nav mark names no menu")
+				var desk := DispatchScript.parse("<!-- speaker: Control -->\n\n<!-- tablet -->\n\n```page\nurl: a.test\nnav: %s\n\n# Site\n```\n\n<!-- /tablet -->\n\nDone.\n" % fill)
+				_ok((desk["tablet"]["pages"][0].get("nav", PackedStringArray()) as PackedStringArray).size() == 4,
+					"a page fence's nav: line names no menu on a dispatch desk's tablet")
 			"timestamp":
 				var t := Manuscript.mark_timestamp_pauses(ex + "The subject was moved.")
 				_ok(Manuscript.hesitations(t).size() == 1, "a log-entry time gets no rest")

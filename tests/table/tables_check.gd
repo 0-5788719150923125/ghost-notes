@@ -21,6 +21,10 @@ extends SceneTree
 ##   are taken away; the episode lists the step only once the table lays the painting where its depth is read, a new cloth clears
 ##   it and a new table does not. Fine grain whose map leaves out the painting's broad color is still matched, against unrelated
 ##   grain and a move beyond the search, which are refused.
+## - A top's edge is shaded as it is cut: on a bevel or a round-over every edge vertex faces outward and up, never down (the
+##   control: the same profile with its slope taken the other way faces down); a square corner is mitered - two vertices at it, each
+##   shaded by its own side, drawn in as far from both sides as the sides are (the control: the corner's own diagonal normal draws it
+##   in less).
 ## - The light reads what lies uppermost: a pale runner over a dark cloth is pale under the runner and dark beside it; past the
 ##   top, the floor.
 
@@ -35,6 +39,7 @@ func _initialize() -> void:
 	_drape()
 	_lightness()
 	_height_map()
+	_edge_shading()
 	if _fails.is_empty():
 		print("tables_check: ALL OK")
 		quit(0)
@@ -262,6 +267,51 @@ func _lightness() -> void:
 
 
 ## A surface photographed from above, made: boards with a grain and knots, from [param seed].
+func _edge_shading() -> void:
+	for edge in ["bevel", "eased", "bullnose"]:
+		var spec := Tables.sanitize({"shape": "rect", "size": [120.0, 60.0], "thickness": 4.5, "edge": edge, "material": "x"}, [],
+			{"x": Props.sanitize_material({"kind": "wood"}, "#2a1810")}, [])
+		var o := Tables.top_outline(spec["top"])
+		var arr := Tables._top_mesh(o, edge, 0.045).surface_get_arrays(0)
+		var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var ns: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
+		var down := 0
+		var up := 0
+		for i in vs.size():
+			# the edge's upper part, where every profile here steps outward as it goes down
+			if vs[i].y < -0.0005 and vs[i].y > -0.008:
+				if ns[i].y < -0.05:
+					down += 1
+				elif ns[i].y > 0.05:
+					up += 1
+		_ok(down == 0 and up > 0, "a %s edge's upper part faces up and out, never down (%d up, %d down)" % [edge, up, down])
+	# the control: the slope taken the other way faces it down
+	var th := 0.045
+	var t := 0.1
+	var slope := (Tables.profile_inset("bevel", t + 0.01, th) - Tables.profile_inset("bevel", t - 0.01, th)) / (0.02 * th)
+	_ok((Vector3(1, 0, 0) + Vector3.UP * slope).normalized().y < 0.0, "the control: a bevel's slope added, not taken, faces it down")
+	var sq := Tables.sanitize({"shape": "rect", "size": [120.0, 60.0], "thickness": 4.5, "edge": "eased", "material": "x"}, [],
+		{"x": Props.sanitize_material({"kind": "wood"}, "#2a1810")}, [])
+	var ro := Tables.top_outline(sq["top"])
+	var m := Tables._mitered(ro, Tables.edge_points(ro))
+	var pts: PackedVector2Array = m["points"]
+	var h: Vector2 = ro["half"]
+	var at := []
+	for i in pts.size():
+		if pts[i].distance_to(Vector2(h.x, h.y)) < 1e-4:
+			at.append(i)
+	var inset := 0.008
+	var drawn := Vector2.ZERO
+	var sides := []
+	for i in at:
+		drawn = pts[i] - (m["offsets"] as PackedVector2Array)[i] * inset
+		sides.append((m["normals"] as PackedVector2Array)[i])
+	var diag := Vector2(h.x, h.y) - Tables._grad_local(ro, Vector2(h.x, h.y)) * inset
+	_ok(at.size() == 2 and sides.has(Vector2(1, 0)) and sides.has(Vector2(0, 1)) and drawn.distance_to(Vector2(h.x - inset, h.y - inset)) < 1e-4
+		and diag.distance_to(Vector2(h.x - inset, h.y - inset)) > 0.002,
+		"a square corner is mitered: two vertices, each its side's normal, drawn in %s (the control, its diagonal: %s)" % [str(drawn), str(diag)])
+
+
 func _boards(seed: int, w: int, h: int) -> Image:
 	var img := Image.create(w, h, false, Image.FORMAT_RGB8)
 	var n := FastNoiseLite.new()

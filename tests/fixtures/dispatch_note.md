@@ -233,6 +233,22 @@ url: forum.board/t/headlights
 Brighting, three nights running, and a cough in every line.
 
 <!-- player -->
+
+<!-- post: nightlog | Member · 1,204 posts | Tue, 22:14 -->
+
+Same height, same distance, three nights running. They turn when I turn, and they never pass.
+
+<!-- post: quietroad | Member · 412 posts | Tue, 22:31 -->
+
+Log the plate if you can read it. If you can't, log the color and the hour.
+
+<!-- post: fourteenth_floor | Senior member · 3,881 posts | Tue, 22:40 -->
+
+Mine stopped after I changed my route. Then the coughing started.
+
+<!-- post: m_in_the_mirror | Member · 977 posts | Tue, 22:52 -->
+
+Same here, every store, every line, just as I reach the front.
 ```
 
 <!-- live: tablet -->

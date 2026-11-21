@@ -11,7 +11,7 @@ An entry does not implement its mark. The parsers of record stay where they are 
 
 A table brief is not a script, and has marks of its own: a show's document is the brief its agents work from, never read aloud, so a mark in it does something only where the code reads it out of the brief or an agent is told to honor it. Those are offered ("table" in `modes`), each saying what it does there (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its deck, a macro reads as its default and a note to self is taken out before any agent sees the brief (`TablePrompts.brief`), and a hesitation, a delivery or a stressed word stands in a line the brief gives the host word for word (rules/table/reader.yaml, `spoken`). The marks of a page or a tablet (pictures, scene lines, web pages) and the inline pronunciation are not offered: the table is the only medium there, and a reader's passage keeps no bracket (`TableProducer.clean_spoken`).
 
-Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (84 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
+Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (87 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
 
 ## Voices
 
@@ -80,7 +80,10 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | Landscape | `<!-- landscape -->` | Generative | Tablet: turn to landscape. The camera turns; the tablet stays where it lies. |
 | Portrait | `<!-- portrait -->` | Generative | Tablet: turn back to portrait. |
 | Skip | `<!-- skip -->` | Generative | Tablet: shown, not read. Mid-paragraph, the rest of it from the end of that sentence; on its own line, the whole paragraph below. |
-| Placeholder stories | `<!-- filler: 3 -->` | Generative | Tablet: this many placeholder stories - squiggles where writing would be - on the page here. |
+| Placeholder stories | `<!-- filler: 3 -->` | Generative | Tablet: this many placeholder stories - squiggles where writing would be - on the page here. The dispatch desk's tablet draws no placeholders. |
+| Forum post | `<!-- post: nightlog \| Member · 1,204 posts \| Tue, 22:14 -->` | Generative | Tablet: a forum post on the page - who wrote it, what the forum says of them (parted by ·), and when. What follows is its body, until the next post, a heading, a rule or the page's end: set beside the author's column with a drawn avatar. A > line in it is a quote. |
+| Site menu | `<!-- nav: Forums \| New posts \| Members \| Rules -->` | Generative | Tablet: after a page's url, the site's menu in the row under its name, parted by \|; later pages of the site keep it. On a dispatch page, a nav: line after its url: line. |
+| Pager | `<!-- pager: 245 -->` | Generative | Tablet: Back (grayed), the page numbers up to this one with the first marked, and Next, here on the page: the first page of a long listing, as a forum board's threads are. |
 
 ## The deck
 
@@ -150,7 +153,7 @@ url: notalone.board
 # Not Alone
 
 A forum for people who are being followed.
-```` | Generative | Dispatch desk: a web page on the tablet while it is up, in the tablet's own markdown, its first line url: (or search:). Browsed as the tablet browses: a page the one up links to is tapped, any other address typed into the bar; a search is typed into a search engine's own box, else into the bar; the address of the page up again reloads it. Shown and never said: it scrolls to what the room says that is on it, else eases down the page. |
+```` | Generative | Dispatch desk: a web page on the tablet while it is up, in the tablet's own markdown, its first line url: (or search:), then any nav: line (the site's menu). Browsed as the tablet browses: a page the one up links to is tapped, any other address typed into the bar; a search is typed into a search engine's own box, else into the bar; the address of the page up again reloads it. Shown and never said: it scrolls to what the room reads off it, else eases slowly down, never past its writing; nothing nobody wrote is drawn. A forum is written with post marks and > quotes. |
 | Player | `<!-- player -->` | Generative | Dispatch desk: on a tablet's page, a video player at that point, dark until live: tablet plays the desk into it. |
 | Replay | `<!-- replay: tablet \| The night begins. -->` | Generative | Dispatch desk: the room's own earlier words said again through the tablet's small speaker, the voice's take of them as the video's soundtrack, while the room waits. |
 | Redacted | `<!-- redact: DOE, JANE -->` | Generative | Dispatch desk: on a line of a terminal block, these words are on the glass as written but hidden over the picture, as an editor hides a name in a video: a box that follows them, cracked into large flat shards, each the average color of what lies under it. Typed in a command, the box goes up whole at the first key. Not on a type: line, which is said aloud. |
