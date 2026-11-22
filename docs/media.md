@@ -205,7 +205,7 @@ The Camera card's rows (`CameraFollow.FIELDS`), each at its default where a form
 | --- | --- | --- |
 | `ease_in` Ease in (s) | `0.0` | How long a move takes to get going: every turn starts slowly over about this many seconds. 0 starts at once, on the spring alone. |
 | `settle` Settle (s) | `1.6` | How slowly it settles on what it turns to: the spring's time in seconds. A short look is mostly there in about four of these. |
-| `long` Long looks (x) | `2.0` | How many times quicker a long look runs, its end included: 2 crosses the desk in about half the time. 1 takes a long look at a short one's pace. |
+| `long` Long looks (x) | `2.0` | How many times quicker a long look runs, its end included: 2 crosses the desk in about half the time. 1 takes a long look at a short one's pace; under 1, slower. |
 | `long_from` Long from (°) | `20.0` | A look of this many degrees or less runs at its own pace; past it, quicker and quicker. |
 | `long_full` Fully long (°) | `80.0` | A look of this many degrees or more is quickened by the whole of Long looks. |
 | `top_speed` Top speed (°/s) | `45.0` | The fastest it ever turns, in degrees a second: a move that would go faster is eased under it. |

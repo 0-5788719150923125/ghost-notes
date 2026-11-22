@@ -21,17 +21,17 @@ class_name CameraFollow
 ## What can be set (the Camera card's rows, [CameraCard]); a format's row in [constant Medium.REGISTRY] (`follow`) says its
 ## own, and where it says none these defaults stand.
 const FIELDS := {
-	"ease_in": {"label": "Ease in (s)", "type": "float", "min": 0.0, "max": 4.0, "step": 0.05, "default": 0.0,
+	"ease_in": {"label": "Ease in (s)", "type": "float", "min": 0.0, "max": 20.0, "step": 0.05, "default": 0.0,
 		"blurb": "How long a move takes to get going: every turn starts slowly over about this many seconds. 0 starts at once, on the spring alone."},
-	"settle": {"label": "Settle (s)", "type": "float", "min": 0.2, "max": 6.0, "step": 0.05, "default": 1.6,
+	"settle": {"label": "Settle (s)", "type": "float", "min": 0.1, "max": 30.0, "step": 0.05, "default": 1.6,
 		"blurb": "How slowly it settles on what it turns to: the spring's time in seconds. A short look is mostly there in about four of these."},
-	"long": {"label": "Long looks (x)", "type": "float", "min": 1.0, "max": 4.0, "step": 0.05, "default": 2.0,
-		"blurb": "How many times quicker a long look runs, its end included: 2 crosses the desk in about half the time. 1 takes a long look at a short one's pace."},
-	"long_from": {"label": "Long from (°)", "type": "float", "min": 0.0, "max": 120.0, "step": 1.0, "default": 20.0,
+	"long": {"label": "Long looks (x)", "type": "float", "min": 0.25, "max": 8.0, "step": 0.05, "default": 2.0,
+		"blurb": "How many times quicker a long look runs, its end included: 2 crosses the desk in about half the time. 1 takes a long look at a short one's pace; under 1, slower."},
+	"long_from": {"label": "Long from (°)", "type": "float", "min": 0.0, "max": 180.0, "step": 1.0, "default": 20.0,
 		"blurb": "A look of this many degrees or less runs at its own pace; past it, quicker and quicker."},
 	"long_full": {"label": "Fully long (°)", "type": "float", "min": 1.0, "max": 180.0, "step": 1.0, "default": 80.0,
 		"blurb": "A look of this many degrees or more is quickened by the whole of Long looks."},
-	"top_speed": {"label": "Top speed (°/s)", "type": "float", "min": 5.0, "max": 360.0, "step": 1.0, "default": 45.0,
+	"top_speed": {"label": "Top speed (°/s)", "type": "float", "min": 1.0, "max": 720.0, "step": 1.0, "default": 45.0,
 		"blurb": "The fastest it ever turns, in degrees a second: a move that would go faster is eased under it."},
 }
 ## Steps a second the springs are worked at, at the least; more where a quick spring would need them.
@@ -44,6 +44,8 @@ const REST_SPEED := 2.0
 const SCALE_EASE := 0.3
 ## A look has arrived ([method arrival]) within this share of its way, or within [constant REST].
 const ARRIVED := 0.1
+## The longest a look is followed to work out its arrival (seconds): past it, it is said to arrive then.
+const LONGEST := 300.0
 
 var _slow := PackedFloat32Array([1.0])
 var _look := 0
@@ -174,7 +176,7 @@ func arrival(deg: float) -> float:
 	var t := 0.0
 	var near := maxf(deg * ARRIVED, REST)
 	var measure := func() -> Vector2: return Vector2(absf(deg - float(probe._c[0])), absf(float(probe._v[0])))
-	while t < 60.0 and absf(deg - float(probe._c[0])) > near:
+	while t < LONGEST and absf(deg - float(probe._c[0])) > near:
 		probe._advance([deg], h, 1.0, measure)
 		t += h
 	if _arrivals.size() > 64:
