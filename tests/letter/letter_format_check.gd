@@ -290,7 +290,7 @@ func _steps() -> void:
 	ed._youtube._write_tags.button_pressed = true
 	_tick_steps(card, up, pipe)
 	var feed = up.feed()
-	_check(step.shown == feed and not pipe.row(step.key, "YouTube").is_empty() and pipe.row(step.key, "Letter").is_empty(),
+	_check(step.shown == feed and not pipe.row(step.key, "Upload").is_empty() and pipe.row(step.key, "Letter").is_empty(),
 		"ticked: its row is the YouTube section's, the note its episode, never the Letter's")
 	var names: Array = pipe.names()
 	_check(names.find("Ink") < names.find("Tags"), "the words' own steps stand above what is made from them (%s)" % str(names))

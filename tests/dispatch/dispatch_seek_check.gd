@@ -13,7 +13,10 @@ extends SceneTree
 ##   reading comes within [constant DispatchMedium.PLAN_AHEAD] of what it knows (the control: a gate's and a render's
 ##   desk makes it at once);
 ## - the same picture files handed again stay up as they are (the controls: another file, and the same one written
-##   again, are decoded anew).
+##   again, are decoded anew);
+## - a reading started part way under a titled opening is sharp, untitled and up from its first frame, before any of its
+##   words are heard and once they are, and with its start words not found in the note (the control: the same desk read from
+##   the top is in its intro, blurred under the name).
 ##
 ## Run: godot --headless --path . --script tests/dispatch/dispatch_seek_check.gd
 
@@ -140,6 +143,35 @@ func _run() -> void:
 	_ok(same and other != null and other != up and again != null and again != other,
 		"the same picture files handed again stay up (kept %s; the controls: another file decoded %s, the same one written again decoded %s)"
 			% [str(same), str(other != null and other != up), str(again != null and again != other)])
+	# a scrub has no intro: the dark note under a title, started part way
+	var dark := "<!-- fade: from-black, 22:40 -->\n\n" + BODY
+	var dparsed := DispatchScript.parse(dark)
+	var dwords := DispatchScript.rehearsal(dparsed, 0.32)
+	var dspoken: PackedStringArray = dparsed["spoken"]
+	md.feed.opening = "title"
+	var looks: Array = []
+	for start in [dspoken.slice(k, k + 8), PackedStringArray(["words", "the", "note", "never", "says"])]:
+		md.load_note(dark, {"seed": 3}, start, k, since)
+		md._now = 0.2
+		md.take_words([])
+		looks.append(_intro_look(md))
+		var dlater: Array = []
+		for w in dwords.slice(k):
+			var d: Dictionary = (w as Dictionary).duplicate()
+			d["t0"] = float(d["t0"]) - since + 0.3
+			d["t1"] = float(d["t1"]) - since + 0.3
+			dlater.append(d)
+		md.take_words(dlater.slice(0, 4))
+		md._now = 1.5
+		looks.append(_intro_look(md))
+	md.load_note(dark, {"seed": 3})
+	md._now = 1.5
+	md.take_words([])
+	var top := _intro_look(md)
+	_ok(looks.all(func(l: Vector3) -> bool: return l == Vector3(1.0, 0.0, 0.0)) and top.x < 0.5 and top.y > 0.5,
+		"a scrub opens sharp, untitled and up, its words heard or not and its start found or not (pull, title, black: %s; the control, from the top: %s)"
+			% [str(looks), str(top)])
+	md.feed.opening = Openings.DEFAULT
 	md.queue_free()
 	for f in [a_path, b_path]:
 		DirAccess.remove_absolute(f)
@@ -157,6 +189,13 @@ func _picture(path: String, color: Color) -> void:
 	var img := Image.create(8, 8, false, Image.FORMAT_RGB8)
 	img.fill(color)
 	img.save_png(path)
+
+
+## The desk's intro look now: its focus pull (1 sharp), the name's alpha and how black it is.
+func _intro_look(md: DispatchMedium) -> Vector3:
+	var op := md._opening()
+	var style := ShowOpening.style_of(md.feed.opening, md._midway)
+	return Vector3(md._pull(md._now, op), ShowOpening.title_alpha(style, md._now, op, md._built_n > 0), md.fade_at(md._now))
 
 
 func _ok(cond: bool, what: String) -> void:

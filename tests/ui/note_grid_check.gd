@@ -117,7 +117,7 @@ func _check_tiles(notes: Dictionary) -> void:
 		"a heading that only says the title again is left out (%s)" % JSON.stringify(table._words.text if table != null else ""))
 	_ok(words.begins_with("To Pen"), "THE CONTROL: a heading that says something else stays")
 	var chips := letter._chips.get_children().map(func(c: Node) -> String: return (c as Label).text) if letter != null else []
-	_ok(chips == ["Voice", "Medium", "YouTube"], "a chip for each component, in the order their cards stand (%s)" % str(chips))
+	_ok(chips == ["Voice", "Medium", "Upload"], "a chip for each component, in the order their cards stand (%s)" % str(chips))
 	var plain := g.tile_of(notes["plain"])
 	_ok(plain != null and plain._chips.get_child_count() == 0, "a note of words alone has no chips")
 	_ok(plain != null and plain.color == Card.PAPER and letter.color != Card.PAPER, "...and is the paper's gray, where the letter is not")

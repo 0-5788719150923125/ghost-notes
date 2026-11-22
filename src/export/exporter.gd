@@ -12,15 +12,17 @@ class_name Exporter
 ##   3. Transcode (ffmpeg): the AVI is encoded to the chosen MP4 (H.264 + AAC) while it is written; on Linux what has been
 ##      encoded is given back as it goes and the scratch leaves the folder (see [member _live_encode]). Godot writes only
 ##      AVI, whose 32-bit RIFF sizes corrupt past ~4 GB; the MP4 uses 64-bit offsets and is far smaller.
-##   4. Upload (only when the note has a YouTube card with "Upload after export" ticked): the saved MP4 goes up as the card
-##      describes it, see [member upload_provider], [YouTubeCard] and youtube.gd. The sign-in it needs is settled as the
-##      export starts, beside the render. The menu says nothing of YouTube: the card holds the choice, the Google client,
-##      the sign-in and a waiting upload's resume.
+##   4. Upload (only when the note has an Upload card with "Upload after export" ticked): the saved MP4 goes up as the card
+##      describes it, see [member upload_provider], [YouTubeCard], youtube.gd and tiktok.gd - to YouTube, then to TikTok,
+##      as its targets say. YouTube's sign-in is settled as the export starts, beside the render; TikTok's is the card's,
+##      and an export it is not ready for is refused before it renders. The menu says nothing of either: the card holds the
+##      choice, the clients, the sign-ins and a waiting upload's resume.
 ##
 ## Status ("Analyzing… / Rendering… / Finalizing… / Saved ✓") shows in the main window.
 
 const Bake := preload("res://src/audio/bake.gd")
 const YouTube := preload("res://src/export/youtube.gd")
+const TikTok := preload("res://src/export/tiktok.gd")
 ## What the ⤓ says on hover once there is something to render.
 const READY_TIP := "Render the note's video to a file, in the background"
 
@@ -65,7 +67,7 @@ const STATUS_W := 588.0
 const SIGN_BLOCKED := ("\"Access blocked\" or \"has not completed the Google verification process\"? "
 	+ "While the Google Cloud project %s is in Testing, only its own test users can sign in - another "
 	+ "project's list does not count. Add your Google account as a test user of that project (Google "
-	+ "Cloud, Google Auth Platform, Audience) and open the page again, or pick another Client on the YouTube card.")
+	+ "Cloud, Google Auth Platform, Audience) and open the page again, or pick another Client on the Upload card.")
 const SIGN_WAIT := ("Your browser should be showing Google's sign-in. Choose the Google account that "
 	+ "owns the channel - and the channel, when Google asks which - and allow Ghost Notes to upload "
 	+ "videos. This window closes by itself.\n\n"
@@ -128,6 +130,10 @@ var _stall_t := 0.0      # seconds since the render last showed ANY sign of life
 var _stall_frac := -1.0  # high-water fractional progress the watchdog has seen
 var _stall_size := 0     # high-water size of the movie file being written
 var _yt: YouTube               # the sign-in and the upload
+var _tk: Node                  # TikTok's sign-in and upload (tiktok.gd)
+var _tiktok_next := false      # a TikTok upload is queued for this export, to go once YouTube's is done
+var _tiktok_said := ""         # why this export's TikTok upload could not be queued
+var _tiktok_before := ""       # what the line said of the rest of the export, kept while TikTok's goes
 var _client_dialog: FileDialog # the Google client file, asked for once
 var _client_then := Callable() # what an imported client file leads on to
 var _upload_this := false      # this export goes to YouTube once it is saved
@@ -232,9 +238,9 @@ func _notification(what: int) -> void:
 		return
 	if _state == "idle" or _state == "done":
 		return
-	if _state in ["preparing", "upload_wait", "uploading"]:
+	if _state in ["preparing", "upload_wait", "uploading", "tiktok"]:
 		# the video is saved and the upload waits in pending.json: nothing to stop or clear
-		print("ghost: YouTube upload interrupted - ghost is closing; resume it from a note's YouTube card")
+		print("ghost: upload interrupted - ghost is closing; resume it from a note's Upload card")
 		return
 	for pid in [_bake_pid, _render_pid, _transcode_pid]:
 		Subprocess.stop(int(pid))
@@ -327,6 +333,8 @@ func _build_ui() -> void:
 	add_child(_client_dialog)
 	_yt = YouTube.new()
 	add_child(_yt)
+	_tk = TikTok.new()
+	add_child(_tk)
 	# The sign-in, visible while it waits: the page can open behind another window, and Google's "Access blocked" never comes
 	# back, so the person sees what is awaited.
 	_sign_dialog = AcceptDialog.new()
@@ -369,8 +377,9 @@ func _process(dt: float) -> void:
 					else:
 						_state = "done"
 						_done_t = 60.0
-						_set_status("⚠  Not uploaded: %s - resume it from the YouTube card" % _sign_why,
+						_set_status("⚠  Not uploaded: %s - resume it from the Upload card" % _sign_why,
 							Color(1.0, 0.7, 0.6))
+						_start_tiktok(_status.text)
 				"client":
 					_set_status("⇪  %s waits for your Google client file" % _upload_file.get_file(),
 						Color(0.95, 0.92, 0.7))
@@ -382,6 +391,11 @@ func _process(dt: float) -> void:
 		"uploading":
 			_set_status("⇪  Uploading %s to YouTube …  %d%%" % [_upload_file.get_file(),
 				int(round(_yt.progress * 100.0))], Color(0.95, 0.92, 0.7))
+		"tiktok":
+			var said := ("⇪  TikTok is processing %s - this can take a few minutes" % _upload_file.get_file()) \
+				if _tk.phase == "processing" else ("⇪  Sending %s to TikTok …  %d%%" % [_upload_file.get_file(),
+				int(round(float(_tk.progress) * 100.0))])
+			_set_status((_tiktok_before + "   " if not _tiktok_before.is_empty() else "") + said, Color(0.95, 0.92, 0.7))
 		"done":
 			_done_t -= dt
 			if _done_t <= 0.0:
@@ -762,9 +776,11 @@ func _on_path(out_path: String) -> void:
 	# (a stretch goes back into a file, and the file goes up once it is whole, if at all)
 	if not _stretch.is_empty():
 		_upload_this = false
-	if _upload_this:
+	if _upload_this and targets_of(peek).has("youtube"):
 		_check_sign_in(Callable(), scopes_for(peek), str(peek.get("channel", "")), str(peek.get("channel_name", "")),
 			str(peek.get("client", "")))
+	elif _upload_this:
+		_sign = ""               # no YouTube sign-in is this export's: the line says none
 	# _song was resolved at click time (_on_export): the live audio path. A session without a finished take renders one
 	# now, after quality and path are committed: the provider is a coroutine, and the await is required.
 	if _song.is_empty() and take_provider.is_valid():
@@ -1390,6 +1406,12 @@ func _upload_peek() -> Dictionary:
 	return m if m is Dictionary else {}
 
 
+## Where an upload described by [param meta] goes: its card's targets, YouTube for a card that names none.
+static func targets_of(meta: Dictionary) -> Array:
+	var to: Variant = meta.get("targets", ["youtube"])
+	return Array(to) if to is Array or to is PackedStringArray else ["youtube"]
+
+
 ## The scopes an upload described by [param meta] asks Google for: the upload's, and the
 ## playlists' when it joins one.
 static func scopes_for(meta: Dictionary) -> Array:
@@ -1434,6 +1456,23 @@ func youtube_resume() -> void:
 ## Is an upload on its way - its thumbnail being taken, its sign-in awaited, or its bytes going up?
 func youtube_busy() -> bool:
 	return _state in ["preparing", "upload_wait", "uploading"]
+
+
+## TikTok's sign-in and upload (tiktok.gd), for a card to sign in through and read its phase and progress.
+func tiktok() -> Node:
+	return _tk
+
+
+## Send the TikTok upload that waits (an earlier export's, from any note), unless an export or upload is under way.
+func tiktok_resume() -> void:
+	if _prepping or _state in ["baking", "rendering", "transcoding", "stitching", "preparing", "upload_wait", "uploading", "tiktok"]:
+		return
+	if TikTok.pending().is_empty():
+		return
+	_upload_file = str(TikTok.pending().get("file", ""))
+	_tiktok_next = true
+	_tiktok_said = ""
+	_start_tiktok("")
 
 
 ## The sign-in an upload needs, settled where the person can see it: channel [param channel]'s kept sign-in is renewed, and
@@ -1576,7 +1615,7 @@ func _on_client_file(path: String) -> void:
 		_client_failed(err)
 		return
 	_note_t = 6.0
-	_set_status("✓  Google client imported - it stays on the Client list of every YouTube card", Color(0.82, 0.95, 0.86))
+	_set_status("✓  Google client imported - it stays on the Client list of every Upload card", Color(0.82, 0.95, 0.86))
 	if then.is_valid():
 		then.call()
 
@@ -1599,6 +1638,15 @@ func _client_failed(why: String) -> void:
 ## goes up once the sign-in settles (see the `upload_wait` state).
 func _queue_upload() -> void:
 	_upload_this = false
+	var to := targets_of(_upload_meta)
+	_tiktok_next = false
+	_tiktok_said = ""
+	if to.has("tiktok"):
+		_queue_tiktok()
+	if not to.has("youtube"):
+		_upload_file = _out
+		_start_tiktok(_status.text)
+		return
 	# The thumbnail first, as the YouTube card chose it: a picture made for it, beside the video so the queued upload holds its
 	# own; or a frame of the saved video at the moment named. One that cannot be had only costs the thumbnail, and the line
 	# says why.
@@ -1622,9 +1670,62 @@ func _queue_upload() -> void:
 		_state = "done"
 		_done_t = 30.0
 		_set_status("✓  Saved  %s   ⚠ not uploaded: %s" % [_out, q["error"]], Color(1.0, 0.85, 0.6))
+		_start_tiktok(_status.text)
 		return
 	_upload_file = _out
 	_state = "upload_wait"
+
+
+## The saved export joins TikTok's queue, as the card described it (tiktok.gd's `post_of`); its result is recorded beside the
+## mode's YouTube record. Why it could not is kept for the line.
+func _queue_tiktok() -> void:
+	var rec := str(_upload_meta.get("record", ""))
+	var q: Dictionary = TikTok.queue(_out, TikTok.post_of(_upload_meta, _song_dur),
+		rec.get_base_dir().path_join("tiktok.json") if not rec.is_empty() else "")
+	if q.has("error"):
+		_tiktok_said = "⚠ not sent to TikTok: %s" % q["error"]
+		return
+	_tiktok_next = true
+
+
+## Once YouTube's part is over (or there is none), the TikTok upload queued for this export goes; [param before] is what the
+## line said of the rest, kept in front of TikTok's.
+func _start_tiktok(before: String) -> void:
+	if not _tiktok_next:
+		if not _tiktok_said.is_empty():
+			_set_status(before + "   " + _tiktok_said, Color(1.0, 0.85, 0.6))
+			_tiktok_said = ""
+		return
+	_tiktok_next = false
+	_tiktok_before = before
+	_run_tiktok()
+
+
+func _run_tiktok() -> void:
+	_state = "tiktok"
+	var post: Dictionary = TikTok.pending().get("post", {}) if TikTok.pending().get("post") is Dictionary else {}
+	var res: Dictionary = await _tk.resume()
+	_state = "done"
+	_done_t = 60.0
+	var lead := (_tiktok_before + "   ") if not _tiktok_before.is_empty() else ""
+	if res.has("error"):
+		var later := "" if TikTok.pending().is_empty() else " - send it again from the Upload card"
+		_set_status(lead + "⚠  TikTok: %s%s" % [res["error"], later], Color(1.0, 0.7, 0.6))
+		return
+	var url := str(res.get("url", ""))
+	if not url.is_empty() and _tiktok_before.find("link copied") < 0:
+		DisplayServer.clipboard_set(url)
+	var said := ""
+	match str(res.get("status", "")):
+		"SEND_TO_USER_INBOX":
+			said = "✓  In your TikTok app's inbox: open its notification there to post it"
+		"PUBLISH_COMPLETE":
+			said = "✓  Posted to TikTok (%s)%s" % [str(TikTok.PRIVACIES.get(str(post.get("privacy", "")), "posted")),
+				(": %s" % url) if not url.is_empty() else ""]
+		_:
+			said = "✓  Sent to TikTok - it is still processing there" if str(post.get("mode", "")) == "post" \
+				else "✓  Sent to TikTok - it reaches your TikTok app's inbox once processed"
+	_set_status(lead + said, Color(0.82, 0.95, 0.86))
 
 
 ## A frame of [param video] at [param at] seconds, as a 1280x720 JPEG beside it (YouTube's thumbnail size): its path, or ""
@@ -1684,6 +1785,11 @@ func _resume_upload() -> void:
 ## Send the queued upload; the state is set before the first await, so the frame loop starts it once. One queued before its
 ## note had a channel goes to the one its sign-in landed on.
 func _run_upload() -> void:
+	await _run_youtube()
+	_start_tiktok(_status.text)
+
+
+func _run_youtube() -> void:
 	_state = "uploading"
 	if _sign == "ok":
 		YouTube.aim_pending(_sign_landed)
@@ -1695,7 +1801,7 @@ func _run_upload() -> void:
 	_state = "done"
 	_done_t = 60.0
 	if res.has("error"):
-		var later := "" if YouTube.pending().is_empty() else " - resume it from the YouTube card"
+		var later := "" if YouTube.pending().is_empty() else " - resume it from the Upload card"
 		_set_status("⚠  The YouTube upload stopped: %s%s" % [res["error"], later], Color(1.0, 0.7, 0.6))
 		return
 	var url := str(res.get("url", ""))

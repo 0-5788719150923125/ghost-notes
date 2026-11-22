@@ -8,8 +8,8 @@ class_name DispatchCensor
 ##
 ## A run is on the terminal unless it names its own screen (`glass`, `curve`, `size` and `line`: the radar's coordinates).
 ## The box belongs to the frame, not the glass: each run's rect on its screen (padded; runs that then touch become one,
-## [method groups]) is carried through the glass's bulge and the camera ([method on_glass], [method seen]), and the box is
-## the upright rect round it, as a tracker draws one. It follows a beat behind ([constant LAG]), wavers outward a little
+## [method groups]) is carried through the glass's bulge and the camera ([method on_glass], [method seen_along]), and the box is
+## the rect round it turned to the words' own baseline as the camera sees it (a tilted scope's coordinates get a tilted box). It follows a beat behind ([constant LAG]), wavers outward a little
 ## ([constant WAVER]) and always holds the words' own rect ([method cover]). Its cracks are laid once per run, seeded by
 ## its words ([method cracks]), and stretch with the box: the shards keep their shapes, only their colors change.
 
@@ -33,9 +33,10 @@ const STEP_RATE := 11.0
 ## A shard's longest length, in the terminal's px (a screen's own in proportion to its line): about three letters.
 const SHARD := 56.0
 
-## This frame's boxes: `{rect: Rect2 (px), key: int, aspect: float}`.
+## This frame's boxes: `{center: Vector2, half: Vector2, angle: float (px; the box turned by its angle round its center),
+## rect: Rect2 (the upright rect round it), key: int, aspect: float}`.
 var boxes: Array = []
-var _eased := {}                # a run's key -> where its box was, eased (Rect2)
+var _eased := {}                # a run's key -> where its box was, eased ({center, half, angle})
 var _cracks := {}               # a run's key -> its cracks ([method cracks])
 var _last := -INF
 var _mat := ShaderMaterial.new()
@@ -68,20 +69,34 @@ func cover(runs: Array, glass: MeshInstance3D, curve: float, cam: Camera3D, now:
 		if on == null:
 			continue
 		var size: Vector2 = g.get("size", Vector2(DispatchScreens.TERM_SIZE))
-		var exact := seen(g["rect"], on, float(g.get("curve", curve)), cam, size)
-		if exact.size.x <= 0.0 or boxes.size() >= MOST:
+		var exact := seen_along(g["rect"], on, float(g.get("curve", curve)), cam, size)
+		if exact.is_empty() or boxes.size() >= MOST:
 			continue
-		var was: Rect2 = _eased.get(key, exact)
-		var at := exact if snap else Rect2(was.position.lerp(exact.position, follow), Vector2.ZERO).expand(was.end.lerp(exact.end, follow))
-		next[key] = at
-		var out := exact.size.y * WAVER
+		var was: Dictionary = _eased.get(key, exact)
+		var angle := float(exact["angle"]) if snap else lerp_angle(float(was["angle"]), float(exact["angle"]), follow)
+		# in the box's own frame (turned back by its angle): where the words are, and where the box was
+		var words := Rect2()
+		var pts: PackedVector2Array = exact["points"]
+		for i in pts.size():
+			var q := pts[i].rotated(-angle)
+			words = Rect2(q, Vector2.ZERO) if i == 0 else words.expand(q)
+		var c0 := (was["center"] as Vector2).rotated(-angle)
+		var before := Rect2(c0 - (was["half"] as Vector2), (was["half"] as Vector2) * 2.0)
+		var at := words if snap else Rect2(before.position.lerp(words.position, follow), Vector2.ZERO).expand(before.end.lerp(words.end, follow))
+		var out := words.size.y * WAVER
 		var lo := at.position - Vector2(waver(key, 0, now), waver(key, 1, now)) * out
 		var hi := at.end + Vector2(waver(key, 2, now), waver(key, 3, now)) * out
+		var own := Rect2(lo, Vector2.ZERO).expand(hi).merge(words)
+		var box := {"center": own.get_center().rotated(angle), "half": own.size * 0.5, "angle": angle}
+		next[key] = {"center": at.get_center().rotated(angle), "half": at.size * 0.5, "angle": angle}
 		var r := g["rect"] as Rect2
 		if not _cracks.has(key):
 			var shard := SHARD / DispatchScreens.TERM_LINE * float(g.get("line", DispatchScreens.TERM_LINE))
 			_cracks[key] = cracks(key, r.size.x / r.size.y, shard / r.size.y)
-		boxes.append({"rect": Rect2(lo, Vector2.ZERO).expand(hi).merge(exact), "key": key, "aspect": r.size.x / r.size.y})
+		box["rect"] = upright(box)
+		box["key"] = key
+		box["aspect"] = r.size.x / r.size.y
+		boxes.append(box)
 	_eased = next
 	for key in _cracks.keys():
 		if not next.has(key):
@@ -92,6 +107,8 @@ func cover(runs: Array, glass: MeshInstance3D, curve: float, cam: Camera3D, now:
 func _push() -> void:
 	var packed := PackedVector4Array()
 	packed.resize(MOST)
+	var angles := PackedFloat32Array()
+	angles.resize(MOST)
 	var aspects := PackedFloat32Array()
 	aspects.resize(MOST)
 	var leaves := PackedVector4Array()
@@ -101,17 +118,20 @@ func _push() -> void:
 	lines.fill(Vector3(0, 0, 1))
 	for i in boxes.size():
 		var b: Dictionary = boxes[i]
-		var q: Rect2 = b["rect"]
-		packed[i] = Vector4(q.position.x, q.position.y, q.end.x, q.end.y)
+		var c: Vector2 = b["center"]
+		var h: Vector2 = b["half"]
+		packed[i] = Vector4(c.x, c.y, h.x, h.y)
+		angles[i] = float(b["angle"])
 		aspects[i] = float(b["aspect"])
 		var laid: Dictionary = _cracks[int(b["key"])]
-		var c: PackedVector3Array = laid["lines"]
+		var cut: PackedVector3Array = laid["lines"]
 		for k in NODES:
-			lines[i * NODES + k] = c[k]
+			lines[i * NODES + k] = cut[k]
 		var bb: PackedVector4Array = laid["leaves"]
 		for k in LEAVES:
 			leaves[i * LEAVES + k] = bb[k]
 	_mat.set_shader_parameter("boxes", packed)
+	_mat.set_shader_parameter("angles", angles)
 	_mat.set_shader_parameter("aspects", aspects)
 	_mat.set_shader_parameter("leaves", leaves)
 	_mat.set_shader_parameter("cracks", lines)
@@ -122,7 +142,39 @@ func _push() -> void:
 
 func _draw() -> void:
 	for b in boxes:
-		draw_rect(b["rect"], Color.WHITE)
+		draw_colored_polygon(corners(b), Color.WHITE)
+
+
+## The four corners of box [param b] in the frame, from its top left round.
+static func corners(b: Dictionary) -> PackedVector2Array:
+	var c: Vector2 = b["center"]
+	var h: Vector2 = b["half"]
+	var a := float(b["angle"])
+	var out := PackedVector2Array()
+	for k in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+		out.append(c + (h * (k as Vector2)).rotated(a))
+	return out
+
+
+## The upright rect round box [param b].
+static func upright(b: Dictionary) -> Rect2:
+	var cs := corners(b)
+	var out := Rect2(cs[0], Vector2.ZERO)
+	for p in cs:
+		out = out.expand(p)
+	return out
+
+
+## Where frame point [param p] lies in box [param b]'s own frame: from its top left, along its baseline and down (px).
+static func local(b: Dictionary, p: Vector2) -> Vector2:
+	return (p - (b["center"] as Vector2)).rotated(-float(b["angle"])) + (b["half"] as Vector2)
+
+
+## Is frame point [param p] inside box [param b], grown by [param grow] px each way?
+static func inside(b: Dictionary, p: Vector2, grow := 0.0) -> bool:
+	var q := local(b, p)
+	var s := (b["half"] as Vector2) * 2.0
+	return q.x >= -grow and q.y >= -grow and q.x <= s.x + grow and q.y <= s.y + grow
 
 
 # --- where the boxes go -----------------------------------------------------------------------------------------------
@@ -170,6 +222,30 @@ static func on_glass(px: Vector2, glass: MeshInstance3D, curve: float, screen :=
 		c = b / (1.0 + curve * c.dot(c) * 0.5)
 	var size: Vector2 = glass.get_meta("size") if glass.has_meta("size") else (glass.mesh as QuadMesh).size
 	return glass.global_transform * Vector3(c.x * 0.5 * size.x, -c.y * 0.5 * size.y, 0.0)
+
+
+## Rect [param r] (px on a screen [param screen] across) as [param cam] sees it, along its own baseline: `{points (its edges
+## followed through the bulge, in the frame), angle (of its baseline, its left middle to its right middle), center, half (the
+## rect round the points turned to that angle)}`; empty when any of it is behind the camera.
+static func seen_along(r: Rect2, glass: MeshInstance3D, curve: float, cam: Camera3D, screen := Vector2(DispatchScreens.TERM_SIZE)) -> Dictionary:
+	var pts := PackedVector2Array()
+	for k in 16:
+		var u := float(k % 4) / 4.0
+		var edge := k / 4
+		var px: Vector2 = [r.position + Vector2(r.size.x * u, 0.0), Vector2(r.end.x, r.position.y + r.size.y * u),
+			r.end - Vector2(r.size.x * u, 0.0), Vector2(r.position.x, r.end.y - r.size.y * u)][edge]
+		var w := on_glass(px, glass, curve, screen)
+		if cam.is_position_behind(w):
+			return {}
+		pts.append(cam.unproject_position(w))
+	var west := on_glass(Vector2(r.position.x, r.get_center().y), glass, curve, screen)
+	var east := on_glass(Vector2(r.end.x, r.get_center().y), glass, curve, screen)
+	var angle := (cam.unproject_position(east) - cam.unproject_position(west)).angle()
+	var own := Rect2()
+	for i in pts.size():
+		var q := pts[i].rotated(-angle)
+		own = Rect2(q, Vector2.ZERO) if i == 0 else own.expand(q)
+	return {"points": pts, "angle": angle, "center": own.get_center().rotated(angle), "half": own.size * 0.5}
 
 
 ## The upright rect round [param r] (px on a screen [param screen] across, the terminal's unless given) in [param cam]'s

@@ -1,8 +1,14 @@
 extends VBoxContainer
 class_name YouTubeCard
 
-## YouTubeCard - the YouTube component's card: whether an export goes up, what it is called, who may see it and the playlist
-## it joins, plus the Google client and the sign-in an upload needs. Its block in a document is `youtube:`.
+## YouTubeCard - the Upload card: whether an export goes up, where to (YouTube, TikTok or both, [constant TARGETS]), what it
+## is called and says, and each target's own rows. Its component, block (`youtube:`) and class keep the name they had when
+## YouTube was its only target, so every note's settings stay where they are.
+##
+## The title, description and tags are shared: YouTube takes them as they are, TikTok as one caption with the tags as hashtags
+## ([method TikTok.caption]). Under them, a group per target shows while it is picked: YouTube's (the rest of this header) and
+## TikTok's (tiktok_rows.gd). A target that cannot take an upload yet (TikTok not signed in, a post's privacy not picked) is said
+## under the title and refused before the export renders ([method why_not_targets]). An old block names no targets: YouTube.
 ##
 ## The title is a template ([method Macros.line]) of the macros in [constant Macros.ROWS], so one note makes many
 ## videos; the description takes them too, as prose ([method Macros.fill]). Its names are the Script card's: every panel
@@ -55,11 +61,16 @@ class_name YouTubeCard
 
 const YouTube := preload("res://src/export/youtube.gd")
 const Macros := preload("res://src/data/macros.gd")
+## The TikTok target's rows.
+const TikTokRows := preload("res://src/export/tiktok_rows.gd")
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "youtube"
-## A new card's block: nothing goes up until the box is ticked, and then privately.
-const DEFAULTS := {"upload": false, "title": YouTube.TITLE_TEMPLATE, "privacy": YouTube.PRIVACY,
+## Where an export can go up, in the order the card offers them.
+const TARGETS := {"youtube": "YouTube", "tiktok": "TikTok"}
+## A new card's block: nothing goes up until the box is ticked, and then privately, to YouTube. TikTok's rows keep their own
+## (tiktok_rows.gd's `DEFAULTS`).
+const DEFAULTS := {"upload": false, "targets": ["youtube"], "title": YouTube.TITLE_TEMPLATE, "privacy": YouTube.PRIVACY,
 	"category": YouTube.CATEGORY, "playlist": "", "playlist_title": "", "channel": "", "channel_name": "", "client": "",
 	"management_policy": "none", "write_tags": false, "description": "", "thumbnail": YouTube.THUMBNAIL,
 	"thumbnail_writer": "claude", "thumbnail_writer_model": "", "thumbnail_writer_effort": "",
@@ -78,6 +89,13 @@ var extra: VBoxContainer
 var exporter: Node
 
 var _upload: CheckBox
+var _to_yt: Button
+var _to_tt: Button
+## YouTube's rows, shown while it is a target; TikTok's are [member _tt].
+var _yt_box: VBoxContainer
+var _tt: TikTokRows
+## Where [method _row] puts a row as the card is built.
+var _into: Container
 var _chips: HFlowContainer
 var _chip_group: ButtonGroup
 var _add: Button
@@ -143,13 +161,14 @@ static func for_note(_ctx: Dictionary) -> YouTubeCard:
 
 
 func _init() -> void:
+	_into = self
 	add_theme_constant_override("separation", 8)
 	_upload = CheckBox.new()
 	_upload.text = "Upload after export"
 	_upload.add_theme_font_size_override("font_size", 12)
-	_upload.tooltip_text = ("Once an export of this note is saved, upload it to the YouTube channel picked below. "
-		+ "Ticking it the first time asks for your Google OAuth client file (the JSON from Google Cloud), "
-		+ "then opens your browser to sign in.")
+	_upload.tooltip_text = ("Once an export of this note is saved, upload it to where Goes to says. For YouTube, "
+		+ "ticking it the first time asks for your Google OAuth client file (the JSON from Google Cloud), then opens "
+		+ "your browser to sign in; TikTok's sign-in is under TikTok.")
 	_upload.toggled.connect(_on_tick)
 	var boxes := HFlowContainer.new()
 	boxes.add_theme_constant_override("h_separation", 12)
@@ -176,6 +195,43 @@ func _init() -> void:
 		+ "designed and painted free of them.")
 	_thumb_match.toggled.connect(func(_on: bool) -> void: refresh())
 	boxes.add_child(_thumb_match)
+	# where it goes up: each target's rows show while it is picked
+	var trow := HBoxContainer.new()
+	trow.add_theme_constant_override("separation", 6)
+	_to_yt = _target(TARGETS["youtube"], "Upload each export to the YouTube channel picked below.")
+	_to_yt.set_pressed_no_signal(true)
+	trow.add_child(_to_yt)
+	_to_tt = _target(TARGETS["tiktok"], ("Send each export to TikTok: posted, or as a draft you finish in the TikTok app. "
+		+ "The caption is the title, the description and the tags as hashtags."))
+	trow.add_child(_to_tt)
+	_row("Goes to", trow)
+	_title = LineEdit.new()
+	_title.placeholder_text = YouTube.TITLE_TEMPLATE
+	_title.tooltip_text = _title_tip({})
+	_title.text = YouTube.TITLE_TEMPLATE
+	_title.text_changed.connect(func(_t: String) -> void: refresh())
+	_row("Title", _title)
+	_preview = _small("")
+	add_child(_preview)
+	_desc = TextField.new("Description", "No description yet - click to write one",
+		"The video's description, as it goes up. The playlist it joins is named and linked "
+		+ "under it, and what the note's cards add (an actor's likeness, said) between the two. "
+		+ "It takes the title's macros (%title%, %episode%, %date%...), filled as the title's are.")
+	_desc.visible = false
+	add_child(_desc)
+	extra = VBoxContainer.new()
+	extra.add_theme_constant_override("separation", 8)
+	add_child(extra)
+	_build_tags()
+	_yt_box = VBoxContainer.new()
+	_yt_box.add_theme_constant_override("separation", 8)
+	add_child(_yt_box)
+	_into = _yt_box
+	_into.add_child(HSeparator.new())
+	var yhead := Label.new()
+	yhead.text = "YouTube"
+	yhead.add_theme_font_size_override("font_size", 12)
+	_into.add_child(yhead)
 	_chips = HFlowContainer.new()
 	_chips.add_theme_constant_override("h_separation", 4)
 	_chips.add_theme_constant_override("v_separation", 4)
@@ -204,14 +260,6 @@ func _init() -> void:
 	_client_del = _armed_delete("✕", _forget_client, "Forget this client: Ghost Notes keeps no copy of it. Its file can be imported again.")
 	crow.add_child(_client_del)
 	_row("Client", crow)
-	_title = LineEdit.new()
-	_title.placeholder_text = YouTube.TITLE_TEMPLATE
-	_title.tooltip_text = _title_tip({})
-	_title.text = YouTube.TITLE_TEMPLATE
-	_title.text_changed.connect(func(_t: String) -> void: refresh())
-	_row("Title", _title)
-	_preview = _small("")
-	add_child(_preview)
 	_privacy = OptionButton.new()
 	_privacy.fit_to_longest_item = false
 	_privacy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -262,24 +310,13 @@ func _init() -> void:
 	_management.item_selected.connect(func(_i: int) -> void: refresh())
 	_row("Management policy", _management)
 	_management_note = _small("")
-	add_child(_management_note)
+	_into.add_child(_management_note)
 	_build_thumbnail()
-	_desc = TextField.new("Description", "No description yet - click to write one",
-		"The video's description, as it goes up. The playlist it joins is named and linked "
-		+ "under it, and what the note's cards add (an actor's likeness, said) between the two. "
-		+ "It takes the title's macros (%title%, %episode%, %date%...), filled as the title's are.")
-	_desc.visible = false
-	add_child(_desc)
-	extra = VBoxContainer.new()
-	extra.add_theme_constant_override("separation", 8)
-	add_child(extra)
-	_build_tags()
-	add_child(HSeparator.new())
 	_account = _small("")
-	add_child(_account)
+	_into.add_child(_account)
 	var arow := HBoxContainer.new()
 	arow.add_theme_constant_override("separation", 6)
-	add_child(arow)
+	_into.add_child(arow)
 	_sign = Button.new()
 	_sign.focus_mode = Control.FOCUS_NONE
 	_sign.add_theme_font_size_override("font_size", 12)
@@ -304,9 +341,15 @@ func _init() -> void:
 	_resume.tooltip_text = ("An export's upload was cut off - by a quit, a lapsed sign-in or a dropped "
 		+ "connection. It carries on from where YouTube says it stopped.")
 	_resume.pressed.connect(_on_resume)
-	add_child(_resume)
+	_into.add_child(_resume)
 	_state = _small("")
-	add_child(_state)
+	_into.add_child(_state)
+	_into = self
+	_tt = TikTokRows.new(self)
+	var tsep := HSeparator.new()
+	_tt.add_child(tsep)
+	_tt.move_child(tsep, 0)
+	add_child(_tt)
 
 
 func _ready() -> void:
@@ -332,14 +375,14 @@ func _build_thumbnail() -> void:
 	_thumb_writer = AgentPick.writer("Reads the episode and writes what its thumbnail shows - the subject, the "
 		+ "light, the colors, a few words on it or none - and which of the episode's own pictures the painter follows.")
 	_thumb_writer.changed.connect(refresh)
-	add_child(_thumb_writer)
+	_into.add_child(_thumb_writer)
 	_thumb_painter = AgentPick.painter("Paints the thumbnail the writer describes, cut to YouTube's 16:9.")
 	_thumb_painter.changed.connect(refresh)
-	add_child(_thumb_painter)
+	_into.add_child(_thumb_painter)
 	_thumb = YouTubeThumbnail.new(func() -> bool: return thumbnail() == "painted", _thumb_writer.choice,
 		_thumb_painter.choice, func() -> bool: return _thumb_match.button_pressed)
 	_thumb_note = _small("")
-	add_child(_thumb_note)
+	_into.add_child(_thumb_note)
 	_thumb_view = TextureRect.new()
 	_thumb_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_thumb_view.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -352,12 +395,12 @@ func _build_thumbnail() -> void:
 		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
 				and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 			open_thumbnail())
-	add_child(_thumb_view)
+	_into.add_child(_thumb_view)
 	_thumb_steps = HBoxContainer.new()
 	_thumb_steps.alignment = BoxContainer.ALIGNMENT_CENTER
 	_thumb_steps.add_theme_constant_override("separation", 4)
 	_thumb_steps.visible = false
-	add_child(_thumb_steps)
+	_into.add_child(_thumb_steps)
 	_thumb_back = _thumb_button("‹", "Show the thumbnail painted before this one: it goes up instead.")
 	_thumb_back.pressed.connect(func() -> void: _choose_thumb(-1))
 	_thumb_at = Label.new()
@@ -374,15 +417,37 @@ func _build_thumbnail() -> void:
 ## beside "Upload after export"; the list it writes is the panel's, above).
 func _build_tags() -> void:
 	_tags = YouTubeTags.new(func() -> bool: return _write_tags.button_pressed)
-	_section = EpisodeSteps.new("YouTube", episode_steps, self)
+	_section = EpisodeSteps.new("Upload", episode_steps, self)
 	_tags_note = _small("")
 	add_child(_tags_note)
+
+
+## A target's toggle on the Goes to row.
+func _target(text: String, tip: String) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.toggle_mode = true
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_size_override("font_size", 12)
+	b.tooltip_text = tip
+	b.toggled.connect(func(_on: bool) -> void: refresh())
+	return b
+
+
+## Where an export goes up, in [constant TARGETS]' order.
+func targets() -> Array:
+	var out := []
+	if _to_yt.button_pressed:
+		out.append("youtube")
+	if _to_tt.button_pressed:
+		out.append("tiktok")
+	return out
 
 
 func _row(label: String, field: Control) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
-	add_child(row)
+	_into.add_child(row)
 	var l := Label.new()
 	l.text = label
 	l.custom_minimum_size = Vector2(72, 0)
@@ -415,7 +480,7 @@ func _process(dt: float) -> void:
 func capture() -> Dictionary:
 	var w := _thumb_writer.choice()
 	var p := _thumb_painter.choice()
-	return {"upload": _upload.button_pressed, "title": _title.text, "privacy": _privacy_key(),
+	var out := {"upload": _upload.button_pressed, "targets": targets(), "title": _title.text, "privacy": _privacy_key(),
 		"category": _category_key(), "playlist": String(_list["id"]), "playlist_title": String(_list["title"]),
 		"management_policy": management_policy(),
 		"channel": String(_chan["id"]), "channel_name": _channel_name(), "client": _client_pick, "write_tags": writes_tags(),
@@ -423,6 +488,8 @@ func capture() -> Dictionary:
 		"thumbnail_writer": w["agent"], "thumbnail_writer_model": w["model"], "thumbnail_writer_effort": w["effort"],
 		"thumbnail_painter": p["agent"], "thumbnail_painter_model": p["model"], "thumbnail_painter_effort": p["effort"],
 		"thumbnail_match": _thumb_match.button_pressed}
+	out.merge(_tt.capture(), true)
+	return out
 
 
 ## ...and back. A key the block does not name keeps the card's default; a privacy YouTube does not know is Private, a
@@ -432,6 +499,10 @@ func apply(block: Dictionary) -> void:
 	var b := DEFAULTS.duplicate()
 	b.merge(block, true)
 	_upload.set_pressed_no_signal(bool(b["upload"]))
+	var to: Array = Array(b["targets"]) if b["targets"] is Array or b["targets"] is PackedStringArray else ["youtube"]
+	_to_yt.set_pressed_no_signal(to.has("youtube"))
+	_to_tt.set_pressed_no_signal(to.has("tiktok"))
+	_tt.apply(block)
 	_write_tags.set_pressed_no_signal(bool(b["write_tags"]))
 	_tags_seen = []
 	if _title.text != str(b["title"]):
@@ -572,6 +643,17 @@ func why_not(given := {}) -> String:
 		" and ".join(said), "it" if out.size() == 1 else "them"]
 
 
+## Why the targets cannot take an upload as they stand ("" when they can): none is picked, or one is not ready
+## (tiktok_rows.gd's `why_not`).
+func why_not_targets() -> String:
+	var to := targets()
+	if to.is_empty():
+		return "Pick where it goes up (Goes to), or nothing goes up."
+	if to.has("tiktok"):
+		return _tt.why_not()
+	return ""
+
+
 ## The title box's tooltip: what each macro the note fills stands for - only those.
 static func _title_tip(v: Dictionary) -> String:
 	return ("The video's title, made of the words written here and these macros: %s What a missing one leaves "
@@ -601,9 +683,14 @@ func meta(base: Dictionary, take := "") -> Dictionary:
 		return {}
 	var held: Variant = base.get("values", {})
 	var why := why_not(held if held is Dictionary else {})
+	if why.is_empty():
+		why = why_not_targets()
 	if not why.is_empty():
 		return {"refused": why}
 	var out := base.duplicate()
+	out["targets"] = targets()
+	if targets().has("tiktok"):
+		out["tiktok"] = _tt.part()
 	var own := description()
 	if not own.is_empty():
 		var theirs := str(out.get("description", "")).strip_edges()
@@ -657,6 +744,8 @@ func refresh() -> void:
 		_tip = tip
 		_title.tooltip_text = tip
 	var why := why_not(v)
+	if why.is_empty() and ticked():
+		why = why_not_targets()
 	var t := title_now(v) if not v.is_empty() else ""
 	if not why.is_empty():
 		_preview.text = "⚠  " + why
@@ -667,6 +756,11 @@ func refresh() -> void:
 			_preview.remove_theme_color_override("font_color")
 		else:
 			_preview.add_theme_color_override("font_color", Color(1.0, 0.85, 0.6))
+	var to := targets()
+	_yt_box.visible = to.has("youtube")
+	_tt.visible = to.has("tiktok")
+	if _tt.visible:
+		_tt.refresh()
 	_refresh_account()
 	_refresh_tags()
 	_refresh_thumbnail()
@@ -757,7 +851,7 @@ func _exporter() -> Node:
 ## Ticked: set uploads up first; the box shows ticked only once the note's channel is signed in and may do what this card
 ## asks (a playlist chosen asks for more); a note with no channel yet signs in to one, and takes it. Cleared: simply cleared.
 func _on_tick(on: bool) -> void:
-	if not on:
+	if not on or not targets().has("youtube"):
 		refresh()
 		return
 	var id := String(_chan["id"])
@@ -1186,7 +1280,7 @@ func load_playlists(quiet := false) -> void:
 ## already see them and the card is where the exporter is. A sign-in that may only upload waits for ↻, which asks for more.
 func _look_quietly() -> void:
 	var id := String(_chan["id"])
-	if _loading or id.is_empty() or _looked == id or String(_list["id"]).is_empty():
+	if not targets().has("youtube") or _loading or id.is_empty() or _looked == id or String(_list["id"]).is_empty():
 		return
 	if _exporter() != null and YouTube.granted(YouTube.PLAYLIST_SCOPE, id):
 		load_playlists(true)

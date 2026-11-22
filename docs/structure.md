@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 753 references inside a folder, 1396 down the stack, 0 up it.
+Between scripts today: 761 references inside a folder, 1399 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -21,7 +21,7 @@ Between scripts today: 753 references inside a folder, 1396 down the stack, 0 up
 | `table/` | The set | 75 | `reading`, `media`, `ui`, `agents`, `scene_kit`, `geometry`, `render`, `audio`, `platform`, `data` |
 | `cartoon/` | Cartoon | 5 | `reading`, `timeline`, `show`, `ui`, `notes`, `agents`, `stage`, `platform`, `data` |
 | `reading/` | The voice's workspaces | 17 | `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
-| `export/` | Export | 6 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
+| `export/` | Export | 9 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `music/` | Music | 11 | `timeline`, `show`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 9 | `show`, `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `show/` | The show | 11 | `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
@@ -146,7 +146,7 @@ A note that makes its own sound (next/music.md): the theory and the banks a song
 
 Rendering a session to video (bake + Movie Maker, background processes) and uploading it to YouTube. Under the workspaces: a reading and a show of cards export a take and fill in an upload, and the exporter names neither.
 
-[`exporter`](../src/export/exporter.gd), [`stitch`](../src/export/stitch.gd), [`youtube`](../src/export/youtube.gd), [`youtube_card`](../src/export/youtube_card.gd), [`youtube_tags`](../src/export/youtube_tags.gd), [`youtube_thumbnail`](../src/export/youtube_thumbnail.gd)
+[`exporter`](../src/export/exporter.gd), [`oauth`](../src/export/oauth.gd), [`stitch`](../src/export/stitch.gd), [`tiktok`](../src/export/tiktok.gd), [`tiktok_rows`](../src/export/tiktok_rows.gd), [`youtube`](../src/export/youtube.gd), [`youtube_card`](../src/export/youtube_card.gd), [`youtube_tags`](../src/export/youtube_tags.gd), [`youtube_thumbnail`](../src/export/youtube_thumbnail.gd)
 
 ### `reading/` - The voice's workspaces
 
@@ -219,4 +219,4 @@ Godot compiles a script with every script it names by class or preload, wherever
 | launch | builds | scripts | lines | budget |
 | --- | --- | --- | --- | --- |
 | the phone shell | `app/main`, `app/phone_shell` | 75 | 30,722 | 40,000 |
-| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 117 | 50,947 | 65,000 |
+| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 119 | 51,942 | 65,000 |

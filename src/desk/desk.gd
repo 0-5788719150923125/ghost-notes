@@ -142,6 +142,7 @@ var _spoken_n := 0
 var _strokes := {}                 # item id -> Ink.schedule
 var _follower := ReadingFollower.new()
 var _built_n := -1
+var _midway := false                # the reading started part way (its start words): no intro
 var _plan: Array = []              # per action: {start, end, turn_at} (seconds), INF while not placed
 var _first_pen := 0               # the pen picked up first: the desk's own, or a letter's first ink
 var _held := {}                    # action -> what was shown of it when the plan was made again
@@ -571,8 +572,9 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_env.adjustment_brightness = clampf(clampf(t / 1.2, 0.0, 1.0)
 		* _end_fade() * feed.live_fade, 0.0, 1.0)
 	var opening := _opening()
-	ShowOpening.lens(ShowOpening.pull(feed.opening, _now, opening, _built_n > 0), _blur, _attrs)
-	_title.alpha = ShowOpening.title_alpha(feed.opening, _now, opening, _built_n > 0)
+	var style := ShowOpening.style_of(feed.opening, _midway)
+	ShowOpening.lens(ShowOpening.pull(style, _now, opening, _built_n > 0), _blur, _attrs)
+	_title.alpha = ShowOpening.title_alpha(style, _now, opening, _built_n > 0)
 	_title.fisheye = feed.fisheye()
 	_title.queue_redraw()
 	_show_pages()
@@ -680,6 +682,7 @@ func load_lesson(source: String, desk: Dictionary, start := PackedStringArray(),
 func _begin(spoken: PackedStringArray, start: PackedStringArray, near: int, est_of: Callable) -> void:
 	_spoken_n = spoken.size()
 	var from := TabletScript.find_run(spoken, start, near) if not start.is_empty() else -1
+	_midway = not start.is_empty()
 	_follower.reset(spoken, from, est_of.call() if from > 0 else PackedFloat32Array())
 	_built_n = -1
 	_held = {}

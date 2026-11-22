@@ -306,6 +306,7 @@ var _moves: Array = []
 var _spoken_n := 0
 var _typed_words := PackedByteArray()   # a spoken word -> 1 when it is typed on the terminal as it is said
 var _follower := ReadingFollower.new()
+var _midway := false                    # the reading started part way (its document names start words): no intro
 var _since := 0.0                       # a mid-way start: how far into the reading it starts (s, the scrub bar's scale)
 var _est_from := 0.0                    # ...and where its first word falls on the steady voice's estimate (s)
 var _built_n := -1
@@ -886,7 +887,7 @@ func advance(features, delta: float, _bookend: float) -> void:
 		_snap = true
 	var opening := _opening()
 	ShowOpening.lens(_pull(_now, opening), _blur, _attrs)
-	_title.alpha = ShowOpening.title_alpha(feed.opening, _now, opening, _built_n > 0)
+	_title.alpha = ShowOpening.title_alpha(ShowOpening.style_of(feed.opening, _midway), _now, opening, _built_n > 0)
 	_title.fisheye = feed.fisheye()
 	_title.queue_redraw()
 	if _set != null:
@@ -1117,6 +1118,7 @@ func load_note(text: String, dispatch: Dictionary, start := PackedStringArray(),
 	_build_set(_labels, _seed)
 	_load_pictures(dispatch.get("pictures", {}) if dispatch.get("pictures") is Dictionary else {})
 	var from := TabletScript.find_run(spoken, start, near) if not start.is_empty() else -1
+	_midway = not start.is_empty()
 	var est := _estimate() if from > 0 else PackedFloat32Array()
 	_follower.reset(spoken, from, est)
 	_since = maxf(since, 0.0) if from > 0 else 0.0
@@ -3347,8 +3349,11 @@ func fade_at(t: float) -> float:
 
 ## How black a note that opens in the black is at [param t], before its first fade up: with a title or a blur to open on,
 ## up under them and down to black as the title goes ([method ShowOpening.title_alpha]: from 0.6 s before the opening to
-## 0.3 s after it), and up while the opening is not known; with neither, black from the start.
+## 0.3 s after it), and up while the opening is not known; with neither, black from the start. A reading started part way is past
+## it: its fades decide.
 func _opened_black(t: float) -> float:
+	if _midway:
+		return 0.0
 	if not Openings.titled(feed.opening) and not Openings.blurred(feed.opening):
 		return 1.0
 	var opening := _opening()
@@ -3361,8 +3366,8 @@ func _opened_black(t: float) -> float:
 ## note opens in the black the title's blur never lifts on the desk: it holds as the picture goes down to black, and is
 ## gone once it is black, so the night comes up sharp.
 func _pull(t: float, opening: float) -> float:
-	var p := ShowOpening.pull(feed.opening, t, opening, _built_n > 0)
-	if not _dark0 or opening == INF:
+	var p := ShowOpening.pull(ShowOpening.style_of(feed.opening, _midway), t, opening, _built_n > 0)
+	if _midway or not _dark0 or opening == INF:
 		return p
 	return 1.0 if _opened_black(t) >= 1.0 else 0.0
 

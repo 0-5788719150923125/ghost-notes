@@ -534,7 +534,7 @@ const REGISTRY := {
 	"ping": {
 		"label": "Ping",
 		"group": "dispatch",
-		"blurb": "Dispatch desk: the target comes to this place on the radar - a sonar ping, his coordinates beside the blip (hidden over the frame) and the place held in a readout at the scope's lower right (the first ping: the radar finds him there). After the bar, where a radar reports a contact: its bearing in degrees clockwise from the scope's top, and its range in range rings out from the desk (the scope's edge the last ring). He goes there along a track while the voice goes on, the sweep painting him a step further each round, never a jump - from where a Moving mark set him off, else over the moments before. A place named again bare is the same spot.",
+		"blurb": "Dispatch desk: the target comes to this place on the radar - a sonar ping, his coordinates beside the blip (hidden over the frame) and the place held in a readout at the scope's foot (the first ping: the radar finds him there). After the bar, where a radar reports a contact: its bearing in degrees clockwise from the scope's top, and its range in range rings out from the desk (the scope's edge the last ring). He goes there along a track while the voice goes on, the sweep painting him a step further each round, never a jump - from where a Moving mark set him off, else over the moments before. A place named again bare is the same spot.",
 		"before": "<!-- ping: ", "fill": "the stairwell | 210, 0.7", "after": " -->", "line": "own",
 		"modes": ["generative"],
 		"pattern": "<!--\\s*ping\\s*:[^>]*-->",

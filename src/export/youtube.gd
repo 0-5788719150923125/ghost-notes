@@ -63,6 +63,8 @@ const CATEGORIES := {"2": "Autos & Vehicles", "23": "Comedy", "27": "Education",
 	"28": "Science & Technology", "17": "Sports", "19": "Travel & Events"}
 ## A note's names, filled in its title and description ([method title_shape], [YouTubeCard]).
 const Macros := preload("res://src/data/macros.gd")
+## The browser's redirect caught, and one HTTP exchange: what every upload site's sign-in shares.
+const OAuth := preload("res://src/export/oauth.gd")
 ## The title a new YouTube card starts with: macros every note fills ([constant Macros.ROWS]).
 const TITLE_TEMPLATE := "%title%: %episode%"
 const CATEGORY := "22"
@@ -91,7 +93,7 @@ const CHAPTER_LEAST := 10.0
 ## A chunk: a multiple of 256 KiB, as the protocol requires of every chunk but the last.
 const CHUNK := 8 * 1024 * 1024
 ## Seconds the browser's answer is waited for, and one chunk may take.
-const SIGN_IN_TIMEOUT := 600.0
+const SIGN_IN_TIMEOUT := OAuth.SIGN_IN_TIMEOUT
 const CHUNK_TIMEOUT := 600.0
 ## Failures in a row before an upload stops (and waits to be resumed); the waits between them
 ## double, to a minute.
@@ -468,23 +470,12 @@ static func auth_url(c: Dictionary, redirect: String, code_challenge: String, st
 
 ## [param fields] as `application/x-www-form-urlencoded` - also a URL's query - in their order.
 static func form(fields: Dictionary) -> String:
-	var parts := PackedStringArray()
-	for k in fields:
-		parts.append("%s=%s" % [str(k).uri_encode(), str(fields[k]).uri_encode()])
-	return "&".join(parts)
+	return OAuth.form(fields)
 
 
 ## The query of a request path (`/?a=1&b=two+words`), decoded.
 static func query_of(path: String) -> Dictionary:
-	var out := {}
-	if not path.contains("?"):
-		return out
-	for pair in path.get_slice("?", 1).get_slice("#", 0).split("&", false):
-		var s := String(pair)
-		var k := s.get_slice("=", 0)
-		out[k.replace("+", " ").uri_decode()] = s.substr(k.length() + 1).replace("+", " ").uri_decode() \
-			if s.contains("=") else ""
-	return out
+	return OAuth.query_of(path)
 
 
 ## Sign in through the browser, asking for [param scopes] (the upload's alone unless a playlist is wanted) and the channel's
@@ -603,74 +594,15 @@ func stop_sign_in() -> void:
 ## The browser's answer at the listener: `{code}`, or `{error}`. Anything else that knocks (a favicon, a stale tab) is turned
 ## away and the wait goes on, until the sign-in [param mine] is replaced or stopped.
 func _await_answer(tcp: TCPServer, state: String, mine: int) -> Dictionary:
-	var t0 := Time.get_ticks_msec()
-	var conns: Array = []
-	while true:
-		if mine != _wait:
-			_drop(conns)
-			return {"error": "the sign-in was cancelled" if _cancelled == mine else "the sign-in was replaced by a newer one"}
-		if Time.get_ticks_msec() - t0 > int(SIGN_IN_TIMEOUT * 1000.0):
-			_drop(conns)
-			return {"error": "the sign-in timed out - nothing came back from the browser in %d minutes"
-				% int(SIGN_IN_TIMEOUT / 60.0)}
-		while tcp.is_connection_available():
-			var peer := tcp.take_connection()
-			if peer != null:
-				conns.append({"peer": peer, "buf": PackedByteArray()})
-		for c in conns.duplicate():
-			var conn: Dictionary = c
-			var peer: StreamPeerTCP = conn["peer"]
-			peer.poll()
-			if peer.get_status() != StreamPeerTCP.STATUS_CONNECTED:
-				conns.erase(conn)
-				continue
-			var n := peer.get_available_bytes()
-			if n > 0:
-				var part: Array = peer.get_partial_data(n)
-				if int(part[0]) == OK:
-					var buf: PackedByteArray = conn["buf"]
-					buf.append_array(part[1] as PackedByteArray)
-					conn["buf"] = buf
-			var req := AgentTools.parse_request(conn["buf"])
-			if req.is_empty():
-				continue
-			conns.erase(conn)
-			var q := query_of(str(req.get("path", "")))
-			if req.has("error") or str(req.get("method", "")) != "GET" or not q.has("state"):
-				_answer(peer, 404, "Nothing here.")
-				continue
-			if str(q["state"]) != state:
-				_answer(peer, 400, "This is not the sign-in Ghost Notes is waiting for. Start it again from Ghost Notes.")
-				continue
-			if q.has("error"):
-				_answer(peer, 200, "The sign-in was not completed. You can close this tab.")
-				_drop(conns)
-				return {"error": ("Google refused access (access_denied): the consent screen was declined, or "
-					+ "this Google account is not one of the Cloud project's test users") if q["error"] == "access_denied"
-					else "Google said: %s" % q["error"]}
-			if str(q.get("code", "")).is_empty():
-				_answer(peer, 400, "Google sent no code. Start the sign-in again from Ghost Notes.")
-				continue
-			_answer(peer, 200, "Ghost Notes is signed in to YouTube. You can close this tab.")
-			_drop(conns)
-			return {"code": str(q["code"])}
-		await get_tree().process_frame
-	return {}
-
-
-static func _answer(peer: StreamPeerTCP, status: int, text: String) -> void:
-	var page := ("<!doctype html><html><head><meta charset=\"utf-8\"><title>Ghost Notes</title></head>"
-		+ "<body style=\"margin:0;height:100vh;display:grid;place-items:center;background:#111;"
-		+ "color:#ddd;font:16px system-ui,sans-serif\"><p>%s</p></body></html>") % text.xml_escape()
-	peer.put_data(AgentTools.http_response(status, page,
-		{"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"}))
-	peer.disconnect_from_host()
-
-
-static func _drop(conns: Array) -> void:
-	for c in conns:
-		((c as Dictionary)["peer"] as StreamPeerTCP).disconnect_from_host()
-	conns.clear()
+	var still := func() -> String:
+		if mine == _wait:
+			return ""
+		return "the sign-in was cancelled" if _cancelled == mine else "the sign-in was replaced by a newer one"
+	var got: Dictionary = await OAuth.await_code(tcp, state, still, "Google", "Google refused access (access_denied): "
+		+ "the consent screen was declined, or this Google account is not one of the Cloud project's test users")
+	if got.has("code"):
+		return {"code": got["code"]}
+	return got
 
 
 ## A live access token for channel [param id]: `{token}`, renewed from its refresh token (through the client it signed in
@@ -1082,7 +1014,7 @@ func playlists(ch: String) -> Dictionary:
 ## when it is there, else why not.
 func add_to_playlist(video_id: String, playlist_id: String, ch: String) -> String:
 	if not granted(PLAYLIST_SCOPE, ch):
-		return "the YouTube sign-in may upload but not add to playlists - sign in again from the YouTube card"
+		return "the YouTube sign-in may upload but not add to playlists - sign in again from the Upload card"
 	var body := JSON.stringify({"snippet": {"playlistId": playlist_id,
 		"resourceId": {"kind": "youtube#video", "videoId": video_id}}}).to_utf8_buffer()
 	for attempt in 2:
@@ -1111,7 +1043,7 @@ func add_to_playlist(video_id: String, playlist_id: String, ch: String) -> Strin
 func unlist_others(video_id: String, playlist_id: String, ch: String) -> Dictionary:
 	var out := {"unlisted": 0, "skipped": 0}
 	if not granted(PLAYLIST_SCOPE, ch):
-		out["error"] = "sign in again from the YouTube card to manage playlist videos"
+		out["error"] = "sign in again from the Upload card to manage playlist videos"
 		return out
 	var ids := PackedStringArray()
 	var seen := {video_id: true}
@@ -1464,41 +1396,7 @@ static func _form_headers() -> PackedStringArray:
 ## no answer came at all.
 func _send(url: String, headers: PackedStringArray, method: HTTPClient.Method, body: PackedByteArray,
 		timeout: float) -> Dictionary:
-	var h := HTTPRequest.new()
-	h.use_threads = true
-	h.timeout = timeout
-	var proxy := Provision.https_proxy()
-	if not proxy.is_empty():
-		h.set_https_proxy(String(proxy[0]), int(proxy[1]))
-	add_child(h)
-	var all := PackedStringArray(["User-Agent: Ghost Notes (Godot %s)" % str(Engine.get_version_info().get("string", "4"))])
-	all.append_array(headers)
-	var err := h.request_raw(url, all, method, body)
-	if err != OK:
-		h.queue_free()
-		return {"error": "the request could not start (%s)" % error_string(err)}
-	var r: Array = await h.request_completed
-	h.queue_free()
-	if int(r[0]) != HTTPRequest.RESULT_SUCCESS:
-		return {"error": _result_text(int(r[0]))}
-	var out := {"code": int(r[1]), "headers": r[2] as PackedStringArray, "body": r[3] as PackedByteArray}
-	var j := JSON.new()
-	if j.parse((r[3] as PackedByteArray).get_string_from_utf8()) == OK:
-		out["json"] = j.data
-	return out
-
-
-static func _result_text(result: int) -> String:
-	match result:
-		HTTPRequest.RESULT_CANT_CONNECT, HTTPRequest.RESULT_CANT_RESOLVE:
-			return "no connection"
-		HTTPRequest.RESULT_TLS_HANDSHAKE_ERROR:
-			return "a secure connection could not be made"
-		HTTPRequest.RESULT_TIMEOUT:
-			return "it timed out"
-		HTTPRequest.RESULT_CONNECTION_ERROR, HTTPRequest.RESULT_NO_RESPONSE:
-			return "the connection dropped"
-	return "error %d" % result
+	return await OAuth.send(self, url, headers, method, body, timeout)
 
 
 # --- files ---------------------------------------------------------------------------------------

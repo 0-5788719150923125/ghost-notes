@@ -188,8 +188,8 @@ const REGISTRY := {
 		"capabilities": ["forward_plus", "subprocess", "ffmpeg"], "marks": [], "block": "", "card": ""},
 	# An export's destination: it needs what a video is made of, and the exporter that makes one (Masking's own export
 	# is a relaunch of its editor, so its panel offers no "+").
-	"youtube": {"label": "YouTube", "family": &"publish",
-		"blurb": "Uploads the exported video to your YouTube channel: its title, thumbnail, privacy and playlist.",
+	"youtube": {"label": "Upload", "family": &"publish",
+		"blurb": "Uploads the exported video to YouTube, TikTok or both: one title, description and tags, and each site's own settings.",
 		"needs": ["picture", "audio"], "provides": [], "requires": [], "slots": [], "workspace": "",
 		"capabilities": ["movie_export", "subprocess", "ffmpeg"], "marks": [], "block": "youtube", "card": "youtube",
 		"script": "res://src/export/youtube_card.gd"},

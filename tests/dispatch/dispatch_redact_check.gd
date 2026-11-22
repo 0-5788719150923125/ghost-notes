@@ -10,8 +10,9 @@ extends SceneTree
 ##   color), its shape the cracks' ([method DispatchCensor.shard], line for line with the shader); shards differ from each
 ##   other; nothing outside the boxes changes;
 ## - the boxes are the frame's: runs on adjacent lines are one box, runs a line apart two (control: plain lines, none); a box is
-##   upright, larger than the words and never short of them while the camera moves; it trails a beat behind a sudden move and
-##   wavers at rest, a function of show time alone.
+##   turned to its words' baseline as the camera sees it (the glass turned 12 degrees, the box turns with it; control: an upright
+##   box round the same words is far larger), larger than the words and never short of them while the camera moves; it
+##   trails a beat behind a sudden move and wavers at rest, a function of show time alone.
 ##
 ##   tests/run_quiet.sh dispatch_redact_check
 ##   tests/run_quiet.sh -- tests/dispatch/dispatch_redact_check.gd --png <path>   (the frame, and <path>_bare.png without)
@@ -113,10 +114,9 @@ func _run() -> void:
 	_ok(boxes.size() == 3, "a box over each group (%d)" % boxes.size())
 	var larger := true
 	for r in runs:
-		var words := DispatchCensor.seen(r["rect"], _glass, CURVE, _cam)
 		var held := false
 		for b in boxes:
-			held = held or (b["rect"] as Rect2).grow(-3.0).encloses(words)
+			held = held or _holds_words(b, r["rect"], -3.0)
 		larger = larger and held
 	_ok(larger, "a box holds the words as the camera sees them, with room round them")
 	# no letter of the redacted words reaches the frame
@@ -188,8 +188,7 @@ func _run() -> void:
 		tr.cover(runs, _glass, CURVE, _cam, now)
 		held_all = held_all and _holds(tr, groups)
 		var b0: Rect2 = tr.boxes[0]["rect"]
-		var e0 := DispatchCensor.seen(groups[0]["rect"], _glass, CURVE, _cam)
-		within = within and e0.grow(e0.size.y * DispatchCensor.WAVER + 1.0).encloses(b0)
+		within = within and _within(tr.boxes[0], groups[0]["rect"])
 		rest_x.append(b0.position.x)
 	var again := DispatchCensor.new()
 	again.cover(runs, _glass, CURVE, _cam, 10.0 + 59.0 / 60.0)
@@ -207,11 +206,26 @@ func _run() -> void:
 	for f in range(1, 31):
 		tr.cover(runs, _glass, CURVE, _cam, 11.0 + float(f) / 60.0)
 		held_all = held_all and _holds(tr, groups)
-	var settled: Rect2 = tr.boxes[0]["rect"]
 	_ok(jump >= 20.0 and w_jump >= w_rest + jump * 0.5,
 		"a sudden move: the box trails a beat behind (%.1f px wide at rest, %.1f just after a %.1f px move)" % [w_rest, w_jump, jump])
-	_ok(after.grow(after.size.y * DispatchCensor.WAVER + 1.0).encloses(settled), "half a second after the move, the box is back round the words")
+	_ok(_within(tr.boxes[0], groups[0]["rect"]), "half a second after the move, the box is back round the words")
 	_ok(held_all, "a box was short of its words while the camera moved")
+	# turned to the words: the glass turned about its own face, the box turns with their baseline
+	_cam.look_at_from_position(EYE, Vector3.ZERO, Vector3.UP)
+	var turn := deg_to_rad(12.0)
+	_glass.rotate_object_local(Vector3.BACK, turn)
+	var tilted := DispatchCensor.new()
+	tilted.cover(runs, _glass, CURVE, _cam, 12.0)
+	var along := DispatchCensor.seen_along(groups[0]["rect"], _glass, CURVE, _cam)
+	var b_t: Dictionary = tilted.boxes[0]
+	var oriented := (b_t["half"] as Vector2).x * (b_t["half"] as Vector2).y * 4.0
+	var upright := DispatchCensor.seen(groups[0]["rect"], _glass, CURVE, _cam)
+	_ok(absf(angle_difference(float(b_t["angle"]), float(along["angle"]))) < deg_to_rad(0.5) and absf(float(b_t["angle"])) > deg_to_rad(8.0)
+		and _holds_words(b_t, groups[0]["rect"], 0.01) and _within(b_t, groups[0]["rect"]),
+		"the glass turned, the box turns with the words' baseline and still holds them (%.1f degrees)" % rad_to_deg(float(b_t["angle"])))
+	_ok(upright.get_area() > oriented * 1.3, "the control: an upright box round the same words is far larger (%.0f against %.0f px)" % [upright.get_area(), oriented])
+	_glass.rotate_object_local(Vector3.BACK, -turn)
+	tilted.free()
 	tr.free()
 	again.free()
 	print("dispatch_redact_check: %s (%d checks, %d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _checks, _fails, "" if _fails == 1 else "s"])
@@ -223,15 +237,37 @@ func _holds(c: DispatchCensor, groups: Array) -> bool:
 	if c.boxes.size() != groups.size():
 		return false
 	for i in groups.size():
-		var e := DispatchCensor.seen(groups[i]["rect"], _glass, CURVE, _cam)
-		if not (c.boxes[i]["rect"] as Rect2).grow(0.01).encloses(e):
+		if not _holds_words(c.boxes[i], groups[i]["rect"], 0.01):
+			return false
+	return true
+
+
+## Does box [param b], grown by [param grow] px, hold the words at [param r] (terminal px) as the camera sees them now?
+func _holds_words(b: Dictionary, r: Rect2, grow: float) -> bool:
+	var along := DispatchCensor.seen_along(r, _glass, CURVE, _cam)
+	if along.is_empty():
+		return false
+	for p in along["points"]:
+		if not DispatchCensor.inside(b, p, grow):
+			return false
+	return true
+
+
+## Is box [param b] within its waver of the words at [param r] (terminal px) as the camera sees them now?
+func _within(b: Dictionary, r: Rect2) -> bool:
+	var along := DispatchCensor.seen_along(r, _glass, CURVE, _cam)
+	if along.is_empty():
+		return false
+	var out := (along["half"] as Vector2).y * 2.0 * DispatchCensor.WAVER + 1.0
+	for p in DispatchCensor.corners(b):
+		if not DispatchCensor.inside(along, p, out):
 			return false
 	return true
 
 
 static func _inside(boxes: Array, p: Vector2, grow: float) -> bool:
 	for b in boxes:
-		if (b["rect"] as Rect2).grow(grow).has_point(p):
+		if DispatchCensor.inside(b, p, grow):
 			return true
 	return false
 
@@ -251,21 +287,23 @@ func _frame(lines: PackedStringArray, censored: bool, now: float) -> Image:
 ## averages) and `inner` (those 1.5 px from any crack or edge, what must be one color).
 func _shards(b: Dictionary) -> Dictionary:
 	var q: Rect2 = b["rect"]
+	var own := Rect2(Vector2.ZERO, (b["half"] as Vector2) * 2.0)
 	var lines: PackedVector3Array = _censor._cracks[int(b["key"])]["lines"]
-	var scale := Vector2(float(b["aspect"]), 1.0) / q.size
+	var scale := Vector2(float(b["aspect"]), 1.0) / own.size
 	var out := {}
 	for y in range(floori(q.position.y), ceili(q.end.y)):
 		for x in range(floori(q.position.x), ceili(q.end.x)):
 			var p := Vector2(x, y) + Vector2(0.5, 0.5)
-			if not q.has_point(p):
+			var l := DispatchCensor.local(b, p)
+			if not own.has_point(l):
 				continue
-			var id := DispatchCensor.shard(lines, (p - q.position) * scale)
+			var id := DispatchCensor.shard(lines, l * scale)
 			if not out.has(id):
 				out[id] = {"all": [], "inner": []}
 			(out[id]["all"] as Array).append(Vector2i(x, y))
-			var interior := q.grow(-1.5).has_point(p)
+			var interior := own.grow(-1.5).has_point(l)
 			for d in [Vector2(1.5, 0), Vector2(-1.5, 0), Vector2(0, 1.5), Vector2(0, -1.5), Vector2(1.1, 1.1), Vector2(-1.1, -1.1), Vector2(1.1, -1.1), Vector2(-1.1, 1.1)]:
-				interior = interior and DispatchCensor.shard(lines, (p + d - q.position) * scale) == id
+				interior = interior and DispatchCensor.shard(lines, (l + d) * scale) == id
 			if interior:
 				(out[id]["inner"] as Array).append(Vector2i(x, y))
 	return out

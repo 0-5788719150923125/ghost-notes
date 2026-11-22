@@ -391,9 +391,12 @@ A note that makes its own sound (next/music.md): the theory and the banks a song
 Rendering a session to video (bake + Movie Maker, background processes) and uploading it to YouTube. Under the workspaces: a reading and a show of cards export a take and fill in an upload, and the exporter names neither.
 
 - [`exporter.gd`](../src/export/exporter.gd) **Exporter** - renders the visualization to a video in the background, as separate processes polled by PID.
+- [`oauth.gd`](../src/export/oauth.gd) **oauth** - OAuth - what every upload site's sign-in and requests share: the one-shot listener on 127.0.0.1 that catches the browser's redirect (`await_code`), the page it answers with, and one HTTP exchange (`send`).
 - [`stitch.gd`](../src/export/stitch.gd) **Stitch** - a stretch of an export rendered again and put back in its place (next/editing.md step 13; next/cloud_render.md's `--from` and stitch, on this machine): a late fix renders its stretch, not the whole video.
+- [`tiktok.gd`](../src/export/tiktok.gd) **tiktok** - TikTok - sign in to the author's TikTok account and send a finished export there: posted, or as a draft the author finishes in the TikTok app.
+- [`tiktok_rows.gd`](../src/export/tiktok_rows.gd) **tiktok_rows** - TikTok rows - the Upload card's TikTok rows (`YouTubeCard`), shown while TikTok is one of the card's targets: the account and the app's client, how the video goes up (`TikTok.MODES`) and, for a post, who may see it and what viewers may do. Its keys sit in the card's block beside the card's ...
 - [`youtube.gd`](../src/export/youtube.gd) **youtube** - YouTube - sign in to the author's YouTube channel and upload a finished export to it.
-- [`youtube_card.gd`](../src/export/youtube_card.gd) **YouTubeCard** - the YouTube component's card: whether an export goes up, what it is called, who may see it and the playlist it joins, plus the Google client and the sign-in an upload needs. Its block in a document is `youtube:`.
+- [`youtube_card.gd`](../src/export/youtube_card.gd) **YouTubeCard** - the Upload card: whether an export goes up, where to (YouTube, TikTok or both, `TARGETS`), what it is called and says, and each target's own rows. Its component, block (`youtube:`) and class keep the name they had when YouTube was its only target, so every note's settings stay where they ...
 - [`youtube_tags.gd`](../src/export/youtube_tags.gd) **YouTubeTags** - each episode's tags, written from what it says.
 - [`youtube_thumbnail.gd`](../src/export/youtube_thumbnail.gd) **YouTubeThumbnail** - a thumbnail painted for each episode.
 

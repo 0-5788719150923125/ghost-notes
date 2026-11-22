@@ -55,7 +55,7 @@ var _match_by: Callable
 func _init(wanted_by := Callable(), writer_by := Callable(), painter_by := Callable(), match_by := Callable()) -> void:
 	key = "youtube_thumbnail"
 	label = "Thumbnail"
-	again = "Paint another thumbnail for this episode, unlike the ones before - they are kept, and the YouTube card steps between them"
+	again = "Paint another thumbnail for this episode, unlike the ones before - they are kept, and the Upload card steps between them"
 	first = "Paint this episode's thumbnail now"
 	waits = "painted once the episode's words are written"
 	unmade = "not painted for this episode yet"

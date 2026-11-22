@@ -13,7 +13,7 @@ class_name DispatchScreens
 ##
 ## Redacted words on the terminal ([constant DispatchScript.REDACT]) and the coordinates beside the radar's blip are drawn as
 ## written; [DispatchCensor] hides them over the camera's finished picture, where [method redactions] and [method
-## radar_redactions] say they lie. The place the coordinates come to is held in a readout at the scope's lower right.
+## radar_redactions] say they lie. The place the coordinates come to is held in a readout at the scope's foot.
 
 const TERM_SIZE := Vector2i(1120, 840)
 const RADAR_SIZE := Vector2i(512, 512)
@@ -85,15 +85,19 @@ const PHOSPHOR := Color(0.4315, 1.0, 0.5059)
 const SCREEN_DARK := Color(0.0056, 0.016, 0.0074)
 const RADAR_GLOW := Color(0.2706, 1.0, 0.3569)
 const RADAR_GLASS := Color(0.0085, 0.05, 0.017)
-## The radar's writing (px): its letters and lines; how many degrees of the coordinates beside the blip the scope's radius spans
+## The radar's writing (px): its letters and lines (the readout's; the coordinates' smaller, held clear of the blip's halo by
+## their gap, so the censor's box round them never meets the blip); how many degrees of the coordinates beside the blip the scope's radius spans
 ## from 0, 0 at its middle (hidden, never a real place: they only move as he moves); and the place's readout - its widest line,
-## its margin, and its lower right corner (a share of the scope's radius from its middle, inside the bearing ticks).
+## its margin, and how far below the scope's middle its foot is (a share of the radius, inside the bearing ticks); it is centered.
 const RADAR_FONT := 15
 const RADAR_LINE := 17.0
+const TAG_FONT := 11
+const TAG_LINE := 13.0
+const TAG_GAP := 24.0
 const RADAR_SPAN := 0.08
 const READOUT_WIDE := 150.0
 const READOUT_PAD := 7.0
-const READOUT_CORNER := Vector2(0.62, 0.68)
+const READOUT_FOOT := 0.8
 const SCOPE_GLOW := Color(0.2863, 1.0, 0.3765)
 const SCOPE_GLASS := Color(0.0045, 0.02, 0.009)
 
@@ -290,8 +294,8 @@ func radar_redactions() -> Array:
 	var size := Vector2(RADAR_SIZE)
 	var out: Array = []
 	var k := 0
-	for l in _tag(blip["at"] as Vector2, size * 0.5, size.x * 0.47):
-		out.append({"rect": l["rect"], "key": hash(["radar coordinates", k]), "line": RADAR_LINE, "size": size})
+	for l in _tag(blip["at"] as Vector2, size * 0.5, size.x * 0.47, String(blip.get("label", ""))):
+		out.append({"rect": l["rect"], "key": hash(["radar coordinates", k]), "line": TAG_LINE, "size": size})
 		k += 1
 	return out
 
@@ -310,24 +314,42 @@ static func _degrees(deg: float, plus: String, minus: String, digits: int) -> St
 
 
 ## The coordinates beside a blip at [param at] (the scope's radius 1) on a scope of radius [param rad] round [param mid]:
-## `{text, base, rect}` a line - its baseline's start and its rect a line high about the letters' middle (px) - on the blip's
-## right unless it is far right.
-func _tag(at: Vector2, mid: Vector2, rad: float) -> Array:
+## `{text, base, rect}` a line - its baseline's start and its rect a line high about the letters' middle (px) - [constant
+## TAG_GAP] from the blip: on its right unless it is far right, else its left, above or below, the first where the censor's
+## box round them clears the readout of [param place].
+func _tag(at: Vector2, mid: Vector2, rad: float, place := "") -> Array:
 	var p := mid + at * rad
-	var right := p.x < mid.x + rad * 0.3
 	var lines := coordinates(at)
+	var widths: Array = []
+	var w := 0.0
+	for l in lines:
+		widths.append(_mono.get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, TAG_FONT).x)
+		w = maxf(w, float(widths[-1]))
+	var h := TAG_LINE * float(lines.size())
+	var right := Vector2(p.x + TAG_GAP, p.y - h * 0.5)
+	var left := Vector2(p.x - TAG_GAP - w, p.y - h * 0.5)
+	var sides := [right, left] if p.x < mid.x + rad * 0.3 else [left, right]
+	sides.append_array([Vector2(p.x - w * 0.5, p.y - TAG_GAP - h), Vector2(p.x - w * 0.5, p.y + TAG_GAP)])
+	var corner: Vector2 = sides[0]
+	if not place.is_empty():
+		var avoid: Rect2 = _readout(place, mid, rad)["rect"]
+		var pad := Vector2(DispatchCensor.PAD_X, DispatchCensor.HALF_H) * TAG_LINE
+		for c in sides:
+			if not Rect2(c, Vector2(w, h)).grow_individual(pad.x, pad.y, pad.x, pad.y).intersects(avoid):
+				corner = c
+				break
 	var out: Array = []
 	for k in lines.size():
-		var w := _mono.get_string_size(lines[k], HORIZONTAL_ALIGNMENT_LEFT, -1, RADAR_FONT).x
-		var base := p + Vector2(12.0 if right else -12.0 - w, -4.0 + RADAR_LINE * (float(k) - 0.5))
-		var y := base.y - float(RADAR_FONT) * 0.32
-		out.append({"text": lines[k], "base": base, "rect": Rect2(base.x, y - RADAR_LINE * 0.5, w, RADAR_LINE)})
+		var x := corner.x if corner.x >= p.x or corner.x + w <= p.x else p.x - float(widths[k]) * 0.5
+		var y := corner.y + TAG_LINE * (float(k) + 0.5)
+		out.append({"text": lines[k], "base": Vector2(x, y + float(TAG_FONT) * 0.32),
+			"rect": Rect2(x, y - TAG_LINE * 0.5, widths[k], TAG_LINE)})
 	return out
 
 
-## The readout of the place [param place] on a scope of radius [param rad] round [param mid]: its box, its lower right
-## corner held at [constant READOUT_CORNER], and its lines - parted at a comma, then wrapped to [constant READOUT_WIDE] -
-## `{rect, lines: [{text, base}]}` (px).
+## The readout of the place [param place] on a scope of radius [param rad] round [param mid]: its box, centered with its foot
+## held at [constant READOUT_FOOT], and its lines, each centered in it - parted at a comma, then wrapped to [constant
+## READOUT_WIDE] - `{rect, lines: [{text, base}]}` (px).
 func _readout(place: String, mid: Vector2, rad: float) -> Dictionary:
 	var lines := PackedStringArray()
 	var parts := place.split(", ", false)
@@ -341,14 +363,16 @@ func _readout(place: String, mid: Vector2, rad: float) -> Dictionary:
 			line = next
 		if not line.is_empty():
 			lines.append(line)
+	var widths := PackedFloat32Array()
 	var w := 0.0
 	for l in lines:
-		w = maxf(w, _mono.get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, RADAR_FONT).x)
-	var end := mid + READOUT_CORNER * rad
-	var box := Rect2(end - Vector2(w, RADAR_LINE * float(lines.size())) - Vector2.ONE * READOUT_PAD * 2.0, Vector2.ZERO).expand(end)
+		widths.append(_mono.get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, RADAR_FONT).x)
+		w = maxf(w, widths[-1])
+	var size := Vector2(w, RADAR_LINE * float(lines.size())) + Vector2.ONE * READOUT_PAD * 2.0
+	var box := Rect2(mid + Vector2(-size.x * 0.5, READOUT_FOOT * rad - size.y), size)
 	var out: Array = []
 	for k in lines.size():
-		out.append({"text": lines[k], "base": box.position + Vector2(READOUT_PAD, READOUT_PAD + RADAR_LINE * (float(k) + 0.78))})
+		out.append({"text": lines[k], "base": Vector2(mid.x - widths[k] * 0.5, box.position.y + READOUT_PAD + RADAR_LINE * (float(k) + 0.78))})
 	return {"rect": box, "lines": out}
 
 
@@ -509,7 +533,7 @@ func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 
 ## The radar: dark green glass, its range rings and cross, the sweep going round with its glow fading behind it, the desk
 ## at its middle; the target's blip, lit as the sweep passes and fading after, his coordinates written small beside it (hidden
-## over the frame, [method radar_redactions]) and the place they come to held in the readout at the lower right; the places
+## over the frame, [method radar_redactions]) and the place they come to held in the readout at its foot; the places
 ## before it fading out; a ping's ring opening out from the blip; an aircraft's small mark drifting across now
 ## and then; and with the gain turned up, clutter round him, smaller and dimmer, with no name (at the top of the knob one
 ## on the desk itself, the chair's).
@@ -560,8 +584,8 @@ func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
 		var fresh := clampf(1.0 - since / 1.2, 0.0, 1.0)
 		c.draw_circle(at, 7.0 + 4.0 * fresh, Color(_radar_ink, 0.25 + 0.4 * lit))
 		c.draw_circle(at, 4.5, Color(_radar_ink.lightened(0.4), 0.55 + 0.45 * maxf(lit, fresh)))
-		for l in _tag(blip["at"] as Vector2, mid, rad):
-			c.draw_string(_mono, l["base"], String(l["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, RADAR_FONT, Color(_radar_ink, 0.85))
+		for l in _tag(blip["at"] as Vector2, mid, rad, String(blip.get("label", ""))):
+			c.draw_string(_mono, l["base"], String(l["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, TAG_FONT, Color(_radar_ink, 0.85))
 		var ping := float(st.get("ping", -1.0))
 		if ping >= 0.0 and ping < DispatchScript.PING_LEN:
 			var u := ping / DispatchScript.PING_LEN

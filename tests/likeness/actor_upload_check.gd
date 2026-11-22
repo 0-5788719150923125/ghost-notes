@@ -144,7 +144,7 @@ func _check() -> void:
 	ed._youtube._write_tags.button_pressed = true
 	_tick(card, up, pipe)
 	var feed = up.feed()
-	_ok(step.shown == feed and not pipe.row(step.key, "YouTube").is_empty() and pipe.row(step.key, "Actor").is_empty(),
+	_ok(step.shown == feed and not pipe.row(step.key, "Upload").is_empty() and pipe.row(step.key, "Actor").is_empty(),
 		"ticked: its row is the YouTube section's, the note its episode")
 	ed._youtube._refresh_tags()
 	var line: String = ed._youtube._tags_note.text

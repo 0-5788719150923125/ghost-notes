@@ -608,11 +608,13 @@ func _card() -> bool:
 	var card = load("res://src/export/youtube_card.gd").new()
 	card.exporter = ex
 	var cap: Dictionary = card.capture()
-	_ok(cap == {"upload": false, "title": "%title%: %episode%", "privacy": "private", "category": "22", "playlist": "",
+	_ok(cap == {"upload": false, "targets": ["youtube"], "title": "%title%: %episode%", "privacy": "private", "category": "22", "playlist": "",
 		"playlist_title": "", "channel": "", "channel_name": "", "client": "", "write_tags": false, "description": "",
 		"management_policy": "none",
 		"thumbnail": "youtube", "thumbnail_writer": "claude", "thumbnail_writer_model": "", "thumbnail_writer_effort": "",
-		"thumbnail_painter": "codex", "thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": true},
+		"thumbnail_painter": "codex", "thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": true,
+		"tiktok_mode": "draft", "tiktok_privacy": "", "tiktok_comments": false, "tiktok_duet": false, "tiktok_stitch": false,
+		"tiktok_aigc": true, "tiktok_brand_own": false, "tiktok_brand_paid": false},
 		"a new card uploads nothing, privately, as People & Blogs, titled by the template, to no channel yet, with YouTube's thumbnail - matched to the video's pictures once painted (%s)" % str(cap))
 	var names = _names({"title": "Truthful Tarot", "episode": "The Tower", "author": "Pen", "book": "Major Arcana"})
 	_ok(not names.shows_field("title") and not names.shows_field("episode") and not names.shows_field("author")
@@ -622,12 +624,14 @@ func _card() -> bool:
 		and card.values_now() == {"title": "Truthful Tarot", "episode": "The Tower", "author": "Pen", "book": "Major Arcana"},
 		"bound, the card shows all four on it and reads the note's names from there (%s)" % str(card.values_now()))
 	_ok(card.meta({"tags": ["a"]}).is_empty(), "unticked, it describes no upload whatever the panel has")
-	var block := {"upload": true, "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "category": "27",
+	var block := {"upload": true, "targets": ["youtube"], "title": "%title% - %episode% (%date%)", "privacy": "unlisted", "category": "27",
 		"management_policy": "unlist_others",
 		"playlist": "PL1", "playlist_title": "Readings", "channel": "UC-x", "channel_name": "@x", "client": "a1b2c3d4e5f6", "write_tags": true,
 		"description": "Line one.\n\nLine two.", "thumbnail": "painted", "thumbnail_writer": "claude",
 		"thumbnail_writer_model": "m1", "thumbnail_writer_effort": "high", "thumbnail_painter": "grok",
-		"thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": false}
+		"thumbnail_painter_model": "", "thumbnail_painter_effort": "", "thumbnail_match": false,
+		"tiktok_mode": "post", "tiktok_privacy": "SELF_ONLY", "tiktok_comments": true, "tiktok_duet": false, "tiktok_stitch": true,
+		"tiktok_aigc": false, "tiktok_brand_own": true, "tiktok_brand_paid": false}
 	card.apply(block)
 	_ok(card.capture() == block, "its block round-trips, the description's lines and all (%s)" % str(card.capture()))
 	_ok(card.meta({"tags": []}).get("management_policy") == "unlist_others" and card._management_note.visible
@@ -887,7 +891,7 @@ func _note_steps() -> bool:
 	up.refresh()
 	pipe.refresh()
 	var folder: String = up._feed.folder()
-	_ok(step.shown == up._feed and not pipe.row(step.key, "YouTube").is_empty()
+	_ok(step.shown == up._feed and not pipe.row(step.key, "Upload").is_empty()
 		and folder.begins_with(ProjectSettings.globalize_path(ROOT + "_readings")) and folder.get_file().begins_with("a-reading-"),
 		"ticked, it is on the Pipeline card, the note its episode, kept in the note's own folder (%s)" % folder.get_file())
 	_ok(up._feed.words() == "The quick brown fox  jumps over the lazy dog." and up._feed.episode_title() == "A Reading"
@@ -1194,7 +1198,7 @@ func _panel_fields() -> bool:
 	_ok(pipe.row(tags_step.key).is_empty(), "box clear, no tags are listed")
 	ed._youtube._write_tags.button_pressed = true
 	pipe.refresh()
-	var row: Dictionary = pipe.row(tags_step.key, "YouTube")
+	var row: Dictionary = pipe.row(tags_step.key, "Upload")
 	var listed: Array = pipe.names()
 	_ok(not row.is_empty() and listed.find("Tags") > listed.find("Close") and pipe.row(tags_step.key, "Episode").is_empty(),
 		"ticked, its row stands under the Close, in the YouTube section, never the Episode's: %s" % str(listed))

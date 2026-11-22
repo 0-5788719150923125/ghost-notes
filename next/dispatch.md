@@ -389,7 +389,8 @@ Sensitive text is hidden the way a video blurs a face, as a post-process on the 
   place names in what is said and on the radar are generic ("the grocery store", "the avenue", "the store").
 - **`DispatchCensor` is drawn over the desk's frame after the 3D** (and under a picture over the whole screen): each run's
   rect on the terminal, padded (runs on lines next to each other make one box), is carried through the glass's bulge and the
-  camera, and the box is the upright rect round it, eased a beat behind (`LAG` 0.09 s) and wavering outward a little, never
+  camera, and the box is the rect round it turned to the words' own baseline as the camera sees it (a tilted scope's
+  coordinates get a tilted box), eased a beat behind (`LAG` 0.09 s) and wavering outward a little, never
   short of the words. It is unstable and detached from the terminal on purpose: a big rectangle with large straight cracks
   in it. Its cracks are a tree of straight lines laid once per run (each across the shard it splits, shards about three
   letters long), and each shard is flat, the average of the frame under it, read off a jittered grid of taps over that shard
@@ -398,9 +399,10 @@ Sensitive text is hidden the way a video blurs a face, as a post-process on the 
   is typed.
 - **The radar writes coordinates, not a place, beside the blip**: a real scope tags a track with data (who it is, where it is) and
   keeps place names on a map under the sweep. Beside the blip are his latitude and longitude, two lines that change as the sweep
-  paints him (`DispatchScreens.coordinates`, from 0, 0 at the scope's middle, so never a real place), hidden by the censor like
+  paints him (`DispatchScreens.coordinates`, from 0, 0 at the scope's middle, so never a real place), small and `TAG_GAP` out from
+  the blip, on whichever side keeps the censor's box clear of the blip and the readout, and hidden by the censor like
   the terminal's words (`radar_redactions`; a run may name its own screen: `glass`, `curve`, `size`, `line`). The place they
-  come to is held in a readout at the scope's lower right (`_readout`: parted at a comma, wrapped, on a dark plate, brighter
+  come to is held in a readout centered at the scope's foot (`_readout`: parted at a comma, wrapped, on a dark plate, brighter
   for a moment after a ping), so the coordinates read as translated into a place.
 
 Looked at: the censor in the gate's render (`tests/run_quiet.sh -- tests/dispatch/dispatch_redact_check.gd --png`). The radar's

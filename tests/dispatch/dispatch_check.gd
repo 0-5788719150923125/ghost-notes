@@ -60,8 +60,9 @@ extends SceneTree
 ## - the camera turns to what is active (terminal typing, receiver in a storm, ringing phone) and a look holds while nothing else
 ##   is; it goes to the radar only at its sounds; the radar target moves in small steps under the voice, never a jump, with its
 ##   old place in the readout until it arrives; his coordinates beside him, changing as he moves and hidden over the frame by a
-##   box that follows them, the place held in a readout at the scope's lower right wherever he is (control: before the first
-##   ping, nothing to hide); the receiver is open only in its storm;
+##   box that follows them and clears the blip and the readout (control: at the old gap it meets the blip), the place held in a
+##   readout centered at the scope's foot wherever he is (control: before the first ping, nothing to hide); the receiver is open
+##   only in its storm;
 ## - a voice with no phone comes in on the receiver, typed or said: open from the static before it straight on through its
 ##   words, the storm brought down under them and the needle swelling in a word, shut after its tail, one stretch of sound
 ##   (the control: the room's own typed line opens nothing);
@@ -295,8 +296,25 @@ func _run() -> void:
 		and (coords_there[0]["rect"] as Rect2).position.distance_to((coords_going[0]["rect"] as Rect2).position) > 1.0
 		and DispatchScreens.coordinates(arrived["blip"]["at"]) != DispatchScreens.coordinates(going["blip"]["at"]),
 		"his coordinates are beside him and change as he moves, one run a line under the same keys (%s, %s)" % [DispatchScreens.coordinates(going["blip"]["at"]), DispatchScreens.coordinates(arrived["blip"]["at"])])
-	_ok((ro_going["rect"] as Rect2).end == ro_box.end and inside and " ".join(ro_words) == String(arrived["blip"]["label"]) and ro_box.position.x > r_mid.x - r_rad * 0.2,
-		"the place is held in a readout at the scope's lower right, inside its glass, wherever he is (%s: %s)" % [ro_words, ro_box])
+	_ok((ro_going["rect"] as Rect2).end == ro_box.end and inside and " ".join(ro_words) == String(arrived["blip"]["label"]) and absf(ro_box.get_center().x - r_mid.x) < 0.5
+		and ro_box.position.y > r_mid.y + r_rad * 0.4,
+		"the place is held in a readout centered at the scope's foot, inside its glass, wherever he is (%s: %s)" % [ro_words, ro_box])
+	# the censor's box round them (padded, wavered out) clears the blip's halo and the readout, wherever he is on his way
+	var halo := 11.0
+	var cleared := true
+	var near := INF
+	for rr_st in [going, arrived, md.radar_at(t0[moving_i] + 0.5)]:
+		var rr_b_at: Vector2 = (rr_st as Dictionary)["blip"]["at"]
+		var rr_tag: Array = md._screens._tag(rr_b_at, r_mid, r_rad, String(rr_st["blip"]["label"]))
+		var rr_box := (rr_tag[0]["rect"] as Rect2).merge(rr_tag[1]["rect"])
+		var rr_pad := Vector2(DispatchCensor.PAD_X, DispatchCensor.HALF_H) * DispatchScreens.TAG_LINE
+		rr_box = rr_box.grow_individual(rr_pad.x, rr_pad.y, rr_pad.x, rr_pad.y).grow(rr_box.size.y * DispatchCensor.WAVER)
+		var rr_p := r_mid + rr_b_at * r_rad
+		var rr_gap := rr_p.distance_to(Vector2(clampf(rr_p.x, rr_box.position.x, rr_box.end.x), clampf(rr_p.y, rr_box.position.y, rr_box.end.y)))
+		near = minf(near, rr_gap)
+		cleared = cleared and rr_gap > halo and not rr_box.intersects(md._screens._readout(String(rr_st["blip"]["label"]), r_mid, r_rad)["rect"])
+	var old_gap := 12.0 - DispatchCensor.PAD_X * DispatchScreens.TAG_LINE
+	_ok(cleared and old_gap < halo, "the box round his coordinates clears the blip's halo and the readout (nearest %.1f px; the control: at the old gap, %.1f, it meets the halo)" % [near, old_gap])
 	md._now = arrived_t
 	md._snap = true
 	md._tick_camera(0.016)
@@ -305,11 +323,17 @@ func _run() -> void:
 	var r_curve := float(md._glass("radar", "scope").get("curve", 0.0))
 	var coords_seen := DispatchCensor.seen((coords_there[0]["rect"] as Rect2).merge(coords_there[1]["rect"]), md._set.radar_screen, r_curve, md._cam,
 		Vector2(DispatchScreens.RADAR_SIZE))
+	var r_along := DispatchCensor.seen_along((coords_there[0]["rect"] as Rect2).merge(coords_there[1]["rect"]), md._set.radar_screen, r_curve, md._cam,
+		Vector2(DispatchScreens.RADAR_SIZE))
 	var r_covered := false
 	for bx in md._censor.boxes:
-		r_covered = r_covered or ((bx as Dictionary)["rect"] as Rect2).encloses(coords_seen)
+		var held := not r_along.is_empty() and absf(angle_difference(float(bx["angle"]), float(r_along["angle"]))) < deg_to_rad(0.5)
+		for rp in (r_along.get("points", PackedVector2Array()) as PackedVector2Array):
+			held = held and DispatchCensor.inside(bx, rp)
+		r_covered = r_covered or held
 	_ok(md.looking_at(arrived_t) == "radar" and coords_seen.size.x > 0.0 and r_covered,
-		"his coordinates are hidden over the frame as the camera sees them on the radar (%s, %d boxes)" % [coords_seen, md._censor.boxes.size()])
+		"his coordinates are hidden over the frame as the camera sees them on the radar, the box along the scope's own axis (%s, %.1f degrees, %d boxes)"
+		% [coords_seen, rad_to_deg(float(r_along.get("angle", 0.0))), md._censor.boxes.size()])
 	md._screens.show_radar(md.radar_at(0.5))
 	_ok(md._screens.radar_redactions().is_empty(), "the control: before the first ping, no coordinates to hide")
 	_ok(md.looking_at(t0[moving_i] + 1.0) == "radar", "the radar's alarm as he sets off turns the camera to it (%s)" % md.looking_at(t0[moving_i] + 1.0))

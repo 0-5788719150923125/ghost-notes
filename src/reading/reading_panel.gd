@@ -537,7 +537,7 @@ func _add_youtube() -> void:
 	_youtube = YouTubeCard.new()
 	_youtube.values = func() -> Dictionary: return publish.upload_values()
 	_youtube.name_from(_writer)
-	_panel.add_card(YouTubeCard.KEY, "YouTube", &"publish", "youtube").add_child(_youtube)
+	_panel.add_card(YouTubeCard.KEY, "Upload", &"publish", "youtube").add_child(_youtube)
 	_block_cards[YouTubeCard.KEY] = _youtube
 	_youtube.noted.connect(_set_status)
 	_offer_pipeline(_youtube)

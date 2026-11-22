@@ -15,7 +15,8 @@ class_name ShowOpening
 ## ([Openings] "title"), the blur alone ("blur"), or neither, the picture up sharp from black ("none", a note's default). A thumbnail of
 ## the title screen is the YouTube card's to take ([method Openings.title_moment]), never this one's.
 ##
-## Pure functions of show time, so a live reading, a scrub and an export open and close alike.
+## Pure functions of show time, so a live reading, a scrub and an export open and close alike. THE INTRO IS THE TOP'S: a reading
+## started part way (a live scrub) opens as "none" ([method style_of]), whatever is known yet of where its top was.
 
 ## The focus pull: it starts this long before the show opens and takes this long after it (seconds),
 ## from a lens this soft (CameraAttributesPractical.dof_blur_amount).
@@ -25,6 +26,12 @@ const FOCUS_BLUR := 0.16
 const INTRO_SHADER := preload("res://shaders/table_intro.gdshader")
 const INTRO_LIFT := 0.5
 const INTRO_SHARP := 0.0005
+
+
+## How a reading opens: [param style] ([constant Openings.ROWS]) from the top, "none" where it started part way ([param midway]) -
+## up sharp from its first frame, never the blur or the name.
+static func style_of(style: String, midway: bool) -> String:
+	return "none" if midway else style
 
 
 ## The name's alpha at [param t]: up by 1.4 s, gone as the show opens at [param opening] (INF while it is not known) - and only then:

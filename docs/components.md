@@ -101,7 +101,7 @@ By family - the color a component's card, chip and marks are drawn in.
 
 ### Publish
 
-- **YouTube** (`youtube`) - Uploads the exported video to your YouTube channel: its title, thumbnail, privacy and playlist.
+- **Upload** (`youtube`) - Uploads the exported video to YouTube, TikTok or both: one title, description and tags, and each site's own settings.
   - needs picture, audio; asks for `movie_export`, `subprocess`, `ffmpeg`; kept in `youtube:`
 
 ## Capabilities
