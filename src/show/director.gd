@@ -288,6 +288,7 @@ func reset_show() -> void:
 	set_pacing(1.0)
 	set_flourish(1.0)
 	set_camera(1.0)
+	set_camera_follow({})
 	set_hand("kalam")
 	set_intro_hold(INTRO_DEFAULT)
 	set_outro_hold(OUTRO_DEFAULT)
@@ -351,6 +352,16 @@ func set_camera(v: float) -> void:
 	if is_equal_approx(c, camera):
 		return
 	camera = c
+	_save_pacing()
+
+
+## How a flown camera follows what it turns to ([member ShowFeed.camera_follow]): only the settings [param d] names, within
+## their bounds ([method CameraFollow.sanitize]). A playing medium takes it on its next frame.
+func set_camera_follow(d: Dictionary) -> void:
+	var f := CameraFollow.sanitize(d)
+	if f == camera_follow:
+		return
+	camera_follow = f
 	_save_pacing()
 
 
@@ -561,6 +572,7 @@ func _load_pacing() -> void:
 	pacing = clampf(float(Settings.read("director", "pacing", 1.0)), PACING_MIN, PACING_MAX)
 	flourish = clampf(float(Settings.read("director", "flourish", 1.0)), FLOURISH_MIN, FLOURISH_MAX)
 	camera = clampf(float(Settings.read("director", "camera", 1.0)), CAMERA_MIN, CAMERA_MAX)
+	camera_follow = CameraFollow.sanitize(Settings.read("director", "camera_follow", {}))
 	var h := String(Settings.read("director", "hand", "kalam"))
 	hand = h if (h == "random" or NotebookLayout.HANDS.has(h)) else "kalam"
 	intro_hold = clampf(float(Settings.read("director", "intro", intro_hold)), INTRO_MIN, INTRO_MAX)
@@ -589,6 +601,7 @@ func _save_pacing() -> void:
 	Settings.write("director", "pacing", pacing)
 	Settings.write("director", "flourish", flourish)
 	Settings.write("director", "camera", camera)
+	Settings.write("director", "camera_follow", camera_follow)
 	Settings.write("director", "hand", hand)
 	Settings.write("director", "intro", intro_hold)
 	Settings.write("director", "outro", outro_hold)

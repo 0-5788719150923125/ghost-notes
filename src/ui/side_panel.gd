@@ -9,8 +9,8 @@ class_name SidePanel
 ##
 ## Add rows to [member body], never to the panel: the panel's own child is the scroll view.
 ##
-## A header is pinned over the scrolling body ([method pin_header]): the panel's title row - "‹", "⋯"
-## and "–" - stays in view however far the body is scrolled, and goes with the panel when it is hidden.
+## A header is pinned over the scrolling body ([method pin_header]): the panel's title row - "⋯" and
+## "‹" - stays in view however far the body is scrolled, and goes with the panel when it is hidden.
 ## A note's panel names no mode there ([method pin_title_row]).
 ##
 ## Its cards are a deck ([PanelDeck]; next/panel_deck.md): one scroll, and the title bars of the cards
@@ -48,9 +48,8 @@ var detach := Callable()
 var detach_blocker := Callable()
 var _detach_buttons: Array = []     # [Button, component, tooltip]
 var _detach_t := 0.0
-## The way back: a small "›" in the corner the panel occupied, shown while the panel is hidden (after
-## a small "‹" home on a note's panel, [method pin_title_row]). A sibling, not a child, which would be
-## hidden with the panel.
+## The way back: a small "›" in the corner the panel occupied, shown while the panel is hidden
+## ([method pin_title_row]). A sibling, not a child, which would be hidden with the panel.
 var _restore: HBoxContainer
 
 var _col: VBoxContainer
@@ -243,29 +242,24 @@ func pin_header(row: Control) -> void:
 	_fit()
 
 
-## The title row of a note's panel, pinned ([method pin_header]): "‹" at its left, "⋯" and - where
-## [param hides] - "–" at its right, and no name between them. Hidden, the panel leaves a small "‹"
-## before its "›", one style; the "‹" is the same button shown or hidden ([method Shell.back_button]).
-## [param owner] is the panel's mode, which [Shell] is asked through.
+## The title row of a note's panel, pinned ([method pin_header]): "⋯" and - where [param hides] - "‹"
+## at its right, which hides the panel and leaves "›" in its corner to bring it back; no name. The way
+## home is the chrome's row alone. [param owner] is the panel's mode, which [Shell] is asked through.
 func pin_title_row(owner: Node, hides := true) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
-	row.add_child(Shell.back_button(owner))
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(gap)
 	row.add_child(Shell.note_menu(owner))
 	if hides:
 		var hide := Button.new()
-		hide.text = "–"
+		hide.text = "‹"
 		hide.tooltip_text = "Hide panel (F2)"
 		hide.focus_mode = Control.FOCUS_NONE
 		hide.custom_minimum_size = Vector2(28, 28)
 		hide.pressed.connect(func() -> void: visible = false)
 		row.add_child(hide)
-	var home := Shell.back_button(owner)
-	_corner().add_child(home)
-	_corner().move_child(home, 0)
 	pin_header(row)
 	return row
 

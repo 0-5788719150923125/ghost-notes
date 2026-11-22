@@ -28,7 +28,7 @@ class_name Components
 ## The families: a label and a hue in degrees, the color a component's card, chip and marks are drawn in ([Card]);
 ## "paper", the note's own text, has none. Color is per family because hues run out near eight. The order is the
 ## order cards stand in on a panel, read top to bottom: the text, what produces a reading, the voice, sound, pictures,
-## the presentation, what is round it, the Look, and where the finished video goes.
+## the presentation, its camera, what is round it, the Look, and where the finished video goes.
 const FAMILIES := {
 	&"paper": {"label": "Text", "hue": -1.0},
 	&"producer": {"label": "Producer", "hue": 275.0},
@@ -36,6 +36,7 @@ const FAMILIES := {
 	&"sound": {"label": "Sound", "hue": 212.0},
 	&"picture": {"label": "Picture", "hue": 32.0},
 	&"medium": {"label": "Medium", "hue": 128.0},
+	&"camera": {"label": "Camera", "hue": 56.0},
 	&"environment": {"label": "Environment", "hue": 245.0},
 	&"look": {"label": "Look", "hue": 322.0},
 	&"publish": {"label": "Publish", "hue": 2.0},
@@ -62,13 +63,13 @@ const WORKSPACES := {
 		"blurb": "The note's own panel: its words, and a card for each thing attached."},
 	"reading": {"label": "Reading", "section": "generative",
 		"blurb": "A voice reads the note: the cast, each speaker's delivery and room, the stream.",
-		"hosts": ["direction", "voice", "voice_training", "medium", "environment", "illustrations", "actor", "look", "bookends"],
+		"hosts": ["direction", "voice", "voice_training", "medium", "camera", "environment", "illustrations", "actor", "look", "bookends"],
 		"classic": ["text", "voice", "medium", "illustrations", "look", "bookends"]},
 	# (its settings keep the section they had as Cards, or the workspace would forget them)
 	"table": {"label": "Table", "section": "cards", "mode": "table",
 		"blurb": "A show at a table: the episodes agents make from the note's brief, and the voice that reads them.",
 		# (the Pictures card comes with a show at a table, so it is left out here)
-		"hosts": ["table", "direction", "voice", "voice_training", "medium", "environment", "illustrations", "look", "bookends"],
+		"hosts": ["table", "direction", "voice", "voice_training", "medium", "camera", "environment", "illustrations", "look", "bookends"],
 		"classic": ["text", "table", "voice", "look", "bookends"]},
 	"clip": {"label": "Masking", "section": "",
 		"blurb": "A clip's editor: its markers, tracks, effects and timeline."},
@@ -122,6 +123,13 @@ const REGISTRY := {
 		"slots": [], "workspace": "",
 		"capabilities": ["forward_plus"], "marks": ["pictures"], "block": "illustrations", "card": "pictures",
 		"script": "res://src/show/pictures_card.gd"},
+	# How the camera of the format the note is shown in follows what it turns to ([CameraFollow]): one card over every format
+	# that flies one, each row at the format's own until set; where and when it looks stays the format's
+	"camera": {"label": "Camera", "family": &"camera",
+		"blurb": "How the camera turns to what it looks at, in every format that flies one: how it eases in and settles, how much quicker a long look runs, and the fastest it turns.",
+		"needs": ["places"], "provides": [], "requires": [], "slots": [], "workspace": "",
+		"capabilities": ["forward_plus"], "marks": [], "block": "camera", "card": "camera",
+		"script": "res://src/show/camera_card.gd"},
 	# What is round the scene the note is shown in (next/environment.md): its light, shafts through its haze, what drifts in its air,
 	# what is heard round it and how strongly each lit thing in it shines - read by the scene its Medium's format shows
 	"environment": {"label": "Environment", "family": &"environment",
@@ -263,6 +271,8 @@ static func attach_blocks(key: String) -> Dictionary:
 			return {"bookends": {}}
 		"environment":
 			return {"environment": {}}
+		"camera":
+			return {"camera": {}}
 		# its card fills its defaults (nothing goes up until "Upload after export" is ticked)
 		"youtube":
 			return {"youtube": {}}

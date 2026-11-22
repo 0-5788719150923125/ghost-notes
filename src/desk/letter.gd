@@ -21,8 +21,8 @@ class_name LetterMedium
 ## _camera_pose]), lingering in a thought ([constant LetterScript.POINT_LINGER]).
 ##
 ## The camera's arc over a page is the book's and the tablet's ([method _arc]): the whole pad as a page opens, closer as the
-## writing gets under way, let go before the turn, between [constant LETTER_WIDE] and [constant LETTER_LOCAL] on slow springs
-## ([constant LETTER_TAU]). Only a point at the camera ([constant CAMERA_K]) and a still change how close it is; a thought,
+## writing gets under way, let go before the turn, between [constant LETTER_WIDE] and [constant LETTER_LOCAL], slowly (its
+## format's own follow, [CameraFollow]). Only a point at the camera ([constant CAMERA_K]) and a still change how close it is; a thought,
 ## a point and a tap move where it looks only.
 ##
 ## A picture (`<!-- image (full): -->` ... `<!-- /image -->`) fades up over the desk as its passage begins, moves slowly
@@ -37,13 +37,12 @@ class_name LetterMedium
 
 ## The camera ([method _arc]): close on the writing, nearer than the desk's, which frames a formula (at this the camera
 ## sees about three fifths of the page's height and all its width); wide, the whole pad with a little desk round it, for
-## the opening, each turn and the close. Its springs' time (seconds), the tablet's. A page closes in over ARC_IN from
+## the opening, each turn and the close. Its springs are the tablet's (the Letter's `follow` row). A page closes in over ARC_IN from
 ## ARRIVE after it has come up (the first from the intro's end, over the blank page, [constant LetterScript.BLANK_PAGE])
 ## and lets go over ARC_OUT, done OUT_BEFORE its turn: the springs run about twice their time behind, so the turn is seen
 ## from nearly the whole pad.
 const LETTER_LOCAL := {"dist": 0.47, "pitch": 80.0}
 const LETTER_WIDE := {"dist": 0.85, "pitch": 77.0}
-const LETTER_TAU := 4.2
 const ARRIVE := 1.0
 const ARC_IN := 9.0
 const ARC_OUT := 9.0
@@ -91,9 +90,9 @@ const AWAY_LEAD := 3.5
 ## The writer hesitates too: through a hesitation the pen stops after the word before it and takes up again this long
 ## (seconds) before the voice goes on ([method _resume_floor]).
 const RESUME_LEAD := 0.9
-## A still is still from its first moment: the camera heads for the drawing [constant AWAY_LEAD] early, on springs this
-## much quicker than its own, so it has settled when the still begins.
-const STILL_SPRING := 0.3
+## A still is still from its first moment: the camera heads for the drawing [constant AWAY_LEAD] early, its springs' time this
+## share of its own, so it has settled when the still begins.
+const STILL_SPRING := 0.23
 ## The camera catches on a drawing: from [constant AWAY_LEAD] before the pen begins it, the camera is close and holds it at
 ## the frame's middle ([method _caught]) while the line written under it is no more than CATCH_LOW (px of the page) below
 ## it. Past that it lets go to exactly where it would be with no drawing, slowly: from LET_GO_LEAD (seconds) before that
@@ -1084,13 +1083,13 @@ func _still_soon() -> bool:
 	return false
 
 
-## The camera's springs: the tablet's slow ones ([constant LETTER_TAU]), quicker caught on a drawing ([constant
-## CATCH_SPRING]), quick through a still and the run-up to it.
-func _spring_tau() -> float:
+## What the camera's follow makes of this moment: its own slow pace, quicker caught on a drawing ([constant CATCH_SPRING]),
+## quick through a still and the run-up to it ([constant STILL_SPRING]).
+func _camera_pace() -> float:
 	if _still_soon() or not _span_now("still").is_empty():
-		return SPRING_TAU * STILL_SPRING
+		return STILL_SPRING
 	var caught := _caught()
-	return LETTER_TAU * (CATCH_SPRING if not caught.is_empty() and not caught.has("from") else 1.0)
+	return CATCH_SPRING if not caught.is_empty() and not caught.has("from") else 1.0
 
 
 ## The page lies blank before the first thing is written ([constant LetterScript.BLANK_PAGE]).

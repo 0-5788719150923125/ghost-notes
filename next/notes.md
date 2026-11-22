@@ -321,8 +321,8 @@ Three changes, all in the shell, none in the engine.
 
 A notes app opens on its notes, so Ghost Notes does. The left panel is the first thing on screen, and it
 lists notes (the name and tagline at its head, then New and Open…, then the notes newest first).
-Opening a note turns the panel into that note's cards, with "‹ Notes" at the top to go back, and the
-main area into the note: its text while you write, its stage while it plays. While no note is open, the
+Opening a note turns the panel into that note's cards, "‹" at its top right hiding the panel ("›" brings it back;
+the way home is the ⌂ in the bottom-right row), and the main area into the note: its text while you write, its stage while it plays. While no note is open, the
 main area shows the name and tagline in large type, with no controls. (`byline:` is a table show's own
 line, so the plan says tagline.)
 
@@ -970,7 +970,7 @@ list (`src/app/notes_list.gd`): New, and the notes newest first, from `NoteStore
 the default folder `user://notes` plus the files and folders the author adds). `main.open_note` starts a note
 through the one session path. A new note carries only its marker block, because an empty block is not "the
 defaults" to every card (an empty `illustrations:` wipes the pictures' look). A note with nothing attached is
-`src/app/note_panel.gd`, its "+" offering what decides what it becomes. "‹ Notes" tops every panel, a song that
+`src/app/note_panel.gd`, its "+" offering what decides what it becomes. The ⌂ in the bottom-right row leaves every note, a song that
 ends stays in its note, and the assistant picker's gating checks live in assistant_pick_check.
 
 - Not built: the note owning the clock, feeds, moments, places and seed (each workspace still runs its own

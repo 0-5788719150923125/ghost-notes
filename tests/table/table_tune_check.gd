@@ -11,12 +11,13 @@ extends SceneTree
 ##     out. The control: a show's tune changes the number the table reads;
 ##   - as a form shows them ([method TableTune.fields] in a [SchemaForm]): a slider per row within its bounds (the control: a row
 ##     with no bound draws none); each offered by the laws it paces (the control: acts that only turn things are offered none); the
-##     panel's Pacing card shown while a section offers a row, a row moved handed back (the control: nothing offered, no card).
+##     Episode card's Pacing rows ([EpisodePacing]) shown while the episode offers a row, a row moved handed back (the control:
+##     nothing offered, no rows).
 
 var _fails := 0
 
 
-class Offer extends TuneSection:
+class Offer:
 	var offered := {}
 	var told := {}
 
@@ -26,9 +27,8 @@ class Offer extends TuneSection:
 	func values() -> Dictionary:
 		return told
 
-	func set_value(key: String, value: Variant) -> String:
+	func set_value(key: String, value: Variant) -> void:
 		told[key] = value
-		return ""
 
 
 func _initialize() -> void:
@@ -60,21 +60,20 @@ func _initialize() -> void:
 	_ok(TableTune.fields(["paint"]).keys() == ["slow_most", "rest_most", "move_pace"] and TableTune.fields(["carry", "turn"]).keys() == ["laid_rest"],
 		"each law brings the numbers that pace it: %s, %s" % [TableTune.fields(["paint"]).keys(), TableTune.fields(["carry", "turn"]).keys()])
 	_ok(TableTune.fields(["turn", "clock"]).is_empty(), "the control: acts that only turn things are offered nothing to pace")
-	# The pacing card: shown while a section offers a row, a row moved handed to its section - the control: nothing offered, no card
+	# The Episode card's Pacing rows: shown while the episode offers a row, a row moved handed back - the control: nothing offered,
+	# no rows
 	var offer := Offer.new()
 	offer.offered = TableTune.fields(["paint"])
-	var card := Card.new("check.pacing", "Pacing", &"producer")
-	root.add_child(card)
-	var pacing := PacingCard.new(func() -> Array: return [offer])
-	card.body.add_child(pacing)
+	var pacing := EpisodePacing.new(offer.rows, offer.values, offer.set_value)
+	root.add_child(pacing)
 	pacing.refresh()
-	_ok(card.visible and pacing.row_count() == 3, "the Pacing card shows what is offered (%d rows)" % pacing.row_count())
+	_ok(pacing.visible and pacing.row_count() == 3, "the Pacing rows show what is offered (%d rows)" % pacing.row_count())
 	pacing._form.edited.emit("slow_most", 3.0)
-	_ok(offer.told.get("slow_most") == 3.0, "a row moved is handed to the section that offers it")
+	_ok(offer.told.get("slow_most") == 3.0, "a row moved is handed back to the episode")
 	offer.offered = {}
 	pacing.refresh()
-	_ok(not card.visible and pacing.row_count() == 0, "the control: nothing offered, no Pacing card")
-	card.free()
+	_ok(not pacing.visible and pacing.row_count() == 0, "the control: nothing offered, no Pacing rows")
+	pacing.free()
 	if _fails == 0:
 		print("table_tune_check: ALL OK")
 		quit(0)

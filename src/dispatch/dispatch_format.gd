@@ -69,6 +69,8 @@ static func for_note(ctx: Dictionary) -> DispatchFormat:
 
 ## The script is read again once its words have rested this long (seconds); a long note parses in tens of milliseconds.
 const SETTLE := 1.0
+## The note's dates, filled as the show fills them ([method _say_about]).
+const Macros := preload("res://src/data/macros.gd")
 
 
 func _process(delta: float) -> void:
@@ -298,10 +300,12 @@ func _build() -> void:
 	_show_knobs()
 
 
-## What the script asks of the desk: its phones, its voices through them, and anything it gets wrong.
+## What the script asks of the desk: its phones, its voices through them, and anything it gets wrong - read with its dates
+## filled ([method Macros.dated]), as the show plays it, so a count's width is the count's and not its macro's.
 func _say_about(body: String) -> void:
 	if _about == null:
 		return
+	body = Macros.dated(body)
 	var p := DispatchScript.parse(body, films())
 	_wants = DispatchMedium.wants_of(p, body)
 	_works = DispatchMedium.works_of(p)
@@ -310,7 +314,7 @@ func _say_about(body: String) -> void:
 	var n := (p["actions"] as Array).size()
 	var line := "%d phones (%s); %d things the desk does." % [phones.size(), ", ".join(phones), n]
 	var warn: PackedStringArray = p["warnings"]
-	StatusLog.say("dispatch desk", "\n".join(warn))
+	StatusLog.warn("dispatch desk", warn)
 	if not warn.is_empty():
 		line += "\n⚠  " + "\n⚠  ".join(warn.slice(0, 4))
 		if warn.size() > 4:

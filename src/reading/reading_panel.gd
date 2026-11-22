@@ -189,10 +189,6 @@ var document_parts := {}
 ## what an upload says. A note's own, unless a component's card hands another.
 var publish: ReadingPublish = ReadingPublish.new()
 
-## What the show may be paced by ([TuneSection]): each component whose parts read such numbers hands one; the
-## Pacing card shows the rows they offer, and none when none do ([PacingCard]).
-var tune_sections: Array = []
-
 ## What the note's presentation sets down ([PropSection]): each component that stands props hands one; the Props card shows
 ## their rows, and none when none has any ([PropsCard]).
 var prop_sections: Array = []
@@ -362,8 +358,6 @@ func _build_panel() -> void:
 	# ...and where the video goes, when the note says so
 	if _attached.has("youtube"):
 		_add_youtube()
-		# ...what the show may be paced by ([PacingCard]): a card only while some component offers a row
-	_panel.add_card("pacing", "Pacing", &"producer", "", PacingCard.BLURB).add_child(PacingCard.new(func() -> Array: return tune_sections))
 		# ...what it sets down ([PropsCard]): a card only while some component stands props
 	_panel.add_card("props", "Props", &"medium", "", PropsCard.BLURB).add_child(PropsCard.new(func() -> Array: return prop_sections))
 		# ...the timeline open, as a list ([TimelineList]): a card shown only while a timeline editor is open
@@ -592,7 +586,7 @@ func episode_left(feed: EpisodeFeed) -> void:
 
 
 func _build_header(_box: VBoxContainer) -> void:
-		# pinned over the scrolling body, so "⋯" and "–" never scroll away (SidePanel.pin_title_row)
+		# pinned over the scrolling body, so "⋯" and "‹" never scroll away (SidePanel.pin_title_row)
 	(_panel as SidePanel).pin_title_row(self)
 
 

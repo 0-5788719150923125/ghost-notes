@@ -25,6 +25,8 @@ class_name ScriptWriter
 ## what the note is made of and every mark the palette offers, and changes them in the editor as the author asks, each change a
 ## step Ctrl+Z takes back. The conversation is kept in the note's folder ([member refine_folder]) and goes on with the window
 ## closed; the panel says what the note is made of ([member refine_parts]).
+##
+## Ctrl+F, or the magnifier in the foot, finds and replaces in the words ([FindBar]).
 
 ## The document's own metadata - top-level frontmatter keys, not ghost's block - edited on the card,
 ## never in the editor. Each is read by something: the label, its tooltip, the panels that use it. A row
@@ -99,6 +101,8 @@ var refine_folder: Callable
 var refine_parts: Callable
 var _chat: WriterChat = null
 var _refine: TextRefine = null
+## Find and replace over the editor (Ctrl+F, or its button in the foot).
+var _find: FindBar
 
 
 func _wording(key: String, dflt: String) -> String:
@@ -430,7 +434,7 @@ func _build_window(section: String, blocks: PackedStringArray) -> void:
 	_window.min_size = Vector2i(760, 440)
 	_window.close_requested.connect(_window.hide)
 	_window.window_input.connect(func(e: InputEvent) -> void:
-		if e is InputEventKey and e.pressed and e.keycode == KEY_ESCAPE:
+		if e is InputEventKey and e.pressed and e.keycode == KEY_ESCAPE and not _find.visible:
 			_window.hide())
 	add_child(_window)
 
@@ -470,7 +474,13 @@ func _build_window(section: String, blocks: PackedStringArray) -> void:
 	text_edit.add_theme_font_size_override("font_size", 16)
 	text_edit.add_theme_constant_override("line_spacing", 6)
 	text_edit.syntax_highlighter = ScriptHighlighter.new(_mode)
-	split.add_child(text_edit)
+	var words := VBoxContainer.new()
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.add_theme_constant_override("separation", 6)
+	_find = FindBar.new(text_edit)
+	words.add_child(_find)
+	words.add_child(text_edit)
+	split.add_child(words)
 	split.add_child(_build_palette())
 
 	var foot := HBoxContainer.new()
@@ -490,6 +500,7 @@ func _build_window(section: String, blocks: PackedStringArray) -> void:
 		+ "what they are for, what the note is made of and every mark listed beside them. Each change is a step Ctrl+Z takes back, "
 		+ "and the conversation is kept with the note.")
 	refine.pressed.connect(open_refine)
+	foot.add_child(_find.button())
 	foot.add_child(refine)
 	var close := Button.new()
 	close.text = "Done"

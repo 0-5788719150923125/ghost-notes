@@ -15,6 +15,8 @@ class_name TextField
 ## A writer's change ([method splice]) is said too, since the card keeps it as it keeps a hand's.
 ##
 ## A field with no heading shows none on the card; its window is called [member window_title] then.
+##
+## Ctrl+F, or the magnifier in the window's foot, finds and replaces in the words ([FindBar]).
 
 ## The hand changed the words. Assigning [member text] does not say so.
 signal text_changed
@@ -47,6 +49,8 @@ var _actions: Array = []
 var _lines: Array = []
 var _foot: HBoxContainer
 var _col: VBoxContainer
+## Find and replace over the words (Ctrl+F, or its button in the foot).
+var _find: FindBar
 
 
 ## [param heading] names it on the card and on its window, [param placeholder] stands in for no words, and [param
@@ -139,7 +143,7 @@ func _build_window() -> void:
 	_window.min_size = Vector2i(560, 320)
 	_window.close_requested.connect(_window.hide)
 	_window.window_input.connect(func(e: InputEvent) -> void:
-		if e is InputEventKey and e.pressed and e.keycode == KEY_ESCAPE:
+		if e is InputEventKey and e.pressed and e.keycode == KEY_ESCAPE and not _find.visible:
 			_window.hide())
 	add_child(_window)
 
@@ -170,6 +174,8 @@ func _build_window() -> void:
 			return
 		text = _edit.text
 		text_changed.emit())
+	_find = FindBar.new(_edit)
+	col.add_child(_find)
 	col.add_child(_edit)
 	for c in _lines:
 		col.add_child(c)
@@ -184,6 +190,7 @@ func _build_window() -> void:
 	hint.add_theme_font_size_override("font_size", 11)
 	hint.modulate = Color(1, 1, 1, 0.55)
 	foot.add_child(hint)
+	foot.add_child(_find.button())
 	for c in _actions:
 		foot.add_child(c)
 	var done := Button.new()

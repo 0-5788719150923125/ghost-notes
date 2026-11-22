@@ -86,6 +86,8 @@ var _tl_btn: Button = null
 var _undo: Array = []                 # what the dock's Undo takes back, last last: {episode, step, digest} - the version before each edit
 var _source_window: SourceWindow = null    # ✎'s window, made the first time a row's is pressed
 var _tune := {}                     # the show's `tune:` ([TableTune]), as its block tells it - {} for none
+var _laws_seen := "-"               # the episode and acts the laws below were read from ([method pacing_rows])
+var _laws_now: Array = []
 var _taking := false                # the voice's take being made ([method _make_take])
 var _design_window: DesignWindow = null    # a painted design's elements as rows, made the first time its ✎ is pressed
 var _producer: TableProducer = null
@@ -161,7 +163,6 @@ func serve(panel: ReadingPanel) -> void:
 	reading.walk = EpisodeWalk.new(func() -> TableEpisode: return _episode)
 	reading.bed = Bed.new(self)
 	reading.publish = Publish.new(self)
-	reading.tune_sections.append(Pacing.new(self))
 	reading.prop_sections.append(EpisodeProps.new(self))
 	_doc.opened.connect(_on_show_opened)
 	_doc.mode_changed.connect(_on_doc_mode)
@@ -276,32 +277,17 @@ class Bed extends ReadingBed:
 		return float(card._knobs["environment"])
 
 
-## What the episode is paced by ([TuneSection], on the panel's Pacing card): the numbers that pace the laws its acts use
-## ([method TableTune.fields]: a show that paints nothing is offered no brush's), told in the show's block (`tune:`). Read again only
-## when the acts change.
-class Pacing extends TuneSection:
-	var card: EpisodeCard
-	var _seen := "-"
-	var _laws: Array = []
-
-	func _init(c: EpisodeCard) -> void:
-		card = c
-
-	func rows() -> Dictionary:
-		if card._episode == null or not card._episode.has("acts"):
-			return {}
-		var key := card._episode.dir + "|" + card._episode.digest("acts")
-		if key != _seen:
-			_seen = key
-			_laws = card.laws_used()
-		return TableTune.fields(_laws)
-
-	func values() -> Dictionary:
-		return card._tune.duplicate()
-
-	func set_value(key: String, value: Variant) -> String:
-		card.set_tune(key, value)
-		return ""
+## What the episode is paced by (its Pacing rows, [EpisodePacing]): the numbers that pace the laws its acts use ([method
+## TableTune.fields]: a show that paints nothing is offered no brush's), told in the show's block (`tune:`). The laws are read
+## again only when the acts change.
+func pacing_rows() -> Dictionary:
+	if _episode == null or not _episode.has("acts"):
+		return {}
+	var key := _episode.dir + "|" + _episode.digest("acts")
+	if key != _laws_seen:
+		_laws_seen = key
+		_laws_now = laws_used()
+	return TableTune.fields(_laws_now)
 
 
 ## The laws the episode's acts use, each once.
@@ -845,6 +831,8 @@ func _build() -> void:
 				return
 			_knobs["environment"] = v
 			_touch())
+	# What the show's hands are paced by at the table: only the numbers its acts use, and nothing while it has none
+	box.add_child(EpisodePacing.new(pacing_rows, func() -> Dictionary: return _tune.duplicate(), set_tune))
 
 
 	# Who writes and who paints: an agent CLI each, from the registries - the plan, the booklet and

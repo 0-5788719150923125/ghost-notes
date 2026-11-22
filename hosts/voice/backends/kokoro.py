@@ -192,6 +192,9 @@ PLAN = "_plan.onnx"
 # The stock graph made to sing (`_sung_graphs`, kokoro_sung.py), and it cut to its planned curves, beside it.
 SUNG = "model_sung.onnx"
 SUNG_CURVES = "model_sung_curves.onnx"
+# ...and the graph a voice moves in made so (an inflected reading of a moving voice), and it cut to its curves.
+MOVING_SUNG = "model_moving_sung.onnx"
+MOVING_SUNG_CURVES = "model_moving_sung_curves.onnx"
 # A sung vowel's energy is held at its peak over its first HOLD_LOOK curve steps (12.5 ms each), and never more than
 # HOLD_UNDER (the curve's own log units) under the phrase's vowels' typical peak.
 HOLD_LOOK = 8
@@ -442,7 +445,7 @@ class KokoroBackend(PiperBackend):
         self._moving: dict = {}  # checkpoint -> its graph that takes a style a token, or None (`_moving_graph`)
         self._paths: dict = {}  # id(a graph) -> its file
         self._plans: dict = {}  # id(a graph) -> the graph that makes its plan alone (`_planner`)
-        self._sung: dict = {}  # checkpoint -> (its graph that sings, its curve planner), or None (`_sung_graphs`)
+        self._sung: dict = {}  # (checkpoint, moving) -> (its graph that sings, its curve planner), or None (`_sung_graphs`)
 
     # -- storage -----------------------------------------------------------
 
@@ -864,28 +867,37 @@ class KokoroBackend(PiperBackend):
 
     # -- singing -----------------------------------------------------------
 
-    def _sung_graphs(self, family: str):
+    def _sung_graphs(self, family: str, moving: bool = False):
         """(the graph that sings, the graph that plans its curves) for a checkpoint, made from its patched graph the
-        first time (kokoro_sung.py) and again whenever that is newer - None where it cannot sing."""
-        if family not in self._sung:
+        first time (kokoro_sung.py) and again whenever that is newer - None where it cannot sing. `moving`: made from
+        the graph a voice moves in (`_moving_graph`) instead, for an inflected reading of a moving voice."""
+        key = (family, moving)
+        if key not in self._sung:
             import onnxruntime as ort
 
             import kokoro_sung
 
             self._graph(family)  # fetched and patched first
             home = self._home(family)
-            stock, sung, plan = home / MODEL, home / SUNG, home / SUNG_CURVES
+            if moving:
+                if self._moving_graph(family) is None:
+                    self._sung[key] = None
+                    return None
+                stock, sung, plan = home / MOVING, home / MOVING_SUNG, home / MOVING_SUNG_CURVES
+            else:
+                stock, sung, plan = home / MODEL, home / SUNG, home / SUNG_CURVES
             if not sung.exists() or sung.stat().st_mtime < stock.stat().st_mtime:
-                print("ghost/voice: making the Kokoro graph that sings, once", file=sys.stderr)
+                print("ghost/voice: making the Kokoro graph that sings%s, once" % (" a moving voice" if moving else ""),
+                      file=sys.stderr)
                 if not kokoro_sung.make(stock, sung):
-                    self._sung[family] = None
+                    self._sung[key] = None
                     return None
             if not plan.exists() or plan.stat().st_mtime < sung.stat().st_mtime:
                 kokoro_sung.curves(sung, plan)
             opts = self._options()
             open_ = lambda p: ort.InferenceSession(str(p), sess_options=opts, providers=["CPUExecutionProvider"])  # noqa: E731
-            self._sung[family] = (open_(sung), open_(plan) if plan.exists() else None)
-        return self._sung[family]
+            self._sung[key] = (open_(sung), open_(plan) if plan.exists() else None)
+        return self._sung[key]
 
     def sing(self, voice: str, words: list, out_path: str, params: dict, style: dict) -> dict:
         """A phrase sung (next/music.md, "Kokoro sings"; singing.py lays it): `words` [{text, notes: [{t, len, midi}]}],
@@ -1095,8 +1107,9 @@ class KokoroBackend(PiperBackend):
         frames times that (its remainders carried, so the word is that much longer in whole frames), and where
         any has a pitch shape the call is planned first (its frames, and its pitch where a word is flattened: the sung
         graph cut to its curves) and read by the sung graph (kokoro_sung.py), its `f0_keep` the shapes laid on that
-        plan (`inflection.curve`) - Kokoro's own pitch moved, the decoder making it. Not in
-        a voice that moves (its graph takes no pitch): there the pitch is left out.
+        plan (`inflection.curve`) - Kokoro's own pitch moved, the decoder making it, and a vowel it would whisper told
+        its pitch outright where a mark voices it (`inflection.voiced`). A voice that moves reads by the
+        graph it moves in made so (`_sung_graphs(moving=True)`).
         """
         import numpy as np
 
@@ -1237,9 +1250,12 @@ class KokoroBackend(PiperBackend):
 
         # the sung graph, where a mark moves the pitch and this call reads the checkpoint's stock graph
         pitched = contours = None
-        if inflect and any(m.shapes() or m.flatten > 0.0 for m in inflect.values()) and kk.get("family") \
-                and moving is None and sess is self._models.get(kk["family"]):
-            pitched, contours = self._sung_graphs(kk["family"]) or (None, None)
+        if inflect and any(m.shapes() or m.flatten > 0.0 for m in inflect.values()) and kk.get("family"):
+            family = kk["family"]
+            if moving is None and sess is self._models.get(family):
+                pitched, contours = self._sung_graphs(family) or (None, None)
+            elif moving is not None and sess is self._moving.get(family):
+                pitched, contours = self._sung_graphs(family, moving=True) or (None, None)
 
         def inflected(a: int, b: int, more: list, told, lead, feeds: dict):
             """`feeds` with the pitch the marks ask for laid on the call's own plan (`f0_keep`), None where it moves
@@ -1258,15 +1274,24 @@ class KokoroBackend(PiperBackend):
                 if is_core[k] and sound[k]:
                     cores.setdefault(owner[k], []).append(1 + front + k - a)
             stress = {w: (ks[0], ks[-1]) for w, ks in cores.items()}
-            f0 = None
-            if contours is not None and any(m.flatten > 0.0 for m in inflect.values()):
+            f0 = energy = None
+            if contours is not None and any(m.flatten > 0.0 or m.voice for m in inflect.values()):
                 got = contours.run(None, feeds)
-                f0 = got[[o.name for o in contours.get_outputs()].index("f0_planned")]
+                names = [o.name for o in contours.get_outputs()]
+                f0, energy = got[names.index("f0_planned")], got[names.index("n_planned")]
             # the shapes laid where the sounds are heard (PLAN_LEAD early), two curve steps a frame
-            keep = inflection.curve(inflect, owners, plan.tolist(), sounds, stress, f0,
-                                    lead=int(round(PLAN_LEAD / (frame_s / 2.0))))
+            lead_steps = int(round(PLAN_LEAD / (frame_s / 2.0)))
+            keep = inflection.curve(inflect, owners, plan.tolist(), sounds, stress, f0, lead=lead_steps)
             if keep is None:
                 return None
+            # a vowel the plan whispers, voiced where a mark asks (`voice`): the pitch told outright
+            vowels = {1 + front + k - a for k in range(a, b) if vowel[k]}
+            got = inflection.voiced(inflect, owners, plan.tolist(), vowels, stress, f0, keep, lead=lead_steps)
+            if got is not None:
+                pitch, _told, loud = got
+                return {**feeds, "f0_keep": np.zeros(1, np.float32), "f0_set": pitch.reshape(1, -1),
+                        "n_keep": np.zeros(1, np.float32),
+                        "n_set": inflection.lifted(energy, loud, f0).reshape(1, -1)}
             return {**feeds, "f0_keep": keep.reshape(1, -1)}
 
         def read(a: int, b: int, more: list, told=None, lead=()):

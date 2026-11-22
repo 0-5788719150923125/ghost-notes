@@ -38,7 +38,8 @@ extends SceneTree
 ## - a picture on a screen told `unwatched` is the same picture, marked for the camera and painted as any other (controls: a
 ##   word a picture is not told, and a picture over the whole screen told one, are each warned of);
 ## - the tablet: pages typed into the bar or tapped from the page up (or come back to), never said; a replay says the room's
-##   earlier words again through the tablet (control: words never said are warned of); a clip on a screen is a picture with
+##   earlier words again through the tablet, or the television's speaker (controls: words never said, and a replay through what
+##   plays nothing, are warned of); a clip on a screen is a picture with
 ##   its file, handed to the Pictures card as a clip;
 ## - the tablet browsed as the tablet medium browses (tests/fixtures/dispatch_browsing.md): back to the page before in its
 ##   tab and a link tapped from it, a new tab with the next address typed into it, a search typed into a search engine's own
@@ -543,6 +544,11 @@ func _init() -> void:
 	_ok(replayed > 0 and sp.find("He is in the hall.", replayed) - replayed < 120 and spoken.count("hall") == 3, "a replay says the room's own words again through the tablet's speaker")
 	var unsaid := DispatchScript.parse("<!-- speaker: Control -->\n\nHi.\n\n<!-- tablet -->\n\n<!-- replay: tablet | Never said. -->\n\n<!-- /tablet -->\n")
 	_ok(str(unsaid["warnings"]).contains("was not said"), "the control: a replay of words never said is warned of (%s)" % str(unsaid["warnings"]))
+	var on_tv := DispatchScript.parse("<!-- speaker: Control -->\n\nHe is in the hall.\n\n<!-- replay: tv | He is in the hall. -->\n")
+	_ok((on_tv["warnings"] as PackedStringArray).is_empty() and String(on_tv["speakable"]).contains("<!-- heard: tv -->\n\nHe is in the hall."),
+		"a replay through the television says them through its speaker (%s)" % str(on_tv["warnings"]))
+	var on_radio := DispatchScript.parse("<!-- speaker: Control -->\n\nHe is in the hall.\n\n<!-- replay: radio | He is in the hall. -->\n")
+	_ok(str(on_radio["warnings"]).contains("replay: radio"), "the control: a replay through what plays nothing is warned of (%s)" % str(on_radio["warnings"]))
 	var page_src := "<!-- speaker: Control -->\n\nHi.\n\n<!-- tablet -->\n\n```page\nurl: a.example\n\n# A Site\n\nOne two three.\n\n%sFour five.\n```\n\nLook at this.\n\n<!-- /tablet -->\n"
 	var placed_p := DispatchScript.parse(page_src % "<!-- said: Look at this -->\n\n")
 	var unplaced := DispatchScript.parse(page_src % "")

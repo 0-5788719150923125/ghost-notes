@@ -16,7 +16,8 @@ frames each token holds. `curves` cuts the sung graph to its planned curves alon
 for the pass that reads what Kokoro would do with those durations before the pass that sings.
 
 THE SITES ARE FOUND BY NAME AND SHAPE: the predictor's `F0_proj` and `N_proj` convolutions, each read by one Squeeze
-whose output is the curve. A graph without them is not made, and the voice cannot sing.
+whose output is the curve. A graph without them is not made, and the voice cannot sing. The graph a voice moves in
+(kokoro_moving.py, a style row a token) is made so too: its pitch is what an inflected reading of a moving voice moves.
 """
 
 from __future__ import annotations
@@ -129,6 +130,10 @@ def check(stock: Path, sung: Path) -> bool:
     packs = sorted((Path(stock).parent / "voices").glob("*.bin"))
     row = (np.fromfile(packs[0], dtype=np.float32).reshape(-1, 256)[9:10] if packs
            else np.zeros((1, 256), dtype=np.float32))
+    # a graph that takes a style a token (kokoro_moving.py) is fed the one row for every id
+    first = a.get_inputs()[[i.name for i in a.get_inputs()].index("style")].shape[0]
+    if first != 1:
+        row = np.repeat(row, ids.shape[1], axis=0)
     feed = {"input_ids": ids, "style": row, "speed": np.array([1.0], dtype=np.float32)}
     try:
         wa, da = a.run(None, feed)[:2]

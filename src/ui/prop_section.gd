@@ -1,8 +1,8 @@
 extends ShelfSection
 class_name PropSection
 
-## PropSection - the props a presentation sets down, handed to the panel's Props card ([PropsCard]) by whatever shows them, as a
-## show hands the Pacing card a [TuneSection]: the card draws, the section does, and with no section there is no card. No component
+## PropSection - the props a presentation sets down, handed to the panel's Props card ([PropsCard]) by whatever shows them: the
+## card draws, the section does, and with no section there is no card. No component
 ## names the card and the card names no component. What can be added is its shelves on the Dex ([ShelfSection], [DexWindow]).
 ##
 ## A row is a prop as it stands now: `{key, name, line, group, picture, on, verbs}` - an entry on the card ([EntryCard]) - `picture`

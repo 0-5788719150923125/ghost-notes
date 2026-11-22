@@ -5,8 +5,8 @@ class_name MediumCard
 ##
 ## The format is what the show is carried on: a row of [constant Medium.REGISTRY] that no component
 ## owns (the seeded show, full frame, a comic, a novel, a notebook, a tablet, a letter, a dispatch desk).
-## Under it stand the shared rows (the frame, scene hold and flourishes, the camera, the handwriting, the
-## films), each shown only where the format `uses` it, and under those the format's own rows (a row's
+## Under it stand the shared rows (the frame, scene hold and flourishes, the handwriting, the films), each
+## shown only where the format `uses` it (how its camera moves is the Camera card's, [CameraCard]), and under those the format's own rows (a row's
 ## `card`: the Letter's desk and sketch writer, the Desk's desk, the Dispatch desk's number), built from the script the
 ## row names. One block holds them all, only what the format uses: switching a Letter to a Tablet drops
 ## the desk. The note's pictures stay the Pictures card's ([PicturesCard]).
@@ -41,7 +41,6 @@ var _frame_pick: OptionButton
 var _hand_pick: OptionButton
 var _scene_hold: HSlider
 var _flourish: HSlider
-var _camera: HSlider
 var _film_list: VBoxContainer
 var _film_freq: HSlider
 var _film_status: Label
@@ -117,15 +116,6 @@ func _init(ctx := {"reading": true}) -> void:
 		+ "Set this to 0 first if the cutting feels busy: it separates 'too often' from 'too fast'.",
 		func(v: float) -> void: Director.set_flourish(v))
 	_tag("scenes", _flourish.get_parent())
-	_camera = Card.slider_row(self, "Camera", Director.CAMERA_MIN, Director.CAMERA_MAX, 0.05,
-		Director.camera,
-		"How severe the camera is - one knob over the whole behavior. 0 is a slow gentle drift "
-		+ "that barely turns and never cuts; 1 is the default; 2 is fast, restless and cinematic, "
-		+ "with real jump cuts. It scales how far a shot may swing, how many shots that swing is "
-		+ "spread over, how long a move lasts and how deep a push goes. It is shown only for the "
-		+ "formats that fly a camera.",
-		func(v: float) -> void: Director.set_camera(v))
-	_tag("camera", _camera.get_parent())
 	_hand_pick = _hand_option()
 	_build_own(ctx)
 	sync_medium()
@@ -202,7 +192,6 @@ func _shown() -> String:
 func _to_defaults() -> void:
 	_scene_hold.value = 1.0
 	_flourish.value = 1.0
-	_camera.value = 1.0
 	Director.set_frame("landscape")
 
 
@@ -226,8 +215,6 @@ func capture() -> Dictionary:
 	if Medium.uses(key, "scenes"):
 		out["scene_hold"] = snappedf(Director.pacing, 0.01)
 		out["flourishes"] = snappedf(Director.flourish, 0.01)
-	if Medium.uses(key, "camera"):
-		out["camera"] = snappedf(Director.camera, 0.01)
 	if Medium.uses(key, "handwriting"):
 		out["hand"] = Director.hand
 	if Medium.uses(key, "films"):
@@ -271,8 +258,7 @@ func apply(block: Dictionary) -> void:
 	if block.has("hand"):
 		Director.set_hand(String(block["hand"]))
 		_hand_pick.select(maxi(0, _hand_keys().find(Director.hand)))
-	for pair in [["scene_hold", _scene_hold], ["flourishes", _flourish], ["camera", _camera],
-			["film_frequency", _film_freq]]:
+	for pair in [["scene_hold", _scene_hold], ["flourishes", _flourish], ["film_frequency", _film_freq]]:
 		var sl: HSlider = pair[1]
 		if block.has(String(pair[0])):
 			sl.value = clampf(float(block[String(pair[0])]), sl.min_value, sl.max_value)

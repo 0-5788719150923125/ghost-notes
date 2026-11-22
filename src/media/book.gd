@@ -19,8 +19,9 @@ class_name BookMedium
 ##
 ## A gentle camera, unlike the comic's: a wide view of the spread most of the time, drifting toward the
 ## page and then the lines being read, changing framing on a slow schedule drawn from the session seed and
-## the show clock (so an export frames the same shots). Every channel is a critically damped spring, so
-## nothing is a jump. `Director.camera` scales how far and how often it moves.
+## the show clock (so an export frames the same shots). Every channel follows by the one follow every flown
+## camera has ([CameraFollow]: the Camera card's over the format's own), so nothing is a jump. `Director.camera`
+## scales how far and how often it moves.
 
 ## World size of one page: 1 wide, 1.5 tall, spine along z at x = 0, the reader at +z.
 const PAGE_H := BookLayout.PAGE.y / BookLayout.PAGE.x
@@ -34,8 +35,6 @@ const WIDE := {"dist": 5.3, "pitch": 66.0}
 const LOCAL := {"dist": 3.3, "pitch": 71.0}
 const ARC_IN := 0.12
 const ARC_OUT := 0.12
-## The camera springs' time constant at Camera 1. Slow, on purpose.
-const SPRING_TAU := 3.2
 ## The slow angle: each spread's own yaw (+/- degrees), a wander over minutes on top, a whisper of roll,
 ## and how many times slower than the framing the yaw settles.
 const YAW_SPREAD := 9.0
@@ -198,17 +197,13 @@ var _ink := Color(0.11, 0.095, 0.085)
 var _seed := 0
 var _seed_hue := 0.0             # where the sentence rainbow starts, per session
 
-# the camera's springs: value and velocity per channel
+# the camera: where each channel is, as its follow has it ([CameraFollow]: aim, distance, pitch; yaw and roll slower)
+var _follow := CameraFollow.new([1.0, 1.0, 1.0, ANGLE_SLOW, ANGLE_SLOW])
 var _c_aim := Vector3.ZERO
-var _v_aim := Vector3.ZERO
 var _c_dist := 5.3
-var _v_dist := 0.0
 var _c_pitch := 60.0
-var _v_pitch := 0.0
 var _c_yaw := 0.0
-var _v_yaw := 0.0
 var _c_roll := 0.0
-var _v_roll := 0.0
 var _snap := true
 var _reading_z := 0.0            # the line being read, as world z, heavily smoothed
 
@@ -1307,32 +1302,18 @@ func _tick_camera(delta: float) -> void:
 	var roll := (_hash01(_spread, 53) - 0.5) * 2.0 * ROLL_SPREAD \
 		+ sin(t * 0.047 + 0.7) * ROLL_WANDER * sev
 	pitch += (_hash01(_spread, 67) - 0.5) * 2.0 * TILT_SPREAD + sin(t * 0.037 + 2.4) * TILT_WANDER * sev
+	# the Camera dial: a severe camera's springs quicker, a gentle one's slower
+	_follow.configure(camera_follow())
+	var to := [aim, dist, pitch, yaw, roll]
 	if _snap:
 		_snap = false
-		_c_aim = aim
-		_c_dist = dist
-		_c_pitch = pitch
-		_c_yaw = yaw
-		_c_roll = roll
-	var tau := SPRING_TAU / lerpf(0.6, 1.4, sev * 0.5)
-	var steps := maxi(1, int(ceil(delta / (1.0 / 60.0))))
-	var h := delta / float(steps)
-	for _i in steps:
-		var res := _spring3(_c_aim, _v_aim, aim, tau, h)
-		_c_aim = res[0]
-		_v_aim = res[1]
-		var rd := _spring(_c_dist, _v_dist, dist, tau, h)
-		_c_dist = rd.x
-		_v_dist = rd.y
-		var rp := _spring(_c_pitch, _v_pitch, pitch, tau, h)
-		_c_pitch = rp.x
-		_v_pitch = rp.y
-		var ry := _spring(_c_yaw, _v_yaw, yaw, tau * ANGLE_SLOW, h)
-		var rr := _spring(_c_roll, _v_roll, roll, tau * ANGLE_SLOW, h)
-		_c_roll = rr.x
-		_v_roll = rr.y
-		_c_yaw = ry.x
-		_v_yaw = ry.y
+		_follow.snap(to)
+	var c := _follow.step(to, delta, _cam.position, 1.0 / lerpf(0.6, 1.4, sev * 0.5))
+	_c_aim = c[0]
+	_c_dist = c[1]
+	_c_pitch = c[2]
+	_c_yaw = c[3]
+	_c_roll = c[4]
 	var p := deg_to_rad(_c_pitch)
 	var y := deg_to_rad(_c_yaw)
 	var dir := Vector3(sin(y) * cos(p), sin(p), cos(y) * cos(p))
@@ -1341,23 +1322,6 @@ func _tick_camera(delta: float) -> void:
 	_cam.rotate_object_local(Vector3.FORWARD, deg_to_rad(_c_roll))
 	if not _cam.current:
 		_cam.make_current()
-
-
-## A critically damped spring, one step: no overshoot, no jump, eases in and out.
-static func _spring(x: float, v: float, target: float, tau: float, h: float) -> Vector2:
-	var w := 2.0 / maxf(tau, 0.05)
-	var a := w * w * (target - x) - 2.0 * w * v
-	v += a * h
-	x += v * h
-	return Vector2(x, v)
-
-
-static func _spring3(x: Vector3, v: Vector3, target: Vector3, tau: float, h: float) -> Array:
-	var w := 2.0 / maxf(tau, 0.05)
-	var a := (target - x) * (w * w) - v * (2.0 * w)
-	v += a * h
-	x += v * h
-	return [x, v]
 
 
 ## Debug line for probes.

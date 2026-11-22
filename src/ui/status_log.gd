@@ -29,6 +29,15 @@ static func say(where: String, text: String) -> void:
 			print("ghost: %s: %s" % [where, s])
 
 
+## Log [param lines] as [param where]'s warnings ([method say]), each marked ⚠ so it stands out among the log's lines; none
+## logs nothing, and the same warnings come back as new once they have gone.
+static func warn(where: String, lines: PackedStringArray) -> void:
+	var marked := PackedStringArray()
+	for l in lines:
+		marked.append("⚠ " + String(l))
+	say(where, "\n".join(marked))
+
+
 static var _re: RegEx = null
 
 

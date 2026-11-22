@@ -28,8 +28,8 @@ class_name DeskMedium
 ## The pad: a legal pad page (8.5 x 11 in), ruled, filled top to bottom ([method DeskScript.lay_out]) and turned only when
 ## the next item would run off the foot ([LegalPad]). Each episode's desk is its own ([DeskLook], from the seed), lit by the
 ## room and candles ([DeskLight]). The camera is the book's kind ([BookMedium]): a long lens from high and a little in
-## front, wide over the intro and a page turn, closer while the pen writes, on one slow critically damped spring, with a
-## wander over minutes.
+## front, wide over the intro and a page turn, closer while the pen writes, slowly by the follow every flown camera has
+## ([CameraFollow]), with a wander over minutes.
 ##
 ## The pen has no hand, and is the table's ([Pen]): it leans to the top right of the frame from its nib, swaying slowly,
 ## turning a little with where the nib is on the page, its top trailing the nib's travel; off the paper the nib drifts a
@@ -114,7 +114,6 @@ const WIDE := {"dist": 1.45, "pitch": 74.0}
 const AMBIENT := Color(0.55, 0.5, 0.45)
 const AMBIENT_ENERGY := 0.35
 const LOCAL := {"dist": 0.82, "pitch": 79.0}
-const SPRING_TAU := 3.2
 const YAW_SPREAD := 4.0
 const YAW_WANDER := 1.5
 const ROLL_SPREAD := 1.0
@@ -202,17 +201,13 @@ var _dressed := -1                 # the seed the desk was last dressed for
 var look: Dictionary = DeskLook.of(1)
 var _blur: IntroBlur
 var _title: TitleCard
-# the camera's springs
+# the camera: where each channel is, as its follow has it ([CameraFollow]: aim, distance, pitch; yaw and roll slower)
+var _follow := CameraFollow.new([1.0, 1.0, 1.0, ANGLE_SLOW, ANGLE_SLOW])
 var _c_aim := Vector3.ZERO
-var _v_aim := Vector3.ZERO
 var _c_dist := 1.45
-var _v_dist := 0.0
 var _c_pitch := 74.0
-var _v_pitch := 0.0
 var _c_yaw := 0.0
-var _v_yaw := 0.0
 var _c_roll := 0.0
-var _v_roll := 0.0
 
 
 ## A page, drawn: paper, rules, and the ink on page [member page] now - all of it, or one [member part].
@@ -1757,37 +1752,17 @@ func _tick_camera(delta: float) -> void:
 		+ (_hash01(page, 67) - 0.5) * 2.0 * TILT_SPREAD + sin(w * 0.029 + 1.3) * 0.8
 	var dist := lerpf(float(wide["dist"]), float(close["dist"]), k) * (1.0 + 0.012 * sin(w * 0.033 + 2.1))
 	var roll := (_hash01(page, 53) - 0.5) * 2.0 * ROLL_SPREAD + sin(w * 0.047 + 0.7) * 0.5
+	_follow.configure(camera_follow())
+	var to := [aim, dist, pitch, yaw, roll]
 	if _snap:
 		_snap = false
-		_c_aim = aim
-		_c_dist = dist
-		_c_pitch = pitch
-		_c_yaw = yaw
-		_c_roll = roll
-		_v_aim = Vector3.ZERO
-		_v_dist = 0.0
-		_v_pitch = 0.0
-		_v_yaw = 0.0
-		_v_roll = 0.0
-	var tau := _spring_tau()
-	var steps := maxi(1, int(ceil(delta / (1.0 / 60.0))))
-	var h := delta / float(steps)
-	for _i in steps:
-		var res := BookMedium._spring3(_c_aim, _v_aim, aim, tau, h)
-		_c_aim = res[0]
-		_v_aim = res[1]
-		var rd := BookMedium._spring(_c_dist, _v_dist, dist, tau, h)
-		_c_dist = rd.x
-		_v_dist = rd.y
-		var rp := BookMedium._spring(_c_pitch, _v_pitch, pitch, tau, h)
-		_c_pitch = rp.x
-		_v_pitch = rp.y
-		var ry := BookMedium._spring(_c_yaw, _v_yaw, yaw, tau * ANGLE_SLOW, h)
-		_c_yaw = ry.x
-		_v_yaw = ry.y
-		var rr := BookMedium._spring(_c_roll, _v_roll, roll, tau * ANGLE_SLOW, h)
-		_c_roll = rr.x
-		_v_roll = rr.y
+		_follow.snap(to)
+	var c := _follow.step(to, delta, _cam.position, _camera_pace())
+	_c_aim = c[0]
+	_c_dist = c[1]
+	_c_pitch = c[2]
+	_c_yaw = c[3]
+	_c_roll = c[4]
 	var p := deg_to_rad(_c_pitch)
 	var y := deg_to_rad(_c_yaw)
 	var dir := Vector3(sin(y) * cos(p), sin(p), cos(y) * cos(p))
@@ -1819,9 +1794,9 @@ func _wander_time() -> float:
 	return _now
 
 
-## How slowly the camera's springs follow ([constant SPRING_TAU]).
-func _spring_tau() -> float:
-	return SPRING_TAU
+## What the camera's follow makes of this moment ([method CameraFollow.step]: under 1 quicker): the desk's is its own pace.
+func _camera_pace() -> float:
+	return 1.0
 
 
 ## How long the page lies blank after the intro before anything is done on it (seconds): the settle the voice rests on at

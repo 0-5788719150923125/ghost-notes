@@ -67,7 +67,7 @@ No scenes: the Director still keeps its schedule, but a cut hands over to one hi
 
 Real 3D: the stage SubViewport has a world of its own, so the book is geometry in it: a Camera3D, a lamp, a desk, a cloth cover, two page stacks and three leaves (the left page, the right page, and the one being turned), each leaf a subdivided plane bent by `LEAF_SHADER` into the gutter curve and, while turning, rolled over the spine with a curl. Each visible page is a SubViewport drawn by `BookMedium.PageCanvas`, redrawn only when what is printed or lit on it changes. Four page targets cover the worst case, a turn (old left, old right, new left and new right all in shot).
 
-A gentle camera, unlike the comic's: a wide view of the spread most of the time, drifting toward the page and then the lines being read, changing framing on a slow schedule drawn from the session seed and the show clock (so an export frames the same shots). Every channel is a critically damped spring, so nothing is a jump. `Director.camera` scales how far and how often it moves.
+A gentle camera, unlike the comic's: a wide view of the spread most of the time, drifting toward the page and then the lines being read, changing framing on a slow schedule drawn from the session seed and the show clock (so an export frames the same shots). Every channel follows by the one follow every flown camera has (`CameraFollow`: the Camera card's over the format's own), so nothing is a jump. `Director.camera` scales how far and how often it moves.
 
 Source: [src/media/book.gd](../src/media/book.gd)
 
@@ -111,7 +111,7 @@ The pen writes two words ahead (`LetterScript`): each word is written while the 
 
 The pen lies beside the pad's right edge (`DeskLook.pen_rest`) through the intro, is picked up over the blank page (`_pick_up_pose`) and carried to the first stroke, and set down again a beat after its last action (`_set_down_pose`). While the writer thinks (italics) the pen is lifted. `<!-- tap -->` turns it over and taps its top on the pad or desk (`_tap_pose`); `<!-- point: camera -->` lifts it and turns its nib to the lens (`_camera_pose`), lingering in a thought (`LetterScript.POINT_LINGER`).
 
-The camera's arc over a page is the book's and the tablet's (`_arc`): the whole pad as a page opens, closer as the writing gets under way, let go before the turn, between `LETTER_WIDE` and `LETTER_LOCAL` on slow springs (`LETTER_TAU`). Only a point at the camera (`CAMERA_K`) and a still change how close it is; a thought, a point and a tap move where it looks only.
+The camera's arc over a page is the book's and the tablet's (`_arc`): the whole pad as a page opens, closer as the writing gets under way, let go before the turn, between `LETTER_WIDE` and `LETTER_LOCAL`, slowly (its format's own follow, `CameraFollow`). Only a point at the camera (`CAMERA_K`) and a still change how close it is; a thought, a point and a tap move where it looks only.
 
 A picture (`<!-- image (full): -->` ... `<!-- /image -->`) fades up over the desk as its passage begins, moves slowly (`MOVES`: a pan its length guessed from the script, never from the voice's times) and fades back as it ends; the pen writes on under it. A picture whose passage begins where the last one's ends (`blend`) comes up over it, the one under held whole, so the page is never seen between them (`pictures_at`). A hesitation before a picture's mark brings it up as the pen is taken up again, `RESUME_LEAD` before the voice goes on.
 
@@ -129,7 +129,7 @@ It draws from the reading's document: its `source`, the note with its marks (`Di
 
 The desk acts in the rests the voice leaves for it (`_place`): each action of the script before its spoken word, placed back from that word by what the script wrote after it in the same silence (or on from the word before when the next is not heard yet) and, once begun, kept where it began (`_held`; a live reading's words arrive a sentence at a time). Everything on the desk is then a pure function of show time (`_pose`), so a render draws what the live reading drew and a scrub lands where the reading is.
 
-The camera sits in the chair and turns to what is active (`_attention`, `SPOTS`): a phone ringing, the terminal while it types or shows something, the radar on a ping, the receiver while it plays static, a picture landing on a screen, the printer, the bell, the lamp switched (the whole desk, to see it go dark). `look:` turns it on purpose and it stays, as the gain knob holds it on the radar. It leans toward what it looks at and its lens closes in on the small things, on critically damped springs (`SPRING_TAU`); with nothing new for a while it eases back to the whole desk, with a slow breath of wander under it. Every look holds long enough to settle (`LOOK_LEAST`), a ping to the end of the sentence said over it (`PING_HOLD`), and it never leaves a thing only to come straight back (`AWAY_LEAST`).
+The camera sits in the chair and turns to what is active (`_attention`, `SPOTS`): a phone ringing, the terminal while it types or shows something, the radar on a ping, the receiver while it plays static, a picture landing on a screen, the printer, the bell, the lamp switched (the whole desk, to see it go dark). `look:` turns it on purpose and it stays, as the gain knob holds it on the radar. It leans toward what it looks at and its lens closes in on the small things, by the one follow every flown camera has (`CameraFollow`: the Camera card's over the format's own, a long look across the desk quicker than a short one); with nothing new for a while it eases back to the whole desk, with a slow breath of wander under it. Every look holds long enough to settle (`LOOK_LEAST`), a ping to the end of the sentence said over it (`PING_HOLD`), and it never leaves a thing only to come straight back (`AWAY_LEAST`).
 
 A phone in hand is held to the ear: it rises out of its row, flips open and floats up beside the camera, in the frame's lower right, its screen saying who is on it and for how long, and goes back the same way. A call is speed-dialed: the phone comes up before the eye, 1 is held and Send pressed, then it goes to the ear for the rings. One on hold lies open on the desk in front of the rows. A phone ringing buzzes and rattles in its row. A text chimes and the phone comes up open before the eye with the message on its screen, never captioned; a reply is typed into it as it is said, under the message, and sent; then it goes home.
 
@@ -190,3 +190,33 @@ What stands before them is drawn over them, still: the still's `front_K.png` (th
 A pure function of the show's time: what is drawn at a moment depends on the plan and the phones, never on what was drawn before, so a seek lands where it should and an export draws what was heard.
 
 Source: [src/likeness/likeness.gd](../src/likeness/likeness.gd)
+
+## How a flown camera follows
+
+CameraFollow - how a flown camera follows what it is turned to: the one follow of every medium that flies one (the Dispatch desk, the desk and the Letter, the novel and the notebook, the tablet). Each channel of the view (where it looks, where it stands, its lens, its angles) is led in over `FIELDS` `ease_in`, so no move starts with a jolt, and settled on a critically damped spring (`settle`), so none overshoots.
+
+A long look runs on a quicker clock, its end included: a turn of `long_full` degrees or more `long` times quicker, one of `long_from` or less at its own pace, partly between. A linear spring takes as long over a short look as a long one, and on a long one the eye sees the slow end crawl for seconds; quickening the whole move is what shortens it. A move's size is the farthest the view has been from where it goes since it last came to rest, so a look turned elsewhere mid-way keeps its pace. It never turns faster than `top_speed`, eased under it rather than clipped.
+
+The settings are the Camera card's over the format's own (a Medium row's `follow`, `settings`). What a medium changes for a moment (springs quickened on a new page, through a still) is a pace on one step (`step`), never a setting. A medium makes one with each channel's slowness (1 its own pace; 3 for angles that settle three times slower) and which channel is the point it looks at, and steps it each frame with where every channel is going and where the eye is now. A channel is a float or a Vector3; the point looked at is a Vector3.
+
+The Camera card's rows (`CameraFollow.FIELDS`), each at its default where a format says none:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `ease_in` Ease in (s) | `0.0` | How long a move takes to get going: every turn starts slowly over about this many seconds. 0 starts at once, on the spring alone. |
+| `settle` Settle (s) | `1.6` | How slowly it settles on what it turns to: the spring's time in seconds. A short look is mostly there in about four of these. |
+| `long` Long looks (x) | `2.0` | How many times quicker a long look runs, its end included: 2 crosses the desk in about half the time. 1 takes a long look at a short one's pace. |
+| `long_from` Long from (°) | `20.0` | A look of this many degrees or less runs at its own pace; past it, quicker and quicker. |
+| `long_full` Fully long (°) | `80.0` | A look of this many degrees or more is quickened by the whole of Long looks. |
+| `top_speed` Top speed (°/s) | `45.0` | The fastest it ever turns, in degrees a second: a move that would go faster is eased under it. |
+
+Each format's own (its row's `follow`), which the card's rows stand at until set:
+
+| Format | Its own |
+| --- | --- |
+| `book` | `settle` 1.6 |
+| `notebook` | `settle` 1.6 |
+| `tablet` | `settle` 2.1 |
+| `letter` | `settle` 2.1 |
+| `dispatch` | `ease_in` 1.1, `settle` 1.7 |
+| `desk` | `settle` 1.6 |

@@ -380,7 +380,8 @@ func _check_outside_edit_survives() -> void:
 
 ## The picture travels with the document: the Medium's format, Look filters and the Director's dials. Set here, saved,
 ## changed, and read back by the next Play. Only what the format uses is kept (control: a notebook cuts no scenes, so
-## no scene hold is written).
+## no scene hold is written). The camera is the Camera card's: its severity and follow come back through its block, and a note
+## without one keeps neither in its Medium's (the control).
 func _check_the_picture_travels() -> void:
 	var was := {"medium": Director.medium, "filters": Director.filters.duplicate(),
 		"pacing": Director.pacing, "camera": Director.camera, "hand": Director.hand}
@@ -394,11 +395,21 @@ func _check_the_picture_travels() -> void:
 	var raw := FileAccess.get_file_as_string(_path)
 	_ok(raw.contains("medium:") and raw.contains("format: notebook"), "the medium was not written into the frontmatter")
 	_ok(not raw.contains("scene_hold"), "a notebook's block keeps a scene hold it does not use")
+	_ok(not raw.contains("camera:"), "the control: a note with no Camera card keeps no camera in its Medium's block")
+	var cam := CameraCard.new()
+	Director.set_camera_follow({"long": 3.0})
+	var cam_block := cam.capture()
 	Director.set_medium("full")
 	Director.set_filter("static", 0.0)
 	Director.set_camera(1.0)
+	Director.set_camera_follow({})
 	Director.set_pacing(1.0)
 	Director.set_hand("kalam")
+	cam.apply(cam_block)
+	_ok(is_equal_approx(Director.camera, 1.4) and is_equal_approx(float(Director.camera_follow.get("long", 0.0)), 3.0),
+		"the camera did not come back from the Camera card's block (%s)" % str(cam_block))
+	cam.free()
+	Director.set_camera_follow({})
 	# as a note opened from nothing builds the card: the dial and its number both at the registry's default
 	var row: Dictionary = (_ed._block_cards["look"] as LookCard)._filter_rows["static"]
 	Card.put_slider(row["slider"], row["readout"], float(Registry.field(Filters.REGISTRY, "static", "default", 0.5)))
@@ -408,12 +419,10 @@ func _check_the_picture_travels() -> void:
 	_doc.pull()
 	_ok(Director.medium == "notebook", "the medium did not come back from the document (%s)" % Director.medium)
 	_ok(is_equal_approx(Director.filter_amount("static"), 0.3), "the Look did not come back from the document")
-	_ok(is_equal_approx(Director.camera, 1.4), "the camera did not come back from the document")
 	_ok(Director.hand == "patrick", "the handwriting did not come back from the document (%s)" % Director.hand)
 	var pic: MediumCard = _ed._block_cards.get("medium")
 	_ok(pic._hand_pick.get_item_text(pic._hand_pick.selected) == "Patrick",
 		"the panel does not show the document's handwriting")
-	_ok(is_equal_approx(pic._camera.value, 1.4), "the panel does not show the document's camera")
 	_ok((row["box"] as CheckBox).button_pressed, "the panel does not show the document's filter")
 	_ok(is_equal_approx((row["slider"] as HSlider).value, 0.3), "the dial does not show the document's filter amount")
 	_ok((row["readout"] as Label).text == "0.30",

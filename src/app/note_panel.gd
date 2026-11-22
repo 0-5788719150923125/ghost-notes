@@ -173,7 +173,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 
 func _build_header(_box: VBoxContainer) -> void:
-	#pinned over the scrolling body, so "⋯" and "–" never scroll away (SidePanel.pin_title_row)
+	#pinned over the scrolling body, so "⋯" and "‹" never scroll away (SidePanel.pin_title_row)
 	_panel.pin_title_row(self)
 
 

@@ -35,7 +35,8 @@ class_name Medium
 ##   script  the medium's script, by path (a medium a feature brings lives with that feature)
 ##   uses    which optional settings it uses, as the Medium card's group names; a setting a medium
 ##           has no use for is hidden (declared here, not branched on in the panel). `scenes`: it cuts
-##           the Director's scenes, so Scene hold and Flourishes mean something. `camera`, `films`,
+##           the Director's scenes, so Scene hold and Flourishes mean something. `camera` (its shots steered by
+##           the Camera card's Severity, [CameraCard]), `films`,
 ##           `illustrations` (the note's Pictures card stands), `handwriting` (the shared hand row),
 ##           `ink` (a voice's pen color, on the Voice card). `opening`: it draws an opening of its own
 ##           through the intro hold ([Openings], [ShowOpening]) and the Intro & outro card offers one.
@@ -53,6 +54,8 @@ class_name Medium
 ##   capabilities  optional: what the format asks of the platform ([Capabilities]); a format
 ##           impossible here is grayed in the picker, saying why.
 ##   intro_tip, outro_tip  optional: what the Intro & outro card's holds say under this format.
+##   follow  optional: how its camera follows what it turns to, as its own ([CameraFollow] settings; the Camera card's are
+##           laid over them, [method camera_follow]). A format without one flies no follow.
 ##   mode    optional: the component it belongs to, which shows its readings in it (the table and the desk are
 ##           Table's, drawn from an episode Table produced). Never remembered as the setting ([method pickable]);
 ##           its component pins it for the session (see [member Director.medium_override]).
@@ -72,23 +75,26 @@ const REGISTRY := {
 		"blurb": "The same scenes drawn into the panels of an open comic book - two facing pages, flown over by a real perspective camera. Each cut fills the next panel; a full spread turns the leaf on its spine."},
 	"book": {"label": "Novel", "script": "res://src/media/book.gd",
 		"uses": ["camera", "illustrations"], "frames": ["landscape", "standard"], "needs": ["reading"],
+		"follow": {"settle": 1.6},
 		"blurb": "The chapter itself, typeset into the pages of an open novel on a desk, with each word lit as it is spoken and the leaf turning as the reading reaches the next spread. Pictures come from the chapter's image markers."},
 	"notebook": {"label": "Notebook", "script": "res://src/media/notebook.gd",
 		"uses": ["camera", "illustrations", "handwriting", "ink"], "frames": ["landscape", "standard"], "needs": ["reading"],
+		"follow": {"settle": 1.6},
 		"blurb": "The chapter handwritten into a ruled research notebook - margin times, underlined emphasis, photos paper-clipped over the writing at an angle, and sketches (`<!-- sketch: ... -->`) drawn onto the page in the same ink. For a chapter drafted as a journal or a lab report."},
 	"tablet": {"label": "Tablet", "script": "res://src/media/tablet.gd",
 		"uses": ["camera", "illustrations"], "frames": ["landscape", "standard"], "needs": ["reading"],
+		"follow": {"settle": 2.1},
 		"blurb": "Somebody browsing on a tablet lying on a desk: the chapter is web pages (`<!-- url: -->`), read aloud as they are scrolled, with searches, new tabs, a turn to landscape and links followed between them - every tap and keystroke timed into the rests the voice leaves for it."},
 	"letter": {"label": "Letter", "script": "res://src/desk/letter.gd",
 		"uses": ["opening", "illustrations", "handwriting"], "frames": ["landscape", "standard"], "needs": ["reading"],
-		"card": "res://src/letter/letter_format.gd",
+		"card": "res://src/letter/letter_format.gd", "follow": {"settle": 2.1},
 		"capabilities": ["subprocess", "agent:writer", "tex", "python:math"],
 		"intro_tip": "Seconds the desk holds before the letter is begun, its title over it.",
 		"outro_tip": "Seconds held after the pen's last stroke, the page on the desk, fading picture and sound out together.",
 		"blurb": "Somebody writing a letter at a desk, reading it aloud as the pen puts it down in a cursive hand: a thought said and not written, a line crossed out, a sketch drawn as it is described, the pen tapped while the writer thinks or pointed at whoever watches, and a picture over the whole screen for a passage read over it."},
 	"dispatch": {"label": "Dispatch desk", "script": "res://src/dispatch/dispatch.gd",
 		"uses": ["opening", "illustrations"], "frames": ["landscape", "standard"], "needs": ["reading"],
-		"card": "res://src/dispatch/dispatch_format.gd",
+		"card": "res://src/dispatch/dispatch_format.gd", "follow": {"ease_in": 1.1, "settle": 1.7},
 		"intro_tip": "Seconds the desk holds, its title over it; then the desk at rest, a few seconds more, before the first word.",
 		"outro_tip": "Seconds held after the last word, the desk in the dark, fading picture and sound out together.",
 		"blurb": "One desk late at night in a hollow under the ground, seen from the chair: an old terminal that types what is said, a dozen labeled flip phones that ring and are held to the ear (every voice but the room's heard through one), a radar, a shortwave receiver, a printer, small screens - the camera turning to whatever is active, roots growing across the desk."},
@@ -97,7 +103,7 @@ const REGISTRY := {
 		"blurb": "A show at a table the agents built, seen from the chair: its things, its light and its room, the cards drawn and read, the work done with the table's things - every move from the episode the agents produced."},
 	"desk": {"label": "Desk", "script": "res://src/desk/episode_desk.gd",
 		"uses": ["opening"], "frames": ["landscape", "standard"], "mode": "table", "needs": ["episode"],
-		"card": "res://src/desk/desk_format.gd",
+		"card": "res://src/desk/desk_format.gd", "follow": {"settle": 1.6},
 		"intro_tip": "Seconds the desk holds before the first line is written, the episode's title over it.",
 		"outro_tip": "Seconds held after the pen's last stroke, the page on the desk, fading picture and sound out together.",
 		"blurb": "A lesson at a desk, seen close from the chair: a legal pad under a lamp or candles, and a pen writing what the episode's work writes - formulas, drawings, words in a hand - stroke by stroke as the words are said, pointing at what is talked about, turning a page over the binding when it is full. The desk is the Letter's."},
@@ -151,6 +157,12 @@ static func uses(key: String, feature: String) -> bool:
 	if not REGISTRY.has(key):
 		return true
 	return feature in (Registry.field(REGISTRY, key, "uses", []) as Array)
+
+
+## How [param key]'s camera follows what it turns to, as its own: its row's `follow` ({} for a format that flies none).
+static func follow_of(key: String) -> Dictionary:
+	var f: Variant = Registry.field(REGISTRY, key, "follow", {})
+	return f if f is Dictionary else {}
 
 
 ## What a medium shows as pictures, for the one Pictures card every presentation shares: [param body]'s
@@ -242,6 +254,19 @@ var key := "full"
 ## [method Director.attach]; the live show for a medium nobody handed one (a gate). A medium reads the
 ## show here, never by the Director's name (it is below the player: docs/structure.md).
 var feed: ShowFeed = ShowFeed.playing()
+
+## How this medium's camera follows what it turns to ([CameraFollow]): the Camera card's settings ([member
+## ShowFeed.camera_follow]) over its format's own ([method follow_of]; a medium built by hand, under no key of its own, is
+## known by its script).
+func camera_follow() -> Dictionary:
+	var own := follow_of(key)
+	if own.is_empty():
+		var path := String(get_script().resource_path) if get_script() != null else ""
+		for k in REGISTRY:
+			if String(Registry.field(REGISTRY, k, "script", "")) == path:
+				own = follow_of(String(k))
+	return CameraFollow.settings(own, feed.camera_follow if feed != null else {})
+
 
 ## The stage this medium is mounted in - the SubViewport [main] composites. Set by
 ## [method mount] before the Director attaches.

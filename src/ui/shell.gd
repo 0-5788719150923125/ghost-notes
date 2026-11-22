@@ -310,7 +310,7 @@ func set_home(leave: Callable, blocker := Callable()) -> void:
 	_paint_home()
 
 
-## Back to the notes - the ⌂, and every panel's "‹" ([method back_button]).
+## Back to the notes - the ⌂.
 func go_home() -> void:
 	if not _home_leave.is_valid():
 		return
@@ -321,22 +321,6 @@ func go_home() -> void:
 
 func _go_home() -> void:
 	go_home()
-
-
-## "‹" for a panel's header (next/notes.md step 8): the same way out as the row's home button, boxed
-## like the one the hidden panel leaves in its corner ([method SidePanel.pin_title_row]). A panel
-## built without a Chrome (a probe) gets one that does nothing.
-static func back_button(owner: Node) -> Button:
-	var b := Button.new()
-	b.text = "‹"
-	b.custom_minimum_size = Vector2(28, 28)
-	b.focus_mode = Control.FOCUS_NONE
-	b.tooltip_text = "Back to the notes. This note's settings and its file are kept as they are."
-	b.pressed.connect(func() -> void:
-		var ch := Shell.of(owner)
-		if ch != null:
-			ch.go_home())
-	return b
 
 
 ## The note open now, and how to delete it ([param delete]: (path, "trash" or "forget") -> void) -

@@ -50,10 +50,9 @@ const WIDE := Vector2(3.2, 2.4)
 const NEAR := Vector2(1.95, 1.55)
 const PITCH_WIDE := 66.0
 const PITCH_NEAR := 74.0
-## The springs: framing settles over seconds, the angles several times slower; a context switch
-## quickens the framing to QUICK_TAU for about QUICK_TIME seconds.
-const FRAME_TAU := 4.2
-const QUICK_TAU := 1.8
+## The springs ([CameraFollow], the tablet's `follow` row): the angles several times slower than the framing; a context
+## switch quickens them to QUICK_PACE of their time for about QUICK_TIME seconds.
+const QUICK_PACE := 0.43
 const QUICK_TIME := 3.0
 const ANGLE_SLOW := 3.0
 const LINE_TAU := 3.0
@@ -152,19 +151,14 @@ var _char0 := PackedInt32Array() # word -> its first letter's place in the runni
 var _st: Dictionary = {}         # this frame's screen state
 var _now := 0.0
 
-# camera springs
+# the camera: where each channel is, as its follow has it ([CameraFollow]: aim, distance, pitch; the angles slower)
+var _follow := CameraFollow.new([1.0, 1.0, 1.0, ANGLE_SLOW, ANGLE_SLOW, ANGLE_SLOW])
 var _c_aim := Vector3.ZERO
-var _v_aim := Vector3.ZERO
 var _c_dist := 3.2
-var _v_dist := 0.0
 var _c_pitch := PITCH_WIDE
-var _v_pitch := 0.0
 var _c_wan := 0.0
-var _v_wan := 0.0
 var _c_roll := 0.0
-var _v_roll := 0.0
 var _c_tilt := 0.0
-var _v_tilt := 0.0
 var _line_y := 0.0
 var _ctx := ""
 var _quick := 0.0
@@ -1182,36 +1176,20 @@ func _tick_camera(delta: float) -> void:
 	var yaw := (_hash01(["yaw", pk]) - 0.5) * 2.0 * YAW_SPREAD + sin(t * 0.019 + float(_seed % 97)) * YAW_WANDER * sev
 	var roll := (_hash01(["roll", pk]) - 0.5) * 2.0 * ROLL_SPREAD + sin(t * 0.043 + 0.7) * ROLL_WANDER * sev
 	var tilt := (_hash01(["tilt", pk]) - 0.5) * 2.0 * TILT_SPREAD + sin(t * 0.031 + 2.4) * TILT_WANDER * sev
+	_follow.configure(camera_follow())
+	var to := [aim, dist, pitch, yaw, roll, tilt]
 	if _snap:
 		_snap = false
-		_c_aim = aim
-		_c_dist = dist
-		_c_pitch = pitch
-		_c_wan = yaw
-		_c_roll = roll
-		_c_tilt = tilt
-	var tau := lerpf(FRAME_TAU, QUICK_TAU, _quick) / lerpf(0.75, 1.25, clampf(sev * 0.5, 0.0, 1.0))
-	var steps := maxi(1, int(ceil(delta / (1.0 / 60.0))))
-	var h := delta / float(steps)
-	for _i in steps:
-		var ra := BookMedium._spring3(_c_aim, _v_aim, aim, tau, h)
-		_c_aim = ra[0]
-		_v_aim = ra[1]
-		var rd := _spring(_c_dist, _v_dist, dist, tau, h)
-		_c_dist = rd.x
-		_v_dist = rd.y
-		var rp := _spring(_c_pitch, _v_pitch, pitch, tau, h)
-		_c_pitch = rp.x
-		_v_pitch = rp.y
-		var rw := _spring(_c_wan, _v_wan, yaw, tau * ANGLE_SLOW, h)
-		_c_wan = rw.x
-		_v_wan = rw.y
-		var rr := _spring(_c_roll, _v_roll, roll, tau * ANGLE_SLOW, h)
-		_c_roll = rr.x
-		_v_roll = rr.y
-		var rt := _spring(_c_tilt, _v_tilt, tilt, tau * ANGLE_SLOW, h)
-		_c_tilt = rt.x
-		_v_tilt = rt.y
+		_follow.snap(to)
+	# a context switch quickens its springs; the Camera dial makes a severe camera's quicker, a gentle one's slower
+	var pace := lerpf(1.0, QUICK_PACE, _quick) / lerpf(0.75, 1.25, clampf(sev * 0.5, 0.0, 1.0))
+	var c := _follow.step(to, delta, _cam.position, pace)
+	_c_aim = c[0]
+	_c_dist = c[1]
+	_c_pitch = c[2]
+	_c_wan = c[3]
+	_c_roll = c[4]
+	_c_tilt = c[5]
 	var p := deg_to_rad(_c_pitch + _c_tilt)
 	# tilt is paid for in distance: closer as the slab foreshortens, so it keeps its size
 	var d := _c_dist * sin(p) / sin(deg_to_rad(_c_pitch))
@@ -1258,10 +1236,6 @@ func _arc(page: int) -> float:
 	var p := clampf((float(si - span.x) + float(r["frac"])) / n, 0.0, 1.0)
 	return smoothstep(0.0, ARC_IN, p) * (1.0 - smoothstep(1.0 - ARC_OUT, 1.0, p)) \
 		* clampf(n / ARC_WORDS, 0.25, 1.0)
-
-
-static func _spring(x: float, v: float, target: float, tau: float, h: float) -> Vector2:
-	return BookMedium._spring(x, v, target, tau, h)
 
 
 func _current_page() -> int:

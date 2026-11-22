@@ -64,7 +64,8 @@ class_name DispatchScript
 ##                                     was left (with none behind it, warned of).
 ##     <!-- new tab -->                a blank tab is opened on the tablet; the next page is typed into its bar.
 ##     <!-- replay: tablet | words --> the room's own earlier words said again through the tablet's speaker, as the
-##                                     video's soundtrack (found among what was said, else warned of).
+##                                     video's soundtrack (found among what was said, else warned of); `replay: tv`
+##                                     through the television's, as the soundtrack of what it shows (`live: tv`).
 ##     <!-- image (feed): words -->    a picture on that screen (feed, satellite, tv) until the next there or `off`, the
 ##                                     camera turning to it; `image (feed, unwatched): words` lands it with the camera left
 ##                                     on what it was on.
@@ -206,6 +207,8 @@ const TABLET_SENT := REPLY_SEND + 0.6
 const PLAYER := "\uE0F7 the video player"
 ## `reply:`'s word for the tablet's page, and what the walk keeps for it (no phone's label: those are in capitals).
 const TABLET_REPLY := "tablet"
+## What a `replay:` can play the room's earlier words through: each a band of [constant VoiceFX.HEARD] of the same name.
+const REPLAY_THROUGH := ["tablet", "tv"]
 ## The timing of each action (seconds). `rest` is what the voice waits for it; an action may move on past its rest,
 ## under the next words (`len`). A phone: out of its row, opened and to the ear; dialed; the two rings in the earpiece,
 ## each a pair of short rings on a cycle, answered as the second's pair ends; answered at once when it was ringing;
@@ -1385,17 +1388,17 @@ static func parse(body: String, films := {}) -> Dictionary:
 						var where := arg.get_slice("|", 0).strip_edges().to_lower()
 						var said := arg.get_slice("|", 1).strip_edges() if arg.contains("|") else ""
 						var words := words_of(said)
-						if where != "tablet" or words.is_empty():
-							warnings.append("replay: %s - the tablet and the words it plays: replay: tablet | words" % arg)
+						if not where in REPLAY_THROUGH or words.is_empty():
+							warnings.append("replay: %s - what plays them (%s) and the words: replay: tablet | words" % [arg, ", ".join(PackedStringArray(REPLAY_THROUGH))])
 							continue
 						if TabletScript.find_run(spoken, words) < 0:
 							warnings.append("replay: \"%s\" was not said before it" % said)
 						var who := room if not room.is_empty() else speaker
 						_act(actions, gap, pending, at, {"kind": "replay", "from": spoken.size(), "to": spoken.size() + words.size()}, 0.0, 0.0)
 						_hold_films(actions, gap, pending)
-						_flush(speak, pending, who, "tablet", said_as, heard_as)
+						_flush(speak, pending, who, where, said_as, heard_as)
 						said_as = who
-						heard_as = "tablet"
+						heard_as = where
 						speak.append(said)
 						spoken.append_array(words)
 						said_any = true

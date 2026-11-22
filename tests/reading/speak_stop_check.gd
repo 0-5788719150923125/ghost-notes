@@ -129,7 +129,7 @@ func _check_space_plays_wherever_the_focus_is() -> void:
 	var collapse: Button = null
 	var focused: Button = null
 	for b in _ed._panel.find_children("*", "Button", true, false):
-		if (b as Button).text == "–":
+		if (b as Button).text == "‹" and (b as Button).tooltip_text.begins_with("Hide panel"):
 			collapse = b
 		elif focused == null and (b as Button).focus_mode != Control.FOCUS_NONE:
 			focused = b

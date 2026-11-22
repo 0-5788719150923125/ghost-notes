@@ -36,6 +36,8 @@ const HEARD := {
 		"low": 350.0, "high": 2700.0, "drive": 3.0, "gain": 0.85, "hiss": 0.03, "crackle": 4.0, "squelch": true, "fade": 0.0},
 	"tablet": {"label": "From a tablet's speaker", "blurb": "A tablet lying on the desk playing a stream or a video: a small speaker, brighter than a phone on the desk and with no line's hiss.",
 		"low": 240.0, "high": 6800.0, "drive": 1.25, "gain": 0.6, "hiss": 0.0, "crackle": 0.0, "squelch": false, "fade": 0.0},
+	"tv": {"label": "From a small old television", "blurb": "A small old set across the desk playing a recording: a boxy little speaker, duller than a tablet's, with the faint whine and hiss of the tube.",
+		"low": 220.0, "high": 5200.0, "drive": 1.4, "gain": 0.5, "hiss": 0.003, "crackle": 0.0, "squelch": false, "fade": 0.0},
 	"receiver": {"label": "Over a shortwave receiver", "blurb": "A voice from very far off, inside the signal: a shortwave receiver's narrow band, sinking into its hiss and crackle and coming back out as the signal fades, never keyed up or off.",
 		"low": 300.0, "high": 2600.0, "drive": 2.4, "gain": 0.9, "hiss": 0.008, "crackle": 2.5, "squelch": false, "fade": 0.55},
 }

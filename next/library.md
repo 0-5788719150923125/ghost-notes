@@ -142,8 +142,7 @@ Not built: the `Keys` registry and its shelf (step 3), kept props on a desk othe
 - Its picture is made when it is kept (`TablePreview.thing`, on a worker), cached by the spec's hash; a Seen thing's
   while its shelf is open, the nearest the view first.
 - **The Props card** is one card for every presentation that sets things down, as the Pictures card is for pictures.
-  Whatever shows things hands it a `PropSection`, as a show hands the Pacing card a `TuneSection`; the card draws, the
-  section does, and with no section there is no card. No card names another.
+  Whatever shows things hands it a `PropSection`; the card draws, the section does, and with no section there is no card. No card names another.
 - Its rows are what stands: a small picture, a name and ×. "+ Add a prop" opens the Dex's Props shelf to pick from,
   offering only what fits (a 40 cm cauldron is not offered for a desk).
 - **The desk**: `DeskRows`' ticks move here. Until a prop is added or taken off, the desk's number draws them, as now;

@@ -192,7 +192,10 @@ func _window() -> void:
 	await _settle()
 	_ok(field._edit.text == "Arrived." and said[0] == said_before + 1, "words arriving while it is open reach the window and say nothing")
 
-	var done: Button = field._window.find_children("*", "Button", true, false)[0]
+	var done: Button = null
+	for b in field._window.find_children("*", "Button", true, false):
+		if (b as Button).text == "Done":
+			done = b
 	done.pressed.emit()
 	_ok(not field.editing() and field.text == "Arrived.", "Done shuts it, and the words stay")
 	field.open()

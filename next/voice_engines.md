@@ -1110,8 +1110,12 @@ heuristic is a row and a function.
 - A word's `slow` is whole frames: planned, then each sound floored at its frames times `slow`, remainders carried (a
   ratio on 25 ms frames rounds back to nothing).
 - The reading sends `inflect: true` to the voices of a backend that says `inflect` (Kokoro: `ReadingCast.inflects`), so
-  a take kept without it is made again once and no Piper take is touched. A voice that moves (`kokoro_moving.py`) gets
-  the slowdown but no pitch: its graph takes none.
+  a take kept without it is made again once and no Piper take is touched. A VOICE THAT MOVES INFLECTS TOO: the graph it
+  moves in is made to sing as the stock graph is (`model_moving_sung.onnx`, `_sung_graphs(moving=True)`).
+- A question's last word is VOICED where the plan whispers it (`voice`, `inflection.voiced`): a breathy blend whispers a
+  sentence's last word, and a multiplier on a pitch of nothing is nothing. Its vowels from the stressed one on are told
+  the shaped pitch outright (`f0_set`), and the stressed vowel made as loud as the call's voiced steps (`lifted`,
+  `n_set`); a vowel after it keeps its own energy, so a tail that dies away still does.
 - `hosts/voice/test_inflection.py`; listening pairs by `hosts/voice/inflection_probe.py` (plain, then inflected).
 
 ### What was measured
@@ -1120,12 +1124,14 @@ Emma: every yes/no question's last word ends 5-7 st above plain ("outside?" 153 
 length, the wh-questions the same as plain;
 an italic peaks about 2.5 st over plain at its vowel, 25-50 ms longer; "It was *real*." 50 ms shorter than plain.
 Heart rises the same ("outside?" 177 to 268 Hz); before the lead, a short vowel before a stop ("what?") rose after
-it was over.
+it was over. Targeting Individuals' moving Puck-Nicole blend: "Can I go home now?" whispers "now" plain, rises 159 to
+190 Hz voiced.
 
 ### Status
 
 In the reading. Heard: questions and italics good; the first holds were too long (now as above), and wh-questions
-should fall (now so); awaiting the ear again. Open: a Voice card row to turn it off or tune it.
+should fall (now so); moving voices awaiting the ear. Open: a Voice card row to turn it off or tune it; a mark for a
+line that rises against the rule (an incredulous wh-question).
 
 ## Training Kokoro
 

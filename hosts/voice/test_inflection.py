@@ -17,7 +17,10 @@ Held, each with the case that must not change:
   6. an accent peaks on the stressed vowel, not at the word's middle;
   7. flattening takes a planned fall out of the word (and leaves an unflattened word's alone), never reads what follows
      the word in the call or a step on the edge of voicing, moves no step past FLATTEN_MOST, and the curve has no step a
-     decoder would click on.
+     decoder would click on;
+  8. a word whose vowels the plan whispers is voiced where a mark asks (at its base pitch times the curve, from its
+     stressed vowel on, louder to the call's voiced energy), and a voiced word or a mark that does not voice is left
+     to the plan.
 """
 
 from __future__ import annotations
@@ -164,10 +167,41 @@ def curves() -> None:
     check(float(jumps.max()) < 1.5, f"no step a decoder would click on (largest {jumps.max():.2f} st a step)")
 
 
+def voicing() -> None:
+    steps = int(sum(FRAMES)) * 2
+    f0 = np.full(steps, 200.0)
+    f0[:step_of(1)] = 0.0
+    a, b = step_of(5), step_of(8)
+    whisper = f0.copy()
+    whisper[a:] = 0.0  # word 1 from its stressed vowel on, and the rest
+    vowels = {5, 6}  # STRESS has word 1's stressed vowel as ids 5-6
+    q = inflection.plan(words("see it?"), {"question": {"flatten": 0.0}})
+    keep = inflection.curve(q, OWNERS, FRAMES, SOUNDS, STRESS, whisper)
+    got = inflection.voiced(q, OWNERS, FRAMES, vowels, STRESS, whisper, keep)
+    check(got is not None, "a whispered marked vowel is voiced")
+    pitch, told, loud = got
+    v = step_of(7)  # ids 5-6 the vowels; 7 a consonant, left whispered
+    check(bool(told[a:v].all()) and not told[:a].any() and not told[v:].any(), "...on its vowels from the stressed one on")
+    check(pitch[v - 1] > 200.0 * 2.0 ** (4.0 / 12.0), f"...at the base times the rise ({pitch[v - 1]:.0f} Hz)")
+    check(inflection.voiced(q, OWNERS, FRAMES, vowels, STRESS, f0, keep) is None, "a voiced word is left to the plan")
+    quiet = {k: Mark(pitch=m.pitch, voice=False) for k, m in q.items()}
+    check(inflection.voiced(quiet, OWNERS, FRAMES, vowels, STRESS, whisper, keep) is None,
+          "a mark that does not voice leaves it whispered")
+    energy = np.where(whisper > 0, 1.0, -2.0)
+    _p, told2, loud2 = inflection.voiced(q, OWNERS, FRAMES, vowels, {1: (5, 5)}, whisper, keep)
+    six = step_of(6)
+    check(bool(told2[six:step_of(7)].all()) and bool(loud2[a:six].all()) and not loud2[six:].any(),
+          "...the stressed vowel made loud, a vowel after it voiced at its own energy")
+    up = inflection.lifted(energy, loud, whisper)
+    check(float(up[a + 2]) >= 1.0 - inflection.ENERGY_UNDER - 1e-3 and float(up[2]) == -2.0,
+          "the voiced steps are raised to the call's voiced energy, the rest kept")
+
+
 if __name__ == "__main__":
     rules()
     wh()
     settings()
     curves()
+    voicing()
     print(f"\n{len(FAILS)} failed" if FAILS else "\nall passed")
     raise SystemExit(1 if FAILS else 0)

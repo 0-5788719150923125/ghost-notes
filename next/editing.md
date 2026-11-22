@@ -41,9 +41,8 @@ scenes from scratch and debug them in manual mode. The C# question is answered i
 8. **From nothing** - "By hand" episodes Generate passes by; a library of things (`ThingLibrary`).
 9. **Agents on what is picked** - "Ask the set dresser / the puppeteer" about one thing or act, with a note.
 10. **Flags** - `StageKeys`: the camera, an actor's size, hue and fade, and the Look's filters (`ShowFeed.turn_look`).
-11. **Numbers as rows** - `TableTune`, told per show (`table: tune:`), on the panel's Pacing card: a component hands the rows it
-    reads (`TuneSection`), a table show only those pacing the laws its acts use - no brush's for a show that paints nothing, and no
-    card at all when nothing is offered (`PacingCard`).
+11. **Numbers as rows** - `TableTune`, told per show (`table: tune:`), as the Episode card's Pacing rows (`EpisodePacing`): only
+    those pacing the laws its acts use - no brush's for a show that paints nothing, and no rows at all when nothing is offered.
 12. **The other shows** - Proof's steps kept and its lesson a Timeline; every reading's marks a Timeline (`ReadingTimeline`, the
     Letter's and the Dispatch desk's too).
 13. **A stretch rendered again** - `Stitch`, `--from`, the exporter's "A stretch again".

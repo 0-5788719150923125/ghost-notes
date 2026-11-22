@@ -46,7 +46,7 @@ static func sanitize(raw: Variant) -> Dictionary:
 ## The rows as a form's fields ([SchemaForm]): each a number within its bounds - a slider beside its
 ## box - labeled and explained as its row is, with its unit. Given [param laws], only the rows that
 ## pace one of them (each row's `laws`), so a show that paints nothing is offered no brush's
-## ([TuneSection]).
+## (the Episode card's Pacing rows, [EpisodePacing]).
 static func fields(laws: Variant = null) -> Dictionary:
 	var out := {}
 	for k in ROWS:

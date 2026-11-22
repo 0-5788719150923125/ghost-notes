@@ -5,6 +5,8 @@ kokoro_sung.py: `f0_keep` fed a curve multiplies the pitch it plans, so the deco
 
     marks = plan(group, settings)     # {token: Mark}, `group` a sentence's tokens, `settings` the request's `inflect`
     keep = curve(marks, owners, frames, sounds, stress, planned)   # [2 x frames] multipliers, 1 where no rule speaks
+    f0, told, loud = voiced(marks, owners, frames, vowels, stress, planned, keep)   # the pitch, where a mark voices
+    energy = lifted(energy_planned, loud, planned)   # ...its stressed vowel as loud as the call's voiced steps
 
 A RULE IS A ROW of RULES (`label`, `blurb`, `fields` with each default, `fn`): `fn(group, fields) -> {token: Mark}`.
 A new heuristic is a row and a function; nothing else changes. Marks from every rule on one word are combined: the
@@ -19,6 +21,9 @@ A Mark is what one word does:
 - `flatten`: how much of the model's own pitch movement on the word is taken out (0 none, 1 all), pulled to what it
   plans before the stressed vowel, so the shape is the word's contour rather than a bend of the model's (a sentence's
   last word falls as a statement's: a question's rise on top of it is heard flat). Needs the planned pitch.
+- `voice`: where the model plans the word's vowels unvoiced from its stressed one on (a breathy voice whispers a
+  sentence's last word), they are voiced at the pitch the shapes ask for, from the word's own pitch before its
+  stressed vowel or the sentence's just before the word (`voiced`): a whispered vowel has no pitch to move.
 - `slow`: every sound of the word held this much longer (its pace).
 - `stretch`: its stressed vowel held this much longer, on top. With inflection on, the rules' stretches are all a word
   has: the backend's own emphasis stretch is not added.
@@ -41,6 +46,8 @@ VOICED = 40.0
 VOICED_SHARE = 0.5
 # The most flattening moves a step, in semitones either way.
 FLATTEN_MOST = 6.0
+# A voiced step's energy is raised to the call's median voiced energy less this (the curve's own log units).
+ENERGY_UNDER = 0.5
 ANCHORS = ("stress<", "stress", "stress>")
 # Penn tags of a wh-word, and of what may stand before one at the front of a wh-question (conjunction, preposition,
 # interjection, adverb, a comma).
@@ -55,10 +62,12 @@ class Mark:
     stretch: float = 1.0
     flatten: float = 0.0
     more: list = field(default_factory=list)  # other rules' shapes on the same word, each read alone and added
+    voice: bool = False
 
     def add(self, other: "Mark") -> "Mark":
         return Mark(self.pitch, self.slow * other.slow, self.stretch * other.stretch,
-                    max(self.flatten, other.flatten), self.more + ([other.pitch] if other.pitch else []) + other.more)
+                    max(self.flatten, other.flatten), self.more + ([other.pitch] if other.pitch else []) + other.more,
+                    self.voice or other.voice)
 
     def shapes(self) -> list:
         return [sh for sh in [self.pitch, *self.more] if sh]
@@ -100,8 +109,9 @@ def wh_question(group: list) -> bool:
 def question(group: list, f: dict) -> dict:
     """A sentence that ends on "?" rises on its last word (a low rise): its own fall flattened, a small dip at the start
     of its stressed vowel, `on_vowel` of `rise` semitones by that vowel's end and the rest by the word's, held into
-    the rest. The word keeps its length: the trail already holds a sentence's last word (`slow`, `stretch` 1). A
-    wh-question (`wh_question`) rises `wh` of that: none by default, falling as a statement does."""
+    the rest. The word keeps its length: the trail already holds a sentence's last word (`slow`, `stretch` 1), and
+    its vowels are voiced where the model would whisper them (`voice`). A wh-question (`wh_question`) rises `wh` of
+    that: none by default, falling as a statement does."""
     if "?" not in _end_mark(group):
         return {}
     ti = _last_word(group)
@@ -113,7 +123,8 @@ def question(group: list, f: dict) -> dict:
     rise = float(f["rise"]) * share
     return {ti: Mark(pitch=[(0.0, 0.0), ("stress<", -float(f["dip"])), ("stress>", rise * float(f["on_vowel"])),
                             (1.0, rise)],
-                     slow=float(f["slow"]), stretch=float(f["stretch"]), flatten=float(f["flatten"]))}
+                     slow=float(f["slow"]), stretch=float(f["stretch"]), flatten=float(f["flatten"]),
+                     voice=float(f["voice"]) > 0.0)}
 
 
 def emphasis(group: list, f: dict) -> dict:
@@ -139,7 +150,8 @@ RULES: dict = {
     "question": {
         "label": "Question",
         "blurb": "A sentence ending in a question mark rises on its last word, unless it asks with a wh-word in front.",
-        "fields": {"rise": 6.0, "dip": 0.7, "on_vowel": 1.0, "flatten": 0.8, "slow": 1.0, "stretch": 1.0, "wh": 0.0},
+        "fields": {"rise": 6.0, "dip": 0.7, "on_vowel": 1.0, "flatten": 0.8, "slow": 1.0, "stretch": 1.0, "wh": 0.0,
+                   "voice": 1.0},
         "fn": question,
     },
     "emphasis": {
@@ -257,3 +269,75 @@ def _flattened(f0, u, onset: float, amount: float):
     ref = float(np.median(f0[before])) if before.size >= 2 else float(np.median(f0[voiced[:3]]))
     st = np.clip(amount * 12.0 * np.log2(ref / f0[voiced]), -FLATTEN_MOST, FLATTEN_MOST)
     return np.interp(np.arange(f0.size), voiced, st)
+
+
+def voiced(marks: dict, owners: list, frames: list, vowels, stress: dict | None, planned, keep, lead: int = 0):
+    """The pitch a step (Hz) to feed in place of `planned` times `keep`, where a mark that `voice`s finds its word's
+    vowels from its stressed one on planned unvoiced: those steps (laid `lead` early, as the shapes are) at the base
+    pitch times `keep`, the base the word's voiced pitch before its stressed vowel or the last voiced before the word;
+    the joins eased (singing.seam_pitch). `vowels` the ids that are vowels. (the pitch, the steps voiced, the steps of
+    the stressed vowel among them - what `lifted` makes loud: a vowel after it keeps its planned energy, so a word's
+    tail that dies away still does), or None where nothing is voiced."""
+    import numpy as np
+
+    import singing
+
+    if planned is None or keep is None or not any(m.voice for m in marks.values()):
+        return None
+    f0 = np.asarray(planned, dtype=np.float64).ravel()
+    steps = len(keep)
+    f0 = f0[:steps] if f0.size >= steps else np.pad(f0, (0, steps - f0.size))
+    keep = np.asarray(keep, dtype=np.float64)
+    starts = np.concatenate(([0.0], np.cumsum(np.asarray(frames, dtype=np.float64))))
+    out = f0 * keep
+    told = np.zeros(steps, dtype=bool)
+    loud = np.zeros(steps, dtype=bool)
+    for ti, m in marks.items():
+        if not m.voice:
+            continue
+        mine = [k for k in range(len(owners)) if owners[k] == ti]
+        if not mine:
+            continue
+        first = stress[ti][0] if stress and ti in stress else mine[0]
+        last = stress[ti][1] if stress and ti in stress else first
+        at = [k for k in mine if k >= first and k in vowels]
+        lo_word = int(math.floor(starts[mine[0]] * 2))
+        cut = int(math.floor(starts[first] * 2))
+        before = f0[lo_word:cut]
+        before = before[before > VOICED]
+        if before.size < 2:
+            earlier = f0[:lo_word]
+            before = earlier[earlier > VOICED][-6:]
+        if before.size < 2:
+            continue
+        base = float(np.median(before))
+        for k in at:
+            for j in range(int(math.floor(starts[k] * 2)), min(steps, int(math.ceil(starts[k + 1] * 2)))):
+                j_heard = max(0, j - lead)
+                if f0[j] < VOICED:
+                    told[j_heard] = True
+                    loud[j_heard] = k <= last
+                    out[j_heard] = base * keep[j_heard]
+    if not told.any():
+        return None
+    return singing.seam_pitch(out, told, f0).astype(np.float32), told, loud
+
+
+def lifted(energy, told, planned):
+    """The model's energy curve with the steps `told` (`voiced`'s stressed vowel) raised to the call's typical voiced energy (less
+    ENERGY_UNDER), eased in and out (singing.seam_energy): the decoder voices a vowel only while it is told it is loud,
+    and a whispered one is planned quiet."""
+    import numpy as np
+
+    import singing
+
+    n = np.asarray(energy, dtype=np.float64).ravel()
+    f0 = np.asarray(planned, dtype=np.float64).ravel()[:n.size]
+    told = np.asarray(told, dtype=bool)[:n.size]
+    loud = n[:f0.size][f0 > VOICED]
+    if loud.size < 4:
+        return n.astype(np.float32)
+    target = float(np.median(loud)) - ENERGY_UNDER
+    out = n.copy()
+    out[:told.size][told] = np.maximum(n[:told.size][told], target)
+    return singing.seam_energy(out, n).astype(np.float32)

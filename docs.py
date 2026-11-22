@@ -990,6 +990,21 @@ def media_page(base: Script) -> str:
         if rel not in registered and path.stem != "medium" and path.parent != SCENES_DIR \
                 and script_at(path).extends in kinds and script_at(path).class_name not in bases:
             warn(f"{rel} is a medium not registered in Medium.REGISTRY - it can never be selected")
+    # how a flown camera follows: the Camera card's rows, and each format's own (a row's `follow`)
+    follow = script_at(SCRIPTS / "motion" / "camera_follow.gd")
+    fields = follow.const("FIELDS", {})
+    if not fields:
+        warn("could not parse CameraFollow.FIELDS")
+    owns = [(k, r.get("follow")) for k, r in rows.items() if isinstance(r.get("follow"), dict)]
+    for k, f in owns:
+        for name in f:
+            if name not in fields:
+                warn(f"Medium.REGISTRY['{k}'] follows by '{name}', which CameraFollow.FIELDS has no row for")
+    blocks += ["## How a flown camera follows", full_doc(follow.doc),
+               "The Camera card's rows (`CameraFollow.FIELDS`), each at its default where a format says none:",
+               field_table(fields),
+               "Each format's own (its row's `follow`), which the card's rows stand at until set:",
+               table(["Format", "Its own"], ([f"`{k}`", ", ".join(f"`{n}` {v}" for n, v in f.items())] for k, f in owns))]
     return page("Media: what carries the show", blocks)
 
 

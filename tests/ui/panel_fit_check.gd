@@ -7,7 +7,7 @@ extends Node
 ## Holds, on every panel and at every window height in a sweep:
 ## - the panel is inside the window, and scrolled to the bottom the last row is inside the panel's own
 ##   rectangle (either half alone passes on a broken panel);
-## - its title row stays pinned: "‹", "⋯" and "–" are in view scrolled to the bottom;
+## - its title row stays pinned: "⋯" and "‹" are in view scrolled to the bottom;
 ## - a panel that fits is unchanged: it does not stretch to fill the window;
 ## - it keeps its declared width: checked on every panel, the Cards one holding real long titles;
 ## - nothing on a card scrolls of its own ([TextField]): what would take the wheel from the panel, found
@@ -189,7 +189,7 @@ func _check_fits(name: String, panel: SidePanel_) -> void:
 			+ "outside the %.0f..%.0f the panel shows" % [view.position.y, view.end.y])
 		# The bar has clear space beside it: clearance is measured rather than non-overlap, since a
 		# ScrollContainer reserves the bar's width and the content already stops at the bar's left edge.
-		# The header stays: scrolled to the bottom, the title row with its "⋯" and "–" is still inside the
+		# The header stays: scrolled to the bottom, the title row with its "⋯" and "‹" is still inside the
 		# panel, above the scrolled body - and the body's first row, the control, has moved under it
 		var head: Control = panel._head.get_child(0) if panel._head.get_child_count() > 0 else null
 		_ok(head != null, "%s: no title row is pinned over the body" % name)

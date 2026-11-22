@@ -20,7 +20,8 @@ class_name DispatchMedium
 ## terminal while it types or shows something, the radar on a ping, the receiver while it plays static, a picture landing
 ## on a screen, the printer, the bell, the lamp switched (the whole desk, to see it go dark). `look:` turns it on purpose
 ## and it stays, as the gain knob holds it on the radar. It leans toward what it looks at and its lens closes in on the
-## small things, on critically damped springs ([constant SPRING_TAU]); with nothing new for a while it eases back to the
+## small things, by the one follow every flown camera has ([CameraFollow]: the Camera card's over the format's own, a long
+## look across the desk quicker than a short one); with nothing new for a while it eases back to the
 ## whole desk, with a slow breath of wander under it. Every look holds long enough to settle ([constant LOOK_LEAST]), a
 ## ping to the end of the sentence said over it ([constant PING_HOLD]), and it never leaves a thing only to come straight
 ## back ([constant AWAY_LEAST]).
@@ -64,13 +65,8 @@ const SPOTS := {
 	"clock": {"label": "The clock", "blurb": "Close on the little flip clock's cards."},
 	"tablet": {"label": "The tablet", "blurb": "The tablet held up before the eye."},
 }
-## The camera's springs (seconds): how long it takes to settle on what it turns to (critically damped), after a lead that
-## eases every move in so none starts with a jolt - slow and gentle, as the night is; and how long after the last thing it
-## looked at it waits before easing back to the whole desk.
-const SPRING_TAU := 1.7
-const LEAD_TAU := 1.1
-## How long after it turns to a thing the camera is on it, by those springs (seconds).
-const CAMERA_ARRIVES := 8.0
+## How long after the last thing it looked at the camera waits before easing back to the whole desk (seconds). How it moves
+## is its follow's ([CameraFollow]; slow and gentle by the format's own, as the night is).
 const HOME_AFTER := 9.0
 ## The tablet laid down leaves nothing where it was held: the camera stays there this long after the hand begins to lay it
 ## down (seconds), then goes to the whole desk - or straight on to what is turned to next, where that begins within as long
@@ -144,7 +140,7 @@ const MOVING_HOLD_MOST := 12.0
 const PING_HOLD := 12.0
 const PING_HOLD_MOST := 16.0
 const PING_LINGER := 4.0
-## What the camera turns to is seen (seconds; the camera takes about eight of them to arrive): every look holds at least
+## What the camera turns to is seen (seconds; the camera takes several of them to arrive, [CameraFollow]): every look holds at least
 ## [constant LOOK_LEAST] from its start, unless something else begins first; and the camera never leaves a thing for less
 ## than [constant AWAY_LEAST] - it stays on what it was on rather than pull back to the whole desk for less than that before
 ## it turns again.
@@ -402,15 +398,7 @@ var _stage_was := {}
 var _fill: DirectionalLight3D
 var _mats := {}                         # a screen's or phone face's ShaderMaterial, by name
 
-var _f_aim := Vector3.ZERO                # where the camera is led toward, eased in ([constant LEAD_TAU])...
-var _f_eye := Vector3.ZERO
-var _f_fov := 50.0
-var _c_aim := Vector3.ZERO
-var _v_aim := Vector3.ZERO
-var _c_eye := Vector3.ZERO
-var _v_eye := Vector3.ZERO
-var _c_fov := 50.0
-var _v_fov := 0.0
+var _cam_follow := CameraFollow.new([1.0, 1.0, 1.0], 0, 0.1)   # where it looks, where it stands, its lens ([method _tick_camera])
 
 
 # --- mount -------------------------------------------------------------------------------------------------------------
@@ -3596,14 +3584,19 @@ func _page_scroll(i: int, t: float) -> float:
 	return minf(base + (t - start) * PAGE_DRIFT, most)
 
 
-## When the camera is on the tablet page action [param i] is on: [constant CAMERA_ARRIVES] after it was picked up (-INF
-## where it was not). A page is looked at from then, so the first page of a tablet just picked up stays where it came up
-## until the camera has got to it.
+## When the camera is on the tablet page action [param i] is on: as long after it was picked up as the camera takes to turn
+## there from what it looked at before ([method CameraFollow.arrival]; -INF where it was not). A page is looked at from then,
+## so the first page of a tablet just picked up stays where it came up until the camera has got to it.
 func _tablet_seen(i: int) -> float:
 	for k in range(i - 1, -1, -1):
 		var b: Dictionary = _actions[k]
 		if String(b["kind"]) == "tablet":
-			return _t0[k] + CAMERA_ARRIVES if bool(b["up"]) and _t0[k] < INF else -INF
+			if not bool(b["up"]) or _t0[k] == INF:
+				return -INF
+			var was := _attention(_t0[k] - 0.01)
+			var to := _spot("tablet")
+			_cam_follow.configure(camera_follow())
+			return _t0[k] + _cam_follow.arrival(CameraFollow.apart(was["eye"], was["aim"], to["aim"]))
 	return -INF
 
 
@@ -4259,37 +4252,14 @@ func _tick_camera(delta: float) -> void:
 	var w := Vector3(sin(_now * WANDER_RATE * TAU + 1.3) * WANDER.x, sin(_now * WANDER_RATE * 0.77 * TAU) * WANDER.y,
 		sin(_now * WANDER_RATE * 0.53 * TAU + 2.1) * WANDER.z)
 	aim += w
+	_cam_follow.configure(camera_follow())
 	if _snap:
-		_f_aim = aim
-		_f_eye = eye
-		_f_fov = fov
-		_c_aim = aim
-		_c_eye = eye
-		_c_fov = fov
-		_v_aim = Vector3.ZERO
-		_v_eye = Vector3.ZERO
-		_v_fov = 0.0
+		_cam_follow.snap([aim, eye, fov])
 		_snap = false
 	else:
-		var dt := clampf(delta, 0.0, 0.1)
-		var steps := maxi(1, ceili(dt / 0.02))
-		var h := dt / float(steps)
-		var lead := 1.0 - exp(-h / LEAD_TAU)
-		for _s in steps:
-			# the lead first, so the spring is pulled toward a target that moves off gently, never one that jumps
-			_f_aim = _f_aim.lerp(aim, lead)
-			_f_eye = _f_eye.lerp(eye, lead)
-			_f_fov = lerpf(_f_fov, fov, lead)
-			var k := h / (SPRING_TAU * SPRING_TAU)
-			var c := 2.0 * h / SPRING_TAU
-			_v_aim += (_f_aim - _c_aim) * k - _v_aim * c
-			_c_aim += _v_aim * h
-			_v_eye += (_f_eye - _c_eye) * k - _v_eye * c
-			_c_eye += _v_eye * h
-			_v_fov += (_f_fov - _c_fov) * k - _v_fov * c
-			_c_fov += _v_fov * h
-	_cam.fov = _c_fov
-	_cam.look_at_from_position(_c_eye, _c_aim, Vector3.UP)
+		_cam_follow.step([aim, eye, fov], delta, _cam_follow.value(1))
+	_cam.fov = float(_cam_follow.value(2))
+	_cam.look_at_from_position(_cam_follow.value(1), _cam_follow.value(0), Vector3.UP)
 
 
 # --- the pictures over the whole screen ---------------------------------------------------------------------------------

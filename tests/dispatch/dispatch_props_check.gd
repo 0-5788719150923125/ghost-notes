@@ -346,19 +346,21 @@ func _format_and_card() -> void:
 	var pale_face: String = face_of.call({"receiver_glow": {"paper": "#ffffff"}})
 	_ok((recv_row.get("fields", {}) as Dictionary).has("paper") and pale_face != own_face and pale_face == "b3b3b3",
 		"the dial's face takes the color picked (%s; the control, its own: %s)" % [pale_face, own_face])
-	var meter_of := func(makes: Dictionary) -> String:
+	var meter_of := func(makes: Dictionary) -> Array:
 		var ds := DispatchSet.new()
 		ds.makes = makes
 		var n := ds.build(PackedStringArray(["A"]), 3, {"dial": PlaceholderTexture2D.new()})
-		var face: MeshInstance3D = ds.rigs["receiver"].face("meter") if ds.rigs.has("receiver") else null
-		var m := face.material_override as StandardMaterial3D if face != null else null
-		var out := "%s %s" % [m.albedo_color.to_html(false), m.emission.to_html(false)] if m != null else ""
+		var out := []
+		for face in [ds.meter, ds.dial]:
+			var m := (face as MeshInstance3D).material_override as StandardMaterial3D if face != null else null
+			out.append("%s %s" % [m.albedo_color.to_html(false), m.emission.to_html(false)] if m != null else "")
 		n.free()
 		return out
-	var own_meter: String = meter_of.call({})
-	var pale_meter: String = meter_of.call({"receiver_glow": {"paper": "#ffffff", "dial": "#b8ffc8"}})
-	_ok(not own_meter.is_empty() and own_meter != pale_meter and pale_meter == "b2b2b2 b8ffc8",
-		"the needle meter's card takes the dial's face and lamp (%s; the control, its own: %s)" % [pale_meter, own_meter])
+	var own_meter: Array = meter_of.call({})
+	var pale_meter: Array = meter_of.call({"receiver_glow": {"paper": "#ffffff", "dial": "#b8ffc8"}})
+	_ok(not String(own_meter[0]).is_empty() and own_meter[0] != pale_meter[0] and pale_meter[0] == pale_meter[1]
+		and String(pale_meter[0]).ends_with(" b8ffc8"),
+		"the needle meter's card takes the dial's face and lamp, as the dial does (%s; the control, its own: %s)" % [pale_meter, own_meter])
 	_ok(sec.act("role:receiver", "own").is_empty() and fmt.part("receiver_glow").is_empty(), "the desk's own takes the receiver's colors back")
 	# the security monitor's static on its entry, kept in the block and read by the medium (the control: its own until set)
 	var feed_row: Dictionary = by_key.call("role:feed")
