@@ -44,8 +44,15 @@ const EMPH_MARKS := EMPH_ITALIC + EMPH_BOLD
 ## emphasis sentinels do: [Phonemes.parse] peels it into `hold` / `hold_before` on the word, and the
 ## panel splices the silence into the take there.
 const HOLD_MARK := "\uE003"
+## How the words between two of one are inflected (`<!-- inflect: none -->`, [constant Manuscript.INFLECT]): toggles as the
+## emphasis sentinels are, welded to the words at each end of the run by [method ReadingPlan.resolve_marks];
+## [Phonemes.parse] peels them into `inflect` on each word between.
+const INFLECT_NONE := "\uE004"
+const INFLECT_RISE := "\uE005"
+## The kinds an inflection mark names, each its sentinel.
+const INFLECTS := {"none": INFLECT_NONE, "rise": INFLECT_RISE}
 ## Every sentinel, for the passes that treat one as a wrapper (like a quote) rather than part of the word.
-const SENTINELS := EMPH_ITALIC + EMPH_BOLD + HOLD_MARK
+const SENTINELS := EMPH_ITALIC + EMPH_BOLD + HOLD_MARK + INFLECT_NONE + INFLECT_RISE
 ## Level bits carried on a word: 1 italic, 2 bold, 3 both.
 const EMPH_I := 1
 const EMPH_B := 2
@@ -237,12 +244,17 @@ static func _strip_markdown(text: String) -> String:
 ## Strip every sentinel from `text` - emphasis and hesitation alike - for callers who want speakable
 ## words and nothing else (everyone except [Phonemes.parse]).
 static func strip_emphasis(text: String) -> String:
-	if not (text.contains(EMPH_ITALIC) or text.contains(EMPH_BOLD) or text.contains(HOLD_MARK)):
+	var any := false
+	for c in SENTINELS:
+		if text.contains(c):
+			any = true
+			break
+	if not any:
 		return text
 	var out := ""
 	for i in text.length():
 		var c := text[i]
-		if c != EMPH_ITALIC and c != EMPH_BOLD and c != HOLD_MARK:
+		if not SENTINELS.contains(c):
 			out += c
 	return out
 

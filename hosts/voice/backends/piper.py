@@ -2895,6 +2895,11 @@ class PiperBackend(Backend):
         marks = inflection.plan(group, asked)
         if asked:
             stretch = {ti: m.stretch for ti, m in marks.items() if m.stretch != 1.0}
+            # a word the script says to inflect none is leaned on as without inflection
+            for ti, t in enumerate(group):
+                level = int(t.get("emph", 0) or 0)
+                if str(t.get("inflect", "")) == "none" and level in EMPHASIS:
+                    stretch[ti] = EMPHASIS[level][0]
         else:
             stretch = {
                 ti: EMPHASIS[int(t.get("emph", 0) or 0)][0]

@@ -14,9 +14,9 @@ class_name VoiceHost
 ## Nothing here blocks the frame. The wait is polled; synthesis is a request whose reply arrives on a
 ## later frame. The caller gets signals, not return values.
 ##
-## Ghost Notes' own voice ([FormantVoice]) is made here rather than in the host: a request for it runs on a worker,
-## one at a time as the host makes them, and is answered on `synthesized` as the host's are; every listing of the
-## voices carries its row.
+## Ghost Notes' own voice ([FormantVoice]) is made here rather than in the host: a request for it - said, or sung
+## ([FormantSinging]) - runs on a worker, one at a time as the host makes them, and is answered on `synthesized` as the
+## host's are; every listing of the voices carries its row.
 
 signal host_ready(backends: PackedStringArray)  # not `ready`: Node already has one
 signal failed(stage: String, message: String)
@@ -38,7 +38,7 @@ var _said := ""                      # the last progress line, so each is emitte
 var _rx := ""                        # partial line buffer
 var _stderr: FileAccess              # the host's diagnostics
 var _erx := ""
-var _here: Array = []                # requests for [FormantVoice] waiting their turn: [{id, out, params}]
+var _here: Array = []                # requests for [FormantVoice] waiting their turn: [{id, out, params}], a sung one with op, words, style
 var _making := {}                    # the one being made: {id, task, box}
 
 
@@ -103,10 +103,16 @@ func request(text: String, voice: String, out_path: String,
 ## A phrase sung on its notes (the host's `sing`; next/music.md, "Kokoro sings"): [param words] `[{text, notes: [{t,
 ## len, midi}]}]`, times in seconds from the phrase's start; [param params] the reader (`speaker`) or `blend`;
 ## [param style] how it is sung (`tune`, `vibrato`, ...). Returns the request id; the take arrives on `synthesized`
-## with `start`, where its first sample falls in the phrase's seconds. A failure is `failed("sing", why)`.
+## with `start`, where its first sample falls in the phrase's seconds. A failure is `failed("sing", why)`. The formant voice
+## sings here, on a worker ([FormantSinging]; [param params] its `formant` and the Tone's `semis`).
 func sing(words: Array, voice: String, out_path: String, params := {}, style := {}) -> int:
 	var id := _next_id
 	_next_id += 1
+	if voice == FormantVoice.ID:
+		_here.append({"id": id, "op": "sing", "out": ProjectSettings.globalize_path(out_path), "params": params.duplicate(true),
+			"words": words.duplicate(true), "style": style.duplicate(true)})
+		_make_next_here()
+		return id
 	_pending[id] = {"op": "sing", "voice": voice}
 	_send({"id": id, "op": "sing", "voice": voice, "out": ProjectSettings.globalize_path(out_path), "words": words,
 		"params": params, "style": style})
@@ -255,10 +261,17 @@ func _make_next_here() -> void:
 	var params: Dictionary = r["params"]
 	var out := String(r["out"])
 	var box := {}
-	var task := WorkerThreadPool.add_task(func() -> void:
-		box["result"] = FormantVoice.say(params.get("tokens", []) as Array, params.get("formant", {}) as Dictionary,
-			params, out))
-	_making = {"id": int(r["id"]), "task": task, "box": box}
+	var task := -1
+	if String(r.get("op", "")) == "sing":
+		var words: Array = r["words"]
+		var style: Dictionary = r["style"]
+		task = WorkerThreadPool.add_task(func() -> void:
+			box["result"] = FormantSinging.sing(words, params, style, out))
+	else:
+		task = WorkerThreadPool.add_task(func() -> void:
+			box["result"] = FormantVoice.say(params.get("tokens", []) as Array, params.get("formant", {}) as Dictionary,
+				params, out))
+	_making = {"id": int(r["id"]), "task": task, "box": box, "op": String(r.get("op", "synthesize"))}
 	set_process(true)
 
 
@@ -267,12 +280,13 @@ func _pump_here() -> void:
 	if _making.is_empty() or not WorkerThreadPool.is_task_completed(int(_making["task"])):
 		return
 	var id := int(_making["id"])
+	var op := String(_making.get("op", "synthesize"))
 	var result: Dictionary = _finish_here()
 	_make_next_here()
 	if not bool(result.get("ok", false)):
 		var err := String(result.get("error", "the formant voice made nothing"))
 		print("ghost/voice: request %d failed: %s" % [id, err])
-		failed.emit("synthesize", err)
+		failed.emit(op, err)
 		return
 	synthesized.emit(id, result)
 

@@ -86,6 +86,10 @@ const SWEEP := 2.5
 const TRAIL := 6
 const PLANE_PASS := 70.0
 const PLANE_EVERY := 900.0
+## A `plane` mark's aircraft: on the glass's edge this long after the mark, on a line at most this far off the middle
+## (the glass's radius 1), so it comes well in rather than grazing the rim.
+const PLANE_IN := 0.4
+const PLANE_OFF := 0.45
 ## The target's track ([method track_of]): how far he goes on the scope a second of a ping's seconds (its radius 1), a
 ## step's least and most, the step of a ping that says no seconds, how far a place's comma puts it off its head, how
 ## sharply the track turns (radians), how far out the whole track may reach; a bare ping's leg at most (seconds), and a
@@ -366,6 +370,7 @@ var _loads := {}                        # ...a note's song and bake being read o
 var _dt := 0.0                          # this frame's step, for a note played inside the desk
 var _power_now := 1.0                   # how much power the desk has this frame ([method power_at])
 var _glass_power := 1.0                 # the same without its flicker, for the screens' glass
+var _glass_rising := false              # whether the grid is coming back up ([method power_rising])
 var _of_kind := {}                      # `play`, `power`, `environment` -> the actions of that kind, in order
 var _cut_by := {}                       # a `play` -> the next action that puts something else on its screen (-1 none)
 var _film_now := {}                     # each screen -> the film on it this frame ([method film_at])
@@ -387,6 +392,9 @@ var _bands := PackedFloat32Array()      # the heard audio's bands this frame ([A
 var _heard: AudioFeatures               # ...and the whole frame, its waveform the scope's ([member _scope])
 var _scope: DispatchScope               # the receiver's oscilloscope: its trace worked out on a worker
 var _sounds: DispatchSounds
+var _clip_jobs := {}                    # a made sound's key -> {box, task, wav}: its frames read on a worker
+var _clip_wavs := {}                    # ...and the file each one's frames were read from
+var _clip_levels := {}                  # ...and each one's level, dB over as made ([method SoundEffects.level_of])
 var _blur: IntroBlur
 var _censor: DispatchCensor
 var _after_censor: BackBufferCopy       # what reads the frame after the censor (the intro's blur) reads it censored
@@ -886,6 +894,7 @@ func advance(features, delta: float, _bookend: float) -> void:
 		_pose(_now)
 		_censor_at(_now)
 	_show_pictures()
+	_land_sounds()
 	_sounds.tick(_now, self)
 
 
@@ -1044,12 +1053,14 @@ func load_note(text: String, dispatch: Dictionary, start := PackedStringArray(),
 	# The note read once: a seek starts the reading again part way and hands the same words over, and reading them (every
 	# mark, every sentence's end, each glass's words) is a quarter of a second of this thread for a long note.
 	var films: Dictionary = dispatch.get("films", {}) if dispatch.get("films") is Dictionary else {}
-	var heard := source + "\n" + JSON.stringify(DispatchScript.lengths_of(films))
+	var made: Dictionary = dispatch.get("sounds", {}) if dispatch.get("sounds") is Dictionary else {}
+	var heard := source + "\n" + JSON.stringify(DispatchScript.lengths_of(films)) + JSON.stringify(made)
 	var read := _parsed.is_empty() or heard != _parsed_of
 	_take_films(films)
+	_take_sounds(made)
 	if read:
 		_parsed_of = heard
-		_parsed = DispatchScript.parse(source, films)
+		_parsed = DispatchScript.parse(source, films, made)
 		_ends = DispatchScript.sentence_ends(_parsed)
 		_est = PackedFloat32Array()
 	_actions = _parsed["actions"]
@@ -1926,7 +1937,11 @@ func _build_sound() -> void:
 						"alert":
 							out.append({"t": at, "t1": at + DispatchSounds.BELL_LEN, "kind": "bell", "ears": DispatchSounds.ears_of(term_at)})
 			"sound":
-				if String(a["sound"]) == "jet":
+				# a sound made from its words plays as made; else the jet the desk knows
+				if a.has("made"):
+					out.append({"t": t, "t1": e, "kind": "clip", "key": String(a["made"]),
+						"gain": db_to_linear(float(_clip_levels.get(String(a["made"]), 0.0)))})
+				elif String(a["sound"]) == "jet":
 					out.append({"t": t, "t1": e, "kind": "jet"})
 			"print":
 				out.append({"t": t, "t1": e, "kind": "print", "lines": (a["lines"] as PackedStringArray).size(), "ears": DispatchSounds.ears_of(printer_at)})
@@ -2048,6 +2063,17 @@ func power_at(t: float, flicker := true) -> float:
 	return lit
 
 
+## Whether the grid is coming back up at [param t]: the last `power` gone through is `on` and still fading in.
+func power_rising(t: float) -> bool:
+	var up := false
+	for i in _of_kind.get("power", PackedInt32Array()):
+		var at := _t0[i] + POWER_AT / _sp[i]
+		if _t0[i] == INF or at > t:
+			continue
+		up = bool((_actions[i] as Dictionary)["on"]) and t - at < POWER_FADE
+	return up
+
+
 ## Each Environment element's share of itself at [param t]: its place in the block's `elements` -> 0 to 1 (-1 the hollow's own
 ## shaft, where the block chooses no shafts and a mark names them), as each `environment:` mark switched it, eased over its seconds;
 ## before the first mark that names it, the other way. An element no mark names is not in it (whole).
@@ -2074,6 +2100,37 @@ func _env_named(name: String) -> Array:
 	if out.is_empty() and name.strip_edges().to_lower() == "shafts" and not Surroundings.has_shafts(_surround):
 		out.append(-1)
 	return out
+
+
+## The sounds made for the script's `sound:` marks ([param made]: key -> {wav, secs, tail}, [method SoundEffects.made_in]): each file's
+## frames read on a worker ([method SoundEffects.frames_of]) and handed to the desk's sound once read ([method _land_sounds]); one
+## already read from the same file is kept.
+func _take_sounds(made: Dictionary) -> void:
+	_clip_levels = {}
+	for key in made:
+		_clip_levels[key] = float((made[key] as Dictionary).get("level", 0.0))
+		var wav := String((made[key] as Dictionary).get("wav", ""))
+		var stamp := "%s@%d" % [wav, FileAccess.get_modified_time(wav)]
+		if wav.is_empty() or String(_clip_wavs.get(key, "")) == stamp or (_clip_jobs.has(key) and String(_clip_jobs[key]["wav"]) == stamp):
+			continue
+		var box := [PackedVector2Array()]
+		_clip_jobs[key] = {"box": box, "wav": stamp, "task": WorkerThreadPool.add_task(func() -> void: box[0] = SoundEffects.frames_of(wav))}
+
+
+## The made sounds whose frames are read, handed to the desk's sound (a new map each time, never one changed under its feet).
+func _land_sounds() -> void:
+	if _clip_jobs.is_empty() or _sounds == null:
+		return
+	var clips := _sounds.clips.duplicate()
+	for key in _clip_jobs.keys():
+		var job: Dictionary = _clip_jobs[key]
+		if not WorkerThreadPool.is_task_completed(int(job["task"])):
+			continue
+		WorkerThreadPool.wait_for_task_completion(int(job["task"]))
+		clips[key] = (job["box"] as Array)[0]
+		_clip_wavs[key] = job["wav"]
+		_clip_jobs.erase(key)
+	_sounds.clips = clips
 
 
 ## The films handed in ([param films]: what each `play` plays -> its film): a player kept for each that is the same film, the rest let go.
@@ -2134,8 +2191,8 @@ func _let_go(what: String) -> void:
 		_shows.erase(what)
 
 
-## The film up on screen [param key] at [param t]: `{i, what, at (seconds into it), power (its glass: waking, then going down), mono,
-## playing, note}`, {} for none - from a `play` on it to its last frame and a beat, unless something else is put on that screen first.
+## The film up on screen [param key] at [param t]: `{i, what, at (seconds into it), power (its glass: waking, then going down), rising
+## (waking), mono, playing, note}`, {} for none - from a `play` on it to its last frame and a beat, unless something else is put on that screen first.
 ## What is not ready is the screen's static (`snow`) from its `play` on.
 func film_at(key: String, t: float) -> Dictionary:
 	var out := {}
@@ -2165,7 +2222,7 @@ func film_at(key: String, t: float) -> Dictionary:
 			# not ready (a note's song not heard yet, a file not read, nothing by that name): the glass wakes on its static, as a
 			# clip not imported does, until something else is put on it
 			out = {"i": i, "what": String(a["what"]), "at": 0.0, "mono": false, "snow": true, "playing": false,
-				"power": clampf(since / FILM_WAKE, 0.0, 1.0)}
+				"power": clampf(since / FILM_WAKE, 0.0, 1.0), "rising": since < FILM_WAKE}
 			continue
 		if at > gone + FILM_WAKE:
 			out = {}
@@ -2173,7 +2230,7 @@ func film_at(key: String, t: float) -> Dictionary:
 		out = {"i": i, "what": String(a["what"]), "note": String(film.get("kind", "")) == "note",
 			"at": clampf(at, 0.0, maxf(secs - 0.001, 0.0)), "mono": bool(a.get(DispatchScript.MONO, false)),
 			"power": clampf(since / FILM_WAKE, 0.0, 1.0) * clampf((gone + FILM_WAKE - at) / FILM_WAKE, 0.0, 1.0),
-			"playing": at >= 0.0 and at < secs}
+			"rising": since < FILM_WAKE, "playing": at >= 0.0 and at < secs}
 	return out
 
 
@@ -2217,6 +2274,7 @@ func _show_film(m: ShaderMaterial, film: Dictionary) -> void:
 		m.set_shader_parameter("mono", 0.0)
 		m.set_shader_parameter("frame", floor(_now * 24.0))
 		m.set_shader_parameter("power", float(film["power"]))
+		m.set_shader_parameter("rising", bool(film["rising"]))
 		return
 	var tex: Texture2D = null
 	if bool(film.get("note", false)):
@@ -2230,6 +2288,7 @@ func _show_film(m: ShaderMaterial, film: Dictionary) -> void:
 	m.set_shader_parameter("snow", 0.0)
 	m.set_shader_parameter("mono", 1.0 if bool(film["mono"]) else 0.0)
 	m.set_shader_parameter("power", float(film["power"]))
+	m.set_shader_parameter("rising", bool(film["rising"]))
 
 
 ## The terminal's glass: a film on it ([param film]) shows in place of its program; else its program's face, as lit as the desk has
@@ -2246,6 +2305,7 @@ func _pose_terminal(film: Dictionary) -> void:
 	m.set_shader_parameter("mono", 0.0)
 	m.set_shader_parameter("snow", 0.0)
 	m.set_shader_parameter("power", _glass_power)
+	m.set_shader_parameter("rising", _glass_rising)
 
 
 ## Everything on the desk that runs on the grid at the power it has ([method PropRig.set_power]): its lights and its glowing parts,
@@ -2264,6 +2324,7 @@ func _pose_power(on_glass: Dictionary) -> void:
 	for key in ["radar", "scope"]:
 		if _mats.has(key):
 			(_mats[key] as ShaderMaterial).set_shader_parameter("power", _glass_power)
+			(_mats[key] as ShaderMaterial).set_shader_parameter("rising", _glass_rising)
 	for card in [_set.dial, _set.meter]:
 		if card != null and (card as MeshInstance3D).material_override is StandardMaterial3D:
 			((card as MeshInstance3D).material_override as StandardMaterial3D).emission_energy_multiplier = DispatchSet.DIAL_GLOW * _power_now
@@ -2312,6 +2373,7 @@ func _pose(t: float) -> void:
 	_feeds = {}
 	_power_now = power_at(t)
 	_glass_power = power_at(t, false)
+	_glass_rising = power_rising(t)
 	_land_notes()
 	_film_now = {}
 	if not (_of_kind.get("play", PackedInt32Array()) as PackedInt32Array).is_empty():
@@ -2719,14 +2781,17 @@ func passes(t0: float, t1: float) -> PackedFloat32Array:
 ## the clutter round him ([method clutter_at]).
 func radar_at(t: float) -> Dictionary:
 	var jet := -1.0
-	var jet_len := 1.0
+	var called: Array = []
 	for i in _actions.size():
 		var a: Dictionary = _actions[i]
 		if _t0[i] > t or _t0[i] == INF:
 			continue
 		if String(a["kind"]) == "sound" and String(a["sound"]) == "jet" and t < _end_of(i):
 			jet = t - _t0[i]
-			jet_len = _end_of(i) - _t0[i]
+		elif String(a["kind"]) == "plane":
+			var mark := _plane_of(i, t)
+			if not mark.is_empty():
+				called.append(mark)
 	var st := {"t": t}
 	var sweep := fposmod(t / SWEEP, 1.0) * TAU - PI * 0.5
 	var now := target_at(t)
@@ -2767,8 +2832,10 @@ func radar_at(t: float) -> Dictionary:
 		var d := Vector2.from_angle(ang)
 		planes.append({"at": d * lerpf(-1.05, 1.05, u) + d.orthogonal() * off, "heading": ang})
 	if jet >= 0.0:
-		var u := jet / jet_len
+		# overhead as it is heard nearest; on past the glass's edge while its tail is heard
+		var u := jet / (2.0 * DispatchSounds.JET_CLOSEST)
 		planes.append({"at": Vector2(lerpf(-1.0, 1.0, u), 0.06), "heading": 0.0})
+	planes.append_array(called)
 	st["planes"] = planes
 	st["rings"] = roundi(_rings)
 	var clutter := clutter_at(t)
@@ -2825,6 +2892,21 @@ static func clutter_of(seed: int) -> Array:
 		out.append(at)
 	out.sort_custom(func(x: Vector2, y: Vector2) -> bool: return x.length() < y.length())
 	return out
+
+
+## Where action [param i]'s aircraft (a `plane` mark) is at [param t], `{at, heading}` as the ones passing now and then: on a
+## line across the glass drawn from the seed, on its edge [constant PLANE_IN] after the mark, at the pace they
+## cross ([constant PLANE_PASS] edge past edge); {} once it is gone.
+func _plane_of(i: int, t: float) -> Dictionary:
+	var ang := DispatchSounds.hash01(_seed + 43, i) * TAU
+	var off := (DispatchSounds.hash01(_seed + 47, i) * 2.0 - 1.0) * PLANE_OFF
+	var d := Vector2.from_angle(ang)
+	# along its line, the glass's edge is where its distance from the middle comes to 1
+	var edge := -sqrt(1.0 - off * off)
+	var u := (edge + 1.05) / 2.1 + (t - _t0[i] - PLANE_IN) / PLANE_PASS
+	if u > 1.0:
+		return {}
+	return {"at": d * lerpf(-1.05, 1.05, u) + d.orthogonal() * off, "heading": ang}
 
 
 ## The clutter on the scope at [param t]: `[{at, fade, chair?}]` - each blip the gain reaches, round where the target was
@@ -3186,6 +3268,8 @@ func _pose_screens(t: float) -> void:
 			power = clampf(1.0 + since / 0.5, 0.0, 1.0)
 		elif since < INF:
 			power = clampf(since / 0.35, 0.0, 1.0)
+		# which way its glass is going: the grid's, while the grid is not whole, else its own
+		m.set_shader_parameter("rising", _glass_rising if _glass_power < 1.0 else (since >= 0.0 and since < 0.35))
 		if snowing:
 			# a clip not imported yet: the screen's static, never a still where a moving picture belongs
 			m.set_shader_parameter("snow", 0.85)
@@ -4264,12 +4348,19 @@ func _tick_camera(delta: float) -> void:
 
 # --- the pictures over the whole screen ---------------------------------------------------------------------------------
 
-## When a picture over the whole screen comes in: just after the word before its passage, and never before what the desk
-## does ahead of it in that silence is done (the actions written before it, a block's typing among them): the picture
-## comes where it is written. INF while one of those is not placed yet.
+## When a picture over the whole screen comes in: where it is written in its silence - after the word before its passage by
+## what is written before it there (a hesitation, the rests of the actions), back from its passage's first word by what is
+## written after it once that word is heard, never before the word before it ended - and never before what the desk does
+## ahead of it in that silence is done (the actions written before it, a block's typing among them). INF while one of those
+## is not placed yet.
 func _picture_in(sp: Dictionary) -> float:
 	var from := int(sp["from"])
-	var t := (_word_t1(from - 1) + 0.1) if from > 0 else _word_t0(from) - IMAGE_FADE
+	var t := _word_t0(from) - IMAGE_FADE
+	if from > 0:
+		var prev1 := _word_t1(from - 1)
+		t = prev1 + 0.1 + float(sp.get("fwd", 0.0))
+		if from < _spoken_n and _word_t0(from) < INF:
+			t = maxf(prev1 + 0.1, minf(t, _word_t0(from) - float(sp.get("back", 0.0))))
 	for i in range(mini(int(sp.get("acts", 0)), _actions.size()) - 1, -1, -1):
 		var a: Dictionary = _actions[i]
 		if int(a["after"]) != from:

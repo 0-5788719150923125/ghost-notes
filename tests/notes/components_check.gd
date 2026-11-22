@@ -13,7 +13,8 @@ extends SceneTree
 ## workspace runs the show). Two-sided: the same voice without Table is a reading.
 ##
 ## Slots: a note has one clock and one presentation. A second clock is refused with a sentence naming the one in the
-## way (a Voice on a note with a Song) - and lit again once what held the slot is gone. A table show brings its Medium,
+## way (a Cartoon on a note a Voice reads) - and lit again once what held the slot is gone. A Sound takes no slot: beside a
+## Voice it holds the note's sound effects alone ([method SoundCard.clock_elsewhere]). A table show brings its Medium,
 ## whose formats are Table's, so it is never refused one; Table is refused beside an Actor, whose room that Medium would take
 ## (the control).
 ##
@@ -209,22 +210,26 @@ func _composition() -> void:
 
 func _slots() -> void:
 	print("-- one clock, one presentation")
-	_ok(Components.holder("clock", ["text", "sound"]) == "sound" and Components.holder("clock", ["text"]).is_empty(),
-		"a sound holds the clock; a plain note's is free")
-	var why := Components.cannot_attach("voice", ["text", "sound"])
-	_ok(why.contains("clock") and why.contains("Sound") and why.contains("detach"),
-		"a Voice on a note with a Sound is refused, naming what is in the way (%s)" % why)
-	_ok(Components.cannot_attach("voice", ["text"]).is_empty() or not Components.not_ready("voice").is_empty(),
-		"...and has room on a note with no clock")
-	_ok(Components.slot_note("sound", ["text", "voice"]).contains("Voice"), "a Sound on a reading is refused the same way")
-	_ok(Components.slot_note("clip", ["text", "sound"]).contains("Sound"), "a clip is a clock too")
+	_ok(Components.holder("clock", ["text", "voice"]) == "voice" and Components.holder("clock", ["text", "sound"]).is_empty()
+		and Components.holder("clock", ["text"]).is_empty(), "a voice holds the clock; a Sound holds none; a plain note's is free")
+	var why := Components.slot_note("cartoon", ["text", "voice"])
+	_ok(why.contains("clock") and why.contains("Voice") and why.contains("detach"),
+		"a Cartoon on a note a Voice reads is refused, naming what is in the way (%s)" % why)
+	_ok(Components.slot_note("cartoon", ["text"]).is_empty(), "...and has room on a note with no clock")
+	_ok(Components.slot_note("sound", ["text", "voice"]).is_empty() and Components.slot_note("voice", ["text", "sound"]).is_empty(),
+		"a Sound and a Voice have room beside each other: the Sound then holds the sound effects alone")
+	_ok(Components.slot_note("clip", ["text", "voice"]).contains("Voice"), "a clip is a clock too")
+	_ok(Components.attached_of({"voice": {}}, "Hi.\n\n<!-- sound: a door slams -->\n").has("sound")
+		and not Components.attached_of({"voice": {}}, "Hi.\n\nNo sound here.\n").has("sound")
+		and not Components.attached_of({"voice": {}}).has("sound"),
+		"a note whose words ask for a sound has the Sound, its block written or not (the control: words with no sound mark, none)")
 	_ok(Components.with_required(["table"]).has("medium") and Components.slot_note("medium", ["text", "table"]).is_empty(),
 		"a show at a table brings its Medium (its formats are Table's), so it is never refused one")
 	_ok(Components.slot_note("table", ["text", "voice"]).is_empty(), "Table on a reading with no Medium has room")
 	_ok(Components.slot_note("table", ["text", "voice", "medium"]).is_empty(), "...and on one with a Medium: it brings the one the note has")
 	why = Components.slot_note("table", ["text", "voice", "actor"])
 	_ok(why.contains("presentation") and why.contains("Actor"), "CONTROL: ...but not beside an Actor, whose room its Medium would take (%s)" % why)
-	_ok(Components.slot_note("table", ["text", "sound"]).contains("Sound"), "Table brings a voice, so a sound's clock is in its way too")
+	_ok(Components.slot_note("table", ["text", "cartoon"]).contains("Cartoon"), "Table brings a voice, so a cartoon's clock is in its way too")
 	_ok(Components.slot_note("look", ["text", "sound", "voice"]).is_empty(), "a component with no slot is never refused for one")
 
 
@@ -341,7 +346,10 @@ func _menu() -> void:
 	var yt := _item(menu, "youtube")
 	_ok(yt >= 0 and not menu.is_item_disabled(yt), "YouTube is lit on a song with a Medium")
 	var voice := _item(menu, "voice")
-	_ok(voice >= 0 and menu.is_item_disabled(voice) and menu.get_item_tooltip(voice).contains("clock"),
+	_ok(voice >= 0 and not menu.is_item_disabled(voice), "a Voice is lit beside a Sound: the Sound then holds the sound effects")
+	Components.attach_menu(menu, ["text", "voice", "medium"])
+	var clip := _item(menu, "clip")
+	_ok(clip >= 0 and menu.is_item_disabled(clip) and menu.get_item_tooltip(clip).contains("clock"),
 		"a second clock is grayed in the menu, with the reason")
 	Components.attach_menu(menu, ["text", "sound"])
 	yt = _item(menu, "youtube")

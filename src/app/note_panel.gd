@@ -26,6 +26,8 @@ class_name NotePanel
 
 ## The Settings section the script's source lives in (its remembered document).
 const SECTION := "note"
+## Seconds the typing pauses before the cards that follow the words are handed them.
+const WORDS_SETTLE := 0.6
 
 ## Set by main: the note this panel shows, and how to open it again once a component is attached.
 var path := ""
@@ -63,7 +65,8 @@ var _youtube: YouTubeCard
 func _ready() -> void:
 	layer = 10
 	_blocks = NoteStore.blocks_of(path) if not path.is_empty() else {}
-	_attached = Components.attached_of(_blocks)
+	var words := String(FrontMatter.split(FileAccess.get_file_as_string(path)).get("body", "")) if not path.is_empty() and FileAccess.file_exists(path) else ""
+	_attached = Components.attached_of(_blocks, words)
 	var has_song := _attached.has("sound")
 	var has_show := _attached.has("medium") or _attached.has("cartoon")
 	#Nothing to render without a show: a plain note, or a song with no medium yet, has no ⤓ (released on the
@@ -99,7 +102,7 @@ func _ready() -> void:
 	kept.cache_dir = func() -> String: return NoteUpload.folder_of(path)
 	kept.history_dir = func() -> String: return NoteUpload.folder_of(path).path_join("history") if not path.is_empty() else ""
 	script_card.add_child(kept)
-	_cards = NoteCards.build(_panel, _attached, {"blocks": _blocks, "reshape": _reshape, "path": path,
+	_cards = NoteCards.build(_panel, _attached, {"blocks": _blocks, "reshape": _reshape, "path": path, "brought": Components.brought_by(words),
 		"folder": NoteUpload.folder_of(path) if not path.is_empty() else "", "video": _attached.has("medium"),
 		"begin_stream": begin_stream, "end_stream": end_stream, "live": live,
 		"intro_tip": "Seconds held before the song starts, the picture fading up through them and up a few seconds before it.",
@@ -148,6 +151,17 @@ func _ready() -> void:
 	_writer.doc.capture = _doc_capture
 	_writer.doc.apply = _doc_apply
 	_writer.doc.bind_text(_writer.text_edit)
+	# the cards that follow the words follow them as they are typed, once the typing pauses (`set_script_text`, as the reading's do)
+	var pause := Timer.new()
+	pause.one_shot = true
+	pause.wait_time = WORDS_SETTLE
+	pause.timeout.connect(func() -> void:
+		var body := String(FrontMatter.split(_writer.text_edit.text).get("body", _writer.text_edit.text))
+		for key in _cards:
+			if (_cards[key] as Object).has_method("set_script_text"):
+				(_cards[key] as Object).call("set_script_text", body))
+	add_child(pause)
+	_writer.text_edit.text_changed.connect(pause.start)
 	if _medium != null:
 		Director.medium_changed.connect(_on_medium)
 	# a composed song conducts itself, heard as it is made ([SongStream]); a file, or a render's mix, plays as a song does
@@ -204,7 +218,10 @@ func _doc_blocks() -> Array:
 func _doc_capture() -> Dictionary:
 	var out := {}
 	for key in _cards:
-		out[key] = (_cards[key] as Object).call("capture")
+		# a card with nothing to keep yet (one the note's marks bring, never changed) writes no block
+		var block: Variant = (_cards[key] as Object).call("capture")
+		if block is Dictionary:
+			out[key] = block
 	return out
 
 

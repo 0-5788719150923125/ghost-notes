@@ -468,11 +468,14 @@ static func lines_of(score: Dictionary) -> Array:
 	return out
 
 
-## What the voice host is asked to sing in [param singer] ([method singer_of]): its reader, its blend, its Tone's size.
+## What the voice host is asked to sing in [param singer] ([method singer_of]): its reader, its blend or a formant voice's
+## own, its Tone's size.
 static func params_of(singer: Dictionary) -> Dictionary:
 	var params := {"speaker": int(singer.get("speaker", 0))}
 	if not String(singer.get("blend", "")).is_empty():
 		params["blend"] = String(singer["blend"])
+	if singer.get("formant") is Dictionary:
+		params["formant"] = (singer["formant"] as Dictionary).duplicate(true)
 	if absf(float(singer.get("semis", 0.0))) > 0.001:
 		params["semis"] = float(singer["semis"])
 	return params
@@ -485,12 +488,19 @@ static func take_of(folder: String, vocal: Dictionary, phrase: Dictionary) -> St
 	return ProjectSettings.globalize_path(folder).path_join("takes").path_join(h + ".wav")
 
 
-## Who sings: the score's singer, a voice kept in the library read by its name (`kept`: its reader, its blend and its
-## Tone's shift, `semis`, which the voice host makes a change of size). A kept voice is read once a library version.
+## Who sings: the score's singer, a voice kept in the library read by its name (`kept`: its reader, its blend or a formant
+## voice's own, and its Tone's shift, `semis`, which the voice makes a change of size). A kept voice is read once a library
+## version.
 static func singer_of(singer: Variant) -> Dictionary:
 	var s: Dictionary = singer if singer is Dictionary else {}
 	if not String(s.get("kept", "")).is_empty():
 		var v := _kept_voice(String(s["kept"]))
+		if String(v.get("voice", "")) == FormantVoice.ID:
+			var sung := {"voice": FormantVoice.ID, "formant": v.get("formant", {}) if v.get("formant") is Dictionary else {}}
+			var size := Delivery.tone_semis(int(v.get("tone", 0)))
+			if absf(size) > 0.001:
+				sung["semis"] = size
+			return sung
 		if String(v.get("voice", "")).begins_with("kokoro"):
 			var out := {"voice": String(v["voice"]), "speaker": int(v.get("speaker", 0)), "blend": String(v.get("blend", ""))}
 			var semis := Delivery.tone_semis(int(v.get("tone", 0)))

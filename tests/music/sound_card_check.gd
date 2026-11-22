@@ -36,6 +36,9 @@ extends Node
 ##   encoded by FFmpeg (where ghost has it) each end "Saved" there, the file written; the subtitles beside a mix are its
 ##   words sung, each line a sentence (`SongBake.write_sidecar`).
 ## - A section of the words pinned (`place`) is where the score lays it, with a reference made for the gate.
+## - Words typed reach the card: a break written at their end is a section every part's Used in offers (the control: before,
+##   none); a section a part is used in reads ✓ and is drawn otherwise, as wide on as off. A card the sound marks brought writes no block until a
+##   setting changes.
 ## - With a reference its Likeness shows (the control, none, hides it), and the card says what the roll drew and kept of
 ##   it - at likeness 1 its tempo, key, form and chords, at 0 nothing; a part's pattern picked stays, and Auto lets
 ##   the roll draw it again.
@@ -75,6 +78,7 @@ func _ready() -> void:
 	await _pipeline(note, folder)
 	await _export(note, folder)
 	_placed(note, folder)
+	_typed(note, folder)
 	_timeline(note, folder)
 	await _stream(note, folder)
 	DirAccess.remove_absolute(note)
@@ -90,6 +94,83 @@ func _card(block: Dictionary, note: String, folder: String) -> SoundCard:
 	var c := SoundCard.for_note({"blocks": block, "path": note, "folder": folder})
 	add_child(c)
 	return c
+
+
+## Words typed into the note reach the card ([method SoundCard.set_script_text]): a break written at their end is a section every
+## part's Used in offers (the control: before, none); a section a part is used in reads ✓ and is drawn otherwise than one it is
+## not. A card the note's sound marks brought, with no block, writes none until a setting changes.
+func _typed(note: String, folder: String) -> void:
+	var c := _card({"sound": {"source": "composed", "parts": {"drums": {"sections": ["intro"]}}}}, note, folder)
+	var words := c._words()
+	var before := (c.score()["sections"] as Array).filter(func(x: Dictionary) -> bool: return String(x["label"]) == "Break").size()
+	c.set_script_text(words + "\n<!-- break: 8 -->\n")
+	var after := (c.score()["sections"] as Array).filter(func(x: Dictionary) -> bool: return String(x["label"]) == "Break").size()
+	c._open["drums"] = true
+	c._build_parts()
+	var toggles: Array = []
+	_buttons_in(c, toggles)
+	var used: Array = toggles.filter(func(b: Button) -> bool: return b.toggle_mode and b.button_pressed)
+	var unused: Array = toggles.filter(func(b: Button) -> bool: return b.toggle_mode and not b.button_pressed)
+	var names: Array = toggles.map(func(b: Button) -> String: return b.text)
+	_ok(before == 0 and after == 1 and names.any(func(n: String) -> bool: return n.contains("Break")),
+		"a break typed at the words' end is a section the parts' Used in offers (%d before, %d after; %s)" % [before, after, str(names)])
+	var drawn_apart := not used.is_empty() and not unused.is_empty() and String((used[0] as Button).text).begins_with("✓") \
+		and not String((unused[0] as Button).text).begins_with("✓") \
+		and ((used[0] as Button).get_theme_stylebox("pressed") as StyleBoxFlat).bg_color != ((unused[0] as Button).get_theme_stylebox("normal") as StyleBoxFlat).bg_color
+	_ok(drawn_apart, "a section a part is used in reads ✓ and is drawn otherwise than one it is not")
+	var probe := Button.new()
+	probe.toggle_mode = true
+	add_child(probe)
+	Card.toggle_look(probe, &"sound", "Chorus 2")
+	var off_w := probe.get_combined_minimum_size().x
+	probe.button_pressed = true
+	var on_w := probe.get_combined_minimum_size().x
+	_ok(is_equal_approx(off_w, on_w) and probe.text.begins_with("✓") and off_w > 0.0,
+		"a toggle is as wide on as off, so pressing one never moves the others (%.0f, %.0f px); the control: its ✓ shows" % [off_w, on_w])
+	probe.queue_free()
+	c.queue_free()
+	var with_guitar := _card({"sound": {"source": "composed", "parts": {"guitar": {}}}}, note, folder)
+	var offered: Array = []
+	var pop := with_guitar._add.get_popup()
+	for i in pop.item_count:
+		offered.append(pop.get_item_text(i))
+	var four := _card({"sound": {"source": "composed", "parts": {"guitar": {}, "guitar_2": {}, "guitar_3": {}, "guitar_4": {}}}}, note, folder)
+	var offered4: Array = []
+	for i in four._add.get_popup().item_count:
+		offered4.append(four._add.get_popup().get_item_text(i))
+	_ok(offered.has("Guitar") and not offered4.has("Guitar")
+		and four._parts_box.get_child_count() >= 4,
+		"+ offers another guitar beside one, and none past four, each its own entry (%s / %s)" % [str(offered), str(offered4)])
+	var copy := four._part_entry("guitar_2", {})
+	var lists: Array = []
+	_options_in(copy, lists)
+	var counts: Array = lists.map(func(ob: OptionButton) -> int: return ob.item_count)
+	_ok(lists.size() >= 2 and (lists[0] as OptionButton).item_count == SongParts.patterns_for("guitar").size() + 1
+		and (lists[1] as OptionButton).item_count == Instruments.for_part("guitar").size() + 1,
+		"a second guitar offers every guitar pattern and sound, Auto first (%s)" % str(counts))
+	copy.free()
+	with_guitar.queue_free()
+	four.queue_free()
+	var brought := _card({}, note, folder)
+	var bare: Variant = brought.capture()
+	brought._block["designer"] = {"agent": "claude"}
+	_ok(bare == null and brought.source() == "none" and brought.capture() is Dictionary,
+		"a card the sound marks brought writes no block until a setting changes (%s)" % str(bare))
+	brought.queue_free()
+
+
+func _options_in(n: Node, out: Array) -> void:
+	for ch in n.get_children():
+		if ch is OptionButton:
+			out.append(ch)
+		_options_in(ch, out)
+
+
+func _buttons_in(n: Node, out: Array) -> void:
+	for ch in n.get_children():
+		if ch is Button:
+			out.append(ch)
+		_buttons_in(ch, out)
 
 
 func _old_block(note: String, folder: String) -> void:
@@ -233,7 +314,7 @@ func _voices(note: String, folder: String) -> void:
 			for b in (f as Node).get_children():
 				if b is Button and (b as Button).toggle_mode:
 					toggles.append(b)
-	_ok(toggles.size() == 2 and String(toggles[1].text) == "Chorus 1" and bool(toggles[1].button_pressed),
+	_ok(toggles.size() == 2 and String(toggles[1].text).trim_prefix("✓ ") == "Chorus 1" and bool(toggles[1].button_pressed),
 		"...a toggle a section of the words, the last chorus pressed (%d)" % toggles.size())
 	if toggles.size() == 2:
 		(toggles[0] as Button).button_pressed = not (toggles[0] as Button).button_pressed
@@ -257,7 +338,7 @@ func _voices(note: String, folder: String) -> void:
 			for b in (f as Node).get_children():
 				if b is Button and (b as Button).toggle_mode:
 					used.append(b)
-	var names: Array = used.map(func(b: Button) -> String: return b.text)
+	var names: Array = used.map(func(b: Button) -> String: return b.text.trim_prefix("✓ "))
 	_ok(names.size() == (d.score()["sections"] as Array).size() and names.has("Intro") and names.has("Verse 1") and names.has("Outro"),
 		"an instrument is used in the sections of the song, a toggle each - its intro and outro too: %s" % str(names))
 	var off: Button = null

@@ -14,9 +14,10 @@ extends Node
 ##   between each two, a second of silence after the last, every joined frame through the room once;
 ## - a take is taken off the disk once it is joined;
 ## - Stop drops the replies still in flight and cancels them on the host (every sentence still asked, and no other).
+## - Test pauses a show playing where it is (the transport's pause), never stops it or the reading on the stream.
 ##
 ## Controls: a reply held back leaves nothing joined until the one ahead arrives; a Stop after every
-## sentence has arrived cancels nothing.
+## sentence has arrived cancels nothing; a Test with the show paused pauses nothing.
 ##
 ## The panel is built by hand and never added to the tree (its `_ready` starts the python voice host);
 ## the audition is handed a player that is in it, so the ring can be fed.
@@ -146,6 +147,25 @@ func _run() -> void:
 	var gone := _host.cancelled.duplicate()
 	gone.sort()
 	_ok(gone == asked_now, "Stop cancelled %d of the %d sentences still asked on the host" % [gone.size(), asked_now.size()])
+	# Test pauses a show playing where it is, and never ends it: a reading on the stream stays there
+	var calls: Array = []
+	var playing := [true]
+	Spectrum.conduct(self, {
+		"playing": func() -> bool: return playing[0],
+		"pause": func() -> void:
+			calls.append("pause")
+			playing[0] = false,
+		"stop": func() -> void: calls.append("stop")})
+	_ed._stream.chunks = [{"text": "A reading part way."}]
+	_ed._on_test()
+	_ok(calls == ["pause"] and _ed._stream.has_reading(), "Test with a show playing did %s, not a pause alone" % [calls])
+	_ed._stop_test()
+	calls.clear()
+	_ed._on_test()
+	_ok(calls.is_empty(), "control: Test with the show paused did %s" % [calls])
+	_ed._stop_test()
+	Spectrum.release_conductor(self)
+	_ed._stream.chunks = []
 	print("")
 	if _fails.is_empty():
 		print("audition_check: ALL OK")

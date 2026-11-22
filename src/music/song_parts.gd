@@ -48,6 +48,8 @@ const PARTS := {
 
 ## How many voices a song may have.
 const VOICES_MOST := 4
+## The most parts of one instrument a song may have ([method keys_of]): the first and its copies.
+const COPIES_MOST := 4
 
 ## What a voice sings: the song's tune, in the octave nearest where its singer sits (two voices on the tune are a
 ## unison, or a gang an octave apart), or a harmony to it. `styles` steer a roll between them, as a pattern's do.
@@ -253,15 +255,59 @@ static func is_voice(key: String) -> bool:
 	return voice_keys().has(key)
 
 
-## The kind of part key [param key] is (a [constant PARTS] key): every voice's is `vocal`.
+## The kind of part key [param key] is (a [constant PARTS] key): every voice's is `vocal`, a copy's its kind's (`guitar_2` is
+## a guitar).
 static func kind_of(key: String) -> String:
-	return "vocal" if is_voice(key) else key
+	if is_voice(key):
+		return "vocal"
+	var cut := key.rfind("_")
+	if cut > 0 and key.substr(cut + 1).is_valid_int() and PARTS.has(key.substr(0, cut)):
+		return key.substr(0, cut)
+	return key
 
 
-## A part's name on the card: its row's label, a voice after the first numbered ("Voice 2").
+## Which of its kind part key [param key] is: 1 the first, 2 its first copy (`guitar_2`).
+static func number_of(key: String) -> int:
+	var cut := key.rfind("_")
+	return int(key.substr(cut + 1)) if cut > 0 and key.substr(cut + 1).is_valid_int() and kind_of(key) != key else 1
+
+
+## Every key a part of [param kind] can have, the first first: a voice's [method voice_keys]; an instrument's itself and its
+## copies, up to COPIES_MOST of a kind (`drums`, `drums_2` ...), each its own part with its own pattern, sound and sections.
+static func keys_of(kind: String) -> Array:
+	if kind == "vocal":
+		return voice_keys()
+	var out: Array = [kind]
+	for i in range(2, COPIES_MOST + 1):
+		out.append("%s_%d" % [kind, i])
+	return out
+
+
+## The next part of [param kind] a song with parts [param have] can take: its first key not there, "" when it has them all.
+static func next_key(kind: String, have: Array) -> String:
+	for k in keys_of(kind):
+		if not have.has(k):
+			return k
+	return ""
+
+
+## Part keys [param keys] in the order the card and the mix stand them: by kind as [constant PARTS] lists them, each kind's
+## first before its copies.
+static func ordered(keys: Array) -> Array:
+	var order: Array = PARTS.keys()
+	var out := keys.duplicate()
+	out.sort_custom(func(a: Variant, b: Variant) -> bool:
+		var ka := order.find(kind_of(String(a)))
+		var kb := order.find(kind_of(String(b)))
+		return ka < kb if ka != kb else number_of(String(a)) < number_of(String(b)))
+	return out
+
+
+## A part's name on the card: its row's label, a voice after the first or a copy numbered ("Voice 2", "Guitar 2").
 static func label_of(key: String) -> String:
 	var label := Registry.label(PARTS, kind_of(key))
-	return label + key.trim_prefix("vocal_").insert(0, " ") if key.begins_with("vocal_") else label
+	var n := number_of(key) if not key.begins_with("vocal_") else int(key.trim_prefix("vocal_"))
+	return label + (" %d" % n if n > 1 else "")
 
 
 ## The patterns part [param part] may play, `reference` first where [param has_reference].

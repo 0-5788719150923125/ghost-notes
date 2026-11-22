@@ -43,6 +43,10 @@ const COMMENT := "<!--[\\s\\S]*?-->"
 ## (Delivery.DELIVERY_WORDS), each a small step in pace, brightness or pauses - from here to the end of its
 ## paragraph, eased in and out across sentences. A lean of the voice's own delivery, never a different voice.
 const DELIVERY := "<!--\\s*delivery\\s*(?::\\s*([^>]*?))?\\s*-->"
+## How the words it wraps are inflected (hosts/voice/inflection.py): `<!-- inflect: none -->Am I fired?<!-- /inflect -->`
+## says them with no inflection the text would give them, `rise` with a question's rise on their last word whatever the
+## sentence is. Group 1 the closing slash, group 2 the kind (a key of [constant TextNorm.INFLECTS]). [ReadingPlan], [Phonemes].
+const INFLECT := "<!--\\s*(/)?\\s*inflect\\s*(?::\\s*([A-Za-z]+))?\\s*-->"
 ## Text before the first cue belongs to this voice. A chapter that opens on a cue never has one.
 const NARRATOR := "Narrator"
 ## Voices over each other (next/tabletop.md): `<!-- over -->`, at the top of a speaker's turn: the turn comes in before the last one has ended, by [constant OVER_BARE] or the seconds given: group 1. `<!-- together -->`: it comes in just after the last one began, as a table reacts as one. [ReadingPlan], [ReadingJoin].
@@ -199,24 +203,42 @@ static func _is_blank_or_note(line: String) -> bool:
 
 
 ## The script cut into passages by speaker: `[{speaker, text}]`, in order, with the cues consumed. Text before
-## the first cue is the narrator's. Comments are not stripped here: a hesitation is a comment and its position
-## matters to the caller.
+## the first cue is the narrator's. A cue for the voice already speaking starts a new passage only where what it is
+## heard through changes ([constant HEARD]): its own turn heard through a television, then back in the room. Comments
+## are not stripped here: a hesitation is a comment and its position matters to the caller.
 static func passages(body: String) -> Array:
 	var out: Array = []
 	var who := NARRATOR
 	var buf := PackedStringArray()
-	for line in strip_frontmatter(body).split("\n"):
-		var next := speaker_of_line(String(line))
+	var lines := strip_frontmatter(body).split("\n")
+	var band := _band_after(lines, -1)
+	for i in lines.size():
+		var line := String(lines[i])
+		var next := speaker_of_line(line)
 		if next.is_empty():
-			buf.append(String(line))
+			buf.append(line)
 			continue
-		if next == who:
+		var heard := _band_after(lines, i)
+		if next == who and heard == band:
 			continue
 		out.append({"speaker": who, "text": "\n".join(buf)})
 		buf = PackedStringArray()
 		who = next
+		band = heard
 	out.append({"speaker": who, "text": "\n".join(buf)})
 	return out
+
+
+## What the turn opening after line [param i] of [param lines] is heard through: the band of a [constant HEARD] mark on its
+## first line with anything on it, "" for the room.
+static func _band_after(lines: PackedStringArray, i: int) -> String:
+	for k in range(i + 1, lines.size()):
+		var line := String(lines[k])
+		if line.strip_edges().is_empty():
+			continue
+		var m := _rx(HEARD).search(line)
+		return m.get_string(1).to_lower() if m != null else ""
+	return ""
 
 
 ## Every hesitation in [param text]: `[{at, len, seconds}]`, ascending, where `seconds` is

@@ -32,6 +32,9 @@ class_name DispatchScript
 ##     <!-- moving -->                 the target sets off from where he is, toward the next ping's place: the radar sounds
 ##                                     its alarm and the camera turns to it. Straight after a ping he passes through it (a
 ##                                     place on the way: `driving south`) with no alarm.
+##     <!-- plane -->                  an aircraft comes in over the radar's edge as it is reached and drifts across, as the
+##                                     ones that pass now and then do; the voice never waits and the camera stays where it
+##                                     is (a `look: radar` before it sees it come in).
 ##     <!-- sound: jet, ... -->        a sound of [constant DispatchSounds.SOUNDS], named by its key among the words.
 ##     <!-- static: 5 -->, <!-- static: 5, surf -->   the receiver opens up for that many seconds: Io-B's crackle, or surf.
 ##                                     `<!-- static: 5, surf, unwatched -->`: heard with the camera left where it is.
@@ -145,15 +148,15 @@ class_name DispatchScript
 ## out here from the calls.
 
 ## Own-line desk marks: group 1 the verb, 2 its argument.
-const MARK := "^\\s*<!--\\s*(call|/\\s*call|ring|text|reply|ping|moving|sound|static|print|sleep|off|look|lift|switch|live|strike|gain|bell|lamp|power|environment|fade|tablet|/\\s*tablet|back|new\\s+tab|replay|/\\s*image)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
+const MARK := "^\\s*<!--\\s*(call|/\\s*call|ring|text|reply|ping|moving|plane|sound|static|print|sleep|off|look|lift|switch|live|strike|gain|bell|lamp|power|environment|fade|tablet|/\\s*tablet|back|new\\s+tab|replay|/\\s*image)\\s*(?::\\s*((?:(?!-->)[\\s\\S])*?))?\\s*-->\\s*$"
 ## A moving picture: group 1 its screen and what it is told ([method _pinned]), 2 the clip's file name, 3 its words.
-const VIDEO := "^\\s*<!--\\s*video\\s*\\(\\s*([a-z]+(?:\\s*,\\s*[a-z]+)*)\\s*\\)\\s*:\\s*([^|]*?)\\s*\\|\\s*([\\s\\S]*?)\\s*-->\\s*$"
+const VIDEO := "^\\s*<!--\\s*video\\s*\\(\\s*([a-z]+(?:\\s*,\\s*[a-z]+)*)\\s*\\)\\s*:\\s*([^|]*?)\\s*\\|\\s*((?:(?!-->)[\\s\\S])*?)\\s*-->\\s*$"
 ## A film on a screen: group 1 its screen and what it is told ([method _pinned]), 2 what plays - a note's title, or a video file.
-const PLAY := "^\\s*<!--\\s*play\\s*\\(\\s*([a-z]+(?:\\s*,\\s*[a-z]+)*)\\s*\\)\\s*:\\s*([\\s\\S]*?)\\s*-->\\s*$"
+const PLAY := "^\\s*<!--\\s*play\\s*\\(\\s*([a-z]+(?:\\s*,\\s*[a-z]+)*)\\s*\\)\\s*:\\s*((?:(?!-->)[\\s\\S])*?)\\s*-->\\s*$"
 ## What a film is told, after its screen and a comma (`play (terminal, mono)`): shown in the screen's own phosphor, not its colors.
 const MONO := "mono"
 ## A picture: group 1 where (full, feed, satellite, tv; none is full) and what it is told ([method _pinned]), 2 its words.
-const IMAGE := "^\\s*<!--\\s*image\\s*(?:\\(\\s*([a-z]+(?:\\s*,\\s*[a-z]+)*)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->\\s*$"
+const IMAGE := "^\\s*<!--\\s*image\\s*(?:\\(\\s*([a-z]+(?:\\s*,\\s*[a-z]+)*)\\s*\\))?\\s*:\\s*((?:(?!-->)[\\s\\S])*?)\\s*-->\\s*$"
 ## What a picture pinned to a screen is told, after the screen and a comma (`image (feed, unwatched)`): it lands with the
 ## camera left on what it was on.
 const UNWATCHED := "unwatched"
@@ -169,7 +172,7 @@ const REDACT := "<!--\\s*redact\\s*:\\s*([\\s\\S]*?)\\s*-->"
 ## A redacted character is itself moved up by this much (Supplementary Private Use Area-A, U+F0000-U+FFFFD).
 const REDACT_BASE := 0xF0000
 ## Own-line marks the voice reads: a hesitation, a delivery.
-const VOICE_LINE := "^\\s*(?:<!--\\s*(?:hesitation|delivery)\\b[\\s\\S]*?-->\\s*)+$"
+const VOICE_LINE := "^\\s*(?:<!--\\s*(?:hesitation|delivery)\\b(?:(?!-->)[\\s\\S])*?-->\\s*)+$"
 const HESITATION := Manuscript.HESITATION
 const COMMENT := Manuscript.COMMENT
 ## What makes a note a dispatch script: nothing is rewritten for any other.
@@ -380,8 +383,8 @@ static func is_dispatch(body: String) -> bool:
 
 
 ## [param body] as the voice should read it (see the class note).
-static func speakable(body: String, films := {}) -> String:
-	return String(parse(body, films)["speakable"])
+static func speakable(body: String, films := {}, sounds := {}) -> String:
+	return String(parse(body, films, sounds)["speakable"])
 
 
 ## How long each thing played runs, as [param films] has them (`what` -> [method ScreenPlays.record_of]): what the voice waits for,
@@ -553,7 +556,7 @@ static func _classify(s: String) -> Dictionary:
 			"prompt": im.get_string(2).strip_edges()}
 	if _rx(VOICE_LINE).search(s) != null:
 		return {"kind": "voice", "text": s.strip_edges()}
-	if _rx("^\\s*<!--[\\s\\S]*?-->\\s*$").search(s) != null:
+	if _rx("^\\s*(?:<!--(?:(?!-->)[\\s\\S])*?-->\\s*)+$").search(s) != null:
 		return {"kind": "note"}
 	return {}
 
@@ -873,8 +876,10 @@ static func label_of(s: String) -> String:
 ## `back` after it. A said line is an action too (its `rest` the lead before its words), with `from` and `to` its
 ## spoken words and `spans` where each is on the screen ([method typed_spans]); every action at the terminal carries the
 ## `glass` it starts from. `spans` are the pictures over the whole
-## screen: `{key, prompt, from, to, blend}` in spoken words.
-static func parse(body: String, films := {}) -> Dictionary:
+## screen: `{key, prompt, from, to, blend, fwd, back}` in spoken words, `fwd` and `back` as an action's. [param sounds]: the sounds
+## made from their marks' words (`{key: {secs, tail}}`, [method SoundEffects.made_in]) - a `sound:` mark with one waits its `secs`
+## and runs on its `tail`, its action carrying `made` (the key).
+static func parse(body: String, films := {}, sounds := {}) -> Dictionary:
 	var phones := phones_of(body)
 	var spoken := PackedStringArray()
 	var speak := PackedStringArray()      # the voice's text, a block a line apart
@@ -952,7 +957,8 @@ static func parse(body: String, films := {}) -> Dictionary:
 					if open_image >= 0:
 						(spans[open_image] as Dictionary)["to"] = spoken.size()
 					spans.append({"kind": "image", "key": Manuscript.image_key(prompt), "prompt": prompt,
-						"from": spoken.size(), "to": -1, "blend": blend or _ends_at(spans, spoken.size()), "acts": actions.size()})
+						"from": spoken.size(), "to": -1, "blend": blend or _ends_at(spans, spoken.size()), "acts": actions.size(),
+						"gap": gap, "in_gap": gap.size()})
 					open_image = spans.size() - 1
 				else:
 					_act(actions, gap, pending, spoken.size(), _tell({"kind": "picture", "screen": where,
@@ -1277,10 +1283,20 @@ static func parse(body: String, films := {}) -> Dictionary:
 						var passing := not gap.is_empty() and int((gap.back() as Array)[1]) >= 0 \
 							and String((actions[int((gap.back() as Array)[1])] as Dictionary)["kind"]) == "ping"
 						_act(actions, gap, pending, at, {"kind": "moving", "passing": passing}, 0.0 if passing else MOVING, MOVING_LEN)
+					"plane":
+						_act(actions, gap, pending, at, {"kind": "plane"}, 0.0, 0.0)
 					"sound":
+						# a sound made from its words plays as made ([param sounds]); else one the desk knows by a word of it
 						var key := sound_of(arg)
+						var made_key := SoundEffects.key_of(arg)
 						var secs := float(DispatchSounds.SOUNDS[key]["secs"]) if not key.is_empty() else SOUND_BARE
-						_act(actions, gap, pending, at, {"kind": "sound", "sound": key, "words": arg}, secs, secs)
+						var tail := float(DispatchSounds.SOUNDS[key].get("tail", 0.0)) if not key.is_empty() else 0.0
+						var a := {"kind": "sound", "sound": key, "words": arg}
+						if sounds.has(made_key):
+							secs = float((sounds[made_key] as Dictionary).get("secs", secs))
+							tail = float((sounds[made_key] as Dictionary).get("tail", 0.0))
+							a["made"] = made_key
+						_act(actions, gap, pending, at, a, secs, secs + tail)
 					"static":
 						var st := static_of(arg)
 						storm = String(st["kind"])
@@ -1465,7 +1481,7 @@ static func parse(body: String, films := {}) -> Dictionary:
 			speak.append(" ".join(pending))
 		else:
 			speak[speak.size() - 1] = String(speak[speak.size() - 1]) + " " + " ".join(pending)
-	_silences(actions)
+	_silences(actions, spans)
 	warnings.append_array(_clock_check(actions, spoken.size()))
 	if not reply_to.is_empty():
 		warnings.append("reply: no words of the room's after it to type")
@@ -1876,24 +1892,36 @@ static func environment_of(arg: String) -> Dictionary:
 
 
 ## Each action's `fwd` and `back`: the seconds of its silence written before and after it - its hesitations and the rests
-## of the actions in it, in order (each action holds its silence's list, `gap`, until now).
-static func _silences(actions: Array) -> void:
+## of the actions in it, in order (each action holds its silence's list, `gap`, until now). A picture over the whole screen
+## ([param spans]) has its `fwd` and `back` the same way, from where it was written in its silence (`in_gap`).
+static func _silences(actions: Array, spans: Array) -> void:
 	for i in actions.size():
 		var act: Dictionary = actions[i]
 		var g: Array = act.get("gap", [])
-		var before := 0.0
 		var mine := -1
 		for k in g.size():
 			if int((g[k] as Array)[1]) == i:
 				mine = k
 				break
-			before += float((g[k] as Array)[0]) + (REST_PAD if int((g[k] as Array)[1]) >= 0 else 0.0)
-		var after := 0.0
-		for k in range(mine + 1, g.size()):
-			after += float((g[k] as Array)[0]) + (REST_PAD if int((g[k] as Array)[1]) >= 0 else 0.0)
-		act["fwd"] = before
-		act["back"] = after + REST_PAD
+		act["fwd"] = _written(g, 0, mine if mine >= 0 else g.size())
+		act["back"] = _written(g, mine + 1, g.size()) + REST_PAD
 		act.erase("gap")
+	for sp in spans:
+		var g: Array = (sp as Dictionary).get("gap", [])
+		var at := int(sp.get("in_gap", 0))
+		sp["fwd"] = _written(g, 0, at)
+		sp["back"] = _written(g, at, g.size())
+		(sp as Dictionary).erase("gap")
+		(sp as Dictionary).erase("in_gap")
+
+
+## The seconds written into silence [param g] from entry [param a] to before [param b]: each hesitation, and each action's rest
+## with its pad.
+static func _written(g: Array, a: int, b: int) -> float:
+	var secs := 0.0
+	for k in range(a, mini(b, g.size())):
+		secs += float((g[k] as Array)[0]) + (REST_PAD if int((g[k] as Array)[1]) >= 0 else 0.0)
+	return secs
 
 
 ## The voice's text for the next words: a speaker cue where the voice or what it is heard through changes, then what

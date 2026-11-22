@@ -1,11 +1,13 @@
 extends PanelContainer
 class_name FindBar
 
-## FindBar - find and replace in a [TextEdit], as a code editor has it: a bar above the text with a Find box and a
-## Replace box. Every match is highlighted ([method TextEdit.set_search_text]) and the current one selected.
+## FindBar - find and replace in a [TextEdit], as a code editor has it: a small panel over the text's top-right corner
+## with a Find box and a Replace box, drawn over the words, never moving them. Every match is highlighted
+## ([method TextEdit.set_search_text]) and the current one selected. It stands beside the text in a holder
+## ([method stack]), never inside it, so no key typed in its boxes reaches the words.
 ##
 ## Keys, from anywhere in the window it stands in: Ctrl+F opens it on Find (a selection on one line becomes what is
-## found), Ctrl+H on Replace, Escape closes it. Enter in Find goes to the next match and Shift+Enter to the one before;
+## found) and closes it again, as its button does; Ctrl+H opens it on Replace; Escape closes it. Enter in Find goes to the next match and Shift+Enter to the one before;
 ## F3 and Shift+F3 do the same from anywhere. Enter in Replace replaces the current match and goes on to the next;
 ## Ctrl+Enter replaces every match. Aa matches case. A replacement is one step Ctrl+Z takes back, Replace All too.
 ##
@@ -17,6 +19,9 @@ const MOST := 20000
 const HIT_FILL := Color(0.95, 0.68, 0.2, 0.32)
 const HIT_EDGE := Color(1.0, 0.75, 0.28, 0.85)
 const NONE_COLOR := Color(1.0, 0.5, 0.45)
+## How wide the panel is, and how far it stands from the text's top and right edges (the right past the scroll bar).
+const WIDE := 400.0
+const INSET := Vector2(20, 6)
 
 ## The text searched.
 var target: TextEdit
@@ -43,12 +48,21 @@ func _init(edit: TextEdit) -> void:
 	target.text_set.connect(_text_moved)
 
 	var box := StyleBoxFlat.new()
-	box.bg_color = Color(1, 1, 1, 0.05)
+	box.bg_color = Color(0.12, 0.13, 0.15, 0.97)
+	box.border_color = Color(1, 1, 1, 0.12)
+	box.set_border_width_all(1)
 	box.set_corner_radius_all(4)
-	box.set_content_margin_all(6)
+	box.set_content_margin_all(5)
+	box.shadow_color = Color(0, 0, 0, 0.4)
+	box.shadow_size = 6
 	add_theme_stylebox_override("panel", box)
+	set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	offset_right = -INSET.x
+	offset_left = -INSET.x - WIDE
+	offset_top = INSET.y
 	var rows := VBoxContainer.new()
-	rows.add_theme_constant_override("separation", 4)
+	rows.add_theme_constant_override("separation", 3)
 	add_child(rows)
 
 	var top := HBoxContainer.new()
@@ -66,13 +80,13 @@ func _init(edit: TextEdit) -> void:
 	_case.toggled.connect(func(_on: bool) -> void: _search(true))
 	top.add_child(_case)
 	_count = Label.new()
-	_count.custom_minimum_size = Vector2(96, 0)
+	_count.custom_minimum_size = Vector2(76, 0)
 	_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_count.add_theme_font_size_override("font_size", 12)
 	top.add_child(_count)
 	top.add_child(_button("‹", "The match before (Shift+Enter, Shift+F3).", step.bind(-1)))
 	top.add_child(_button("›", "The next match (Enter, F3).", step.bind(1)))
-	top.add_child(_button("×", "Close (Escape).", close))
+	top.add_child(_button("×", "Close (Escape, Ctrl+F).", close))
 
 	var low := HBoxContainer.new()
 	low.add_theme_constant_override("separation", 4)
@@ -88,11 +102,32 @@ func _init(edit: TextEdit) -> void:
 	low.add_child(all)
 
 
-## A button that opens the bar, for a window's foot.
+## The text box and the bar over it, in one holder that takes the box's place in its container: the box fills it and
+## the bar stands over its top-right corner. Called once, before the box has a parent.
+func stack() -> Control:
+	var hold := Control.new()
+	hold.size_flags_horizontal = target.size_flags_horizontal
+	hold.size_flags_vertical = target.size_flags_vertical
+	hold.custom_minimum_size = target.custom_minimum_size
+	hold.add_child(target)
+	target.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hold.add_child(self)
+	return hold
+
+
+## A button that opens the bar and closes it again, for a window's foot.
 func button() -> Button:
 	var b := Icons.button("search", 16, "Find and replace (Ctrl+F).")
-	b.pressed.connect(open)
+	b.pressed.connect(toggle)
 	return b
+
+
+## The bar opened on Find, or closed if it is up.
+func toggle() -> void:
+	if visible:
+		close()
+	else:
+		open()
 
 
 ## The bar up, its Find box taking the keys ([param on_replace]: the Replace box): a selection on one line is what is
@@ -183,8 +218,14 @@ func _input(e: InputEvent) -> void:
 	if k == null or not k.pressed or not is_visible_in_tree() and not _opens(k):
 		return
 	if _opens(k):
-		if not k.echo:
-			open(k.keycode == KEY_H)
+		if k.echo:
+			pass
+		elif k.keycode == KEY_F:
+			toggle()
+		elif visible and _replace.has_focus():
+			close()
+		else:
+			open(true)
 	elif k.keycode == KEY_ESCAPE:
 		close()
 	elif k.keycode == KEY_F3:
@@ -273,11 +314,12 @@ func _first_from(p: Vector2i) -> int:
 	return 0
 
 
-## Match [param i] selected and brought into view (centered when it was out of it).
+## Match [param i] selected and brought into view (centered when it was out of it or under the bar).
 func _select(i: int) -> void:
 	var h := _hits[i]
 	target.select(h.x, h.y, h.x, h.y + _find.text.length())
-	if h.x < target.get_first_visible_line() or h.x > target.get_last_full_visible_line():
+	var under := ceili((position.y + size.y) / maxf(target.get_line_height(), 1.0)) if visible else 0
+	if h.x < target.get_first_visible_line() + under or h.x > target.get_last_full_visible_line():
 		target.center_viewport_to_caret()
 	_show_count()
 
@@ -301,8 +343,8 @@ func _box(hint: String) -> LineEdit:
 	var e := LineEdit.new()
 	e.placeholder_text = hint
 	e.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	e.custom_minimum_size = Vector2(200, 0)
-	e.add_theme_font_size_override("font_size", 14)
+	e.custom_minimum_size = Vector2(150, 0)
+	e.add_theme_font_size_override("font_size", 13)
 	return e
 
 
@@ -312,5 +354,6 @@ func _button(words: String, tip: String, act: Callable) -> Button:
 	b.flat = true
 	b.focus_mode = Control.FOCUS_NONE
 	b.tooltip_text = tip
+	b.add_theme_font_size_override("font_size", 13)
 	b.pressed.connect(act)
 	return b

@@ -59,7 +59,9 @@ static func for_note(ctx: Dictionary) -> DispatchFormat:
 	var card := DispatchFormat.new()
 	card._panel = ctx.get("workspace") as ReadingPanel
 	if card._panel != null:
-		card._panel.walk = DispatchWalk.new(card.films)
+		var walk := DispatchWalk.new(card.films)
+		walk.sounds = SoundEffects.made_in
+		card._panel.walk = walk
 		card._panel.publish = Publish.new(card)
 		# what is on the desk, on the Props card ([DispatchProps])
 		card._panel.prop_sections.append(DispatchProps.new(card))
@@ -143,7 +145,7 @@ func desk_seed() -> int:
 
 
 ## The document's `dispatch`: the desk's seed, each picture's file, each clip's frames ([method Illustrations.clip_of]), each
-## film a `play` mark plays ([method films]) and the note's frontmatter (`head`, its `desk:` and `terminal:` blocks; the words a synced note is read with have none) -
+## film a `play` mark plays ([method films]), each sound made for a `sound:` mark ([method SoundEffects.made_in]) and the note's frontmatter (`head`, its `desk:` and `terminal:` blocks; the words a synced note is read with have none) -
 ## what [DispatchMedium] reads.
 func document() -> Dictionary:
 	var pictures := {}
@@ -159,7 +161,7 @@ func document() -> Dictionary:
 		if not path.is_empty():
 			pictures[key] = ProjectSettings.globalize_path(path)
 	var out := {"seed": desk_seed(), "things": things().duplicate(true), "pictures": pictures, "clips": clips, "head": _head(),
-		"films": films().duplicate(true)}
+		"films": films().duplicate(true), "sounds": SoundEffects.made_in(_body())}
 	for p in PARTS:
 		out[p] = part(p)
 	return out
@@ -306,7 +308,7 @@ func _say_about(body: String) -> void:
 	if _about == null:
 		return
 	body = Macros.dated(body)
-	var p := DispatchScript.parse(body, films())
+	var p := DispatchScript.parse(body, films(), SoundEffects.made_in(body))
 	_wants = DispatchMedium.wants_of(p, body)
 	_works = DispatchMedium.works_of(p)
 	var phones: PackedStringArray = p["phones"]

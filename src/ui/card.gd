@@ -204,11 +204,55 @@ static func put_slider(sl: HSlider, label: Label, v: float, suffix := "") -> voi
 	label.text = ("%.2f" % v) + suffix
 
 
+## A toggle's words' size ([method toggle_look]).
+const TOGGLE_FONT := 11
+
+
 static func family_color(f: StringName) -> Color:
 	var hue := float((FAMILIES.get(f, FAMILIES[&"paper"]) as Dictionary)["hue"])
 	if hue < 0.0:
 		return PAPER
 	return Color.from_hsv(hue / 360.0, SAT, VAL)
+
+
+## A toggle among others on a card (a section a part is used in), told on and off at a glance: on, filled in its card's
+## [param family] color with bright words and a ✓; off, an outline with its words dimmed. Small, and as wide on as off (the ✓'s
+## room kept either way), so toggling one never moves the others. [param text] is its words without the ✓.
+static func toggle_look(b: Button, family: StringName, text: String) -> void:
+	var col := family_color(family)
+	var on := StyleBoxFlat.new()
+	on.bg_color = col.darkened(0.15)
+	on.border_color = col.lightened(0.35)
+	on.set_border_width_all(1)
+	on.set_corner_radius_all(3)
+	on.content_margin_top = 1
+	on.content_margin_bottom = 1
+	on.content_margin_left = 6
+	on.content_margin_right = 6
+	var off := on.duplicate() as StyleBoxFlat
+	off.bg_color = Color(0, 0, 0, 0.18)
+	off.border_color = Color(col, 0.45)
+	var off_hover := off.duplicate() as StyleBoxFlat
+	off_hover.bg_color = Color(col, 0.18)
+	var on_hover := on.duplicate() as StyleBoxFlat
+	on_hover.bg_color = col
+	for st in ["normal", "disabled", "focus"]:
+		b.add_theme_stylebox_override(st, off)
+	b.add_theme_stylebox_override("hover", off_hover)
+	b.add_theme_stylebox_override("pressed", on)
+	b.add_theme_stylebox_override("hover_pressed", on_hover)
+	b.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
+	b.add_theme_color_override("font_hover_color", Color(1, 1, 1, 0.8))
+	b.add_theme_color_override("font_pressed_color", Color.WHITE)
+	b.add_theme_color_override("font_hover_pressed_color", Color.WHITE)
+	b.add_theme_font_size_override("font_size", TOGGLE_FONT)
+	var font := b.get_theme_font("font")
+	if font != null:
+		b.custom_minimum_size.x = ceilf(font.get_string_size("✓ " + text, HORIZONTAL_ALIGNMENT_LEFT, -1, TOGGLE_FONT).x) \
+			+ on.content_margin_left + on.content_margin_right
+	var said := func(pressed: bool) -> void: b.text = ("✓ " + text) if pressed else text
+	said.call(b.button_pressed)
+	b.toggled.connect(said)
 
 
 ## Recolor (a note's choice) and redraw.

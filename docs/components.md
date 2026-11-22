@@ -25,7 +25,7 @@ Where a note has room for exactly one. Components that take the same slot are al
 
 | Slot | What it is | Taken by |
 | --- | --- | --- |
-| `clock` | What the show is timed by, and how long it is: a sound (a song from a file, or composed), a voice reading the text, or a clip. | Sound, Voice, Cartoon, Clip |
+| `clock` | What the show is timed by, and how long it is: a sound (a song from a file, or composed), a voice reading the text, or a clip. | Voice, Cartoon, Clip |
 | `presentation` | What the show is seen in: the Medium and the format it names, a card table, an actor's room, or a clip's own frame. | Medium, Actor, Clip |
 
 ## Workspaces
@@ -68,8 +68,8 @@ By family - the color a component's card, chip and marks are drawn in.
 
 ### Sound
 
-- **Sound** (`sound`) - What the show is timed by and heard with: a song from a file, or a song composed for the note - its parts synthesized from first principles, its words sung, a song file's patterns taken as its own.
-  - gives audio; takes the clock; asks for `stage`, `subprocess`, `ffmpeg`, `python:music`, `python:voice`; kept in `sound:`
+- **Sound** (`sound`) - What the show is heard with: a song from a file or composed for the note - its parts synthesized from first principles, its words sung, a song file's patterns taken as its own - and the sound effects its script asks for, each made from its words. Beside a voice reading the note, the sound effects alone.
+  - gives audio; asks for `stage`, `subprocess`, `ffmpeg`, `python:music`, `python:voice`; kept in `sound:`
 
 ### Picture
 

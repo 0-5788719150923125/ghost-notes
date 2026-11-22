@@ -30,7 +30,7 @@ static func of(score: Dictionary) -> Dictionary:
 			var key := String(p["key"])
 			if not (s["parts"] as Array).has(key) and not (key == "lead" and (s["parts"] as Array).has("vocal")):
 				continue
-			var label := Registry.label(SongParts.PARTS, key) + (" (muted)" if bool(p.get("mute", false)) else "")
+			var label := SongParts.label_of(key) + (" (muted)" if bool(p.get("mute", false)) else "")
 			_part_spans(g, key, label, p, score, b0, b1, g0)
 		for v in score.get("voices", []):
 			_sung(g, v, String(v["key"]), SongParts.label_of(String(v["key"])) + (" (muted)" if bool(v.get("mute", false)) else ""),

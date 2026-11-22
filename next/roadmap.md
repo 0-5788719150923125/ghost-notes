@@ -70,6 +70,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **The synthesized voice: the room, landmarks, the actor**
       Voice.md's open rungs: room acoustics, a murmuring crowd and the air between voice and listener, all carried in the genome; landmark labels within a reading; and the voice as a Cast kind, so a storyboard speaks. See [voice.md](voice.md).
 
+- [ ] **Sound effects from their words**
+      Built: a `sound:` mark's description written as a synth patch by a sound designer agent who renders and hears it, an entry on the Sound card with Refine… and versions, kept in the Library, played by the desk. Open: the first sounds judged by ear (next/sound_effects.md).
+
 - [ ] **Rendering in the cloud**
       An export takes about 9x the video's length on this PC (6.5 fps at 2880x1620). Cut into time spans rendered at once on spot GPU instances and stitched, a 30-minute video could take about 20 minutes on ten machines for about $1.50. Asked 2026-10-30; nothing built. See [cloud_render.md](cloud_render.md).
 

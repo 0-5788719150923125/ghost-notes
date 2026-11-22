@@ -25,8 +25,8 @@ extends Node
 ##   grayed), "+" Medium (Auto: the seeded show); choosing a
 ##   song file writes it into the note as the Sound's file and opens it
 ##   again loaded and waiting at its start; it plays through the transport; a note with a Medium holds its
-##   storyboard with nothing attached, and the seed chooses until something is written. A second clock is refused with the reason (a Voice
-##   on a note with a sound), and a component comes off again: the Sound card's ×, once asked, takes the
+##   storyboard with nothing attached, and the seed chooses until something is written. A Voice is offered beside a Sound (which takes no
+##   clock), and a component comes off again: the Sound card's ×, once asked, takes the
 ##   `sound:` block out and leaves the other blocks and words. The ⌂ leaves it; New then "+" Voice reopens a
 ##   plain note as a reading; back on the list nothing is left behind (claims, row, conductor, stage,
 ##   background programs, mode node).
@@ -352,8 +352,8 @@ func _check_round_trip() -> void:
 	if panel == null:
 		return
 	_ok(Spectrum.timed() and not _stage_up(), "...its song heard as it is made: the transport is up, and no stage until Play")
-	_ok(_offer(panel, "voice") == "grayed" and _tip(panel, "voice").contains("clock") and _tip(panel, "voice").contains("Sound"),
-		"a second clock is refused, and \"+\" says which to detach (%s)" % _tip(panel, "voice").get_slice("\n\n", 1))
+	_ok(_offer(panel, "voice") == "lit",
+		"a Voice is offered beside a Sound: the Sound takes no clock, and beside a Voice holds the sound effects alone (%s)" % _offer(panel, "voice"))
 	_ok(_offer(panel, "sound") == "", "what is attached is not offered again")
 	panel = await _attach(panel, "medium")
 	_ok(panel != null and panel._medium != null and Director.medium == "auto",

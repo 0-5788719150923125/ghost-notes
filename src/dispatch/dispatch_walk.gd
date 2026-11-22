@@ -14,6 +14,9 @@ var _said := ""             # ...and what the voice reads of it
 var _asked := false
 ## () -> Dictionary: what each film the script plays is ([method DispatchFormat.films]), whose lengths the voice waits for.
 var films := Callable()
+## (text: String) -> Dictionary: the sounds made for its sound marks ([method SoundEffects.made_in]), whose lengths the voice waits
+## for; unset, none.
+var sounds := Callable()
 
 
 func _init(of_films := Callable()) -> void:
@@ -22,9 +25,10 @@ func _init(of_films := Callable()) -> void:
 
 func spoken(text: String, _title: String) -> Dictionary:
 	var f: Dictionary = films.call() if films.is_valid() else {}
-	var key := text + "\n" + JSON.stringify(DispatchScript.lengths_of(f))
+	var s: Dictionary = sounds.call(text) if sounds.is_valid() else {}
+	var key := text + "\n" + JSON.stringify(DispatchScript.lengths_of(f)) + JSON.stringify(s)
 	if not _asked or key != _of:
 		_of = key
-		_said = DispatchScript.speakable(text, f)
+		_said = DispatchScript.speakable(text, f, s)
 		_asked = true
 	return {"body": _said, "title": ""}

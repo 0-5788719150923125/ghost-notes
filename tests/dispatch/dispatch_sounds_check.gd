@@ -3,7 +3,8 @@ extends SceneTree
 ## Gate for the desk's sound ([DispatchSounds], next/dispatch.md). It holds:
 ##
 ## - the jet's pitch falls as it passes (the Doppler factor c / (c - v cos), falling all the way through) and it is loudest
-##   overhead;
+##   overhead; it fades slowly away under the words after it, quieter each second to all but nothing (the control: as the words
+##   come back it is still well heard);
 ## - the storms differ: Io-B's pops are spiky (peak far over level), Io-A's surf is smooth swells; both are heard over the
 ##   receiver's hiss;
 ## - a voice over the receiver: the storm is brought down under it and is whole again past it (the control: the same stretch
@@ -12,6 +13,8 @@ extends SceneTree
 ## - subdued: a phone flipped and snapped, keys, the ping, the toggle, the mug set down, the gain knob's click, the lamp's
 ##   switch, the earpiece ring and the terminal's bell are none louder than the desk's most;
 ## - the bell is one short beep, heard over the hiss while it sounds and gone when it ends;
+## - a sound made from its words is heard where the plan puts it, its peak at what the voice waits for (the control: its frames
+##   not read yet, only the hiss);
 ## - a pure function of the schedule: the same plan made twice is the same sound, sample for sample;
 ## - Io-B's clusters ease into each other, never switched (the control: switched a quarter second at a time, they jump), so the
 ##   hiss they open never pulses;
@@ -38,21 +41,53 @@ class Plan extends RefCounted:
 
 func _init() -> void:
 	# jet
-	var span := float(DispatchSounds.SOUNDS["jet"]["secs"])
-	var early := DispatchSounds.jet_pitch(0.5, span)
-	var late := DispatchSounds.jet_pitch(span - 0.5, span)
+	var waits := float(DispatchSounds.SOUNDS["jet"]["secs"])
+	var span := waits + float(DispatchSounds.SOUNDS["jet"]["tail"])
+	var early := DispatchSounds.jet_pitch(0.5)
+	var late := DispatchSounds.jet_pitch(waits - 0.5)
 	var falls := true
 	var last := INF
 	for k in 40:
-		var f := DispatchSounds.jet_pitch(span * float(k) / 39.0, span)
+		var f := DispatchSounds.jet_pitch(span * float(k) / 39.0)
 		if f > last + 1e-6:
 			falls = false
 		last = f
 	_ok(early > 1.08 and late < 0.93 and falls, "the jet's pitch falls all through its pass (%.3f to %.3f)" % [early, late])
 	var jet := _render([{"t": 0.0, "t1": span, "kind": "jet"}], span)
-	var ends := maxf(_rms(jet, 0.2, 1.2), _rms(jet, span - 1.2, span - 0.2))
-	var over := _rms(jet, span * 0.5 - 0.6, span * 0.5 + 0.6)
+	var near := DispatchSounds.JET_CLOSEST
+	var ends := maxf(_rms(jet, 0.2, 1.2), _rms(jet, waits - 1.2, waits - 0.2))
+	var over := _rms(jet, near - 0.6, near + 0.6)
 	_ok(over > ends * 2.0 and _peak(jet) < DispatchSounds.LOUD_MOST * 2.0, "the jet is loudest overhead, and never too loud (%.4f against %.4f, peak %.3f)" % [over, ends, _peak(jet)])
+	# it goes away slowly: quieter second by second through its tail, its last second all but gone (the control: as the voice
+	# comes back it is still well heard - the tail is not a cut)
+	var going := true
+	var louder := INF
+	for k in range(int(waits), int(span)):
+		var r := _rms(jet, float(k), float(k) + 1.0)
+		going = going and r < louder
+		louder = r
+	var at_words := _rms(jet, waits - 1.0, waits)
+	var gone := _rms(jet, span - 1.0, span)
+	_ok(going and gone < over * 0.02 and at_words > over * 0.2,
+		"the jet fades slowly away under the words after it (%.4f as they come, %.4f at its end, %.4f overhead)" % [at_words, gone, over])
+	# a sound made from its words: its frames heard where the plan puts it, at what the voice waits for (the control: its frames not
+	# read yet, nothing but the hiss)
+	var frames := PackedVector2Array()
+	frames.resize(RATE)
+	for i in frames.size():
+		var v := SoundEffects.CEILING * sin(TAU * 440.0 * float(i) / RATE)
+		frames[i] = Vector2(v, -v)
+	var clip_plan := [{"t": 0.5, "t1": 1.5, "kind": "clip", "key": "k"}]
+	var clip_heard := _render(clip_plan, 2.0, 1.0, {"k": frames})
+	var unread := _render(clip_plan, 2.0, 1.0, {})
+	var halved := _render([{"t": 0.5, "t1": 1.5, "kind": "clip", "key": "k", "gain": 0.5}], 2.0, 1.0, {"k": frames})
+	_ok(absf(_rms(halved, 0.6, 1.4) / maxf(_rms(clip_heard, 0.6, 1.4), 1e-9) - 0.5) < 0.05,
+		"a made sound's level is heard: at half its gain, half as loud (the control: at its own, as made)")
+	var level := _rms(clip_heard, 0.6, 1.4)
+	_ok(level > 0.04 and _rms(clip_heard, 0.05, 0.45) < level * 0.1 and _rms(clip_heard, 1.6, 1.95) < level * 0.1
+		and absf(_peak(clip_heard) - DispatchSounds.LOUD_MOST) < DispatchSounds.LOUD_MOST * 0.2 and _rms(unread, 0.6, 1.4) < level * 0.1,
+		"a made sound is heard where the plan puts it, its peak at what the voice waits for, and nothing before its frames are read (%.4f, peak %.4f, unread %.4f)"
+			% [level, _peak(clip_heard), _rms(unread, 0.6, 1.4)])
 	# storms
 	var pop := _render([{"t": 0.0, "t1": 5.0, "kind": "static", "storm": "popcorn", "seed": 11}], 5.0)
 	var surf := _render([{"t": 0.0, "t1": 5.0, "kind": "static", "storm": "surf", "seed": 11}], 5.0)
@@ -144,11 +179,12 @@ func _init() -> void:
 		quit(1)
 
 
-func _render(plan: Array, secs: float, receiver := 1.0) -> PackedVector2Array:
+func _render(plan: Array, secs: float, receiver := 1.0, clips := {}) -> PackedVector2Array:
 	var p := Plan.new()
 	p.plan = plan
 	var s := DispatchSounds.new(p)
 	s.receiver_share = receiver
+	s.clips = clips
 	s._restart(0.0)
 	var out := PackedVector2Array()
 	var n := int(secs * RATE)

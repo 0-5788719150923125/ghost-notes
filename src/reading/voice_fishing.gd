@@ -1463,8 +1463,8 @@ func _passage() -> String:
 		else ReadingAudition.PASSAGE).strip_edges()
 
 
-## The line heard: the Test passage read in the voice on the line, as the tab's rows have it - a reading and a Test
-## stopped first, one sound at a time. Restarted in place when the line is already out.
+## The line heard: the Test passage read in the voice on the line, as the tab's rows have it - a show playing paused
+## where it is and a Test stopped first, one sound at a time. Restarted in place when the line is already out.
 func _speak() -> void:
 	if quiet or not _cast:
 		return
@@ -1472,8 +1472,8 @@ func _speak() -> void:
 	if text.is_empty():
 		return
 	if cast != null:
-		if cast.panel._stream.has_reading():
-			cast.panel._stream.stop()
+		if Spectrum.transport_playing():
+			Spectrum.transport_pause()
 		if cast.panel._test_busy():
 			cast.panel._stop_test()
 	if _sampler.visible:

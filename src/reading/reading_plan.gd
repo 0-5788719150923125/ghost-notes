@@ -213,8 +213,9 @@ static func passages(body: String, title: String, ask: Dictionary) -> Array:
 
 ## A passage's marks resolved: `{text, holds, leans}`. Every hesitation (and the tablet's action rests) becomes a
 ## [constant TextNorm.HOLD_MARK] welded to the word before it (or leading the next, when nothing precedes it), with
-## its length in `holds`; a delivery mark is noted where it falls in `leans` (see [method Delivery.leans_of]);
-## every other comment goes.
+## its length in `holds`; a delivery mark is noted where it falls in `leans` (see [method Delivery.leans_of]); an
+## inflection mark's run has its sentinel ([constant TextNorm.INFLECTS]) welded to its first word and its last; every
+## other comment goes.
 static func resolve_marks(t: String, on: bool, bare: float) -> Dictionary:
 	var out := ""
 	var at := 0
@@ -223,9 +224,32 @@ static func resolve_marks(t: String, on: bool, bare: float) -> Dictionary:
 	var re := Manuscript._rx(Manuscript.COMMENT)
 	var hes := Manuscript._rx(Manuscript.HESITATION)
 	var lean_re := Manuscript._rx(Manuscript.DELIVERY)
+	var inflect_re := Manuscript._rx(Manuscript.INFLECT)
+	var opening := ""          # an inflection mark's sentinel, welded to the next word written
+	var open_kinds: Array = []  # the inflection marks open, innermost last
 	for m in re.search_all(t):
-		out += t.substr(at, m.get_start() - at)
+		var welded := _weld_ahead(t.substr(at, m.get_start() - at), opening)
+		out += String(welded[0])
+		opening = String(welded[1])
 		at = m.get_end()
+				# How the words it wraps are inflected ([constant Manuscript.INFLECT]): the run's sentinel welded to its first
+				# word and again to its last, toggles as emphasis is ([method Phonemes.parse])
+		var im := inflect_re.search(m.get_string())
+		if im != null:
+			if im.get_string(1).is_empty():
+				var kind := im.get_string(2).to_lower()
+				if TextNorm.INFLECTS.has(kind):
+					open_kinds.append(kind)
+					opening += String(TextNorm.INFLECTS[kind])
+			elif not open_kinds.is_empty():
+				var mark := String(TextNorm.INFLECTS[open_kinds.pop_back()])
+				var pending := opening.find(mark)
+				if pending >= 0:
+					opening = opening.erase(pending, 1)  # opened and closed round no words: nothing
+				else:
+					var tail := out.rstrip(" \t\n")
+					out = tail + mark + out.substr(tail.length())
+			continue
 				# The tablet's hand is not a hesitation: its rest is the time a tap or typed address takes, so it stays when the
 				# Hesitate box is off
 		var secs := TabletScript.hold_of(m.get_string())
@@ -246,7 +270,7 @@ static func resolve_marks(t: String, on: bool, bare: float) -> Dictionary:
 		var head := out.rstrip(" \t\n")
 		out = head + TextNorm.HOLD_MARK + out.substr(head.length())
 		holds.append(secs)
-	out += t.substr(at)
+	out += String(_weld_ahead(t.substr(at), opening)[0])
 	leans = Delivery.leans_of(out, leans)
 		# Sentinels with nothing before them in the passage lead the next word instead: close the gap so they weld on.
 	var body_t := out.strip_edges()
@@ -271,6 +295,17 @@ static func resolve_marks(t: String, on: bool, bare: float) -> Dictionary:
 		for lean in leans:
 			(lean as Array)[0] = maxi(0, int((lean as Array)[0]) - gone)
 	return {"text": said, "holds": holds, "leans": leans}
+
+
+## [param piece] with [param opening] (an inflection mark's sentinels) welded to its first word, and what is left of
+## [param opening]: all of it where [param piece] has no word to weld to, for the next piece written.
+static func _weld_ahead(piece: String, opening: String) -> Array:
+	if opening.is_empty():
+		return [piece, ""]
+	for i in piece.length():
+		if not piece[i] in " \t\n":
+			return [piece.substr(0, i) + opening + piece.substr(i), ""]
+	return [piece, opening]
 
 
 ## One passage, cut at sentence boundaries: `{chunks, sentence_no}`, each chunk `{tokens, words, holds}`. [param said]: the
@@ -365,6 +400,9 @@ static func cut(body: String, sentence_no: int, holds: Array = [], said := {}) -
 						# lifts the word a little (piper.py `EMPHASIS`). Sent only when set.
 			if stressed_at.has(flat):
 				tok["emph"] = int(stressed_at[flat])
+						# ...and inflected as an inflection mark says (hosts/voice/inflection.py): sent only when set
+			if w.has("inflect"):
+				tok["inflect"] = String(w["inflect"])
 			toks.append(tok)
 						# One subtitle entry per source run: `2009` is three spoken words and one thing on the page, so the
 						# words after the first in a rewritten run extend this one's end and the highlight sweeps across all

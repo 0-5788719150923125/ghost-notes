@@ -28,6 +28,10 @@ A Mark is what one word does:
 - `stretch`: its stressed vowel held this much longer, on top. With inflection on, the rules' stretches are all a word
   has: the backend's own emphasis stretch is not added.
 
+A SCRIPT OVERRIDES THE RULES word by word: a token's `inflect` (the script's `<!-- inflect: none -->...<!-- /inflect -->`,
+src/data/manuscript.gd INFLECT) is "none" (no rule marks it) or "rise" (the last word of each run so wrapped rises as a
+question's last word does, whatever the sentence is).
+
 Outside a marked word the curve is 1 (the model's own pitch), and the whole is eased over SMOOTH steps so no rule
 makes a step the decoder would click on. `settings` is True (every rule at its defaults), False/None (none), or
 {rule: True, False or {field: value}}: a rule left out is on.
@@ -106,6 +110,14 @@ def wh_question(group: list) -> bool:
     return False
 
 
+def _rise(f: dict) -> Mark:
+    """A question's rise on a word, by the question rule's fields `f`."""
+    rise = float(f["rise"])
+    return Mark(pitch=[(0.0, 0.0), ("stress<", -float(f["dip"])), ("stress>", rise * float(f["on_vowel"])), (1.0, rise)],
+                slow=float(f["slow"]), stretch=float(f["stretch"]), flatten=float(f["flatten"]),
+                voice=float(f["voice"]) > 0.0)
+
+
 def question(group: list, f: dict) -> dict:
     """A sentence that ends on "?" rises on its last word (a low rise): its own fall flattened, a small dip at the start
     of its stressed vowel, `on_vowel` of `rise` semitones by that vowel's end and the rest by the word's, held into
@@ -120,11 +132,7 @@ def question(group: list, f: dict) -> dict:
     share = float(f["wh"]) if wh_question(group) else 1.0
     if share <= 0.0:
         return {}
-    rise = float(f["rise"]) * share
-    return {ti: Mark(pitch=[(0.0, 0.0), ("stress<", -float(f["dip"])), ("stress>", rise * float(f["on_vowel"])),
-                            (1.0, rise)],
-                     slow=float(f["slow"]), stretch=float(f["stretch"]), flatten=float(f["flatten"]),
-                     voice=float(f["voice"]) > 0.0)}
+    return {ti: _rise({**f, "rise": float(f["rise"]) * share})}
 
 
 def emphasis(group: list, f: dict) -> dict:
@@ -164,11 +172,14 @@ RULES: dict = {
 
 
 def plan(group: list, settings) -> dict:
-    """{token index: Mark} for one sentence, every rule `settings` leaves on combined."""
+    """{token index: Mark} for one sentence, every rule `settings` leaves on combined, then what the script says
+    word by word (`inflect`): a word marked "none" unmarked, the last of each run marked "rise" given a question's rise
+    (by the question rule's fields) where the question rule has not already."""
     if not settings:
         return {}
     told = settings if isinstance(settings, dict) else {}
     out: dict = {}
+    risen: set = set()
     for key, row in RULES.items():
         own = told.get(key, True)
         if own is False:
@@ -176,6 +187,20 @@ def plan(group: list, settings) -> dict:
         fields = {**row["fields"], **(own if isinstance(own, dict) else {})}
         for ti, m in row["fn"](group, fields).items():
             out[ti] = out[ti].add(m) if ti in out else m
+            if key == "question":
+                risen.add(ti)
+    asked = [str(t.get("inflect", "") or "") for t in group]
+    q = told.get("question")
+    q_fields = {**RULES["question"]["fields"], **(q if isinstance(q, dict) else {})}
+    said = [ti for ti, t in enumerate(group) if str(t.get("text", "")).strip()]
+    for k, ti in enumerate(said):
+        if asked[ti] != "rise" or (k + 1 < len(said) and asked[said[k + 1]] == "rise"):
+            continue  # not the last word of a run marked to rise
+        if ti not in risen:
+            out[ti] = out[ti].add(_rise(q_fields)) if ti in out else _rise(q_fields)
+    for ti, kind in enumerate(asked):
+        if kind == "none":
+            out.pop(ti, None)
     return out
 
 

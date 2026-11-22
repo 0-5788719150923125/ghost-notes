@@ -45,7 +45,8 @@ extends SceneTree
 ##   untold turns the camera to its screen); a static told `unwatched` is heard with the camera left on the terminal (the
 ##   control: untold, it turns to the receiver);
 ## - a picture over the whole screen written after a block comes in once the block's typing is done, never over it (the
-##   control: written before the block, it comes in just after the word before);
+##   control: written before the block, it comes in just after the word before); one written after a hesitation comes in
+##   once the hesitation is over, before its passage's first word (the control: with none, just after the word before);
 ## - a said passage is typed at an even pace ahead of its voice: every word whole before it is said, never more than three
 ##   words ahead, its pace from word to word swinging less than half as much (the control: each word typed in the time of the
 ##   word two before it), on a voice whose words take as long as their letters and that rests at each sentence's end;
@@ -61,8 +62,9 @@ extends SceneTree
 ##   is; it goes to the radar only at its sounds; the radar target moves in small steps under the voice, never a jump, with its
 ##   old place in the readout until it arrives; his coordinates beside him, changing as he moves and hidden over the frame by a
 ##   box that follows them and clears the blip and the readout (control: at the old gap it meets the blip), the place held in a
-##   readout centered at the scope's foot wherever he is (control: before the first ping, nothing to hide); the receiver is open
-##   only in its storm;
+##   readout centered at the scope's foot wherever he is (control: before the first ping, nothing to hide); a plane mark's
+##   aircraft just off the glass at the mark and on it a few seconds on (control: gone once it has crossed); the receiver is
+##   open only in its storm;
 ## - a voice with no phone comes in on the receiver, typed or said: open from the static before it straight on through its
 ##   words, the storm brought down under them and the needle swelling in a word, shut after its tail, one stretch of sound
 ##   (the control: the room's own typed line opens nothing);
@@ -340,6 +342,12 @@ func _run() -> void:
 	md._screens.show_radar(md.radar_at(0.5))
 	_ok(md._screens.radar_redactions().is_empty(), "the control: before the first ping, no coordinates to hide")
 	_ok(md.looking_at(t0[moving_i] + 1.0) == "radar", "the radar's alarm as he sets off turns the camera to it (%s)" % md.looking_at(t0[moving_i] + 1.0))
+	# a plane mark's aircraft comes in over the glass's edge as the mark is reached (any action's moment stands in for one)
+	var off_glass := (md._plane_of(moving_i, t0[moving_i]).get("at", Vector2.ZERO) as Vector2).length()
+	var on_glass := (md._plane_of(moving_i, t0[moving_i] + 8.0).get("at", Vector2.ONE * 9.0) as Vector2).length()
+	_ok(off_glass > 1.0 and off_glass < 1.03 and on_glass < 1.0,
+		"a plane mark's aircraft is just off the glass at the mark and on it a few seconds on (%.3f, %.3f)" % [off_glass, on_glass])
+	_ok(md._plane_of(moving_i, t0[moving_i] + DispatchMedium.PLANE_PASS + 1.0).is_empty(), "the control: once across, it is gone")
 	# the camera goes to the radar only at its sounds: every look at it begins as it pings or sounds its alarm (or a look mark
 	# asks) and none stays to watch it do nothing - a ping is held to its sentence's end at most, a walk to the ping where he
 	# arrives; either runs on only into the next look
@@ -542,6 +550,7 @@ func _run() -> void:
 	small.mount(st)
 	_unwatched(small)
 	_picture_after_block(small)
+	_picture_after_hesitation(small)
 	_typing_cadence(small)
 	_said_keys_typing(small)
 	_call_across_black(small)
@@ -848,6 +857,12 @@ func _grid_and_film(st: SubViewport, feed: ShowFeed) -> void:
 	_ok(md.film_at("terminal", t0[f_i] - 0.05).is_empty() and absf(float(up.get("at", -1.0)) - 1.5) < 0.01 and bool(up.get("playing", false))
 		and md.film_at("terminal", t0[f_i] + DispatchMedium.FILM_WAKE * 2.0 + 3.0 + DispatchMedium.FILM_HOLD + 0.1).is_empty(),
 		"the film is up on the glass after its mark, as far into it as the show is past that, and gone after its last frame and a beat (%s)" % up)
+	var waking := md.film_at("terminal", t0[f_i] + DispatchMedium.FILM_WAKE * 0.5)
+	var ending := md.film_at("terminal", t0[f_i] + DispatchMedium.FILM_WAKE * 1.5 + 3.0 + DispatchMedium.FILM_HOLD)
+	_ok(bool(waking.get("rising", false)) and float(waking.get("power", 1.0)) < 1.0
+		and not bool(up.get("rising", true)) and float(ending.get("power", 1.0)) < 1.0 and not bool(ending.get("rising", true))
+		and not md.power_rising(gone),
+		"a film's glass coming on is told it is rising (a warm-up, never the collapse backward); going down, it is not, nor the grid going down (%s %s)" % [waking, ending])
 	md._pose(mid)
 	var term_lit := (md._set.rigs["terminal"] as PropRig).lights().any(func(l: Light3D) -> bool: return l.visible)
 	md._hear_films(mid)
@@ -1289,6 +1304,28 @@ func _picture_after_block(md: DispatchMedium) -> void:
 	_ok(float(a[0]) < INF and float(a[0]) > float(a[1]) and float(b[0]) < float(b[1]) and is_equal_approx(float(b[0]), float(b[2])),
 		"a picture written after a block comes in once its typing is done (%.1f s, typed by %.1f s); the control: written before it, just after the word before (%.1f s, typed by %.1f s)"
 			% [float(a[0]), float(a[1]), float(b[0]), float(b[1])])
+
+
+## A picture over the whole screen written after a hesitation comes in once the hesitation is over, before its passage's first
+## word (the control: with no hesitation, just after the word before).
+func _picture_after_hesitation(md: DispatchMedium) -> void:
+	var block := "```terminal\n> m\npanel: MIRROR | HIS NOTES\nread: a roof. food. a ride. a doctor.\nread: we have the tools now.\n```\n\n"
+	var picture := "<!-- image (full): a small town seen from the air before dawn -->\n\n"
+	var got := {}
+	for wait: String in ["<!-- hesitation: 3 -->\n\n", ""]:
+		var body := "<!-- speaker: Control -->\n\nOne two three four.\n\n" + block + wait + picture + "Five six seven eight.\n"
+		md.load_note(body, {"seed": 3})
+		md._now = 0.0
+		md.take_words(DispatchScript.rehearsal(DispatchScript.parse(body), 0.32))
+		var sp: Dictionary = md._spans[0]
+		var from := int(sp["from"])
+		got[wait.is_empty()] = [md._picture_in(sp), md._word_t1(from - 1), md._word_t0(from)]
+	var held: Array = got[false]
+	var bare: Array = got[true]
+	_ok(float(held[0]) >= float(held[1]) + 3.0 and float(held[0]) < float(held[2])
+		and float(bare[0]) < float(bare[1]) + 0.5,
+		"a picture written after a hesitation comes in once it is over (%.1f s, the word before ended %.1f s, the next at %.1f s); the control: with none, just after the word before (%.1f s, %.1f s)"
+			% [float(held[0]), float(held[1]), float(held[2]), float(bare[0]), float(bare[1])])
 
 
 ## A said passage is typed at an even pace ahead of its voice (the control: each word typed in the time of the word two

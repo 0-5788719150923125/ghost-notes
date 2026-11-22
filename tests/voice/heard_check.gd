@@ -7,7 +7,9 @@ extends SceneTree
 ##   lying on the desk is quieter than one at the ear, and a voice through somebody else's phone quieter still;
 ## - THE CONTROL: heard through nothing, a chain gives back exactly what one that never heard of phones gives;
 ## - THE PLAN: a turn marked `<!-- heard: phone -->` has every chunk heard through it, the turn before it none, and a
-##   key nobody knows is a note and nothing more; the mark is never said;
+##   key nobody knows is a note and nothing more; the mark is never said; one voice's own turn heard through a television
+##   between two of its turns in the room is the only one heard through it (THE CONTROL: a cue for the voice already
+##   speaking, with no mark, changes nothing);
 ## - THE JOIN: a voice heard through one thing, then another, is a change of room each time - a mark where it changes;
 ## - the static rides the voice: over a radio, static is heard in the gap between two words and not before the voice
 ##   begins, the squelch's tail is heard as the channel closes, and the rest after it is clean (THE CONTROL: heard through
@@ -168,6 +170,16 @@ func _plan_and_join() -> void:
 	_ok(by.get("Van", []) == ["desk"], "a turn marked desk is heard from the desk (%s)" % str(by.get("Van")))
 	_ok(by.get("Cough", []) == [""], "the control: a key nobody knows is a note, heard in the room (%s)" % str(by.get("Cough")))
 	_ok(not "heard" in " ".join(said) and not "phone" in " ".join(said), "the mark is never said (%s)" % " ".join(said))
+	# the room's voice heard again through a television, in the middle of its own words: that turn alone
+	var replayed := ReadingPlan.make("<!-- speaker: Control -->\n\nThat's my desk.\n\n<!-- speaker: Control -->\n<!-- heard: tv -->\n\n"
+		+ "Twenty to eleven.\n\n<!-- speaker: Control -->\n\nThat's me.\n", "", {"reader": "Control", "hesitate": true, "bare": 1.5, "outro": 0.0})
+	var bands: Array = (replayed["chunks"] as Array).map(func(c: Dictionary) -> String: return String(c.get("heard", "")))
+	_ok(bands == ["", "tv", ""], "a voice's own turn heard through a television is the only one heard through it (%s)" % str(bands))
+	var again := ReadingPlan.make("<!-- speaker: Control -->\n\nThat's my desk.\n\n<!-- speaker: Control -->\n\nThat's me.\n", "",
+		{"reader": "Control", "hesitate": true, "bare": 1.5, "outro": 0.0})
+	_ok(Manuscript.passages("<!-- speaker: Control -->\n\nThat's my desk.\n\n<!-- speaker: Control -->\n\nThat's me.\n").size() == 2
+		and (again["chunks"] as Array).all(func(c: Dictionary) -> bool: return String(c.get("heard", "")).is_empty()),
+		"the control: a cue for the voice already speaking, with no mark, is one turn in the room")
 	# THE JOIN: a change of what a voice is heard through is a change of room
 	var join := ReadingJoin.new(SR)
 	var chunks: Array = plan["chunks"]

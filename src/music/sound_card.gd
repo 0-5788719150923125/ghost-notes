@@ -34,6 +34,7 @@ const KEY := "sound"
 const SOURCES := {
 	"file": {"label": "A file", "blurb": "A song from a file plays as the note's sound: its beat and spectrum drive the scenes."},
 	"composed": {"label": "Composed", "blurb": "A song composed for the note from its choices and its seed, every sound synthesized, the note's words sung."},
+	"none": {"label": "None - sound effects only", "blurb": "No song: the card holds the sound effects the script asks for, and the note is timed by whatever else it has (a voice reading it)."},
 }
 const AUDIO_EXTS := ["wav", "mp3", "ogg", "oga", "flac"]
 ## What the mix may be saved as.
@@ -107,6 +108,9 @@ var _typed := false            # the code field holds what a person typed, not t
 var _history: Array = []       # the codes before each roll or code entered, the latest last (Back walks them)
 var _back: Button
 var _saving_as := ""           # the file the mix is being exported to
+var _clock_by := ""            # what else times the note (a Voice reading it): its label, "" for nothing - the song is not played
+var _effects: SoundEffectsPart = null
+var _brought := false          # made with no block, by the note's sound marks: it writes none until a setting changes
 
 
 ## This card for a note's panel ([method NoteCards.make]): `blocks` the note's, `path` its file, `folder` its own folder
@@ -115,9 +119,12 @@ static func for_note(ctx: Dictionary) -> SoundCard:
 	var blocks: Dictionary = ctx.get("blocks", {})
 	var block: Variant = blocks.get("sound", null)
 	if not (block is Dictionary):
-		var old: Variant = blocks.get("song", {})
-		block = {"source": "file", "path": String((old as Dictionary).get("path", ""))} if old is Dictionary else {}
-	var card := SoundCard.new(block as Dictionary, String(ctx.get("path", "")), String(ctx.get("folder", "")))
+		# a Song's old block is the file source; with no block at all the card was brought by the note's sound marks
+		# ([method Components.brought_by]) and holds their sounds alone
+		var old: Variant = blocks.get("song", null)
+		block = {"source": "file", "path": String((old as Dictionary).get("path", ""))} if old is Dictionary else {"source": "none"}
+	var card := SoundCard.new(block as Dictionary, String(ctx.get("path", "")), String(ctx.get("folder", "")), clock_elsewhere(blocks))
+	card._brought = not (blocks.get("sound") is Dictionary) and not (blocks.get("song") is Dictionary)
 	card._video = bool(ctx.get("video", false))
 	card._live = bool(ctx.get("live", false))
 	card._begin_stream = ctx.get("begin_stream", Callable())
@@ -126,10 +133,11 @@ static func for_note(ctx: Dictionary) -> SoundCard:
 	return card
 
 
-func _init(block := {}, note := "", note_folder := "") -> void:
+func _init(block := {}, note := "", note_folder := "", clock_by := "") -> void:
 	_block = block.duplicate(true)
 	_note = note
 	_note_folder = note_folder
+	_clock_by = clock_by
 	add_theme_constant_override("separation", 6)
 	_build()
 	_section = _SoundSection.new()
@@ -169,23 +177,47 @@ func _exit_tree() -> void:
 
 # --- what the panel asks ----------------------------------------------------------------------------
 
-## The block as it stands.
-func capture() -> Dictionary:
+## The block as it stands; null for a card the note's sound marks brought whose settings were never changed (no block is written
+## for it, so the marks alone keep it).
+func capture() -> Variant:
+	if _brought and _block == {"source": "none"}:
+		return null
 	return _block.duplicate(true)
 
 
-## The block from the note, shown.
+## The block from the note, shown - and shown again where the note's words changed though the block did not (a section
+## written into them is a section every part's Used in offers).
 func apply(block: Dictionary) -> void:
-	_words_text = _words()
+	var words := _words()
+	var new_words := words != _words_text
+	_words_text = words
+	if _effects != null:
+		_effects.refresh(_words_text)
 	if JSON.stringify(block) == JSON.stringify(_block):
+		if new_words:
+			_changed()
 		return
 	_block = block.duplicate(true)
 	_load_ref()
 	_refresh()
 
 
-## The file the note plays now: the file source's file, or the composed song's mix once made. "" for none.
+## The note's words as they are typed ([method ReadingPanel._script_text_changed], the note's panel's own): the sections and the
+## sounds they ask for shown again where they changed.
+func set_script_text(body: String) -> void:
+	if body == _words_text:
+		return
+	_words_text = body
+	if _effects != null:
+		_effects.refresh(body)
+	_changed()
+
+
+## The file the note plays now: the file source's file, or the composed song's mix once made. "" for none (sound effects only,
+## or another thing times the note).
 func playable() -> String:
+	if source() == "none":
+		return ""
 	if _composed():
 		var mix := SongBake.mix_of(folder())
 		return mix if FileAccess.file_exists(mix) else ""
@@ -259,7 +291,28 @@ func folder() -> String:
 
 
 func _composed() -> bool:
-	return String(_block.get("source", "composed")) == "composed"
+	return source() == "composed"
+
+
+## The source the card plays: its block's, or "none" while something else times the note ([method clock_elsewhere]).
+func source() -> String:
+	if not _clock_by.is_empty():
+		return "none"
+	var s := String(_block.get("source", "composed"))
+	return s if SOURCES.has(s) else "composed"
+
+
+## What else attached to a note with [param blocks] times it (a Voice reading it, an Actor, a cartoon, a clip): its label, ""
+## for nothing. A Sound beside one holds sound effects only.
+static func clock_elsewhere(blocks: Dictionary) -> String:
+	for k in Components.REGISTRY:
+		var row: Dictionary = Components.REGISTRY[k]
+		if k == "sound" or not (row.get("slots", []) as Array).has("clock"):
+			continue
+		var b := String(row.get("block", ""))
+		if not b.is_empty() and blocks.has(b):
+			return String(row.get("label", k))
+	return ""
 
 
 # --- the card -----------------------------------------------------------------------------------------
@@ -277,6 +330,11 @@ func _build() -> void:
 		_block["source"] = String(_source.get_item_metadata(i))
 		_changed())
 	row.add_child(_source)
+	if not _clock_by.is_empty():
+		for i in _source.item_count:
+			if String(_source.get_item_metadata(i)) != "none":
+				_source.set_item_disabled(i, true)
+				_source.set_item_tooltip(i, "This note is timed by its %s: a song cannot play beside it. The card holds its sound effects." % _clock_by)
 	_file_box = VBoxContainer.new()
 	add_child(_file_box)
 	var fr := HBoxContainer.new()
@@ -387,15 +445,13 @@ func _build() -> void:
 	_add = MenuButton.new()
 	_add.text = "+ Add a part"
 	_add.flat = false
-	_add.tooltip_text = "Another part for the song: a drum kit, a bass, keys, a pad, a guitar, a lead, bells, a voice (up to four)."
+	_add.tooltip_text = ("Another part for the song: a drum kit, a bass, keys, a pad, a guitar, a lead, bells, a voice - up to four of each, "
+		+ "each with its own pattern, sound and sections (a second guitar for the chorus alone).")
 	_add.get_popup().id_pressed.connect(func(id: int) -> void:
-		var k: String = SongParts.PARTS.keys()[id]
 		var parts := _parts()
-		if k == "vocal":
-			for v in SongParts.voice_keys():
-				if not parts.has(v):
-					k = v
-					break
+		var k := SongParts.next_key(String(SongParts.PARTS.keys()[id]), parts.keys())
+		if k.is_empty():
+			return
 		parts[k] = {}
 		_block["parts"] = parts
 		_open[k] = true
@@ -411,6 +467,14 @@ func _build() -> void:
 	_save.custom_minimum_size = Vector2(40, 40)
 	_save.pressed.connect(_save_audio)
 	br.add_child(_save)
+	_effects = SoundEffectsPart.new()
+	_effects.title = String(FrontMatter.field_of(FileAccess.get_file_as_string(_note), "title")) if not _note.is_empty() and FileAccess.file_exists(_note) else ""
+	_effects.set_pick(_block.get("designer", {}) if _block.get("designer") is Dictionary else {})
+	_effects.chosen = func(choice: Dictionary) -> void:
+		_block["designer"] = choice
+		_changed(false)
+	_effects.noted.connect(_say)
+	add_child(_effects)
 	_status_label = _small("")
 	_status_label.add_theme_color_override("font_color", Color(0.55, 0.95, 0.75, 0.85))
 	add_child(_status_label)
@@ -419,10 +483,16 @@ func _build() -> void:
 func _refresh() -> void:
 	var composed := _composed()
 	for i in _source.item_count:
-		if String(_source.get_item_metadata(i)) == ("composed" if composed else "file"):
+		if String(_source.get_item_metadata(i)) == source():
 			_source.select(i)
-	_file_box.visible = not composed
+	_file_box.visible = source() == "file"
 	_composed_box.visible = composed
+	if _effects != null:
+		_effects.refresh(_words_text)
+	if source() == "none":
+		_show_save()
+		_offer_timeline()
+		return
 	_show_save()
 	_offer_timeline()
 	if not composed:
@@ -510,21 +580,18 @@ func _build_parts() -> void:
 	var parts := _parts()
 	var popup := _add.get_popup()
 	popup.clear()
-	var keys: Array = SongParts.PARTS.keys()
-	for i in keys.size():
-		var k: String = keys[i]
-		if k == "vocal":
-			var have: Array = SongParts.voice_keys().filter(func(v: String) -> bool: return parts.has(v))
-			for v in have:
-				_parts_box.add_child(_part_entry(v, parts[v] if parts[v] is Dictionary else {}))
-			if have.size() < SongParts.VOICES_MOST:
-				popup.add_item(Registry.label(SongParts.PARTS, k), i)
-				popup.set_item_tooltip(popup.item_count - 1, Registry.blurb(SongParts.PARTS, k))
-		elif parts.has(k):
-			_parts_box.add_child(_part_entry(k, parts[k] if parts[k] is Dictionary else {}))
-		else:
-			popup.add_item(Registry.label(SongParts.PARTS, k), i)
-			popup.set_item_tooltip(popup.item_count - 1, Registry.blurb(SongParts.PARTS, k))
+	# every part the song has, by kind, each kind's copies after it; "+" offers each kind while it has room for another
+	for k in SongParts.ordered(parts.keys()):
+		if SongParts.PARTS.has(SongParts.kind_of(String(k))):
+			_parts_box.add_child(_part_entry(String(k), parts[k] if parts[k] is Dictionary else {}))
+	var kinds: Array = SongParts.PARTS.keys()
+	for i in kinds.size():
+		var kind := String(kinds[i])
+		var next := SongParts.next_key(kind, parts.keys())
+		if next.is_empty():
+			continue
+		popup.add_item(Registry.label(SongParts.PARTS, kind), i)
+		popup.set_item_tooltip(popup.item_count - 1, Registry.blurb(SongParts.PARTS, kind))
 	_add.disabled = popup.item_count == 0
 
 
@@ -555,7 +622,7 @@ func _part_entry(k: String, cfg: Dictionary) -> EntryCard:
 	pat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pat.fit_to_longest_item = false
 	_auto_item(pat, Registry.label(SongParts.PATTERNS, String(chose["pattern"])) if not cfg.has("pattern") else "", "")
-	for p in SongParts.patterns_for(k, has_ref):
+	for p in SongParts.patterns_for(SongParts.kind_of(k), has_ref):
 		pat.add_item(Registry.label(SongParts.PATTERNS, p))
 		pat.set_item_metadata(pat.item_count - 1, p)
 		pat.set_item_tooltip(pat.item_count - 1, Registry.blurb(SongParts.PATTERNS, p))
@@ -571,7 +638,7 @@ func _part_entry(k: String, cfg: Dictionary) -> EntryCard:
 		inst.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		inst.fit_to_longest_item = false
 		_auto_item(inst, Registry.label(Instruments.ROWS, String(chose["instrument"])) if not cfg.has("instrument") else "", "")
-		for key in Instruments.for_part(k):
+		for key in Instruments.for_part(SongParts.kind_of(k)):
 			inst.add_item(Registry.label(Instruments.ROWS, key))
 			inst.set_item_metadata(inst.item_count - 1, key)
 			inst.set_item_tooltip(inst.item_count - 1, Registry.blurb(Instruments.ROWS, key))
@@ -689,8 +756,8 @@ func _used_in_row(o: VBoxContainer, k: String, cfg: Dictionary, named: Array, us
 		var b := Button.new()
 		b.toggle_mode = true
 		b.focus_mode = Control.FOCUS_NONE
-		b.text = String(n["name"])
 		b.button_pressed = used.has(key)
+		Card.toggle_look(b, &"sound", String(n["name"]))
 		b.tooltip_text = "Whether this part is used in this section of the song. Dimmed, the line-ups and the roll chose; pressed, they are set."
 		b.toggled.connect(func(on: bool) -> void:
 			var now: Array = used.duplicate()
@@ -700,8 +767,10 @@ func _used_in_row(o: VBoxContainer, k: String, cfg: Dictionary, named: Array, us
 				now.erase(key)
 			_set_part(k, "sections", now))
 		flow.add_child(b)
-	if set_sections:
-		ir.add_child(_button("Auto", "Let the line-ups and the roll choose the sections again.", func() -> void: _set_part(k, "sections", {})))
+	# always there, grayed while there is nothing set to let go: a row that grew a button would wrap its toggles anew
+	var auto := _button("Auto", "Let the line-ups and the roll choose the sections again.", func() -> void: _set_part(k, "sections", {}))
+	auto.disabled = not set_sections
+	ir.add_child(auto)
 
 
 ## Each section of the note's words named as the card shows it: its label and how many of that label so far ("Chorus 2").
@@ -743,6 +812,8 @@ func _voice_rows(o: VBoxContainer, k: String, cfg: Dictionary) -> void:
 	var who := _singer_picker(singer, _singer_name(k, cfg) if singer.is_empty() else "")
 	who.item_selected.connect(func(i: int) -> void: _set_part(k, "singer", who.get_item_metadata(i)))
 	sr.add_child(who)
+	sr.add_child(_button("Choose…", "Choose who sings from the voices kept in your library, heard on the Dex: a Kokoro voice or the formant voice, kept from any note's Voice card.",
+		func() -> void: _choose_singer(k)))
 	var style: Dictionary = sung.get("style", Composer.STYLE)
 	_drawn_dial(o, "Tune", 0.0, 1.0, 0.05, cfg.get("tune"), float(style.get("tune", Composer.STYLE["tune"])),
 		"How tuned the voice is: at 0 a singer's own glides into each note, its vibrato and drift; at 1 every note a hard step, the tuned sound of a vocoder or a pitch corrector.",
@@ -765,7 +836,7 @@ func _singer_picker(singer: Dictionary, drawn: String) -> OptionButton:
 	var who := OptionButton.new()
 	who.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	who.fit_to_longest_item = false
-	who.tooltip_text = "Who sings: a voice kept in the library (♥) - made on a Voice card, its size set by its Tone and its vibrato and drift in its Lab, then kept - or one of Kokoro's readers. Auto: the roll's pick among them."
+	who.tooltip_text = "Who sings: a voice kept in the library (♥) - a Kokoro voice or the formant voice made on a Voice card, its size set by its Tone and its vibrato and drift in its Lab, then kept - or one of Kokoro's readers. Auto: the roll's pick among them."
 	_auto_item(who, drawn, {})
 	for name in _voices:
 		who.add_item("♥ " + String(name))
@@ -782,6 +853,21 @@ func _singer_picker(singer: Dictionary, drawn: String) -> OptionButton:
 		if not singer.is_empty() and String(singer.get("kept", "")).is_empty() and int(r["i"]) == int(singer.get("speaker", -1)):
 			who.select(who.item_count - 1)
 	return who
+
+
+var _singer_dex: DexWindow = null
+
+
+## The Dex opened on the voices that can sing ([SingerShelf]): the one picked there sings voice part [param k].
+func _choose_singer(k: String) -> void:
+	if _singer_dex == null or not is_instance_valid(_singer_dex):
+		_singer_dex = DexWindow.new()
+		add_child(_singer_dex)
+	_singer_dex.open([SingerShelf.new(func(name: String) -> void:
+		_set_part(k, "singer", {"kept": name, "name": name})
+		_singer_dex.hide())], func(err: String) -> void:
+		if not err.is_empty():
+			_say(err))
 
 
 ## Part [param k]'s [param field] set to [param value]; an empty one (Auto) is the roll's again.
@@ -1282,24 +1368,32 @@ class _SoundSection extends PipelineSection:
 	var card: SoundCard
 
 	func shown() -> bool:
-		return card != null and card._composed()
+		return card != null and (card._composed() or (card._effects != null and card._effects.has_sounds()))
 
 	func rows() -> Array:
-		return card.pipeline_rows()
+		return (card.pipeline_rows() if card._composed() else []) + (card._effects.rows() if card._effects != null else [])
 
 	func line() -> String:
 		return told if not told.is_empty() else card._status
 
 	func make() -> void:
-		card.make()
+		if card._composed():
+			card.make()
+		if card._effects != null:
+			card._effects.make_missing()
 
 	func make_tip() -> String:
-		return "Make the song: the reference read, every line not kept sung, the mix rendered."
+		return ("Make the song (the reference read, every line not kept sung, the mix rendered) and every sound effect not made yet."
+			if card._composed() else "Make every sound effect the script asks for that is not made yet, each by the designer picked on the Sound card.")
 
 	func busy() -> bool:
-		return card._bake != null and card._bake.busy()
+		return (card._bake != null and card._bake.busy()) or (card._effects != null and card._effects.busy())
 
 	func missing() -> bool:
+		if card._effects != null and card._effects.missing():
+			return true
+		if not card._composed():
+			return false
 		for r in card.pipeline_rows():
 			if String((r as PipelineRow).state) in ["missing", "stale"]:
 				return true
@@ -1308,3 +1402,5 @@ class _SoundSection extends PipelineSection:
 	func stop() -> void:
 		if card._bake != null:
 			card._bake.stop()
+		if card._effects != null:
+			card._effects.stop()

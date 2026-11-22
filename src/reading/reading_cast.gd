@@ -517,8 +517,8 @@ func _build_singing(box: VBoxContainer) -> void:
 func sing_test() -> void:
 	capture_slot()
 	var cfg := slot_cfg(slot)
-	if not String(cfg["voice"]).begins_with("kokoro"):
-		panel.status("Only a Kokoro voice sings.")
+	if not Singers.sings(cfg):
+		panel.status("Only a Kokoro voice or the formant voice sings.")
 		return
 	var host: VoiceHost = panel._host
 	if host == null or not host.is_up():
@@ -527,6 +527,8 @@ func sing_test() -> void:
 	if not host.synthesized.is_connected(_on_sung):
 		host.synthesized.connect(_on_sung)
 	var low := 52 if Delivery.sings_low(cfg, _speaker_names()) else 60
+	if String(cfg["voice"]) == FormantVoice.ID:
+		low = Singers.formant_center(cfg.get("formant", {}) if cfg.get("formant") is Dictionary else {}) - 5
 	var words: Array = []
 	var at := 0.0
 	var steps := [0, 2, 4, 5, 7, 9, 7]

@@ -212,6 +212,9 @@ static func parse(text: String, said := {}) -> Array:
 	# The emphasis level in force. The sentinels TextNorm leaves are toggles welded to the word at each
 	# end of a run, so this carries the level across everything between.
 	var emph_state := 0
+	# The inflection in force (`<!-- inflect: none -->`, [constant TextNorm.INFLECTS]'s kinds, "" none): toggled by the
+	# sentinels welded to the words at each end of a run, as emphasis is.
+	var inflect_state := ""
 	# Hesitation sentinels peeled off the current token, not yet given to a word.
 	var hold_acc := {"lead": 0, "tail": 0, "count": 0, "carry": 0}
 	for ti in toks.size():
@@ -222,16 +225,22 @@ static func parse(text: String, said := {}) -> Array:
 		# is known whether it produced one - see [method _settle_holds].
 		_settle_holds(words, sentences, hold_acc)
 		var emph := emph_state
+		var inflect := inflect_state
 		if token.contains(TextNorm.EMPH_ITALIC) or token.contains(TextNorm.EMPH_BOLD) \
-				or token.contains(TextNorm.HOLD_MARK):
+				or token.contains(TextNorm.HOLD_MARK) or token.contains(TextNorm.INFLECT_NONE) \
+				or token.contains(TextNorm.INFLECT_RISE):
 			var clean := ""
 			var seen := 0
+			inflect = ""
 			for ci in token.length():
 				var ech := token[ci]
 				if ech == TextNorm.EMPH_ITALIC:
 					emph_state ^= TextNorm.EMPH_I
 				elif ech == TextNorm.EMPH_BOLD:
 					emph_state ^= TextNorm.EMPH_B
+				elif ech == TextNorm.INFLECT_NONE or ech == TextNorm.INFLECT_RISE:
+					var kind := "none" if ech == TextNorm.INFLECT_NONE else "rise"
+					inflect_state = "" if inflect_state == kind else kind
 				elif ech == TextNorm.HOLD_MARK:
 					# Before any letter it is a rest BEFORE this word, after one a rest after it.
 					if clean.strip_edges().is_empty():
@@ -240,6 +249,8 @@ static func parse(text: String, said := {}) -> Array:
 						hold_acc["tail"] = int(hold_acc["tail"]) + 1
 				else:
 					seen |= emph_state
+					if not inflect_state.is_empty():
+						inflect = inflect_state
 					clean += ech
 			token = clean
 			emph = seen
@@ -262,6 +273,8 @@ static func parse(text: String, said := {}) -> Array:
 		if token.begins_with("["):
 			var lit := _literal_word(token)
 			lit["emph"] = emph
+			if not inflect.is_empty():
+				lit["inflect"] = inflect
 			words.append(lit)
 			continue
 		var pause := "none"
@@ -293,6 +306,8 @@ static func parse(text: String, said := {}) -> Array:
 			words.append({"text": "…", "display": "…", "phones": ["AH", "M"],
 				"stressed": false, "pause_after": pause, "punct": punct, "hesit": true,
 				"emph": emph})
+			if not inflect.is_empty():
+				(words[words.size() - 1] as Dictionary)["inflect"] = inflect
 			if pause == "stop" and words.size() > 0 and _ends_sentence(toks, ti):
 				sentences.append(words)
 				words = []
@@ -371,6 +386,9 @@ static func parse(text: String, said := {}) -> Array:
 					entry["literal"] = true
 					if told.has("ipa"):
 						entry["say"] = String(told["ipa"])
+				# how the words an inflection mark wraps are inflected ([constant TextNorm.INFLECTS])
+				if not inflect.is_empty():
+					entry["inflect"] = inflect
 				words.append(entry)
 		if pause == "stop" and words.size() > 0 and _ends_sentence(toks, ti):
 			sentences.append(words)

@@ -138,6 +138,44 @@ func _parsers_agree() -> void:
 				_ok(heard.size() == 2 and String((heard[0] as Dictionary).get("heard", "")).is_empty()
 						and String((heard[1] as Dictionary).get("heard", "")) == fill and VoiceFX.HEARD.has(fill),
 					"a turn marked %s is not heard through it" % ex)
+			"inflect":
+				# the words it wraps carry its kind to the voice, the words round it nothing (the control), spaced or not,
+				# and no sentinel is spoken or shown
+				for form in [ex, ex.replace("-->A", "--> A").replace("?<!", "? <!"), ex.replace(": none", ": rise")]:
+					var kind := "rise" if form.contains("rise") else "none"
+					var made := ReadingPlan.make("They left. %s Then what?\n" % form, "", {"reader": "Narrator", "hesitate": true, "bare": 1.0, "outro": 0.0})["chunks"] as Array
+					var got := {}
+					var shown := ""
+					for c in made:
+						for tok in (c as Dictionary)["tokens"]:
+							got[String((tok as Dictionary)["text"])] = String((tok as Dictionary).get("inflect", ""))
+						for w in (c as Dictionary)["words"]:
+							shown += String((w as Dictionary)["text"]) + " "
+					_ok(got.get("am", "") == kind and got.get("i", "") == kind and got.get("fired", "") == kind,
+						"the words %s wraps are not inflected %s (%s)" % [form, kind, str(got)])
+					_ok(got.has("left") and got["left"] == "" and got.has("what") and got["what"] == "",
+						"words outside %s are inflected too (%s)" % [form, str(got)])
+					_ok(not got.has("inflect") and not got.has("none") and TextNorm.strip_emphasis(shown) == shown,
+						"%s is spoken or shown (%s)" % [form, shown])
+				# ...and on a line of its own, where a medium reads its lines first: the words between its two comments are
+				# words, never a note dropped whole (a pattern for a comment that runs on past its own close), while a line of
+				# comments alone is still a note (the control)
+				var own := "<!-- speaker: Van -->\n\n%s\n\n<!-- speaker: Control -->\n\nGo home.\n" % ex
+				var desk := DispatchScript.speakable("<!-- call: VAN -->\n\n" + own)
+				var desk_made := ReadingPlan.make(desk, "", {"reader": "Control", "hesitate": true, "bare": 1.0, "outro": 0.0})["chunks"] as Array
+				var desk_said := {}
+				for c in desk_made:
+					for tok in (c as Dictionary)["tokens"]:
+						desk_said[String((tok as Dictionary)["text"])] = String((tok as Dictionary).get("inflect", ""))
+				_ok(desk_said.get("fired", "") == "none" and desk_said.get("go", "x") == "",
+					"a dispatch desk drops the words an inflection mark wraps on a line of its own (%s)" % str(desk_said))
+				var letter := ""
+				for b in LetterScript.blocks(own):
+					if String((b as Dictionary)["kind"]) == "para":
+						letter += String((b as Dictionary)["text"])
+				_ok(letter.contains("Am I fired?"), "a letter drops the words an inflection mark wraps on a line of its own")
+				_ok(DispatchScript._classify("<!-- hesitation: 2 --> <!-- sound: a door -->").get("kind", "") == "note",
+					"a line of comments alone is no longer a note")
 			"hesitation", "hesitation_timed":
 				var h := Manuscript.hesitations("Wait %s for it." % ex)
 				_ok(h.size() == 1, "%s is not a hesitation" % k)
@@ -353,7 +391,7 @@ func _parsers_agree() -> void:
 			"thought", "strike", "struck", "color", "unspoken", "sketch_timed", "point", "tap", "image_end", "still", "new_page":
 				_letter_mark(k, ex)
 			"call", "hang_up", "ring", "text_msg", "ping", "desk_sound", "static", "print", "sleep", "screen_off", "look", "lift", \
-					"switch", "live", "image_screen", "video_screen", "terminal", "moving", "reply", "redact", "gain", "bell", "lamp", "fade", "tablet", \
+					"switch", "live", "image_screen", "video_screen", "terminal", "moving", "plane", "reply", "redact", "gain", "bell", "lamp", "fade", "tablet", \
 					"tablet_end", "page", "player", "replay", "power", "environment_switch", "play_screen":
 				_dispatch_mark(k, ex)
 			_:
@@ -593,6 +631,10 @@ func _dispatch_mark(k: String, ex: String) -> void:
 			var kinds: Array = (d["actions"] as Array).map(func(x: Dictionary) -> String: return String(x["kind"]))
 			_ok(kinds == ["moving", "ping"] and is_equal_approx(float(d["actions"][0]["rest"]), DispatchScript.MOVING)
 				and (d["spoken"] as PackedStringArray).has("walking"), "a moving mark does not set him off under the words before the ping (%s)" % str(kinds))
+		"plane":
+			var acts: Array = DispatchScript.parse(head + ex + tail)["actions"]
+			_ok(acts.size() == 1 and String(acts[0]["kind"]) == "plane" and is_equal_approx(float(acts[0]["rest"]), 0.0),
+				"a plane mark is not an aircraft the voice never waits for")
 		"desk_sound":
 			var a: Dictionary = DispatchScript.parse(head + ex + tail)["actions"][0]
 			_ok(String(a["kind"]) == "sound" and String(a["sound"]) == "jet" and is_equal_approx(float(a["rest"]), float(DispatchSounds.SOUNDS["jet"]["secs"])),

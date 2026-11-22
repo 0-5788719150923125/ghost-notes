@@ -175,8 +175,7 @@ func _build_window() -> void:
 		text = _edit.text
 		text_changed.emit())
 	_find = FindBar.new(_edit)
-	col.add_child(_find)
-	col.add_child(_edit)
+	col.add_child(_find.stack())
 	for c in _lines:
 		col.add_child(c)
 

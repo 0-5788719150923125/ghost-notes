@@ -4,6 +4,8 @@ extends SceneTree
 ## (tests/fixtures/dispatch_note.md). It holds:
 ##
 ## - phones are the `desk:` block's labels, the room's voice the first cued;
+## - a sound made from its words waits its secs and runs on its tail, its action naming it (the control: not made, the jet the
+##   desk knows by a word of it);
 ## - calls: one dialed, the one in hand laid down open when another is called, one lying open picked back up, a ringing one
 ##   answered, every one hung up;
 ## - voices: a voice whose phone is in hand is heard through it, one whose phone lies on the desk from the desk, one with
@@ -170,6 +172,23 @@ func _init() -> void:
 	var aisle := DispatchScript.ping_of("the grocery store, aisle seven")
 	_ok(String(aisle["place"]) == "the grocery store, aisle seven" and float(aisle["travel"]) == 0.0,
 		"the control: a comma inside a place's name is kept")
+	# a sound made from its words: the voice waits its secs, it runs on its tail, its action says which (the control: not made, the
+	# jet the desk knows by a word of it)
+	var jet_words := "a jet passes low over the building and fades away"
+	var jet_mark := "<!-- speaker: Control -->\n\nHi.\n\n<!-- sound: %s -->\n\nThere.\n" % jet_words
+	var made_doc := DispatchScript.parse(jet_mark, {}, {SoundEffects.key_of(jet_words): {"secs": 4.0, "tail": 6.5}})
+	var bare_doc := DispatchScript.parse(jet_mark)
+	var ma: Dictionary = (made_doc["actions"] as Array)[0]
+	var ba: Dictionary = (bare_doc["actions"] as Array)[0]
+	_ok(String(ma.get("made", "")) == SoundEffects.key_of(jet_words) and is_equal_approx(float(ma["rest"]), 4.0) and is_equal_approx(float(ma["len"]), 10.5)
+		and not ba.has("made") and String(ba["sound"]) == "jet" and is_equal_approx(float(ba["rest"]), float(DispatchSounds.SOUNDS["jet"]["secs"])),
+		"a sound made from its words waits its secs and runs on its tail; the control, not made, is the desk's jet (%s, %s)" % [str(ma), str(ba)])
+	var flown := DispatchScript.parse("<!-- speaker: Control -->\n\n<!-- look: radar -->\n\n<!-- plane -->\n\nPull the audio.\n")
+	var kinds: Array = (flown["actions"] as Array).map(func(a: Dictionary) -> String: return String(a["kind"]))
+	_ok(kinds == ["look", "plane"] and is_equal_approx(float(flown["actions"][1]["rest"]), 0.0) and (flown["warnings"] as Array).is_empty(),
+		"a plane mark is an aircraft the voice never waits for (%s, %s)" % [kinds, flown["warnings"]])
+	var unflown := DispatchScript.parse("<!-- speaker: Control -->\n\n<!-- look: radar -->\n\nPull the audio.\n")
+	_ok((unflown["actions"] as Array).size() == 1, "the control: a look alone brings no plane")
 	var seconds := DispatchScript.parse("<!-- speaker: Control -->\n\n<!-- ping: the stairwell, 18 -->\n\nOh.\n")
 	_ok(String((seconds["actions"] as Array)[0]["place"]) == "the stairwell" and str(seconds["warnings"]).contains("moving"),
 		"a ping that gives seconds says they are not read, and where to mark the setting off instead (%s)" % str(seconds["warnings"]))

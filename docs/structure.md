@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 763 references inside a folder, 1409 down the stack, 0 up it.
+Between scripts today: 781 references inside a folder, 1438 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -20,13 +20,13 @@ Between scripts today: 763 references inside a folder, 1409 down the stack, 0 up
 | `table_show/` | The table's show | 26 | `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `geometry`, `audio`, `platform`, `data` |
 | `table/` | The set | 75 | `reading`, `media`, `ui`, `agents`, `scene_kit`, `geometry`, `render`, `audio`, `platform`, `data` |
 | `cartoon/` | Cartoon | 5 | `reading`, `timeline`, `show`, `ui`, `notes`, `agents`, `stage`, `platform`, `data` |
-| `reading/` | The voice's workspaces | 17 | `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
+| `reading/` | The voice's workspaces | 17 | `export`, `music`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
 | `export/` | Export | 9 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
-| `music/` | Music | 11 | `timeline`, `show`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
+| `music/` | Music | 18 | `timeline`, `show`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 9 | `show`, `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `show/` | The show | 12 | `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `media/` | Media | 22 | `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
-| `voice/` | Synthesis (voice) | 18 | `ui`, `audio`, `platform`, `data` |
+| `voice/` | Synthesis (voice) | 19 | `ui`, `audio`, `platform`, `data` |
 | `ui/` | The panel kit | 37 | `notes`, `agents`, `render`, `platform`, `data` |
 | `notes/` | Notes | 13 | `agents`, `platform`, `data` |
 | `agents/` | Agents | 9 | `platform`, `data` |
@@ -116,7 +116,7 @@ What every note's panel is built from, and what it asks of the window it is in: 
 
 Text to narrated audio in two paths: ghost's own formant synthesizer (no models, no weights, fully inspectable, and the only path that can sing), made in-process, and local neural voices run by a subprocess host - both answered alike to the reading. Shared between them: the text front end and its normalization, the room and the buffer effects. Design: next/voice.md.
 
-[`delivery`](../src/voice/delivery.gd), [`formant_voice`](../src/voice/formant_voice.gd), [`library_voices`](../src/voice/library_voices.gd), [`phonemes`](../src/voice/phonemes.gd), [`phrasing`](../src/voice/phrasing.gd), [`room_fx`](../src/voice/room_fx.gd), [`splice`](../src/voice/splice.gd), [`text_norm`](../src/voice/text_norm.gd), [`voice`](../src/voice/voice.gd), [`voice_blend`](../src/voice/voice_blend.gd), [`voice_field`](../src/voice/voice_field.gd), [`voice_fx`](../src/voice/voice_fx.gd), [`voice_host`](../src/voice/voice_host.gd), [`voice_library`](../src/voice/voice_library.gd), [`voice_party`](../src/voice/voice_party.gd), [`voice_readers`](../src/voice/voice_readers.gd), [`voice_sampler`](../src/voice/voice_sampler.gd), [`voice_stream`](../src/voice/voice_stream.gd)
+[`delivery`](../src/voice/delivery.gd), [`formant_singing`](../src/voice/formant_singing.gd), [`formant_voice`](../src/voice/formant_voice.gd), [`library_voices`](../src/voice/library_voices.gd), [`phonemes`](../src/voice/phonemes.gd), [`phrasing`](../src/voice/phrasing.gd), [`room_fx`](../src/voice/room_fx.gd), [`splice`](../src/voice/splice.gd), [`text_norm`](../src/voice/text_norm.gd), [`voice`](../src/voice/voice.gd), [`voice_blend`](../src/voice/voice_blend.gd), [`voice_field`](../src/voice/voice_field.gd), [`voice_fx`](../src/voice/voice_fx.gd), [`voice_host`](../src/voice/voice_host.gd), [`voice_library`](../src/voice/voice_library.gd), [`voice_party`](../src/voice/voice_party.gd), [`voice_readers`](../src/voice/voice_readers.gd), [`voice_sampler`](../src/voice/voice_sampler.gd), [`voice_stream`](../src/voice/voice_stream.gd)
 
 ### `media/` - Media
 
@@ -140,7 +140,7 @@ What keeps a note's storyboard in its folder and the dock it opens beside Play: 
 
 A note that makes its own sound (next/music.md): the theory and the banks a song is composed from (scales, chords, parts, patterns, instruments, kinds of section, all rows), the lyrics read from a note's words, the composer (a pure function from the `sound:` block, the words and a reference to a score), the bake that sings each line through the voice host and renders the parts through the music host (hosts/music/), the score on the one Timeline, and the Sound card - a file, or a song composed for the note.
 
-[`composer`](../src/music/composer.gd), [`instruments`](../src/music/instruments.gd), [`lyrics`](../src/music/lyrics.gd), [`music_theory`](../src/music/music_theory.gd), [`singers`](../src/music/singers.gd), [`song_bake`](../src/music/song_bake.gd), [`song_code`](../src/music/song_code.gd), [`song_parts`](../src/music/song_parts.gd), [`song_stream`](../src/music/song_stream.gd), [`sound_card`](../src/music/sound_card.gd), [`sound_timeline`](../src/music/sound_timeline.gd)
+[`composer`](../src/music/composer.gd), [`instruments`](../src/music/instruments.gd), [`lyrics`](../src/music/lyrics.gd), [`music_theory`](../src/music/music_theory.gd), [`singer_shelf`](../src/music/singer_shelf.gd), [`singers`](../src/music/singers.gd), [`song_bake`](../src/music/song_bake.gd), [`song_code`](../src/music/song_code.gd), [`song_parts`](../src/music/song_parts.gd), [`song_stream`](../src/music/song_stream.gd), [`sound_card`](../src/music/sound_card.gd), [`sound_design`](../src/music/sound_design.gd), [`sound_effects`](../src/music/sound_effects.gd), [`sound_effects_part`](../src/music/sound_effects_part.gd), [`sound_library`](../src/music/sound_library.gd), [`sound_shelf`](../src/music/sound_shelf.gd), [`sound_timeline`](../src/music/sound_timeline.gd), [`sound_tools`](../src/music/sound_tools.gd)
 
 ### `export/` - Export
 
@@ -218,5 +218,5 @@ Godot compiles a script with every script it names by class or preload, wherever
 
 | launch | builds | scripts | lines | budget |
 | --- | --- | --- | --- | --- |
-| the phone shell | `app/main`, `app/phone_shell` | 76 | 30,978 | 40,000 |
-| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 120 | 52,192 | 65,000 |
+| the phone shell | `app/main`, `app/phone_shell` | 76 | 31,076 | 40,000 |
+| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 120 | 52,318 | 65,000 |

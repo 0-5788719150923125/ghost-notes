@@ -144,12 +144,15 @@ static func tone_semis(tone: int) -> float:
 	return float((TONE_PRESETS[keys[clampi(tone, 0, keys.size() - 1)]] as Dictionary)["semis"])
 
 
-## How voice [param cfg] (a cast row or a kept voice) is asked to sing (the voice host's `sing`): its reader, its blend,
-## and its Tone's pitch shift as a change of SIZE (`semis`: the formants move, the notes stay where they are written).
+## How voice [param cfg] (a cast row or a kept voice) is asked to sing (the voice host's `sing`): its reader, its blend or
+## a formant voice's own (`formant`), and its Tone's pitch shift as a change of SIZE (`semis`: the formants move, the notes
+## stay where they are written).
 static func sung_params(cfg: Dictionary) -> Dictionary:
 	var out := {"speaker": int(cfg.get("speaker", 0))}
 	if not String(cfg.get("blend", "")).is_empty():
 		out["blend"] = String(cfg["blend"])
+	if String(cfg.get("voice", "")) == FormantVoice.ID and cfg.get("formant") is Dictionary:
+		out["formant"] = (cfg["formant"] as Dictionary).duplicate(true)
 	var semis := tone_semis(int(cfg.get("tone", 0)))
 	if absf(semis) > 0.001:
 		out["semis"] = semis

@@ -20,7 +20,9 @@ Held, each with the case that must not change:
      decoder would click on;
   8. a word whose vowels the plan whispers is voiced where a mark asks (at its base pitch times the curve, from its
      stressed vowel on, louder to the call's voiced energy), and a voiced word or a mark that does not voice is left
-     to the plan.
+     to the plan;
+  9. the script overrides word by word: "none" unmarks (a question, a leaned-on word), "rise" gives the last word of
+     each run a question's rise (a wh-question, a run mid-sentence), by the question rule's fields.
 """
 
 from __future__ import annotations
@@ -197,11 +199,35 @@ def voicing() -> None:
           "the voiced steps are raised to the call's voiced energy, the rest kept")
 
 
+def script() -> None:
+    told = words("am I fired?")
+    for t in told:
+        t["inflect"] = "none"
+    check(inflection.plan(told, True) == {}, "a question the script says to inflect none does not rise")
+    check(bool(inflection.plan(words("am I fired?"), True)), "...and unmarked, it does (the control)")
+    lean = words("I said *she* did.")
+    lean[2]["inflect"] = "none"
+    check(inflection.plan(lean, True) == {}, "a leaned-on word the script says to inflect none is not accented")
+    wh = tagged("then/RB who/WP did/VBD I/PRP flash/VB?")
+    check(inflection.plan(wh, True) == {}, "a wh-question falls (the control)")
+    for t in wh:
+        t["inflect"] = "rise"
+    up = inflection.plan(wh, True)
+    check(list(up) == [4] and up[4].pitch[-1][1] == 6.0, "...and rises on its last word where the script says rise")
+    run = words("he went home and slept.")
+    for t in run[:3]:
+        t["inflect"] = "rise"
+    check(list(inflection.plan(run, True)) == [2], "a rise run rises on its own last word, mid-sentence")
+    some = inflection.plan(wh, {"question": {"rise": 3.0}})
+    check(some[4].pitch[-1][1] == 3.0, "...by the question rule's fields as set")
+
+
 if __name__ == "__main__":
     rules()
     wh()
     settings()
     curves()
     voicing()
+    script()
     print(f"\n{len(FAILS)} failed" if FAILS else "\nall passed")
     raise SystemExit(1 if FAILS else 0)

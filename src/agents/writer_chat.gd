@@ -47,6 +47,12 @@ var read_note: Callable
 ## What the writer is told it works on: `func() -> Dictionary`, the system prompt's names and flags
 ## (rules/agents/refine.yaml `system`) and `title`.
 var about: Callable
+## The rules the writer is told by: a file with `system`, `first` and `turn` taking refine.yaml's names (a sound's designer
+## has its own, rules/sound/designer.yaml).
+var rules := "agents/refine"
+## The tools served beside the text's own: `func(text: TextTools) -> Object`, a toolset ([AgentTools]) that answers the
+## text's tools through [param text] and adds its own; unset, the text's tools alone.
+var toolset: Callable
 
 var turns: Array = []
 ## The writer picked last for this conversation: `{agent, model, effort}`, {} for none yet.
@@ -158,13 +164,13 @@ func send(message: String, chosen: Dictionary) -> String:
 	var tools := gen.takes_tools()
 	var info: Dictionary = about.call() if about.is_valid() else {}
 	_resumed = gen.sessions() and String(session.get("agent", "")) == agent and not String(session.get("id", "")).is_empty()
-	var prompt := turn_message(seen, text, said) if _resumed else \
-		first_message(info, text, said, replay(earlier), String(read_note.call()) if read_note.is_valid() else "")
+	var prompt := turn_message(seen, text, said, rules) if _resumed else \
+		first_message(info, text, said, replay(earlier), String(read_note.call()) if read_note.is_valid() else "", rules)
 	var turn := {"you": said, "agent": agent, "model": pick["model"], "effort": pick["effort"], "at": int(Time.get_unix_time_from_system()),
 		"events": [], "reply": "", "usage": {}, "error": "", "running": true}
 	var run := dir.path_join("turns").path_join("%d_%d" % [int(Time.get_unix_time_from_system()), turns.size() + 1])
 	var spec := {"kind": "text", "backend": agent, "tier": "best", "dir": ProjectSettings.globalize_path(run),
-		"cwd": ProjectSettings.globalize_path(dir), "system": system_of(info, tools), "prompt": prompt,
+		"cwd": ProjectSettings.globalize_path(dir), "system": system_of(info, tools, rules), "prompt": prompt,
 		"label": "refine %s" % String(info.get("what", "text")), "model": pick["model"], "effort": pick["effort"]}
 	if gen.sessions():
 		spec["session"] = {"id": String(session["id"]) if _resumed else AssistantBackends.new_session_id(), "resume": _resumed}
@@ -180,7 +186,7 @@ func send(message: String, chosen: Dictionary) -> String:
 			_tools.read_note = func() -> String: return String(read_note.call()) if read_note.is_valid() else ""
 		_tools.calling = func() -> void: _take_said(AgentJobs.said(_job, true))
 		_tools.changed = _changed_by_writer
-		_url = AgentTools.open(String(spec["dir"]), _tools)
+		_url = AgentTools.open(String(spec["dir"]), toolset.call(_tools) if toolset.is_valid() else _tools)
 		if _url.is_empty():
 			return "this session cannot serve the writer its tools"
 		spec["tools_url"] = _url
@@ -306,29 +312,29 @@ func _close_tools() -> void:
 # --- what the writer is told, pure for the gate ----------------------------------------------------------------------
 
 ## The system prompt, fixed for the conversation: [param info] is [member about]'s, [param tools] whether the writer edits
-## with tools or answers with the text.
-static func system_of(info: Dictionary, tools: bool) -> String:
+## with tools or answers with the text, [param from] the rules ([member rules]).
+static func system_of(info: Dictionary, tools: bool, from := "agents/refine") -> String:
 	var vars := {"what": "the note's words", "title": "", "direction": false, "brief": false, "script": false, "parts": [],
 		"marks": [], "tools": tools}
 	vars.merge(info, true)
 	vars["has_parts"] = not (vars["parts"] as Array).is_empty()
 	vars["has_marks"] = not (vars["marks"] as Array).is_empty()
 	vars["tools"] = tools
-	return Rules.say("agents/refine.system", vars)
+	return Rules.say(from + ".system", vars)
 
 
 ## A first turn's message: the note a Direction stands beside ([param note]), the conversation so far for a session started
 ## again ([param earlier], [method replay]'s), the text whole, and the author's words.
-static func first_message(info: Dictionary, text: String, message: String, earlier := "", note := "") -> String:
-	return Rules.say("agents/refine.first", {"title": String(info.get("title", "")), "has_note": not note.strip_edges().is_empty(),
+static func first_message(info: Dictionary, text: String, message: String, earlier := "", note := "", from := "agents/refine") -> String:
+	return Rules.say(from + ".first", {"title": String(info.get("title", "")), "has_note": not note.strip_edges().is_empty(),
 		"note": note.strip_edges(), "has_replay": not earlier.is_empty(), "replay": earlier, "has_text": not text.strip_edges().is_empty(),
 		"text": text, "message": message})
 
 
 ## A resumed turn's message: what a hand changed since the writer saw [param was] ([method changed_part]), and the author's words.
-static func turn_message(was: String, now: String, message: String) -> String:
+static func turn_message(was: String, now: String, message: String, from := "agents/refine") -> String:
 	var ch := changed_part(was, now)
-	return Rules.say("agents/refine.turn", {"has_change": ch.has("was"), "was": String(ch.get("was", "")), "now": String(ch.get("now", "")),
+	return Rules.say(from + ".turn", {"has_change": ch.has("was"), "was": String(ch.get("was", "")), "now": String(ch.get("now", "")),
 		"rewritten": ch.has("text"), "text": String(ch.get("text", "")), "message": message})
 
 

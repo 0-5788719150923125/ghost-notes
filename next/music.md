@@ -15,7 +15,9 @@ the ear. The design below is the plan; this says what of it stands.
   (`Lyrics`: a script like any other - `<!-- verse -->`, `<!-- chorus -->`, `<!-- bridge -->` where a section begins (a
   pre-chorus a bridge, a hook or refrain a chorus), one with no lines under it the last of its kind again,
   `<!-- repeat -->`, instrumental sections where written - `<!-- intro: 4 -->`, `<!-- break: 8 -->` (a solo, interlude
-  or instrumental), `<!-- ending: 4 -->`, none of a kind written drawn (over a reference's form, its own bars stand) - stanzas, syllables and stress from `Phonemes`,
+  or instrumental), `<!-- ending: 4 -->`, none of a kind written drawn (over a reference's form its own bars stand between
+  the sung sections - one written there names them - and what is written after the last sung section ends the song in place
+  of the reference's last bars, past its end on its last four bars' chords, the last bar home) - stanzas, syllables and stress from `Phonemes`,
   a `say:` mark's spelling sung as written, every other mark never sung) and a reference make the score -
   form, one chord track every pitched part reads, eight parts (`SongParts.PARTS`: drums, bass, keys, pad, guitar,
   lead, bells, voice) from their patterns (`SongParts.PATTERNS`) and instruments (`Instruments.ROWS`, each a `method`
@@ -28,6 +30,14 @@ the ear. The design below is the plan; this says what of it stands.
   the syllables on the notes; kokoro_sung.py makes Kokoro's graph take its pitch and energy curves; `VoiceHost.sing`).
   Every Kokoro voice sings by that path, a kept voice of the library too. The Voice entry's Tune dial is the
   "auto-tune": 0 a singer's damped glides, overshoot, vibrato and drift, 1 every note a hard step.
+- **The formant voice sings** (`FormantSinging`, made in-process on a worker by `VoiceHost.sing`): each syllable laid
+  as singing.py lays Kokoro's (the vowel on the beat, its onset before it, its coda at the note's end), the pitch one
+  curve over the take that every segment carries (`bend`, `Voice.BEND_STEP`) - each note, a damped glide into it,
+  vibrato and drift from the voice's Lab, all taken out by Tune - and its Tone a change of size. A formant voice kept
+  in the library is a singer (`Singers.sings`; it sits `ABOVE_SPEAKING` over the pitch it speaks at), offered in the
+  Singer picker (♥) and on the Dex from Choose… beside it (`SingerShelf`: Sings it); the Lab's Sing sings it too.
+  Measured: every note within 0.2 semitones of its pitch, a held note steady through two seconds
+  (`tests/voice/formant_singing_check.gd`).
 - **The bake** (`SongBake`): every line not kept is sung (kept in the note's folder under a hash of singer, style and
   notes), then hosts/music/render.py renders each part's stem (kept under its own hash) and mixes them in one room,
   each stem brought to one loudness first so a part's level is its place in the mix. The mix is the note's song: the
@@ -186,8 +196,12 @@ the ear. The design below is the plan; this says what of it stands.
    on a Voice card (Tone, Sing in its Lab), kept, and cast.
 6. The song's code: whether its length is livable for a song tuned part by part, and whether a code should also be
    kept for you (a list of the songs you liked on the card) rather than copied out by hand.
+7. The Council singing: his kept voice cast on a song's Voice part (♥ Council in the Singer picker, or Choose… and
+   Sings it), by ear - his consonants against the beat, his vowels held, the Tune dial on him.
 
-**Open:** what "Next" lists below; MIDI and stem export; a loop of the section being rolled heard at once; the bed
+**Open:** what "Next" lists below; a Piper voice singing (its graph's duration floor already sets each phone's
+length, as Kokoro's sings; what it lacks is pitch - VITS takes none - so each take would be pitch-tracked and moved
+onto the curve after, by PSOLA, with a pitch tracker in the voice host); MIDI and stem export; a loop of the section being rolled heard at once; the bed
 under a reading; a Sound linked from another note (Targeting Individuality ends on this song); the stream's held
 intro and fade (it starts at once); a mix made before the sidecar carried the grid shows no grid in an export until
 it is made again.
@@ -513,9 +527,8 @@ PSOLA. It is lower quality but works on anything, Piper included.
 
 ### The formant voice sings too
 
-It already has a song mode: vowels stretched onto a beat grid, steps instead of glides, pitches pulled onto the scale,
-vibrato. What it lacks is taking its notes from a score instead of from its genome, which is a small change. It is not
-the voice for natural singing, but it is the right voice for:
+It sings a score's notes (`FormantSinging`, in Status), as a Kokoro voice does. It is not the voice for natural singing,
+but it is the right voice for:
 
 - **A deliberately synthetic lead**: the vocoder sound, or "Daisy Bell" as the IBM 7094 sang it in 1961.
 - **A wordless choir pad** as an instrument (above).

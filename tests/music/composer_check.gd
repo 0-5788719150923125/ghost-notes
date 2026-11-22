@@ -5,6 +5,10 @@ extends SceneTree
 ##   godot --headless --path . --script res://tests/music/composer_check.gd
 ##
 ## What it holds:
+##   - A part's copies: a second guitar is its own part (Guitar 2, after the guitar, drawn by its own number), playing in its own
+##     sections (the control: none set, where the guitar plays); a fifth of a kind is not offered.
+##   - Over a reference's form, a break written after the last sung section ends the song in place of the reference's last
+##     bars, running past its end on its chords, the last bar home (the control: none written, the reference's own outro).
 ##   - Lyrics: a section's mark starts it (`<!-- verse -->`, `<!-- chorus -->`), a repeat sings the section so far again,
 ##     a blank line ends a stanza, the title is not sung, a section's mark with no lines under it is the last of its
 ##     kind again, and each word carries its syllables and stress - the control, a line that only names a section
@@ -86,6 +90,7 @@ func _init() -> void:
 	_voices()
 	_used()
 	_instrumentals()
+	_copies()
 	if _fails == 0:
 		print("composer_check: ALL OK")
 		quit(0)
@@ -633,6 +638,46 @@ func _instrumentals() -> void:
 	var plain := Composer.score({"seed": 5, "tempo": 100.0, "parts": {"drums": {}, "vocal": {}}}, {"lyrics": Lyrics.parse(CHORUS_SONG)})
 	_ok(String(plain["sections"][0]["kind"]) == "intro" and String((plain["sections"] as Array).back()["kind"]) == "outro"
 		and String(plain["sections"][0]["label"]) == "Intro", "the control: with none written, an intro and an outro are drawn")
+	# over a reference's form, what the words write after the last sung section ends the song in place of the reference's last
+	# bars, running past its end - its chords going round there, the last bar home (the control: none written, its own outro)
+	var two := "<!-- verse -->\none\ntwo\nthree\nfour\nfive\nsix\nseven\neight\n<!-- chorus -->\na\nb\nc\nd\ne\nf\ng\nh\n"
+	var ref := _reference([[8, 16], [24, 32]])
+	var ended := Composer.score({"seed": 1, "likeness": 1.0}, {"lyrics": Lyrics.parse(two + "<!-- break: 12 -->\n"), "reference": ref})
+	var bare := Composer.score({"seed": 1, "likeness": 1.0}, {"lyrics": Lyrics.parse(two), "reference": ref})
+	var last: Dictionary = (ended["sections"] as Array).back()
+	var chords: Array = ended["chords"]
+	var past := chords.filter(func(c: Dictionary) -> bool: return int(c["bar"]) >= 40)
+	_ok(String(last["label"]) == "Break" and int(last["bar"]) == 32 and int(last["bars"]) == 12 and int(ended["bars"]) == 44
+		and not (ended["sections"] as Array).any(func(x: Dictionary) -> bool: return String(x["kind"]) == "outro")
+		and past.size() >= 2 and int((chords.back() as Dictionary)["bar"]) == 43 and int((chords.back() as Dictionary)["root"]) == 0,
+		"over a reference, a break written after the last sung section ends the song, past the reference's end, its last bar home (%s)"
+			% str((ended["sections"] as Array).map(func(x: Dictionary) -> String: return "%s@%d+%d" % [x["label"], int(x["bar"]), int(x["bars"])])))
+	_ok(String(((bare["sections"] as Array).back() as Dictionary)["kind"]) == "outro" and int(bare["bars"]) == 40,
+		"the control: none written, the reference's own last bars are its outro")
+
+
+## A part's copies: a second guitar is a part of its own, named and ordered after the first, drawn by its own number, playing
+## in the sections set for it alone (the control: none set, it plays where the guitar does); a fifth of a kind is not offered.
+func _copies() -> void:
+	_ok(SongParts.kind_of("guitar_2") == "guitar" and SongParts.kind_of("vocal_3") == "vocal" and SongParts.kind_of("keys") == "keys"
+		and SongParts.label_of("guitar_2") == "Guitar 2" and SongParts.label_of("vocal_2") == "Voice 2" and SongParts.label_of("drums") == "Drums"
+		and SongParts.next_key("guitar", ["guitar"]) == "guitar_2" and SongParts.next_key("guitar", SongParts.keys_of("guitar")).is_empty()
+		and SongParts.ordered(["keys_2", "drums", "keys", "drums_3", "drums_2"]) == ["drums", "drums_2", "drums_3", "keys", "keys_2"],
+		"a copy's kind, name and place: guitar_2 is Guitar 2 after the guitar, and a fifth of a kind is not offered")
+	var words := Lyrics.parse(CHORUS_SONG)
+	var set := Composer.score({"seed": 5, "tempo": 100.0, "parts": {"guitar": {}, "guitar_2": {"sections": ["intro"]}, "vocal": {}}}, {"lyrics": words})
+	var free := Composer.score({"seed": 5, "tempo": 100.0, "parts": {"guitar": {}, "guitar_2": {}, "vocal": {}}}, {"lyrics": words})
+	var g2 := _part(set, "guitar_2")
+	var intro: Dictionary = (set["sections"] as Array)[0]
+	var intro_end := float(intro["start"]) + float(intro["length"])
+	var outside := (g2.get("notes", []) as Array).filter(func(n: Dictionary) -> bool: return float(n["t"]) >= intro_end - 0.01)
+	_ok(not g2.is_empty() and not (g2["notes"] as Array).is_empty() and outside.is_empty() and String(intro["kind"]) == "intro",
+		"a second guitar plays in the sections set for it alone (%d notes, %d past the intro)" % [(g2.get("notes", []) as Array).size(), outside.size()])
+	var plays := func(sc: Dictionary, k: String) -> Array:
+		return (sc["sections"] as Array).filter(func(x: Dictionary) -> bool: return (x["parts"] as Array).has(k)).map(func(x: Dictionary) -> Variant: return x["key"])
+	_ok(plays.call(free, "guitar_2") == plays.call(free, "guitar") and not (plays.call(free, "guitar") as Array).is_empty(),
+		"the control: none set, it plays where the guitar does (%s)" % str(plays.call(free, "guitar_2")))
+	_ok(Composer.part_seed(5, "guitar", {}) != Composer.part_seed(5, "guitar_2", {}), "...each drawn by its own number")
 
 
 func _chord_at_beat(sc: Dictionary, t: float) -> Dictionary:

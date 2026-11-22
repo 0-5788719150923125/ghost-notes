@@ -24,10 +24,10 @@ class_name DispatchSounds
 ## voice waits for, a little more ([constant LOUD_MOST]).
 
 ## The sounds a `sound:` mark can name ([method DispatchScript.sound_of]): its key among the mark's words. `secs` is how
-## long the voice waits for it.
+## long the voice waits for it, `tail` how long it is still heard after, under the words.
 const SOUNDS := {
-	"jet": {"label": "A jet passing over", "blurb": "A jet passes low over the building: its turbine's whine and its roar rising as it comes and falling as it goes - a real Doppler fall - and fading away.",
-		"secs": 11.0},
+	"jet": {"label": "A jet passing over", "blurb": "A jet passes low over the building: its turbine's whine and its roar rising as it comes and falling as it goes - a real Doppler fall - and fading slowly away under the words after it.",
+		"secs": 11.0, "tail": 8.0},
 }
 ## The storms the receiver opens up on (`<!-- static: 5, surf -->`; bare is popcorn).
 const STORMS := {
@@ -94,12 +94,17 @@ const BELL_HZ := 880.0
 const BELL_LEN := 0.2
 const BELL := 0.022
 ## The jet ([method _jet]): its speed (m/s), how near it comes (m), the speed of sound (m/s), its turbine's whine (Hz) and
-## its loudness at its nearest; the far air's darkening.
+## its loudness at its nearest; the far air's darkening. It is nearest this long into its pass (s), and fades out, eased, over
+## the last of it (s).
+const JET_CLOSEST := 5.5
+const JET_FADE := 6.0
 const JET_SPEED := 95.0
 const JET_NEAR := 240.0
 const SOUND_SPEED := 343.0
 const WHINE_HZ := 1650.0
 const JET := 0.07
+## A made sound's level: its loudest sample (written at [constant SoundEffects.CEILING]) heard at what the voice waits for.
+const CLIP := LOUD_MOST / SoundEffects.CEILING
 ## How far a thing is to one side before it is heard all the way there (meters), and how far to one side it ever goes.
 const PAN_REACH := 1.1
 const PAN := 0.55
@@ -108,6 +113,9 @@ const VOICES := 48
 const BURSTS := 32
 
 var medium: Object = null        # a [DispatchMedium]: what sounds when ([method DispatchMedium.sound_plan])
+## The sounds made from their marks' words, by key: each one's frames at [constant RATE] ([method SoundEffects.frames_of]), played
+## by a plan's `clip` at [constant CLIP] times its `gain` (the sound's level). Handed whole, a new map each time.
+var clips := {}
 var _player: AudioStreamPlayer = null
 var _pb: AudioStreamGeneratorPlayback = null
 var _at := NAN                   # the show time of the next sample made
@@ -354,6 +362,13 @@ func _run(out: PackedVector2Array, i: int, m: int, t0: float) -> void:
 					var s := _jet(d, u)
 					l += s.x
 					r += s.y
+				"clip":
+					var fr: PackedVector2Array = clips.get(String(d["key"]), PackedVector2Array())
+					var at := int(u * float(RATE))
+					if at >= 0 and at < fr.size():
+						var level := CLIP * float(d.get("gain", 1.0))
+						l += fr[at].x * level
+						r += fr[at].y * level
 		out[i + k] = Vector2(clampf(l, -LOUD_MOST * 2.0, LOUD_MOST * 2.0), clampf(r, -LOUD_MOST * 2.0, LOUD_MOST * 2.0))
 	while si < spawn.size():
 		_begin(spawn[si][1])
@@ -700,7 +715,7 @@ func _printing(d: Dictionary, u: float) -> float:
 ## pitch factor c / (c - v cos), cos being how directly it came on.
 func _jet(d: Dictionary, u: float) -> Vector2:
 	var span := float(d["t1"]) - float(d["t"])
-	var tc := span * 0.5
+	var tc := JET_CLOSEST
 	var te := u
 	for _k in 4:
 		var x := JET_SPEED * (te - tc)
@@ -710,7 +725,7 @@ func _jet(d: Dictionary, u: float) -> Vector2:
 	var coming := -xe / r
 	var f := SOUND_SPEED / (SOUND_SPEED - JET_SPEED * coming)
 	var near := JET_NEAR / r
-	var edge := clampf(u / 1.0, 0.0, 1.0) * clampf((span - u) / 1.5, 0.0, 1.0)
+	var edge := clampf(u / 1.0, 0.0, 1.0) * smoothstep(0.0, JET_FADE, span - u)
 	var amp := JET * near * edge
 	_jph += TAU * WHINE_HZ * f / float(RATE)
 	var whine := sin(_jph) + 0.4 * sin(_jph * 2.02) + 0.2 * sin(_jph * 0.5)
@@ -725,9 +740,9 @@ func _jet(d: Dictionary, u: float) -> Vector2:
 	return Vector2(s * cos(ang), s * sin(ang))
 
 
-## The pitch factor heard [param u] seconds into a jet's pass of [param span] seconds: what [method _jet] plays it at.
-static func jet_pitch(u: float, span: float) -> float:
-	var tc := span * 0.5
+## The pitch factor heard [param u] seconds into a jet's pass: what [method _jet] plays it at.
+static func jet_pitch(u: float) -> float:
+	var tc := JET_CLOSEST
 	var te := u
 	for _k in 4:
 		var x := JET_SPEED * (te - tc)

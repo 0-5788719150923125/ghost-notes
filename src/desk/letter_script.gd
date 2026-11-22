@@ -68,7 +68,7 @@ class_name LetterScript
 ## drawing would run off its foot - mid-sentence too, where the voice reads on and the pen catches up ([method _voice_text]).
 
 ## The marks of their own line: group 1 the verb, group 2 what follows the colon.
-const MARK := "^\\s*<!--\\s*(strike|tap|still|new\\s+page|/\\s*image|unspoken|color)\\s*(?::\\s*([\\s\\S]*?))?\\s*-->\\s*$"
+const MARK := "^\\s*<!--\\s*(strike|tap|still|new\\s+page|/\\s*image|unspoken|color)\\s*(?::\\s*((?:(?!-->)[\\s\\S])*?))?\\s*-->\\s*$"
 ## A point inside speech: group 1 what it points at.
 const POINT := "<!--\\s*point\\s*:\\s*([^>]*?)\\s*-->"
 ## Words written and struck inside a line, the words after the mark written beside them: group 1 the struck words.
@@ -241,9 +241,9 @@ static func _target(arg: String) -> Dictionary:
 static func blocks(body: String) -> Array:
 	var src := Manuscript.strip_frontmatter(body)
 	var mark := _rx(MARK)
-	var pic := _rx("^\\s*<!--\\s*(image|sketch)\\s*(?:\\(\\s*([^)]*?)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->\\s*$")
-	var voice := _rx("^\\s*(?:<!--\\s*(?:hesitation|delivery|speaker|point)\\b[\\s\\S]*?-->\\s*)+$")
-	var note := _rx("^\\s*<!--[\\s\\S]*?-->\\s*$")
+	var pic := _rx("^\\s*<!--\\s*(image|sketch)\\s*(?:\\(\\s*([^)]*?)\\s*\\))?\\s*:\\s*((?:(?!-->)[\\s\\S])*?)\\s*-->\\s*$")
+	var voice := _rx("^\\s*(?:<!--\\s*(?:hesitation|delivery|speaker|point)\\b(?:(?!-->)[\\s\\S])*?-->\\s*)+$")
+	var note := _rx("^\\s*(?:<!--(?:(?!-->)[\\s\\S])*?-->\\s*)+$")
 	var out: Array = []
 	var para := PackedStringArray()
 	for line in _logical_lines(src):

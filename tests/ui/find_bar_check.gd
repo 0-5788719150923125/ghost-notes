@@ -7,6 +7,9 @@ extends SceneTree
 ##
 ## - Ctrl+F opens it in the window, a selection on one line becoming what is found; Escape closes the bar and leaves the
 ##   window open, and a second Escape closes the window (control: with the bar shut, the first Escape closes it).
+## - Ctrl+F again closes it, as its button opens and closes it.
+## - It stands over the words' top-right corner and moves nothing: the text box keeps its place and size (control: the
+##   holder's own rect, which the bar lies inside).
 ## - Every match is counted, case or not (control: Aa finds fewer); Enter steps to the next, Shift+Enter back, round the end.
 ## - Enter in Replace replaces the current match and selects the next; Ctrl+Enter replaces every match; each is one step
 ##   Ctrl+Z takes back, and the field is told of each as of a hand's edit.
@@ -28,7 +31,7 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	await process_frame
-	for check in [_find, _replace, _escape]:
+	for check in [_find, _replace, _escape, _toggle]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	print("find_bar_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -140,6 +143,35 @@ func _escape() -> bool:
 	_ok(bar.target.has_focus(), "the words take the keys again")
 	_key(KEY_ESCAPE)
 	_ok(not w.visible, "a second Escape closes the window (control)")
+	f.queue_free()
+	await process_frame
+	return true
+
+
+func _toggle() -> bool:
+	var got: Array = await _field()
+	var f: TextField = got[0]
+	var bar: FindBar = got[1]
+	var t := bar.target
+	await process_frame
+	var was := t.get_global_rect()
+	_key(KEY_F, true)
+	await process_frame
+	await process_frame
+	_ok(bar.visible, "Ctrl+F opens it")
+	_ok(t.get_global_rect() == was, "the words do not move (%s, was %s)" % [t.get_global_rect(), was])
+	var r := bar.get_global_rect()
+	_ok(r.size.x > 0 and was.encloses(r), "it stands over them (%s in %s)" % [r, was])
+	_ok(r.end.x > was.get_center().x and r.position.y < was.get_center().y, "in their top-right corner (%s)" % r)
+	_ok(bar.get_parent() == t.get_parent() and bar.get_index() > t.get_index(), "beside the box, drawn after it, never in it")
+	_key(KEY_F, true)
+	_ok(not bar.visible and f.window().visible, "Ctrl+F again closes it, and only it")
+	var b := bar.button()
+	f.window().add_child(b)
+	b.pressed.emit()
+	_ok(bar.visible, "its button opens it")
+	b.pressed.emit()
+	_ok(not bar.visible, "and closes it")
 	f.queue_free()
 	await process_frame
 	return true

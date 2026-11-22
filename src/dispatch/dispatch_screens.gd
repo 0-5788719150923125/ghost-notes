@@ -536,7 +536,7 @@ func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 ## over the frame, [method radar_redactions]) and the place they come to held in the readout at its foot; the places
 ## before it fading out; a ping's ring opening out from the blip; an aircraft's small mark drifting across now
 ## and then; and with the gain turned up, clutter round him, smaller and dimmer, with no name (at the top of the knob one
-## on the desk itself, the chair's).
+## on the desk itself, the chair's). Only the glass shows marks: an aircraft comes in from past its edge and leaves past it.
 func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
 	var size := Vector2(RADAR_SIZE)
 	var mid := size * 0.5
@@ -600,6 +600,10 @@ func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
 			c.draw_rect(ro["rect"], Color(_radar_ink, 0.35), false, 1.2)
 			for l in ro["lines"]:
 				c.draw_string(_mono, l["base"], String(l["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, RADAR_FONT, Color(_radar_ink, 0.7 + 0.3 * fresh))
+	# the black round the glass goes on last, out to the corners: a mark past the glass's edge (a plane coming in or going,
+	# clutter, a ping's ring, the coordinates) is never seen over it
+	var far := mid.length() + 2.0
+	c.draw_arc(mid, (rad + far) * 0.5, 0.0, TAU, 128, Color(0.0, 0.0, 0.0), far - rad)
 	c.draw_arc(mid, rad, 0.0, TAU, 128, Color(0.0, 0.0, 0.0), 8.0, true)
 
 

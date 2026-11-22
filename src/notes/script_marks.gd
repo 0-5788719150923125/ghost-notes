@@ -124,6 +124,14 @@ const REGISTRY := {
 		"blurbs": {"table": "On a line of its own before words the brief gives the host to say word for word: leans how they are said - quicker / slower, brighter / graver, tighter / looser, louder / softer, or excited, serious, hushed, urgent, playful, tender, dry. Everywhere else the reader chooses its own."},
 		"pattern": Manuscript.DELIVERY,
 	},
+	"inflect": {
+		"label": "Inflection",
+		"group": "timing",
+		"blurb": "How the words it wraps are inflected: none says them with no inflection the text would give (a question's rise at its end, an italic word's accent), rise gives their last word a question's rise whatever the sentence is (a wh-question that should rise). Kokoro voices.",
+		"before": "<!-- inflect: none -->", "fill": "Am I fired?", "after": "<!-- /inflect -->", "line": "",
+		"modes": ["generative"],
+		"pattern": "<!--\\s*inflect\\s*:\\s*[A-Za-z]+\\s*-->[\\s\\S]*?<!--\\s*/\\s*inflect\\s*-->",
+	},
 	"hesitation_timed": {
 		"label": "Timed hesitation",
 		"group": "timing",
@@ -546,6 +554,14 @@ const REGISTRY := {
 		"before": "<!-- moving -->", "fill": "", "after": "", "line": "own",
 		"modes": ["generative"],
 		"pattern": "<!--\\s*moving\\s*-->",
+	},
+	"plane": {
+		"label": "Plane",
+		"group": "dispatch",
+		"blurb": "Dispatch desk: an aircraft comes in over the radar's edge here and drifts slowly across, as the ones passing now and then do. The voice goes on and the camera stays where it is: a Look at the radar just before it sees it come in.",
+		"before": "<!-- plane -->", "fill": "", "after": "", "line": "own",
+		"modes": ["generative"],
+		"pattern": "<!--\\s*plane\\s*-->",
 	},
 	"desk_sound": {
 		"label": "Sound",

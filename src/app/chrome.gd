@@ -44,7 +44,8 @@ var _dex_shelves: Array = []    # what the Dex opened on its own shows: the libr
 ## which named here would compile before the notes list could show.
 const DEX := "res://src/ui/dex_window.gd"
 const DEX_SHELVES := ["res://src/table_show/library_props.gd", "res://src/voice/library_voices.gd",
-	"res://src/desk/desk_recipes.gd", "res://src/dispatch/dispatch_props.gd", "res://src/table/environment_section.gd"]
+	"res://src/desk/desk_recipes.gd", "res://src/dispatch/dispatch_props.gd", "res://src/table/environment_section.gd",
+	"res://src/music/sound_shelf.gd"]
 
 var _env_layer: CanvasLayer
 var _env_button: Button

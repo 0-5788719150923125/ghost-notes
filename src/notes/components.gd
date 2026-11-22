@@ -63,7 +63,7 @@ const WORKSPACES := {
 		"blurb": "The note's own panel: its words, and a card for each thing attached."},
 	"reading": {"label": "Reading", "section": "generative",
 		"blurb": "A voice reads the note: the cast, each speaker's delivery and room, the stream.",
-		"hosts": ["direction", "voice", "voice_training", "medium", "camera", "environment", "illustrations", "actor", "look", "bookends"],
+		"hosts": ["direction", "voice", "voice_training", "sound", "medium", "camera", "environment", "illustrations", "actor", "look", "bookends"],
 		"classic": ["text", "voice", "medium", "illustrations", "look", "bookends"]},
 	# (its settings keep the section they had as Cards, or the workspace would forget them)
 	"table": {"label": "Table", "section": "cards", "mode": "table",
@@ -81,13 +81,16 @@ const REGISTRY := {
 		"needs": [], "provides": ["text"], "requires": [], "slots": [], "workspace": "", "capabilities": [],
 		"marks": [], "block": "", "card": "body"},
 	# The note's sound (next/music.md): a song from a file, or one composed for the note - its parts synthesized, its
-	# words sung - made on its card and played as the file a song is. A note written before keeps `song: {path}`,
-	# read as a file ([constant OLD_BLOCKS]).
+	# words sung - made on its card and played as the file a song is; and the sound effects its script asks for
+	# (next/sound_effects.md). A note written before keeps `song: {path}`, read as a file ([constant OLD_BLOCKS]). It takes
+	# no slot: beside what else times a note (a Voice reading it) its card plays no song and holds the sound effects alone
+	# ([method SoundCard.clock_elsewhere]).
 	"sound": {"label": "Sound", "family": &"sound",
-		"blurb": "What the show is timed by and heard with: a song from a file, or a song composed for the note - its parts synthesized from first principles, its words sung, a song file's patterns taken as its own.",
-		"needs": [], "provides": ["audio"], "requires": [], "slots": ["clock"], "workspace": "",
+		"blurb": "What the show is heard with: a song from a file or composed for the note - its parts synthesized from first principles, its words sung, a song file's patterns taken as its own - and the sound effects its script asks for, each made from its words. Beside a voice reading the note, the sound effects alone.",
+		"needs": [], "provides": ["audio"], "requires": [], "slots": [], "workspace": "",
 		"capabilities": ["stage", "subprocess", "ffmpeg", "python:music", "python:voice"],
-		"marks": [], "block": "sound", "card": "sound", "script": "res://src/music/sound_card.gd"},
+		"marks": [], "block": "sound", "card": "sound", "script": "res://src/music/sound_card.gd",
+		"brought_by": "<!--\\s*sound\\s*:"},
 	"scenes": {"label": "Scenes", "family": &"picture",
 		"blurb": "The visualizer scenes, cut to the sound: picked by the seed, or in the order the note's storyboard writes them (its timeline, beside Play).",
 		"needs": ["audio"], "provides": ["picture", "moments"], "requires": [], "slots": [], "workspace": "",
@@ -311,17 +314,34 @@ static func detach_blocker(key: String, attached: Array) -> String:
 ## Which components a note has, read off its blocks: the text always, and each component whose block it carries. A
 ## part that comes with another, carried with none of them, has the first (a chapter keeping `illustrations:` and no
 ## `medium:` is still shown with its pictures).
-static func attached_of(blocks: Dictionary) -> Array:
+static func attached_of(blocks: Dictionary, words := "") -> Array:
 	var out: Array = ["text"]
 	for k in REGISTRY:
 		var b := String((REGISTRY[k] as Dictionary)["block"])
 		if not b.is_empty() and (blocks.get(b) is Dictionary or _old_block_of(b, blocks)):
+			out.append(k)
+	for k in brought_by(words):
+		if not out.has(k):
 			out.append(k)
 	for k in out.duplicate():
 		var hosts: Array = (REGISTRY.get(k, {}) as Dictionary).get("comes_with", [])
 		var have := with_required(out)
 		if not hosts.is_empty() and not hosts.any(func(h: String) -> bool: return have.has(h)):
 			out.append(hosts[0])
+	return out
+
+
+## The components a note's [param words] bring by their marks, whether their blocks are written or not: each row whose
+## `brought_by` (a pattern) the words match - a sound mark brings the Sound, whose card holds the sounds it asks for. Its card
+## has no × ([method NoteCards.build]): the marks keep it.
+static func brought_by(words: String) -> Array:
+	var out: Array = []
+	if words.is_empty():
+		return out
+	for k in REGISTRY:
+		var pat := String((REGISTRY[k] as Dictionary).get("brought_by", ""))
+		if not pat.is_empty() and RegEx.create_from_string(pat).search(words) != null:
+			out.append(k)
 	return out
 
 

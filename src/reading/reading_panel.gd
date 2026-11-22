@@ -322,7 +322,7 @@ func _build_panel() -> void:
 	_panel.title = _row("label")
 	if not note_path.is_empty():
 		_blocks = NoteStore.blocks_of(note_path)
-		_attached = Components.attached_of(_blocks)
+		_attached = Components.attached_of(_blocks, _note_words())
 		# a note's components come off again: each card's × (see SidePanel.add_card)
 		_panel.detach = _detach
 		_panel.detach_blocker = func(key: String) -> String: return Components.detach_blocker(key, _has())
@@ -391,7 +391,8 @@ func _row(field: String) -> String:
 func _note_cards(producers: bool) -> void:
 	var have := _voiced()
 	var with := {"reading": true, "workspace": self, "cast": _cast, "blocks": _blocks, "reshape": _reshape,
-		"provides": Components.provided(have), "path": note_path, "folder": NoteUpload.folder_of(note_path)}
+		"provides": Components.provided(have), "path": note_path, "folder": NoteUpload.folder_of(note_path),
+		"brought": Components.brought_by(_note_words())}
 	var fmt: Variant = _blocks.get("medium")
 	var rows: Array = []
 	for key in have:
@@ -846,6 +847,14 @@ var walk: TextWalk = TextWalk.new()
 ## The words to read, fresh: what Play, a scrub and an export read. Here the document's own body - in sync mode
 ## the file as it is on disk right now (see [method DocSource.pull]) - with its dates filled ([method Macros.dated]): the
 ## voice says, and the medium shows, the night it is made on.
+## The note's words as its file holds them (its frontmatter apart), "" for no note: what its marks bring is read from them
+## ([method Components.brought_by]).
+func _note_words() -> String:
+	if note_path.is_empty() or not FileAccess.file_exists(note_path):
+		return ""
+	return String(FrontMatter.split(FileAccess.get_file_as_string(note_path)).get("body", ""))
+
+
 func _reading_body() -> String:
 	return Macros.dated(walk.body(_doc.pull()))
 
@@ -1138,15 +1147,16 @@ func _gap_before(chunks: Array, idx: int, s: Dictionary) -> float:
 # --- the audition ---------------------------------------------------------------------------------
 
 
-## Test: the selected tab's voice on its own ([ReadingAudition]), or stop the one playing. One sound at a time.
+## Test: the selected tab's voice on its own ([ReadingAudition]), or stop the one playing. One sound at a time:
+## a show playing is paused where it is (a reading, a song, an episode), never stopped, so Play carries on from there.
 func _on_test() -> void:
 	if _test_busy():
 		_stop_test()
 		return
 	if _host == null or not _host.is_up() or _cast.voice_meta.is_empty():
 		return
-	if _stream.has_reading():
-		_stream.stop()
+	if Spectrum.transport_playing():
+		Spectrum.transport_pause()
 	_cast.capture_slot()
 	_audition.start(_test_passage(), _cast.tab_name())
 	_show_testing(true)

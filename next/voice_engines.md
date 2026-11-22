@@ -1116,6 +1116,12 @@ heuristic is a row and a function.
   sentence's last word, and a multiplier on a pitch of nothing is nothing. Its vowels from the stressed one on are told
   the shaped pitch outright (`f0_set`), and the stressed vowel made as loud as the call's voiced steps (`lifted`,
   `n_set`); a vowel after it keeps its own energy, so a tail that dies away still does.
+- THE SCRIPT OVERRIDES THE RULES: `<!-- inflect: none -->...<!-- /inflect -->` wraps any words (the palette's
+  Inflection, `Manuscript.INFLECT`): `none` leaves them as no rule would mark them (sample for sample the take without
+  inflection; a leaned-on word keeps `EMPHASIS`'s length), `rise` gives the last word of the run a question's rise
+  whatever the sentence is. `ReadingPlan.resolve_marks` welds a toggle sentinel (`TextNorm.INFLECTS`) to the run's first
+  and last words, `Phonemes.parse` peels it into each word's `inflect`, the token carries it, `inflection.plan` honors
+  it - held by `script_marks_check` and `test_inflection.py`.
 - `hosts/voice/test_inflection.py`; listening pairs by `hosts/voice/inflection_probe.py` (plain, then inflected).
 
 ### What was measured
@@ -1130,8 +1136,8 @@ it was over. Targeting Individuals' moving Puck-Nicole blend: "Can I go home now
 ### Status
 
 In the reading. Heard: questions and italics good; the first holds were too long (now as above), and wh-questions
-should fall (now so); moving voices awaiting the ear. Open: a Voice card row to turn it off or tune it; a mark for a
-line that rises against the rule (an incredulous wh-question).
+should fall (now so); some lines are better without it ("Am I fired?" is marked `none` in Targeting Individuals);
+moving voices and the mark awaiting the ear. Open: a Voice card row to turn it off or tune it.
 
 ## Training Kokoro
 

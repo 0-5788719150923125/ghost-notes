@@ -27,7 +27,8 @@ const KEYS := ["table", "cartoon", "direction", "voice", "voice_training", "soun
 ## `only`, when a panel builds some of them itself), added to [param panel]. Returns them by block
 ## key, in order. [param ctx]: `reading` (the note has a voice, so every format of the Medium is offered),
 ## `blocks` (the note's, as it opened), `reshape` (write what the cards hold and open the note again), `intro_tip` /
-## `outro_tip` (what the bookends hold in this workspace's words), `only`.
+## `outro_tip` (what the bookends hold in this workspace's words), `only`, `brought` (the components the note's marks bring,
+## [method Components.brought_by]: their cards have no ×).
 static func build(panel: SidePanel, attached: Array, ctx := {}) -> Dictionary:
 	var out := {}
 	var only: Array = ctx.get("only", KEYS)
@@ -39,7 +40,7 @@ static func build(panel: SidePanel, attached: Array, ctx := {}) -> Dictionary:
 		# the card's id is its row's `card`, its title
 		# the row's `heading` where it has one; a part that only comes with another has no × of its own
 		var body := panel.add_card(String(row.get("card", card.KEY)), String(row.get("heading", row["label"])),
-			row["family"], key if not Components.attach_blocks(key).is_empty() else "")
+			row["family"], key if not Components.attach_blocks(key).is_empty() and not (ctx.get("brought", []) as Array).has(key) else "")
 		var why := Components.needs_note(key, attached)
 		if not why.is_empty():
 			body.add_child(_waiting(why))

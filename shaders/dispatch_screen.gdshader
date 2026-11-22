@@ -4,8 +4,9 @@ render_mode unshaded, cull_back, depth_draw_opaque;
 // A screen on the dispatch desk (DispatchMedium, DispatchSet): what its 2D face draws, shown as a tube or a panel shows
 // it. A CRT's glass bulges (`curve`), its picture has scanlines (`lines`) and a phosphor's soft bloom round what is lit
 // (`bloom`), its corners fall off; a black-and-white one is gray (`mono`), a snowy feed has noise (`snow`); a flat panel
-// has none of that (`curve` 0, `lines` 0). `power` brings it on and off: a tube's picture snaps flat to a bright line, the
-// line pulls in to a dot and the dot fades (on, the same backward); a round scope only fades to its dot; a panel dims. A
+// has none of that (`curve` 0, `lines` 0). `power` brings it on and off: going off, a tube's picture snaps flat to a bright
+// line, the line pulls in to a dot and the dot fades; a round scope only fades to its dot; a panel dims. Coming on (`rising`)
+// is never that backward: a tube's picture warms up whole, dim and soft, sharpening as it brightens; a panel brightens. A
 // caller ramps `power` steadily (no flicker), or the collapse strobes. `round` masks a radar's round scope. Emissive, so the
 // screen lights the dark - the medium's lights carry the rest.
 
@@ -21,6 +22,8 @@ uniform float bloom : hint_range(0.0, 2.0) = 0.6;
 uniform float mono : hint_range(0.0, 1.0) = 0.0;
 uniform float snow : hint_range(0.0, 1.0) = 0.0;
 uniform float power : hint_range(0.0, 1.0) = 1.0;
+// Whether `power` is coming up: the warm-up, never the collapse.
+uniform bool rising = false;
 uniform float round_mask : hint_range(0.0, 1.0) = 0.0;
 uniform float frame = 0.0;
 uniform float flicker : hint_range(0.0, 0.2) = 0.02;
@@ -51,7 +54,8 @@ void fragment() {
 	float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
 	// going off: a raster tube's picture flattened to a line (slow, then fast: it lands as a snap), then the line pulled in to a dot
 	float tube = step(0.001, curve + lines);
-	float raster = tube * step(round_mask, 0.5);
+	float going = rising ? 0.0 : 1.0;
+	float raster = tube * step(round_mask, 0.5) * going;
 	float sv = clamp((power - COLLAPSE_V * raster) / max(1.0 - COLLAPSE_V * raster, 0.001), 0.0, 1.0);
 	float sh = clamp((power - COLLAPSE_DOT) / (COLLAPSE_H - COLLAPSE_DOT), 0.0, 1.0);
 	float h = mix(1.0, max(sv * (2.0 - sv), LINE_H), raster);
@@ -63,8 +67,10 @@ void fragment() {
 	// what is flattened is the beam's whole energy on less glass: brighter, and toward the phosphor's own white as it thins
 	float flat_share = raster * (1.0 - smoothstep(LINE_H, 0.2, h));
 	vec3 col = vec3(0.0);
+	// warming up, a tube's beam is out of focus until its picture is nearly whole
+	float soft_lod = tube * (1.0 - going) * 4.0 * (1.0 - smoothstep(0.2, 0.9, power));
 	if (has_face) {
-		col = texture(face, q).rgb;
+		col = soft_lod > 0.01 ? textureLod(face, q, soft_lod).rgb : texture(face, q).rgb;
 		if (bloom > 0.0) {
 			vec3 soft = textureLod(face, q, 3.0).rgb + textureLod(face, q, 5.0).rgb * 0.6;
 			col += soft * bloom * 0.35;
@@ -88,9 +94,11 @@ void fragment() {
 	col *= 1.0 + 1.5 * flat_share;
 	// a tube's afterglow: a dot at the middle that fades as the last of the power goes; a panel simply dims
 	float fade = mix(smoothstep(0.0, 0.3, power), step(COLLAPSE_DOT, power), raster);
+	// a tube warming up: dark at first, then swelling to its whole brightness
+	fade = mix(fade, power * power * (3.0 - 2.0 * power), tube * (1.0 - going));
 	float d = length((uv - 0.5) * vec2(1.0, 1.4));
 	float last = clamp(power / COLLAPSE_DOT, 0.0, 1.0);
-	float dot_on = tube * step(power, COLLAPSE_DOT) * step(0.001, power) * last * exp(-pow(d / (0.006 + 0.012 * last), 2.0)) * 2.5;
+	float dot_on = tube * going * step(power, COLLAPSE_DOT) * step(0.001, power) * last * exp(-pow(d / (0.006 + 0.012 * last), 2.0)) * 2.5;
 	vec3 hot = mix(tint, vec3(1.0), 0.5) * brightness;
 	col = col * tint * brightness * on * inside * fade + hot * dot_on;
 	if (round_mask > 0.0) {

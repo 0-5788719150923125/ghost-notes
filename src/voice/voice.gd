@@ -136,6 +136,9 @@ const LOCUS_SHARE := 0.35
 # Vibrato separates a held sung note from a held robotic tone. 5.5 Hz is the center of the human range
 # (5-7 Hz); depth is in semitones and scaled by `Spec.song`, so a speaking voice has none. It ramps in
 # over VIB_ONSET so short notes do not wobble.
+## A sung segment's own pitch curve (`bend`, [method synth]): semitones over the voice's base, one value this many seconds
+## of the take, read by where the take is - one curve can serve every segment of a phrase.
+const BEND_STEP := 0.005
 const VIB_RATE := 5.5                 # Hz
 const VIB_DEPTH := 0.38               # semitones at song = 1
 const VIB_ONSET := 0.18               # seconds for the waver to reach full depth
@@ -1109,6 +1112,7 @@ static func _ptype(p: String) -> String:
 
 ## Realize planned segments into PCM + the timing map. Split out from render() so the editor can chunk
 ## it across frames and tests can drive it directly.
+## A segment carrying `bend` (a sung phrase's pitch curve, [FormantSinging]) is pitched by it instead of its `semitones`.
 static func synth(segs: Array, spec: Spec, from_seg := 0, to_seg := -1, state := {}) -> Dictionary:
 	if state.is_empty():
 		state = synth_state(spec)
@@ -1454,7 +1458,9 @@ static func _run_frames(out: PackedFloat32Array, state: Dictionary, spec: Spec,
 	# inflection depth scales the whole deviation from base: at 0 the melody collapses to a flat
 	# monotone at f0_base, above 1 it exaggerates
 	var f0_target: float = spec.f0_base * pow(2.0, seg.semitones * spec.inflect / 12.0) * 1.06
-	var vib_on: bool = spec.song > 0.0 and ttype != "sil"
+	# a sung segment's pitch is its curve, vibrato and glides already in it ([constant BEND_STEP])
+	var bend: PackedFloat32Array = seg.get("bend", PackedFloat32Array())
+	var vib_on: bool = spec.song > 0.0 and ttype != "sil" and bend.is_empty()
 	var done := 0
 	# radiation memory continues across segments (resetting it clicks at every phoneme boundary)
 	var prev: float = state.prev
@@ -1516,6 +1522,9 @@ static func _run_frames(out: PackedFloat32Array, state: Dictionary, spec: Spec,
 		for k in 3:
 			state.fsm[k] = lerpf(state.fsm[k], state.ftg[k], fa)
 		var f0_t := f0_target
+		if not bend.is_empty():
+			var bi := clampi(int(float(out.size()) / SR / BEND_STEP), 0, bend.size() - 1)
+			f0_t = spec.f0_base * 1.06 * pow(2.0, bend[bi] / 12.0)
 		if vib_on:
 			# time inside this note drives the onset ramp; the phase runs on the take's own clock so the
 			# waver is continuous across a held note's internal segment boundaries

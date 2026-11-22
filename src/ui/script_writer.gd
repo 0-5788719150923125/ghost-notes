@@ -474,13 +474,8 @@ func _build_window(section: String, blocks: PackedStringArray) -> void:
 	text_edit.add_theme_font_size_override("font_size", 16)
 	text_edit.add_theme_constant_override("line_spacing", 6)
 	text_edit.syntax_highlighter = ScriptHighlighter.new(_mode)
-	var words := VBoxContainer.new()
-	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	words.add_theme_constant_override("separation", 6)
 	_find = FindBar.new(text_edit)
-	words.add_child(_find)
-	words.add_child(text_edit)
-	split.add_child(words)
+	split.add_child(_find.stack())
 	split.add_child(_build_palette())
 
 	var foot := HBoxContainer.new()
