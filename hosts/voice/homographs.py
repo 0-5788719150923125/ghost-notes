@@ -369,7 +369,8 @@ class Homographs:
     # -- public ------------------------------------------------------------
 
     def annotate(self, tokens: list, lang: str) -> int:
-        """Set `ipa` on every token whose part of speech changes its reading.
+        """Set `ipa` on every token whose part of speech changes its reading, and `pos` on every token with words
+        (the Penn tag of its first word, a contraction's head included: what inflection.py reads a sentence by).
 
         Mutates `tokens` in place and returns how many were rewritten. Tokens are
         one sentence - the unit the tagger needs and the unit `_synth_tokens`
@@ -377,7 +378,7 @@ class Homographs:
         """
         if not _Corpus.ready():
             return 0
-        words, owner = self._tagger_input(tokens)
+        words, owner, heads = self._tagger_input(tokens)
         if not words:
             return 0
         try:
@@ -388,6 +389,17 @@ class Homographs:
             return 0
 
         tags = [p for _w, p in tagged]
+        for ti, wi in heads.items():
+            tokens[ti]["pos"] = tags[wi]
+        # a sentence's capital is no name: a first word tagged one is tagged again lower-cased ("Whose coat is
+        # this?" tags `Whose` NNP), for `pos` alone - the readings below keep the tagger's first answer
+        first = min(heads, default=None)
+        if first is not None and tags[heads[first]] == "NNP":
+            try:
+                again = _Corpus.tag([words[heads[first]].lower(), *words[heads[first] + 1:]])
+                tokens[first]["pos"] = again[0][1]
+            except Exception:  # noqa: BLE001 - the first answer stands
+                pass
         lower = [w.lower() for w in words]
         # Before resolving anything: this sentence's own tensed verbs are part of the narrative the next
         # sentence is read against, and of the one this sentence is read against too ("I stood ... and read"
@@ -619,20 +631,22 @@ class Homographs:
 
     # -- internals ---------------------------------------------------------
 
-    def _tagger_input(self, tokens: list) -> tuple[list[str], list[int]]:
-        """The sentence as the tagger wants it, and which token each word is.
+    def _tagger_input(self, tokens: list) -> tuple[list[str], list[int], dict]:
+        """The sentence as the tagger wants it, which token each word is (-1: context only, never rewritten), and
+        {token: the place of its first word}.
 
-        Punctuation goes in as its own item (a strong feature for the tagger) and maps to token -1: context
-        only, never rewritten.
+        Punctuation goes in as its own item (a strong feature for the tagger) and maps to token -1.
         """
         words: list[str] = []
         owner: list[int] = []
+        heads: dict = {}
         for ti, tok in enumerate(tokens):
             # As the page has it: ghost sends each word lower-cased for the phoneme lookup and its source
             # spelling as `cased`, and the tagger reads grammar off capitals (lower-cased, "i live in hell"
             # tags `i` an adjective and `live` is read as the adjective).
             text = str(tok.get("cased") or tok.get("text", "")).strip()
             if text:
+                heads[ti] = len(words)
                 # As the tagger learned it: a contraction is two words in the treebank ("Let 's", "do n't"),
                 # and whole it is a word the tagger never saw ("Let's" came back NNP, its verb a name).
                 # Split for tagging only; a contraction is context either way (it is not all letters), so
@@ -651,7 +665,7 @@ class Homographs:
             if punct:
                 words.append(punct)
                 owner.append(-1)
-        return words, owner
+        return words, owner, heads
 
     def _fill(self, lang: str, wanted: list[tuple[str, str]]) -> None:
         """Phonemize every probe not already cached, in one batch.

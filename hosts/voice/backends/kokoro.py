@@ -74,7 +74,7 @@ what they change is how it comes in - its first words' pitch and level, softer t
 pace. Where the model reads on into the sentence (after a word or two it does not rest), it is read without them.
 
 Not here: `noise_scale` and `noise_w` (the Tone's `noise` columns do nothing on these voices), F0 as an
-input (the arc and the Tone resample), Kokoro's own dwell at a mark (the pause figures are Piper's
+input save the request's `inflect` (inflection.py, through the sung graph; the arc and the Tone resample), Kokoro's own dwell at a mark (the pause figures are Piper's
 measurements), the vowel probe.
 
 The rate: rendered at 24 kHz and handed back at 22,050 (`OUT_RATE`) through the band-limited resampler,
@@ -372,6 +372,8 @@ class KokoroBackend(PiperBackend):
     # the trail's way back up runs on into it, never a step.
     trail_early = 0.0
     trail_through = True
+    # The text inflects the words (inflection.py): its pitch through the sung graph.
+    inflects = True
     # Kokoro samples nothing: its level is the same render to render (level.py, PiperBackend.level_noise).
     level_noise = 1.0
 
@@ -393,6 +395,9 @@ class KokoroBackend(PiperBackend):
                 # A request's `before` (the words said before its sentence) is read first and cut away: said of the
                 # backend, so a reading sends them to no other voice and keys no other voice's takes by them.
                 "before": True,
+                # A request's `inflect` (inflection.py: a question rises, a leaned-on word is accented): said of the
+                # backend, so a reading sends it to these voices alone and keys no other voice's takes by it.
+                "inflect": True,
             }
         )
         return d
@@ -848,6 +853,7 @@ class KokoroBackend(PiperBackend):
             raise BackendError(f"unknown Kokoro voice '{voice}'")
         sess = self._graph(voice)
         cfg = self._cfg_of(voice, params)
+        cfg = {**cfg, "kokoro": {**cfg["kokoro"], "family": voice}}  # what an inflected call finds its sung graph by
         run = sess
         if cfg.get("kokoro", {}).get("moving") is not None:
             run = self._moving_graph(voice)
@@ -1068,6 +1074,7 @@ class KokoroBackend(PiperBackend):
         stretch: dict | None = None,
         opening: float = 0.0,
         hold: dict | None = None,
+        inflect: dict | None = None,
     ):
         """(symbol, source) pairs -> audio, plus a time span per source - Piper's contract
         (`PiperBackend._render_symbols`), on Kokoro's ids: one id a symbol, a pad at each end, no
@@ -1083,6 +1090,13 @@ class KokoroBackend(PiperBackend):
         many as the request's `after` says), told the plan it has alone, and cut before the word; what is handed
         back is the sentence's alone. So is a sentence read after what the request's `before` says was said: it is
         said first and the take cut in the rest after it (`led`).
+
+        `inflect` (inflection.py's marks) inflects the words: a word's `slow` floors every sound of it at its planned
+        frames times that (its remainders carried, so the word is that much longer in whole frames), and where
+        any has a pitch shape the call is planned first (its frames, and its pitch where a word is flattened: the sung
+        graph cut to its curves) and read by the sung graph (kokoro_sung.py), its `f0_keep` the shapes laid on that
+        plan (`inflection.curve`) - Kokoro's own pitch moved, the decoder making it. Not in
+        a voice that moves (its graph takes no pitch): there the pitch is left out.
         """
         import numpy as np
 
@@ -1124,6 +1138,7 @@ class KokoroBackend(PiperBackend):
         scale: list[float] = []
         unit_of: list[int] = []  # which place in `units` each id is, -1 for a pad
         vowel: list[bool] = []  # whether each id is a vowel (a diphthong is one): what the pace may not squash
+        is_core: list[bool] = []  # whether each id is of its word's stressed vowel (where an accent peaks)
         missing: list[str] = []
         opened = False
         for u, (ksym, src, at) in enumerate(units):
@@ -1154,6 +1169,7 @@ class KokoroBackend(PiperBackend):
             scale.append(mul)
             unit_of.append(u)
             vowel.append(any(symbols[j][0] in _VOWELS for j in at))
+            is_core.append(core)  # its stress mark with it: Kokoro plans the syllable's onset on the mark
         for sym in sorted(set(missing)):
             if sym in self._warned_symbols:
                 continue
@@ -1219,10 +1235,46 @@ class KokoroBackend(PiperBackend):
                 feeds[DUR_SCALE_INPUT] = np.array(scales, dtype=np.float32)
             return feeds
 
+        # the sung graph, where a mark moves the pitch and this call reads the checkpoint's stock graph
+        pitched = contours = None
+        if inflect and any(m.shapes() or m.flatten > 0.0 for m in inflect.values()) and kk.get("family") \
+                and moving is None and sess is self._models.get(kk["family"]):
+            pitched, contours = self._sung_graphs(kk["family"]) or (None, None)
+
+        def inflected(a: int, b: int, more: list, told, lead, feeds: dict):
+            """`feeds` with the pitch the marks ask for laid on the call's own plan (`f0_keep`), None where it moves
+            no pitch."""
+            import inflection
+
+            plan = np.asarray(self._planner(sess).run(None, feeds)[-1]).reshape(-1)
+            front = (len(lead) + 1) if lead else 0
+            back = (len(more) + 1) if more else 0
+            owners = [-1] * (1 + front) + owner[a:b] + [-1] * (back + 1)
+            sounds = [False] * (1 + front) + sound[a:b] + [False] * (back + 1)
+            if len(owners) != plan.size:
+                return None
+            cores: dict = {}
+            for k in range(a, b):
+                if is_core[k] and sound[k]:
+                    cores.setdefault(owner[k], []).append(1 + front + k - a)
+            stress = {w: (ks[0], ks[-1]) for w, ks in cores.items()}
+            f0 = None
+            if contours is not None and any(m.flatten > 0.0 for m in inflect.values()):
+                got = contours.run(None, feeds)
+                f0 = got[[o.name for o in contours.get_outputs()].index("f0_planned")]
+            # the shapes laid where the sounds are heard (PLAN_LEAD early), two curve steps a frame
+            keep = inflection.curve(inflect, owners, plan.tolist(), sounds, stress, f0,
+                                    lead=int(round(PLAN_LEAD / (frame_s / 2.0))))
+            if keep is None:
+                return None
+            return {**feeds, "f0_keep": keep.reshape(1, -1)}
+
         def read(a: int, b: int, more: list, told=None, lead=()):
             """ids[a:b] in one call, `lead` said before them and `more` after: (audio, the plan's frames an id, a pad
             at each end)."""
-            out = sess.run(None, feeds_of(a, b, more, told, lead))
+            feeds = feeds_of(a, b, more, told, lead)
+            sung = inflected(a, b, more, told, lead, feeds) if pitched is not None else None
+            out = pitched.run(None, sung) if sung is not None else sess.run(None, feeds)
             planned = np.asarray(out[1]).reshape(-1).astype(np.float64)
             # an unpatched graph hands back the plan before its Round and Clip: done here as there
             return (np.asarray(out[0]).reshape(-1).astype(np.float32),
@@ -1253,6 +1305,19 @@ class KokoroBackend(PiperBackend):
                     if vowel[k]:
                         floor[k] = max(floor[k], min(float(VOWEL_LEAST), float(at_one[1 + k - a])))
                 fed_floor = fed_floor or any(floor[a:b])
+            # a word inflected slower, by whole frames: planned, its sounds' frames times its `slow` laid out with
+            # each one's remainder carried to the next, and floored there (a 2-frame sound times 1.12 rounds back to 2)
+            slowed = {w: float(m.slow) for w, m in (inflect or {}).items() if m.slow != 1.0}
+            if slowed and told_plan and any(owner[k] in slowed for k in range(a, b)):
+                plan = np.asarray(self._planner(sess).run(None, feeds_of(a, b, []))[-1]).reshape(-1)
+                carry: dict = {}
+                for k in range(a, b):
+                    if sound[k] and owner[k] in slowed:
+                        exact = float(plan[1 + k - a]) * slowed[owner[k]] + carry.get(owner[k], 0.0)
+                        n = float(round(exact))
+                        carry[owner[k]] = exact - n
+                        floor[k] = max(floor[k], n)
+                fed_floor = True
             # the sentence's end is not the call's (AFTER_WORDS): words after it, and the take cut before them
             more = []
             heard = [k for k in range(a, b) if sound[k]]

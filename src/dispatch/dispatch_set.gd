@@ -75,6 +75,13 @@ const ARM_CLAMP_STEP := 0.02
 ## close behind the panel, before a long one).
 const ARM_DROP := 0.10
 const ARM_REACH_COST := 1.5
+## How far past the panel's outline, and behind its back, the arm keeps wherever it crosses it (m): it holds the panel from behind.
+## How far behind the desk's back edge its elbow may lean (m): no further than that from where the roots hang.
+const ARM_CLEAR := 0.025
+const ARM_BEHIND := 0.08
+## How far the elbow leans sideways off its upward bend, in the order tried ([method _arm_fold]): away from the chair, more and
+## more, then straight up, then toward the chair.
+const ARM_LEANS := [0.35, 0.7, 1.2, 2.0, 0.0, -0.35]
 const ARM_X := [0.66, 0.74, 0.82, 0.90]
 const ARM_Z := [-0.52, -0.47, -0.42]
 const ARM_H := [0.34, 0.38, 0.42, 0.46]
@@ -169,15 +176,23 @@ const RADAR_FIELDS := {
 	"glow": {"label": "Glow color", "blurb": "The color the scope's sweep, rings and blips glow in. The light the radar throws takes its hue.",
 		"type": "color", "default": "#45ff5b", "roll": ["#45ff5b", "#ffa31a", "#d9ff4d"]},
 }
-## The receiver's properties ([Roll]; kept in the block's `receiver_glow`): its oscilloscope's trace and the lamp behind its dial, any
+## The receiver's properties ([Roll]; kept in the block's `receiver_glow`): its oscilloscope's trace, the lamp behind its dial and the dial's face, any
 ## color picked, the scope's default [constant DispatchScreens.SCOPE_GLOW] to 8 bits; and how its scope draws ([DispatchScope]).
 const RECEIVER_FIELDS := {
 	"scope": {"label": "Scope color", "blurb": "The color the oscilloscope's grid and trace glow in.",
 		"type": "color", "default": "#49ff60", "roll": ["#49ff60", "#ffb000", "#7fd4ff"]},
-	"dial": {"label": "Dial light", "blurb": "The color of the lamp lighting the tuning dial from behind.",
+	"dial": {"label": "Dial light", "blurb": "The color of the lamp lighting the tuning dial and the needle meter from behind.",
 		"type": "color", "default": "#ffd98c", "roll": ["#ffd98c", "#ffc070", "#b8ffc8"]},
+	"paper": {"label": "Dial face", "blurb": "The color of the tuning dial's face, behind its markings, and of the needle meter's.",
+		"type": "color", "default": "#c7a86b", "roll": ["#c7a86b", "#d9d2bf", "#b8c9b0"]},
 	"trace": {"label": "Scope", "blurb": "How the scope draws what the receiver plays: a figure (it against morphed copies of itself, turning in depth) or a sweep (it over time).",
 		"type": "enum", "options": ["figure", "sweep"], "default": "figure", "roll": ["figure", "sweep"]},
+}
+## The security monitor's properties ([Roll]; kept in the block's `feed_screen`, [DispatchProps]): how much snow shows over its
+## picture. With nothing on it, it is all snow whatever this says.
+const FEED_FIELDS := {
+	"static": {"label": "Static", "blurb": "How much snow shows over the monitor's picture: 0 a clean picture, 1 nothing but snow.",
+		"type": "float", "min": 0.0, "max": 1.0, "step": 0.01, "default": 0.12, "roll": [0.04, 0.2]},
 }
 ## The material a terminal make's lamps wear (its power light, its case's light), which take the hue of its text.
 const TERMINAL_LAMP := "green light"
@@ -214,6 +229,7 @@ var radar_screen: MeshInstance3D
 var scope_screen: MeshInstance3D
 var spectrum_screen: MeshInstance3D   # the SDR's screen ([method _sdr]; null where it is taken off)
 var dial: MeshInstance3D
+var meter: MeshInstance3D           # the receiver's needle meter's card, lit as the dial is
 var paper: MeshInstance3D         # the paper coming up out of the printer, over its rest and down to the heap ([method feed_paper])
 var paper_print: Material         # what its printed side wears (the medium's picture of it); its back is the heap's paper
 var paper_from := 0.0             # how much of it this desk begins with fed (m): where along a fold it starts
@@ -233,6 +249,9 @@ var tablet_screen: MeshInstance3D
 var tablet_home := Transform3D()
 var tablet_box := AABB()            # the tablet's own box, in its own space: what is carried ([method slab_clear])
 var footprints: Array = []        # Rect2s of what is on the desk (x, z), for the roots to go round - the chart too, which a root lying on the desk would pass through
+## How high over the desk's top a part's underside must be (m) for it to stay out of its thing's footprint ([member footprints]):
+## anything lower would rest on a root lying under it, as a body standing out past its own base does.
+const ROOT_HEADROOM := 0.12
 var clear: Array = []             # AABBs of what fills the air by the desk, which no root goes through: the paper, its heap
 var bodies := {}                  # a thing -> the box its meshes fill, in the set's space ([method bounds])
 var things := {}                  # a thing -> its node, as built
@@ -296,11 +315,11 @@ func build(labels: PackedStringArray, seed: int, tex: Dictionary, wants := {}) -
 		if not s.is_empty():
 			spots[k] = s
 	for k in bodies:
-		# what is on the desk, never what is held over it (the satellite's panel on its arm)
+		# what stands on the desk or over it too low for a root to pass under, never what is held high over it
 		var foot := Rect2()
 		for part in _parts[k]:
 			var b: AABB = (part as Dictionary)["box"]
-			if b.position.y <= DESK_Y + 0.02:
+			if b.position.y < DESK_Y + ROOT_HEADROOM:
 				var r := Rect2(b.position.x, b.position.z, b.size.x, b.size.z)
 				foot = r if not foot.has_area() else foot.merge(r)
 		if foot.has_area():
@@ -1075,10 +1094,15 @@ static func radar_ink(spec: Dictionary) -> Color:
 	return Color.html(String(Roll.own_or_drawn(RADAR_FIELDS, spec)["glow"]))
 
 
-## The receiver's oscilloscope's color and its dial's lamp ([constant RECEIVER_FIELDS]) as [param spec] keeps them: `{scope, dial}`.
+## The receiver's oscilloscope's color and its dial's lamp ([constant RECEIVER_FIELDS]) as [param spec] keeps them, and the dial's face: `{scope, dial, paper}`.
 static func receiver_inks(spec: Dictionary) -> Dictionary:
 	var v := Roll.own_or_drawn(RECEIVER_FIELDS, spec)
-	return {"scope": Color.html(String(v["scope"])), "dial": Color.html(String(v["dial"]))}
+	return {"scope": Color.html(String(v["scope"])), "dial": Color.html(String(v["dial"])), "paper": Color.html(String(v["paper"]))}
+
+
+## How much snow shows over the security monitor's picture ([constant FEED_FIELDS] `static`) as [param spec] keeps it.
+static func feed_static(spec: Dictionary) -> float:
+	return float(Roll.own_or_drawn(FEED_FIELDS, spec)["static"])
 
 
 ## How the receiver's scope draws ([constant RECEIVER_FIELDS] `trace`) as [param spec] keeps it: `figure` or `sweep`.
@@ -1256,21 +1280,19 @@ const DIAL_GLOW := 0.22
 
 
 ## The receiver's make ([PropMakes] `receiver`): its `dial` face printed with the frequency ([DispatchScreens]' dial, lit from
-## behind by a lamp of the color its properties pick, [constant RECEIVER_FIELDS]), its needle swinging as the medium feeds it
-## (`signal`), its oscilloscope's trace ([member scope_screen]) the medium's; and two wires run up from its `antenna` points into
+## behind by a lamp of the color its properties pick, [constant RECEIVER_FIELDS]), its `meter`'s card the same paper under the
+## same lamp, its needle swinging as the medium feeds it (`signal`), its oscilloscope's trace ([member scope_screen]) the medium's; and two wires run up from its `antenna` points into
 ## the dark.
 func _receiver() -> void:
 	var t := _place("receiver", desk_at("receiver"), turn["receiver"])
 	dial = t.face("dial")
+	var inks := receiver_inks(makes.get("receiver_glow", {}))
 	if dial != null and _tex.has("dial"):
-		var dmat := StandardMaterial3D.new()
-		dmat.albedo_texture = _tex["dial"]
-		dmat.albedo_color = Color(DIAL_PAPER, DIAL_PAPER, DIAL_PAPER)
-		dmat.emission_enabled = true
-		dmat.emission_texture = _tex["dial"]
-		dmat.emission = receiver_inks(makes.get("receiver_glow", {}))["dial"]
-		dmat.emission_energy_multiplier = DIAL_GLOW
-		dial.material_override = dmat
+		dial.material_override = _dial_face(inks, _tex["dial"])
+	# the needle meter's card is the dial's paper under the same lamp
+	meter = t.face("meter")
+	if meter != null:
+		meter.material_override = _dial_face(inks, null)
 	scope_screen = t.face("scope")
 	for k in 2:
 		var named: Variant = t.point("antenna %d" % (k + 1))
@@ -1282,6 +1304,20 @@ func _receiver() -> void:
 		put(t.node, tube(p, 0.0018, 5), _mats["cable"], Vector3.ZERO)
 	_body("receiver", t.node)
 	_faces["receiver"] = _read("receiver")
+
+
+## A card of the receiver's lit from behind ([constant RECEIVER_FIELDS]): [param inks]' `paper` under the room's light, glowing in
+## its `dial` lamp; [param tex] what is printed on it (the dial's scale), or a plain card with none (the meter's).
+static func _dial_face(inks: Dictionary, tex: Texture2D) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	var paper: Color = inks["paper"]
+	m.albedo_texture = tex
+	m.albedo_color = Color(paper.r * DIAL_PAPER, paper.g * DIAL_PAPER, paper.b * DIAL_PAPER)
+	m.emission_enabled = true
+	m.emission_texture = tex
+	m.emission = inks["dial"]
+	m.emission_energy_multiplier = DIAL_GLOW
+	return m
 
 
 # --- the SDR screen ---------------------------------------------------------------------------------------------------
@@ -1636,9 +1672,9 @@ func _arm(parent: Node3D, joints: Array, clamp: Vector2, xf: Transform3D) -> voi
 
 ## Where the arm bends to hold a panel standing as [param xf] from its clamp at [param clamp]: the post's top (a little below
 ## the head), the elbow and the head behind the panel - or [] where it does not reach. Its segments are long enough that the
-## elbow always bends: up over the line between them, as a monitor arm's does, leaning [param back] (away from the chair) or
-## toward it.
-func _arm_joints(xf: Transform3D, clamp: Vector2, back := true) -> Array:
+## elbow always bends: up over the line between them, as a monitor arm's does, leaning [param lean] to the side (away from the
+## chair where it is more than nought, toward it where less).
+func _arm_joints(xf: Transform3D, clamp: Vector2, lean: float = ARM_LEANS[0]) -> Array:
 	var head := xf * Vector3(0, 0, -_sat_panel.z * 0.5 - 0.05)
 	var top := Vector3(clamp.x, head.y - ARM_DROP, clamp.y)
 	var span := head - top
@@ -1649,9 +1685,9 @@ func _arm_joints(xf: Transform3D, clamp: Vector2, back := true) -> Array:
 	var dir := span / d
 	var up := (Vector3.UP - dir * dir.y).normalized()
 	var across := Vector3(span.z, 0.0, -span.x).normalized()
-	if (across.z > 0.0) == back:
+	if across.z > 0.0:
 		across = -across
-	var bend := (up * 0.8 + across * 0.35).normalized()
+	var bend := (up * 0.8 + across * lean).normalized()
 	bend = (bend - dir * bend.dot(dir)).normalized()
 	var elbow := (top + head) * 0.5 + bend * sqrt(maxf(len * len - d * d * 0.25, 0.0))
 	return [top, elbow, head]
@@ -1666,7 +1702,7 @@ func _arm_in(joints: Array) -> int:
 		var b: Vector3 = joints[i + 1]
 		for k in 9:
 			var p := a.lerp(b, float(k) / 8.0)
-			if p.z < FAR or absf(p.x) > DESK_W * 0.5:
+			if p.z < FAR - ARM_BEHIND or absf(p.x) > DESK_W * 0.5:
 				n += 1
 				continue
 			var sq := PackedVector2Array([Vector2(p.x - 0.02, p.z - 0.02), Vector2(p.x + 0.02, p.z - 0.02), Vector2(p.x + 0.02, p.z + 0.02),
@@ -1674,6 +1710,22 @@ func _arm_in(joints: Array) -> int:
 			for o in bodies:
 				if (bodies[o] as AABB).grow(0.02).has_point(p) and _meets(sq, p.y - 0.02, p.y + 0.02, _parts[o]):
 					n += 1
+	return n
+
+
+## How many points along the arm's [param joints] are within the outline of the panel standing as [param xf] (and [constant
+## ARM_CLEAR] round it) but not behind its back by that much: in it, or across its glass. None, and the arm holds it from behind.
+func _arm_through(joints: Array, xf: Transform3D) -> int:
+	if joints.is_empty():
+		return 0
+	var to_panel := xf.affine_inverse()
+	var half := _sat_panel * 0.5
+	var n := 0
+	for i in 2:
+		for k in 17:
+			var p: Vector3 = to_panel * (joints[i] as Vector3).lerp(joints[i + 1] as Vector3, float(k) / 16.0)
+			if absf(p.x) < half.x + ARM_CLEAR and absf(p.y) < half.y + ARM_CLEAR and p.z > -half.z - ARM_CLEAR:
+				n += 1
 	return n
 
 
@@ -1687,14 +1739,23 @@ func _clamp_in(clamp: Vector2) -> bool:
 	return false
 
 
-## The arm's joints for a panel standing as [param xf]: the elbow folded back unless only the other way is clear ([method
-## _arm_in]); [] where it does not reach.
+## The arm's joints for a panel standing as [param xf]: the elbow leaning each way of [constant ARM_LEANS] in turn, the first clear
+## of what stands there and of the panel itself ([method _arm_in], [method _arm_through]) - with none, the one that meets least;
+## [] where it does not reach.
 func _arm_fold(xf: Transform3D, clamp: Vector2) -> Array:
-	var back := _arm_joints(xf, clamp, true)
-	if back.is_empty() or _arm_in(back) == 0:
-		return back
-	var front := _arm_joints(xf, clamp, false)
-	return front if _arm_in(front) == 0 else back
+	var best: Array = []
+	var least := 1 << 30
+	for lean in ARM_LEANS:
+		var joints := _arm_joints(xf, clamp, float(lean))
+		if joints.is_empty():
+			return joints
+		var meets := _arm_in(joints) + _arm_through(joints, xf)
+		if meets == 0:
+			return joints
+		if meets < least:
+			least = meets
+			best = joints
+	return best
 
 
 ## How badly the satellite's panel stands as [param xf] on its arm from [param clamp]: out of the arm's reach, or panel or
@@ -1723,7 +1784,7 @@ func _arm_misfit(xf: Transform3D, clamp: Vector2, sights: Array, beat := INF) ->
 	for o in bodies:
 		if room.intersects(bodies[o]) and _meets(grown[0], lo - PACK_MARGIN, hi + PACK_MARGIN, _parts[o]):
 			bad += 1000.0
-	bad += 1000.0 * _arm_in(joints)
+	bad += 1000.0 * (_arm_in(joints) + _arm_through(joints, xf))
 	# a short arm, low behind the panel
 	bad += ((joints[2] as Vector3) - (joints[0] as Vector3)).length() * ARM_REACH_COST
 	if bad >= beat:
@@ -1809,7 +1870,7 @@ func _things_back() -> void:
 
 ## The patch panel's cables ([method lay_cables]): each a soft cord ([Rope]) from one of its sockets, laid first as a hand would lay
 ## it - round everything standing on the desk ([method _desk_grid]), along its back where it can, beside the cables laid before it -
-## a little slack, then let fall and settled: draped over the roots lying in its way and those beside the desk ([param lying], [param
+## wandering a little where it has room ([method _roomy]), then let fall and settled: draped over the roots lying in its way and those beside the desk ([param lying], [param
 ## hanging]: [member DispatchRoots.lying], [member DispatchRoots.hanging]) and over the cables laid before it where it crosses them,
 ## resting on the desk, never through what stands there. It
 ## runs to a thing that takes a cable ([constant CABLED]), plugged into the part it stands on, on the side that faces the panel
@@ -1892,18 +1953,24 @@ func lay_cables(lying: Array = [], hanging: Array = []) -> void:
 			pts.append(Vector3(x, low + 0.003, FAR - 0.004))
 			pts.append(Vector3(x, DESK_Y - 0.02, FAR - 0.014))
 			pts.append(Vector3(x + r.randf_range(-0.03, 0.03), DESK_Y - 0.34, FAR - 0.03))
-		# a rope laid along that way, a little slack and a little over it, let fall and settled on what is under it ([Rope])
-		# (along the way as laid: a curve drawn through its corners can overshoot into a loop the rope would keep; the rope's own
-		# stiffness rounds them as it settles)
-		var rope := Rope.resampled(Rope.rounded(_floored(PackedVector3Array(pts), low), CABLE_ROUND, 2, 2), CABLE_LINK)
+		# a rope laid along that way, as long as it and a little over it, let fall and settled on what is under it ([Rope])
+		# (along the way as laid - a curve drawn through its corners can overshoot into a loop the rope would keep - each corner on
+		# the desk's top turned on an arc of the rope's least bend and set out from what it turns round so the arc clears it
+		# ([method _stood_off]), the rest - over an edge, up to a plug - rounded off; no longer than its way, or what lies flat on
+		# the desk takes the extra in ripples)
+		var way := _floored(PackedVector3Array(_stood_off(pts, low, 2)), low)
+		var rope := Rope.resampled(Rope.rounded(Rope.filleted(way, _bend(), 2, CABLE_FILLET_STEP, _flat_corners(way, low)), CABLE_ROUND,
+			2, 2), CABLE_LINK)
 		var laid_rope := rope
-		rope = Rope.meandered(rope, CABLE_MEANDER.x, CABLE_MEANDER.y, r.randf_range(0.0, TAU), CABLE_PLUG + CABLE_LINK * 2.0)
-		# (never wandered off the desk: what was laid on its top stays on it, back from its edges)
+		rope = _roomy(Rope.meandered(rope, CABLE_MEANDER.x, CABLE_MEANDER.y, r.randf_range(0.0, TAU), CABLE_PLUG + CABLE_LINK * 2.0),
+			laid_rope, grid)
+		# (never wandered off the desk: what was laid on its top stays on it, back from its edges - a point laid nearer an edge than
+		# that never pulled back from it, which would hook the cable where it goes over)
 		for i in rope.size():
 			var was := laid_rope[i]
 			if was.y <= low + 0.01 and _on_desk(was):
-				rope[i].z = clampf(rope[i].z, FAR + CABLE_EDGE_KEEP, NEAR - CABLE_EDGE_KEEP)
-				rope[i].x = clampf(rope[i].x, -DESK_W * 0.5 + CABLE_EDGE_KEEP, DESK_W * 0.5 - CABLE_EDGE_KEEP)
+				rope[i].z = clampf(rope[i].z, minf(was.z, FAR + CABLE_EDGE_KEEP), maxf(was.z, NEAR - CABLE_EDGE_KEEP))
+				rope[i].x = clampf(rope[i].x, minf(was.x, -DESK_W * 0.5 + CABLE_EDGE_KEEP), maxf(was.x, DESK_W * 0.5 - CABLE_EDGE_KEEP))
 		for i in range(1, rope.size() - 1):
 			rope[i].y += CABLE_DROP
 		rope = Rope.lifted_over(rope, caps, CABLE_R)
@@ -1921,7 +1988,7 @@ func lay_cables(lying: Array = [], hanging: Array = []) -> void:
 				if rope[i].z < FAR:
 					pins.append(i)
 					break
-		var settled := Rope.settle(rope, pins, CABLE_R, CABLE_STIFF, solids, caps + stubs.slice(0, k) + stubs.slice(k + 1), 0.0, CABLE_SLACK,
+		var settled := Rope.settle(rope, pins, CABLE_R, CABLE_STIFF, solids, caps + stubs.slice(0, k) + stubs.slice(k + 1), 0.0, 0.0,
 			CABLE_GAP)
 		# what the next cables lie on: this one, where it crosses their way
 		for i in settled.size() - 1:
@@ -1973,6 +2040,87 @@ func _cable_solids() -> Array:
 				out.append(pd["box"])
 	out.append_array(clear)
 	return out
+
+
+## [param pts] (a cable's way as [method lay_cables] lays it, [param low] its height on the desk) with each corner it turns on the
+## desk set out from what it turns round, as far as the corner's arc ([method Rope.filleted], the rope's least bend) then
+## passes clear of it - a rounding cut into a thing is pushed back out against the thing's own corner as the rope settles, and
+## kinks there - and only where the way it then takes is clear too; its first and last [param keep] points as they are.
+func _stood_off(pts: Array, low: float, keep: int) -> Array:
+	var near: Array = []                  # [bounds, outline] of each part standing at the cable's height, grown by its reach
+	for k in _parts:
+		for part in _parts[k]:
+			var pd: Dictionary = part
+			if float(pd["lo"]) > low + CABLE_R or (pd["outline"] as PackedVector2Array).size() < 3:
+				continue
+			for g in Geometry2D.offset_polygon(pd["outline"], CABLE_R + CABLE_GAP + CABLE_CORNER_SPARE):
+				var poly: PackedVector2Array = g
+				var bb := Rect2(poly[0], Vector2.ZERO)
+				for q in poly:
+					bb = bb.expand(q)
+				near.append([bb, poly])
+	var out := pts.duplicate()
+	for i in range(keep, out.size() - keep):
+		var a: Vector3 = out[i - 1]
+		var b: Vector3 = out[i]
+		var c: Vector3 = out[i + 1]
+		if not _on_top(a, b, c, low) or _rounding_clear(a, b, c, near):
+			continue
+		var bis := Vector2(a.x - b.x, a.z - b.z).normalized() + Vector2(c.x - b.x, c.z - b.z).normalized()
+		if bis.length() < 1e-4:
+			continue
+		var away := -bis.normalized()
+		for step in range(1, CABLE_CORNER_STEPS + 1):
+			var b2 := b + Vector3(away.x, 0.0, away.y) * (CABLE_CORNER_STEP * float(step))
+			if _rounding_clear(a, b2, c, near) and _run_clear(a, b2, near) and _run_clear(b2, c, near):
+				out[i] = b2
+				break
+	return out
+
+
+## Whether the corner [param a] [param b] [param c] of a cable's way lies flat on the desk's top, at [param low].
+static func _on_top(a: Vector3, b: Vector3, c: Vector3, low: float) -> bool:
+	return absf(a.y - low) <= 0.001 and absf(b.y - low) <= 0.001 and absf(c.y - low) <= 0.001
+
+
+## Which corners of [param way] (a cable's, [param low] its height on the desk) lie flat on the desk's top ([method _on_top]): one
+## byte a point, for [method Rope.filleted].
+static func _flat_corners(way: PackedVector3Array, low: float) -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(way.size())
+	for i in range(1, way.size() - 1):
+		out[i] = int(_on_top(way[i - 1], way[i], way[i + 1], low))
+	return out
+
+
+## Whether the corner [param a] [param b] [param c] of a cable's way, turned as [method lay_cables] turns it, keeps out of every
+## grown outline of [param near] ([method _stood_off]).
+static func _rounding_clear(a: Vector3, b: Vector3, c: Vector3, near: Array) -> bool:
+	var r := Rope.filleted(PackedVector3Array([a, b, c]), _bend(), 1, CABLE_FILLET_STEP)
+	for i in range(1, r.size() - 2):
+		if not _run_clear(r[i], r[i + 1], near):
+			return false
+	return true
+
+
+## The least radius a cable bends round ([method Rope.least_bend]): what each corner of its way is turned on.
+static func _bend() -> float:
+	return Rope.least_bend(CABLE_R, CABLE_STIFF)
+
+
+## Whether the straight run from [param a] to [param b] keeps on the desk's top and out of every grown outline of [param near]
+## ([method _stood_off]), looked at every few millimeters.
+static func _run_clear(a: Vector3, b: Vector3, near: Array) -> bool:
+	var n := maxi(1, ceili(a.distance_to(b) / 0.004))
+	for s in n + 1:
+		var q := a.lerp(b, float(s) / float(n))
+		var at := Vector2(q.x, q.z)
+		if at.y < FAR + CABLE_EDGE_KEEP or at.y > NEAR - CABLE_EDGE_KEEP or absf(at.x) > DESK_W * 0.5 - CABLE_EDGE_KEEP:
+			return false
+		for one in near:
+			if (one[0] as Rect2).has_point(at) and Geometry2D.is_point_in_polygon(at, one[1]):
+				return false
+	return true
 
 
 ## The roots of [param paths] ([member DispatchRoots.lying], [member DispatchRoots.hanging]) down at the desk - on its top, or just
@@ -2083,6 +2231,27 @@ func _lay(grid: AStarGrid2D, from: Vector2, to: Vector2, ahead := INF, exact := 
 		out.append(_at_cell(cells[j]))
 		i = j
 	out[out.size() - 1] = to
+	return out
+
+
+## [param wandered] (a cable's way [param laid] wandered, [method Rope.meandered]) kept as laid wherever its wander would take it
+## where [param grid] ([method _desk_grid]) has no room - beside a thing, or by the desk's edges - and faded back to its wander
+## over [constant CABLE_MEANDER_FADE] links either side: what it lies along it lies straight beside, never pressed into it, so
+## the rope settles with no length to spare there to fold into a knot.
+static func _roomy(wandered: PackedVector3Array, laid: PackedVector3Array, grid: AStarGrid2D) -> PackedVector3Array:
+	var n := wandered.size()
+	var blocked := PackedByteArray()
+	blocked.resize(n)
+	for i in n:
+		var c := _cell(Vector2(wandered[i].x, wandered[i].z))
+		blocked[i] = int(grid.region.has_point(c) and grid.is_point_solid(c))
+	var out := wandered.duplicate()
+	for i in n:
+		var room := 1.0
+		for j in range(maxi(i - CABLE_MEANDER_FADE, 0), mini(i + CABLE_MEANDER_FADE, n - 1) + 1):
+			if blocked[j] != 0:
+				room = minf(room, float(absi(j - i)) / float(CABLE_MEANDER_FADE + 1))
+		out[i] = laid[i] + (wandered[i] - laid[i]) * smoothstep(0.0, 1.0, room)
 	return out
 
 
@@ -2430,23 +2599,31 @@ func mug_tall() -> float:
 
 
 ## The patch panel's cables ([method lay_cables]): how many, how thick (radius, m), and the things on the desk they run to the back
-## of; each a rope ([Rope]) of links this long (m), this stiff, this much longer than the way it is laid, let fall from this far over
-## it (m).
+## of; each a rope ([Rope]) of links this long (m), this stiff, let fall from this far over the way it is laid (m).
 const CABLES := 12
 const CABLE_R := 0.0024
 const CABLE_LINK := 0.015
 const CABLE_STIFF := 0.9
-const CABLE_SLACK := 0.03
 const CABLE_DROP := 0.012
 ## How far a cable comes straight out of a socket or a port before it bends (m): a plug's length, held as it is; and how far it
 ## keeps from a thing, a root or another cable (m: the curve drawn through its links cuts a bend by about a millimeter).
 const CABLE_PLUG := 0.012
 const CABLE_GAP := 0.002
-## How far each corner of a cable's way is rounded off along either side before it settles (m: at most; a quarter of a side where
-## that is less), so it lies in curves, not runs and corners.
+## How far apart the points of the arc a cable's way turns each corner on the desk's top on are laid before it is cut into links
+## (m): each turned on the rope's own least bend ([method Rope.filleted]), so it lies in curves, not runs and corners; and how far
+## each of its other corners (over an edge, up to a plug) is rounded off along either side (m: at most; a quarter of a side where
+## that is less).
+const CABLE_FILLET_STEP := 0.005
 const CABLE_ROUND := 0.025
-## How far a cable laid along the desk wanders to either side of its way, and how long a wander is (m): it lies in curves.
+## How far a corner of a cable's way may be set out from what it turns round so its rounding clears it ([method _stood_off]): in
+## steps this long (m), at most this many; and how far clear of the thing its rounding keeps beyond where the rope keeps (m).
+const CABLE_CORNER_STEP := 0.003
+const CABLE_CORNER_STEPS := 8
+const CABLE_CORNER_SPARE := 0.001
+## How far a cable laid along the desk wanders to either side of its way, and how long a wander is (m): it lies in curves; and over
+## how many links its wander fades out round a place it has no room to wander into ([method _roomy]).
 const CABLE_MEANDER := Vector2(0.012, 0.28)
+const CABLE_MEANDER_FADE := 4
 ## How far back from the desk's edges a cable laid on it is kept as it wanders (m), and how far from a root a cable falling over its
 ## far edge falls (m).
 const CABLE_EDGE_KEEP := 0.008

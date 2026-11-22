@@ -334,7 +334,39 @@ func _format_and_card() -> void:
 	var own_dial: String = lamp_of.call({})
 	var green_dial: String = lamp_of.call(glows)
 	_ok(own_dial == "ffd98c" and green_dial == "b8ffc8", "the dial's lamp lights it in the color picked (%s; the control, its own: %s)" % [green_dial, own_dial])
+	var face_of := func(makes: Dictionary) -> String:
+		var ds := DispatchSet.new()
+		ds.makes = makes
+		var n := ds.build(PackedStringArray(["A"]), 3, {"dial": PlaceholderTexture2D.new()})
+		var m := ds.dial.material_override as StandardMaterial3D if ds.dial != null else null
+		var out := m.albedo_color.to_html(false) if m != null else ""
+		n.free()
+		return out
+	var own_face: String = face_of.call({})
+	var pale_face: String = face_of.call({"receiver_glow": {"paper": "#ffffff"}})
+	_ok((recv_row.get("fields", {}) as Dictionary).has("paper") and pale_face != own_face and pale_face == "b3b3b3",
+		"the dial's face takes the color picked (%s; the control, its own: %s)" % [pale_face, own_face])
+	var meter_of := func(makes: Dictionary) -> String:
+		var ds := DispatchSet.new()
+		ds.makes = makes
+		var n := ds.build(PackedStringArray(["A"]), 3, {"dial": PlaceholderTexture2D.new()})
+		var face: MeshInstance3D = ds.rigs["receiver"].face("meter") if ds.rigs.has("receiver") else null
+		var m := face.material_override as StandardMaterial3D if face != null else null
+		var out := "%s %s" % [m.albedo_color.to_html(false), m.emission.to_html(false)] if m != null else ""
+		n.free()
+		return out
+	var own_meter: String = meter_of.call({})
+	var pale_meter: String = meter_of.call({"receiver_glow": {"paper": "#ffffff", "dial": "#b8ffc8"}})
+	_ok(not own_meter.is_empty() and own_meter != pale_meter and pale_meter == "b2b2b2 b8ffc8",
+		"the needle meter's card takes the dial's face and lamp (%s; the control, its own: %s)" % [pale_meter, own_meter])
 	_ok(sec.act("role:receiver", "own").is_empty() and fmt.part("receiver_glow").is_empty(), "the desk's own takes the receiver's colors back")
+	# the security monitor's static on its entry, kept in the block and read by the medium (the control: its own until set)
+	var feed_row: Dictionary = by_key.call("role:feed")
+	var calm := DispatchMedium.makes_of(fmt.document()) if sec.set_field("role:feed", "static", 0.03).is_empty() else {}
+	_ok((feed_row.get("fields", {}) as Dictionary).has("static") and is_equal_approx(DispatchSet.feed_static({}), 0.12)
+		and calm.get("feed_screen") == {"static": 0.03} and is_equal_approx(DispatchSet.feed_static(calm["feed_screen"]), 0.03),
+		"the security monitor's entry carries how much static shows over its picture, kept in the block (%s)" % str(calm))
+	_ok(sec.act("role:feed", "own").is_empty() and fmt.part("feed_screen").is_empty(), "the desk's own takes the monitor's static back")
 	var card := PropsCard.new(func() -> Array: return [sec])
 	add_child(card)
 	card.refresh(true)
@@ -552,7 +584,11 @@ func _remade_live() -> void:
 	(subs.document["dispatch"] as Dictionary)["terminal_screen"] = {"text": "#ffb000"}
 	(subs.document["dispatch"] as Dictionary)["radar_screen"] = {"glow": "#ffa31a"}
 	(subs.document["dispatch"] as Dictionary)["receiver_glow"] = {"scope": "#7fd4ff"}
+	var own_static := md._feed_static
+	(subs.document["dispatch"] as Dictionary)["feed_screen"] = {"static": 0.03}
 	md._ensure_doc()
+	_ok(is_equal_approx(own_static, 0.12) and is_equal_approx(md._feed_static, 0.03),
+		"the security monitor's static set while the note plays is the snow over its picture (%.2f, was %.2f)" % [md._feed_static, own_static])
 	_ok(own_inks == PackedStringArray([DispatchScreens.PHOSPHOR.to_html(false), DispatchScreens.RADAR_GLOW.to_html(false), DispatchScreens.SCOPE_GLOW.to_html(false)])
 		and inks.call() == PackedStringArray(["ffb000", "ffa31a", "7fd4ff"]) and absf(md._title.ink.h - Color.html("#ffb000").h) < 0.01
 		and md._built_n == built_n, "colors picked while the note plays draw each screen in its own, the reading kept (%s, was %s)" % [inks.call(), own_inks])

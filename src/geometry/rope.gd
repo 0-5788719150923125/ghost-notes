@@ -71,9 +71,8 @@ static func settle(path: PackedVector3Array, pinned: Array, radius: float, stiff
 	var near_caps: Array = capsules.filter(func(c: Array) -> bool:
 		return AABB((c[0] as Vector3), Vector3.ZERO).expand(c[1] as Vector3).grow(float(c[2]) + radius).intersects(reach))
 	var grid := _grid(near_solids, near_caps, radius)
-	# how far apart a point and the one after next may come: a cord this stiff bends no sharper
-	# the least radius it bends round: a limp cord's as tight as it is thick, the stiffest's BEND_MOST
-	var bend_radius := lerpf(radius * 2.0, BEND_MOST, clampf(stiff, 0.0, 1.0))
+	# how far apart a point and the one after next may come: a cord this stiff bends no sharper than its least radius
+	var bend_radius := least_bend(radius, stiff)
 	var least_chords: Array = []          # per span, the shortest chord from each point an arc of that radius allows
 	for span in SPANS:
 		var chords := PackedFloat32Array()
@@ -128,6 +127,12 @@ static func settle(path: PackedVector3Array, pinned: Array, radius: float, stiff
 	for _k in SETTLE_PASSES:
 		_push_out(p, held, touched, grid, radius, floor, true)
 	return p
+
+
+## The least radius a cord [param radius] thick and [param stiff] (0 limp to 1 stiff) bends round (m): a limp cord's as tight as
+## it is thick, the stiffest's [constant BEND_MOST].
+static func least_bend(radius: float, stiff: float) -> float:
+	return lerpf(radius * 2.0, BEND_MOST, clampf(stiff, 0.0, 1.0))
 
 
 ## A solid of [param settle] grown by [param radius]: `{box}` for an AABB, `{box, outline}` for an outline standing between two
@@ -432,6 +437,40 @@ static func rounded(path: PackedVector3Array, cut: float, times: int, keep: int)
 		for i in range(maxi(out.size() - keep, keep), out.size()):
 			next.append(out[i])
 		out = next
+	return out
+
+
+## [param path] with each corner turned on an arc of [param radius] - less where a side is too short to hold it, sharing each side
+## with the corner at its other end - its points [param spacing] apart along it; the first and last [param keep] points as they
+## are, and where [param only] is given, only the corners it marks (non-zero, one per point of [param path]). A way turned so is
+## no tighter there than a cord of that least radius bends ([method least_bend]); its arcs lie inside its corners, so a corner
+## turned round something must stand off from it far enough for its arc to clear.
+static func filleted(path: PackedVector3Array, radius: float, keep: int, spacing: float, only := PackedByteArray()) -> PackedVector3Array:
+	var n := path.size()
+	if n < 3:
+		return path
+	var out := PackedVector3Array()
+	for i in mini(keep, n):
+		out.append(path[i])
+	for i in range(keep, n - keep):
+		var b := path[i]
+		var u := path[i - 1] - b
+		var w := path[i + 1] - b
+		var phi := u.angle_to(w) if u.length() > 1e-6 and w.length() > 1e-6 else PI
+		if phi > PI - 0.01 or (not only.is_empty() and only[i] == 0):
+			out.append(b)
+			continue
+		var half := (PI - phi) * 0.5
+		var t := minf(radius * tan(half), minf(u.length(), w.length()) * 0.5)
+		var r := t / tan(half)
+		var from := u.normalized() * t
+		var to := w.normalized() * t
+		var centre := b + (u.normalized() + w.normalized()).normalized() * (r / sin(phi * 0.5))
+		var steps := maxi(2, ceili(r * (PI - phi) / maxf(spacing, 1e-4)))
+		for s in steps + 1:
+			out.append(centre + (b + from - centre).slerp(b + to - centre, float(s) / float(steps)))
+	for i in range(maxi(n - keep, keep), n):
+		out.append(path[i])
 	return out
 
 

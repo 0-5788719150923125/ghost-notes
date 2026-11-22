@@ -70,15 +70,17 @@ extends SceneTree
 ##   is speed-dialed (1 held, Send, ear);
 ## - captions: a typed word is read on the terminal, a spoken line is captioned;
 ## - a live reading, words arriving a sentence at a time: an action begun keeps its start when the plan is made again;
-## - the roots: some on the desk, grown further at the end than at the start, none under an open phone or its lid, none
+## - the roots: some on the desk, grown further at the end than at the start at a Growth of one half and whole from the start
+##   at 1, none under an open phone or its lid, none
 ##   through the printer's paper or its heap (control: grown knowing nothing of them, they go through); none lying on the
-##   desk nearer what stands there than it is thick (control: grown knowing nothing of what stands there, into it); each a
+##   desk nearer what stands there than it is thick (control: grown knowing nothing of what stands there, into it), nor under a
+##   part held lower over it than its top (control: grown round each thing's base alone, a body past its base on one); each a
 ##   moderate reach across the top, some over the near edge and hanging down clear of the desk's front, some ending on it;
 ## - the desk is its number's: the same number is the same desk, across numbers it is mirrored and packed differently; on
 ##   forty desks no two things meet by their own meshes' outlines, nothing packed hides a label, dial, screen or the clock's
 ##   cards from the chair and nothing hides one in its own close-up (controls: a mug just before the clock hides it; a switch
 ##   at the radar's face meets it; the chart across the blotter's edge does not fit), the satellite's monitor is on its arm
-##   turned to the chair, the handbook's spine faces the chair, the chart lies wholly off the blotter, the mug 25-40 cm in
+##   turned to the chair, held from behind (control: the elbow leaning to the chair goes through it), the handbook's spine faces the chair, the chart lies wholly off the blotter, the mug 25-40 cm in
 ##   from the edge beside the keyboard; the keyboard's keys all on its case; an open phone laid on the desk faces the chair;
 ## - the mug is drunk from: upright, brought to the mouth and out of the picture for the sip, back in its ring;
 ## - the gain knob turns from three to nine a click a step with the camera on the radar: at three only the target is on the
@@ -296,7 +298,8 @@ func _run() -> void:
 		and (coords_there[0]["rect"] as Rect2).position.distance_to((coords_going[0]["rect"] as Rect2).position) > 1.0
 		and DispatchScreens.coordinates(arrived["blip"]["at"]) != DispatchScreens.coordinates(going["blip"]["at"]),
 		"his coordinates are beside him and change as he moves, one run a line under the same keys (%s, %s)" % [DispatchScreens.coordinates(going["blip"]["at"]), DispatchScreens.coordinates(arrived["blip"]["at"])])
-	_ok((ro_going["rect"] as Rect2).end == ro_box.end and inside and " ".join(ro_words) == String(arrived["blip"]["label"]) and absf(ro_box.get_center().x - r_mid.x) < 0.5
+	var foot := func(r: Rect2) -> Vector2: return Vector2(r.get_center().x, r.end.y)
+	_ok(foot.call(ro_going["rect"]).is_equal_approx(foot.call(ro_box)) and inside and " ".join(ro_words) == String(arrived["blip"]["label"]) and absf(ro_box.get_center().x - r_mid.x) < 0.5
 		and ro_box.position.y > r_mid.y + r_rad * 0.4,
 		"the place is held in a readout centered at the scope's foot, inside its glass, wherever he is (%s: %s)" % [ro_words, ro_box])
 	# the censor's box round them (padded, wavered out) clears the blip's halo and the readout, wherever he is on his way
@@ -593,8 +596,10 @@ func _run() -> void:
 	_ok(kept >= 0 and not moved, "a live reading's begun action keeps its start as the plan is made again")
 	_reseed_live(live, body, words, end_t * 0.5)
 	# roots
-	_ok(md._roots.on_desk.size() >= 2 and DispatchRoots.grown(end_t + 2000.0) > DispatchRoots.grown(0.0),
-		"roots reach onto the desk, and grow through the night (%d on the desk)" % md._roots.on_desk.size())
+	_ok(md._roots.on_desk.size() >= 2 and DispatchRoots.grown(end_t + 2000.0, 0.5) > DispatchRoots.grown(0.0, 0.5),
+		"roots reach onto the desk, and grow through the night at a Growth of one half (%d on the desk)" % md._roots.on_desk.size())
+	_ok(DispatchRoots.grown(0.0, 1.0) == 1.0 and DispatchRoots.grown(end_t + 2000.0, 0.0) == DispatchRoots.grown(0.0, 0.0)
+		and DispatchRoots.grown(0.0, 0.0) < 1.0, "a Growth of 1 is whole from the start, of 0 never grows past where it begins")
 	# built on a worker, as the app builds it: the show held, the desk put in as it lands
 	DispatchMedium.away_in_tests = true
 	var away := DispatchMedium.new()
@@ -1520,6 +1525,8 @@ func _layout() -> void:
 	var clear := ""
 	var seen := ""
 	var arm := ""
+	var arm_through := ""
+	var arm_front := 0
 	var spine := ""
 	var blotter_cross := ""
 	var mug_reach := true
@@ -1564,6 +1571,10 @@ func _layout() -> void:
 		var to := (DispatchSet.EYE - panel.origin).normalized()
 		if arm.is_empty() and (s._arm_fold(panel, s.at_of("satellite")).is_empty() or panel.basis.z.dot(to) < 0.95):
 			arm = "desk %d" % seed
+		# held from behind: no part of the arm in the panel or across its glass (the control: the elbow leaning to the chair)
+		if arm_through.is_empty() and s._arm_through(s._arm_fold(panel, s.at_of("satellite")), panel) > 0:
+			arm_through = "desk %d" % seed
+		arm_front += int(s._arm_through(s._arm_joints(panel, s.at_of("satellite"), -0.35), panel) > 0)
 		var label: Node3D = (s._faces["handbook"] as Array)[0]
 		var spine_xf := s.bounds_xf(label)
 		if spine.is_empty() and spine_xf.basis.z.dot((DispatchSet.EYE - spine_xf.origin).normalized()) < 0.5:
@@ -1603,6 +1614,8 @@ func _layout() -> void:
 	_ok(clear.is_empty(), "no two things on the desk meet, by their own meshes' outlines - the satellite's arm and panel and the printer's paper too (%s)" % clear)
 	_ok(seen.is_empty(), "nothing packed hides a label, dial, screen or the clock's cards from the chair, and nothing hides one in its own close-up (%s)" % seen)
 	_ok(arm.is_empty(), "the satellite's monitor is held on its arm, turned to the chair (%s)" % arm)
+	_ok(arm_through.is_empty() and arm_front > 0, "the satellite's arm holds its panel from behind, never through it (%s; the control: the elbow leaning to the chair, through it on %d of 40)"
+		% [arm_through, arm_front])
 	_ok(spine.is_empty(), "the handbook's spine faces the chair (%s)" % spine)
 	_ok(blotter_cross.is_empty(), "the chart is taped down wholly on the desk's own top, never across the blotter (%s)" % blotter_cross)
 	_layout_controls(labels, tex)
@@ -1887,6 +1900,8 @@ func _roots_clear() -> void:
 	var flat_crossed := 0
 	var touching := []
 	var touching_blind := 0
+	var under := []
+	var under_based := 0
 	var reach_most := 0.0
 	var over_edge := 0
 	var on_top := 0
@@ -1977,6 +1992,14 @@ func _roots_clear() -> void:
 		var un_node := unseeing.build(sd, [], Rect2(), ds.clear)
 		touching_blind += int(_roots_touch(unseeing, stood))
 		un_node.free()
+		# nothing rests on a root: none lies under a part held lower over it than its own top (the control: grown round each thing's
+		# base alone, a body standing out past its base sits on one)
+		if _roots_under(ds, rr):
+			under.append(sd)
+		var based := DispatchRoots.new()
+		var based_node := based.build(sd, _bases(ds), held, ds.clear)
+		under_based += int(_roots_under(ds, based))
+		based_node.free()
 		for o in rr.on_desk:
 			reach_most = maxf(reach_most, float(o["reach"]))
 			over_edge += int(bool(o["leaves"]))
@@ -2002,6 +2025,9 @@ func _roots_clear() -> void:
 	_ok(touching.is_empty() and touching_blind > 0,
 		"no root lying on the desk comes nearer what stands there - the chart taped to it, where a phone is laid open - than it is thick (%s; the control: grown knowing nothing of what stands there, into it on %d of 8)"
 		% [str(touching), touching_blind])
+	_ok(under.is_empty() and under_based > 0,
+		"nothing on the desk rests on a root lying there (%s; the control: grown round each thing's base alone, under one on %d of 8)"
+		% [str(under), under_based])
 	_ok(reach_most <= DispatchRoots.DESK_REACH.y * DispatchRoots.REACH_OVER * 1.2 and over_edge > 0 and on_top > 0 and hang_wrong.is_empty(),
 		"a root reaches a moderate way across the top (%.2f m at most), going over the near edge and down clear of the desk's front (%d) or ending on the top (%d) - wrong on %s"
 		% [reach_most, over_edge, on_top, str(hang_wrong)])
@@ -2219,6 +2245,39 @@ static func _roots_touch(rr: DispatchRoots, stood: Array) -> bool:
 				if away.length() < rad[k] - 0.001:
 					return true
 	return false
+
+
+## Whether a root of [param rr] lying on the desk's top lies under a part of a thing of [param ds] whose underside is below the
+## root's own top there: the part would rest on it.
+static func _roots_under(ds: DispatchSet, rr: DispatchRoots) -> bool:
+	for path in rr.lying:
+		var pts: PackedVector3Array = path["points"]
+		var rad: PackedFloat32Array = path["radii"]
+		var end := int(path.get("off", -1))
+		for i in range(int(path["from"]), pts.size() if end < 0 else end):
+			for k in ds.bodies:
+				for part in ds._parts[k]:
+					var b: AABB = (part as Dictionary)["box"]
+					if b.position.y > pts[i].y + rad[i] or b.end.y < pts[i].y:
+						continue
+					if pts[i].x > b.position.x and pts[i].x < b.end.x and pts[i].z > b.position.z and pts[i].z < b.end.z:
+						return true
+	return false
+
+
+## Each thing's footprint of [param ds] from its parts standing on the desk's top alone (Rect2s in x, z), none held over it.
+static func _bases(ds: DispatchSet) -> Array:
+	var out: Array = []
+	for k in ds.bodies:
+		var foot := Rect2()
+		for part in ds._parts[k]:
+			var b: AABB = (part as Dictionary)["box"]
+			if b.position.y <= DispatchSet.DESK_Y + 0.02:
+				var r := Rect2(b.position.x, b.position.z, b.size.x, b.size.z)
+				foot = r if not foot.has_area() else foot.merge(r)
+		if foot.has_area():
+			out.append(foot)
+	return out
 
 
 ## Whether any root of [param rr] (off the desk's top or on it) has a point inside one of [param boxes].

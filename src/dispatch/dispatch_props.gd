@@ -15,7 +15,8 @@ class_name DispatchProps
 ## and the desk's Choose… opens the Dex on desks drawn from many numbers ([DeskDraws]). The phones' entry carries their colors the
 ## same way ([constant ROLE_PARTS], [constant DispatchSet.PHONE_FIELDS]): each its own from a palette, or all the make's; the
 ## terminal's and the radar's carry the color their glass glows in, and the receiver's its oscilloscope's and its dial lamp's, any
-## color picked ([constant DispatchSet.TERMINAL_FIELDS], [constant DispatchSet.RADAR_FIELDS], [constant DispatchSet.RECEIVER_FIELDS]).
+## color picked ([constant DispatchSet.TERMINAL_FIELDS], [constant DispatchSet.RADAR_FIELDS], [constant DispatchSet.RECEIVER_FIELDS]);
+## the security monitor's how much static shows over its picture ([constant DispatchSet.FEED_FIELDS]).
 ##
 ## A row's make is pictured from what it is written as ([PropPictures], [ThingLibrary.hash_of]), on a worker, as every prop is:
 ## its faces show their own materials and words, never the program the desk runs on them.
@@ -24,8 +25,9 @@ const GROUPS := [
 	{"key": "desk", "label": "In the scene", "tip": "The desk, the roots and everything the desk works. Choose… another make to play a part - the desk works it the same way - or open its picture to turn it and refine it."},
 ]
 ## A role whose entry also carries properties of its own, kept as a part ([constant DispatchFormat.PARTS]): the phones' colors, the
-## terminal's and the radar's glass, the receiver's glows.
-const ROLE_PARTS := {"phone": "phones", "terminal": "terminal_screen", "radar": "radar_screen", "receiver": "receiver_glow"}
+## terminal's and the radar's glass, the receiver's glows, the security monitor's static.
+const ROLE_PARTS := {"phone": "phones", "terminal": "terminal_screen", "radar": "radar_screen", "receiver": "receiver_glow",
+	"feed": "feed_screen"}
 const SHELVES := [{"key": "dispatch", "label": "Dispatch desk", "tip": "What the Dispatch desk works, each as the first desk draws it."}]
 const OFF_SHELF := [{"key": "taken_off", "label": "Taken off", "tip": "What was taken off this desk: Use sets it out again."}]
 
@@ -83,9 +85,9 @@ func rows() -> Array:
 			var spec := _format.part(part)
 			row["fields"] = Roll.shown_for(DispatchFormat.PARTS[part], spec)
 			row["values"] = _set_of(spec)
-			verbs.insert(1, {"key": "roll", "label": "Roll", "tip": "Other colors: every property you have not set drawn again."})
+			verbs.insert(1, {"key": "roll", "label": "Roll", "tip": "Every property you have not set drawn again."})
 			if choice.is_empty() and not spec.is_empty():
-				verbs.insert(2, {"key": "own", "label": "Desk's own", "tip": "Back to the desk's own, colors and all."})
+				verbs.insert(2, {"key": "own", "label": "Desk's own", "tip": "Back to the desk's own, every property and all."})
 		if not String(role) in DispatchSet.SPARE:
 			row["remove_off"] = "The desk works it: Choose… another make to play it."
 		elif _format.works().has(role):

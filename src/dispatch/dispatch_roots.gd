@@ -12,17 +12,18 @@ class_name DispatchRoots
 ## toward the chair. The ones on the desk come down behind it, over its far edge or its ends where there is a gap, and
 ## crawl across its top toward the chair through the open room between the things standing on it ([member
 ## DispatchSet.footprints]), meandering, each as thick as its way lets it be, and after a moderate reach go over the near edge
-## and hang down the desk's front ([method _desk_root]); how much of each is grown is a pure function of show time ([method
-## grow]), its tip a taper moving on along it. No root goes through
+## and hang down the desk's front ([method _desk_root]); how much of each is grown is a pure function of show time
+## and its Growth ([method grow]: all of it from the start unless told otherwise), its tip a taper moving on along it. No root goes through
 ## what fills the air beside the desk ([member DispatchSet.clear]: the printer's paper and its heap): it goes round ([method
 ## _cleared]).
 ##
 ## A prop on the Dispatch desk's Props card ([DispatchProps]): how many hang, cross the desk and stand beside it, how thick they are,
-## how much they wander and how often they split are its properties ([constant FIELDS]), each set by a person or drawn by its own
+## how much they wander, how often they split and how fast the desk's grow are its properties ([constant FIELDS]), each set by a person or drawn by its own
 ## number ([Roll]); kept unrolled, they are the hollow's own, grown from the desk's number.
 
 ## What the roots can be told: how many hang from the ceiling, cross the desk and stand beside it on each side, how thick they are
-## (over their own), how much they wander and how often they split. Their defaults are the hollow's own.
+## (over their own), how much they wander, how often they split, and how fast the ones on the desk grow to their full length.
+## Their defaults are the hollow's own; Growth is never rolled.
 const FIELDS := {
 	"hanging": {"label": "Hanging", "blurb": "How many systems of roots hang from the ceiling.", "type": "int", "min": 0, "max": 48, "step": 1,
 		"default": 24, "roll": [12, 36]},
@@ -36,6 +37,8 @@ const FIELDS := {
 		"default": 0.42, "roll": [0.26, 0.6]},
 	"split": {"label": "Splits", "blurb": "How often they split into thinner roots.", "type": "float", "min": 0.0, "max": 0.15, "step": 0.005,
 		"default": 0.05, "roll": [0.025, 0.085]},
+	"growth": {"label": "Growth", "blurb": "How fast the roots on the desk reach their full length: 1 there from the start, 0 never past where they begin, faster the higher between.",
+		"type": "float", "min": 0.0, "max": 1.0, "step": 0.01, "default": 1.0},
 }
 ## How far out from the middle the systems beside the desk keep (m: never in front of what the chair sees at the desk's ends), and
 ## how many roots run along under each end.
@@ -84,7 +87,8 @@ const SWAY_EASE := 0.07
 const SWAY_IN := 0.015
 ## Sides round a root (more for a thick one).
 const SIDES := 9
-## The desk's roots are grown this share at the start of the night, all of it after [constant GROWN_BY] seconds.
+## The share of the desk's roots grown at the start of the night where they grow at all, and how long they take to grow the rest
+## at a Growth of one half (s; [method grown]).
 const GROWN_AT_START := 0.62
 const GROWN_BY := 1500.0
 ## Where no hanging root goes: over the desk and in front of it (the chair's), and the column before the terminal.
@@ -100,6 +104,7 @@ const CLEAR_PASSES := 4
 var _seed := 1
 var _v := {}                     # what the roots are told ([constant FIELDS]), as this build has it
 var _desk_mat: ShaderMaterial
+var _growth := 1.0               # how fast the desk's roots grow ([constant FIELDS] `growth`)
 var _feet: Array = []
 var _held := Rect2()
 var _clear: Array = []           # what no root goes through (AABBs, the set's space)
@@ -143,7 +148,8 @@ func build(seed: int, footprints: Array, held := Rect2(), clear: Array = [], spe
 	var root := Node3D.new()
 	root.name = "Roots"
 	var hang_mat := _material(1.0)
-	_desk_mat = _material(GROWN_AT_START)
+	_growth = float(_v["growth"])
+	_desk_mat = _material(grown(0.0, _growth))
 	var r := RandomNumberGenerator.new()
 	r.seed = hash([seed, "roots"])
 	var paths: Array = []
@@ -194,17 +200,22 @@ func build(seed: int, footprints: Array, held := Rect2(), clear: Array = [], spe
 	return root
 
 
-## How much of the desk's roots is grown at show time [param t]: from [constant GROWN_AT_START] at the start to all of it
-## at [constant GROWN_BY] seconds, easing out.
-static func grown(t: float) -> float:
-	var u := clampf(t / GROWN_BY, 0.0, 1.0)
+## How much of the desk's roots is grown at show time [param t] at Growth [param growth]: all of it at 1; [constant GROWN_AT_START]
+## for ever at 0; between, from that at the start to all of it, easing out, after [constant GROWN_BY] seconds at one half (sooner
+## the higher).
+static func grown(t: float, growth: float) -> float:
+	if growth >= 1.0:
+		return 1.0
+	if growth <= 0.0:
+		return GROWN_AT_START
+	var u := clampf(t / (GROWN_BY * (1.0 - growth) / growth), 0.0, 1.0)
 	return lerpf(GROWN_AT_START, 1.0, 1.0 - pow(1.0 - u, 1.6))
 
 
 ## The desk's roots as grown at [param t].
 func grow(t: float) -> void:
 	if _desk_mat != null:
-		_desk_mat.set_shader_parameter("growth", grown(t))
+		_desk_mat.set_shader_parameter("growth", grown(t, _growth))
 
 
 func _material(growth: float) -> ShaderMaterial:
@@ -558,10 +569,16 @@ func _desk_root(r: RandomNumberGenerator, k: int, grid: AStarGrid2D, out: Array,
 	lying.append({"points": pts, "radii": rad, "from": edge, "off": off})
 	on_desk.append({"from": entry, "to": flat[flat.size() - 1], "leaves": leaves, "reach": reach})
 	_take(flat, flat_r)
-	# Tendrils: fine roots off its side on the desk, each short and wandering until something stands in its way
+	var lens_all := PackedFloat32Array([0.0])
+	for i in range(1, pts.size()):
+		lens_all.append(lens_all[i - 1] + pts[i].distance_to(pts[i - 1]))
+	var grown_len := maxf(lens_all[lens_all.size() - 1] - lens_all[edge], 1e-4)
+	# Tendrils: fine roots off its side on the desk, each short and wandering until something stands in its way, and growing
+	# only once the root has grown to where it leaves it (`grow_from`: how much of the root is grown there)
 	for t in r.randi_range(1, 3):
 		var at := r.randi_range(int(flat.size() * 0.25), maxi(int(flat.size() * 0.8), int(flat.size() * 0.25) + 1))
 		at = clampi(at, 1, flat.size() - 2)
+		var grow_from := clampf((lens_all[edge + at] - lens_all[edge]) / grown_len, 0.0, 1.0)
 		var dir := (flat[at + 1] - flat[at - 1]).normalized().rotated(r.randf_range(0.7, 1.3) * (1.0 if r.randf() < 0.5 else -1.0))
 		var tp := PackedVector3Array()
 		var p := flat[at]
@@ -577,7 +594,7 @@ func _desk_root(r: RandomNumberGenerator, k: int, grid: AStarGrid2D, out: Array,
 			var trad := PackedFloat32Array()
 			for i in tp.size():
 				trad.append(lerpf(tr, TIP * 0.6, float(i) / float(tp.size() - 1)))
-			out.append({"points": tp, "radii": trad, "grow_at": 0, "tendril": true})
+			out.append({"points": tp, "radii": trad, "grow_at": 0, "grow_from": grow_from, "tendril": true})
 			lying.append({"points": tp, "radii": trad, "from": 0, "off": -1})
 
 
@@ -863,7 +880,8 @@ func _blocked(p: Vector2, margin: float) -> bool:
 	return false
 
 
-## The roots' mesh: a tube along each path, its radius as the path says; UV.x is how far along its root (0-1), UV2 meters
+## The roots' mesh: a tube along each path, its radius as the path says; UV.x is how far along its root (0-1; a tendril's from
+## its `grow_from`, so it grows only after the root it leaves has grown there), UV2 meters
 ## along and round it, CUSTOM0 the point of its line it is drawn in onto past the growth.
 func _mesh(paths: Array) -> ArrayMesh:
 	var st := SurfaceTool.new()
@@ -888,6 +906,7 @@ func _mesh(paths: Array) -> ArrayMesh:
 		# How far along it has grown is measured from where it begins to grow (a root on the desk: its edge)
 		var g0 := lens[clampi(int(pa.get("grow_at", 0)), 0, n - 1)]
 		var total := maxf(lens[n - 1] - g0, 1e-4)
+		var gf := float(pa.get("grow_from", 0.0))
 		var sides := SIDES if rad[0] > 0.03 else 6
 		var up := Vector3.RIGHT
 		var rings: Array = []
@@ -902,7 +921,8 @@ func _mesh(paths: Array) -> ArrayMesh:
 			for k in sides + 1:
 				var a := TAU * float(k) / float(sides)
 				var dd := bx * cos(a) + by * sin(a)
-				var lump := 1.0 + 0.12 * sin(lens[i] * 23.0 + float(k) * 1.7) * sin(lens[i] * 7.0)
+				# the last of a ring is its first again: the same lump, or the tube opens along that seam
+				var lump := 1.0 + 0.12 * sin(lens[i] * 23.0 + float(k % sides) * 1.7) * sin(lens[i] * 7.0)
 				ring.append([sm[i] + dd * rad[i] * lump, dd, float(k) / float(sides)])
 			rings.append(ring)
 		for i in n - 1:
@@ -912,7 +932,7 @@ func _mesh(paths: Array) -> ArrayMesh:
 					var ii := int(qq[0])
 					var e: Array = rings[ii][int(qq[1])]
 					st.set_normal(e[1])
-					st.set_uv(Vector2(maxf(lens[ii] - g0, 0.0) / total, float(e[2])))
+					st.set_uv(Vector2(lerpf(gf, 1.0, maxf(lens[ii] - g0, 0.0) / total), float(e[2])))
 					st.set_uv2(Vector2(lens[ii], float(e[2]) * TAU * rad[ii]))
 					var c: Vector3 = sm[ii]
 					st.set_custom(0, Color(c.x, c.y, c.z, 0.0))

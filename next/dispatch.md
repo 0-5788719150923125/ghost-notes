@@ -51,11 +51,11 @@ block (the author's, never ghost's `ghost:` block).
   here) becomes `<!-- lift: mug -->` and `<!-- switch: BAD -->`; the last TV picture becomes `<!-- live: tv -->` - the TV
   shows this desk, live, seen from just behind the empty chair, with whatever lies on it. `<!-- static: 5, surf -->` names
   Io-A's sea; bare is Io-B's crackle. A text message gets a short rest so it can be read before the reply.
-- **The roots are grown, seeded, and some grow**: a dozen-odd systems from the ceiling behind and beside the desk, random
+- **The roots are grown and seeded**: a dozen-odd systems from the ceiling behind and beside the desk, random
   walks biased down that branch as they go; most hang into the dark past the desk to the floor, a few come over the desk's
   far edge or its ends and crawl across its top toward the chair through the open room between the things on it, a moderate
-  reach, then over the near edge and down the desk's front. The ones on the desk creep on through the night (a front moving
-  along them with show time). Bark is from the props' wood shader, dark and fibrous; depth fog takes
+  reach, then over the near edge and down the desk's front. The ones on the desk are there whole from the start, or creep on through the
+  night as their Growth says (a front moving along them with show time). Bark is from the props' wood shader, dark and fibrous; depth fog takes
   the far ones.
 
 ## The marks
@@ -187,9 +187,9 @@ tighter than its least radius over a few lengths at once - about CAT-5e's - fall
 that goes into a thing is put back where it went in, keeping half its slide along the face, so a cord at rest holds its place (and
 never passes out through the far side of a thin thing); a point resting on something hardly feels the bending, so nothing pulls a
 cord taut, while what drapes - over a root, off an edge - rests on its peak and comes down in a long curve. The way is laid with its
-corners rounded and a gentle meander (`Rope.rounded`, `Rope.meandered`), 2 cm in from the desk's back and ends. Each is laid first as a hand lays it (`DispatchSet.lay_cables`: a path round
+corners on the desk's top turned on the rope's own least bend (`Rope.filleted`, the rest `Rope.rounded`), each set out from what it turns round until its arc clears it (`_stood_off`), and a gentle meander (`Rope.meandered`) that fades out where it would press into a thing or an edge (`_roomy`), 2 cm in from the desk's back and ends. Each is laid first as a hand lays it (`DispatchSet.lay_cables`: a path round
 everything standing there on a 1 cm grid, the desk's back preferred, each beside the last, over a root where it is lowest; never
-round the front of what it plugs into), a little slack, then let fall: it drapes over the roots on the desk and past its far edge
+round the front of what it plugs into), no longer than its way (a cord lying flat takes any extra in ripples and knots), then let fall: it drapes over the roots on the desk and past its far edge
 and rests on the desk, out of every part by the part's own outline. Each is plugged into the side of the part its thing stands
 on that faces the panel (`ports_of`, three sides tried), or laid round the panel and over the far edge, beside the panel where no root climbs off it, held where it crosses the edge and where it hangs. Gate:
 `dispatch_check` (ends in a part, through nothing on the desk; controls: laid blind of the roots, laid straight).
@@ -219,8 +219,11 @@ entry carries their colors (`DispatchSet.PHONE_FIELDS`, kept in the block's `pho
 (office plastics, bright, metal, pastel), or all the make's own. The terminal's and the radar's entries carry the color their glass
 glows in, any color picked (`TERMINAL_FIELDS`, `RADAR_FIELDS`, kept in the block's `terminal_screen` and `radar_screen`): the glass
 shows it as drawn, so the hue picked is the hue seen; the terminal's power and case lights, the light each screen throws and the
-title over the opening take its hue. The receiver's entry carries its oscilloscope's color and its dial lamp's (`RECEIVER_FIELDS`,
-kept in the block's `receiver_glow`), the scope shown as drawn as the other two are. The Props card's heading is "In the scene".
+title over the opening take its hue. The receiver's entry carries its oscilloscope's color, its dial lamp's and its dial face's (`RECEIVER_FIELDS`,
+kept in the block's `receiver_glow`), the scope shown as drawn as the other two are; the needle meter's card is the dial's face
+under the same lamp. The security monitor's entry carries its
+Static, how much snow shows over its picture (`FEED_FIELDS`, kept in the block's `feed_screen`; 0.12 its own); with nothing on it,
+it is all snow. The Props card's heading is "In the scene".
 
 Looked at (rendered with `tests/dispatch/dispatch_look_probe.gd` on a steady rehearsed voice, frames read by eye): the
 home view from the chair, every camera spot settled, the record and the target's log on the terminal (legible close up),
@@ -298,7 +301,8 @@ The opening, the radar, the terminal and the desk's props were reworked; what st
   the chair and a label, dial, screen or the clock's cards, nor in a face's own close-up (`_sights`, `hidden`: lines from the
   eye through each mesh's box); what the camera reads is packed first, and the stamp and pencil cup are left off a desk with
   no room. The satellite's monitor is on an arm low over the printer and the security monitor, clamped to the back edge
-  where it is free, turned to the chair (`_satellite`). Everything the medium and the roots read follows it (`at_of`,
+  where it is free, turned to the chair (`_satellite`), and held from behind: its elbow leans back as far as it must for no part
+  of the arm to cross the panel (`ARM_LEANS`, `_arm_through`). Everything the medium and the roots read follows it (`at_of`,
   `desk_at`, `held_rect`, the camera's spots). `dispatch_check` holds it on forty desks. The glossy desk top (polish 0.22, an old desk) and the lamp's soft shadow
   (blur 6, never empty of its own light: `shadow_opacity` 0.62, the room's bounce) avoid a crisp pale-blue disc under the
   mug that the screens' cool glows (which cast no shadows) otherwise light. The coffee ring is a thin opaque, matte rim with

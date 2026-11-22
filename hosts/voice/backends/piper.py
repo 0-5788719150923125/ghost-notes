@@ -234,7 +234,7 @@ DUR_SCALE_INPUT = "dur_scale"
 
 # A word leaned on, by the level the script marks it with (`*italic*` 1, `**bold**` 2, both 3): its
 # stressed vowel held longer through the duration plan and the word a little louder. Pitch, the third
-# cue of stress, has no input in a VITS graph.
+# cue of stress, has no input in a VITS graph (Kokoro's is inflection.py's, where a request asks `inflect`).
 # Measured (en_US-libritts-high, 14 renders a level) against the unmarked word: italic 16-20% longer and
 # 5-6 dB up, bold 29-38% longer and 7-9 dB up. The word grows less than its multiplier because only the
 # stressed vowel is held. Most of bold's step over italic is length: the gain never clips the word
@@ -1810,6 +1810,9 @@ class PiperBackend(Backend):
     # return run on.
     trail_early = None
     trail_through = False
+    # Whether a request's `inflect` inflects the words (inflection.py): a graph with no pitch input would get the
+    # lengthening alone, so a VITS voice keeps EMPHASIS as it is.
+    inflects = False
     # What the noise adds to its level (level.py measures a voice with the noise off, so a level kept is the
     # same wherever measured): VITS samples on every render, and libritts-high speaks 1.14 times (speaker 0)
     # to 1.16 (speaker 4) louder than with none. A model that samples nothing (kokoro.py) says 1.
@@ -2883,11 +2886,21 @@ class PiperBackend(Backend):
         # `_load` and vowel_probe.py).
         symbols = self._symbols(group, phonemizer, espeak_voice, voice)
         floors = {ti: _floor_of(t, params, _tail_share(group, ti)) for ti, t in enumerate(group)}
-        stretch = {
-            ti: EMPHASIS[int(t.get("emph", 0) or 0)][0]
-            for ti, t in enumerate(group)
-            if int(t.get("emph", 0) or 0) in EMPHASIS
-        }
+        # how the text inflects the words (inflection.py, the request's `inflect`, where the backend `inflects`): a
+        # stretch here, the rest the render's. Its stretches are all a word has, the leaned-on word's included:
+        # EMPHASIS's is the rule's default
+        import inflection  # ghost's own; HERE is on sys.path - see host.py
+
+        asked = params.get("inflect") if self.inflects else None
+        marks = inflection.plan(group, asked)
+        if asked:
+            stretch = {ti: m.stretch for ti, m in marks.items() if m.stretch != 1.0}
+        else:
+            stretch = {
+                ti: EMPHASIS[int(t.get("emph", 0) or 0)][0]
+                for ti, t in enumerate(group)
+                if int(t.get("emph", 0) or 0) in EMPHASIS
+            }
         # the word before a rest is held (`TRAIL_STRETCH`): its final rime, by this much
         held = {}
         for ti, t in enumerate(group):
@@ -2895,7 +2908,8 @@ class PiperBackend(Backend):
             if w > 0.0:
                 held[ti] = 1.0 + TRAIL_STRETCH * w
         return self._render_symbols(
-            symbols, cfg, sess, params, floors, stretch, opening=OPENING_VOWEL, hold=held
+            symbols, cfg, sess, params, floors, stretch, opening=OPENING_VOWEL, hold=held,
+            **({"inflect": marks} if marks else {}),
         )
 
     def _render_symbols(
@@ -2908,6 +2922,7 @@ class PiperBackend(Backend):
         stretch: dict | None = None,
         opening: float = 0.0,
         hold: dict | None = None,
+        inflect: dict | None = None,
     ):
         """(symbol, source) pairs -> audio, plus a time span per source.
 
@@ -2921,7 +2936,8 @@ class PiperBackend(Backend):
         below (`OPENING_VOWEL`) at the request's length scale, and `hold` {source: multiplier} on that
         source's final rime (`TRAIL_STRETCH`), multiplied with the stress where the two meet. All act on the
         duration plan through the graph's inputs; a graph without them renders as before. The vowel probe
-        passes none: it must get the model's own vowels.
+        passes none: it must get the model's own vowels. `inflect` (inflection.py's marks) are read only where the graph
+        takes a pitch (Kokoro's); a VITS graph has no input for one.
         """
         import numpy as np
 

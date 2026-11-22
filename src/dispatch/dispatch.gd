@@ -325,6 +325,7 @@ var _term_key := Vector2(NAN, NAN)      # the moment [method terminal_at] last d
 var _term_at := {}                      # ...and what it drew
 var _wants := {}                        # the things the script uses that only some desks have: clock, tablet
 var _makes := {}                        # the makes chosen for the desk's parts, and the desk and its roots ([method makes_of])
+var _feed_static := 0.12                # how much snow shows over the security monitor's picture ([method DispatchSet.feed_static])
 var _dark0 := false                     # the note opens in the black, until its first fade up
 var _tablet_doc := {}                   # the tablet's pages as the tablet medium reads them ([TabletScript])
 var _tablet_pages := {}                 # ...a page's index -> its [TabletPage], set when first shown
@@ -636,8 +637,9 @@ func _land_set() -> void:
 
 ## The terminal's text, the radar's glow and the receiver's oscilloscope as the note keeps them ([method DispatchSet.terminal_ink],
 ## [method DispatchSet.radar_ink], [method DispatchSet.receiver_inks]): the screens drawn in them, the title typed in the terminal's hue;
-## and how the scope draws ([method DispatchSet.scope_trace]).
+## how the scope draws ([method DispatchSet.scope_trace]); and the security monitor's static ([method DispatchSet.feed_static]).
 func _dress_inks() -> void:
+	_feed_static = DispatchSet.feed_static(_makes.get("feed_screen", {}))
 	var term := DispatchSet.terminal_ink(_makes.get("terminal_screen", {}))
 	_screens.set_inks(term, DispatchSet.radar_ink(_makes.get("radar_screen", {})),
 		DispatchSet.receiver_inks(_makes.get("receiver_glow", {}))["scope"])
@@ -1004,8 +1006,9 @@ static func wants_of(parsed: Dictionary, source: String) -> Dictionary:
 ## The makes a document's [param dispatch] chooses for the desk's parts: `{role: choice}` ([DispatchProps], [PropMakes]) - and, where
 ## it keeps them otherwise than its own, the desk itself (`desk`, [DispatchDesk]), the roots (`roots`, [DispatchRoots]), the
 ## phones' colors (`phones`, [constant DispatchSet.PHONE_FIELDS]), the terminal's and the radar's glass colors (`terminal_screen`,
-## `radar_screen`, [constant DispatchSet.TERMINAL_FIELDS], [constant DispatchSet.RADAR_FIELDS]) and the receiver's glows
-## (`receiver_glow`, [constant DispatchSet.RECEIVER_FIELDS]), each `{seed, <its fields set>}`.
+## `radar_screen`, [constant DispatchSet.TERMINAL_FIELDS], [constant DispatchSet.RADAR_FIELDS]), the receiver's glows
+## (`receiver_glow`, [constant DispatchSet.RECEIVER_FIELDS]) and the security monitor's static (`feed_screen`, [constant
+## DispatchSet.FEED_FIELDS]), each `{seed, <its fields set>}`.
 static func makes_of(dispatch: Dictionary) -> Dictionary:
 	var out := {}
 	var things: Dictionary = dispatch.get("things", {}) if dispatch.get("things") is Dictionary else {}
@@ -1013,7 +1016,8 @@ static func makes_of(dispatch: Dictionary) -> Dictionary:
 		if PropMakes.valid_for(String(role), things[role]) and not (things[role] as Dictionary).is_empty():
 			out[String(role)] = (things[role] as Dictionary).duplicate(true)
 	var parts := {"desk": DispatchDesk.FIELDS, "roots": DispatchRoots.FIELDS, "phones": DispatchSet.PHONE_FIELDS,
-		"terminal_screen": DispatchSet.TERMINAL_FIELDS, "radar_screen": DispatchSet.RADAR_FIELDS, "receiver_glow": DispatchSet.RECEIVER_FIELDS}
+		"terminal_screen": DispatchSet.TERMINAL_FIELDS, "radar_screen": DispatchSet.RADAR_FIELDS, "receiver_glow": DispatchSet.RECEIVER_FIELDS,
+		"feed_screen": DispatchSet.FEED_FIELDS}
 	for part in parts:
 		var spec := Roll.clean_spec(parts[part], dispatch.get(part))
 		if not spec.is_empty():
@@ -2272,8 +2276,9 @@ func _pose_power(on_glass: Dictionary) -> void:
 	for key in ["radar", "scope"]:
 		if _mats.has(key):
 			(_mats[key] as ShaderMaterial).set_shader_parameter("power", _glass_power)
-	if _set.dial != null and _set.dial.material_override is StandardMaterial3D:
-		(_set.dial.material_override as StandardMaterial3D).emission_energy_multiplier = DispatchSet.DIAL_GLOW * _power_now
+	for card in [_set.dial, _set.meter]:
+		if card != null and (card as MeshInstance3D).material_override is StandardMaterial3D:
+			((card as MeshInstance3D).material_override as StandardMaterial3D).emission_energy_multiplier = DispatchSet.DIAL_GLOW * _power_now
 
 
 ## Each note up on a screen played inside the desk at its moment ([NestedShow]: its scenes stepped, its song heard while it plays,
@@ -3213,7 +3218,7 @@ func _pose_screens(t: float) -> void:
 			_feeds[key] = {"glow": 0.32 + 0.03 * sin(t * 17.0) * sin(t * 5.3)}
 			continue
 		if key == "feed":
-			m.set_shader_parameter("snow", 0.12)
+			m.set_shader_parameter("snow", _feed_static)
 			m.set_shader_parameter("brightness", 1.4)
 			m.set_shader_parameter("frame", floor(t * 24.0))
 		m.set_shader_parameter("has_face", tex != null)

@@ -21,19 +21,21 @@ class_name DispatchFormat
 ## chosen there, kept in the block's `things` (`{role: choice}`, [PropMakes]) and handed to the desk as the seed is; so are the desk
 ## itself (`desk`, [DispatchDesk]), the roots (`roots`, [DispatchRoots]), the phones' colors (`phones`, [constant
 ## DispatchSet.PHONE_FIELDS]), the terminal's and the radar's glass colors (`terminal_screen`, `radar_screen`, [constant
-## DispatchSet.TERMINAL_FIELDS], [constant DispatchSet.RADAR_FIELDS]) and the receiver's glows (`receiver_glow`, [constant
-## DispatchSet.RECEIVER_FIELDS]), each `{seed, <its fields set>}` - none, their own.
+## DispatchSet.TERMINAL_FIELDS], [constant DispatchSet.RADAR_FIELDS]), the receiver's glows (`receiver_glow`, [constant
+## DispatchSet.RECEIVER_FIELDS]) and the security monitor's static (`feed_screen`, [constant DispatchSet.FEED_FIELDS]), each
+## `{seed, <its fields set>}` - none, their own.
 
 ## Its format's key in [constant Medium.REGISTRY].
 const KEY := "dispatch"
 ## Its keys in the Medium's block: the desk's seed (0: the note's own), the makes chosen for its parts (`{role: choice}`, none for
-## the desk's own), and the desk, the roots, the phones, the terminal's and the radar's glass and the receiver's glows as they are
-## kept (none: their own).
+## the desk's own), and the desk, the roots, the phones, the terminal's and the radar's glass, the receiver's glows and the
+## security monitor's static as they are kept (none: their own).
 const KNOBS := {"seed": 0, "things": {}, "desk": {}, "roots": {}, "phones": {}, "terminal_screen": {}, "radar_screen": {},
-	"receiver_glow": {}}
+	"receiver_glow": {}, "feed_screen": {}}
 ## The parts kept as properties and a number, and what each can be told.
 const PARTS := {"desk": DispatchDesk.FIELDS, "roots": DispatchRoots.FIELDS, "phones": DispatchSet.PHONE_FIELDS,
-	"terminal_screen": DispatchSet.TERMINAL_FIELDS, "radar_screen": DispatchSet.RADAR_FIELDS, "receiver_glow": DispatchSet.RECEIVER_FIELDS}
+	"terminal_screen": DispatchSet.TERMINAL_FIELDS, "radar_screen": DispatchSet.RADAR_FIELDS, "receiver_glow": DispatchSet.RECEIVER_FIELDS,
+	"feed_screen": DispatchSet.FEED_FIELDS}
 
 signal noted(text: String)
 

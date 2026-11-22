@@ -1040,21 +1040,22 @@ func _draw_gain(c: CanvasItem) -> void:
 		c.draw_string(_mono, mid + d * (knob + 30.0) + Vector2(-w.x * 0.5, w.y * 0.3), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, ink)
 
 
-## The receiver's dial: a lit face with the band's megahertz along it, a tick every fifth of one, and the cursor where it is
-## tuned - the SDR screen's own frequency ([constant DispatchSpectrum.FREQ]).
+## The receiver's dial: a white face (the prop tints it, [constant DispatchSet.RECEIVER_FIELDS] `paper`) with the band's
+## megahertz along it in black, a tick every fifth of one, and the cursor where it is tuned - the SDR screen's own frequency
+## ([constant DispatchSpectrum.FREQ]).
 const DIAL_MHZ := Vector2(18.0, 22.0)
 const DIAL_X := Vector2(40.0, 472.0)
 
 
 func _draw_dial(c: CanvasItem) -> void:
 	var size := Vector2(512, 256)
-	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.78, 0.66, 0.42))
-	var ink := Color(0.12, 0.08, 0.04)
+	c.draw_rect(Rect2(Vector2.ZERO, size), Color.WHITE)
+	var ink := Color(0.02, 0.02, 0.02)
 	var x_of := func(mhz: float) -> float: return lerpf(DIAL_X.x, DIAL_X.y, (mhz - DIAL_MHZ.x) / (DIAL_MHZ.y - DIAL_MHZ.x))
 	var ticks := int(round((DIAL_MHZ.y - DIAL_MHZ.x) * 5.0))
 	for k in ticks + 1:
 		var x: float = x_of.call(DIAL_MHZ.x + float(k) * 0.2)
-		c.draw_line(Vector2(x, 120), Vector2(x, 150 if k % 5 == 0 else 138), ink, 2.0)
+		c.draw_line(Vector2(x, 120), Vector2(x, 150 if k % 5 == 0 else 138), ink, 3.0)
 	for mhz in range(int(DIAL_MHZ.x), int(DIAL_MHZ.y) + 1):
 		var label := "%d" % mhz
 		var w := _mono.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 30).x

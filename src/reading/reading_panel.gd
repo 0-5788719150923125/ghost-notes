@@ -1128,6 +1128,9 @@ func _request_args(s: Dictionary, ch: Dictionary) -> Dictionary:
 	# the words said before it in its paragraph ([method ReadingPlan.lead_ins]), to a voice that reads them
 	if ch.has("before") and _cast.reads_before(_cast.voice_id_of(s)):
 		a["before"] = ch["before"]
+	# a question rises, a leaned-on word is accented (hosts/voice/inflection.py), to a voice that inflects
+	if _cast.inflects(_cast.voice_id_of(s)):
+		a["inflect"] = true
 	if _cast.voice_id_of(s) == FormantVoice.ID:
 		a["formant"] = (s["formant"] as Dictionary).duplicate(true)
 	return a
@@ -1214,6 +1217,8 @@ func _on_synthesized(id: int, result: Dictionary) -> void:
 				_cast.offer_blends(String(name))
 			if bool((caps[name] as Dictionary).get("before", false)):
 				_cast.offer_before(String(name))
+			if bool((caps[name] as Dictionary).get("inflect", false)):
+				_cast.offer_inflect(String(name))
 		return
 	if result.has("voices"):
 		_cast.fill_voices(result["voices"])

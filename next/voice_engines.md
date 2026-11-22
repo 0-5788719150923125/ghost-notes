@@ -1083,6 +1083,50 @@ awaits the author's hands and ear on the lab. Not built: shapes keyed to the wor
 (the prototype's breath on a phrase's last words, asides, emphasis: the graph takes them already, the line has
 no way to say them), and F0 and energy as inputs (the Arc made in the model).
 
+## Inflection from the text
+
+Kokoro reads a "?" as a statement and an italic word as any other. `hosts/voice/inflection.py` is the primitive: a
+registry of RULES, each a function from a sentence's tokens to what each word does (a pitch shape in semitones keyed to
+the word or its stressed vowel, `flatten` to take out Kokoro's own movement there, `slow` on the whole word, `stretch`
+on its vowel), and one `curve` that lays the shapes on a call's frame plan. Kokoro realizes it through the sung graph:
+`f0_keep` fed the curve multiplies the pitch Kokoro plans, so the decoder makes the inflection (no resampling). A new
+heuristic is a row and a function.
+
+### Built
+
+- `question`: the last word of a sentence ending in "?" rises about 6 st, all of it on its stressed vowel, its own fall
+  flattened; the word keeps its length (the trail holds a sentence's last word already). A WH-QUESTION FALLS (`wh` 0
+  of the rise): a wh-tagged word (Penn WDT, WP, WP$, WRB) first, after nothing but a conjunction, preposition,
+  interjection or adverb ("Where...?", "And how...?", "In which...?"); an echo ("You did what?"), a wh-word in a clause
+  ("Do you know where...?") or a relative ("that") rises. The tags are the tokens' `pos`, kept by homographs.py's
+  tagger pass (a first word tagged a name tagged again lower-cased); an untagged sentence rises.
+- Laid where the sounds are heard: Kokoro voices a sound PLAN_LEAD before its plan while a fed pitch is heard where it
+  is fed (measured within 12 ms), so the shapes lead by that much (`curve`'s `lead`). Flattening reads the word's own
+  sounds alone (a call reads on into the next sentence's first words), a step voiced only if over half the word's
+  median, and moves no step past FLATTEN_MOST.
+- `emphasis`: `*italic*` peaks about 3 st on the stressed vowel and falls back, 12% slower, its vowel held 1.5 times
+  (the rule's; `EMPHASIS`'s stretch is not added); `**bold**` 1.5 times all of it; a sentence's last word keeps 0.3 of
+  the lengthening (`final`). The level lift (`EMPHASIS`) stays.
+- A word's `slow` is whole frames: planned, then each sound floored at its frames times `slow`, remainders carried (a
+  ratio on 25 ms frames rounds back to nothing).
+- The reading sends `inflect: true` to the voices of a backend that says `inflect` (Kokoro: `ReadingCast.inflects`), so
+  a take kept without it is made again once and no Piper take is touched. A voice that moves (`kokoro_moving.py`) gets
+  the slowdown but no pitch: its graph takes none.
+- `hosts/voice/test_inflection.py`; listening pairs by `hosts/voice/inflection_probe.py` (plain, then inflected).
+
+### What was measured
+
+Emma: every yes/no question's last word ends 5-7 st above plain ("outside?" 153 Hz plain, 253 inflected), at plain's
+length, the wh-questions the same as plain;
+an italic peaks about 2.5 st over plain at its vowel, 25-50 ms longer; "It was *real*." 50 ms shorter than plain.
+Heart rises the same ("outside?" 177 to 268 Hz); before the lead, a short vowel before a stop ("what?") rose after
+it was over.
+
+### Status
+
+In the reading. Heard: questions and italics good; the first holds were too long (now as above), and wh-questions
+should fall (now so); awaiting the ear again. Open: a Voice card row to turn it off or tune it.
+
 ## Training Kokoro
 
 Our own custom training loop (other projects have legacy code that would be hard to work with). The test

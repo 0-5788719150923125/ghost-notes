@@ -86,6 +86,7 @@ var _lab: ReaderBrowser          # the Voice row's Lab… (ReaderBrowser)
 var _blend := ""
 var _blending := {}              # the backends whose readers blend, as the host said ([method offer_blends])
 var _leading := {}               # the backends that read a sentence's words before ([method offer_before])
+var _inflecting := {}            # the backends that inflect words from the text ([method offer_inflect])
 ## Ghost Notes' own voice as the tab on screen has it ([FormantVoice], the row's `formant:`): bred in the Lab's
 ## fishing game, read where the tab's voice is the formant one.
 var _formant := {}
@@ -1544,6 +1545,20 @@ func reads_before(id: String) -> bool:
 	for v in voice_meta:
 		if String((v as Dictionary).get("id", "")) == id:
 			return _leading.has(String((v as Dictionary).get("backend", "")))
+	return false
+
+
+## The host says backend [param backend] inflects words from the text (a question rises, a leaned-on word is accented;
+## hosts/voice/inflection.py): asked of its voices alone, so no other voice's takes are keyed by it.
+func offer_inflect(backend: String) -> void:
+	_inflecting[backend] = true
+
+
+## Whether voice [param id] is asked to inflect ([method offer_inflect]).
+func inflects(id: String) -> bool:
+	for v in voice_meta:
+		if String((v as Dictionary).get("id", "")) == id:
+			return _inflecting.has(String((v as Dictionary).get("backend", "")))
 	return false
 
 
