@@ -685,7 +685,7 @@ class _Walk:
 			+ m.get_string() + " " + rest.substr(end.get_end()).strip_edges()
 
 	## The words of [param raw], onto the global list: links kept as targets, emphasis as a
-	## level, everything after a skip mark shown but not spoken.
+	## level, everything after a skip mark shown but not spoken, the first word `lead`.
 	func _tokenize(raw: String, skipping: bool, block: int) -> PackedInt32Array:
 		var out := PackedInt32Array()
 		var text := TabletScript._rx(Manuscript.HESITATION).sub(raw, "", true)
@@ -757,6 +757,9 @@ class _Walk:
 				if brk:
 					words[wi]["brk"] = true
 					brk = false
+				# the first word of a run of text set apart (a paragraph, heading, item or cell)
+				if out.is_empty():
+					words[wi]["lead"] = true
 				out.append(wi)
 				if not skipping:
 					spoken.append(wi)

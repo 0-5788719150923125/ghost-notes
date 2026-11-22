@@ -58,7 +58,7 @@ class_name DispatchScript
 ##                                     typed into the bar; a search is typed into the box of a search engine's page (a page
 ##                                     that is little but its name), else into the bar; the address of the page up again
 ##                                     is that page reloaded. Shown and never said; it follows the room's words, scrolling
-##                                     what is read off it into view, else easing slowly down to where its writing ends. `<!-- player -->` on a page is a
+##                                     what is read off it into view (a sentence read whole off it lit as it is said), else easing slowly down to where its writing ends. `<!-- player -->` on a page is a
 ##                                     video player. `<!-- said: words -->` on a line of a page, over a picture or a
 ##                                     paragraph: the page is brought there as the room says those words, and stays;
 ##                                     a page with one goes only where they say, its top until the first (what is said

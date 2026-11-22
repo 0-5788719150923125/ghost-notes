@@ -215,8 +215,8 @@ const BLACK_TAIL := 0.3
 ## never faster than GLIDE pixels a second (a reader's skim, never past where its writing ends: the desk's pages have no
 ## padding), or DRIFT pixels a second while how long it is up is not known. A word said is followed where it is this long
 ## and the word said after it is the next one there (a phrase, never one stray word), or where it reads on from the last word
-## followed; a run of READ_RUN words read on lights them as the tablet medium lights what its voice reads; a word is looked
-## for this many words on from the last. What the finger goes to is brought this far down the view (a link, a search box;
+## followed; a run of READ_RUN words read on lights the sentences it reads whole as the tablet medium lights what its voice
+## reads; a word is looked for this many words on from the last. What the finger goes to is brought this far down the view (a link, a search box;
 ## a message box, which the keyboard rises under), unless it is in view already, this far from the view's edges. The
 ## keyboard rises and goes down over KEYBOARD seconds, a key under the finger shows for KEY_SHOWN seconds.
 const PAGE_EASE := 0.9
@@ -3763,7 +3763,8 @@ func _page_end(i: int) -> float:
 ## [constant FOLLOW_WINDOW] words, its run starting back at the words said just before it that stand just before it there
 ## (the short words a phrase is never found by); each found is a mark the
 ## page scrolls to, kept [constant PAGE_KEEP] down the view ([param view] high, [param most] the furthest down), and a run of
-## [constant READ_RUN] or more read on in a row is read off the page, its words lit as they are said. A reply typed into the
+## [constant READ_RUN] or more read on in a row is read off the page, the sentences it reads whole there lit as they are said
+## ([method _read_whole]). A reply typed into the
 ## page is a mark too, its message box brought [constant BOX_KEEP] down the view, and its words are typed, never followed.
 ## A page with places marked for what is said ([method DispatchScript.said_in]) goes to those alone, each as its words
 ## begin ([method _said_place]): no word is looked for on it, and none lit.
@@ -3804,7 +3805,7 @@ func _page_follow(i: int, view: float, most: float) -> Dictionary:
 			break
 		if typed:
 			if run.size() >= READ_RUN:
-				lit.append_array(run)
+				lit.append_array(_read_whole(run))
 			run = []
 			used = si
 			continue
@@ -3832,12 +3833,12 @@ func _page_follow(i: int, view: float, most: float) -> Dictionary:
 					break
 		if j < 0:
 			if run.size() >= READ_RUN:
-				lit.append_array(run)
+				lit.append_array(_read_whole(run))
 			run = []
 			continue
 		if not run.is_empty() and j != cursor:
 			if run.size() >= READ_RUN:
-				lit.append_array(run)
+				lit.append_array(_read_whole(run))
 			run = []
 		if run.is_empty():
 			# a phrase found starts its run back at the words said just before it that stand just before it there (the
@@ -3860,7 +3861,7 @@ func _page_follow(i: int, view: float, most: float) -> Dictionary:
 		cursor = j + 1
 		used = si
 	if run.size() >= READ_RUN:
-		lit.append_array(run)
+		lit.append_array(_read_whole(run))
 	if not places.is_empty():
 		var from := int(a["after"])
 		var said := spoken.slice(from, maxi(mini(end, spoken.size()), from))
@@ -3875,9 +3876,65 @@ func _page_follow(i: int, view: float, most: float) -> Dictionary:
 	return out
 
 
+## The pairs of [param run] (`[page word, spoken word]`, read on in a row) that read whole sentences off the page: each from
+## where one begins there (a paragraph, heading, item or cell opening, or a sentence ended before it) to where one ends. A
+## few words the room says in a sentence of its own that happen to stand on the page in a longer one are read off nothing.
+func _read_whole(run: Array) -> Array:
+	var out: Array = []
+	var open := -1
+	for k in run.size():
+		var wi := int((run[k] as Array)[0])
+		if _opens_sentence(wi):
+			open = k
+		if open >= 0 and _closes_sentence(wi):
+			out.append_array(run.slice(open, k + 1))
+			open = -1
+	return out
+
+
+## Whether page word [param wi] (of the whole tablet's words) begins a sentence as written: the first of its paragraph,
+## heading, item or cell, after a line break, or after a sentence's end (a mark with no letters before it read past).
+func _opens_sentence(wi: int) -> bool:
+	var all: Array = _tablet_doc["words"]
+	var w: Dictionary = all[wi]
+	if bool(w.get("lead", false)) or bool(w.get("brk", false)):
+		return true
+	for k in range(wi - 1, -1, -1):
+		var p: Dictionary = all[k]
+		if int(p["page"]) != int(w["page"]) or _ends_sentence_text(String(p["text"])):
+			return true
+		if not String(p["norm"]).is_empty():
+			return false
+		if bool(p.get("lead", false)) or bool(p.get("brk", false)):
+			return true
+	return true
+
+
+## Whether page word [param wi] ends a sentence as written: its own stop, or the last of its paragraph, heading, item or
+## cell (a mark with no letters after it read past).
+func _closes_sentence(wi: int) -> bool:
+	var all: Array = _tablet_doc["words"]
+	var w: Dictionary = all[wi]
+	if _ends_sentence_text(String(w["text"])):
+		return true
+	for k in range(wi + 1, all.size()):
+		var n: Dictionary = all[k]
+		if int(n["page"]) != int(w["page"]) or bool(n.get("lead", false)) or bool(n.get("brk", false)):
+			return true
+		if not String(n["norm"]).is_empty():
+			return false
+		if _ends_sentence_text(String(n["text"])):
+			return true
+	return true
+
+
 ## Whether page word [param w] (`[norm, y, word]`, [method _tablet_page]) ends a sentence as written.
 func _ends_sentence(w: Array) -> bool:
-	var text := String((_tablet_doc["words"][int(w[2])] as Dictionary)["text"])
+	return _ends_sentence_text(String((_tablet_doc["words"][int(w[2])] as Dictionary)["text"]))
+
+
+## Whether [param text], a word as written, ends a sentence: a stop, then any closing quote, bracket or emphasis.
+func _ends_sentence_text(text: String) -> bool:
 	return TabletScript._rx("[.!?][\"')\\]”’*_]*$").search(text) != null
 
 
