@@ -367,6 +367,7 @@ var _shows := {}                        # ...a note's [NestedShow], made when it
 var _loads := {}                        # ...a note's song and bake being read on a worker: {task, box}
 var _dt := 0.0                          # this frame's step, for a note played inside the desk
 var _power_now := 1.0                   # how much power the desk has this frame ([method power_at])
+var _glass_power := 1.0                 # the same without its flicker, for the screens' glass
 var _of_kind := {}                      # `play`, `power`, `environment` -> the actions of that kind, in order
 var _cut_by := {}                       # a `play` -> the next action that puts something else on its screen (-1 none)
 var _film_now := {}                     # each screen -> the film on it this frame ([method film_at])
@@ -2035,8 +2036,9 @@ func sound_rev() -> int:
 # --- the power, the environment, the films ----------------------------------------------------------------------------
 
 ## How much of its power the desk has at [param t] (0 to 1): whole until a `power: off`, every glow dying over [constant
-## POWER_FADE] from its thunk ([constant POWER_AT] into its rest), flickering as it goes; a `power: on` brings it back as quickly.
-func power_at(t: float) -> float:
+## POWER_FADE] from its thunk ([constant POWER_AT] into its rest), flickering as it goes ([param flicker]: a tube's glass takes it
+## steady, or its collapse strobes); a `power: on` brings it back as quickly.
+func power_at(t: float, flicker := true) -> float:
 	var lit := 1.0
 	for i in _of_kind.get("power", PackedInt32Array()):
 		var a: Dictionary = _actions[i]
@@ -2047,7 +2049,7 @@ func power_at(t: float) -> float:
 			continue
 		var u := clampf((t - at) / POWER_FADE, 0.0, 1.0)
 		lit = lerpf(lit, 1.0 if bool(a["on"]) else 0.0, u)
-		if u < 1.0 and not bool(a["on"]):
+		if flicker and u < 1.0 and not bool(a["on"]):
 			lit *= 0.5 + 0.5 * float(fposmod((t - at) * 23.0, 1.0) < 0.65)
 	return lit
 
@@ -2249,7 +2251,7 @@ func _pose_terminal(film: Dictionary) -> void:
 	m.set_shader_parameter("face", _screens.terminal.get_texture())
 	m.set_shader_parameter("mono", 0.0)
 	m.set_shader_parameter("snow", 0.0)
-	m.set_shader_parameter("power", _power_now)
+	m.set_shader_parameter("power", _glass_power)
 
 
 ## Everything on the desk that runs on the grid at the power it has ([method PropRig.set_power]): its lights and its glowing parts,
@@ -2267,7 +2269,7 @@ func _pose_power(on_glass: Dictionary) -> void:
 		(_set.rigs[k] as PropRig).set_power(p)
 	for key in ["radar", "scope"]:
 		if _mats.has(key):
-			(_mats[key] as ShaderMaterial).set_shader_parameter("power", _power_now)
+			(_mats[key] as ShaderMaterial).set_shader_parameter("power", _glass_power)
 	if _set.dial != null and _set.dial.material_override is StandardMaterial3D:
 		(_set.dial.material_override as StandardMaterial3D).emission_energy_multiplier = DispatchSet.DIAL_GLOW * _power_now
 
@@ -2314,6 +2316,7 @@ func _hear_films(_t: float) -> void:
 func _pose(t: float) -> void:
 	_feeds = {}
 	_power_now = power_at(t)
+	_glass_power = power_at(t, false)
 	_land_notes()
 	_film_now = {}
 	if not (_of_kind.get("play", PackedInt32Array()) as PackedInt32Array).is_empty():
@@ -2716,8 +2719,8 @@ func passes(t0: float, t1: float) -> PackedFloat32Array:
 
 
 ## The radar at [param t]: the sweep's clock; the target as the sweep paints him (where he was as it last passed, the
-## paints before it fading behind, a step apart where he is moving), with the place he last came to written beside him and
-## its ping's ring; the aircraft drifting across it; the jet, over the middle, while it is heard; with the gain past three,
+## paints before it fading behind, a step apart where he is moving), with the place he last came to (its readout and his
+## coordinates, [method DispatchScreens.radar_redactions]) and its ping's ring; the aircraft drifting across it; the jet, over the middle, while it is heard; with the gain past three,
 ## the clutter round him ([method clutter_at]).
 func radar_at(t: float) -> Dictionary:
 	var jet := -1.0
@@ -3192,7 +3195,7 @@ func _pose_screens(t: float) -> void:
 			# a clip not imported yet: the screen's static, never a still where a moving picture belongs
 			m.set_shader_parameter("snow", 0.85)
 			m.set_shader_parameter("has_face", false)
-			m.set_shader_parameter("power", power * _power_now)
+			m.set_shader_parameter("power", power * _glass_power)
 			m.set_shader_parameter("frame", floor(t * 24.0))
 			_feeds[key] = {"glow": (0.3 + 0.025 * sin(t * 17.0) * sin(t * 5.3)) * power}
 			continue
@@ -3202,7 +3205,7 @@ func _pose_screens(t: float) -> void:
 		if key == "feed" and tex == null:
 			m.set_shader_parameter("snow", 0.85)
 			m.set_shader_parameter("has_face", false)
-			m.set_shader_parameter("power", _power_now)
+			m.set_shader_parameter("power", _glass_power)
 			m.set_shader_parameter("brightness", 0.5)
 			m.set_shader_parameter("frame", floor(t * 24.0))
 			_feeds[key] = {"glow": 0.32 + 0.03 * sin(t * 17.0) * sin(t * 5.3)}
@@ -3214,7 +3217,7 @@ func _pose_screens(t: float) -> void:
 		m.set_shader_parameter("has_face", tex != null)
 		if tex != null:
 			m.set_shader_parameter("face", tex)
-		m.set_shader_parameter("power", (power if (tex != null or since < 0.0) else 0.0) * _power_now)
+		m.set_shader_parameter("power", (power if (tex != null or since < 0.0) else 0.0) * _glass_power)
 		_feeds[key] = {"glow": 0.35 * power if tex != null else 0.0}
 	_live_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if live else SubViewport.UPDATE_DISABLED
 	if live and _live_cam != null:
@@ -3295,9 +3298,10 @@ static func _mug_samples(home: Vector3, mouth: Vector3, lift: float) -> PackedVe
 	return out
 
 
-## The redacted words on the terminal at [param t], hidden over this frame where the camera sees them ([DispatchCensor]):
-## a run being typed is covered to its end from its first key, as an editor's box goes up when a name begins to appear
-## (unless finishing it would wrap or scroll the screen: then as it stands).
+## The redacted words on the terminal at [param t], and the coordinates beside the radar's blip while its glass is lit, hidden
+## over this frame where the camera sees them ([DispatchCensor]): a run being typed is covered to its end from its first key,
+## as an editor's box goes up when a name begins to appear (unless finishing it would wrap or scroll the screen: then as it
+## stands).
 func _censor_at(t: float) -> void:
 	var shown := terminal_at(t)
 	var runs: Array = []
@@ -3308,6 +3312,12 @@ func _censor_at(t: float) -> void:
 			var whole: PackedStringArray = terminal_at(t, true)["lines"]
 			if whole.size() == lines.size() and whole[0] == lines[0]:
 				runs = _screens.redactions(whole)
+	if _set.radar_screen != null and _power_now > 0.0:
+		var curve := float(_glass("radar", "scope").get("curve", 0.0))
+		for r in _screens.radar_redactions():
+			r["glass"] = _set.radar_screen
+			r["curve"] = curve
+			runs.append(r)
 	_censor.cover(runs, _set.terminal_screen, float(_glass("terminal", "screen").get("curve", 0.0)), _cam, t)
 	_after_censor.visible = _censor.visible and _blur.visible
 

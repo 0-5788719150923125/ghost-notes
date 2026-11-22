@@ -5,10 +5,11 @@ extends Node
 ## (puppets and sets on the library's shelves, the storyboard in the note's folder), so it is a tool, never a gate.
 ##
 ##   godot --headless --path . -- --cartoon PATH [--make] [--rig NAME] [--again NAME] [--paint NAME] [--direct] [--python PY]
-##       [--writer claude|codex|grok] [--model M]
+##       [--trace NAME] [--land FILE] [--writer claude|codex|grok] [--model M]
 ##
 ## `--make` makes whatever is not made yet; `--rig` makes a character's sheet, painting only the drawings it lacks, and `--again` all of
-## them anew; `--python` runs the puppet host on that interpreter (its environment elsewhere).
+## them anew; `--land` lands a director's reply kept in FILE as a run's would be (checked, its cameras framed, written) - after the
+## code that frames them changed; `--trace` traces where a set's characters walk on it (its ground line); `--python` runs the puppet host on that interpreter (its environment elsewhere).
 
 var _producer: CartoonProducer = null
 var _t0 := 0
@@ -31,6 +32,8 @@ func _ready() -> void:
 			"--rig": asked.append(["rig", v])
 			"--again": asked.append(["again", v])
 			"--paint": asked.append(["paint", v])
+			"--trace": asked.append(["trace", v])
+			"--land": asked.append(["land", v])
 			"--direct": asked.append(["direct", ""])
 	if not FileAccess.file_exists(note):
 		print("cartoon_tool: no note at %s" % note)
@@ -48,6 +51,8 @@ func _ready() -> void:
 			"rig": why = _start_rig(String(a[1]))
 			"again": why = _start_rig(String(a[1]), true)
 			"paint": why = _start_paint(String(a[1]))
+			"trace": why = _start_trace(String(a[1]))
+			"land": why = _producer.land(FileAccess.get_file_as_string(String(a[1])))
 			"direct": why = _producer.direct()
 		if not why.is_empty():
 			print("cartoon_tool: %s - %s" % [a[0], why])
@@ -65,6 +70,13 @@ func _start_paint(name: String) -> String:
 	for s in _producer.sets():
 		if String(s["name"]) == name:
 			return _producer.paint(s)
+	return "no set %s in the note's sets" % name
+
+
+func _start_trace(name: String) -> String:
+	for s in _producer.sets():
+		if String(s["name"]) == name:
+			return _producer.trace(s)
 	return "no set %s in the note's sets" % name
 
 

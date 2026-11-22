@@ -23,8 +23,10 @@ prompt:
       IT IS SILENT, like a show on a muted screen: nobody hears a word, so talking is seen - a `talk` span flaps a mouth for as long as a
       line would take, and the one listening reacts. Make every beat read with the sound off.
   - >-
-      ABOUT {{seconds}} SECONDS, in about {{shots}} shots. A shot is 3 to 7 seconds; something happens in every one, and each ends on its
-      point. It is a glimpse of a world, not a whole story: give it a beginning that sets it up, a turn, and a button at the end.
+      ABOUT {{seconds}} SECONDS, in about {{shots}} shots. A shot is 1.5 to 6 seconds - a close-up in a conversation 1 to 2.5, a
+      journey 3 to 4 - something happens in every one, and each ends on its point. It TELLS A STORY THE EYE CAN FOLLOW: who these are and
+      what they want, what they do about it, what it costs someone, and how it ends; where the note names a theme, every sequence turns
+      on it. Give it a beginning that sets it up, turns that raise it, and a button at the end.
   - ""
   - "THE CAST (each is a puppet; its `rig` is what a cast entry names):"
   - insert: cast
@@ -33,6 +35,8 @@ prompt:
   - insert: sets
   - ""
   - include: staging
+  - ""
+  - include: coverage
   - ""
   - include: verbs
   - ""
@@ -61,17 +65,46 @@ staging:
       FAR OFF. To show them small in the distance (crossing a skyline, a far field), keep the wide camera and make them small where they
       are: `height` about 0.25 to 0.4, their feet at y about -0.1 (a line just below the middle of the frame, where a set's far ridge or
       horizon runs - a set whose characters stand on a ridge says so), `shade` 1 for black shapes against a bright sky. They need far
-      less room than up close, and a long walk across the whole frame takes them several seconds.
+      less room than up close, and a long walk across the whole frame takes them several seconds. On a set whose ground line is traced,
+      give each puppet that walks it `on_ground: true`: its feet follow the ground up and down as it goes, whatever y its place gives.
   - when: loops
     say: >-
       IT LOOPS: the last moment is played straight into the first, again and again. End the last shot with every character back where
-      the first shot starts them - the same places, the same way round, the same mood (or none), standing still - so the cut back to the
+      the first shot starts them - the same places, turned the same way (`face` front again where the first shot starts them facing us), the same mood (or none), standing still - so the cut back to the
       start cannot be seen.
   - >-
       THE TRACK. `track: {nominal, spans}`, nominal equal to the shot's `hold`. A span is {action, target, args} with `at` (a moment) or
       `from` and `to` (a window), in seconds from the shot's start; `ease` is smooth by default, `linear` for an even pace or a verb with
       phases of its own, `spike` to strike a pose and come back. Overlap spans freely: a puppet can walk and talk at once, and two can
       talk over each other.
+
+# How a sequence is covered: the shots a film-maker would take of it.
+coverage:
+  - >-
+      COVER IT AS A FILM IS SHOT, never one wide shot after another. A new place opens on it seen whole, often empty or with only the
+      people who live there, before anyone we follow arrives (an establishing shot: a backdrop and nobody in front of it, or its own
+      people going about their night). A CONVERSATION cuts between close shots of whoever is talking - a face filling the frame, its
+      mouth moving - and the one listening reacting, back and forth, then out to the group when something happens. FRAME A CLOSE SHOT ON
+      WHO IT IS OF and the camera is placed for you: `camera: {"frame": an id, "size": "face"}` (a face filling the frame), "chest"
+      (head and shoulders, hands in view), or "full" (the whole body); `frame` a list of ids holds them together (a two-shot). Keep
+      whoever is not framed out of its way. A CUTAWAY shows what someone is about to walk into, or what they left behind, without them in it. Where the
+      cast and sets hold one, an INSERT shows the small act that matters up close (a hand reaching for a handle) on its own close set,
+      and what it does there happens: the handle turns and the door opens (`change` to the set of it open).
+  - >-
+      KEEP THE GEOGRAPHY. A journey keeps its direction across the screen from shot to shot: whoever leaves a shot by the right comes
+      into the next from the left and goes on the same way, and the way home runs the other way. Show a journey crossing the whole
+      frame, from where they came toward where they are going, and arrive at the next place in the shot after. The same character
+      keeps its size and look from one shot of a place to the next, and its mood and pose: one left terrified is still terrified when
+      we cut back to it.
+  - >-
+      CARTOON TIMING IS BRISK. A walk across a room takes 1.5 to 2.5 seconds, a run half that; a journey across a whole frame 3 to 4
+      seconds; a sneak is quick, light steps, never a crawl. Cut as soon as a shot's point lands; a reaction is held a beat, not a
+      speech. Every second something new happens.
+  - >-
+      ONE THING OUT OF ANOTHER starts inside it: a soul leaving a body `emerge`s from it (target the soul, `from` the body), then flies
+      off with `move` (`gait: float`, an `arc` and a `weave` so it swoops and bobs) - never popping up beside them. Things are their
+      own pieces: a piece of furniture the cast holds is placed in depth like a character, in front of or behind whoever is at it. A
+      set painted as another set changed (the same door, open) is shown at the moment it changes with `change` on the backdrop.
 
 # The verbs, in the registry's own words.
 verbs:

@@ -11,8 +11,9 @@ class_name DispatchScreens
 ## the scope's trace move every frame, the terminal only as a key is struck. The medium hands each a state ([method
 ## show_terminal], [method show_radar], ...) and the set's glass shows its texture through `shaders/dispatch_screen.gdshader`.
 ##
-## Redacted words on the terminal ([constant DispatchScript.REDACT]) are drawn as written; [DispatchCensor] hides them over
-## the camera's finished picture, where [method redactions] says they lie.
+## Redacted words on the terminal ([constant DispatchScript.REDACT]) and the coordinates beside the radar's blip are drawn as
+## written; [DispatchCensor] hides them over the camera's finished picture, where [method redactions] and [method
+## radar_redactions] say they lie. The place the coordinates come to is held in a readout at the scope's lower right.
 
 const TERM_SIZE := Vector2i(1120, 840)
 const RADAR_SIZE := Vector2i(512, 512)
@@ -49,9 +50,26 @@ const GAIN_SIZE := Vector2i(256, 256)
 const CLOCK_SIZE := Vector2i(448, 200)
 const DIGIT_CELL := Vector2i(96, 160)
 const TABLET_SIZE := Vector2i(1200, 1600)
-## The chart's rows, and how many of them are nights before tonight's.
-const CHART_ROWS := 11
-const CHART_BEFORE := 4
+## The chart ([method _draw_chart]): its sheet, laid out in [constant CHART_SHEET] units and drawn [constant CHART_SCALE]
+## times over so it reads close up; its plot's corner and side; and the three sources, each a box of Io's phase against
+## the planet's central meridian (degrees, `cml` and `phase` from and to; Radio JOVE's), and its share of the pen's dots.
+const CHART_SHEET := Vector2(840, 600)
+const CHART_SCALE := 2.0
+const CHART_PLOT := Vector2(78, 104)
+const CHART_SIDE := 400.0
+const CHART_SOURCES := {
+	"Io-A": {"cml": Vector2(200, 270), "phase": Vector2(205, 260), "dots": 0.34},
+	"Io-B": {"cml": Vector2(105, 185), "phase": Vector2(80, 110), "dots": 0.46},
+	"Io-C": {"cml": Vector2(280, 360), "phase": Vector2(225, 250), "dots": 0.2},
+}
+## The pen's dots on it, one a night it was heard, and how many of them land in a box; how many nights before tonight it
+## was printed.
+const CHART_DOTS := 2400
+const CHART_IN_BOXES := 0.7
+const CHART_PRINTED := 2617
+## The printer's type and the pen's hand on the chart.
+const PRINT_FACE := "res://fonts/cards/CourierPrime-Regular.ttf"
+const PEN_FACE := "res://fonts/hands/Caveat-Variable.ttf"
 ## Tonight's date, as the chart writes it ([method Macros.tonight]).
 const Macros := preload("res://src/data/macros.gd")
 ## How many phone screens can be lit at once (the one in hand, the ones on the desk, one ringing or texting).
@@ -67,6 +85,15 @@ const PHOSPHOR := Color(0.4315, 1.0, 0.5059)
 const SCREEN_DARK := Color(0.0056, 0.016, 0.0074)
 const RADAR_GLOW := Color(0.2706, 1.0, 0.3569)
 const RADAR_GLASS := Color(0.0085, 0.05, 0.017)
+## The radar's writing (px): its letters and lines; how many degrees of the coordinates beside the blip the scope's radius spans
+## from 0, 0 at its middle (hidden, never a real place: they only move as he moves); and the place's readout - its widest line,
+## its margin, and its lower right corner (a share of the scope's radius from its middle, inside the bearing ticks).
+const RADAR_FONT := 15
+const RADAR_LINE := 17.0
+const RADAR_SPAN := 0.08
+const READOUT_WIDE := 150.0
+const READOUT_PAD := 7.0
+const READOUT_CORNER := Vector2(0.62, 0.68)
 const SCOPE_GLOW := Color(0.2863, 1.0, 0.3765)
 const SCOPE_GLASS := Color(0.0045, 0.02, 0.009)
 
@@ -94,6 +121,8 @@ var _clock: Face
 var _tablet: Face
 var _faces: Array = []
 var _mono: Font
+var _print: Font                 # the chart's type and the pen's hand: held, as a font let go after a draw takes its glyphs with it
+var _pen: Font
 var _term_ink := PHOSPHOR        # the terminal's text and its dark, the radar's glow and its glass ([method set_inks])
 var _term_dark := SCREEN_DARK
 var _radar_ink := RADAR_GLOW
@@ -105,6 +134,8 @@ var _scope_glass := SCOPE_GLASS
 func _init() -> void:
 	name = "DispatchScreens"
 	_mono = load(MONO)
+	_print = load(PRINT_FACE)
+	_pen = load(PEN_FACE)
 
 
 ## Build them, once: [param _labels] (the phones' names) are their makes' own to show now.
@@ -133,7 +164,7 @@ func build(_labels: PackedStringArray) -> void:
 			vp.add_child(f)
 			faces.append(vp)
 			_faces.append(f)
-		chart = _vp(Vector2i(840, 600), false)
+		chart = _vp(Vector2i(CHART_SHEET * CHART_SCALE), false)
 		chart.add_child(Face.new(self, "chart"))
 		dial = _vp(Vector2i(512, 256), false)
 		dial.add_child(Face.new(self, "dial"))
@@ -248,6 +279,77 @@ func _advance(text: String) -> float:
 ## last ping, or -1), planes: [{at, heading}], clutter: [{at, fade, chair?}]}`.
 func show_radar(st: Dictionary) -> void:
 	_show(radar, _radar, st)
+
+
+## Where the coordinates beside the blip lie on the radar shown now: `{rect, key, line, size}` for each line (px, as [method
+## redactions]; its key the same however they change, so one box follows them).
+func radar_redactions() -> Array:
+	var blip: Dictionary = _radar.state.get("blip", {}) if _radar != null else {}
+	if blip.is_empty():
+		return []
+	var size := Vector2(RADAR_SIZE)
+	var out: Array = []
+	var k := 0
+	for l in _tag(blip["at"] as Vector2, size * 0.5, size.x * 0.47):
+		out.append({"rect": l["rect"], "key": hash(["radar coordinates", k]), "line": RADAR_LINE, "size": size})
+		k += 1
+	return out
+
+
+## The coordinates written beside a blip at [param at] (the scope's radius 1): its latitude and longitude, from 0, 0 at the
+## scope's middle.
+static func coordinates(at: Vector2) -> PackedStringArray:
+	return PackedStringArray([_degrees(-at.y * RADAR_SPAN, "N", "S", 2), _degrees(at.x * RADAR_SPAN, "E", "W", 3)])
+
+
+static func _degrees(deg: float, plus: String, minus: String, digits: int) -> String:
+	var a := absf(deg)
+	var d := floori(a)
+	var m := "%.3f" % ((a - float(d)) * 60.0)
+	return "%s %s°%s'" % [plus if deg >= 0.0 else minus, str(d).pad_zeros(digits), m.pad_zeros(2)]
+
+
+## The coordinates beside a blip at [param at] (the scope's radius 1) on a scope of radius [param rad] round [param mid]:
+## `{text, base, rect}` a line - its baseline's start and its rect a line high about the letters' middle (px) - on the blip's
+## right unless it is far right.
+func _tag(at: Vector2, mid: Vector2, rad: float) -> Array:
+	var p := mid + at * rad
+	var right := p.x < mid.x + rad * 0.3
+	var lines := coordinates(at)
+	var out: Array = []
+	for k in lines.size():
+		var w := _mono.get_string_size(lines[k], HORIZONTAL_ALIGNMENT_LEFT, -1, RADAR_FONT).x
+		var base := p + Vector2(12.0 if right else -12.0 - w, -4.0 + RADAR_LINE * (float(k) - 0.5))
+		var y := base.y - float(RADAR_FONT) * 0.32
+		out.append({"text": lines[k], "base": base, "rect": Rect2(base.x, y - RADAR_LINE * 0.5, w, RADAR_LINE)})
+	return out
+
+
+## The readout of the place [param place] on a scope of radius [param rad] round [param mid]: its box, its lower right
+## corner held at [constant READOUT_CORNER], and its lines - parted at a comma, then wrapped to [constant READOUT_WIDE] -
+## `{rect, lines: [{text, base}]}` (px).
+func _readout(place: String, mid: Vector2, rad: float) -> Dictionary:
+	var lines := PackedStringArray()
+	var parts := place.split(", ", false)
+	for i in parts.size():
+		var line := ""
+		for word in (parts[i] + ("," if i < parts.size() - 1 else "")).split(" ", false):
+			var next := word if line.is_empty() else line + " " + word
+			if not line.is_empty() and _mono.get_string_size(next, HORIZONTAL_ALIGNMENT_LEFT, -1, RADAR_FONT).x > READOUT_WIDE:
+				lines.append(line)
+				next = word
+			line = next
+		if not line.is_empty():
+			lines.append(line)
+	var w := 0.0
+	for l in lines:
+		w = maxf(w, _mono.get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, RADAR_FONT).x)
+	var end := mid + READOUT_CORNER * rad
+	var box := Rect2(end - Vector2(w, RADAR_LINE * float(lines.size())) - Vector2.ONE * READOUT_PAD * 2.0, Vector2.ZERO).expand(end)
+	var out: Array = []
+	for k in lines.size():
+		out.append({"text": lines[k], "base": box.position + Vector2(READOUT_PAD, READOUT_PAD + RADAR_LINE * (float(k) + 0.78))})
+	return {"rect": box, "lines": out}
 
 
 ## The scope ([method DispatchScope.shown]): a figure `{figure, glow, trails}` - its points (the glass's half height 1), how
@@ -406,8 +508,9 @@ func _draw_terminal(c: CanvasItem, st: Dictionary) -> void:
 
 
 ## The radar: dark green glass, its range rings and cross, the sweep going round with its glow fading behind it, the desk
-## at its middle; the target's blip, lit as the sweep passes and fading after, its place written small beside it; the
-## places before it fading out; a ping's ring opening out from the blip; an aircraft's small mark drifting across now
+## at its middle; the target's blip, lit as the sweep passes and fading after, his coordinates written small beside it (hidden
+## over the frame, [method radar_redactions]) and the place they come to held in the readout at the lower right; the places
+## before it fading out; a ping's ring opening out from the blip; an aircraft's small mark drifting across now
 ## and then; and with the gain turned up, clutter round him, smaller and dimmer, with no name (at the top of the knob one
 ## on the desk itself, the chair's).
 func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
@@ -457,13 +560,8 @@ func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
 		var fresh := clampf(1.0 - since / 1.2, 0.0, 1.0)
 		c.draw_circle(at, 7.0 + 4.0 * fresh, Color(_radar_ink, 0.25 + 0.4 * lit))
 		c.draw_circle(at, 4.5, Color(_radar_ink.lightened(0.4), 0.55 + 0.45 * maxf(lit, fresh)))
-		var label := String(blip.get("label", ""))
-		var right := at.x < mid.x + rad * 0.3
-		var pos := at + Vector2(12.0 if right else -12.0, -10.0)
-		var w := _mono.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
-		if not right:
-			pos.x -= w
-		c.draw_string(_mono, pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(_radar_ink, 0.85))
+		for l in _tag(blip["at"] as Vector2, mid, rad):
+			c.draw_string(_mono, l["base"], String(l["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, RADAR_FONT, Color(_radar_ink, 0.85))
 		var ping := float(st.get("ping", -1.0))
 		if ping >= 0.0 and ping < DispatchScript.PING_LEN:
 			var u := ping / DispatchScript.PING_LEN
@@ -471,6 +569,13 @@ func _draw_radar(c: CanvasItem, st: Dictionary) -> void:
 				var uu := clampf(u - float(k) * 0.18, 0.0, 1.0)
 				if uu > 0.0:
 					c.draw_arc(at, 8.0 + uu * rad * 0.55, 0.0, TAU, 72, Color(_radar_ink, 0.85 * (1.0 - uu)), 2.2, true)
+		var place := String(blip.get("label", ""))
+		if not place.is_empty():
+			var ro := _readout(place, mid, rad)
+			c.draw_rect(ro["rect"], Color(_radar_glass, 0.92))
+			c.draw_rect(ro["rect"], Color(_radar_ink, 0.35), false, 1.2)
+			for l in ro["lines"]:
+				c.draw_string(_mono, l["base"], String(l["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, RADAR_FONT, Color(_radar_ink, 0.7 + 0.3 * fresh))
 	c.draw_arc(mid, rad, 0.0, TAU, 128, Color(0.0, 0.0, 0.0), 8.0, true)
 
 
@@ -777,43 +882,122 @@ func _draw_handset(c: CanvasItem, at: Vector2, r: float, col: Color, down: bool)
 
 
 
-## The chart: the hobbyist's table printed out - dates and hours in three columns headed IO-A, IO-B and IO-C, its rows
-## the nights round tonight's ([member night]), each date's hours drawn from the date itself. Tonight's Io-B always comes
-## (the receiver opens on its crackle) and is circled in pen, and now and then one on a night before it.
+## The chart: the hobbyist's page printed out, a plot with no dates on it - Io's phase up its side against the planet's
+## central meridian along its foot, the three sources each a hatched box, his rates and table beside it, and the browser's
+## footer with the night it was printed, years before tonight ([member night]). Over it the pen's dots, one a night it was
+## heard, the old ones faded, most in a box and the rest where they fell; tonight's dot in Io-B (the receiver opens on its
+## crackle), circled.
 func _draw_chart(c: CanvasItem) -> void:
-	var size := Vector2(840, 600)
-	c.draw_rect(Rect2(Vector2.ZERO, size), Color(0.94, 0.93, 0.89))
+	var pr := _print
+	var at := func(rot: float, p: Vector2) -> void:
+		c.draw_set_transform_matrix(Transform2D(rot, Vector2(CHART_SCALE, CHART_SCALE), 0.0, p * CHART_SCALE))
+	at.call(0.0, Vector2.ZERO)
+	c.draw_rect(Rect2(Vector2.ZERO, CHART_SHEET), Color(0.93, 0.91, 0.85))
 	var ink := Color(0.1, 0.1, 0.12)
-	c.draw_string(_mono, Vector2(40, 54), "JOVIAN DECAMETRIC STORM PREDICTIONS", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, ink)
-	c.draw_string(_mono, Vector2(40, 86), "20.1 MHz   TIMES UT", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, ink)
-	var cols := [40.0, 250.0, 450.0, 650.0]
-	var heads := ["DATE", "IO-A", "IO-B", "IO-C"]
-	for k in 4:
-		c.draw_string(_mono, Vector2(cols[k], 136), heads[k], HORIZONTAL_ALIGNMENT_LEFT, -1, 22, ink)
-	c.draw_line(Vector2(36, 146), Vector2(size.x - 36, 146), ink, 2.0)
+	var faint := Color(0.1, 0.1, 0.12, 0.22)
+	var footer := Color(0.1, 0.1, 0.12, 0.6)
 	var tonight: Dictionary = night if not night.is_empty() else Macros.tonight()
-	for row in CHART_ROWS:
-		var day := Macros.shifted(tonight, row - CHART_BEFORE)
-		var r := RandomNumberGenerator.new()
-		r.seed = ("chart-" + Macros.written(day)).hash()
-		var y := 182.0 + float(row) * 36.0
-		c.draw_string(_mono, Vector2(cols[0], y), Macros.written(day, "MON DD"), HORIZONTAL_ALIGNMENT_LEFT, -1, 20, ink)
-		var io_b := false
-		for k in 3:
-			if r.randf() < 0.55 or (row == CHART_BEFORE and k == 1):
-				var h := r.randi_range(0, 23)
-				var m := r.randi_range(0, 59)
-				var s := "%02d:%02d-%02d:%02d" % [h, m, (h + r.randi_range(1, 3)) % 24, r.randi_range(0, 59)]
-				c.draw_string(_mono, Vector2(cols[k + 1], y), s, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, ink)
-				io_b = io_b or k == 1
-		if io_b and (row == CHART_BEFORE or (row < CHART_BEFORE and r.randf() < 0.5)):
-			var pen := Color(0.12, 0.18, 0.55, 0.85)
-			var mid := Vector2(cols[2] + 70.0 + r.randf_range(-20, 20), y - 7.0)
-			var pts := PackedVector2Array()
-			for i in 33:
-				var a := float(i) / 32.0 * TAU * 1.08
-				pts.append(mid + Vector2(cos(a) * (96.0 + r.randf_range(-3, 3)), sin(a) * (17.0 + r.randf_range(-2, 2))))
-			c.draw_polyline(pts, pen, 2.4, true)
+	# where it was folded once to fit a pocket, and a ring from a cup set down on it
+	c.draw_line(Vector2(0, 300), Vector2(CHART_SHEET.x, 303), Color(1, 1, 1, 0.35), 3.0)
+	c.draw_line(Vector2(0, 302), Vector2(CHART_SHEET.x, 305), Color(0.4, 0.36, 0.3, 0.12), 1.0)
+	c.draw_arc(Vector2(790, 560), 46.0, PI * 0.9, PI * 1.75, 40, Color(0.55, 0.4, 0.22, 0.16), 4.0, true)
+	c.draw_string(_mono, Vector2(36, 44), "JUPITER DECAMETRIC SOURCES", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, ink)
+	c.draw_string(pr, Vector2(36, 70), "WHEN TO LISTEN AT 20.1 MHz - GOOD FOR ANY YEAR", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, ink)
+	# the plot: a degree's place, its grid every 30 and numbers every 90
+	var o := CHART_PLOT + Vector2(0, CHART_SIDE)
+	var pt := func(cml: float, phase: float) -> Vector2: return o + Vector2(cml, -phase) * (CHART_SIDE / 360.0)
+	for d in range(0, 361, 30):
+		var f := float(d)
+		var w := 1.6 if d % 90 == 0 else 0.8
+		var line := faint if d % 360 != 0 else ink
+		c.draw_line(pt.call(f, 0.0), pt.call(f, 360.0), line, w)
+		c.draw_line(pt.call(0.0, f), pt.call(360.0, f), line, w)
+		if d % 90 == 0:
+			var lab := str(d)
+			var lw := pr.get_string_size(lab, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+			c.draw_string(pr, Vector2(pt.call(f, 0.0)) + Vector2(-lw * 0.5, 18), lab, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, ink)
+			c.draw_string(pr, Vector2(pt.call(0.0, f)) + Vector2(-lw - 6, 5), lab, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, ink)
+	c.draw_string(pr, o + Vector2(CHART_SIDE * 0.5 - 118, 40), "CENTRAL MERIDIAN (SYS III)", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, ink)
+	at.call(-PI * 0.5, CHART_PLOT + Vector2(-44, CHART_SIDE * 0.5 + 40))
+	c.draw_string(pr, Vector2.ZERO, "PHASE OF Io", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, ink)
+	at.call(0.0, Vector2.ZERO)
+	for k in CHART_SOURCES:
+		var src: Dictionary = CHART_SOURCES[k]
+		var cml: Vector2 = src["cml"]
+		var phase: Vector2 = src["phase"]
+		var box := Rect2(pt.call(cml.x, phase.y), Vector2(cml.y - cml.x, phase.y - phase.x) * (CHART_SIDE / 360.0))
+		var u := 0.0
+		while u < box.size.x + box.size.y:
+			var p0 := box.position + Vector2(minf(u, box.size.x), maxf(u - box.size.x, 0.0))
+			var p1 := box.position + Vector2(maxf(u - box.size.y, 0.0), minf(u, box.size.y))
+			c.draw_line(p0, p1, Color(0.1, 0.1, 0.12, 0.3), 1.0)
+			u += 7.0
+		c.draw_rect(box, ink, false, 1.6)
+		c.draw_string(_mono, box.position + Vector2(3, -5), k, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, ink)
+	# beside it: how to read it, his rates, his table
+	var lines := [
+		"HOW TO USE",
+		"Look up Io's phase and the CML",
+		"for your hour. Where the two",
+		"meet in a box, listen.",
+		"",
+		"CML  one turn   9h 55m 30s",
+		"Io   one turn  42h 28m",
+		"",
+		"SOURCE  CML      Io PHASE",
+		"Io-A   200-270  205-260",
+		"Io-B   105-185   80-110",
+		"Io-C   280-360  225-250",
+		"",
+		"Io-B  short bursts, popcorn",
+		"Io-A  long bursts, like surf",
+	]
+	for i in lines.size():
+		var head: bool = i == 0 or String(lines[i]).begins_with("SOURCE")
+		c.draw_string(_mono if head else pr, Vector2(530, 128 + 22.0 * i), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, ink)
+	var printed := Macros.shifted(tonight, -CHART_PRINTED)
+	c.draw_string(pr, Vector2(36, 584), Macros.written(printed, "MM/DD/YYYY") + "  11:52 PM", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, footer)
+	c.draw_string(pr, Vector2(720, 584), "Page 1 of 1", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, footer)
+	# the pen: a dot a night, oldest first and faded, most of them in a box
+	var r := RandomNumberGenerator.new()
+	r.seed = "chart-dots".hash()
+	var old_ink := Color(0.42, 0.4, 0.38, 0.5)
+	var pen := Color(0.12, 0.18, 0.55, 0.85)
+	var keys := CHART_SOURCES.keys()
+	for i in CHART_DOTS:
+		var cml := r.randf() * 360.0
+		var phase := r.randf() * 360.0
+		if r.randf() < CHART_IN_BOXES:
+			var pick := r.randf()
+			var src: Dictionary = CHART_SOURCES[keys[-1]]
+			for k in keys:
+				pick -= float((CHART_SOURCES[k] as Dictionary)["dots"])
+				if pick <= 0.0:
+					src = CHART_SOURCES[k]
+					break
+			var sc: Vector2 = src["cml"]
+			var sp: Vector2 = src["phase"]
+			cml = r.randf_range(sc.x, sc.y)
+			phase = r.randf_range(sp.x, sp.y)
+		var age := float(i) / float(CHART_DOTS)
+		c.draw_circle(pt.call(cml, phase) + Vector2(r.randf_range(-1, 1), r.randf_range(-1, 1)), r.randf_range(1.2, 2.0), old_ink.lerp(pen, age * age))
+	# tonight: one more in Io-B, ringed, and his word beside the box
+	var tr := RandomNumberGenerator.new()
+	tr.seed = ("chart-" + Macros.written(tonight)).hash()
+	var bc: Vector2 = (CHART_SOURCES["Io-B"] as Dictionary)["cml"]
+	var bp: Vector2 = (CHART_SOURCES["Io-B"] as Dictionary)["phase"]
+	var mid: Vector2 = pt.call(tr.randf_range(bc.x + 15.0, bc.y - 15.0), tr.randf_range(bp.x + 6.0, bp.y - 6.0))
+	var fresh := Color(0.06, 0.08, 0.4)
+	c.draw_circle(mid, 3.4, fresh)
+	for turn in 2:
+		var ring := PackedVector2Array()
+		for i in 41:
+			var a := float(i) / 40.0 * TAU * 1.08 + 0.4 + float(turn) * 0.7
+			ring.append(mid + Vector2(cos(a) * (24.0 + tr.randf_range(-2.0, 2.0)), sin(a) * (20.0 + tr.randf_range(-2.0, 2.0))))
+		c.draw_polyline(ring, fresh, 2.6, true)
+	var note: Vector2 = Vector2(pt.call(bc.y, bp.x)) + Vector2(8, 22)
+	c.draw_string(_pen, note, "talks the most", HORIZONTAL_ALIGNMENT_LEFT, -1, 24, pen)
+	c.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
 ## The radar's gain scale, printed round its knob: a tick and a number for each step, one to ten, from the lower left round

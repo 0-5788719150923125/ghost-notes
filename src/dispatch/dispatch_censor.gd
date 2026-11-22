@@ -6,7 +6,8 @@ class_name DispatchCensor
 ## desk's finished frame, after the 3D, and covers each redacted run with a box cracked along a few long straight lines
 ## into large flat shards, each the average color of the frame under it (`shaders/dispatch_redact.gdshader`).
 ##
-## The box belongs to the frame, not the glass: each run's rect on the terminal (padded; runs that then touch become one,
+## A run is on the terminal unless it names its own screen (`glass`, `curve`, `size` and `line`: the radar's coordinates).
+## The box belongs to the frame, not the glass: each run's rect on its screen (padded; runs that then touch become one,
 ## [method groups]) is carried through the glass's bulge and the camera ([method on_glass], [method seen]), and the box is
 ## the upright rect round it, as a tracker draws one. It follows a beat behind ([constant LAG]), wavers outward a little
 ## ([constant WAVER]) and always holds the words' own rect ([method cover]). Its cracks are laid once per run, seeded by
@@ -29,7 +30,7 @@ const HALF_H := 0.62
 const LAG := 0.09
 const WAVER := 0.08
 const STEP_RATE := 11.0
-## A shard's longest length, in the terminal's px: about three letters.
+## A shard's longest length, in the terminal's px (a screen's own in proportion to its line): about three letters.
 const SHARD := 56.0
 
 ## This frame's boxes: `{rect: Rect2 (px), key: int, aspect: float}`.
@@ -47,8 +48,9 @@ func _init() -> void:
 	visible = false
 
 
-## Hide [param runs] ({rect, key} on the terminal, [method DispatchScreens.redactions]) where [param cam] sees them on
-## [param glass] (its face bulged by [param curve]) at show time [param now]: each group's box eased from where it was,
+## Hide [param runs] ({rect, key} on the terminal, [method DispatchScreens.redactions], or on a screen of their own, [method
+## DispatchScreens.radar_redactions]) where [param cam] sees them on [param glass] (its face bulged by [param curve]; a run's
+## own `glass` and `curve` where it names them) at show time [param now]: each group's box eased from where it was,
 ## wavered, never short of the words' own rect; the shader's arrays pushed whole.
 func cover(runs: Array, glass: MeshInstance3D, curve: float, cam: Camera3D, now: float) -> void:
 	var dt := now - _last
@@ -62,7 +64,11 @@ func cover(runs: Array, glass: MeshInstance3D, curve: float, cam: Camera3D, now:
 		while next.has(key):
 			# the same words in the same column twice: each its own box
 			key = hash([key, "again"])
-		var exact := seen(g["rect"], glass, curve, cam)
+		var on: MeshInstance3D = g.get("glass", glass)
+		if on == null:
+			continue
+		var size: Vector2 = g.get("size", Vector2(DispatchScreens.TERM_SIZE))
+		var exact := seen(g["rect"], on, float(g.get("curve", curve)), cam, size)
 		if exact.size.x <= 0.0 or boxes.size() >= MOST:
 			continue
 		var was: Rect2 = _eased.get(key, exact)
@@ -73,7 +79,8 @@ func cover(runs: Array, glass: MeshInstance3D, curve: float, cam: Camera3D, now:
 		var hi := at.end + Vector2(waver(key, 2, now), waver(key, 3, now)) * out
 		var r := g["rect"] as Rect2
 		if not _cracks.has(key):
-			_cracks[key] = cracks(key, r.size.x / r.size.y, SHARD / r.size.y)
+			var shard := SHARD / DispatchScreens.TERM_LINE * float(g.get("line", DispatchScreens.TERM_LINE))
+			_cracks[key] = cracks(key, r.size.x / r.size.y, shard / r.size.y)
 		boxes.append({"rect": Rect2(lo, Vector2.ZERO).expand(hi).merge(exact), "key": key, "aspect": r.size.x / r.size.y})
 	_eased = next
 	for key in _cracks.keys():
@@ -120,16 +127,19 @@ func _draw() -> void:
 
 # --- where the boxes go -----------------------------------------------------------------------------------------------
 
-## The runs as boxes on the terminal (px): each of [param runs] ({rect, key}) padded ([constant PAD_X], [constant HALF_H]),
-## and those that then overlap made one (the names down a column of matches are one box): `{rect, key}`.
+## The runs as boxes on their screens (px): each of [param runs] ({rect, key}, and a screen's own fields) padded by its line
+## ([constant PAD_X], [constant HALF_H]), and those on one screen that then overlap made one (the names down a column of
+## matches are one box): `{rect, key}` and the run's own fields.
 static func groups(runs: Array) -> Array:
-	var line := DispatchScreens.TERM_LINE
 	var out: Array = []
 	for r in runs:
+		var line := float(r.get("line", DispatchScreens.TERM_LINE))
 		var q: Rect2 = r["rect"]
 		var mid := q.get_center().y
-		out.append({"rect": Rect2(q.position.x - PAD_X * line, mid - HALF_H * line, q.size.x + 2.0 * PAD_X * line, 2.0 * HALF_H * line),
-			"key": int(r["key"])})
+		var g: Dictionary = (r as Dictionary).duplicate()
+		g["rect"] = Rect2(q.position.x - PAD_X * line, mid - HALF_H * line, q.size.x + 2.0 * PAD_X * line, 2.0 * HALF_H * line)
+		g["key"] = int(r["key"])
+		out.append(g)
 	var merged := true
 	while merged:
 		merged = false
@@ -137,8 +147,11 @@ static func groups(runs: Array) -> Array:
 			for j in range(i + 1, out.size()):
 				var a: Rect2 = out[i]["rect"]
 				var b: Rect2 = out[j]["rect"]
-				if a.intersects(b):
-					out[i] = {"rect": a.merge(b), "key": hash([out[i]["key"], out[j]["key"]])}
+				if a.intersects(b) and out[i].get("glass") == out[j].get("glass"):
+					var m: Dictionary = (out[i] as Dictionary).duplicate()
+					m["rect"] = a.merge(b)
+					m["key"] = hash([out[i]["key"], out[j]["key"]])
+					out[i] = m
 					out.remove_at(j)
 					merged = true
 					break
@@ -147,10 +160,11 @@ static func groups(runs: Array) -> Array:
 	return out
 
 
-## Where terminal pixel [param px] is shown on [param glass], in the world: a face standing at its middle (a make's, its size in
+## Where pixel [param px] of a screen [param screen] px across (the terminal's unless given) is shown on [param glass], in the
+## world: a face standing at its middle (a make's, its size in
 ## its `size` meta, or a quad) that `shaders/dispatch_screen.gdshader` bulges by [param curve], showing the face's point b at the quad's c where c (1 + curve |c|^2 / 2) = b.
-static func on_glass(px: Vector2, glass: MeshInstance3D, curve: float) -> Vector3:
-	var b := px / Vector2(DispatchScreens.TERM_SIZE) * 2.0 - Vector2.ONE
+static func on_glass(px: Vector2, glass: MeshInstance3D, curve: float, screen := Vector2(DispatchScreens.TERM_SIZE)) -> Vector3:
+	var b := px / screen * 2.0 - Vector2.ONE
 	var c := b
 	for _i in 10:
 		c = b / (1.0 + curve * c.dot(c) * 0.5)
@@ -158,9 +172,9 @@ static func on_glass(px: Vector2, glass: MeshInstance3D, curve: float) -> Vector
 	return glass.global_transform * Vector3(c.x * 0.5 * size.x, -c.y * 0.5 * size.y, 0.0)
 
 
-## The upright rect round [param r] (terminal px) in [param cam]'s frame, its edges followed through the bulge; empty when
-## any of it is behind the camera.
-static func seen(r: Rect2, glass: MeshInstance3D, curve: float, cam: Camera3D) -> Rect2:
+## The upright rect round [param r] (px on a screen [param screen] across, the terminal's unless given) in [param cam]'s
+## frame, its edges followed through the bulge; empty when any of it is behind the camera.
+static func seen(r: Rect2, glass: MeshInstance3D, curve: float, cam: Camera3D, screen := Vector2(DispatchScreens.TERM_SIZE)) -> Rect2:
 	var out := Rect2()
 	var first := true
 	for k in 16:
@@ -168,7 +182,7 @@ static func seen(r: Rect2, glass: MeshInstance3D, curve: float, cam: Camera3D) -
 		var edge := k / 4
 		var px: Vector2 = [r.position + Vector2(r.size.x * u, 0.0), Vector2(r.end.x, r.position.y + r.size.y * u),
 			r.end - Vector2(r.size.x * u, 0.0), Vector2(r.position.x, r.end.y - r.size.y * u)][edge]
-		var w := on_glass(px, glass, curve)
+		var w := on_glass(px, glass, curve, screen)
 		if cam.is_position_behind(w):
 			return Rect2()
 		var s := cam.unproject_position(w)

@@ -23,7 +23,7 @@ const REGISTRY := {
 	"gather": Gather, "fly": Fly, "helix_split": HelixSplit, "lane_jump": LaneJump,
 	"set": SetParam, "ramp": Ramp, "pulse": Pulse, "flash": Flash,
 	"move": Move, "pose": Pose, "talk": Talk, "face": Face, "strike": Strike, "hit": Hit, "hop": Hop, "shake": Shake, "fx": Fx,
-	"feel": Feel,
+	"feel": Feel, "emerge": Emerge, "change": Change,
 }
 
 ## How a puppet goes ([constant PuppetBody.GAITS]), the poses every rig has ([constant PuppetBody.POSES]) and the marks a cartoon
@@ -154,6 +154,19 @@ const ARGS := {
 		"gait": {"label": "Gait", "type": "enum", "options": GAITS, "default": "walk",
 			"blurb": "How it goes: walking, running, tiptoeing, hopping, floating off the ground, or sliding with its feet still."},
 		"turn": {"label": "Turns", "type": "bool", "default": true, "blurb": "It turns to face the way it goes first."},
+		"arc": {"label": "Arc", "type": "num", "default": 0.0,
+			"blurb": "How high its path bows up on the way (stage units; below 0 dips): a leap, a swoop."},
+		"weave": {"label": "Weave", "type": "num", "default": 0.0,
+			"blurb": "How many times it bobs up and down along the way, each a fifth of its height: a ghost's flight, a flutter."},
+	},
+	"emerge": {
+		"from": {"label": "From", "type": "actor", "default": null,
+			"blurb": "Who it comes out of: it starts small and faint at their middle and grows, rises and comes clear."},
+		"rise": {"label": "Rises", "type": "num", "default": 0.6, "blurb": "How far it rises out of them, in its own heights."},
+	},
+	"change": {
+		"picture": {"label": "Picture", "type": "text", "default": "",
+			"blurb": "The painted set a backdrop shows from now on (the same place changed: a door open, a light on)."},
 	},
 	"pose": {
 		"pose": {"label": "Pose", "type": "enum", "options": POSE_NAMES, "default": "rest",
@@ -1572,9 +1585,13 @@ class Move extends Action:
 					Vector2(signf((_to[a] as Vector3).x - a.pos.x), 0))
 
 	func apply(_stage, actors: Array, k: float, _f: AudioFeatures, _dt: float) -> void:
+		var arc := num("arc", 0.0)
+		var weave := num("weave", 0.0)
 		for a in actors:
 			if _from.has(a):
 				a.pos = (_from[a] as Vector3).lerp(_to[a], k)
+				# a bowed path and a bob along it, both nothing at its ends
+				a.pos.y += arc * 4.0 * k * (1.0 - k) + 0.2 * a.scale * sin(k * PI * 2.0 * weave) * sin(k * PI) * signf(weave)
 				a.home = a.pos
 
 	func finish(_stage, actors: Array) -> void:
@@ -1619,9 +1636,9 @@ class Pose extends Action:
 			_to[a] = to
 
 	func apply(_stage, actors: Array, k: float, _f: AudioFeatures, _dt: float) -> void:
-		# on a puppet with a model sheet, a pose it has a drawing for shows that drawing while the pose is mostly held (a spiked
-		# pose's drawing goes as the pose comes back)
-		var shown := String(PuppetBody.POSE_DRAWINGS.get(String(args.get("pose", "rest")), "")) if k > 0.3 else ""
+		# on a puppet with a model sheet, a pose it has a drawing for shows that drawing once the limbs are more than half way
+		# there (the body swaps it in when they have bent most of the way); a spiked pose's drawing goes as the pose comes back
+		var shown := String(PuppetBody.POSE_DRAWINGS.get(String(args.get("pose", "rest")), "")) if k > 0.5 else ""
 		for a in actors:
 			var pb := Actions.puppet(a)
 			if pb == null or not _from.has(a):
@@ -1694,6 +1711,49 @@ class Feel extends Action:
 				pb.mood = m if PuppetSheet.MOODS.has(m) else ""
 
 
+## emerge - a puppet comes out of another (a soul leaving a body): it starts small and faint at their middle, just in front of them,
+## and grows, comes clear and rises out of them over the window. args: from (who), rise (in its own heights).
+class Emerge extends Action:
+	var _h := {}
+	var _start := {}
+
+	func begin(stage, actors: Array) -> void:
+		var src = stage.actor(String(args.get("from", "")))
+		for a in actors:
+			_h[a] = a.scale
+			var mid: Vector3 = (src.pos + Vector3(0, src.scale * 0.45, 0.04)) if src != null else a.pos + Vector3(0, a.scale * 0.5, 0)
+			_start[a] = mid
+
+	func apply(_stage, actors: Array, k: float, _f: AudioFeatures, _dt: float) -> void:
+		var rise := num("rise", 0.6)
+		for a in actors:
+			if not _h.has(a):
+				continue
+			var h: float = _h[a]
+			var grow := smoothstep(0.0, 0.6, k)
+			a.scale = h * lerpf(0.2, 1.0, grow)
+			a.fade = smoothstep(0.0, 0.35, k)
+			# its middle on theirs, then risen by its height times rise
+			a.pos = (_start[a] as Vector3) + Vector3(0, -a.scale * 0.5 + h * rise * smoothstep(0.2, 1.0, k), 0)
+			a.home = a.pos
+
+	func finish(_stage, actors: Array) -> void:
+		for a in actors:
+			if _h.has(a):
+				a.scale = _h[a]
+				a.fade = 1.0
+
+
+## change - a backdrop shows another painted set from now on: the same place changed (a door opened, a light switched on). A point
+## in time. args: picture.
+class Change extends Action:
+	func begin(_stage, actors: Array) -> void:
+		var pic := String(args.get("picture", ""))
+		for a in actors:
+			if a is Cast.BackdropActor and not pic.is_empty():
+				(a as Cast.BackdropActor).picture = pic
+
+
 ## strike - a puppet hits another: it winds up (the arm nearer them up and back, crouching), swings through fast and lunges, and
 ## where the blow lands they are hit (recoil, spin, squash, eyes popping) with a star burst or dizzy stars; then it settles back.
 ## Give the span `ease: linear`; a second or so reads well. args: at (who), force, mark.
@@ -1737,7 +1797,7 @@ class Strike extends Action:
 			var s: Dictionary = _swing[a]
 			var pose := {}
 			var lunge := 0.0
-			pb.action = "windup" if k < 0.5 else ""
+			pb.action = "windup" if k > 0.2 and k < 0.5 else ""
 			if k < 0.45:
 				pose = Actions._mix(f, w, smoothstep(0.0, 1.0, k / 0.45))
 				pb.squash_hold = lerpf(1.0, 0.9, k / 0.45)

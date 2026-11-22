@@ -13,6 +13,9 @@ class_name PuppetRig
 ## right), `bones` [{name, parent, head, tail, role, side}] parents first, `layers` [{name, image, points (flat x, y), tris (flat),
 ## weights [[[bone index, weight], ...] per point]}] drawn in order, `cavity` {color, bone} (the mouth, painted into the body),
 ## `eyes` [{name, bone, center, radius [rx, ry], lid}], `mouth` {hinge, open (degrees), drop (px)}, `poses` {name: {bone: deg}}.
+## A painted set may keep a GROUND LINE beside its picture (`NAME.ground.json`, [method ground_file]): {line: [[x, y], ...]} as
+## shares of the picture's width and height, left to right - where its characters' feet go across it (a hill's ridge), traced by
+## an agent that looked at it ([CartoonProducer]); read with the picture and held ([method ground]).
 ## A puppet with a model sheet ([PuppetSheet]) keeps `sheet.json` and a folder of that shape per drawing; [member drawings] holds them,
 ## and the puppet's own data is its front's.
 
@@ -105,27 +108,33 @@ static func read_now(name: String) -> PuppetRig:
 	return r
 
 
-## Everything the storyboard [param board] (its loaded form) names that is read from disk - each puppet's rig, each painted set -
+## Everything the storyboard [param board] (its loaded form) names that is read from disk - each puppet's rig, each painted set (a
+## backdrop's, and one a `change` span turns it to) -
 ## read here and held, waited for (a worker's: [method NestedShow.prepared], a render's own).
 static func warm(board: Dictionary) -> void:
 	for key in ["sequence", "tail"]:
 		for e in board.get(key, []):
 			if not (e is Dictionary):
 				continue
+			var pictures: Array = []
 			for c in (e as Dictionary).get("cast", []):
-				if not (c is Dictionary):
+				if c is Dictionary and String((c as Dictionary).get("kind", "")) == "puppet":
+					read_now(String(c.get("rig", "")))
+				elif c is Dictionary and String((c as Dictionary).get("kind", "")) == "backdrop":
+					pictures.append(String(c.get("picture", "")))
+			var track: Variant = (e as Dictionary).get("track")
+			for sp in (track as Dictionary).get("spans", []) if track is Dictionary else []:
+				if sp is Dictionary and String((sp as Dictionary).get("action", "")) == "change" and (sp as Dictionary).get("args") is Dictionary:
+					pictures.append(String(sp["args"].get("picture", "")))
+			for picture in pictures:
+				var file := set_file(String(picture))
+				if file.is_empty():
 					continue
-				match String((c as Dictionary).get("kind", "")):
-					"puppet":
-						read_now(String(c.get("rig", "")))
-					"backdrop":
-						var file := set_file(String(c.get("picture", "")))
-						if not file.is_empty():
-							_lock.lock()
-							var had: Dictionary = _pictures.get(file, {})
-							_lock.unlock()
-							if had.get("image") == null or int(had.get("stamp", -1)) != int(FileAccess.get_modified_time(file)):
-								read_backdrop(file, {"stamp": int(FileAccess.get_modified_time(file)), "image": null, "texture": null})
+				_lock.lock()
+				var had: Dictionary = _pictures.get(file, {})
+				_lock.unlock()
+				if had.get("image") == null or int(had.get("stamp", -1)) != _set_stamp(file):
+					read_backdrop(file, {"stamp": _set_stamp(file), "image": null, "texture": null})
 
 
 ## Whether a reading begun for [param name] is still going.
@@ -146,7 +155,7 @@ static func backdrop(name: String) -> Texture2D:
 	_lock.lock()
 	var got: Dictionary = _pictures.get(file, {})
 	_lock.unlock()
-	var stamp := int(FileAccess.get_modified_time(file))
+	var stamp := _set_stamp(file)
 	if not got.is_empty() and int(got["stamp"]) == stamp:
 		if got.get("texture") == null and got.get("image") != null:
 			got["texture"] = ImageTexture.create_from_image(got["image"])
@@ -168,10 +177,62 @@ static func read_backdrop(file: String, entry: Dictionary) -> void:
 		img.convert(Image.FORMAT_RGBA8)
 		img.generate_mipmaps()
 	entry["image"] = img
+	entry["ground"] = read_ground(ground_file(file))
 	entry.erase("task")
 	_lock.lock()
 	_pictures[file] = entry
 	_lock.unlock()
+
+
+## A set's file stamped by its picture and its ground line, so either written again is read again.
+static func _set_stamp(file: String) -> int:
+	var g := ground_file(file)
+	return maxi(int(FileAccess.get_modified_time(file)), int(FileAccess.get_modified_time(g)) if FileAccess.file_exists(g) else 0)
+
+
+## Where the ground line of the set picture [param file] is kept.
+static func ground_file(file: String) -> String:
+	return file.get_basename() + ".ground.json"
+
+
+## The ground line at [param file] (points as shares of the picture, left to right); empty where there is none or it will not read.
+static func read_ground(file: String) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	if not FileAccess.file_exists(file):
+		return out
+	var got: Variant = JSON.parse_string(FileAccess.get_file_as_string(file))
+	for p in (got as Dictionary).get("line", []) if got is Dictionary else []:
+		if p is Array and (p as Array).size() >= 2:
+			out.append(Vector2(clampf(float(p[0]), 0.0, 1.0), clampf(float(p[1]), 0.0, 1.0)))
+	var pts := Array(out)
+	pts.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
+	return PackedVector2Array(pts) if pts.size() >= 2 else PackedVector2Array()
+
+
+## The ground line of the painted set [param name] as it was read with its picture ([method backdrop]); empty while it is read, or
+## where the set has none.
+static func ground(name: String) -> PackedVector2Array:
+	var file := set_file(name)
+	if file.is_empty():
+		return PackedVector2Array()
+	_lock.lock()
+	var got: Dictionary = _pictures.get(file, {})
+	_lock.unlock()
+	return got.get("ground", PackedVector2Array())
+
+
+## The height of [param line] (a ground line) at [param x] (a share of the picture's width), as a share of its height; NAN for none.
+static func ground_at(line: PackedVector2Array, x: float) -> float:
+	if line.size() < 2:
+		return NAN
+	if x <= line[0].x:
+		return line[0].y
+	for i in range(1, line.size()):
+		if x <= line[i].x:
+			var a := line[i - 1]
+			var b := line[i]
+			return lerpf(a.y, b.y, (x - a.x) / maxf(1e-6, b.x - a.x))
+	return line[line.size() - 1].y
 
 
 ## The file of the painted set [param name] ("" where there is none).

@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 752 references inside a folder, 1395 down the stack, 0 up it.
+Between scripts today: 753 references inside a folder, 1396 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -19,7 +19,7 @@ Between scripts today: 752 references inside a folder, 1395 down the stack, 0 up
 | `desk/` | The desk | 15 | `table_show`, `table`, `reading`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `render`, `data` |
 | `table_show/` | The table's show | 25 | `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `geometry`, `audio`, `platform`, `data` |
 | `table/` | The set | 75 | `reading`, `media`, `ui`, `agents`, `scene_kit`, `geometry`, `render`, `audio`, `platform`, `data` |
-| `cartoon/` | Cartoon | 4 | `reading`, `timeline`, `show`, `ui`, `notes`, `agents`, `stage`, `platform`, `data` |
+| `cartoon/` | Cartoon | 5 | `reading`, `timeline`, `show`, `ui`, `notes`, `agents`, `stage`, `platform`, `data` |
 | `reading/` | The voice's workspaces | 17 | `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
 | `export/` | Export | 6 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `music/` | Music | 11 | `timeline`, `show`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
@@ -158,7 +158,7 @@ The panels a voice runs in: the reading (script, cast, voice, stream, export), t
 
 A cartoon made from drawings (next/cartoon.md): the card that lists its characters and sets, the rigger's tools (a drawing cut, rigged and looked at through `hosts/puppet/`), and the producer whose agents rig each character, paint each set and write the storyboard the stage plays silent.
 
-[`cartoon_card`](../src/cartoon/cartoon_card.gd), [`cartoon_producer`](../src/cartoon/cartoon_producer.gd), [`cartoon_tool`](../src/cartoon/cartoon_tool.gd), [`rigger_tools`](../src/cartoon/rigger_tools.gd)
+[`cartoon_card`](../src/cartoon/cartoon_card.gd), [`cartoon_producer`](../src/cartoon/cartoon_producer.gd), [`cartoon_tool`](../src/cartoon/cartoon_tool.gd), [`rigger_tools`](../src/cartoon/rigger_tools.gd), [`surveyor_tools`](../src/cartoon/surveyor_tools.gd)
 
 ### `table/` - The set
 
@@ -218,5 +218,5 @@ Godot compiles a script with every script it names by class or preload, wherever
 
 | launch | builds | scripts | lines | budget |
 | --- | --- | --- | --- | --- |
-| the phone shell | `app/main`, `app/phone_shell` | 75 | 30,721 | 40,000 |
-| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 117 | 50,724 | 65,000 |
+| the phone shell | `app/main`, `app/phone_shell` | 75 | 30,722 | 40,000 |
+| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 117 | 50,947 | 65,000 |

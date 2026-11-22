@@ -224,8 +224,7 @@ kept in the block's `receiver_glow`), the scope shown as drawn as the other two 
 
 Looked at (rendered with `tests/dispatch/dispatch_look_probe.gd` on a steady rehearsed voice, frames read by eye): the
 home view from the chair, every camera spot settled, the record and the target's log on the terminal (legible close up),
-the council's typed question, a text on its phone, a phone dialing and one on hold, a ring, the radar's ping with the place
-beside the blip, the receiver in a storm, the printer, the TV showing this desk live from behind the chair, the roots from
+the council's typed question, a text on its phone, a phone dialing and one on hold, a ring, the radar's ping, the receiver in a storm, the printer, the TV showing this desk live from behind the chair, the roots from
 the chair looking up and from outside the hollow.
 
 Measured: the episode's 3,329 spoken words line up with the voice's plan word for word; every voice is routed through the
@@ -397,8 +396,15 @@ Sensitive text is hidden the way a video blurs a face, as a post-process on the 
   alone (Godot's screen mipmaps are blurred: averaged off them, every shard came out near the box's mean). A name typed at
   the prompt is covered whole from its first key. The terminal draws its cursor as before; it is under the box while a name
   is typed.
+- **The radar writes coordinates, not a place, beside the blip**: a real scope tags a track with data (who it is, where it is) and
+  keeps place names on a map under the sweep. Beside the blip are his latitude and longitude, two lines that change as the sweep
+  paints him (`DispatchScreens.coordinates`, from 0, 0 at the scope's middle, so never a real place), hidden by the censor like
+  the terminal's words (`radar_redactions`; a run may name its own screen: `glass`, `curve`, `size`, `line`). The place they
+  come to is held in a readout at the scope's lower right (`_readout`: parted at a comma, wrapped, on a dark plate, brighter
+  for a moment after a ping), so the coordinates read as translated into a place.
 
-Looked at: the censor in the gate's render (`tests/run_quiet.sh -- tests/dispatch/dispatch_redact_check.gd --png`).
+Looked at: the censor in the gate's render (`tests/run_quiet.sh -- tests/dispatch/dispatch_redact_check.gd --png`). The radar's
+readout and its covered coordinates are not yet seen by eye.
 
 ### The revised night's marks: the gain, the bell, the lamp
 

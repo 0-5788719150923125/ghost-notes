@@ -288,7 +288,7 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
      "anything is. Reads only: for an edit made in a terminal, in seconds. Pairs with `--headless`.", False),
     ("--cartoon", "<note>",
      "Run a cartoon's agents on the note at that path (next/cartoon.md), as its card's Generate does, each step waited for "
-     "and said as it lands, then exit: with `--make` whatever is not made yet, or `--rig NAME`, `--paint NAME`, `--direct`; "
+     "and said as it lands, then exit: with `--make` whatever is not made yet, or `--rig NAME`, `--paint NAME`, `--trace NAME`, `--direct`, `--land FILE` (a kept director reply checked, framed and written); "
      "`--writer` and `--model` pick who writes. Writes the puppets and sets on the library's shelves and the storyboard in "
      "the note's folder. Pairs with `--headless`.", False),
     ("--seed", "<N>",

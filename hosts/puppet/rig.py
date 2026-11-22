@@ -4,7 +4,7 @@ placed on it - what the stage's puppet reads ([PuppetRig]).
 
     rig.py cut <spec.json>     the drawing off its paper:  cut.png, cut.json, cut_look.png
     rig.py build <spec.json>   its skeleton, jaw and eyes: rig.json, skin.png, jaw.png, look.png
-    rig.py align <spec.json>   a drawing set onto another's canvas: its cut.png, as tall as the other's, its feet on theirs
+    rig.py align <spec.json>   a drawing set onto another's canvas (grown where it reaches past it): its cut.png, as tall as the other's, its feet on theirs
 
 A spec is JSON, never argv. Every coordinate is a pixel of `cut.png` (x right, y down). Each step writes `done.json` beside what it
 made: `{ok, ...}` or `{ok: false, error}` - errors are sentences for the agent that wrote the spec.
@@ -244,10 +244,16 @@ def align(spec):
     # its feet's middle onto the base's: the bottom row of each figure, the middle of its width
     ox = round((bb[0] + bb[2]) / 2.0 - (vb[0] + vb[2]) / 2.0 * k)
     oy = round(bb[3] - vb[3] * k)
-    canvas = Image.new("RGBA", b.size, (0, 0, 0, 0))
-    canvas.paste(vs, (ox, oy), vs)
+    # the base's canvas, grown wherever this drawing reaches past it (a pan swung out wider than a figure standing), so nothing is
+    # cut off; the figure keeps its place on the base's grid, shifted by what was added to the left and the top
+    x0, y0 = ox + vb[0] * k, oy + vb[1] * k
+    x1, y1 = ox + vb[2] * k, oy + vb[3] * k
+    pad = [max(0, math.ceil(2 - x0)), max(0, math.ceil(2 - y0))]
+    grow = [max(0, math.ceil(x1 + 3 - b.width)), max(0, math.ceil(y1 + 3 - b.height))]
+    canvas = Image.new("RGBA", (b.width + pad[0] + grow[0], b.height + pad[1] + grow[1]), (0, 0, 0, 0))
+    canvas.paste(vs, (ox + pad[0], oy + pad[1]), vs)
     canvas.save(out / "cut.png")
-    return {"cut": str(out / "cut.png"), "scale": round(k, 4), "offset": [ox, oy], "size": list(b.size)}
+    return {"cut": str(out / "cut.png"), "scale": round(k, 4), "offset": [ox + pad[0], oy + pad[1]], "size": list(canvas.size), "pad": pad}
 
 
 def _bbox(mask):

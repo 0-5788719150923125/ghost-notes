@@ -59,7 +59,9 @@ extends SceneTree
 ##   the call began);
 ## - the camera turns to what is active (terminal typing, receiver in a storm, ringing phone) and a look holds while nothing else
 ##   is; it goes to the radar only at its sounds; the radar target moves in small steps under the voice, never a jump, with its
-##   old place written beside it until it arrives; the receiver is open only in its storm;
+##   old place in the readout until it arrives; his coordinates beside him, changing as he moves and hidden over the frame by a
+##   box that follows them, the place held in a readout at the scope's lower right wherever he is (control: before the first
+##   ping, nothing to hide); the receiver is open only in its storm;
 ## - a voice with no phone comes in on the receiver, typed or said: open from the static before it straight on through its
 ##   words, the storm brought down under them and the needle swelling in a word, shut after its tail, one stretch of sound
 ##   (the control: the room's own typed line opens nothing);
@@ -271,7 +273,45 @@ func _run() -> void:
 	_ok(String(going["blip"]["label"]) == "THE HALL" and mid_at.distance_to(hall) > 0.01 and mid_at.distance_to(stair) > 0.01 and steps_ok and trail.size() >= 1,
 		"on his way, under the voice, the sweep paints him a step at a time, never a jump (%s, %d paints)" % [going["blip"]["label"], trail.size() + 1])
 	_ok(String(arrived["blip"]["label"]) == "THE STAIRWELL" and (arrived["blip"]["at"] as Vector2).distance_to(stair) < 0.03,
-		"arrived, the stairwell is written beside him (%s)" % arrived["blip"]["label"])
+		"arrived, the stairwell is his place on the scope (%s)" % arrived["blip"]["label"])
+	# his coordinates written beside him and hidden over the frame, one box following them; the place in a readout that stays put
+	var r_mid := Vector2(DispatchScreens.RADAR_SIZE) * 0.5
+	var r_rad := float(DispatchScreens.RADAR_SIZE.x) * 0.47
+	var arrived_t := t0[stair_i] + 1.0
+	md._screens.show_radar(arrived)
+	var coords_there: Array = md._screens.radar_redactions()
+	md._screens.show_radar(going)
+	var coords_going: Array = md._screens.radar_redactions()
+	var ro_there: Dictionary = md._screens._readout(String(arrived["blip"]["label"]), r_mid, r_rad)
+	var ro_going: Dictionary = md._screens._readout(String(going["blip"]["label"]), r_mid, r_rad)
+	var ro_box: Rect2 = ro_there["rect"]
+	var ro_words := PackedStringArray()
+	for l in ro_there["lines"]:
+		ro_words.append(String(l["text"]))
+	var inside := true
+	for corner in [ro_box.position, ro_box.end, Vector2(ro_box.position.x, ro_box.end.y), Vector2(ro_box.end.x, ro_box.position.y)]:
+		inside = inside and (corner as Vector2).distance_to(r_mid) < r_rad * 0.95
+	_ok(coords_there.size() == 2 and coords_going.size() == 2 and int(coords_there[0]["key"]) == int(coords_going[0]["key"])
+		and (coords_there[0]["rect"] as Rect2).position.distance_to((coords_going[0]["rect"] as Rect2).position) > 1.0
+		and DispatchScreens.coordinates(arrived["blip"]["at"]) != DispatchScreens.coordinates(going["blip"]["at"]),
+		"his coordinates are beside him and change as he moves, one run a line under the same keys (%s, %s)" % [DispatchScreens.coordinates(going["blip"]["at"]), DispatchScreens.coordinates(arrived["blip"]["at"])])
+	_ok((ro_going["rect"] as Rect2).end == ro_box.end and inside and " ".join(ro_words) == String(arrived["blip"]["label"]) and ro_box.position.x > r_mid.x - r_rad * 0.2,
+		"the place is held in a readout at the scope's lower right, inside its glass, wherever he is (%s: %s)" % [ro_words, ro_box])
+	md._now = arrived_t
+	md._snap = true
+	md._tick_camera(0.016)
+	md._screens.show_radar(arrived)
+	md._censor_at(arrived_t)
+	var r_curve := float(md._glass("radar", "scope").get("curve", 0.0))
+	var coords_seen := DispatchCensor.seen((coords_there[0]["rect"] as Rect2).merge(coords_there[1]["rect"]), md._set.radar_screen, r_curve, md._cam,
+		Vector2(DispatchScreens.RADAR_SIZE))
+	var r_covered := false
+	for bx in md._censor.boxes:
+		r_covered = r_covered or ((bx as Dictionary)["rect"] as Rect2).encloses(coords_seen)
+	_ok(md.looking_at(arrived_t) == "radar" and coords_seen.size.x > 0.0 and r_covered,
+		"his coordinates are hidden over the frame as the camera sees them on the radar (%s, %d boxes)" % [coords_seen, md._censor.boxes.size()])
+	md._screens.show_radar(md.radar_at(0.5))
+	_ok(md._screens.radar_redactions().is_empty(), "the control: before the first ping, no coordinates to hide")
 	_ok(md.looking_at(t0[moving_i] + 1.0) == "radar", "the radar's alarm as he sets off turns the camera to it (%s)" % md.looking_at(t0[moving_i] + 1.0))
 	# the camera goes to the radar only at its sounds: every look at it begins as it pings or sounds its alarm (or a look mark
 	# asks) and none stays to watch it do nothing - a ping is held to its sentence's end at most, a walk to the ping where he

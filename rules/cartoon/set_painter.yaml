@@ -2,11 +2,20 @@
 # handed in as references for the style alone, laid out as a stage the puppets stand in front of (the floor across the bottom third, the
 # middle left open), with nothing a puppet would be mistaken for and no words.
 #
+# A set painted FROM another (the same place changed: a door opened) is handed that set's picture first and told to keep everything else.
+# Furniture and things a show moves or stands characters behind are pieces of their own, so the floor is painted bare.
+#
 # The code gives: {{place}}, {{file}}; `has_ground`, {{ground}} (where characters stand in it, where that is not the floor across the
-# bottom third - a far ridge they cross on the skyline).
+# bottom third - a far ridge they cross on the skyline); `has_from` (the first picture attached is the set this one is painted from).
 prompt:
   - "Use your image generation tool to make one picture, then save it in the current directory as {{file}}."
   - ""
+  - when: has_from
+    say: >-
+      THE FIRST ATTACHED PICTURE IS THIS PLACE AS IT IS: paint exactly that picture again - the same framing, the same things in the
+      same places, the same colors and lines - changed only as the place below says.
+  - when: has_from
+    say: ""
   - >-
       The attached drawings are references for the DRAWING STYLE only - their outlines, how they are colored, the paper they are on, how
       sure or wobbly the hand is. Draw nothing from them: no creature or character of any kind.
@@ -15,7 +24,9 @@ prompt:
       The picture: a wide, empty stage backdrop for a cartoon, seen straight on from the front, as if the place were a theater stage;
       landscape, wider than tall.
   - when: "!has_ground"
-    say: "The floor or ground fills the bottom third, and the middle of it is left open and uncluttered, since characters will stand there."
+    say: >-
+      The floor or ground fills the bottom third, and the middle of it is left bare - nothing standing on it, no furniture, no rug or
+      table in the middle - since characters and their furniture will be placed there, each drawn separately.
   - when: has_ground
     say: "Where characters will stand: {{ground}} Leave it open and uncluttered there."
   - "The place:"

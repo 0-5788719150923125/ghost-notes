@@ -42,7 +42,7 @@ core. The commitments:
 - [Look filters](filters.md) (9) - the post-process over the whole picture.
 - [Layers](layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](forces.md) (8) - the physics primitives particles compose.
-- [Stage actors and verbs](stage.md) (5 actors, 34 verbs) - what a storyboard's `stage` entries are made of.
+- [Stage actors and verbs](stage.md) (5 actors, 36 verbs) - what a storyboard's `stage` entries are made of.
 - [Table](table.md) (17 laws) - a table show's data as rows: what a person may set of an act, a thing and a part, and every law a track may move its thing by.
 - [Props and the library](props.md) (21 shapes, 18 materials, 21 roles) - the library of props and voices, the Dex, the Props card, roles any make can play, refining a prop into versions, and what every prop is made of.
 - [The Environment](surroundings.md) (17 kinds, 6 lights) - what is round the scene a note is shown in, a list of elements: its light, shafts through its haze, what drifts in its air, what is heard - each with properties a person sets or Roll draws - and how strongly each lit thing shines.
@@ -427,6 +427,7 @@ A cartoon made from drawings (next/cartoon.md): the card that lists its characte
 - [`cartoon_producer.gd`](../src/cartoon/cartoon_producer.gd) **CartoonProducer** - what agents make for a cartoon (next/cartoon.md), one note's: each character RIGGED from its drawing by the rigger (`RiggerTools`, rules/cartoon/rigger.yaml) onto the library's `puppets` shelf, each set PAINTED in the cast's own drawing style (rules/cartoon/set_painter.yaml, the cast's drawings its ...
 - [`cartoon_tool.gd`](../src/cartoon/cartoon_tool.gd) **cartoon_tool** - CartoonTool - a cartoon's agents run from the command line (next/cartoon.md): the same `CartoonProducer` the Cartoon card runs, on the note at a path, each step it is asked for waited for and said as it lands, then the app quits. It writes what the card would (puppets and sets on the library's ...
 - [`rigger_tools.gd`](../src/cartoon/rigger_tools.gd) **RiggerTools** - the rigger's tools (next/cartoon.md, rules/cartoon/rigger.yaml): a drawing cut off its paper, its skeleton, jaw, eyes and parts built into a puppet, each answered with the picture the puppet host draws of it, and the puppet handed in. Served over ghost's MCP server (`AgentTools`) to a writer that ...
+- [`surveyor_tools.gd`](../src/cartoon/surveyor_tools.gd) **SurveyorTools** - the surveyor's tools (next/cartoon.md, rules/cartoon/surveyor.yaml): a painted set's GROUND LINE, where its characters' feet go across it (a hill's ridge), traced by an agent that looks. Served over ghost's MCP server (`AgentTools`) to a writer that takes tools.
 
 ### `table/` - The set
 

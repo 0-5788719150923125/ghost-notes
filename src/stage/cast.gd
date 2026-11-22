@@ -74,6 +74,8 @@ const PARAMS := {
 			"blurb": "Which way it looks. Unset, as it is drawn (one drawn from the front counts as facing right)."},
 		"shade": {"label": "Shade", "type": "num", "default": 0.0,
 			"blurb": "How dark it is drawn: 0 its own colors, 1 a black silhouette against the sky (a far shot at night). `set` and `ramp` move it."},
+		"on_ground": {"label": "On the ground", "type": "bool", "default": false,
+			"blurb": "Keeps its feet on the line its set's ground was traced along (a hill's ridge), wherever it goes across; the height its place gives is not used."},
 	},
 	"backdrop": {
 		"picture": {"label": "Picture", "type": "text", "default": "",
@@ -891,14 +893,20 @@ class PuppetActor extends Actor:
 		var dark := 1.0 - 0.94 * clampf(float(state.get("shade", 0.0)), 0.0, 1.0)
 		pb.node.modulate = Color(dark, dark, dark * 1.04, fade)
 		pb.shown = fade > 0.003
-		pb.show_at(stage.view.matrix(stage.size) * Transform2D(0.0, Vector2(px, px), 0.0, Vector2(pj.x, pj.y) * u))
+		var feet := Vector2(pj.x, pj.y) * u
+		state.erase("ground_dy")
+		if bool(spec.get("on_ground", false)):
+			var on := BackdropActor.ground_under(stage, feet.x)
+			if not is_nan(on):
+				state["ground_dy"] = on - feet.y
+				feet.y = on
+		pb.show_at(stage.view.matrix(stage.size) * Transform2D(0.0, Vector2(px, px), 0.0, feet))
 
-	## Carried into another shot: what that shot says of it (its height, and its shade and facing where it gives them) taken, and its
-	## node moved there.
+	## Carried into another shot: what that shot says of it (its height, its shade - its own colors where it gives none: a silhouette
+	## is the shot's look, not the body's - and its facing where it gives one) taken, and its node moved there.
 	func moved_to(stage) -> void:
 		scale = maxf(0.05, float(spec.get("height", scale)))
-		if spec.has("shade"):
-			state["shade"] = clampf(float(spec["shade"]), 0.0, 1.0)
+		state["shade"] = clampf(float(spec.get("shade", 0.0)), 0.0, 1.0)
 		if body != null:
 			var pb := body as PuppetBody
 			var want := String(spec.get("facing", ""))
@@ -919,13 +927,14 @@ class PuppetActor extends Actor:
 			return []
 		var at := pos
 		var h := scale
+		var dy := float(state.get("ground_dy", 0.0))
 		var a := fade * (1.0 - clampf(pb.lift * 2.0 + pb._float, 0.0, 0.8))
 		return [{"d": lens.depth(pos) + 0.05, "call": func() -> void:
 			var pj := lens.project(at)
 			if pj.z <= lens.near:
 				return
 			var px: float = h * lens._focal / pj.z * u
-			var c := Vector2(pj.x, pj.y) * u
+			var c := Vector2(pj.x, pj.y) * u + Vector2(0.0, dy)
 			var r := Vector2(0.3, 0.055) * px
 			var ring := PackedVector2Array()
 			for i in 24:
@@ -939,6 +948,7 @@ class PuppetActor extends Actor:
 class BackdropActor extends Actor:
 	var picture := ""
 	var width := 0.0
+	var _shown := ""                  # the picture last drawn: held while one changed to is still being read
 
 	## How wide a picture of [param aspect] (height over width) hung at [param at] must be to fill the frame through [param lens], whose
 	## half-extent is [param half] (unit fractions): wide enough to reach where each corner of the frame meets its plane, with room
@@ -969,18 +979,46 @@ class BackdropActor extends Actor:
 
 	func draw_items(stage, lens: Lens3D, u: float) -> Array:
 		var tex := PuppetRig.backdrop(picture)
+		if tex != null:
+			_shown = picture
+		elif not _shown.is_empty():
+			tex = PuppetRig.backdrop(_shown)
 		if tex == null or fade <= 0.003:
 			return []
-		var at := pos
 		return [{"d": lens.depth(pos) + 100.0, "call": func() -> void:
-			var pj := lens.project(at)
-			if pj.z <= lens.near:
-				return
-			var px: float = lens._focal / pj.z * u
-			var aspect := float(tex.get_height()) / maxf(1.0, float(tex.get_width()))
-			var w := width
-			if w <= 0.0:
-				w = BackdropActor.cover(lens, stage.size * 0.5 / u, at, aspect)
-			var sz := Vector2(w, w * aspect) * px
-			var c := Vector2(pj.x, pj.y) * u
-			stage.draw_texture_rect(tex, Rect2(c - sz * 0.5, sz), false, Color(1, 1, 1, fade))}]
+			var r := rect(stage, tex)
+			if r.size.x > 0.0:
+				stage.draw_texture_rect(tex, r, false, Color(1, 1, 1, fade))}]
+
+	## Where its picture [param tex] is drawn on [param stage] now (the stage's units times its unit, as an actor's place projects);
+	## an empty rect behind the lens.
+	func rect(stage, tex: Texture2D) -> Rect2:
+		var lens: Lens3D = stage.lens
+		var u: float = stage.unit()
+		var pj := lens.project(pos)
+		if pj.z <= lens.near or u <= 0.0:
+			return Rect2()
+		var px: float = lens._focal / pj.z * u
+		var aspect := float(tex.get_height()) / maxf(1.0, float(tex.get_width()))
+		var w := width
+		if w <= 0.0:
+			w = BackdropActor.cover(lens, stage.size * 0.5 / u, pos, aspect)
+		var sz := Vector2(w, w * aspect) * px
+		return Rect2(Vector2(pj.x, pj.y) * u - sz * 0.5, sz)
+
+	## The ground line of [param stage]'s backdrop under screen x [param sx] (as an actor's place projects): its height there, or NAN
+	## where no backdrop on the stage has a ground line.
+	static func ground_under(stage, sx: float) -> float:
+		for a in stage.actors():
+			if not (a is BackdropActor) or (a as BackdropActor).fade <= 0.003:
+				continue
+			var b := a as BackdropActor
+			var line := PuppetRig.ground(b.picture)
+			var tex := PuppetRig.backdrop(b.picture)
+			if line.is_empty() or tex == null:
+				continue
+			var r := b.rect(stage, tex)
+			if r.size.x <= 0.0:
+				continue
+			return r.position.y + PuppetRig.ground_at(line, (sx - r.position.x) / r.size.x) * r.size.y
+		return NAN

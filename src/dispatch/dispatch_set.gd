@@ -119,6 +119,11 @@ const PACK := {
 ## Room left round each small thing (m), and how many places each is tried at; where none is clear, the least bad tried
 ## (a spare thing is left off).
 const PACK_MARGIN := 0.015
+## The camera over the chart ([method _chart_spot]): its eye's distance from the sheet's middle (m), how steeply it looks
+## down at it (degrees from level), and its lens (degrees, vertical).
+const CHART_LOOK_AWAY := 0.39
+const CHART_LOOK_DOWN := 62.0
+const CHART_LOOK_FOV := 26.0
 ## A flat thing's room (the chart, taped down): to the desk's edge, and against what stands round it.
 const FLAT_MARGIN := 0.005
 ## How far a low thing may lie out over the desk's near edge (m).
@@ -2502,11 +2507,13 @@ func spot_of(k: String) -> Dictionary:
 		"printer":
 			var pr := at_of("printer")
 			return {"aim": Vector3(pr.x - 0.29 * flip, y - 0.18, pr.y + 0.14), "eye": EYE + Vector3(-0.42 * flip, 0.06, -0.02), "fov": 54.0}
-		"chart", "handbook", "switch", "mug":
+		"chart":
+			return _chart_spot()
+		"handbook", "switch", "mug":
 			if not at.has(k):
 				return {}
-			var lean: Array = {"chart": [0.0, 0.03, -0.04, -0.18, 28.0], "handbook": [0.05, -0.08, -0.04, -0.12, 32.0],
-				"switch": [0.04, 0.10, -0.06, -0.22, 24.0], "mug": [0.08, 0.10, -0.04, -0.12, 34.0]}[k]
+			var lean: Array = {"handbook": [0.05, -0.08, -0.04, -0.12, 32.0], "switch": [0.04, 0.10, -0.06, -0.22, 24.0],
+				"mug": [0.08, 0.10, -0.04, -0.12, 34.0]}[k]
 			var p := at_of(k)
 			var side := signf(p.x) if absf(p.x) > 0.05 else 1.0
 			return {"aim": Vector3(p.x, y + float(lean[0]), p.y), "eye": EYE + Vector3(absf(float(lean[1])) * side, float(lean[2]), float(lean[3])),
@@ -2529,6 +2536,25 @@ func spot_of(k: String) -> Dictionary:
 			var xf := bounds_xf((screens[k] as Dictionary)["mesh"])
 			return {"aim": xf.origin, "eye": _glass_eye(xf.origin, (xf.basis * Vector3.BACK).normalized()), "fov": 26.0}
 	return {}
+
+
+## Over the chart, square on it: the eye on the sheet's own line from its foot to its head, leaned back from its middle
+## and looking down at it steeply, so its rows lie level in the picture and it fills most of it - wherever and however
+## it was taped down. {} where this desk has none.
+func _chart_spot() -> Dictionary:
+	if not at.has("chart"):
+		return {}
+	var faces: Array = _faces.get("chart", [])
+	var mid := desk_at("chart")
+	var head := Basis(Vector3.UP, deg_to_rad(float(turn.get("chart", 0.0)))) * Vector3.FORWARD
+	if not faces.is_empty():
+		var xf := bounds_xf(faces[0])
+		mid = xf.origin
+		head = xf.basis.y
+	head = Vector3(head.x, 0.0, head.z).normalized()
+	var down := deg_to_rad(CHART_LOOK_DOWN)
+	return {"aim": mid, "eye": mid - head * CHART_LOOK_AWAY * cos(down) + Vector3.UP * CHART_LOOK_AWAY * sin(down),
+		"fov": CHART_LOOK_FOV}
 
 
 ## Where phone [param i] is in its row (world).

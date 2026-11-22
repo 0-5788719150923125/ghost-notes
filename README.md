@@ -34,7 +34,7 @@ Ghost Notes is built from registries. Each page below is generated from one, lis
 - [Look filters](docs/filters.md) (9) - the post-process over the whole picture.
 - [Layers](docs/layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](docs/forces.md) (8) - the physics primitives particles compose.
-- [Stage actors and verbs](docs/stage.md) (5 actors, 34 verbs) - what a storyboard's `stage` entries are made of.
+- [Stage actors and verbs](docs/stage.md) (5 actors, 36 verbs) - what a storyboard's `stage` entries are made of.
 - [Table](docs/table.md) (17 laws) - a table show's data as rows: what a person may set of an act, a thing and a part, and every law a track may move its thing by.
 - [Props and the library](docs/props.md) (21 shapes, 18 materials, 21 roles) - the library of props and voices, the Dex, the Props card, roles any make can play, refining a prop into versions, and what every prop is made of.
 - [The Environment](docs/surroundings.md) (17 kinds, 6 lights) - what is round the scene a note is shown in, a list of elements: its light, shafts through its haze, what drifts in its air, what is heard - each with properties a person sets or Roll draws - and how strongly each lit thing shines.

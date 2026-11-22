@@ -18,8 +18,24 @@ them are the stage's (`src/stage/`: `PuppetRig`, `PuppetBody`, `CartoonFx`, the 
   as its silent track does; a written board kept to its clock (a nested show steps only forward on its host's clock, its Director
   carrying what a hold ran past into the next shot); scrubbing a written show (the Director re-walks a storyboard to wherever the playhead is moved,
   `Spectrum.sought`); cartoon shots framed still and no fade at either end (`CartoonProducer.settled`: `shot: centered`, `behavior:
-  static`, `bookend: false`), no holds on a cartoon note; a puppet with a sheet bends a third as far, its poses shown as drawings
-  (`PuppetBody.POSE_DRAWINGS`); a character in its own setting (`rigid`, `asks`, `align: width`: the sleeper in their bed, asleep,
+  static`, `bookend: false`), no holds on a cartoon note; a pose bends the jointed drawing all the way, and a pose or verb with a drawing of its own (a wind-up,
+  a cower: `PuppetBody.POSE_DRAWINGS`) swaps it in only once the limbs have bent most of the way there, the jointed drawing coming back
+  with its limbs where the pose left them (`SWAP_AT`) - the drawn moods and actions are held whole, so the move is the skeleton's;
+  going across shows the profile whatever the mood, and a profile with two legs or more walks on its skeleton (thighs swinging, knees
+  lifting the feet), one with fewer swapping its stride drawing; a soul `emerge`s from a body and flies on a `move` with an `arc` and a
+  `weave`, its wisps streaming behind; a backdrop `change`s to a set painted FROM it (the same door, open: a set row's `from`); a
+  cast row's `thing` (furniture, its own piece placed in depth, the sets painted bare) and `reaches` (an arm kept running off the
+  frame's edge); a mood carried into a character's next shot past shots without it (`CartoonProducer.carried`); a walk that crawls
+  sent back (`SLOWEST`); an arm too short to reach where it is sent drawn bigger, and never turned round (it pulls back still running off its edge); a drawing set onto another's canvas grown where it
+  reaches past it, never cut off (`rig.py align`); a silhouette's shade the shot's, not carried into the next; the director told what
+  each drawing painted from words shows (a profile that is a charge).
+  Watched by the user: pacing, continuity, the soul, the door, scenes in pieces, the run - each answered as a primitive above.
+  a front with no profile beside it mirrored to face the other way (a sleeper in bed looking at who comes in; the cast row's `looks`);
+  A SET'S GROUND LINE (`NAME.ground.json` beside its picture): the surveyor agent traces where its characters walk from the set's
+  `ground` words by looking (`SurveyorTools`: its points joined along the painted edge near them, the line shown back in red), and a
+  puppet `on_ground` keeps its feet on it, rising and falling over a ridge (`BackdropActor.ground_under`); the director told to cover
+  a story as a film is shot (establishing shots, close-ups back and forth in a conversation, cutaways, inserts) and to keep a journey's
+  direction across the screen (rules/cartoon/director.yaml `coverage`); a character in its own setting (`rigid`, `asks`, `align: width`: the sleeper in their bed, asleep,
   terrified and cartoon-dead); the puppet (a drawing cut off its paper, meshed
   along its outline, weighted to a skeleton through its own silhouette, drawn by the engine's 2D skinning), its life (springs on every bone, breath, sway, blinks, a gait read off its speed), the verbs
   `move`, `pose`, `talk`, `face`, `strike`, `hit`, `hop`, `shake`, `fx`, the backdrop, the marks (a star burst, dizzy stars, dust,
@@ -29,12 +45,14 @@ them are the stage's (`src/stage/`: `PuppetRig`, `PuppetBody`, `CartoonFx`, the 
 - **In Targeting Individuals:** "Demons of Modern Life" loops on the desk's TV in the hypnosis section, in place of the empty stage
   picture (`play (tv, loop)`), until the section's `off: tv`.
 - **Made with it:** the note "Demons of Modern Life" (three demons from their artist's drawings, each a model sheet painted by Codex
-  and rigged by the rigger, a sleeper and their soul painted from words, five sets painted in their style, a 76-second looping
-  storyboard written by the director agent: the den, a prowl over the hills and through town, a soul scared out of a sleeper, home).
+  and rigged by the rigger; three victims - a sleeper, a scroller on a sofa, and a sufferer with a migraine who turns the tables and
+  chases them off with a frying pan - their soul, a coffee table and a demon's arm painted from words; sets painted in their style, two with traced ground lines; a 120-second looping storyboard written by the
+  director agent: the den, over the hills, the town, two souls taken into the Demon of Modern Life's phone, the third victim fighting back, home).
 - **Looked at:** each rig's look (the bones, what each moves, the puppet bent); the three sheets side by side (likeness held across
   all nine drawings); frames of each verb and of the whole storyboard through `tests/stage/cartoon_look_probe.gd` (the nested show, as
   the desk plays it); the note opened on main and played (`tests/cartoon/cartoon_app_probe.gd`).
-- **The user's to judge:** the cartoon by eye; how the rigs move; the director's comedy; whether it is good enough for the desk's TV.
+- **The user's to judge:** the cartoon by eye; how the rigs move (the poses reached, not snapped); the ground over the hills; the
+  director's coverage and its story; whether it is good enough for the desk's TV.
 
 ## The model sheet
 

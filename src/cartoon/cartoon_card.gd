@@ -264,7 +264,7 @@ func _touch() -> void:
 
 # --- what it hands the Pipeline card ---------------------------------------------------------------------------------------
 
-## The cartoon's rows: each character's rig, each set's painting, and the storyboard.
+## The cartoon's rows: each character's rig, each set's painting (and its ground line, where it says where they walk), and the storyboard.
 class Section extends PipelineSection:
 	var card: CartoonCard = null
 
@@ -285,6 +285,11 @@ class Section extends PipelineSection:
 			out.append(_row("set:" + name, "%s painted" % name, CartoonProducer.painted(name), "Paint this set again.",
 				"Throws the set's picture away and paints it again." if CartoonProducer.painted(name) else "",
 				func() -> void: p.paint(s)))
+			if CartoonProducer.grounded(s):
+				out.append(_row("ground:" + name, "%s ground traced" % name, CartoonProducer.traced(name),
+					"Trace where they walk across this set again, by looking.",
+					"Throws the set's ground line away and traces it again." if CartoonProducer.traced(name) else "",
+					func() -> void: p.trace(s)))
 		out.append(_row("board", "Storyboard written", p.boarded(), "Write the storyboard again from the note, its cast and its sets.",
 			"Writes over the storyboard (Restore… on its timeline brings it back)." if p.boarded() else "",
 			func() -> void: p.direct()))
@@ -313,7 +318,7 @@ class Section extends PipelineSection:
 		card.generate()
 
 	func make_tip() -> String:
-		return "Rig each character, paint each set, then write the storyboard: whatever is not made yet."
+		return "Rig each character, paint each set and trace where they walk on it, then write the storyboard: whatever is not made yet."
 
 	func busy() -> bool:
 		return card.producer().busy()

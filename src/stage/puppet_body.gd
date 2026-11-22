@@ -13,9 +13,13 @@ class_name PuppetBody
 ## stretches and lands.
 ##
 ## A puppet with a model sheet ([PuppetSheet]) is a drawing per view, mouth and mood, and SWAPS between them as a hand-drawn cartoon
-## does: its profile while it goes across (mirrored going left - a drawing facing us is never mirrored), the latched [member view]
-## otherwise; the mouth drawing its syllables call for, each held at least two frames at twelve a second; its [member mood]'s drawing
+## does: its profile while it goes across (mirrored going left - a drawing facing us is never mirrored; a mood's drawing waits until it
+## stops), the latched [member view] otherwise; a profile with two legs or more WALKS ON ITS SKELETON, its limbs swinging all the
+## way, and one with fewer swaps in its stride drawing at every step; the mouth drawing its syllables call for, each held at least two frames at twelve a second; its [member mood]'s drawing
 ## while it has one. A swap snaps a little squash. Every drawing shares the springs by bone name, so a pose carries across a swap.
+## A pose bends the jointed drawing's limbs all the way; one with a drawing of its own (a wind-up, a cower) is reached as a drawn move
+## is: the limbs bend toward it first and its drawing swaps in only once they are mostly there ([constant SWAP_AT]); going back, the
+## jointed drawing returns with its limbs where the pose had them and springs them home. A blow's reeling swaps at once.
 ##
 ## Drawn as a node under the stage, placed each frame where the stage's lens puts its feet: `node` (placed) -> its squash about
 ## its feet (lean, spin, bob) -> a rig per drawing (its anchor at the origin, only the one shown visible) -> its skeleton and layers. The stage draws what is under it
@@ -27,11 +31,11 @@ const SPRING := {"": [15.0, 0.55], "head": [12.0, 0.5], "loose": [7.0, 0.28], "j
 ## Gaits: steps a second at its usual speed (in heights a second, `pace`), a leg's and an arm's swing (degrees), the bob (a share
 ## of its height), the waddle and the lean (degrees).
 const GAITS := {
-	"walk": {"pace": 0.55, "steps": 1.9, "leg": 16.0, "arm": 14.0, "bob": 0.025, "roll": 4.0, "lean": 4.0},
-	"run": {"pace": 1.6, "steps": 3.4, "leg": 30.0, "arm": 34.0, "bob": 0.05, "roll": 5.0, "lean": 13.0},
+	"walk": {"pace": 0.55, "steps": 1.9, "leg": 24.0, "arm": 14.0, "bob": 0.025, "roll": 4.0, "lean": 4.0},
+	"run": {"pace": 1.6, "steps": 3.4, "leg": 40.0, "arm": 34.0, "bob": 0.05, "roll": 5.0, "lean": 13.0},
 	"tiptoe": {"pace": 0.3, "steps": 1.3, "leg": 9.0, "arm": 6.0, "bob": 0.03, "roll": 2.5, "lean": -3.0},
 	"hop": {"pace": 0.7, "steps": 2.2, "leg": 6.0, "arm": 10.0, "bob": 0.14, "roll": 1.0, "lean": 3.0},
-	"float": {"pace": 0.4, "steps": 0.6, "leg": 7.0, "arm": 5.0, "bob": 0.04, "roll": 3.0, "lean": 6.0},
+	"float": {"pace": 0.4, "steps": 1.3, "leg": 7.0, "arm": 24.0, "bob": 0.05, "roll": 7.0, "lean": 15.0},
 	"slide": {"pace": 0.8, "steps": 0.0, "leg": 0.0, "arm": 4.0, "bob": 0.0, "roll": 0.0, "lean": 8.0},
 }
 ## Poses any rig has, by role: where each arm (and leg) points on the screen, in degrees (0 right, -90 up), for its left and its
@@ -50,10 +54,15 @@ const POSES := {
 }
 ## How far a pose turns an arm toward where it points, at most (degrees): a drawing bends, it does not spin round.
 const REACH := 115.0
-## How much a puppet with a model sheet bends its limbs, of what one drawing alone would: its big moves are drawings of their own.
+## How much a puppet with a model sheet swings its limbs in its gait and breath, of what one drawing alone would: its stride is a
+## drawing of its own. A pose it is told bends them all the way.
 const SHEET_BEND := 0.3
 ## The drawing a pose shows on a puppet whose sheet has it ([constant PuppetSheet.REGISTRY]).
-const POSE_DRAWINGS := {"cower": "scared", "arms_up": "scared", "cheer": "laughing", "windup": "windup"}
+const POSE_DRAWINGS := {"cower": "scared", "cheer": "laughing", "windup": "windup"}
+## How far its limbs must have bent toward a pose before the pose's own drawing swaps in (a share of the way), and the longest it
+## waits for them (s).
+const SWAP_AT := 0.7
+const SWAP_MOST := 0.22
 ## How long a mouth drawing holds at least (s): two frames at twelve a second, as a hand-drawn mouth does.
 const MOUTH_HOLD := 2.0 / 12.0
 ## The simulation's step (s): springs advance in steps no longer than this, the same live as in an export.
@@ -86,6 +95,9 @@ var action := ""
 var posed := ""
 var _action_left := 0.0              # seconds a reaction ([method react]) holds its drawing
 var _bend := 1.0                     # how much its limbs bend ([constant SHEET_BEND] with a model sheet)
+var _wish := ""                      # the pose's or verb's drawing wanted ("" none), and how long it has been
+var _wish_t := 0.0
+var _targets := {}                   # bone -> where its spring is pulled to now (degrees)
 
 var _squash: Node2D = null
 var _cels := {}                      # drawing key -> Cel
@@ -154,6 +166,7 @@ func _init(r: PuppetRig, seed: int, h: float) -> void:
 				_dir[n] = rad_to_deg((tail - head).angle()) if tail.distance_to(head) > 1.0 else 90.0
 				_angle[n] = 0.0
 				_vel[n] = 0.0
+		cel.walks = cel.view == "side" and cel.rig.bones_of("leg").size() >= 2
 		_cels[cel.key] = cel
 	_cel = _cels.get("front", _cels.values()[0])
 	for c in _cels.values():
@@ -349,8 +362,9 @@ func step(dt: float, pos: Vector3) -> void:
 	if _last == Vector3.INF:
 		_last = pos
 	var move := Vector2(pos.x - _last.x, pos.z - _last.z)
+	var dist := move.length() if gait != "float" else (pos - _last).length()    # a flier goes up as well as across
 	_last = pos
-	var inst := move.length() / maxf(1e-4, dt) / height
+	var inst := dist / maxf(1e-4, dt) / height
 	_speed = lerpf(_speed, inst, 1.0 - exp(-dt / 0.12))
 	if absf(move.x) > 1e-5:
 		_heading = lerpf(_heading, signf(move.x), 1.0 - exp(-dt / 0.1))
@@ -370,14 +384,22 @@ func _advance(dt: float) -> void:
 			action = ""
 	var g: Dictionary = GAITS.get(gait if not gait.is_empty() else "walk", GAITS["walk"])
 	var going := clampf(_speed / maxf(0.05, float(g["pace"]) * 0.35), 0.0, 1.0) if not gait == "slide" else 0.0
+	# a profile that walks on its own legs swings them all the way; one drawn whole bends little and swaps its stride
+	var swing := 1.0 if _cel != null and _cel.walks else _bend
 	if gait == "float" or spooky > 0.0:
 		going = maxf(going, 0.0)
 	_phase += dt * float(g["steps"]) * clampf(0.6 + 0.4 * _speed / maxf(0.05, float(g["pace"])), 0.5, 1.8) * (1.0 if going > 0.02 else 0.0)
 	var cyc := sin(_phase * TAU)
+	# a pose bends the limbs all the way toward it, so a drawing of it swaps in where they have got to
+	var wish := _doing_drawn()
+	if wish != _wish:
+		_wish = wish
+		_wish_t = 0.0
+	else:
+		_wish_t += dt
 	var targets := {}
 	for n in _order:
-		var r := String(_role[n])
-		targets[n] = float(pose.get(n, 0.0)) * (_bend if r in ["arm", "hand", "leg"] else 1.0)
+		targets[n] = float(pose.get(n, 0.0))
 	# breath and sway
 	var breath := sin(_t * TAU * 0.33 + float(_ph[0]))
 	var sway := sin(_t * TAU * 0.21 + float(_ph[1])) * (1.0 - going)
@@ -387,14 +409,15 @@ func _advance(dt: float) -> void:
 		var sd := 1.0 if String(_side[n]) == "left" else -1.0
 		match role:
 			"leg":
-				targets[n] = float(targets[n]) + going * float(g["leg"]) * cyc * sd * _bend
+				targets[n] = float(targets[n]) + going * float(g["leg"]) * _leg_wave(n, cyc, sd) * swing
 			"arm":
-				targets[n] = float(targets[n]) - going * float(g["arm"]) * cyc * sd * _bend + 1.5 * breath * sd
+				targets[n] = float(targets[n]) - going * float(g["arm"]) * cyc * sd * swing + 1.5 * breath * sd
 			"hand":
-				targets[n] = float(targets[n]) + going * float(g["arm"]) * 0.4 * cos(_phase * TAU) * sd * _bend
+				targets[n] = float(targets[n]) + going * float(g["arm"]) * 0.4 * cos(_phase * TAU) * sd * swing
 			"loose":
+				var trail := 26.0 if gait == "float" else 10.0     # a flier's wisps stream out behind it
 				targets[n] = float(targets[n]) + 7.0 * sin(_t * TAU * 0.8 + float(_ph[2]) + _order.find(n)) * (0.35 + going) \
-					- _heading * facing * going * 10.0
+					- _heading * facing * going * trail
 			"head":
 				targets[n] = float(targets[n]) + 2.0 * sin(_t * TAU * 0.27 + float(_ph[3])) + _talk * 3.5 * sin(_t * TAU * 1.9 + float(_ph[4]))
 	# talking: syllables in words, a word's pause between
@@ -418,6 +441,7 @@ func _advance(dt: float) -> void:
 		a += v * dt
 		_angle[n] = a
 		_vel[n] = v
+	_targets = targets
 	# its whole: squash, recoil, spin, lean, eyes
 	var sq_tgt := squash_hold * (1.0 + 0.012 * breath)
 	_sq_v += (18.0 * 18.0 * (sq_tgt - _sq) - 2.0 * 0.32 * 18.0 * _sq_v) * dt
@@ -463,8 +487,8 @@ func show_at(placed: Transform2D) -> void:
 		shake_r = sin(_t * 89.0) * tremble * 2.0
 	_choose(going)
 	var flip := _flip if absf(_flip) > 0.08 else 0.08 * signf(_flip if _flip != 0.0 else 1.0)
-	if _cel.view == "front" and _cels.size() > 1:
-		flip = 1.0                       # a drawing facing us is never mirrored: turning is another drawing
+	if _cel.view == "front" and _cels.size() > 1 and _has_view("side"):
+		flip = 1.0                       # a drawing facing us is never mirrored where turning is another drawing
 	node.transform = placed * Transform2D(0.0, Vector2(flip, 1.0), 0.0, Vector2.ZERO)
 	var sy := _sq
 	var sx := 1.0 / sqrt(maxf(0.2, _sq))
@@ -493,16 +517,22 @@ func show_at(placed: Transform2D) -> void:
 func _choose(going: float) -> void:
 	if _cels.size() < 2 or _cel == null:
 		return
-	var want_view := "side" if going > 0.35 and _has_view("side") else view
+	var across := going > 0.35 and _has_view("side")
+	var want_view := "side" if across else view
 	var want_mouth := "closed" if _jaw < 0.18 else ("open" if _jaw < 0.55 else "wide")
 	if want_mouth != _mouth and _mouth_t >= MOUTH_HOLD:
 		_mouth = want_mouth
 		_mouth_t = 0.0
 	# a drawn walk: the profile and its stride swapped at every step
-	var doing := action if not action.is_empty() else posed
-	if doing.is_empty() and want_view == "side" and going > 0.35 and _cels.has("stride") and sin(_phase * TAU * 2.0) > 0.0:
+	# going across shows the profile: a held pose's drawing waits until it stops, and only a verb's own drawing (a blow's reeling)
+	# shows over it
+	var doing := action if not action.is_empty() else ("" if across else posed)
+	if not doing.is_empty() and not _swap_ready():
+		doing = ""
+	var side: Cel = _cels.get("side")
+	if doing.is_empty() and across and _cels.has("stride") and not (side != null and side.walks) and sin(_phase * TAU * 2.0) > 0.0:
 		doing = "stride"
-	var key := PuppetSheet.pick(_cels, want_view, _mouth, mood, doing)
+	var key := PuppetSheet.pick(_cels, want_view, _mouth, "" if across else mood, doing)
 	if key.is_empty() or key == _cel.key:
 		return
 	var was := _cel
@@ -512,6 +542,37 @@ func _choose(going: float) -> void:
 	_cel.root.visible = true
 	if was.view != _cel.view:
 		kick(-0.25)
+
+
+## The drawing of what it is doing (a verb's, else a held pose's) where its sheet has one, "" else.
+func _doing_drawn() -> String:
+	var doing := action if not action.is_empty() else posed
+	return doing if _cels.size() > 1 and _cels.has(doing) else ""
+
+
+## Whether the drawing it is doing may swap in: a reaction at once; a pose once the limbs have bent most of the way toward it
+## ([constant SWAP_AT]), or [constant SWAP_MOST] on.
+func _swap_ready() -> bool:
+	if _action_left > 0.0 or _wish_t >= SWAP_MOST:
+		return true
+	var least := 1.0
+	for n in _cel.order:
+		if String(_role.get(n, "")) != "arm":
+			continue
+		var tgt := float(_targets.get(n, 0.0))
+		if absf(tgt) > 10.0:
+			least = minf(least, float(_angle[n]) / tgt)
+	return least >= SWAP_AT
+
+
+## How a leg bone [param n] on side [param sd] (1 or -1, half a cycle apart) swings with the gait's cycle [param cyc]: a thigh the
+## whole cycle; a knee or foot (a leg bone under another) with it, bending back (clockwise as drawn) while its leg comes forward, so
+## the foot lifts off the ground and is set down.
+func _leg_wave(n: String, cyc: float, sd: float) -> float:
+	var parent := String(_cel.rig.bone(n).get("parent", "")) if _cel != null else ""
+	if not parent.is_empty() and String(_role.get(parent, "")) == "leg":
+		return 0.6 * cyc * sd + 0.9 * maxf(0.0, cos(_phase * TAU) * sd)
+	return cyc * sd
 
 
 func _has_view(v: String) -> bool:
@@ -534,6 +595,8 @@ class Cel extends RefCounted:
 	var lids: Array = []
 	## Whether its talking is drawings of its own (the sheet has its mouths), so its jaw stays shut.
 	var talks := false
+	## Whether it walks on its own skeleton: a profile with two leg bones or more.
+	var walks := false
 
 	func build() -> void:
 		bones = {}

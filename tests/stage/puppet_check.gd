@@ -17,6 +17,16 @@ extends Node
 ##     backdrop not among the sets, a span aimed at someone not in the shot, a verb there is none of, a length far off (controls);
 ##   - a director's reply is read through words and fences round its JSON; a board written for a cartoon that loops loops, one that
 ##     does not holds its last shot (the control);
+##   - a pose bends the limbs all the way, and its own drawing swaps in only once they have bent most of the way (the control: not
+##     on the step it is asked for), a blow's reeling at once; a drawing facing us is mirrored only where the sheet has no profile;
+##   - a camera that frames someone is placed by their place, height and face (its eye straight in front, as far as the size asks;
+##     a two-shot holds both), and the producer's check names a camera framing someone not in the shot (the control);
+##   - a mood is carried into a character's next shot past shots without it (the control: a shot that sets its own keeps it); a walk
+##     that crawls is sent back (the control: a brisk one passes); an arm that reaches in from an edge is kept off it;
+##   - `emerge` starts small and faint at the other's middle and ends clear and risen; `move`'s arc bows its path; `change` swaps a
+##     backdrop's picture; a profile with two legs walks on them;
+##   - a set's ground line reads sorted and is followed between its points; the surveyor's line laid along a painted edge lands on it
+##     from points a little off it (the control: `snap: false` keeps them where they were written);
 ##   - a model sheet ([PuppetSheet]): each drawing is painted after the one it is painted from, and the drawing shown is the mood's,
 ##     else the view's with that mouth (wide falling back to open, open to closed), else the front.
 
@@ -67,6 +77,10 @@ func _run() -> void:
 	_verbs()
 	_checks()
 	_sheet()
+	_swaps(r)
+	_ground()
+	_framing()
+	_story()
 	if _fails == 0:
 		print("puppet_check: ok")
 	get_tree().quit(_fails)
@@ -236,6 +250,162 @@ func _sheet() -> void:
 	have["reeling"] = 1
 	_ok(PuppetSheet.pick(have, "front", "open", "scared", "reeling") == "reeling", "an action's drawing wins over a mood's")
 	_ok(PuppetSheet.pick(have, "side", "open", "", "stride") == "side", "an action with no drawing is the view's")
+
+
+func _swaps(r: PuppetRig) -> void:
+	r.drawings = {"front": r, "windup": r}
+	var pb := PuppetBody.new(r, 1, 1.0)
+	pb.pose = pb.pose_angles("windup")
+	pb.posed = "windup"
+	pb.step(1.0 / 60.0, Vector3.ZERO)
+	_ok(pb._doing_drawn() == "windup", "a pose with a drawing of its own wants it")
+	_ok(not pb._swap_ready(), "control: its drawing does not swap in on the step it is asked for")
+	for i in 20:
+		pb.step(1.0 / 60.0, Vector3.ZERO)
+	_ok(pb._swap_ready(), "it swaps in once the limbs have bent most of the way")
+	for i in 60:
+		pb.step(1.0 / 60.0, Vector3.ZERO)
+	var want := float(pb.pose.get("arm_l", 0.0))
+	_ok(absf(float(pb._angle["arm_l"]) - want) < 0.1 * absf(want), "a pose bends the arm all the way (%.1f of %.1f)" % [pb._angle["arm_l"], want])
+	var hit := PuppetBody.new(r, 2, 1.0)
+	hit.react("windup", 0.5)
+	hit.step(1.0 / 60.0, Vector3.ZERO)
+	_ok(hit._swap_ready(), "a reaction's drawing swaps in at once")
+	_ok(not pb._has_view("side"), "the fixture sheet has no profile, so its front may be mirrored")
+	r.drawings = {}
+
+
+func _framing() -> void:
+	var p := CartoonProducer.new("", "", {"seconds": 10, "cast": [{"name": "x", "picture": ""}, {"name": "y", "picture": ""}],
+		"sets": [{"name": "room", "place": "a room"}]})
+	var shot := {"cast": [{"id": "set", "kind": "backdrop", "picture": "room", "at": [0, 0, -3]},
+		{"id": "a", "kind": "puppet", "rig": _dir, "height": 1.0, "at": [0.5, -0.72, 0]},
+		{"id": "b", "kind": "puppet", "rig": _dir, "height": 1.0, "at": [-0.5, -0.72, 0]}]}
+	var cam := p.frame_camera(shot, {"frame": "a", "size": "face"})
+	# the fixture's face: three quarters up its head bone (16 px down a 56 px figure on row 60); its head from its top to its neck,
+	# where the head bone joins (row 40)
+	var head_lo := -0.72 + (60.0 - 40.0) / 56.0
+	var frame_h := (0.28 - head_lo) * 1.35
+	var look: Array = cam.get("look", [0, 0, 0])
+	var eye: Array = cam.get("eye", [0, 0, 0])
+	_ok(absf(float(look[0]) - 0.5) < 0.01 and absf(float(look[1]) - (0.28 + head_lo) * 0.5) < 0.01, "a face shot looks at the middle of the head (%s)" % [look])
+	_ok(absf(float(eye[2]) - frame_h / tan(deg_to_rad(20.0))) < 0.01 and is_equal_approx(float(eye[0]), float(look[0])),
+		"its eye stands straight in front, as far as the head fills the frame")
+	p._faces["faceless"] = {"x": 0.0, "y": 0.8, "neck": null, "ok": false}
+	shot["cast"][2]["rig"] = "faceless"
+	var whole := p.frame_camera(shot, {"frame": "b", "size": "face"})
+	_ok(absf(float(whole["look"][1]) - (-0.72 + 0.5)) < 0.01 and float(whole["fov"]) == 48.0, "one drawn with no face to aim at is held whole")
+	shot["cast"][2]["rig"] = _dir
+	var two := p.frame_camera(shot, {"frame": ["a", "b"], "size": "chest"})
+	_ok(absf(float(two["look"][0])) < 0.01 and float(two["eye"][2]) > float(eye[2]), "a two-shot is centered between them and farther off")
+	_ok(p.frame_camera(shot, {"frame": "nobody"}).is_empty(), "framing nobody in the shot places nothing")
+	var board := _board()
+	board["sequence"][0]["camera"] = {"frame": "nobody", "size": "face"}
+	_ok(p.check(board).contains("frames nobody"), "control: the check names a camera framing someone not in the shot")
+
+
+func _story() -> void:
+	var shot := func(cast: Array, spans: Array) -> Dictionary:
+		return {"scene": "stage", "hold": 3.0, "cast": cast, "track": {"nominal": 3.0, "spans": spans}}
+	var bed := {"id": "s", "kind": "puppet", "rig": "x", "at": [0.5, -0.72, 0]}
+	var other := {"id": "o", "kind": "puppet", "rig": "y", "at": [-0.5, -0.72, 0]}
+	var board := {"sequence": [shot.call([bed], [{"action": "feel", "target": "s", "at": 1.0, "args": {"mood": "scared"}}]),
+		shot.call([other], []), shot.call([bed.duplicate()], []),
+		shot.call([bed.duplicate()], [{"action": "feel", "target": "s", "at": 0.0, "args": {"mood": "dead"}}])]}
+	var got := CartoonProducer.carried(board.duplicate(true))
+	var third: Array = got["sequence"][2]["track"]["spans"]
+	_ok(third.size() == 1 and String(third[0]["args"]["mood"]) == "scared" and is_zero_approx(float(third[0]["at"])),
+		"a mood is carried into the next shot it is in, past a shot without it")
+	_ok((got["sequence"][3]["track"]["spans"] as Array).size() == 1, "control: a shot that sets its own mood at its start keeps it alone")
+	_ok((got["sequence"][1]["track"]["spans"] as Array).is_empty(), "nobody absent is given a mood")
+	var p := CartoonProducer.new("", "", {"seconds": 10, "cast": [{"name": "x", "picture": ""}, {"name": "y", "picture": ""},
+		{"name": "arm", "picture": "", "reaches": "left"}], "sets": [{"name": "room", "place": "a room"}]})
+	var slow := _board()
+	slow["sequence"][0]["track"]["spans"].append({"action": "move", "target": "x", "from": 0.0, "to": 4.0, "args": {"to": [1.5, -0.72, 0]}})
+	_ok(p.check(slow).contains("a crawl"), "a walk that crawls is sent back")
+	var brisk := _board()
+	brisk["sequence"][0]["track"]["spans"].append({"action": "move", "target": "x", "from": 0.0, "to": 0.8, "args": {"to": [-1.5, -0.72, 0]}})
+	_ok(p.check(brisk).is_empty(), "control: a brisk walk passes (%s)" % p.check(brisk))
+	var insert := {"camera": {"eye": [0, 0, 4], "look": [0, 0, 0], "fov": 48},
+		"cast": [{"id": "hand", "kind": "puppet", "rig": "arm", "height": 1.0, "at": [0.2, 0, 0]}],
+		"track": {"spans": [{"action": "move", "target": "hand", "from": 0, "to": 1, "args": {"to": [0.5, 0, 0]}},
+			{"action": "face", "target": "hand", "at": 1.5, "args": {"to": "left"}},
+			{"action": "move", "target": "hand", "from": 2, "to": 3, "args": {"to": [-0.8, 0, 0]}}]}}
+	p._keep_reaching(insert)
+	var half_w := 4.0 * tan(deg_to_rad(24.0)) * 0.5 * CartoonProducer.WIDEST
+	var h := float(insert["cast"][0]["height"])
+	var w := 0.8 * h
+	var x := float(insert["cast"][0]["at"][0])
+	var to := float(insert["track"]["spans"][0]["args"]["to"][0])
+	_ok(absf(x - w * 0.5 + half_w) < 0.01 and absf(to - x) < 0.01, "an arm reaching in from the left keeps its end at the frame's edge (%.2f)" % (x - w * 0.5))
+	_ok(h > 1.0 and absf(to + w * 0.5 - 0.9) < 0.01, "and is drawn bigger, so its far end gets where its move sends it (%.2f tall)" % h)
+	var spans: Array = insert["track"]["spans"]
+	_ok(spans.size() == 2 and spans.all(func(sp: Dictionary) -> bool: return String(sp["action"]) == "move" and not bool(sp["args"]["turn"])),
+		"it never turns round: its moves keep their way and a turn aimed at it is dropped")
+	# emerge, arc, change on a stage
+	var stage := FakeStage.new()
+	add_child(stage)
+	var rng := RandomNumberGenerator.new()
+	var body: Cast.Actor = Cast.make("puppet", rng, {"id": "body", "kind": "puppet", "rig": _dir, "height": 1.0, "at": [0.0, -0.7, 0]})
+	var soul: Cast.Actor = Cast.make("puppet", rng, {"id": "soul", "kind": "puppet", "rig": _dir, "height": 0.5, "at": [0.0, 0.0, 0], "hidden": true})
+	var set_a: Cast.Actor = Cast.make("backdrop", rng, {"id": "set", "kind": "backdrop", "picture": "room", "at": [0, 0, -3]})
+	stage.cast = {"body": body, "soul": soul, "set": set_a}
+	var f := AudioFeatures.new()
+	var em := Actions.make("emerge", {"from": "body", "rise": 1.0}, rng)
+	em.begin(stage, [soul])
+	em.apply(stage, [soul], 0.0, f, 0.03)
+	var mid := -0.7 + 0.45
+	_ok(soul.fade < 0.01 and soul.scale < 0.15 and absf(soul.pos.y + soul.scale * 0.5 - mid) < 0.01, "emerge starts faint and small at the other's middle")
+	em.apply(stage, [soul], 1.0, f, 0.03)
+	em.finish(stage, [soul])
+	_ok(is_equal_approx(soul.fade, 1.0) and is_equal_approx(soul.scale, 0.5) and soul.pos.y > mid, "and ends clear, full size and risen")
+	var mv := Actions.make("move", {"to": [1.0, 0.0, 0.0], "arc": 0.4, "gait": "float"}, rng)
+	soul.pos = Vector3(-1.0, 0.0, 0.0)
+	mv.begin(stage, [soul])
+	mv.apply(stage, [soul], 0.5, f, 0.03)
+	_ok(absf(soul.pos.y - 0.4) < 0.01, "a move's arc bows its path up at the middle (%.2f)" % soul.pos.y)
+	var ch := Actions.make("change", {"picture": "room_open"}, rng)
+	ch.begin(stage, [set_a])
+	_ok((set_a as Cast.BackdropActor).picture == "room_open", "change swaps a backdrop's picture")
+	stage.free()
+	var walker := PuppetRig.read_now(_dir)
+	walker.drawings = {"front": walker, "side": walker}
+	var pb := PuppetBody.new(walker, 3, 1.0)
+	_ok((pb._cels["side"] as PuppetBody.Cel).walks, "a profile with two legs walks on them")
+	_ok(not (pb._cels["front"] as PuppetBody.Cel).walks, "control: a front does not")
+	walker.drawings = {}
+
+
+func _ground() -> void:
+	var file := ProjectSettings.globalize_path("user://puppet_check/set.ground.json")
+	var f := FileAccess.open(file, FileAccess.WRITE)
+	f.store_string(JSON.stringify({"line": [[1.0, 0.5], [0.0, 0.7], [0.5, 0.4]]}))
+	f.close()
+	var line := PuppetRig.read_ground(file)
+	_ok(line.size() == 3 and line[0].x == 0.0 and line[2].x == 1.0, "a ground line reads sorted left to right")
+	_ok(is_equal_approx(PuppetRig.ground_at(line, 0.25), 0.55) and is_equal_approx(PuppetRig.ground_at(line, 0.75), 0.45),
+		"it is followed between its points")
+	_ok(is_nan(PuppetRig.ground_at(PackedVector2Array(), 0.5)), "control: no line, no height")
+	# a dark curve on pale paper, and points 2% below it
+	var img := Image.create(400, 200, false, Image.FORMAT_RGB8)
+	img.fill(Color(0.9, 0.9, 0.85))
+	var truth := func(x: float) -> float: return 0.5 + 0.1 * sin(x * TAU)
+	for x in 400:
+		var y := int(truth.call(x / 400.0) * 200.0)
+		img.fill_rect(Rect2i(x, y - 1, 1, 3), Color(0.05, 0.05, 0.05))
+	var pts := PackedVector2Array()
+	for i in 9:
+		var x := i / 8.0
+		pts.append(Vector2(x, float(truth.call(x)) + 0.02))
+	var worst := 0.0
+	for p in SurveyorTools.along_edge(img, pts):
+		worst = maxf(worst, absf(p.y - float(truth.call(p.x))))
+	_ok(worst < 0.012, "the surveyor's line lands on the painted edge (%.3f off at worst)" % worst)
+	var job := {"picture": "", "image": img, "points": pts, "snap": false}
+	SurveyorTools.work(job)
+	var kept: PackedVector2Array = job["line"]
+	_ok(kept.size() == pts.size() and is_equal_approx(kept[4].y, pts[4].y), "control: snap off keeps the points as written")
+	_ok(job["look"] is Image and (job["look"] as Image).get_width() == 400, "it answers with a picture of the line")
 
 
 func _board() -> Dictionary:

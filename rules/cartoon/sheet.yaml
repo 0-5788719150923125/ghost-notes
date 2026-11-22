@@ -3,7 +3,8 @@
 # What is drawn is the sheet's row (`ask`, the registry's own words); the style is the maker's drawing, handed in as a reference.
 #
 # The code gives: {{ask}}, {{file}}; `has_base` (the first reference is another drawing of the sheet, to change as asked); `described`,
-# {{describe}} (a character nobody drew: its words, the references only its style).
+# {{describe}} (a character nobody drew: its words, the references only its style); `thing` (it is an object - furniture, a prop - not a
+# creature).
 prompt:
   - "Use your image generation tool to make one picture, then save it in the current directory as {{file}}."
   - ""
@@ -20,9 +21,15 @@ prompt:
     say: >-
       The attached picture is a character drawn by hand. Draw it again as asked below, by the same hand: the same character in every
       particular - its shapes, colors, markings, how many of each limb and what it holds - drawn in the same outlines and colors.
+  - when: thing
+    say: >-
+      IT IS AN OBJECT, NOT A CREATURE: an ordinary thing as it really is, with no face, no eyes, no mouth, no arms or legs of its own.
   - ""
   - "{{ask}}"
   - ""
+  - >-
+      EVERYTHING IT HOLDS IS WHOLE IN THE PICTURE: whatever it carries, raises or swings stays well inside the page's edges, with white
+      round it, however far it reaches.
   - >-
       On plain white paper with NOTHING else: no lettering or signature, no marks drawn round it to show a moment (no lines for shaking,
       no flashes, no stars), no shadow, no ground, no border - but keep whatever belongs to the character itself, such as an aura, a glow
