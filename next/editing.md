@@ -57,6 +57,18 @@ keep their dialects and the form reads them; one reader of marks for every readi
 
 ## Status: what is left
 
+- **An episode's script, read and edited** (the Episode card's Script…, [EpisodeScript]; also the Script row's edit): every table
+  mark says what it is after a bar; a game's words go back to their passages as the author's, a picture's words changed are the
+  session's and paint that page again (a page is made from its own picture alone, `TableEpisode.page_key`), a picture added is the
+  session's last; every other mark stands. A save is an edit, no step's making (`KeptSteps.carry_over`): the stretches after a
+  passage changed and what is made from the script stay fresh. Refine… talks it over with a writer told the same; a turn lands
+  whoever holds it (`WriterChat` polls itself) and Stop ends it at once. Gate: `episode_script_check`.
+  Open: the author's try.
+- **A person renamed** (the Voice card's Rename… on a table show, [EpisodeRename]): the brief's prose, the voice and every word
+  file of every episode name the new name; the records are carried over (`KeptSteps.carry_over`), so nothing goes stale that was
+  not, and only the take's lines that say the name are said again. Refused while an episode is being made or where someone has
+  the name already. Gate: `episode_rename_check`.
+
 - **The author's eye, first** (step 0): the demo note's Timeline, a key added, an actor clicked; on a copy of a finished episode a
   ⟳, a ✎, the Voice row, the inspector and the plan.
 - A change on the set seen without the table standing again (measure what a stand costs first).

@@ -92,7 +92,7 @@ OpenAI through the Codex CLI.
 
 Reasoning effort is low unless the panel asks for another (the agent only calls one tool and copies one file). `--ephemeral`: ghost keeps the picture, and a session log holds every reference and the result as base64 (5-20 MB a picture) and is never pruned; the thread id and `generated_images` are unaffected.
 
-Runs the OpenAI Codex CLI. Source: [src/agents/image_gen.gd:86](../src/agents/image_gen.gd#L86)
+Runs the OpenAI Codex CLI. Source: [src/agents/image_gen.gd:93](../src/agents/image_gen.gd#L93)
 
 ### `grok` - xAI (Grok Build CLI)
 
@@ -104,7 +104,7 @@ Run as the writer is (`TextGen.Grok`: an agent file whose body is the system pro
 
 The effort is low unless one is chosen, as Codex's painter: the agent writes a prompt and calls one tool; the picture is the image model's.
 
-Runs the Grok Build CLI (xAI). Source: [src/agents/image_gen.gd:322](../src/agents/image_gen.gd#L322)
+Runs the Grok Build CLI (xAI). Source: [src/agents/image_gen.gd:328](../src/agents/image_gen.gd#L328)
 
 ### `bedrock` - Amazon Bedrock (AWS CLI)
 
@@ -116,7 +116,7 @@ An image model is not an agent: every painter prompt in ghost assumes one ("use 
 
 What an image model is asked is per family (`SCHEMAS`): the catalog lists every image model the account can reach and a painter offers the ones it knows how to ask. A new family is an entry there and a body in `body`. Steps, each its own process: the catalog lookup if stale (see `BedrockCatalog`), the director, the painting.
 
-Runs the AWS CLI. Source: [src/agents/image_gen.gd:490](../src/agents/image_gen.gd#L490)
+Runs the AWS CLI. Source: [src/agents/image_gen.gd:496](../src/agents/image_gen.gd#L496)
 
 ## The assistant (3)
 

@@ -9,7 +9,7 @@ extends Node
 ##   the table stood from it stands it no more - the control, before, it does; ticked again it stands again. The card draws a row
 ##   for each.
 ## - An entry's × takes a thing off the table for good, from Used or Set aside (the control: one not there cannot be).
-## - The groups are Used and Set aside, and no row offers Always. Keep puts a thing in the library, and its row says Kept; only a used
+## - The groups are Used and Set aside, and a game's land and figures (empty for a show with no game), and no row offers Always. Keep puts a thing in the library, and its row says Kept; only a used
 ##   thing offers Select. A row's prop whole is its table's thing and materials ([method EpisodeProps.prop_of]), built whole to be
 ##   turned ([method EpisodeProps.model_of]); the viewer holds it, a drag turns it and Set straight puts it back (the control: a
 ##   key with no prop builds nothing). With no table yet there is nothing to add to.
@@ -93,7 +93,10 @@ func _run() -> void:
 	_ok(card.row_count() == 2, "the card draws a row for each (%d)" % card.row_count())
 
 	# Used, Keep, Select
-	_ok(sec.groups().map(func(g: Dictionary) -> String: return String(g["label"])) == ["Used", "Set aside"], "the groups are Used and Set aside")
+	_ok(sec.groups().map(func(g: Dictionary) -> String: return String(g["label"])) == ["Used", "Set aside", "The land", "Figures"],
+		"the groups are Used and Set aside, and a game's land and figures")
+	_ok(sec.rows().filter(func(r: Dictionary) -> bool: return String(r["group"]) in ["board", "figures"]).is_empty(),
+		"a show with no game lists nothing under the land or figures")
 	var verbs_of := func(key: String) -> Array:
 		var row: Array = sec.rows().filter(func(r: Dictionary) -> bool: return String(r["key"]) == key)
 		return (row[0]["verbs"] as Array).map(func(v: Dictionary) -> String: return String(v["key"])) if not row.is_empty() else []

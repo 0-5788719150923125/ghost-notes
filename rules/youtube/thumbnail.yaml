@@ -26,6 +26,11 @@
 # words, maybe empty) and its {{look}} (how they were lettered, maybe empty), none the first time. The painter's part: {{picture}},
 # {{words}} (maybe empty), {{lettering}} (maybe empty), {{refs}} (whether it is handed pictures to follow) and {{portrait}} (a
 # portrait video's thumbnail).
+#
+# A THUMBNAIL REFINED (the card's Refine…, YouTubeThumbnail.refine): one that is mostly right is handed back to a painter with only
+# what the author asks changed, and everything else kept as it is, its words and their lettering included unless the ask is about
+# them. The code gives {{direction}} (the author's ask, as written), {{picture}} (the brief it was painted from), {{words}} and
+# {{lettering}} (maybe empty) and {{portrait}}.
 system: >-
   You design the thumbnail a video goes up to YouTube with: the picture, the words on it and how they are lettered. Answer with
   the JSON asked for and nothing else.
@@ -112,3 +117,36 @@ painter:
       FORMAT: {{#portrait}}PORTRAIT 9:16{{/portrait}}{{^portrait}}LANDSCAPE 16:9{{/portrait}}. It is
       cut to exactly that shape from whatever size is painted, so keep everything that matters away from
       the edges. No border, no frame, no watermark, no signature.
+refine:
+  - >-
+      The attached image is the thumbnail of a YouTube video, right in almost every way. Paint it again with ONLY the change asked
+      below: the same thumbnail, edited where it is asked and nowhere else.
+  - ""
+  - "WHAT TO CHANGE, as the author asks:"
+  - ""
+  - "<direction>"
+  - "{{direction}}"
+  - "</direction>"
+  - ""
+  - "What it was painted from, for what each thing in it is:"
+  - ""
+  - "<description>"
+  - "{{picture}}"
+  - "</description>"
+  - ""
+  - when: words
+    say: >-
+      THE WORDS ON IT are "{{words}}"{{#lettering}}, lettered so: {{lettering}}{{/lettering}}. Keep them exactly as they are -
+      every letter, its lettering and its place - unless the author asks to change them; where the ask changes them, spell
+      every letter as the ask gives it, readable at the size of a stamp and clear of the lower right corner.
+  - when: "!words"
+    say: "It has no words on it: add none unless the author asks for them."
+  - >-
+      Change what the author asks, and only what that change needs to look right where it meets the rest. Everything else stays
+      exactly as it is in the attached image: the composition and framing, the light, every color, the style and its texture, and
+      every person and thing the ask does not name, in the same place and pose. Where people are in it, each has the anatomy a
+      person has unless the description says otherwise.
+  - >-
+      FORMAT: {{#portrait}}PORTRAIT 9:16{{/portrait}}{{^portrait}}LANDSCAPE 16:9{{/portrait}}, the attached image's own shape. It
+      is cut to exactly that shape from whatever size is painted, so keep everything that matters away from the edges. No border,
+      no frame, no watermark, no signature.

@@ -2176,7 +2176,7 @@ func _acts_of(beat: String) -> Array:
 ## script is its play, as it was played. "" written, else why not (and nothing written).
 func write_script(text: String) -> String:
 	if episode.wants_game():
-		return "a game's script is its play, written as it was played"
+		return write_game_script(text)
 	var moves := choreography(_plan(), _drawn(episode.card_count()))
 	var parts := CardReading.split(text)
 	if not String((parts[0] as Dictionary)["text"]).is_empty():
@@ -2204,6 +2204,174 @@ func write_script(text: String) -> String:
 		if not err.is_empty():
 			return err
 	return _make_script() if not writes.is_empty() else ""
+
+
+# --- a game's script, read and edited (EpisodeScript) ------------------------------------------------------------------------
+
+## A table mark with what it is after a bar: `<!-- table: KIND ID | what it is -->`.
+const MARK_RX := "<!--\\s*table:\\s*([a-z_]+)(?:\\s+([a-z0-9-]+))?\\s*(?:\\|([^>]*?))?\\s*-->"
+
+
+## A game's script with every table mark saying what it is ([method write_game_script] reads it back): a picture its name and what
+## it shows, a throw who threw what and what came of it, a figure where it goes. What follows the bar is read back only from a
+## picture's mark; every other mark's is for reading.
+func readable_script() -> String:
+	var text := episode.read_text("script")
+	if not episode.wants_game():
+		return text
+	var by_id := {}
+	for e in episode.events_before(""):
+		by_id[int((e as Dictionary).get("id", 0))] = e
+	var rx := RegEx.create_from_string(MARK_RX)
+	var out := ""
+	var at := 0
+	for m in rx.search_all(text):
+		out += text.substr(at, m.get_start() - at)
+		var kind := m.get_string(1)
+		var id := m.get_string(2)
+		var said := _mark_said(kind, by_id.get(int(id), {}) if id.is_valid_int() else {})
+		out += "<!-- table: %s%s%s -->" % [kind, (" " + id) if not id.is_empty() else "", (" | " + said) if not said.is_empty() else ""]
+		at = m.get_end()
+	return out + text.substr(at)
+
+
+## What a mark of [param kind] is, in a line, from its event [param e].
+static func _mark_said(kind: String, e: Dictionary) -> String:
+	var clean := func(v: Variant) -> String: return " ".join(String(v).replace("-->", "").replace("--", "-").replace(">", "").split("\n", false)).strip_edges()
+	match kind:
+		"picture":
+			return "%s: %s" % [clean.call(e.get("name", "")), clean.call(e.get("looks", ""))] if not e.is_empty() else ""
+		"roll":
+			return clean.call("%s throws %s for %s: %s" % [e.get("who", ""), e.get("notation", ""), e.get("why", ""), e.get("words", "")]) if not e.is_empty() else ""
+		"move":
+			return clean.call("%s walks to %s" % [e.get("figure", ""), str(e.get("to", ""))]) if not e.is_empty() else ""
+		"place":
+			return clean.call("%s set down at %s" % [e.get("figure", ""), str(e.get("at", ""))]) if not e.is_empty() else ""
+		"fall", "rise", "remove":
+			return clean.call("%s %s" % [e.get("figure", ""), kind]) if not e.is_empty() else ""
+		"turn":
+			return clean.call("%s's turn" % e.get("who", "")) if not e.is_empty() else ""
+		"board":
+			return "the view back to the table"
+	return ""
+
+
+## A game's script written back ([method readable_script]'s, or as it is): the words between its stretches' marks go back to their
+## passages, each kept as the author's; a picture's mark may be moved, taken out, given new words ("NAME: what it shows", painted
+## again from them) or added (`picture new`); every other table mark must stand as it stood, in order - what was thrown was thrown.
+## "" written, else why not.
+func write_game_script(text: String) -> String:
+	var rx := RegEx.create_from_string(MARK_RX)
+	var events := episode.events_before("")
+	var by_id := {}
+	var next := 0
+	for e in events:
+		by_id[int((e as Dictionary).get("id", 0))] = e
+		next = maxi(next, int((e as Dictionary).get("id", 0)))
+	# ...every mark but a picture's, in order, as the script stands and as written
+	var fixed := func(t: String) -> Array:
+		var out: Array = []
+		for m in rx.search_all(t):
+			if m.get_string(1) != "picture":
+				out.append("%s %s" % [m.get_string(1), m.get_string(2)])
+		return out
+	var was: Array = fixed.call(episode.read_text("script"))
+	var now: Array = fixed.call(text)
+	if was != now:
+		for i in mini(was.size(), now.size()) + 1:
+			if i >= was.size() or i >= now.size() or was[i] != now[i]:
+				return "the table's marks are as they happened: \"%s\" is where \"%s\" was - edit the words and the pictures, and leave the rest as it stands" % [now[i] if i < now.size() else "nothing", was[i] if i < was.size() else "nothing"]
+	# ...each picture's words taken; a new one made; every mark written back bare
+	var renamed := {}
+	var made: Array = []
+	var bare := ""
+	var at := 0
+	for m in rx.search_all(text):
+		bare += text.substr(at, m.get_start() - at)
+		var kind := m.get_string(1)
+		var id := m.get_string(2)
+		if kind == "picture":
+			var said := m.get_string(3).strip_edges()
+			var colon := said.find(":")
+			var name := said.substr(0, colon).strip_edges() if colon > 0 else ""
+			var looks := said.substr(colon + 1).strip_edges() if colon > 0 else said
+			if id == "new":
+				if looks.is_empty():
+					return "a new picture says what it shows: <!-- table: picture new | NAME: what it shows -->"
+				next += 1
+				id = str(next)
+				made.append({"id": next, "kind": "picture", "name": name if not name.is_empty() else looks.left(40), "looks": looks, "shows": []})
+			elif not id.is_valid_int() or not by_id.has(int(id)):
+				return "there is no picture %s in this episode: a new one is written \"picture new\"" % id
+			elif not looks.is_empty():
+				var e: Dictionary = by_id[int(id)]
+				if looks != String(e.get("looks", "")) or (not name.is_empty() and name != String(e.get("name", ""))):
+					renamed[int(id)] = {"name": name if not name.is_empty() else String(e.get("name", "")), "looks": looks}
+		bare += "<!-- table: %s%s -->" % [kind, (" " + id) if not id.is_empty() else ""]
+		at = m.get_end()
+	bare += text.substr(at)
+	# ...written as an edit, no step's making: what was made from the passages and the script (the stretches after, the figures)
+	# stays as fresh as it was, and a page goes stale by its own picture alone
+	episode.pages_own_pictures()
+	return episode.carry_over(func() -> String: return _write_game_words(bare, renamed, made, rx), false)
+
+
+## The words and pictures of an edited script written back ([method write_game_script]): the session's events, each stretch's
+## passage, and the script put together again. "" written, else why not.
+func _write_game_words(bare: String, renamed: Dictionary, made: Array, rx: RegEx) -> String:
+	# ...the session's events, each stretch's file, as the pictures now are: a new picture is the session's last, so no page that is
+	# painted already changes its number
+	var order := ["say:intro"]
+	for k in range(1, episode.beat_count() + 1):
+		order.append("say:%d" % k)
+	order.append("say:close")
+	var files: Array = []
+	for st in order:
+		if FileAccess.file_exists(episode.events_file(String(st))):
+			files.append(episode.events_file(String(st)))
+	if not renamed.is_empty() or not made.is_empty():
+		for i in files.size():
+			var got: Variant = JSON.parse_string(FileAccess.get_file_as_string(String(files[i])))
+			if not (got is Array):
+				continue
+			for e in got:
+				if renamed.has(int((e as Dictionary).get("id", 0))):
+					(e as Dictionary).merge(renamed[int((e as Dictionary)["id"])], true)
+			if i == files.size() - 1:
+				(got as Array).append_array(made)
+			# ...beside it, then moved over: every write lands whole
+			var f := FileAccess.open(String(files[i]) + ".part", FileAccess.WRITE)
+			if f == null:
+				return "could not write the session's events"
+			f.store_string(JSON.stringify(got))
+			f.close()
+			if DirAccess.rename_absolute(String(files[i]) + ".part", String(files[i])) != OK:
+				return "could not write the session's events"
+	# ...the words, stretch by stretch: what lies between one stretch's mark and the next is its passage
+	var moves: Array = []
+	for m in choreography(_plan(), _drawn(episode.card_count())):
+		var mv: Dictionary = m
+		if not String(mv.get("say", "")).is_empty() and not (String(mv["kind"]) == "work" and episode.read_text(String(mv["say"])).is_empty()):
+			moves.append(mv)
+	var starts: Array = []
+	var mi := 0
+	for m in rx.search_all(bare):
+		if mi < moves.size() and m.get_string(1) == String(moves[mi]["kind"]) and int(m.get_string(2)) == int(moves[mi].get("card", 0)):
+			starts.append({"say": String(moves[mi]["say"]), "from": m.get_end(), "mark": m.get_start()})
+			mi += 1
+	if starts.size() != moves.size():
+		return "a stretch's own mark is missing: the script's stretches begin where they did"
+	for i in starts.size():
+		var end := bare.length() if i + 1 >= starts.size() else int(starts[i + 1]["mark"])
+		var words := bare.substr(int(starts[i]["from"]), end - int(starts[i]["from"])).strip_edges()
+		var say := String(starts[i]["say"])
+		if words != episode.read_text(say).strip_edges():
+			var err := episode.write_text(say, words)
+			if err.is_empty():
+				err = episode.set_kept(say, true)
+			if not err.is_empty():
+				return err
+	return _make_script()
 
 
 func _make_script() -> String:

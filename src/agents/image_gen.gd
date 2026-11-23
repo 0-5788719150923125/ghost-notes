@@ -33,6 +33,13 @@ const REGISTRY := {
 
 ## Build the backend for [param key], falling back to the first entry for an unknown one: a stale
 ## config must not leave the panel without a painter.
+## Whether [param path] is a picture [param job] made: there, not empty, and written since the job started. A picture painted before
+## (the one it is painted again over) is never what a failed run made.
+static func written_by(path: String, job: Dictionary) -> bool:
+	if path.is_empty() or not FileAccess.file_exists(path) or FileAccess.get_file_as_bytes(path).size() == 0:
+		return false
+	return FileAccess.get_modified_time(path) >= int(job.get("started", 0))
+
 static func make(key: String) -> Backend:
 	var cls: Variant = Registry.field(REGISTRY, key, "backend", REGISTRY[REGISTRY.keys()[0]]["backend"])
 	return cls.new()
@@ -141,8 +148,7 @@ class Codex:
 
 	func resolve(job: Dictionary) -> String:
 		var target := String(job.get("target", ""))
-		if not target.is_empty() and FileAccess.file_exists(target) \
-				and FileAccess.get_file_as_bytes(target).size() > 0:
+		if ImageGen.written_by(target, job):
 			return target
 		var tid := thread_id(String(job.get("events", "")))
 		if tid.is_empty():
@@ -454,7 +460,7 @@ class Grok:
 		var target := String(job.get("target", ""))
 		if target.is_empty():
 			target = String(job["dir"]).path_join("image.png")
-		return target if FileAccess.file_exists(target) and FileAccess.get_file_as_bytes(target).size() > 0 else ""
+		return target if ImageGen.written_by(target, job) else ""
 
 	## Why there is no picture: the stream's error, else what the agent said after its last tool call
 	## (a refused prompt is explained there), else the CLI's last complaint.

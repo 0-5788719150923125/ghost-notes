@@ -55,6 +55,19 @@ func _ok(cond: bool, what: String) -> void:
 		_fails += 1
 
 
+## A picture on disk from before a job began is never what the job made: a failed run painted again over one (out of quota, say) has
+## no picture, not the old one. The control: one written since it began is its picture.
+func _stale_picture() -> bool:
+	var path := _scratch.path_join("old_page.png")
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string("an old picture")
+	f.close()
+	var made := FileAccess.get_modified_time(path)
+	_ok(not ImageGen.written_by(path, {"started": made + 5}), "a picture from before the job began is not its picture")
+	_ok(ImageGen.written_by(path, {"started": made}), "control: one written since it began is")
+	return true
+
+
 func _run() -> void:
 	var settings := root.get_node_or_null("Settings")
 	if settings != null:
@@ -67,7 +80,7 @@ func _run() -> void:
 	_wipe(_scratch)
 	DirAccess.make_dir_recursive_absolute(_scratch.path_join("home"))
 	OS.set_environment("GROK_HOME", _scratch.path_join("home"))
-	for check in [_command, _agent_file, _message, _isolation, _reply, _picture, _sessions, _catalog]:
+	for check in [_command, _agent_file, _message, _isolation, _reply, _picture, _stale_picture, _sessions, _catalog]:
 		if not bool(check.call()):
 			_ok(false, "a check stopped part way (script error?)")
 	for k in keep:

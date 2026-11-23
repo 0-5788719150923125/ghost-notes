@@ -41,6 +41,15 @@ system:
     say: >-
       The note's words: read aloud by the voices it names, in the order written, and shown in whatever the note is
       presented in. Its marks are read by the app and never spoken.
+  # An episode's script (EpisodeScript): what was really played and said, its table marks shown with what each is
+  - when: episode
+    say: >-
+      This is one episode's script, as it was made: every word said, in order, under its speaker's mark. A mark written
+      `<!-- table: KIND NUMBER | what it is -->` is something that happens on the table at that point, what follows the bar
+      saying what it is. A picture's mark (`picture`) is a page shown full frame from there until the next: you may rewrite
+      what follows its bar, "NAME: what the picture shows", and it is painted again from that; you may move it, take it out, or
+      add one where the words move on to something new, written `<!-- table: picture new | NAME: what it shows -->`. Every other
+      mark - a throw, a move, a stretch's beginning - stays exactly where it is and as it is: what was thrown was thrown.
   - when: has_parts
     say: ""
   - when: has_parts

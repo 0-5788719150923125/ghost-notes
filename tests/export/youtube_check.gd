@@ -62,7 +62,9 @@ extends SceneTree
 ##   Matching: ticked, writer and painter are given pictures to follow; cleared, none (control). Every painting is kept as a
 ##   version: painted again, the writer is shown the earlier briefs (control: none the first time); the card steps between versions;
 ##   ✕ asks, then deletes the shown one; nothing paints over a choice (with none left, they paint one: control); the full-size
-##   window holds the chosen version.
+##   window holds the chosen version. Refine: the shown one's painting handed to a painter with only the author's ask (control:
+##   no ask, or no such version, is refused, saying why); it lands as a new version, chosen, with its source's brief and words'
+##   fingerprint and what was asked; a refine that fails is tried as itself, then said apart, leaving the step as it was.
 ## - the title screen's moment and ffmpeg's arguments for taking a frame.
 
 ## By path, not by class name: a new class is unknown to `--script` runs until the editor rescans.
@@ -1561,6 +1563,7 @@ func _thumbnails() -> bool:
 	card._refresh_thumbnail()
 	_ok(card._thumb_steps.visible and card._thumb_at.text == "v2/2" and not card._thumb_back.disabled and card._thumb_on.disabled
 		and card._thumb_note.text.contains("2 painted"), "the card steps between them, the latest shown (%s)" % card._thumb_note.text)
+	_refined(step, card, feed, dir, img)
 	card._fill_thumb_window()
 	var big: Array = card._thumb_window.find_children("*", "TextureRect", true, false)
 	var said_big := " ".join(card._thumb_window.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text))
@@ -1600,6 +1603,53 @@ func _thumbnails() -> bool:
 	names.free()
 	ex.free()
 	return true
+
+
+## Refine on a painted thumbnail: what the painter is handed and told, and what lands. [param feed]'s episode in [param dir]
+## holds two versions, the second chosen; it is left so.
+func _refined(step: Variant, card: Variant, feed: Variant, dir: String, img: Image) -> void:
+	var Thumb: GDScript = load("res://src/export/youtube_thumbnail.gd")
+	var pick: Dictionary = card._thumb_painter.choice()
+	var job: Dictionary = step.refine_job(feed, 1, "Make the tower red.", pick)
+	_ok(job.get("kind") == "image" and job.get("refs") == [dir.path_join("youtube_thumbnail_2.png")]
+		and job.get("target") == dir.path_join("youtube_thumbnail_3.png") and job.get("backend") == pick["agent"]
+		and String(job.get("prompt")).contains("Make the tower red.") and String(job.get("prompt")).contains("A tower.")
+		and String(job.get("prompt")).contains("no words on it"),
+		"Refine hands the painter the painting shown and the author's ask, with what it was painted from (%s)" % str(job))
+	_ok(String(step.refine_job(feed, 1, "  ", pick).get("error", "")).contains("say what")
+		and String(step.refine_job(feed, 5, "x", pick).get("error", "")).contains("no such"),
+		"the control: no ask, or no such version, is refused and says why")
+	var worded: String = Thumb.refining({"picture": "A lantern.", "words": "THE LAST CARD", "lettering": "Cut from paper."}, "Bigger.", false)
+	_ok(worded.contains("\"THE LAST CARD\"") and worded.contains("Cut from paper.") and worded.contains("Keep them exactly")
+		and worded.contains("LANDSCAPE 16:9") and not worded.contains("{{") and Rules.missing.is_empty(),
+		"a thumbnail with words is told to keep them as they are unless asked (%s)" % str(Rules.missing))
+	# what lands: a version made from the one shown, chosen
+	var target := String(job["target"])
+	img.save_png(target)
+	AgentJobs._ended["image-youtube-check-refine"] = {"ok": true, "path": target}
+	var from: String = step.versions(feed)[1].get("from", "")
+	step._jobs[dir] = {"id": "image-youtube-check-refine", "feed": feed, "stamp": from, "who": "painter", "alone": job,
+		"got": {"picture": "A tower.", "words": "", "lettering": "", "after": [], "refined": "Make the tower red.", "refined_from": 2}}
+	step.tick()
+	var v: Dictionary = step.made(feed)
+	_ok(step.versions(feed).size() == 3 and step.chosen(feed) == 2 and Thumb.image_in(dir) == dir.path_join("youtube_thumbnail_3.jpg")
+		and v.get("refined") == "Make the tower red." and int(v.get("refined_from", 0)) == 2 and v.get("picture") == "A tower."
+		and v.get("from") == from, "the refined painting lands as a new version that goes up, its brief and words' fingerprint its source's")
+	card._fill_thumb_window()
+	var said := " ".join(card._thumb_window.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text))
+	var buttons: Array = card._thumb_window.find_children("*", "Button", true, false).map(func(b: Button) -> String: return b.text)
+	_ok(said.contains("Refined from version 2: Make the tower red.") and buttons.has("Refine…") and card._thumb_refine.visible,
+		"the window says what it was refined from, and Refine… is there and under the card's thumbnail (%s)" % said)
+	# a refine that fails: tried again as itself, then said apart, the step as it was
+	AgentJobs._ended["image-youtube-check-refine-x"] = {"ok": false, "error": "the painter fell over"}
+	step._tries[dir] = 2
+	step._jobs[dir] = {"id": "image-youtube-check-refine-x", "feed": feed, "stamp": from, "who": "painter", "alone": job, "got": {}}
+	step.tick()
+	_ok(step.lost(feed).contains("the painter fell over") and step.state(feed) != "failed" and step.versions(feed).size() == 3
+		and not step.busy(feed), "a refine out of tries is said apart and the step stays as it was (%s)" % step.lost(feed))
+	step.choose(feed, 1)
+	step.delete(feed, 2)
+	_ok(step.versions(feed).size() == 2 and step.chosen(feed) == 1, "the refined version deleted, the two before it remain")
 
 
 func _tag_field() -> bool:

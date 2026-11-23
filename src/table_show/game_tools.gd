@@ -38,7 +38,7 @@ const OVER_MOST := 3.0
 ## The most words said with nothing shown before the game master is told to show something ([method _running]), and the least
 ## share of that a stretch must have shown to be handed in ([method _submit]): pictures break up the talk, and the viewer sees the
 ## story through them.
-const PICTURE_EVERY := 130
+const PICTURE_EVERY := 100
 const PICTURES_LEAST := 0.6
 ## The most lines in one call: a scene is said in stretches, each answered with how long it has run.
 const LINES_MOST := 40

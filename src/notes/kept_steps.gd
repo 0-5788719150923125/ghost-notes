@@ -199,6 +199,45 @@ func changed_by_hand(step: String) -> bool:
 	return has(step) and not was.is_empty() and digest(step) != was
 
 
+## The episode's files changed by [param edit] (`() -> String`, "" done) in a change that is no step's making (a person renamed in
+## all of them): each record carried over to the files as they now stand, so a step stale before is stale after and no other
+## is, and one changed by a hand still is. With [param whole] false only the steps a step was made from are carried, and what
+## else it says it is made from (a page's own picture) is judged as it now stands. Keeping versions is [param edit]'s. "" done,
+## else why not.
+func carry_over(edit: Callable, whole := true) -> String:
+	adopt()
+	var digests := {}
+	var made := {}
+	for st in steps():
+		digests[String(st)] = digest(String(st))
+	for s in records():
+		made[s] = made_from(String(s))
+	var err := String(edit.call())
+	_digests.clear()
+	_changed()
+	# ...read again: [param edit] may have kept versions, which are records too
+	var all := records().duplicate(true)
+	for s in all:
+		if not (all[s] is Dictionary):
+			continue
+		var r: Dictionary = all[s]
+		if digests.has(s) and String(r.get("digest", "")) == String(digests[s]):
+			r["digest"] = digest(String(s))
+		if not (r.get("from") is Dictionary):
+			continue
+		var from: Dictionary = r["from"]
+		var now := made_from(String(s))
+		for n in from.keys():
+			# ...a step it was made from by that step's digest; anything else a step says it is made from, by what it says now
+			if digests.has(n) and has(String(n)):
+				if str(from[n]) == str(digests[n]):
+					from[n] = digest(String(n))
+			elif whole and made.has(s) and (made[s] as Dictionary).has(n) and str(from[n]) == str(made[s][n]) and now.has(n):
+				from[n] = now[n]
+	var wrote := _write_records(all)
+	return err if not err.is_empty() else wrote
+
+
 ## [param step] kept ([param on]) or given back to Generate - and then, changed by a hand, taken as it is now. "" written.
 func set_kept(step: String, on: bool) -> String:
 	adopt()

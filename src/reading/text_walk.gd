@@ -35,3 +35,20 @@ func cast_text(written: String) -> String:
 ## on the stream out of date. Not for an episode: its brief is what the NEXT one is made from.
 func reads_source() -> bool:
 	return true
+
+
+## Why speaker [param old] may not be called [param new], "" where it may ([param words], the note's words as they stand). Only a
+## walk that reads the note's words, or one that renames where its speakers come from, takes a rename.
+func rename_refused(_old: String, _new: String, _words: String) -> String:
+	return "" if reads_source() else "these speakers are named by the episode's script, not the note's words"
+
+
+## Speaker [param old] called [param new] in what this walk reads beyond the note's words. "" done, else why not.
+func rename_read(_old: String, _new: String) -> String:
+	return ""
+
+
+## The note's words [param words] with speaker [param old] called [param new]: every cue naming it, and no prose
+## ([method Manuscript.rename_speaker]).
+func renamed_words(words: String, old: String, new: String) -> String:
+	return Manuscript.rename_speaker(words, old, new)

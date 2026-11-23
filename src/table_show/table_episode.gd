@@ -684,6 +684,9 @@ func _game_needs(parts: PackedStringArray) -> Array:
 ## What [param step] is made from, as it stands: each made step it needs (never one it waits on only for order, [method _soft]) ->
 ## its digest. The script is put together from every passage, so it is made from all of them.
 func made_from(step: String) -> Dictionary:
+	# ...a game's page is made from its own picture alone ([method page_key]): a word of the script changed paints no page again
+	if _page_step(step):
+		return {"page": page_key(step)}
 	var out := {}
 	var from: Array = needs(step)
 	if step == "script":
@@ -692,6 +695,46 @@ func made_from(step: String) -> Dictionary:
 		if not _soft(String(n), step) and has(String(n)):
 			out[String(n)] = digest(String(n))
 	return out
+
+
+## A game's page step: `image:page:K`.
+static func _page_step(step: String) -> bool:
+	return step.begins_with("image:page:") and step.get_slice(":", 2).is_valid_int()
+
+
+## What page [param step] is painted from: its picture as the session has it (its name, what it shows, who is in it), as a key.
+func page_key(step: String) -> String:
+	var pages: Array = game().get("pages", [])
+	var k := int(step.get_slice(":", 2)) - 1
+	var page: Variant = pages[k] if k >= 0 and k < pages.size() else {}
+	return JSON.stringify(page, "", true).sha256_text().left(16)
+
+
+## Whether [param step] is made from something that has changed since ([method KeptSteps.stale]); a game's page, from its own
+## picture changed. A page recorded as made from the whole script (before pages were their own) is judged as it was recorded.
+func stale(step: String) -> bool:
+	if _page_step(step) and has(step):
+		var from: Variant = record(step).get("from")
+		if from is Dictionary and (from as Dictionary).has("page"):
+			return String((from as Dictionary)["page"]) != page_key(step)
+	return super(step)
+
+
+## Every page recorded as made from the whole script, and fresh by it, recorded as made from its own picture instead
+## ([method page_key]): before the script is written again, so a word changed leaves each page as it is. "" written, else why not.
+func pages_own_pictures() -> String:
+	var all := records().duplicate(true)
+	var changed := false
+	for st in steps():
+		var s := String(st)
+		if not _page_step(s) or not has(s) or not (all.get(s) is Dictionary):
+			continue
+		var r: Dictionary = all[s]
+		var from: Variant = r.get("from")
+		if from is Dictionary and not (from as Dictionary).has("page") and not super.stale(s):
+			r["from"] = {"page": page_key(s)}
+			changed = true
+	return _write_records(all) if changed else ""
 
 
 ## An episode begun by hand, no agent asked (next/editing.md step 8): a plan of [param beats] beats that draws no cards, the table
@@ -774,6 +817,7 @@ func keep_take(wav: String) -> String:
 ## What is cached of the steps' files, forgotten ([method KeptSteps._changed]): a version put back changes them.
 func _changed() -> void:
 	_script_cache = {}
+	_game_cache = {}
 
 
 ## The files [param step] is: its own, and what comes with it.

@@ -6,6 +6,9 @@
   shared; YouTube's rows and TikTok's rows show while each is picked. An export goes up to YouTube first, then to TikTok,
   and the exporter's line says both. `tests/export/tiktok_check.gd` holds TikTok's sign-in, upload, post and draft against
   a stand-in for TikTok on 127.0.0.1.
+- **Built:** a painted thumbnail's Refine… (under it and in its full-size window): a painter changes only what the author
+  asks in the one shown, and it lands as a new version that goes up (`YouTubeThumbnail.refine`, rules/youtube/thumbnail.yaml
+  `refine`). Not yet tried on a real painter; the user still has to judge whether its words stay put when not asked about.
 - **Not yet tried:** a real TikTok account and app. Everything about TikTok is built from its documentation alone.
 - **The user still has to judge:** whether drafts or posts suit; the caption's shape; whether TikTok's portrait export
   (Medium frame 9:16) should be offered when TikTok is a target.

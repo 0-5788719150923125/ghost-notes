@@ -43,7 +43,9 @@ class_name YouTubeCard
 ## episode by the writer and the painter picked under it, a step this card hands the note's Pipeline card
 ## ([YouTubeThumbnail]). What cannot be had is said under it, and the video goes up with YouTube's. Every painted one is kept:
 ## ‹ › under it picks the one that goes up, ✕ pressed twice deletes the one shown, and a click opens it full size in a window
-## of its own ([method open_thumbnail]) with what the writer asked of it. "Match the video's pictures", ticked on a new card,
+## of its own ([method open_thumbnail]) with what the writer asked of it. Refine…, there and under it, opens the Refine window a
+## picture has on the Pictures card ([PropRefine]) beside it: a painter changes only what the author says in the one shown, and
+## it lands as a new version that goes up ([method YouTubeThumbnail.refine]). "Match the video's pictures", ticked on a new card,
 ## paints it in the look of the episode's own pictures.
 ##
 ## A note read as it is written is described here: its panel shows the box ([method describe]) when nothing on the note
@@ -134,6 +136,11 @@ var _thumb_at: Label
 var _thumb_on: Button
 var _thumb_del: Button
 var _thumb_window: PictureWindow = null  # the thumbnail at full size, opened by a click on it
+var _thumb_refine: Button       # Refine… under the painted one
+var _refine: PropRefine = null  # the Refine window, beside the thumbnail at full size
+var _refine_feed: EpisodeFeed = null  # the episode whose thumbnail is being refined, while its painter works
+var _refine_from := 0           # the version it is refined from
+var _refine_n := 0              # how many versions there were when it was asked
 ## The step that paints each episode's thumbnail, while the Thumbnail is Painted.
 var _thumb: YouTubeThumbnail
 var _thumb_seen := []           # what the thumbnail's rows were last drawn for
@@ -409,6 +416,8 @@ func _build_thumbnail() -> void:
 	_thumb_steps.add_child(_thumb_at)
 	_thumb_on = _thumb_button("›", "Show the thumbnail painted after this one: it goes up instead.")
 	_thumb_on.pressed.connect(func() -> void: _choose_thumb(1))
+	_thumb_refine = _thumb_button("Refine…", REFINE_TIP)
+	_thumb_refine.pressed.connect(open_refine)
 	_thumb_del = _armed_delete("✕", _delete_thumb)
 	_thumb_steps.add_child(_thumb_del)
 
@@ -764,6 +773,7 @@ func refresh() -> void:
 	_refresh_account()
 	_refresh_tags()
 	_refresh_thumbnail()
+	_follow_refine()
 	_management_note.visible = management_policy() != "none"
 	_management_note.text = ("Choose a playlist above to apply this policy on the next upload." if String(_list["id"]).is_empty()
 		else "After each upload, all other Public videos you own in this playlist become Unlisted. Private videos and scheduled publication stay unchanged. The new upload keeps its chosen visibility.")
@@ -978,7 +988,7 @@ func _refresh_thumbnail() -> void:
 			if feed == null:
 				t = "⚠  Nothing on this note makes episodes, so nothing paints their thumbnails: YouTube chooses."
 			elif st == "running" or st == "queued":
-				t = "Painting this episode's thumbnail: %s…" % _thumb.said(feed)
+				t = "%s this episode's thumbnail: %s…" % ["Refining" if _refine_feed == feed else "Painting", _thumb.said(feed)]
 			elif st == "failed":
 				t = "⚠  This episode's thumbnail could not be painted: %s. YouTube chooses one until %s tries again." % [
 					_thumb.said(feed), row]
@@ -1070,11 +1080,90 @@ func _fill_thumb_window() -> void:
 	var at := _thumb.chosen(feed)
 	var v: Dictionary = vs[at]
 	var words := String(v.get("words", ""))
+	var asked := String(v.get("refined", ""))
+	var refine := Button.new()
+	refine.text = "Refine…"
+	refine.tooltip_text = REFINE_TIP
+	refine.focus_mode = Control.FOCUS_NONE
+	refine.pressed.connect(open_refine)
 	_thumb_window.fill("Thumbnail  ·  %s" % (feed.episode_title() if not feed.episode_title().is_empty() else "this episode"),
 		_thumb.image(feed), ("Its words: \"%s\"\n\n" % words if not words.is_empty() else "No words on it.\n\n")
-		+ String(v.get("picture", "")), at, vs.size(),
+		+ String(v.get("picture", ""))
+		+ ("\n\nRefined from version %d: %s" % [int(v.get("refined_from", 0)), asked] if not asked.is_empty() else ""), at, vs.size(),
 		"(painted before the words were written again)" if not _thumb.fresh(feed) else "", _choose_thumb,
-		[_armed_delete("Delete this version", _delete_thumb)])
+		[refine, _armed_delete("Delete this version", _delete_thumb)])
+
+
+## What Refine… says of itself, under the thumbnail and in its window.
+const REFINE_TIP := ("Have a painter change only what you say in the thumbnail shown - its words, a face, a color - and keep the "
+	+ "rest. It makes a new version, which goes up; the one it was made from stays a version before it.")
+
+
+## Refine…: the thumbnail shown at full size, and the Refine window ([PropRefine]) beside it, its painter starting as the card's.
+func open_refine() -> void:
+	var feed := _thumb_feed()
+	if feed == null or _thumb.versions(feed).is_empty() or not is_inside_tree():
+		return
+	if _refine == null:
+		_refine = PropRefine.new("picture", _thumb_painter.choice())
+		add_child(_refine)
+		_refine.asked.connect(_refine_asked)
+		_refine.stopped.connect(func() -> void:
+			if _refine_feed == null:
+				return
+			_thumb.stop(_refine_feed)
+			_refine_feed = null
+			_refine.working(false)
+			_refine.say("Stopped: nothing was added."))
+	if not _thumb_window_open():
+		open_thumbnail()
+	var v: Dictionary = _thumb.versions(feed)[_thumb.chosen(feed)]
+	var words := String(v.get("words", ""))
+	_refine.open_for("thumbnail v%d%s" % [_thumb.chosen(feed) + 1, (" \"%s\"" % words) if not words.is_empty() else ""],
+		_thumb_window)
+	_refine.working(_refine_feed != null)
+
+
+func _thumb_window_open() -> bool:
+	return _thumb_window != null and _thumb_window.visible
+
+
+## Refining asked for: the thumbnail shown handed to the painter picked, with the author's words.
+func _refine_asked(direction: String, pick: Dictionary) -> void:
+	var feed := _thumb_feed()
+	if _refine_feed != null or feed == null:
+		return
+	var at := _thumb.chosen(feed)
+	var err := _thumb.refine(feed, at, direction, pick)
+	if not err.is_empty():
+		_refine.say("Not refined: %s." % err)
+		return
+	_refine_feed = feed
+	_refine_from = at
+	_refine_n = _thumb.versions(feed).size()
+	_refine.working(true)
+	_refine.say("Starting…")
+
+
+## While a thumbnail is refined, its painter's line in the window; once it ends, what came of it, the new version shown.
+func _follow_refine() -> void:
+	if _refine_feed == null or _refine == null:
+		return
+	var feed := _refine_feed
+	if _thumb.busy(feed):
+		_refine.say("Painter: %s…" % _thumb.said(feed).trim_prefix("painter ").strip_edges())
+		return
+	_refine_feed = null
+	_refine.working(false)
+	var n := _thumb.versions(feed).size()
+	if n > _refine_n:
+		_refine.say("Made version %d from version %d. It is shown now and goes up; ‹ previous steps back to the one before."
+			% [n, _refine_from + 1])
+		_thumb_seen = []
+		_refresh_thumbnail()
+	else:
+		var why := _thumb.lost(feed)
+		_refine.say("Not refined: %s." % (why if not why.is_empty() else "the painter made nothing"))
 
 
 ## The painted thumbnail at [param path] on the card, read again only when it changes; none for "".

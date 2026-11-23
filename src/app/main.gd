@@ -883,11 +883,30 @@ func _say_slow_frames(delta: float) -> void:
 	Graphics.measure(false, "governor")
 
 
+## How long a close may take before it is made hard ([method _arm_close_watch]): the reap waits up to 3 s for its sweep.
+const CLOSE_GRACE_MS := 8000
+var _close_watch: Thread = null
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_arm_close_watch()
 		#Deferred: this notification is still propagating, so the children are locked ("calling or
 		#emitting") and freeing them here errors. One idle frame later they are free to free.
 		call_deferred("_shutdown")
+
+
+## A close that does not finish (an `_exit_tree` waiting on a thread that never ends, the app's thread stuck) is made hard
+## from a thread of its own after [constant CLOSE_GRACE_MS]: the same SIGKILL the clean close ends in, and every child goes
+## with the app (the death pact and the guardian, [Subprocess]).
+func _arm_close_watch() -> void:
+	if _close_watch != null:
+		return
+	_close_watch = Thread.new()
+	_close_watch.start(func() -> void:
+		OS.delay_msec(CLOSE_GRACE_MS)
+		print("ghost: closing took more than %d s - quitting hard" % (CLOSE_GRACE_MS / 1000))
+		OS.kill(OS.get_process_id()))
 
 
 ## Workaround: with audio input enabled (the voice sampler's microphone; project.godot
@@ -896,6 +915,7 @@ func _notification(what: int) -> void:
 ## _exit_tree, so: free main's children (their save hooks run), then leave without the driver teardown.
 ## GHOST_CLEAN_EXIT=1 restores the normal quit path for debugging; remove when upstream is fixed.
 func _shutdown() -> void:
+	_arm_close_watch()
 	if not OS.get_environment("GHOST_CLEAN_EXIT").is_empty():
 		get_tree().quit()
 		return

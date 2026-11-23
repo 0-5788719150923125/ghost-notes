@@ -27,6 +27,11 @@ class_name YouTubeThumbnail
 ##
 ## Another is another: the writer is shown the versions kept for the episode ([constant EARLIER_MOST] of them) and told to
 ## make one unlike them.
+##
+## A thumbnail REFINED ([method refine], the card's Refine…) is the painting of a version handed back to a painter with only what
+## the author asks changed (rules/youtube/thumbnail.yaml `refine`), no writer between: it lands as a new version, chosen, keeping
+## its source's brief and the fingerprint of the words that one was painted from, with what was asked (`refined`) and the version
+## it was made from (`refined_from`, counted from 1).
 
 const YouTube := preload("res://src/export/youtube.gd")
 ## The most of an episode's own pictures the writer is shown, spread through the video in its order.
@@ -171,6 +176,56 @@ func _keep(feed: EpisodeFeed, got: Dictionary, stamp: String) -> String:
 	var vs := versions(feed).duplicate(true)
 	vs.append(v)
 	return _write(feed, {"versions": vs, "current": vs.size() - 1})
+
+
+## Version [param i] of [param feed]'s episode painted again with only [param direction] changed, by [param pick]'s painter
+## (`{agent, model, effort}`; the card's while it names none). "" once asked, else why not.
+func refine(feed: EpisodeFeed, i: int, direction: String, pick := {}) -> String:
+	var spec := refine_job(feed, i, direction, pick)
+	if spec.has("error"):
+		return String(spec["error"])
+	var agent := String(spec["backend"])
+	if not ImageGen.make(agent).available():
+		return "%s is not installed" % Registry.label(ImageGen.REGISTRY, agent)
+	var v: Dictionary = versions(feed)[i]
+	var got := {"picture": String(v.get("picture", "")), "words": String(v.get("words", "")),
+		"lettering": String(v.get("lettering", "")), "after": v.get("after", []) if v.get("after") is Array else [],
+		"refined": direction.strip_edges(), "refined_from": i + 1}
+	_errors.erase(feed.folder())
+	_tries[feed.folder()] = 1
+	return _submit(feed, spec, String(v.get("from", "")), got, true)
+
+
+## The painter's job [method refine] asks for, or `{error}`: the version's painting (its thumbnail where the painting is gone)
+## its one reference.
+func refine_job(feed: EpisodeFeed, i: int, direction: String, pick := {}) -> Dictionary:
+	var vs := versions(feed)
+	if i < 0 or i >= vs.size():
+		return {"error": "there is no such thumbnail"}
+	if direction.strip_edges().is_empty():
+		return {"error": "say what to change"}
+	if busy(feed):
+		return {"error": "a thumbnail is being painted for this episode already"}
+	var jpg := _image(feed.folder(), vs[i])
+	var png := jpg.get_basename() + ".png" if not jpg.is_empty() else ""
+	var from := png if not png.is_empty() and FileAccess.file_exists(png) else jpg
+	if from.is_empty():
+		return {"error": "its picture is missing"}
+	var p: Variant = pick if not String(pick.get("agent", "")).is_empty() else \
+		(_painter_of.call() if _painter_of.is_valid() else {})
+	var who: Dictionary = p if p is Dictionary else {}
+	var agent := String(who.get("agent", ImageGen.REGISTRY.keys()[0]))
+	return {"kind": "image", "backend": agent, "model": String(who.get("model", "")), "effort": String(who.get("effort", "")),
+		"prompt": refining(vs[i], direction, _portrait()), "refs": [from],
+		"target": feed.folder().path_join(_next_in(feed.folder()) + ".png")}
+
+
+## What the painter is told to refine version [param v] (as kept) by [param direction] - a thumbnail of a [param portrait]
+## video turned. Static and pure for the gate.
+static func refining(v: Dictionary, direction: String, portrait: bool) -> String:
+	var words := String(v.get("words", ""))
+	return Rules.say("youtube/thumbnail.refine", {"direction": direction.strip_edges(), "picture": String(v.get("picture", "")),
+		"words": words, "lettering": String(v.get("lettering", "")) if not words.is_empty() else "", "portrait": portrait})
 
 
 ## The base name of the next painting's files in [param folder]: the first number neither names.

@@ -1388,125 +1388,80 @@ func _render_take() -> String:
 	var intro := maxf(0.0, Director.intro_hold)
 	var outro := maxf(0.0, Director.outro_hold)
 	var head := int(intro * float(_sr))
-	var pcm := PackedFloat32Array()
-	pcm.resize(head)
-	var words: Array = []
-		# One join, the live reading's too ([ReadingJoin]): the seams, the hesitations, where the room changes voice and
-		# distance and every word, in frames and seconds of the take, the intro included
-	var join := ReadingJoin.new(_sr, words, head)
-	var phones: Array = []
-	join.phones = phones
-	join.label = "export chunk"
 	_plan_near(chunks, 0)
-
+		# Each chunk's voice: from the cache where it was said before ([TakeCache]: the same request is the same performance),
+		# else asked of the host and awaited. Only this half is on this thread, and it lets a frame through every few
+		# milliseconds; decoding, joining and the effects over the whole take are a worker's ([method _join_take]).
+	var parts: Array = []
+	var cfgs := {}
+	var turn := _cast.turn_scale()
+	var t0 := Time.get_ticks_msec()
 	for i in chunks.size():
-		_set_status("Rendering for export: %d of %d…" % [i + 1, chunks.size()])
 				# The same arguments the preview used, from the same builder: an export that re-derived its own would be
 				# a different performance from the one auditioned.
 		var who := String((chunks[i] as Dictionary).get("speaker", ""))
 		var s := _cast.cfg_of(who)
+		cfgs[who] = s
 		var args := _request_args(s, chunks[i])
-				# A sentence said before is not said again ([TakeCache]): the same request is the same performance
 		var key := take_key(s, args)
 		var hit := TakeCache.find(key)
-		var out: Dictionary
-		var part := PackedFloat32Array()
 		if not hit.is_empty():
-			out = hit["out"]
-			part = Splice.read_wav(String(hit["wav"]))
+			parts.append({"wav": String(hit["wav"]), "out": hit["out"], "temp": false, "s": s})
 		else:
+			_set_status("Saying the take: %d of %d…" % [i + 1, chunks.size()])
 			var id := _host.request("", _cast.voice_id_of(s), TAKE_DIR + "/export_%d_%d.wav" % [stamp, i], args, null)
 			var res: Array = []
 			while true:
 				res = await _host.synthesized
 				if int(res[0]) == id:
 					break
-			out = res[1]
+			var out: Dictionary = res[1]
 			var wav := String(out.get("wav", ""))
-			if wav.is_empty():
-				continue
-			if not Settings.is_read_only():
+			if not wav.is_empty() and not Settings.is_read_only():
 				TakeCache.put(key, wav, out)
-			part = Splice.read_wav(wav)
-			DirAccess.remove_absolute(ProjectSettings.globalize_path(wav))
-		if part.is_empty():
-			continue
-		pcm.append_array(join.add(chunks, i, part, out.get("tokens", []), s, _cast.turn_scale(), out.get("phones", [])))
-
-	if join.frames <= head:
-		return ""
-	var spoken := float(join.frames - head) / float(_sr)
-		# The outro mark: the reading ends where its fade does (cut there, or filled out with silence if the text ran
-		# out first); the fade is the outro, so none is added after
-	var fade_end := join.fade_end(fade_len)
-	if fade_end >= 0:
-		join.end_at(fade_end)
-		pcm.resize(join.frames)
-		outro = fade_len
-	else:
-		pcm.append_array(join.pad(int(outro * float(_sr))))
-
-		# the ambience belongs in the render, so the export matches the audition - a fresh chain, since the live one is
-		# mid-reading and carries its own tails
-	var fx := VoiceFX.new()
-	fx.pad_seed = hash(body)
-	fx.setup(_sr)
-		# Seed the key, or the intro is silent anyway: the pad picks its tonic from the voice's tracked pitch, which is 0
-		# on silence, so during a leading pad of zeros `_start_tone` refuses to schedule anything and the bed would only
-		# begin after the narration. Measuring the voice first and handing the chain its key up front lets the bed play
-		# before the first word.
-	if intro > 0.0:
-		fx.prime_key(pcm)
-		# One chain, re-dialed per passage, never one per voice: the effects are stateful, so a second chain would start
-		# each speaker in a dead room and cut the previous tail off. The first voice's mark is at 0: it owns the intro.
-	var marks: Array = join.marks
-		# Stereo only when somebody leans: a take where nobody moves is the same mono file, at half the size.
-	var leans := false
-	var wet := PackedVector2Array()
-	var cfg: Dictionary = _cast.cfg_of(String((marks[0] as Dictionary)["speaker"]))
-	for k in marks.size():
-		var m: Dictionary = marks[k]
-				# every mark is applied, even one with no audio before the next: a distance and a voice can change at the
-				# same frame
-		if m.has("speaker"):
-			cfg = _cast.cfg_of(String(m["speaker"]))
-			leans = leans or float(cfg["lean"]) > 0.0 or absf(float(cfg.get("seat", 0.0))) > 0.5
-			Delivery.apply_fx(fx, cfg)
-			fx.heard = String(m.get("heard", ""))
-		if m.has("near"):
-			Delivery.near_to(fx, m["near"])
-		var a := int(m["at"])
-		var b := pcm.size() if k == marks.size() - 1 else int((marks[k + 1] as Dictionary)["at"])
-		if b > a:
-			# ...the voices over this line, each where it sits ([ReadingJoin])
-			fx.side = join.side_between(a, b, _cast.pan_of)
-			leans = leans or not fx.side.is_empty()
-			wet.append_array(fx.process_stereo(pcm.slice(a, b)))
+			parts.append({"wav": wav, "out": out, "temp": true, "s": s})
+		if Time.get_ticks_msec() - t0 > 8:
+			_set_status("Gathering the take: %d of %d…" % [i + 1, chunks.size()])
+			await get_tree().process_frame
+			t0 = Time.get_ticks_msec()
 		# The place, under the whole take (its first sample at show time 0, since the take carries its own bookend), so
-		# the export hears the gusts the render shows. Rendered on a worker: minutes of take are a long while of GDScript.
+		# the export hears the gusts the render shows: made here, mixed on the worker.
+	var env: SoundBed = null
 	var place := bed.of(true)
 	if place.has("make"):
-		var env: SoundBed = (place["make"] as Callable).call(_sr, 0.0)
+		env = (place["make"] as Callable).call(_sr, 0.0)
 		if env != null and env.active():
 			env.set_level(bed.level())
-			_set_status("Mixing in the place's sound...")
-			var box := [wet]
-			var task := WorkerThreadPool.add_task(func() -> void: box[0] = env.mix(box[0]), false, "soundscape export")
-			while not WorkerThreadPool.is_task_completed(task):
-				await get_tree().process_frame
-			WorkerThreadPool.wait_for_task_completion(task)
-			wet = box[0]
-			leans = true          # the place is stereo
-		# ...faded after the effects, so the room and the ambience bed go down with the voice
-	if fade_end >= 0:
-		var f0 := join.fade_at
-		var fade_n := fade_end - f0
-		for i in range(f0, wet.size()):
-			var u := float(i - f0) / maxf(1.0, float(fade_n))
-			wet[i] *= 0.0 if u >= 1.0 else 0.5 + 0.5 * cos(PI * u)
-
-	var path := take_dir + "/take_%d.wav" % stamp
-	var abs_path := Splice.write_wav(path, wet, 2 if leans else 1, _sr)
+		else:
+			env = null
+	for who in join_speakers(chunks):
+		if not cfgs.has(who):
+			cfgs[who] = _cast.cfg_of(who)
+	var box := {"at": 0, "mixing": false}
+	var job := {"chunks": chunks, "parts": parts, "cfgs": cfgs, "turn": turn, "head": head, "intro": intro, "outro": outro,
+		"fade": fade_len, "seed": hash(body), "env": env, "path": take_dir + "/take_%d.wav" % stamp, "sr": _sr}
+		# ...on a thread of its own, never the pool's: minutes of work in one of the pool's few low-priority places leave what the
+		# table and the reading queue there, and whatever waits on it, waiting as long
+	var thread := Thread.new()
+	_take_threads.append(thread)
+	thread.start(func() -> void: _join_take(job, box), Thread.PRIORITY_LOW)
+	while thread.is_alive():
+		_set_status(("Mixing in the place's sound...") if bool(box["mixing"]) else
+			"Rendering for export: %d of %d…" % [mini(int(box["at"]) + 1, chunks.size()), chunks.size()])
+		await get_tree().process_frame
+	thread.wait_to_finish()
+	_take_threads.erase(thread)
+	for part in parts:
+		if bool((part as Dictionary).get("temp", false)) and not String((part as Dictionary).get("wav", "")).is_empty():
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(String(part["wav"])))
+	var abs_path := String(box.get("abs_path", ""))
+	if abs_path.is_empty():
+		return ""
+	var path := String(job["path"])
+	var words: Array = box["words"]
+	var phones: Array = box["phones"]
+	outro = float(box["outro"])
+	var spoken := float(box["spoken"])
 		# Always written, words or not: the book medium reads the chapter from it.
 	var side := FileAccess.open(path.get_basename() + ".json", FileAccess.WRITE)
 	if side != null:
@@ -1521,3 +1476,117 @@ func _render_take() -> String:
 		side.close()
 	_set_status("Rendered %.1fs for export (%.0fs intro, %.0fs outro)." % [spoken, intro, outro])
 	return abs_path
+
+
+## The take joins under way ([method _join_take]), held here so a panel freed mid-join never frees a running thread.
+static var _take_threads: Array = []
+
+
+## Every speaker a chunk names, in order: whose settings the take's effects are dialed to.
+static func join_speakers(chunks: Array) -> Array:
+	var out: Array = []
+	for ch in chunks:
+		var who := String((ch as Dictionary).get("speaker", ""))
+		if not out.has(who):
+			out.append(who)
+	return out
+
+
+## The take made from its chunks' voices ([method _render_take] gathered them): each decoded and joined ([ReadingJoin]), faded or
+## padded, run through one effects chain dialed passage by passage, the place mixed under it, and written - ON A WORKER, from
+## [param job] alone (its speakers' settings read before, never the cast; static, so a panel freed meanwhile is never touched); [param box] says how far it is (`at`, `mixing`) and
+## takes what it made (`abs_path`, `words`, `phones`, `spoken`, `outro`), no `abs_path` for nothing said.
+static func _join_take(job: Dictionary, box: Dictionary) -> void:
+	var sr := int(job["sr"])
+	var chunks: Array = job["chunks"]
+	var parts: Array = job["parts"]
+	var cfgs: Dictionary = job["cfgs"]
+	var cfg_of := func(who: String) -> Dictionary: return cfgs.get(who, cfgs.values()[0] if not cfgs.is_empty() else {})
+	var pan_of := func(who: String) -> float: return Delivery.pan_of_seat(float((cfg_of.call(who) as Dictionary).get("seat", 0.0)))
+	var head := int(job["head"])
+	var intro := float(job["intro"])
+	var outro := float(job["outro"])
+	var fade_len := float(job["fade"])
+	var pcm := PackedFloat32Array()
+	pcm.resize(head)
+	var words: Array = []
+		# One join, the live reading's too ([ReadingJoin]): the seams, the hesitations, where the room changes voice and
+		# distance and every word, in frames and seconds of the take, the intro included
+	var join := ReadingJoin.new(sr, words, head)
+	var phones: Array = []
+	join.phones = phones
+	join.label = "export chunk"
+	for i in chunks.size():
+		box["at"] = i
+		var got: Dictionary = parts[i]
+		if String(got.get("wav", "")).is_empty():
+			continue
+		var out: Dictionary = got["out"]
+		var part := Splice.read_wav(String(got["wav"]))
+		if part.is_empty():
+			continue
+		pcm.append_array(join.add(chunks, i, part, out.get("tokens", []), got["s"], float(job["turn"]), out.get("phones", [])))
+	if join.frames <= head:
+		return
+	var spoken := float(join.frames - head) / float(sr)
+		# The outro mark: the reading ends where its fade does (cut there, or filled out with silence if the text ran
+		# out first); the fade is the outro, so none is added after
+	var fade_end := join.fade_end(fade_len)
+	if fade_end >= 0:
+		join.end_at(fade_end)
+		pcm.resize(join.frames)
+		outro = fade_len
+	else:
+		pcm.append_array(join.pad(int(outro * float(sr))))
+
+		# the ambience belongs in the render, so the export matches the audition - a fresh chain, since the live one is
+		# mid-reading and carries its own tails
+	var fx := VoiceFX.new()
+	fx.pad_seed = int(job["seed"])
+	fx.setup(sr)
+		# Seed the key, or the intro is silent anyway: the pad picks its tonic from the voice's tracked pitch, which is 0
+		# on silence, so during a leading pad of zeros `_start_tone` refuses to schedule anything and the bed would only
+		# begin after the narration. Measuring the voice first and handing the chain its key up front lets the bed play
+		# before the first word.
+	if intro > 0.0:
+		fx.prime_key(pcm)
+		# One chain, re-dialed per passage, never one per voice: the effects are stateful, so a second chain would start
+		# each speaker in a dead room and cut the previous tail off. The first voice's mark is at 0: it owns the intro.
+	var marks: Array = join.marks
+		# Stereo only when somebody leans: a take where nobody moves is the same mono file, at half the size.
+	var leans := false
+	var wet := PackedVector2Array()
+	var cfg: Dictionary = cfg_of.call(String((marks[0] as Dictionary)["speaker"]))
+	for k in marks.size():
+		var m: Dictionary = marks[k]
+				# every mark is applied, even one with no audio before the next: a distance and a voice can change at the
+				# same frame
+		if m.has("speaker"):
+			cfg = cfg_of.call(String(m["speaker"]))
+			leans = leans or float(cfg["lean"]) > 0.0 or absf(float(cfg.get("seat", 0.0))) > 0.5
+			Delivery.apply_fx(fx, cfg)
+			fx.heard = String(m.get("heard", ""))
+		if m.has("near"):
+			Delivery.near_to(fx, m["near"])
+		var a := int(m["at"])
+		var b := pcm.size() if k == marks.size() - 1 else int((marks[k + 1] as Dictionary)["at"])
+		if b > a:
+			# ...the voices over this line, each where it sits ([ReadingJoin])
+			fx.side = join.side_between(a, b, pan_of)
+			leans = leans or not fx.side.is_empty()
+			wet.append_array(fx.process_stereo(pcm.slice(a, b)))
+	var env: SoundBed = job["env"]
+	if env != null:
+		box["mixing"] = true
+		wet = env.mix(wet)
+		leans = true          # the place is stereo
+		# ...faded after the effects, so the room and the ambience bed go down with the voice
+	if fade_end >= 0:
+		var f0 := join.fade_at
+		var fade_n := fade_end - f0
+		for i in range(f0, wet.size()):
+			var u := float(i - f0) / maxf(1.0, float(fade_n))
+			wet[i] *= 0.0 if u >= 1.0 else 0.5 + 0.5 * cos(PI * u)
+
+	var abs_path := Splice.write_wav(String(job["path"]), wet, 2 if leans else 1, sr)
+	box.merge({"abs_path": abs_path, "words": words, "phones": phones, "spoken": spoken, "outro": outro}, true)

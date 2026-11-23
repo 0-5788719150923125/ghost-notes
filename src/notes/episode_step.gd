@@ -21,6 +21,9 @@ class_name EpisodeStep
 ## where the writer's answer is a brief for another agent (a painter's), [method _after] and [method _land_after]: the
 ## second job runs before anything is kept, so a step is made only once all of it is ([YouTubeThumbnail]). Its writer
 ## is the maker's unless it names its own ([method _writer]).
+##
+## A job asked for ALONE ([method _submit]'s `alone`: a thumbnail refined, [method YouTubeThumbnail.refine]) is tried again as
+## itself, never from the writer, and one that fails leaves the step as it was: why is kept apart ([method lost]).
 
 ## A job that fails is tried this many more times before the step stops on it.
 const RETRIES := 1
@@ -47,6 +50,7 @@ var _jobs := {}      # folder -> {id, feed, stamp}: a job making it for that epi
 var _errors := {}    # folder -> why it failed, once out of tries
 var _tries := {}     # folder -> runs started
 var _kept := {}      # file -> {mt, data}: what was read, read again only when the file changes
+var _lost := {}      # folder -> why the last job asked alone failed
 
 
 ## Of [param steps], the ones listed now.
@@ -206,7 +210,13 @@ func tick() -> void:
 			_errors.erase(dir)
 			continue
 		push_warning("ghost: %s - %s" % [key, err])
-		if int(_tries.get(dir, 0)) > RETRIES:
+		if job.has("alone"):
+			_tries[dir] = int(_tries.get(dir, 0)) + 1
+			var again := _submit(job["feed"], job["alone"], String(job["stamp"]), job.get("got"), true) \
+				if int(_tries[dir]) <= RETRIES + 1 else err
+			if not again.is_empty():
+				_lost[dir] = again
+		elif int(_tries.get(dir, 0)) > RETRIES:
 			_errors[dir] = err
 		else:
 			_start(job["feed"])
@@ -229,8 +239,9 @@ func _start(feed: EpisodeFeed) -> void:
 
 ## The job [param spec] queued for [param feed]'s episode, in a folder of its own under the episode's `jobs/` - the
 ## writer's, or the one after it, [param got] what the writer's answer was landed as, [param stamp] the words' it was
-## made from. "" once queued, else why not.
-func _submit(feed: EpisodeFeed, spec: Dictionary, stamp: String, got: Variant = null) -> String:
+## made from; [param alone], asked for by itself (tried again as itself, its failure [method lost]). "" once queued, else
+## why not.
+func _submit(feed: EpisodeFeed, spec: Dictionary, stamp: String, got: Variant = null, alone := false) -> String:
 	var dir := feed.folder()
 	var job := spec.duplicate()
 	var kind := String(spec.get("kind", "text"))
@@ -242,7 +253,15 @@ func _submit(feed: EpisodeFeed, spec: Dictionary, stamp: String, got: Variant = 
 	_jobs[dir] = {"id": id, "feed": feed, "stamp": stamp, "who": "writer" if kind == "text" else "painter"}
 	if got != null:
 		_jobs[dir]["got"] = got
+	if alone:
+		_jobs[dir]["alone"] = spec
+		_lost.erase(dir)
 	return ""
+
+
+## Why the last job asked alone for [param feed]'s episode failed, "" when it did not (or none was asked).
+func lost(feed: EpisodeFeed) -> String:
+	return String(_lost.get(feed.folder(), "")) if feed != null else ""
 
 
 ## What landed, kept with the fingerprint of the words its job was sent ([param stamp]).

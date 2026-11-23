@@ -86,6 +86,8 @@ const PAGE_LEAST := 4.5
 ## The longest a page is pushed in over (seconds): a page whose end is not placed yet is pushed as one held this long.
 const PAGE_HOLD := 45.0
 const PAGE_PUSH := 0.1
+## How much of what a page loses off the frame's height comes off its bottom rather than evenly (0 even, 1 all of it).
+const PAGE_TOP := 0.85
 ## The least a seat's camera looks down past the top of its frame (degrees): no shot round the table shows the room's horizon.
 const BELOW_HORIZON := 4.0
 ## The table seen whole from its head, as a tilt-shift photograph of a model (0 sharp throughout, 1 the most) - the one camera that
@@ -514,6 +516,9 @@ func schedule(sched: Array) -> void:
 		if TableActions.names_event(String(a["kind"])):
 			_times[int(a["card"])] = float(e["t0"])
 	_shots = []
+	# ...when each page goes is worked out again from the marks placed now: a page cached before the next one was placed never went
+	for p in _pages:
+		(p as Dictionary).erase("_going")
 	if _record.is_empty():
 		_plan_cameras()
 		return
@@ -1186,9 +1191,11 @@ func _stand_pages() -> void:
 		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 		node.material_override = mat
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# ...a later page always over an earlier one as it fades in: pages hang at one depth, and the sort would flip between them
+		node.sorting_offset = float(pic) * 0.01
 		node.visible = false
 		root.add_child(node)
-		_pages.append({"node": node, "mat": mat, "event": int(d["id"]), "pic": pic})
+		_pages.append({"node": node, "mat": mat, "event": int(d["id"]), "pic": pic, "size": quad.size})
 
 
 ## When a page goes: at the next page, or once it has had its least, where the view goes back to the table - a `board`, a throw or a
@@ -1241,10 +1248,14 @@ func _tick_pages(t: float) -> void:
 		# ...over its own time where its end is placed already, else over a long hold's
 		var u := clampf((t - at) / maxf(minf(going, at + PAGE_HOLD) + PAGE_FADE - at, 0.1), 0.0, 1.0)
 		var push := 1.0 + PAGE_PUSH * u
-		var drift := Vector2(sin(float(d["pic"]) * 2.3), cos(float(d["pic"]) * 1.7)) * 0.012 * u
+		# ...drifting sideways only, and what is cut off the frame's height (a picture wider than tall, pushed in) cut from its
+		# bottom, nearly all of it: heads and faces are in a picture's upper part
+		var drift := sin(float(d["pic"]) * 2.3) * 0.012 * u
 		var lens := fov_at(t)
 		var k := tan(deg_to_rad(lens * 0.5)) / tan(deg_to_rad(_fov * 0.5))
-		node.transform = _eye(t) * Transform3D(Basis.from_scale(Vector3.ONE * push * k), Vector3(drift.x * PAGE_FAR, drift.y * PAGE_FAR, -PAGE_FAR))
+		var frame_h := 2.0 * PAGE_FAR * tan(deg_to_rad(_fov * 0.5))
+		var over := maxf(((d["size"] as Vector2).y * push - frame_h) * 0.5, 0.0)
+		node.transform = _eye(t) * Transform3D(Basis.from_scale(Vector3.ONE * push * k), Vector3(drift * PAGE_FAR, -over * PAGE_TOP * k, -PAGE_FAR))
 
 
 # --- heard ------------------------------------------------------------------------------------------------------------------------------------------

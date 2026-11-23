@@ -83,12 +83,18 @@ const NAMED_MOST := 6
 ## with no depth until Generate.
 const TOGETHER := {"image:surface": ["image:height"]}
 ## The steps whose files say what steps an episode has ([method TableEpisode.steps]): written again, the rows are listed again.
+## The longest the take's state stands before it is worked out again with nothing else changed (seconds): a voice's settings change no file.
+const TAKE_EVERY := 5.0
 const LISTED_BY := ["plan", "draw", "game", "layers", "acts"]
 
 var _knobs := KNOBS.duplicate(true)
 var _episode: TableEpisode = null
 var _dock: TimelineDock = null      # the episode's timeline, while it is docked under the show
 var _tl_btn: Button = null
+var _script_btn: Button = null
+var _script_window: EpisodeScript = null
+var _take_cache := {}                  # the take's state as last worked out ([method _take_now])
+var _take_failed := ""                 # what the last take that failed was said from: not tried again on its own until it changes
 var _group_steps := {}               # a group on the Pipeline card -> the steps in it that can be made again, as its rows were last built
 var _undo: Array = []                 # what the dock's Undo takes back, last last: {episode, step, digest} - the version before each edit
 var _source_window: SourceWindow = null    # ✎'s window, made the first time a row's is pressed
@@ -168,6 +174,7 @@ func serve(panel: ReadingPanel) -> void:
 	_doc = reading.doc_source()
 	_text = reading.source_box()
 	reading.walk = EpisodeWalk.new(func() -> TableEpisode: return _episode)
+	(reading.walk as EpisodeWalk).renamed = _on_renamed
 	reading.bed = Bed.new(self)
 	reading.publish = Publish.new(self)
 	reading.prop_sections.append(EpisodeProps.new(self))
@@ -232,6 +239,7 @@ func _process(delta: float) -> void:
 		_row_t = 0.25
 		if _producer != null and _producer.holder == self:
 			_producer.tick()
+		_keep_take()
 		_refresh_card()
 		_seed_globals()
 
@@ -807,6 +815,13 @@ func _build() -> void:
 		+ "Generate, or a part at a time with ⟳, on the Pipeline card.")
 	_new_btn.pressed.connect(_new_episode)
 	arow.add_child(_new_btn)
+	# ...its script, read and edited, and talked over with a writer ([EpisodeScript])
+	_script_btn = Button.new()
+	_script_btn.text = "Script…"
+	_script_btn.tooltip_text = ("The episode's script as it was made: every word, and each table mark saying what it is. Edit it, or "
+		+ "Refine… it with a writer: the words go back to their passages as yours, and a picture whose words change is painted again.")
+	_script_btn.pressed.connect(open_script)
+	arow.add_child(_script_btn)
 	# ...or one begun by hand (next/editing.md step 8): no agent asked, every row waiting for its ✎
 	var hand := Button.new()
 	hand.text = "By hand"
@@ -1316,11 +1331,12 @@ func set_tune(key: String, value: Variant) -> void:
 func _take_row(busy: bool) -> PipelineRow:
 	var r := PipelineRow.new("take", "Voice")
 	var has_take := FileAccess.file_exists(_episode.take_file())
-	r.state = "running" if _taking else ("made" if _episode.take_matches(_voice_sig()) else ("stale" if has_take else "none"))
-	r.said = ("being said, a sentence at a time" if _taking else (Clock.text(_episode.take_length()) if has_take else "Optional - save spoken narration"))
+	r.state = "running" if _taking else ("made" if bool(_take_now()["matches"]) else ("stale" if has_take else "none"))
+	r.said = ("being said, a sentence at a time" if _taking else (Clock.text(_episode.take_length()) if has_take else "said on its own once nothing else is running"))
 	r.wraps = _taking
-	r.tip = ("Optional: save the whole reading as audio. Play plays it as the export will, the table plans on when each word is really "
-		+ "said rather than a guess, and a seek lands where it is asked. Stale once the words or a voice change.")
+	r.tip = ("The whole reading kept as audio, said on its own whenever the script or a voice changes, while nothing else is being made "
+		+ "and nothing plays. Play plays it as the export will, the table plans on when each word is really said rather than a guess, and "
+		+ "a seek lands where it is asked. Its ⟳ says it now.")
 	r.again = "Say the whole script and keep it: sentences said before are not said again"
 	r.open = not busy and not _taking and _episode.has("script") and reading != null and reading.can_export_take()
 	r.redo = _make_take
@@ -1334,6 +1350,40 @@ func _voice_sig() -> String:
 
 
 ## The take made and kept: the reading's whole take, rendered as an export renders it, kept with the episode.
+## The take kept as the script and its voices are, on its own (no ⟳ needed): said again whenever they change - sentences said
+## before are not said again - while nothing is being made and nothing plays, so it never takes the voice from a reading or a run.
+## One that failed is not tried again until what it is said from changes. Never in a read-only session, a gate or a probe.
+func _keep_take() -> void:
+	if _taking or _episode == null or reading == null or Settings.is_read_only() or not _episode.has("script"):
+		return
+	# ...never in a gate or a probe, even one let to write: what runs on its own is the author's app's
+	if Settings.is_probe_launch(OS.get_cmdline_args()):
+		return
+	if _making() or Spectrum.transport_playing() or not reading.can_export_take():
+		return
+	var now := _take_now()
+	if bool(now["matches"]) or String(now["sig"]) == _take_failed:
+		return
+	print("ghost: table take - the script or a voice changed, the take is said again")
+	_make_take()
+
+
+## Whether the take kept is the one the script and voices make now, and what they make it from: `{sig, matches}`. Asked by the Voice row
+## and [method _keep_take] at every refresh, worked out again only when the episode's files or the take's record change, or [constant
+## TAKE_EVERY] has passed (a voice's settings change no file): it lays out the whole script and cast and reads the take's record.
+func _take_now() -> Dictionary:
+	var at := Time.get_ticks_msec()
+	# ...keyed by the episode's files, the script and the take's own record (one kept by anything, an export too, is seen at once)
+	var script_at := _episode.file_of("script")
+	var key := [_facts_of.duplicate(), _mtime(_episode.take_file().get_basename() + ".json"), _mtime(_episode.take_file()),
+		_mtime(script_at), FileAccess.get_size(script_at) if FileAccess.file_exists(script_at) else 0]
+	if not _take_cache.is_empty() and _take_cache.get("key") == key and at - int(_take_cache["at"]) < int(TAKE_EVERY * 1000.0):
+		return _take_cache
+	var sig := _voice_sig()
+	_take_cache = {"at": at, "key": key, "sig": sig, "matches": _episode.take_matches(sig)}
+	return _take_cache
+
+
 func _make_take() -> void:
 	if reading == null or _episode == null or _taking:
 		return
@@ -1345,6 +1395,8 @@ func _make_take() -> void:
 	var path: String = await reading.render_take()
 	_taking = false
 	var err := "the voice made no take" if path.is_empty() else ep.keep_take(path)
+	_take_cache = {}
+	_take_failed = String(_take_now()["sig"]) if not err.is_empty() else ""
 	_set_status(("Could not keep the take: " + err) if not err.is_empty() else "The take is kept (%s): Play plays it, and the table plans on its times." % Clock.text(ep.take_length()))
 	_mark_stale()
 
@@ -2026,8 +2078,32 @@ func _edit_of(r: PipelineRow, step: String) -> void:
 	r.edit = _edit_step.bind(step)
 
 
+## The episode's script, read and edited ([EpisodeScript]): what the Script… button and the Script row's edit open.
+func open_script() -> void:
+	if _episode == null or not _episode.has("script"):
+		_set_status("This episode has no script yet: Generate makes it.")
+		return
+	if _script_window == null or not is_instance_valid(_script_window):
+		_script_window = EpisodeScript.new()
+		_script_window.saved = func() -> void:
+			_mark_stale()
+			_set_status("The script is saved: its words are yours, and each picture changed waits for Generate.")
+		add_child(_script_window)
+	_script_window.open_on(_episode, _producer, self)
+
+
+## A person renamed in the episodes ([EpisodeRename]): the reading, and the script open, as the files now stand.
+func _on_renamed() -> void:
+	_mark_stale()
+	if _script_window != null and is_instance_valid(_script_window) and _script_window.visible and _episode != null:
+		_script_window.open_on(_episode, _producer, self)
+
+
 func _edit_step(step: String) -> void:
 	if _episode == null:
+		return
+	if step == "script":
+		open_script()
 		return
 	if step.begins_with("image:"):
 		_import_picture(step)
@@ -2367,6 +2443,8 @@ func _refresh_card() -> void:
 		_deck_note.text = ("Deck: %d cards, from the brief's Cards." % own.size()) if not own.is_empty() \
 			else "Deck: the producer's choice, each episode (the brief lists no cards)."
 	_del_btn.disabled = not DirAccess.dir_exists_absolute(_episode.dir) or _exporting(_episode)
+	if _script_btn != null:
+		_script_btn.disabled = not _episode.has("script")
 	_fill_upload_fields()
 
 

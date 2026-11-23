@@ -307,8 +307,8 @@ func _optional_voice() -> void:
 	var voice: PipelineRow = _show._take_row(false)
 	section.listed = completed + [voice]
 	counter.refresh()
-	_ok(counter._tally.text.ends_with("15/15") and voice.said.contains("Optional"),
-		"an unused optional Voice recording leaves a completed pipeline at 15/15")
+	_ok(counter._tally.text.ends_with("15/15") and voice.said.contains("on its own") and not _show._taking,
+		"a Voice recording not yet said leaves a completed pipeline at 15/15, and a gate never says it on its own")
 	_ok(not voice.open and counter.row("take")["redo"].disabled,
 		"without a ready voice, the recording action is unavailable even when Script exists")
 	_show._taking = true

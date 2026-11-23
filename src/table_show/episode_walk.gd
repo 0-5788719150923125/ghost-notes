@@ -4,10 +4,13 @@ class_name EpisodeWalk
 ## EpisodeWalk - a show of cards reads its episode, never the note: the note is the brief agents work from, and what the reader
 ## says is the script written for the episode up now. A [TextWalk] Cards hands its reading. An episode shown in a Medium whose
 ## row's script rests the voice for its own work (a static `voiced(text, episode's document)`: the desk's pen) is read with
-## those rests ([method _voiced]).
+## those rests ([method _voiced]). A person renamed on the Voice card is renamed in the brief and in every episode
+## ([method rename_read]).
 
 ## The episode up now, asked each time: `() -> TableEpisode`, null while there is none.
 var episode: Callable
+## Called once a person is renamed in the episodes, for the card to show them as they now are.
+var renamed := Callable()
 
 
 func _init(current: Callable) -> void:
@@ -42,6 +45,28 @@ func cast_text(_written: String) -> String:
 ## An edit to the brief changes the next episode, never the reading of this one.
 func reads_source() -> bool:
 	return false
+
+
+## A person is renamed where the show's people come from: the brief's words, every episode made from it ([EpisodeRename]), and
+## the voice. Refused while there is no episode to say which show.
+func rename_refused(old: String, new: String, words: String) -> String:
+	var ep: TableEpisode = episode.call() if episode.is_valid() else null
+	return EpisodeRename.refused(EpisodeRename.episodes_of(ep), old, new, words) if ep != null else ""
+
+
+func rename_read(old: String, new: String) -> String:
+	var ep: TableEpisode = episode.call() if episode.is_valid() else null
+	if ep == null:
+		return ""
+	var err := EpisodeRename.rename(EpisodeRename.episodes_of(ep), old, new)
+	if renamed.is_valid():
+		renamed.call()
+	return err
+
+
+## The brief describes its people in its prose: the name is rewritten wherever it stands whole.
+func renamed_words(words: String, old: String, new: String) -> String:
+	return EpisodeRename.replaced(words, old, new)
 
 
 func _script() -> String:

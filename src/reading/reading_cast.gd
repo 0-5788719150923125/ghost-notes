@@ -38,8 +38,9 @@ var panel: ReadingPanel
 #
 # A voice is renamed on the card ([method rename_voice]: Rename…, or a double click on its row): every cue naming it in
 # the note's words is rewritten to the new name (one undo), and its settings go with it. The reader, who has the words
-# before the first cue, is renamed without a cue: it is whichever voice the block lists first. An episode's speakers are
-# named by its script, never the note's words, and are not renamed here.
+# before the first cue, is renamed without a cue: it is whichever voice the block lists first. Where the words read are not
+# the note's (an episode's script), the walk renames where they come from ([method TextWalk.rename_read],
+# [method TextWalk.renamed_words]) or refuses.
 #
 # The cue must own its line (see [constant Manuscript.SPEAKER]): a mis-parsed cue silently reads the rest of the
 # chapter in the wrong voice.
@@ -920,9 +921,7 @@ func rename_refused(old: String, new: String) -> String:
 		return "%s is the reader's: the words before the first cue are theirs" % Manuscript.NARRATOR
 	if _names.has(name) or _order.has(name) or _stash.has(name):
 		return "%s is a voice in this note already" % name
-	if panel.walk != null and not panel.walk.reads_source():
-		return "these speakers are named by the episode's script, not the note's words"
-	return ""
+	return panel.walk.rename_refused(old, name, panel._text.text) if panel.walk != null else ""
 
 
 ## Voice [param old] called [param new]: every cue naming it in the note's words rewritten (one undo), its settings kept under
@@ -932,6 +931,9 @@ func rename_voice(old: String, new: String) -> String:
 	var why := rename_refused(old, name)
 	if not why.is_empty() or name == old:
 		return why
+	var err := panel.walk.rename_read(old, name) if panel.walk != null else ""
+	if not err.is_empty():
+		return err
 	capture_slot()
 	if keep != null:
 		keep.settle()
@@ -942,7 +944,7 @@ func rename_voice(old: String, new: String) -> String:
 	else:
 		_order.append(name)
 	var body := panel._text.text
-	var renamed := Manuscript.rename_speaker(body, old, name)
+	var renamed := panel.walk.renamed_words(body, old, name) if panel.walk != null else Manuscript.rename_speaker(body, old, name)
 	if renamed != body:
 		var was := body.split("\n")
 		var now := renamed.split("\n")
@@ -987,7 +989,9 @@ func ask_rename(i: int) -> void:
 	checked.call(edit.text)
 	dlg.confirmed.connect(func() -> void:
 		var err := rename_voice(old, edit.text)
-		panel.status(("Renamed %s to %s, in every cue." % [old, edit.text.strip_edges()]) if err.is_empty() else "Not renamed: " + err)
+		var own := panel.walk == null or panel.walk.reads_source()
+		panel.status(("Renamed %s to %s, %s." % [old, edit.text.strip_edges(), "in every cue" if own else "in the brief and every episode"])
+			if err.is_empty() else "Not renamed: " + err)
 		dlg.queue_free())
 	dlg.canceled.connect(dlg.queue_free)
 	panel.add_child(dlg)
@@ -1211,10 +1215,12 @@ func _refresh_tab_labels() -> void:
 		_cast_head.text = "Voices (%d)  -  from the script's speaker cues" % _names.size()
 	if _rename != null:
 		var own := panel.walk == null or panel.walk.reads_source()
-		_rename.disabled = not own or _names.is_empty()
+		_rename.disabled = _names.is_empty()
 		_rename.tooltip_text = ("Rename the voice on screen: every cue in the words that hands a line to it names the new name, "
 			+ "and the voice keeps its settings. A double click on a voice does the same.") if own else \
-			"These speakers are named by the episode's script, not the note's words: they are renamed there."
+			("Rename the person on screen: the brief, every episode made from it (its script, what was played and what is still to "
+			+ "be painted) and the voice all name the new name, and the voice keeps its settings. Only lines that say the name are "
+			+ "read again; nothing else goes stale. A double click on a voice does the same.")
 	var tones := Delivery.TONE_PRESETS.keys()
 	for i in mini(_tabs.get_child_count(), _names.size()):
 		var s := slot_cfg(i)

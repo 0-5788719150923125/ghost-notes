@@ -18,7 +18,9 @@ class_name WriterChat
 ##
 ## A writer that takes no tools answers with the whole new text between `<text>` tags ([method split_reply]).
 ##
-## Its owner polls it from a frame ([method poll]), lands each change ([member apply]) and shows what [signal changed] says.
+## A turn under way polls itself each frame ([method poll], on the tree's `process_frame`), so a turn ends whoever holds it or
+## none; its owner lands each change ([member apply]) and shows what [signal changed] says. Stop ends the turn at once: one
+## that had already ended lands as it ended.
 ## One conversation a folder is live at a time ([method at]): a panel built again (a card attached, a format picked) is handed
 ## the one already talking, turn under way and all, and binds its own text to it. An owner leaving lets go ([method let_go]):
 ## a turn whose text nobody holds a moment later is stopped.
@@ -197,14 +199,27 @@ func send(message: String, chosen: Dictionary) -> String:
 	_said_n = 0
 	turns.append(turn)
 	save()
+	_tick(true)
 	changed.emit()
 	return ""
+
+
+## Polled each frame while a turn is under way ([param on]), and not once it ends.
+func _tick(on: bool) -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	if on and not tree.process_frame.is_connected(poll):
+		tree.process_frame.connect(poll)
+	elif not on and tree.process_frame.is_connected(poll):
+		tree.process_frame.disconnect(poll)
 
 
 ## The turn under way given up: it ends as stopped, and whatever it changed stays (each change can be taken back).
 func stop() -> void:
 	if busy():
 		AgentJobs.cancel(_job)
+		poll()
 
 
 ## The conversation started again: its turns and its session let go, the next turn a new session.
@@ -230,6 +245,7 @@ func poll() -> void:
 	var res := AgentJobs.result(_job)
 	AgentJobs.forget(_job)
 	_job = ""
+	_tick(false)
 	_take_said(res.get("said", []) if res.get("said") is Array else [])
 	_close_tools()
 	_land(res)
@@ -314,7 +330,7 @@ func _close_tools() -> void:
 ## The system prompt, fixed for the conversation: [param info] is [member about]'s, [param tools] whether the writer edits
 ## with tools or answers with the text, [param from] the rules ([member rules]).
 static func system_of(info: Dictionary, tools: bool, from := "agents/refine") -> String:
-	var vars := {"what": "the note's words", "title": "", "direction": false, "brief": false, "script": false, "parts": [],
+	var vars := {"what": "the note's words", "title": "", "direction": false, "brief": false, "script": false, "episode": false, "parts": [],
 		"marks": [], "tools": tools}
 	vars.merge(info, true)
 	vars["has_parts"] = not (vars["parts"] as Array).is_empty()

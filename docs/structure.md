@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 788 references inside a folder, 1454 down the stack, 0 up it.
+Between scripts today: 794 references inside a folder, 1462 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -17,7 +17,7 @@ Between scripts today: 788 references inside a folder, 1454 down the stack, 0 up
 | `dispatch/` | Dispatch desk | 15 | `desk`, `table_show`, `table`, `reading`, `export`, `music`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio`, `platform`, `data` |
 | `letter/` | Letter | 3 | `desk`, `table`, `reading`, `show`, `media`, `ui`, `notes`, `agents`, `platform`, `data` |
 | `desk/` | The desk | 15 | `table_show`, `table`, `reading`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `motion`, `render`, `data` |
-| `table_show/` | The table's show | 27 | `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `geometry`, `audio`, `platform`, `data` |
+| `table_show/` | The table's show | 29 | `table`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `geometry`, `audio`, `platform`, `data` |
 | `table/` | The set | 76 | `reading`, `media`, `ui`, `agents`, `scene_kit`, `geometry`, `motion`, `render`, `audio`, `platform`, `data` |
 | `cartoon/` | Cartoon | 5 | `reading`, `timeline`, `show`, `ui`, `notes`, `agents`, `stage`, `platform`, `data` |
 | `reading/` | The voice's workspaces | 17 | `export`, `music`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
@@ -170,7 +170,7 @@ A place, seen and heard, built from a written description: the table itself (Tab
 
 A show at a table nobody writes: a show's brief, its episodes - each planned, dealt, painted and written by agents a card or a beat of work at a time, kept on disk step by step - the set dresser that builds the table and the puppeteer that works what stands on it, and the solver that works a problem the plan fixes with work a computer checks (a Lean proof, a sandboxed computation). The rules are every show's; the brief says what is done there - cards read (tarot, baseball or trading cards, a card game's deck, flashcards, recipe cards, listed or left to each episode's producer), things made, a problem worked, or any of them. Design: next/cards.md, next/table_work.md, next/proof.md.
 
-[`card_deck`](../src/table_show/card_deck.gd), [`dealer_tools`](../src/table_show/dealer_tools.gd), [`decorator_tools`](../src/table_show/decorator_tools.gd), [`design_window`](../src/table_show/design_window.gd), [`desk_table`](../src/table_show/desk_table.gd), [`diorama_tools`](../src/table_show/diorama_tools.gd), [`episode_card`](../src/table_show/episode_card.gd), [`episode_pacing`](../src/table_show/episode_pacing.gd), [`episode_props`](../src/table_show/episode_props.gd), [`episode_walk`](../src/table_show/episode_walk.gd), [`fixed_table`](../src/table_show/fixed_table.gd), [`game_prep_tools`](../src/table_show/game_prep_tools.gd), [`game_tools`](../src/table_show/game_tools.gd), [`library_props`](../src/table_show/library_props.gd), [`library_versions`](../src/table_show/library_versions.gd), [`model_studio`](../src/table_show/model_studio.gd), [`model_tools`](../src/table_show/model_tools.gd), [`painter_tools`](../src/table_show/painter_tools.gd), [`puppeteer_tools`](../src/table_show/puppeteer_tools.gd), [`set_dresser_tools`](../src/table_show/set_dresser_tools.gd), [`solver_tools`](../src/table_show/solver_tools.gd), [`table_blueprint`](../src/table_show/table_blueprint.gd), [`table_episode`](../src/table_show/table_episode.gd), [`table_plan_view`](../src/table_show/table_plan_view.gd), [`table_preview`](../src/table_show/table_preview.gd), [`table_producer`](../src/table_show/table_producer.gd), [`table_prompts`](../src/table_show/table_prompts.gd)
+[`card_deck`](../src/table_show/card_deck.gd), [`dealer_tools`](../src/table_show/dealer_tools.gd), [`decorator_tools`](../src/table_show/decorator_tools.gd), [`design_window`](../src/table_show/design_window.gd), [`desk_table`](../src/table_show/desk_table.gd), [`diorama_tools`](../src/table_show/diorama_tools.gd), [`episode_card`](../src/table_show/episode_card.gd), [`episode_pacing`](../src/table_show/episode_pacing.gd), [`episode_props`](../src/table_show/episode_props.gd), [`episode_rename`](../src/table_show/episode_rename.gd), [`episode_script`](../src/table_show/episode_script.gd), [`episode_walk`](../src/table_show/episode_walk.gd), [`fixed_table`](../src/table_show/fixed_table.gd), [`game_prep_tools`](../src/table_show/game_prep_tools.gd), [`game_tools`](../src/table_show/game_tools.gd), [`library_props`](../src/table_show/library_props.gd), [`library_versions`](../src/table_show/library_versions.gd), [`model_studio`](../src/table_show/model_studio.gd), [`model_tools`](../src/table_show/model_tools.gd), [`painter_tools`](../src/table_show/painter_tools.gd), [`puppeteer_tools`](../src/table_show/puppeteer_tools.gd), [`set_dresser_tools`](../src/table_show/set_dresser_tools.gd), [`solver_tools`](../src/table_show/solver_tools.gd), [`table_blueprint`](../src/table_show/table_blueprint.gd), [`table_episode`](../src/table_show/table_episode.gd), [`table_plan_view`](../src/table_show/table_plan_view.gd), [`table_preview`](../src/table_show/table_preview.gd), [`table_producer`](../src/table_show/table_producer.gd), [`table_prompts`](../src/table_show/table_prompts.gd)
 
 ### `desk/` - The desk
 
@@ -218,5 +218,5 @@ Godot compiles a script with every script it names by class or preload, wherever
 
 | launch | builds | scripts | lines | budget |
 | --- | --- | --- | --- | --- |
-| the phone shell | `app/main`, `app/phone_shell` | 77 | 31,250 | 40,000 |
-| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 121 | 52,492 | 65,000 |
+| the phone shell | `app/main`, `app/phone_shell` | 77 | 31,276 | 40,000 |
+| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 121 | 52,518 | 65,000 |

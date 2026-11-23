@@ -16,6 +16,9 @@ extends SceneTree
 ## - A turn landing: what the writer said and changed, in order, its reply once (control: the reply also said last is not
 ##   shown twice), the session and what it cost kept, and all of it read back from the file. A resumed turn that failed before
 ##   doing anything starts a new session (here refused: a gate starts no agent).
+## - A turn ends whoever holds it: a turn whose job ended lands on the next frame with no owner polling (control: not before
+##   that frame), and is polled no more; Stop ends a turn at once - one whose writer had already finished lands with its reply,
+##   one still waiting lands stopped.
 ## - Sessions: Claude starts one under its id and resumes it by id (control: a stateless run keeps none); Codex resumes with
 ##   `exec resume` and is told only the new message (control: a fresh run is ephemeral and told its rules first); Grok starts
 ##   one under its id and resumes it.
@@ -37,7 +40,7 @@ func _ok(cond: bool, what: String) -> void:
 
 func _run() -> void:
 	_wipe(ProjectSettings.globalize_path(ROOT))
-	for check in [_tools, _told, _landing, _sessions]:
+	for check in [_tools, _told, _landing, _alone, _sessions]:
 		var done: Variant = await (check as Callable).call()
 		_ok(done == true, "%s stopped part way (a script error - see above)" % (check as Callable).get_method())
 	_wipe(ProjectSettings.globalize_path(ROOT))
@@ -166,6 +169,38 @@ func _landing() -> bool:
 	_ok(back.turns.is_empty() and back.session.is_empty(), "a new conversation forgets the turns and the session")
 	var r := WriterChat.replay([{"you": "Shorter.", "reply": "Cut a line.", "events": [{"tool": "edit"}], "error": ""}])
 	_ok(r.contains("THE AUTHOR: Shorter.") and r.contains("1 change to the text") and r.contains("Cut a line."), "the conversation so far, for a new session (%s)" % r)
+	return true
+
+
+func _alone() -> bool:
+	var held := Held.new()
+	held.text = "The cat sat."
+	var chat := WriterChat.at(ROOT.path_join("alone"))
+	chat.read_text = held.read
+	chat.apply = held.put
+	var turn := func(job: String) -> Dictionary:
+		var t := {"you": "Again.", "agent": "claude", "model": "", "effort": "", "at": 0, "events": [], "reply": "", "usage": {}, "error": "",
+			"running": true}
+		chat.turns.append(t)
+		chat._job = job
+		return t
+	var t1: Dictionary = turn.call("gate-ended")
+	AgentJobs._ended["gate-ended"] = {"ok": true, "text": "Done.", "path": "", "error": ""}
+	chat._tick(true)
+	_ok(bool(t1["running"]), "control: the turn was landed before a frame passed")
+	await process_frame
+	await process_frame
+	_ok(not bool(t1["running"]) and String(t1["reply"]) == "Done." and not chat.busy(), "a turn whose job ended did not land by itself (%s)" % str(t1))
+	_ok(not process_frame.is_connected(chat.poll), "a landed turn is still polled each frame")
+	var t2: Dictionary = turn.call("gate-finished")
+	AgentJobs._ended["gate-finished"] = {"ok": true, "text": "All moved.", "path": "", "error": ""}
+	chat.stop()
+	_ok(not bool(t2["running"]) and String(t2["reply"]) == "All moved.", "Stop on a writer already finished did not land its reply (%s)" % str(t2))
+	var t3: Dictionary = turn.call("gate-queued")
+	AgentJobs._queue.append({"id": "gate-queued"})
+	chat.stop()
+	_ok(not bool(t3["running"]) and String(t3["error"]) == "stopped" and not chat.busy(), "Stop on a waiting turn did not end it (%s)" % str(t3))
+	AgentJobs._ended.erase("gate-queued")
 	return true
 
 
