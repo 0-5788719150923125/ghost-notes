@@ -38,7 +38,7 @@ func _initialize() -> void:
 	for m in CardTable.MOMENTS:
 		_ok(TableActions.moments().has(m), "the air's '%s' is made by some verb" % m)
 	print("-- the marks")
-	_ok(TableActions.written() == ["shuffle", "open", "begin", "draw", "jumper", "spread", "deal", "fan", "show", "rummage", "linger", "tap", "untap", "flip", "work", "roll", "move", "place", "fall", "rise", "remove", "map", "reveal"],
+	_ok(TableActions.written() == ["shuffle", "open", "begin", "draw", "jumper", "spread", "deal", "fan", "show", "rummage", "linger", "tap", "untap", "flip", "work", "roll", "move", "place", "fall", "rise", "remove", "map", "reveal", "picture", "board", "turn"],
 		"the written verbs include searching, a silent hold, a card's work, a show with no cards and what happens at a game's table (%s)" % str(TableActions.written()))
 	# A game's mark names what happened, neither a card nor a beat (next/tabletop.md): and every one of them is a thing the ledger says a viewer sees
 	for k in GameLedger.KINDS:
