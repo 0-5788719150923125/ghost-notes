@@ -1,19 +1,21 @@
 extends RefCounted
 class_name Cameras
 
-## Cameras - the cameras a show can cut between, as a list (the Camera card's Cameras, [CameraCard]): each entry one camera
-## of a [constant REGISTRY] sort with its own settings, as the Props card lists props. The list is in priority order: where two
-## cameras both want a moment, the one higher in the list has it. A sort left off the list is never used.
+## Cameras - the cameras a show sees through, as a list (the Camera card's Cameras, [CameraCard]): each entry one camera of a
+## [constant REGISTRY] sort with its own settings, as the Props card lists props. EACH SORT IS ONE FORMAT'S (its row's `format`):
+## only that format reads it, and the card lists the cameras of the format in use alone ([method of]). The list is in priority
+## order: where two cameras both want a moment, the one higher in the list has it. A sort left off the list is never used, save
+## one a format always sees through (its row's `kept`: why it stays).
 ##
-## A camera here is a behavior, never a place: what it wants a moment for and how it frames it is the format's to work out
-## from what it is handed ([TableGame] reads a game's turns, throws, marches and long narration). Each entry is
-## `{sort, ...fields}`; a field unset stands at its row's default ([method value]).
+## What a camera wants a moment for and how it frames it is the format's to work out from what it is handed ([TableGame] reads a
+## game's turns, throws, marches and long narration; the Dispatch desk sees from its chair, and puts what stands behind it on a
+## screen). Each entry is `{sort, ...fields}`; a field unset stands at its row's default ([method value]).
 ##
 ## Gate: tests/motion/cameras_check.gd.
 
 ## Every sort of camera. `fields` are its settings, as [SchemaForm] draws them.
 const REGISTRY := {
-	"dice": {"label": "Dice", "blurb": "Eases in on the dice as they land, from over the shoulder of whoever threw them, and back out once the words go on.",
+	"dice": {"format": "table", "label": "Dice", "blurb": "Eases in on the dice as they land, from over the shoulder of whoever threw them, and back out once the words go on.",
 		"fields": {
 			"far": {"label": "Distance (cm)", "type": "float", "min": 15.0, "max": 120.0, "step": 1.0, "default": 48.0,
 				"blurb": "How far from the dice it comes to rest."},
@@ -22,7 +24,7 @@ const REGISTRY := {
 			"miniature": {"label": "Miniature", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "default": 0.4,
 				"blurb": "How much it looks like a tilt-shift photograph of a model: a narrow band in focus where it looks, everything nearer and farther soft. 0 sharp throughout."},
 		}},
-	"march": {"label": "Marching", "blurb": "Low and close on the model, beside a figure as it walks across it: what the party sees as it goes, under the words.",
+	"march": {"format": "table", "label": "Marching", "blurb": "Low and close on the model, beside a figure as it walks across it: what the party sees as it goes, under the words.",
 		"fields": {
 			"low": {"label": "Height (cm)", "type": "float", "min": 1.0, "max": 30.0, "step": 0.5, "default": 4.5,
 				"blurb": "How high over the ground the lens is: 3-5 is a figure's own eye line."},
@@ -37,7 +39,7 @@ const REGISTRY := {
 			"miniature": {"label": "Miniature", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "default": 0.45,
 				"blurb": "How much it looks like a tilt-shift photograph of a model: a narrow band in focus where it looks, everything nearer and farther soft. 0 sharp throughout."},
 		}},
-	"seat": {"label": "Their seat", "blurb": "Moves round the table to whoever's turn it is and looks from where they sit, over their shoulder: their roll seen from their side.",
+	"seat": {"format": "table", "label": "Their seat", "blurb": "Moves round the table to whoever's turn it is and looks from where they sit, over their shoulder: their roll seen from their side.",
 		"fields": {
 			"height": {"label": "Height (cm)", "type": "float", "min": 15.0, "max": 120.0, "step": 1.0, "default": 46.0,
 				"blurb": "How high over the table: a person sitting has their eyes about 45 cm over it."},
@@ -50,7 +52,7 @@ const REGISTRY := {
 			"miniature": {"label": "Miniature", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "default": 0.5,
 				"blurb": "How much it looks like a tilt-shift photograph of a model: a narrow band in focus where it looks, everything nearer and farther soft. 0 sharp throughout."},
 		}},
-	"drift": {"label": "Drifting", "blurb": "Circles the model slowly while nothing else wants the moment: long narration over the land itself.",
+	"drift": {"format": "table", "label": "Drifting", "blurb": "Circles the model slowly while nothing else wants the moment: long narration over the land itself.",
 		"fields": {
 			"height": {"label": "Height (cm)", "type": "float", "min": 5.0, "max": 200.0, "step": 1.0, "default": 60.0,
 				"blurb": "How high over the table it circles."},
@@ -65,9 +67,22 @@ const REGISTRY := {
 			"lens": {"label": "Lens (°)", "type": "float", "min": 12.0, "max": 70.0, "step": 1.0, "default": 34.0,
 				"blurb": "How much it takes in, up the frame."},
 		}},
+	"chair": {"format": "dispatch", "label": "From the chair", "kept": "The desk is seen from the chair.",
+		"blurb": "Sits in the chair and turns to what is active: a phone ringing, the terminal, the radar, the tablet. How it turns is the rows above.",
+		"fields": {}},
+	"behind": {"format": "dispatch", "label": "Behind the chair", "kept": "What a `live` mark puts on a screen is this camera's picture.",
+		"blurb": "Stands back behind the chair and looks over it at the desk, never moving: its picture is what a `live` mark puts on a screen.",
+		"fields": {
+			"side": {"label": "Beside (cm)", "type": "float", "min": -150.0, "max": 150.0, "step": 1.0, "default": 32.0,
+				"blurb": "How far to the right of the chair it stands (left below 0)."},
+			"height": {"label": "Height (cm)", "type": "float", "min": 60.0, "max": 250.0, "step": 1.0, "default": 148.0,
+				"blurb": "How high over the floor the lens is: a person standing has their eyes about 160 cm up."},
+			"back": {"label": "Behind (cm)", "type": "float", "min": 60.0, "max": 400.0, "step": 1.0, "default": 195.0,
+				"blurb": "How far back from the desk it stands."},
+			"lens": {"label": "Lens (°)", "type": "float", "min": 12.0, "max": 90.0, "step": 1.0, "default": 46.0,
+				"blurb": "How much it takes in, up the frame."},
+		}},
 }
-## The list a note with no Cameras of its own has: every sort, the dice first.
-const DEFAULT := ["dice", "march", "seat", "drift"]
 ## How long a cut between two cameras takes (seconds): every change of camera is a move, never a jump.
 const EASE := 1.8
 ## The fastest a cut moves the eye in a straight line, at its quickest (meters a second): a longer move takes longer than
@@ -75,15 +90,27 @@ const EASE := 1.8
 const SPEED := 0.65
 
 
-## The list [param raw] made safe: each entry a known sort, its fields within their rows, a field at its default dropped. An
-## empty list stands for [constant DEFAULT] only where [param fill] says so.
-static func sanitize(raw: Variant, fill := false) -> Array:
+## The sorts of format [param fmt], in the registry's order: the list a note with none of its own has.
+static func of(fmt: String) -> Array:
+	var out: Array = []
+	for k in REGISTRY:
+		if String(Registry.field(REGISTRY, k, "format", "")) == fmt:
+			out.append(String(k))
+	return out
+
+
+## The list [param raw] made safe: each entry a known sort, its fields within their rows, a field at its default dropped. Given a
+## format [param fmt], its sorts alone, those it always sees through added where missing, and - where [param fill] says so - an
+## empty list standing for every one of them ([method of]).
+static func sanitize(raw: Variant, fill := false, fmt := "") -> Array:
 	var out: Array = []
 	if raw is Array:
 		for e in raw:
 			if not (e is Dictionary) or not REGISTRY.has(String((e as Dictionary).get("sort", ""))):
 				continue
 			var sort := String(e["sort"])
+			if not fmt.is_empty() and String(Registry.field(REGISTRY, sort, "format", "")) != fmt:
+				continue
 			var entry := {"sort": sort}
 			var fields: Dictionary = Registry.field(REGISTRY, sort, "fields", {})
 			for k in fields:
@@ -95,10 +122,20 @@ static func sanitize(raw: Variant, fill := false) -> Array:
 				if not is_equal_approx(f, float(row["default"])):
 					entry[k] = f
 			out.append(entry)
+	if fmt.is_empty():
+		return out
 	if out.is_empty() and fill:
-		for s in DEFAULT:
+		for s in of(fmt):
+			out.append({"sort": s})
+	for s in of(fmt):
+		if not kept(s).is_empty() and rank(out, s) < 0:
 			out.append({"sort": s})
 	return out
+
+
+## Why [param sort] stays on its format's list, "" where it can be taken off.
+static func kept(sort: String) -> String:
+	return String(Registry.field(REGISTRY, sort, "kept", ""))
 
 
 ## A field of [param entry]: what it sets, or its row's default.

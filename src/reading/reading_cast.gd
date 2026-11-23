@@ -540,6 +540,7 @@ func sing_test() -> void:
 		at += held + 0.04
 	if _sing_id >= 0:
 		host.cancel([_sing_id])
+	panel._stream.yield_host()
 	_sing_id = host.sing(words, String(cfg["voice"]), ProjectSettings.globalize_path("user://lab_sung.wav"),
 		Delivery.sung_params(cfg), Delivery.sung_style(cfg))
 	panel.status("Singing…")

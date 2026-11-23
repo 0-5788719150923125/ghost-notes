@@ -1314,6 +1314,18 @@ static func tags_length(tags: PackedStringArray) -> int:
 	return n
 
 
+## What a card says of [param tags] under them: how many go up and how many of YouTube's characters they take, and how many are
+## left out (an upload never sends more than fit, [method fit_tags]).
+static func count_of(tags: PackedStringArray) -> String:
+	var going := fit_tags(Array(tags))
+	var said := "None of these tags can go up." if going.is_empty() else "%d tag%s go%s up, %d of YouTube's %d characters." % [
+		going.size(), "" if going.size() == 1 else "s", "es" if going.size() == 1 else "", tags_length(going), TAGS_MAX]
+	var out := left_out(tags).size()
+	if out > 0 and not going.is_empty():
+		said += " %d more left out (dimmed)." % out
+	return said
+
+
 ## Which of [param tags] do not go up ([method fit_tags]), and why: `{tag: reason}` - what a tag field
 ## dims, saying so.
 static func left_out(tags: PackedStringArray) -> Dictionary:

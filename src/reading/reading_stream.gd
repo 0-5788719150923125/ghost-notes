@@ -570,9 +570,30 @@ func _let_go() -> void:
 		panel._host.cancel(ids)
 
 
-## Keep LOOKAHEAD chunks in flight and start playback as soon as the chunk we are waiting for exists.
+## Something heard as it is made wants the host (Test, the Lab's Sing): what this reading has in the host's line is let
+## go and asked again from its first, so that waits on at most the sentence being made. A reading paused makes voice
+## ahead ([constant BUFFER_PAUSED]); left in line, its sentences would go before every one of Test's.
+func yield_host() -> void:
+	if _req_chunk.is_empty():
+		return
+	var first := chunks.size()
+	for id in _req_chunk:
+		first = mini(first, int((_req_chunk[id] as Dictionary)["idx"]))
+	_let_go()
+	_next_to_request = mini(_next_to_request, first)
+	# a later sentence already in, from the take cache, comes in again when asked
+	for i in range(_ready_takes.size() - 1, -1, -1):
+		if int(_ready_takes[i]["index"]) >= first:
+			_ready_takes.remove_at(i)
+	for l in _landing:
+		if int(l["index"]) >= first:
+			l["epoch"] = -1
+
+
+## Keep LOOKAHEAD chunks in flight and start playback as soon as the chunk we are waiting for exists. Nothing is asked
+## while Test plays: it has the host ([method yield_host]).
 func _pump() -> void:
-	if panel._cast.voice_meta.is_empty():
+	if panel._cast.voice_meta.is_empty() or panel._test_busy():
 		return
 		# The intro is not lookahead: it is seeded as silence before anything is requested, so counting it would let an
 		# Intro of LOOKAHEAD_SECONDS or more look like a full buffer and nothing would be requested. Only the speech

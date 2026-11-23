@@ -246,8 +246,8 @@ const PAGE_DRIFT := 18.0
 const FOLLOW_LETTERS := 5
 const READ_RUN := 3
 const FOLLOW_WINDOW := 400
-## The live picture: its camera behind the chair, and its viewport's size.
-const LIVE_EYE := Vector3(0.32, 1.48, 1.95)
+## The live picture: where its camera behind the chair looks (where it stands and its lens are the Camera card's, [method
+## _place_live]), and its viewport's size.
 const LIVE_AIM := Vector3(-0.05, 0.86, -0.15)
 const LIVE_SIZE := Vector2i(480, 360)
 ## What the show is told it waits for while the desk is built ([method ShowFeed.wait_for]).
@@ -621,11 +621,10 @@ func _land_set() -> void:
 	_live_vp.world_3d = _root3.get_world_3d()
 	_live_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	_live_cam = Camera3D.new()
-	_live_cam.fov = 46.0
 	_live_cam.environment = _env
 	_live_vp.add_child(_live_cam)
 	_set_node.add_child(_live_vp)
-	_live_cam.look_at_from_position(LIVE_EYE, LIVE_AIM, Vector3.UP)
+	_place_live()
 	_shine_things()
 	_snap = true
 	if _built_n > 0:
@@ -3341,7 +3340,16 @@ func _pose_screens(t: float) -> void:
 		_feeds[key] = {"glow": 0.35 * power if tex != null else 0.0}
 	_live_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if live else SubViewport.UPDATE_DISABLED
 	if live and _live_cam != null:
-		_live_cam.look_at_from_position(LIVE_EYE, LIVE_AIM, Vector3.UP)
+		_place_live()
+
+
+## The camera behind the chair where the Camera card's Cameras stand it ([constant Cameras.REGISTRY] `behind`), looking at
+## [constant LIVE_AIM]: a change there is seen on its next frame.
+func _place_live() -> void:
+	var e := Cameras.entry_of(Cameras.sanitize(feed.cameras if feed != null else [], true, "dispatch"), "behind")
+	_live_cam.fov = Cameras.value(e, "lens")
+	var eye := Vector3(Cameras.value(e, "side"), Cameras.value(e, "height"), Cameras.value(e, "back")) * 0.01
+	_live_cam.look_at_from_position(eye, LIVE_AIM, Vector3.UP)
 
 
 ## The switch at [param t]: up (GOOD) until it is thrown, each throw at its moment.
@@ -4322,7 +4330,7 @@ func _pose_tablet(t: float) -> void:
 	if float(face.get("power", 0.0)) > 0.0 and _live_tablet(t) and _live_vp != null:
 		_live_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 		if _live_cam != null:
-			_live_cam.look_at_from_position(LIVE_EYE, LIVE_AIM, Vector3.UP)
+			_place_live()
 
 
 ## How the tablet is carried between its place on [param set]'s desk and the hand: what its way bends by, as high as it is

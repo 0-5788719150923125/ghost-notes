@@ -1158,6 +1158,7 @@ func _on_test() -> void:
 	if Spectrum.transport_playing():
 		Spectrum.transport_pause()
 	_cast.capture_slot()
+	_stream.yield_host()
 	_audition.start(_test_passage(), _cast.tab_name())
 	_show_testing(true)
 	_set_status("Testing %s…" % _cast.tab_name())

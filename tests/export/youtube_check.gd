@@ -17,7 +17,7 @@ extends SceneTree
 ##   consent screen, loopback redirect, all encoded), the redirect's query decoded. The wire: the next offset from a 308's
 ##   `Range`, headers in any case, Google's error shapes in words.
 ## - what a video says: `<`/`>` made safe, title one line of at most 100 characters cut at a word, description at most 5000
-##   bytes, tags split, deduplicated, counted as YouTube counts them and fitted to 500; private, not for kids, synthetic, no paid
+##   bytes, tags split, deduplicated, counted as YouTube counts them and fitted to 500, the count a card says (how many go up, of 500, how many left out); private, not for kids, synthetic, no paid
 ##   promotion and People & Blogs unless asked otherwise (unknown privacy or category falls back); the playlist is named and
 ##   linked between the description and the chapters (control: no playlist, no line).
 ## - records: an upload recorded and read back; a queued upload pending with its channel, owner-only; a missing file refused; one
@@ -426,6 +426,13 @@ func _fit() -> bool:
 	var fit: PackedStringArray = YouTube.fit_tags(many)
 	_ok(YouTube.tags_length(fit) <= 500 and fit.size() > 20 and fit[fit.size() - 1] == "tiny",
 		"tags fill 500 characters, and a short one after the room ran out still fits (%d)" % YouTube.tags_length(fit))
+	var said := YouTube.count_of(PackedStringArray(many))
+	_ok(said.begins_with("%d tags go up, %d of YouTube's 500 characters." % [fit.size(), YouTube.tags_length(fit)])
+		and said.ends_with("%d more left out (dimmed)." % (many.size() - fit.size())),
+		"the count says how many go up, the characters they take and how many are left out (%s)" % said)
+	_ok(YouTube.count_of(PackedStringArray(["one", "two"])) == "2 tags go up, 7 of YouTube's 500 characters.",
+		"control: tags that all fit say nothing is left out")
+	_ok(YouTube.count_of(PackedStringArray(["solo"])) == "1 tag goes up, 4 of YouTube's 500 characters.", "one tag is one tag")
 	return true
 
 

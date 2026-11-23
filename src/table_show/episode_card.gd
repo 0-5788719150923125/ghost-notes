@@ -2584,14 +2584,12 @@ func _refresh_upload_note() -> void:
 	if _yt_note == null:
 		return
 	var own := _yt_tags.get_tags() if _yt_tags != null else PackedStringArray()
-	var fitted := YouTube.fit_tags(Array(own))
 	if _yt_tags != null:
 		_yt_tags.mark(YouTube.left_out(own))
 	if _episode == null or not _episode.has("plan"):
 		_yt_note.text = "Generate the plan first: the producer writes the episode's title."
 		return
-	var t := ("These %d tag%s go up, %d of YouTube's %d characters." % [fitted.size(),
-		"" if fitted.size() == 1 else "s", YouTube.tags_length(fitted), YouTube.TAGS_MAX]) if not fitted.is_empty() \
+	var t := YouTube.count_of(own) if not own.is_empty() \
 		else "No tags yet: the ones added here are the show's, and go up with every episode."
 	var ups := _episode.uploads()
 	if not ups.is_empty():

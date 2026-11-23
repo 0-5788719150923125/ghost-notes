@@ -3,7 +3,10 @@ extends SceneTree
 ## cameras_check - the list of cameras a show cuts between ([Cameras]). It holds:
 ##
 ## - a list made safe: an unknown sort and a non-entry dropped, a field kept in its bounds, a field at its default dropped, the
-##   order kept (control: an empty list stays empty unless it is filled, and filled it is every sort in [constant Cameras.DEFAULT]);
+##   order kept (control: an empty list stays empty unless it is filled, and filled it is every sort of its format);
+## - each sort is one format's: a format's list holds its sorts alone ([method Cameras.of]), a table's the four of a game and the
+##   Dispatch desk's its chair and the camera behind it, which it always sees through, put back where a list leaves them off
+##   (control: no format, nothing added; a format with no cameras lists none);
 ## - every sort's fields have a label, a blurb, bounds and a default within them;
 ## - a field unset reads its default, and [method Cameras.rank] is the list's order;
 ## - a move between two sides of the table goes round it: half way from one side to the other, the eye is as far from the
@@ -23,8 +26,19 @@ func _init() -> void:
 	_ok(is_equal_approx(float(safe[0]["height"]), 120.0), "a field past its bounds is kept within them")
 	_ok(not (safe[0] as Dictionary).has("lens"), "a field at its default is dropped")
 	_ok(Cameras.sanitize([]).is_empty(), "control: an empty list stays empty")
-	var filled := Cameras.sanitize([], true)
-	_ok(filled.size() == Cameras.DEFAULT.size() and String(filled[0]["sort"]) == String(Cameras.DEFAULT[0]), "filled, an empty list is every default sort")
+	var filled := Cameras.sanitize([], true, "table")
+	_ok(filled.map(func(e: Dictionary) -> String: return String(e["sort"])) == ["dice", "march", "seat", "drift"],
+		"filled, a table's empty list is every sort a table has, the dice first")
+	var mixed := [{"sort": "drift"}, {"sort": "behind", "height": 120.0}]
+	var at_table := Cameras.sanitize(mixed, true, "table")
+	_ok(at_table.size() == 1 and String(at_table[0]["sort"]) == "drift", "a table's list holds a table's cameras alone")
+	var at_desk := Cameras.sanitize(mixed, true, "dispatch")
+	_ok(at_desk.map(func(e: Dictionary) -> String: return String(e["sort"])) == ["behind", "chair"]
+		and is_equal_approx(float(at_desk[0]["height"]), 120.0),
+		"the Dispatch desk's list is the camera behind the chair as set, and the chair put back")
+	_ok(Cameras.sanitize(mixed).size() == 2, "control: with no format, nothing is dropped or added")
+	_ok(Cameras.of("full").is_empty() and Cameras.sanitize([], true, "full").is_empty(), "control: a format with no cameras lists none")
+	_ok(not Cameras.kept("chair").is_empty() and Cameras.kept("dice").is_empty(), "the chair stays; the dice can be taken off")
 	var bad: Array = []
 	for k in Cameras.REGISTRY:
 		_ok(not Registry.label(Cameras.REGISTRY, k).is_empty() and not Registry.blurb(Cameras.REGISTRY, k).is_empty(), "%s has a label and a blurb" % k)

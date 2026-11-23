@@ -916,10 +916,10 @@ static func _key_at(keys: PackedFloat32Array, i: int) -> Transform3D:
 
 # --- the shot ---------------------------------------------------------------------------------------------------------------------------------------
 
-## The cameras in force: the feed's list ([member ShowFeed.cameras]), or every sort.
+## The cameras in force: the feed's list ([member ShowFeed.cameras]), or every sort a table has.
 func _camera_list() -> Array:
 	var feed: ShowFeed = work.medium.feed if work != null and work.medium != null else null
-	return Cameras.sanitize(feed.cameras if feed != null else [], true)
+	return Cameras.sanitize(feed.cameras if feed != null else [], true, "table")
 
 
 ## What each camera on the list wants of the session, worked out once a schedule is known: the dice as they land, a march as

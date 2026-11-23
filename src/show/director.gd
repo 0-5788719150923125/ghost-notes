@@ -366,8 +366,8 @@ func set_camera_follow(d: Dictionary) -> void:
 	_save_pacing()
 
 
-## The cameras a show cuts between ([member ShowFeed.cameras]), made safe ([method Cameras.sanitize]). A playing table
-## takes it on its next frame.
+## The cameras a show sees through ([member ShowFeed.cameras]), every format's, made safe ([method Cameras.sanitize]). A playing
+## show takes it on its next frame.
 func set_cameras(list: Array) -> void:
 	var c := Cameras.sanitize(list)
 	if c == cameras:

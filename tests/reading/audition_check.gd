@@ -15,9 +15,12 @@ extends Node
 ## - a take is taken off the disk once it is joined;
 ## - Stop drops the replies still in flight and cancels them on the host (every sentence still asked, and no other).
 ## - Test pauses a show playing where it is (the transport's pause), never stops it or the reading on the stream.
+## - Test has the host: the reading's sentences in its line are let go and asked again from the first once Test is
+##   done, and the reading asks nothing while Test plays ([method ReadingStream.yield_host]).
 ##
 ## Controls: a reply held back leaves nothing joined until the one ahead arrives; a Stop after every
-## sentence has arrived cancels nothing; a Test with the show paused pauses nothing.
+## sentence has arrived cancels nothing; a Test with the show paused pauses nothing; a take before the first let go
+## stays; with nothing of the reading's in line, nothing is cancelled.
 ##
 ## The panel is built by hand and never added to the tree (its `_ready` starts the python voice host);
 ## the audition is handed a player that is in it, so the ring can be fed.
@@ -147,6 +150,34 @@ func _run() -> void:
 	var gone := _host.cancelled.duplicate()
 	gone.sort()
 	_ok(gone == asked_now, "Stop cancelled %d of the %d sentences still asked on the host" % [gone.size(), asked_now.size()])
+	# Test has the host: what the reading on the stream has in line is let go and asked again from its first once Test
+	# is done, a later take already in goes, and the stream asks nothing while Test plays
+	var st := _ed._stream
+	st.chunks = [{}, {}, {}, {}, {}, {}]
+	st._req_chunk = {700: {"idx": 3, "epoch": st._epoch, "sent": 0}, 701: {"idx": 4, "epoch": st._epoch, "sent": 0}}
+	st._in_flight = 2
+	st._next_to_request = 5
+	st._ready_takes = [{"index": 2}, {"index": 4}]
+	_host.cancelled = []
+	_ed._on_test()
+	var held := _host.asked.size()
+	st._pump()
+	var let := _host.cancelled.filter(func(id: int) -> bool: return id >= 700)
+	let.sort()
+	_ok(let == [700, 701] and st._req_chunk.is_empty() and st._in_flight == 0,
+		"Test left the reading's sentences in the host's line (%s let go)" % [let])
+	_ok(st._next_to_request == 3, "the reading would ask again from sentence %d, not its first let go (3)" % st._next_to_request)
+	_ok(st._ready_takes.map(func(t: Dictionary) -> int: return int(t["index"])) == [2],
+		"control: the takes kept were %s, not the one before the first let go" % [st._ready_takes])
+	_ok(_host.asked.size() == held, "the reading asked the host %d times while Test played" % (_host.asked.size() - held))
+	_ed._stop_test()
+	_host.cancelled = []
+	st._next_to_request = 5
+	st.yield_host()
+	_ok(_host.cancelled.is_empty() and st._next_to_request == 5,
+		"control: with nothing of the reading's in line, Test cancelled %s" % [_host.cancelled])
+	st._ready_takes = []
+	st.chunks = []
 	# Test pauses a show playing where it is, and never ends it: a reading on the stream stays there
 	var calls: Array = []
 	var playing := [true]

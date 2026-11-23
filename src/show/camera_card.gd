@@ -13,9 +13,11 @@ class_name CameraCard
 ## and when the camera looks stays the format's; what a format changes for a moment (springs quickened on a new page) is
 ## laid over these.
 ##
-## Below them, THE CAMERAS ([Cameras]): a list, as the Props card lists props, of the cameras a show cuts between, each an entry
-## with its own settings, in priority order (the higher in the list wins a moment both want; ↑ lifts one). Unset, a show
-## that cuts between cameras has every sort; an entry's × takes that sort off the list. Kept in the block as `cameras`.
+## Below them, THE CAMERAS ([Cameras]): a list, as the Props card lists props, of the cameras the format in use sees through
+## (its sorts alone, [method Cameras.of]; none listed where it has none), each an entry with its own settings, in priority order
+## (the higher in the list wins a moment both want; ↑ lifts one). Unset, the format has every sort of its own; an entry's × takes
+## that sort off the list, save one the format always sees through (grayed, saying why). Kept in the block as `cameras`, every
+## format's entries together: a list edited here leaves another format's as they are.
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "camera"
@@ -24,6 +26,7 @@ const SEVERITY := {"label": "Severity", "type": "float", "min": ShowFeed.CAMERA_
 	"default": 1.0, "blurb": "How severe the format's own shots are, one knob over them: 0 a slow gentle drift that barely turns and never cuts, 1 the default, 2 fast, restless and cinematic, with real jump cuts. It scales how far a shot may swing, how long a move lasts and how deep a push goes."}
 
 var _said: Label
+var _head: Label
 var _form: SchemaForm
 var _list: VBoxContainer
 var _add: MenuButton
@@ -56,11 +59,11 @@ func _init() -> void:
 		Director.set_camera_follow(f)
 		refresh())
 	add_child(_form)
-	var head := Label.new()
-	head.text = "Cameras"
-	head.tooltip_text = "The cameras a show cuts between, the highest in the list winning a moment two of them want. Unset, it has every sort."
-	head.mouse_filter = Control.MOUSE_FILTER_PASS
-	add_child(head)
+	_head = Label.new()
+	_head.text = "Cameras"
+	_head.tooltip_text = "The cameras this format sees through, the highest in the list winning a moment two of them want. Unset, it has every one of its own."
+	_head.mouse_filter = Control.MOUSE_FILTER_PASS
+	add_child(_head)
 	_list = VBoxContainer.new()
 	_list.add_theme_constant_override("separation", 4)
 	add_child(_list)
@@ -103,23 +106,34 @@ func refresh() -> void:
 
 # --- the cameras -------------------------------------------------------------------------------------------------------
 
-## The list as it stands: the note's, or every sort dimmed where it has none.
+## The format in use's list as it stands: the note's, or every sort of the format dimmed where it has none.
 func _cameras() -> Array:
-	return Cameras.sanitize(Director.cameras, true)
+	return Cameras.sanitize(Director.cameras, true, Director.resolved_medium())
 
 
 func _draw_cameras() -> void:
 	for c in _list.get_children():
 		c.queue_free()
+	var fmt := Director.resolved_medium()
+	var any := not Cameras.of(fmt).is_empty()
+	_head.visible = any
+	_list.visible = any
+	_add.visible = Cameras.of(fmt).any(func(k: String) -> bool: return Cameras.kept(k).is_empty())
+	if not any:
+		return
 	var list := _cameras()
-	var own := not Director.cameras.is_empty()
+	var own := Director.cameras.any(func(e: Dictionary) -> bool:
+		return String(Registry.field(Cameras.REGISTRY, String(e.get("sort", "")), "format", "")) == fmt)
 	for i in list.size():
 		var e: Dictionary = list[i]
 		var sort := String(e["sort"])
 		var entry := EntryCard.new(Registry.label(Cameras.REGISTRY, sort), Registry.blurb(Cameras.REGISTRY, sort))
 		entry.modulate = Color(1, 1, 1, 1.0 if own else 0.6)
 		var at := i
-		entry.set_remove(func() -> void: _set_list(_without(at)), "Take this camera off the list.", "" if list.size() > 1 else "A show keeps one camera at least.")
+		var why := Cameras.kept(sort)
+		if why.is_empty() and list.size() <= 1:
+			why = "A show keeps one camera at least."
+		entry.set_remove(func() -> void: _set_list(_without(at)), "Take this camera off the list.", why)
 		entry.open = bool(_open.get(sort, false))
 		entry.toggled.connect(func(o: bool) -> void: _open[sort] = o)
 		var form := SchemaForm.new()
@@ -139,8 +153,9 @@ func _draw_cameras() -> void:
 			else:
 				d[key] = value
 			_set_list(l))
-		entry.options.add_child(form)
-		if i > 0:
+		if not rows.is_empty():
+			entry.options.add_child(form)
+		if i > 0 and Cameras.kept(sort).is_empty() and Cameras.kept(String(list[i - 1]["sort"])).is_empty():
 			var up := Button.new()
 			up.text = "↑ Before the one above"
 			up.tooltip_text = "Give this camera the moments it and the one above both want."
@@ -156,7 +171,7 @@ func _draw_cameras() -> void:
 	pop.clear()
 	var keys := Cameras.REGISTRY.keys()
 	for k in keys.size():
-		if Cameras.rank(list, String(keys[k])) < 0:
+		if String(Registry.field(Cameras.REGISTRY, String(keys[k]), "format", "")) == fmt and Cameras.rank(list, String(keys[k])) < 0:
 			pop.add_item(Registry.label(Cameras.REGISTRY, String(keys[k])), k)
 			pop.set_item_tooltip(pop.item_count - 1, Registry.blurb(Cameras.REGISTRY, String(keys[k])))
 	_add.disabled = pop.item_count == 0
@@ -174,8 +189,12 @@ func _added(id: int) -> void:
 	_set_list(l)
 
 
+## The format in use's list [param l], every other format's entries kept as they are.
 func _set_list(l: Array) -> void:
-	Director.set_cameras(l)
+	var fmt := Director.resolved_medium()
+	var others := Director.cameras.filter(func(e: Dictionary) -> bool:
+		return String(Registry.field(Cameras.REGISTRY, String(e.get("sort", "")), "format", "")) != fmt)
+	Director.set_cameras(others + l)
 	refresh()
 
 

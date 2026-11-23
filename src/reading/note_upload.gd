@@ -30,6 +30,7 @@ var reading: ReadingPanel
 var youtube: YouTubeCard
 var _feed: Feed
 var _tags_field: TagField
+var _tags_count: Label            # how many tags go up, and how much of YouTube's room they take ([method YouTube.count_of])
 var _steps: EpisodeSteps          # what the YouTube card makes from the note, as the Pipeline card lists it
 var _words := ""
 var _pictures := PackedStringArray()
@@ -88,6 +89,11 @@ func _init(panel: ReadingPanel, card: YouTubeCard) -> void:
 		+ "characters of tags in all; a dimmed tag is past that.")
 	_tags_field.changed.connect(_save_tags)
 	add_child(_tags_field)
+	_tags_count = Label.new()
+	_tags_count.add_theme_font_size_override("font_size", 11)
+	_tags_count.modulate = Color(1, 1, 1, 0.6)
+	_tags_count.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	add_child(_tags_count)
 	_steps = youtube.pipeline()
 
 
@@ -216,7 +222,15 @@ func _refresh_tags() -> void:
 	var tags := note_tags()
 	if _tags_field.get_tags() != tags:
 		_tags_field.set_tags(tags)
+	_mark(tags)
+
+
+## The chips past YouTube's room dimmed, and the count under them.
+func _mark(tags: PackedStringArray) -> void:
 	_tags_field.mark(YouTube.left_out(tags))
+	var said := YouTube.count_of(tags) if not tags.is_empty() else "No tags yet."
+	if _tags_count.text != said:
+		_tags_count.text = said
 
 
 ## A chip added or removed: the note's `tags:` line, written at once.
@@ -224,4 +238,4 @@ func _save_tags() -> void:
 	var doc := reading.doc_source()
 	if doc == null or not doc.set_field("tags", ", ".join(_tags_field.get_tags())):
 		reading.status("The tags could not be saved into the note.")
-	_tags_field.mark(YouTube.left_out(_tags_field.get_tags()))
+	_mark(_tags_field.get_tags())
