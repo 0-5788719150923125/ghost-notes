@@ -12,6 +12,10 @@ class_name CameraCard
 ## alike, and a playing show takes a change on its next frame. Its block in a document is `camera:`, only what is set (`severity` among them). Where
 ## and when the camera looks stays the format's; what a format changes for a moment (springs quickened on a new page) is
 ## laid over these.
+##
+## Below them, THE CAMERAS ([Cameras]): a list, as the Props card lists props, of the cameras a show cuts between, each an entry
+## with its own settings, in priority order (the higher in the list wins a moment both want; ↑ lifts one). Unset, a show
+## that cuts between cameras has every sort; an entry's × takes that sort off the list. Kept in the block as `cameras`.
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "camera"
@@ -21,6 +25,9 @@ const SEVERITY := {"label": "Severity", "type": "float", "min": ShowFeed.CAMERA_
 
 var _said: Label
 var _form: SchemaForm
+var _list: VBoxContainer
+var _add: MenuButton
+var _open := {}
 
 
 ## This card for a note's panel, from what the panel says of itself ([method NoteCards.make]): it asks nothing of it.
@@ -49,6 +56,20 @@ func _init() -> void:
 		Director.set_camera_follow(f)
 		refresh())
 	add_child(_form)
+	var head := Label.new()
+	head.text = "Cameras"
+	head.tooltip_text = "The cameras a show cuts between, the highest in the list winning a moment two of them want. Unset, it has every sort."
+	head.mouse_filter = Control.MOUSE_FILTER_PASS
+	add_child(head)
+	_list = VBoxContainer.new()
+	_list.add_theme_constant_override("separation", 4)
+	add_child(_list)
+	_add = MenuButton.new()
+	_add.text = "+ Add"
+	_add.flat = false
+	_add.tooltip_text = "Add a camera to the list."
+	_add.get_popup().id_pressed.connect(_added)
+	add_child(_add)
 	Director.medium_changed.connect(refresh)
 	refresh()
 
@@ -77,6 +98,85 @@ func refresh() -> void:
 		row["default"] = defaults[k]
 		rows[k] = row
 	_form.show_fields(rows, values)
+	_draw_cameras()
+
+
+# --- the cameras -------------------------------------------------------------------------------------------------------
+
+## The list as it stands: the note's, or every sort dimmed where it has none.
+func _cameras() -> Array:
+	return Cameras.sanitize(Director.cameras, true)
+
+
+func _draw_cameras() -> void:
+	for c in _list.get_children():
+		c.queue_free()
+	var list := _cameras()
+	var own := not Director.cameras.is_empty()
+	for i in list.size():
+		var e: Dictionary = list[i]
+		var sort := String(e["sort"])
+		var entry := EntryCard.new(Registry.label(Cameras.REGISTRY, sort), Registry.blurb(Cameras.REGISTRY, sort))
+		entry.modulate = Color(1, 1, 1, 1.0 if own else 0.6)
+		var at := i
+		entry.set_remove(func() -> void: _set_list(_without(at)), "Take this camera off the list.", "" if list.size() > 1 else "A show keeps one camera at least.")
+		entry.open = bool(_open.get(sort, false))
+		entry.toggled.connect(func(o: bool) -> void: _open[sort] = o)
+		var form := SchemaForm.new()
+		var rows := {}
+		var values := {}
+		var fields: Dictionary = Registry.field(Cameras.REGISTRY, sort, "fields", {})
+		for k in fields:
+			rows[k] = (fields[k] as Dictionary).duplicate()
+			if e.has(k):
+				values[k] = e[k]
+		form.show_fields(rows, values)
+		form.edited.connect(func(key: String, value: Variant) -> void:
+			var l := _cameras()
+			var d: Dictionary = l[at]
+			if value == null:
+				d.erase(key)
+			else:
+				d[key] = value
+			_set_list(l))
+		entry.options.add_child(form)
+		if i > 0:
+			var up := Button.new()
+			up.text = "↑ Before the one above"
+			up.tooltip_text = "Give this camera the moments it and the one above both want."
+			up.pressed.connect(func() -> void:
+				var l := _cameras()
+				var d: Variant = l[at]
+				l.remove_at(at)
+				l.insert(at - 1, d)
+				_set_list(l))
+			entry.options.add_child(up)
+		_list.add_child(entry)
+	var pop := _add.get_popup()
+	pop.clear()
+	var keys := Cameras.REGISTRY.keys()
+	for k in keys.size():
+		if Cameras.rank(list, String(keys[k])) < 0:
+			pop.add_item(Registry.label(Cameras.REGISTRY, String(keys[k])), k)
+			pop.set_item_tooltip(pop.item_count - 1, Registry.blurb(Cameras.REGISTRY, String(keys[k])))
+	_add.disabled = pop.item_count == 0
+
+
+func _without(i: int) -> Array:
+	var l := _cameras()
+	l.remove_at(i)
+	return l
+
+
+func _added(id: int) -> void:
+	var l := _cameras()
+	l.append({"sort": String(Cameras.REGISTRY.keys()[id])})
+	_set_list(l)
+
+
+func _set_list(l: Array) -> void:
+	Director.set_cameras(l)
+	refresh()
 
 
 # --- the block ---------------------------------------------------------------------------------------------------------
@@ -88,6 +188,8 @@ func capture() -> Dictionary:
 		out["severity"] = snappedf(Director.camera, 0.01)
 	for k in Director.camera_follow:
 		out[k] = snappedf(float(Director.camera_follow[k]), 0.01)
+	if not Director.cameras.is_empty():
+		out["cameras"] = Director.cameras.duplicate(true)
 	return out
 
 
@@ -96,4 +198,5 @@ func apply(block: Dictionary) -> void:
 	var sev: Variant = block.get("severity")
 	Director.set_camera(float(sev) if (sev is float or sev is int) else 1.0)
 	Director.set_camera_follow(block)
+	Director.set_cameras(block.get("cameras", []) if block.get("cameras") is Array else [])
 	refresh()

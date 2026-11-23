@@ -388,6 +388,20 @@ func _groups_and_rebuilds() -> void:
 	s.listed = [one, two, _row("three")]
 	card.refresh()
 	_ok(card.row("one")["line"] != line and not card.row("three").is_empty(), "the control: a new row builds the list again")
+	# ...a group's own ⟳: shown where its section offers one, pressed it makes the group again; none offered, none shown
+	var g: Dictionary = card._groups.values()[0]
+	_ok(not (g["redo"] as Button).visible, "a group whose section offers no ⟳ shows none")
+	var pressed := [0]
+	var whole := PipelineRow.new("group:Card 3", "Card 3", "Card 3")
+	whole.again = "Make everything in Card 3 again"
+	whole.open = true
+	whole.redo = func() -> void: pressed[0] += 1
+	s.group_redo = whole
+	card.refresh()
+	g = card._groups.values()[0]
+	_ok((g["redo"] as Button).visible and not (g["redo"] as Button).disabled, "a group whose section offers one shows its ⟳")
+	(g["redo"] as Button).pressed.emit()
+	_ok(pressed[0] == 1, "...and pressed, makes the whole group again")
 	card.free()
 
 

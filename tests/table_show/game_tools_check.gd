@@ -293,6 +293,17 @@ func _steps() -> void:
 		_check(after.has(s), "the session asked for %s" % s)
 	_check(ep.needs("image:map:1") == ["script"], "a picture waits for what it shows to have happened")
 	_check(ep.file_of("image:figure:2").ends_with("figure_2.png"), "a picture is kept by name: %s" % ep.file_of("image:figure:2"))
+	# ...a session gathered again lists what it asks for now, even written again inside the same second (a file's clock is in seconds)
+	ep.write_json("game", {"pages": [{"name": "P"}]})
+	_check(ep.steps().has("image:page:1") and not ep.steps().has("image:page:2"), "a session's pages are its steps")
+	ep.write_json("game", {"pages": [{"name": "P"}, {"name": "Q"}, {"name": "S"}]})
+	_check(ep.steps().has("image:page:3"), "gathered again with more pages, at once, it lists them all")
+	_check(ep.steps().has("diorama") and ep.steps().has("minis") and ep.needs("say:intro").has("diorama"), "a game models its land before play and its figures after")
+	# ...the view comes back from the pages only where it is worth watching: told so, or a throw at its extreme
+	_check(TableGame._watched({"kind": "roll", "extreme": "lowest"}) and TableGame._watched({"kind": "move", "watch": true}),
+		"a throw at its extreme, and a walk watched, bring the view back to the table")
+	_check(not TableGame._watched({"kind": "roll"}) and not TableGame._watched({"kind": "move"}) and not TableGame._watched({"kind": "roll", "extreme": "highest", "watch": false})
+		and not TableGame._watched({"kind": "roll", "extreme": "highest", "hidden": true}), "control: any other throw or walk stays under the page")
 	var not_game := TableEpisode.open("game-check", 89)
 	not_game.write_json("plan", {"staging": {"source": "none"}, "spread": {"positions": [{"name": "A"}]}, "look": {}})
 	_check(not not_game.steps().has("prep"), "the control: a show with no game has none of this")

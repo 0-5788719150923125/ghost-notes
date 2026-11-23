@@ -42,7 +42,7 @@ const EDGE := 0.02
 const THING_EDGE := 0.035
 ## The sizes a top may be, centimeters (width, depth), and its thickness.
 const TOP_MIN := Vector2(60.0, 50.0)
-const TOP_MAX := Vector2(260.0, 180.0)
+const TOP_MAX := Vector2(360.0, 260.0)
 const THICK := Vector2(1.5, 9.0)
 ## The most layers, and how high each lies over the one under it (meters): all of them under
 ## [constant LAYERS_UNDER], where a card lying on the table rests ([constant TableMedium.CLOTH_TOP]).

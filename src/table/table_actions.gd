@@ -134,6 +134,12 @@ const REGISTRY := {
 		"about": "another map goes down, and what stood on the last comes off"},
 	"reveal": {"written": true, "args": ["card"], "rest": REVEAL, "shows": false, "lays": false, "ends": false, "moments": [], "event": true,
 		"about": "a painted picture is held up for the table to see"},
+	"picture": {"written": true, "args": ["card"], "rest": 0.0, "shows": false, "lays": false, "ends": false, "moments": [], "event": true,
+		"about": "a page of the night's book covers the frame while the words go on"},
+	"board": {"written": true, "args": ["card"], "rest": 0.0, "shows": false, "lays": false, "ends": false, "moments": [], "event": true,
+		"about": "the view comes back from the pictures to the table"},
+	"turn": {"written": true, "args": ["card"], "rest": 0.0, "shows": false, "lays": false, "ends": false, "moments": [], "event": true,
+		"about": "the turn passes to someone at the table, and the view goes round to where they sit"},
 	# performed between the written ones, never written
 	"push": {"written": false, "args": [], "rest": PUSH, "shows": false, "lays": false, "ends": false,
 		"moments": [], "about": "the shuffled deck is squared and pushed to its side before the first card"},

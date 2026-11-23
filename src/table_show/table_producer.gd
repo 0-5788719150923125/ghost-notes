@@ -88,10 +88,12 @@ const LOCAL := ["draw", "script", "ink", "direction"]
 ## The solver, tried more: a safeguard sometimes stops a sound run part way, and its run is the episode's work. It may work this long (seconds).
 const SOLVE_RETRIES := 2
 const SOLVE_TIMEOUT := 3600
+## The most pictures a page of a game's book is painted beside ([method _page_refs]).
+const PAGE_REFS := 5
 ## Who makes each kind of step, as its record and its row name them (a step's first word -> its maker).
 const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "check": "art director",
 	"table": "set dresser", "say": "reader", "acts": "puppeteer", "model": "modeler", "skin": "decorator", "prep": "game master",
-	"solve": "solver", "ink": "code", "direction": "author",
+	"diorama": "model maker", "minis": "model maker", "solve": "solver", "ink": "code", "direction": "author",
 	"layers": "art director"}
 
 var episode: TableEpisode
@@ -173,9 +175,11 @@ func _forget_live() -> void:
 ## steps again though they are made (a row's ⟳). Generate ([param steps] empty) makes what is missing and what is stale, unless it
 ## is kept ([method owed]). A person pressing is what starts it, so here an episode made before records gains them ([method
 ## TableEpisode.adopt]).
-func start(steps: Array = [], remake := false, note := "", layer := -1) -> void:
+## [param follow]: [param steps] made again, and then everything made from them, as Generate makes what goes stale (a 🔒 kept step
+## stops it there), in place of [param steps] alone.
+func start(steps: Array = [], remake := false, note := "", layer := -1, follow := false) -> void:
 	if running or busy() or not again.is_empty():
-		if steps.is_empty():
+		if steps.is_empty() or follow:
 			only.clear()
 			for step in _errors.keys():
 				_errors.erase(step)
@@ -203,7 +207,7 @@ func start(steps: Array = [], remake := false, note := "", layer := -1) -> void:
 	_errors.clear()
 	_tries.clear()
 	skin_layer = layer
-	only = steps.duplicate()
+	only = [] if follow else steps.duplicate()
 	again = steps.duplicate() if remake else []
 	asked = {}
 	if not note.strip_edges().is_empty():
@@ -698,6 +702,10 @@ func _make(step: String) -> void:
 			_make_acts()
 		"prep":
 			_make_prep()
+		"diorama":
+			_make_models("diorama")
+		"minis":
+			_make_models("minis")
 		"layers":
 			_make_layers()
 		"direction":
@@ -1000,7 +1008,14 @@ func _make_image(step: String) -> void:
 		var list: Array = episode.game().get(key, [])
 		var k := int(parts[2]) - 1
 		var thing: Dictionary = list[k] if k >= 0 and k < list.size() and list[k] is Dictionary else {}
-		_submit_image(step, TablePrompts.game_image(look, String(parts[1]), thing, target), [])
+		var refs := _page_refs(k, thing) if String(parts[1]) == "page" else []
+		# ...in the brief's own hand, where it fixes one ([method TablePrompts.hand_of]): the same in every episode
+		var hand := String(spec.get("hand", ""))
+		var in_hand := look.duplicate()
+		if not hand.is_empty():
+			in_hand["art"] = hand
+			in_hand["own_hand"] = true
+		_submit_image(step, TablePrompts.game_image(in_hand, String(parts[1]), thing, target, not refs.is_empty()), refs)
 		return
 	# A layer of the picture painted first: painted over the one before (the bare surface, for the first), the picture itself its guide
 	if parts.size() == 3 and String(parts[1]) == "layer":
@@ -1029,6 +1044,28 @@ func _make_image(step: String) -> void:
 
 
 # --- a game played at the table (next/tabletop.md) ---------------------------------------------------------------------------------------------------
+
+## What a page of the night's book is painted beside, so it is painted as the rest are: the figures' own pictures of whoever is in it,
+## then the pages just before it, each only where it is painted already.
+func _page_refs(k: int, page: Dictionary) -> Array:
+	var out: Array = []
+	var shows: Array = page.get("shows", []) if page.get("shows") is Array else []
+	var figs: Array = episode.game().get("figures", [])
+	for i in figs.size():
+		var nm := String((figs[i] as Dictionary).get("name", ""))
+		for w in shows:
+			if String(w).to_lower() == nm.to_lower() and out.size() < PAGE_REFS - 1:
+				var f := episode.file_of("image:figure:%d" % (i + 1))
+				if FileAccess.file_exists(f):
+					out.append(f)
+	for j in range(k - 1, -1, -1):
+		if out.size() >= PAGE_REFS:
+			break
+		var f := episode.file_of("image:page:%d" % (j + 1))
+		if FileAccess.file_exists(f):
+			out.append(f)
+	return out
+
 
 ## Everyone at the table, the game master first: the show's voices, as its document spells them.
 func _people() -> PackedStringArray:
@@ -1080,7 +1117,8 @@ func _make_scene(who: String) -> void:
 	var prep_d: Dictionary = prep if prep is Dictionary else {}
 	var people := _people()
 	var past := episode.events_before(step)
-	var ledger := GameLedger.from(sheets_of(prep_d, people), past)
+	var diorama := _diorama()
+	var ledger := GameLedger.from(sheets_of(prep_d, people), past, GameDiorama.board_of(diorama) if not diorama.is_empty() else {})
 	if ledger.over and who != "close":
 		_finish(step, episode.write_text(step, ""))
 		return
@@ -1090,6 +1128,7 @@ func _make_scene(who: String) -> void:
 	plan["_brief"] = String(spec.get("brief", ""))
 	var before := _heard_so_far(step)
 	var toolset := GameTools.new(episode, who, plan, prep_d, people, ledger, episode.job_dir(step), before)
+	toolset.diorama = diorama
 	toolset.players = {"backend": String(spec.get("players", spec.get("writer", "claude"))), "model": String(spec.get("players_model", "")), "effort": String(spec.get("players_effort", ""))}
 	toolset.words_aim = TablePrompts.game_words(who, episode.beat_count())
 	var url := AgentTools.open(episode.job_dir(step), toolset)
@@ -1097,7 +1136,73 @@ func _make_scene(who: String) -> void:
 		_errors[step] = "no tools can be served here"
 		return
 	_tools[step] = {"url": url, "set": toolset}
-	_submit_text(step, TablePrompts.game_master(title, String(spec.get("brief", "")), _plan(), people, who, episode.beat_count(), prep_d, ledger, before, toolset.words_aim), "best", {"tools_url": url})
+	_submit_text(step, TablePrompts.game_master(title, String(spec.get("brief", "")), _plan(), people, who, episode.beat_count(), prep_d, ledger, before, toolset.words_aim, diorama), "best", {"tools_url": url})
+
+
+## The model of the land the game is played on ([GameDiorama]), {} where it has none.
+func _diorama() -> Dictionary:
+	var d: Variant = episode.read_json("diorama") if episode.has("diorama") else null
+	return GameDiorama.sanitize(d) if d is Dictionary else {}
+
+
+## The model maker at its bench ([DioramaTools]): the land from the preparation (`diorama`), or the night's figures from what was played
+## (`minis`), each figure modeled for this show's earlier nights handed in already.
+func _make_models(step: String) -> void:
+	_close_tools(step)
+	if not TextGen.make(String(spec.get("writer", "claude"))).takes_tools():
+		_errors[step] = "its writer cannot use tools, and a model is made with them: pick another"
+		return
+	var toolset := DioramaTools.new(episode.job_dir(step), episode.seed, "land" if step == "diorama" else "figures")
+	var title := String(spec.get("title", ""))
+	var p: Dictionary
+	if step == "diorama":
+		var prep: Variant = episode.read_json("prep")
+		p = TablePrompts.diorama(title, String(spec.get("brief", "")), _plan(), prep if prep is Dictionary else {})
+	else:
+		toolset.wanted = episode.game().get("figures", [])
+		var kept := _earlier_figures(toolset)
+		p = TablePrompts.miniatures(title, String(spec.get("brief", "")), _plan(), toolset.wanted, kept)
+	var url := AgentTools.open(episode.job_dir(step), toolset)
+	if url.is_empty():
+		_errors[step] = "no tools can be served here"
+		return
+	_tools[step] = {"url": url, "set": toolset}
+	_submit_text(step, p, "best", {"tools_url": url})
+
+
+## Every figure tonight wants that this show's latest earlier night modeled, handed to [param toolset] as it was (its materials beside
+## the rest, renamed where two differ): the names handed.
+func _earlier_figures(toolset: DioramaTools) -> Array:
+	var want := {}
+	for f in toolset.wanted:
+		want[String((f as Dictionary)["name"]).to_lower()] = String((f as Dictionary)["name"])
+	var handed: Array = []
+	for h in TableEpisode.history(episode.show):
+		var s := int((h as Dictionary)["seed"])
+		if s == episode.seed:
+			continue
+		var m: Variant = TableEpisode.open(episode.show, s).read_json("minis")
+		if not (m is Dictionary) or not ((m as Dictionary).get("figures") is Dictionary):
+			continue
+		var figs: Dictionary = (m as Dictionary)["figures"]
+		var mats: Dictionary = (m as Dictionary).get("materials", {}) if (m as Dictionary).get("materials") is Dictionary else {}
+		for name in figs:
+			var mine := String(want.get(String(name).to_lower(), ""))
+			if mine.is_empty() or toolset.figures.has(mine) or not (figs[name] is Dictionary):
+				continue
+			var placed := ThingLibrary.put_on({"things": [], "materials": toolset.materials}, {"thing": figs[name], "materials": mats}, null)
+			toolset.materials = placed["materials"]
+			toolset.figures[mine] = (placed["things"] as Array)[0]
+			handed.append(mine)
+	return handed
+
+
+## The land or the figures handed in, as they are: made safe again as they are read.
+func _land_models(step: String, handed: String) -> String:
+	var got: Variant = JSON.parse_string(handed)
+	if not (got is Dictionary):
+		return "what was handed in is not an object"
+	return episode.write_json(step, got)
 
 
 ## What was said tonight, before [param step]: with names and rolls, as anyone at the table heard it.
@@ -1144,7 +1249,8 @@ func _write_game() -> String:
 	var people := _people()
 	var prep: Variant = episode.read_json("prep")
 	var prep_d: Dictionary = prep if prep is Dictionary else {}
-	var game := GameBoard.gather(episode.events_before(""), people, prep_d, spec.get("seats", {}) if spec.get("seats") is Dictionary else {})
+	var diorama := _diorama()
+	var game := GameBoard.gather(episode.events_before(""), people, prep_d, spec.get("seats", {}) if spec.get("seats") is Dictionary else {}, GameDiorama.board_of(diorama) if not diorama.is_empty() else {})
 	return episode.write_json("game", game)
 
 
@@ -2216,11 +2322,13 @@ func _land(step: String, res: Dictionary) -> void:
 				err = _land_skin(handed)
 			"prep":
 				err = _land_prep(handed)
+			"diorama", "minis":
+				err = _land_models(step, handed)
 			"say":
 				err = _land_scene(step, handed)
 			_:
 				err = _land_table(handed)
-	elif episode.wants_game() and (step == "prep" or step.begins_with("say:")):
+	elif episode.wants_game() and (step in ["prep", "diorama", "minis"] or step.begins_with("say:")):
 		err = String(res.get("error", "")) if not bool(res.get("ok", false)) else "it stopped without handing its work in"
 	elif not bool(res.get("ok", false)):
 		err = String(res.get("error", "the job failed"))
@@ -2837,6 +2945,15 @@ func _land_table(text: String) -> String:
 		return "the table was not JSON"
 	# ...the show's fixed things stand in it as the brief writes them, whatever was handed in ([FixedTable])
 	d = FixedTable.merge(d as Dictionary, spec.get("fixed", {}) if spec.get("fixed") is Dictionary else {})
+	# ...a game's table is never smaller than its board and the room round it wants (GameBoard.TOP_LEAST), whatever was written
+	if episode.wants_game() and (d as Dictionary).get("top") is Dictionary:
+		var top: Dictionary = (d as Dictionary)["top"]
+		var asked: Variant = top.get("size")
+		var w := float(asked[0]) if asked is Array and (asked as Array).size() >= 2 else 0.0
+		var h := float(asked[1]) if asked is Array and (asked as Array).size() >= 2 else 0.0
+		top["size"] = [maxf(w, GameBoard.TOP_LEAST.x), maxf(h, GameBoard.TOP_LEAST.y)]
+		if String(top.get("shape", "rect")) == "round":
+			top["shape"] = "rect"
 	if (CardTable.sanitize_table(d as Dictionary, _look())["things"] as Array).is_empty():
 		return "nothing on the table could be built"
 	# ...what is built on it goes with it: every table anywhere is stood from this one file

@@ -91,7 +91,7 @@ func _read(rec: Dictionary) -> void:
 			var read := Dice.landed(shape, Basis(q.normalized()))
 			_check(float(read["dot"]) >= Dice.flat_enough(shape), "throw %d die %d lies flat: %.3f" % [id, k, float(read["dot"])])
 			_check(int(read["face"]) == int(d["face"]), "throw %d die %d says what it shows" % [id, k])
-			_check(GameBoard.LANDS.has_point(Vector2(last.x, last.z)), "throw %d die %d is in the picture: %s" % [id, k, str(last)])
+			_check(GameBoard.lands(Vector2(last.x, last.z)), "throw %d die %d is in the picture: %s" % [id, k, str(last)])
 			_check(last.y > 0.0 and last.y < 0.05 * float((rd["dice"] as Array)[k]["size"]), "throw %d die %d lies on the table: %.3f" % [id, k, last.y])
 			# from where they sit: the first key is on their side of the table
 			var first := Vector3(keys[1], keys[2], keys[3])

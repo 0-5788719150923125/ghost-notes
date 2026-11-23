@@ -18,7 +18,8 @@ class_name EpisodeCard
 ##
 ## Generation is explicit, as with every picture in ghost, and on the note's Pipeline card ([Section]; next/pipeline.md):
 ## Generate makes what the episode is missing, New episode (here) makes a new seed, and a row's redo replaces that step,
-## keeping its previous version and leaving what was made from it stale. Nothing runs on open - it spends the author's
+## keeping its previous version, and then everything made from it in order (a 🔒 on a step stops it there). A group's own line
+## has a ⟳ too, making every step in it again ([method group_again]). Nothing runs on open - it spends the author's
 ## quota. Each thing that can be made again is a row of its own; further requests queue without stopping the current work.
 
 const YouTube := preload("res://src/export/youtube.gd")
@@ -60,6 +61,9 @@ const STEPS := {
 	"image:map:K": {"label": "Map", "again": "Paint this map again"},
 	"image:figure:K": {"label": "Figure", "again": "Paint this figure again"},
 	"image:reveal:K": {"label": "Picture", "again": "Paint this picture again"},
+	"image:page:K": {"label": "Page", "again": "Paint this page again"},
+	"diorama": {"label": "The land", "again": "Model the land again"},
+	"minis": {"label": "Figures", "again": "Model the figures again"},
 	"image:height": {"label": "Depth", "again": ""},
 	"acts": {"label": "Work", "again": "Block the work again"},
 	"say:intro": {"label": "Intro", "again": "Rewrite the intro"},
@@ -78,11 +82,14 @@ const NAMED_MOST := 6
 ## painted from the cloth: a new cloth is a new depth, where the table wants one (TableEpisode.wants_height), and never a cloth
 ## with no depth until Generate.
 const TOGETHER := {"image:surface": ["image:height"]}
+## The steps whose files say what steps an episode has ([method TableEpisode.steps]): written again, the rows are listed again.
+const LISTED_BY := ["plan", "draw", "game", "layers", "acts"]
 
 var _knobs := KNOBS.duplicate(true)
 var _episode: TableEpisode = null
 var _dock: TimelineDock = null      # the episode's timeline, while it is docked under the show
 var _tl_btn: Button = null
+var _group_steps := {}               # a group on the Pipeline card -> the steps in it that can be made again, as its rows were last built
 var _undo: Array = []                 # what the dock's Undo takes back, last last: {episode, step, digest} - the version before each edit
 var _source_window: SourceWindow = null    # ✎'s window, made the first time a row's is pressed
 var _tune := {}                     # the show's `tune:` ([TableTune]), as its block tells it - {} for none
@@ -646,7 +653,7 @@ func _show_title() -> String:
 func _spec() -> Dictionary:
 	var body := Manuscript.strip_frontmatter(_doc.pull())
 	return {"title": _show_title(), "byline": _show_byline(), "names": _names_of(null), "uploads_as": _uploads_as(),
-		"brief": TablePrompts.brief(body), "deck": CardDeck.of(body), "fixed": FixedTable.parse(body),
+		"brief": TablePrompts.brief(body), "deck": CardDeck.of(body), "fixed": FixedTable.parse(body), "hand": TablePrompts.hand_of(body),
 		"chooses": CardDeck.chooses(body), "voices": reading.cast_names(), "seats": reading.cast_seats(), "said_word": reading.reader_said_word(),
 		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"], "writer_effort": _knobs["writer_effort"],
 		"painter": _knobs["painter"], "painter_model": _knobs["painter_model"], "painter_effort": _knobs["painter_effort"],
@@ -1020,7 +1027,7 @@ func _generate() -> void:
 
 
 ## Make what is missing - all of it, or only [param steps] (see [member TableProducer.only]).
-func _run(steps: Array, remake := false, note := "") -> void:
+func _run(steps: Array, remake := false, note := "", follow := false) -> void:
 	if _episode == null:
 		return
 	if Settings.is_read_only():
@@ -1034,7 +1041,7 @@ func _run(steps: Array, remake := false, note := "") -> void:
 	if not _making():
 		_producer.spec = _spec()
 		_brief_changed = false
-	_producer.start(steps, remake, note)
+	_producer.start(steps, remake, note, -1, follow)
 
 
 func _resume(step: String) -> void:
@@ -1109,10 +1116,12 @@ func _redo(step: String) -> void:
 	if _episode == null:
 		return
 	# Made again, nothing thrown away (next/editing.md step 1): what stands plays until the new one lands over it, a version back,
-	# and what was made from it goes stale ([member TableProducer.again])
-	print("ghost: table make %s again - what stands goes a version back" % step)
+	# and then everything made from it, in order, as Generate makes what goes stale - a 🔒 on a step stops it there
+	print("ghost: table make %s again, and what is made from it - what stands goes a version back" % step)
 	_mark_stale()
-	_run([step] + (TOGETHER.get(step, []) as Array), true)
+	# ...everything it will remake queued at once, each waiting for what it is made from, so the whole of it shows from the start
+	var roots: Array = [step] + (TOGETHER.get(step, []) as Array)
+	_run(roots + _episode.remade_with(roots), true, "", true)
 
 
 # --- on the Pipeline card ------------------------------------------------------------------------
@@ -1134,6 +1143,9 @@ class Section extends PipelineSection:
 
 	func group_said(group: String) -> String:
 		return card._group_said(group)
+
+	func group_again(group: String) -> PipelineRow:
+		return card.group_again(group)
 
 	func line() -> String:
 		return card._pipeline_line()
@@ -1172,14 +1184,18 @@ func _making() -> bool:
 	return _producer != null and (_producer.running or _producer.busy())
 
 
-## What the rows read, once per change of the episode's files: a step made or thrown away changes the listing, and the
-## plan's own edits (the Episode's title) its time. What is worked out row by row is kept here too (`asks`, `said`).
+## What the rows read, once per change of the episode's files: a step made or thrown away changes the listing, and a file that
+## says what steps there are (the plan, the draw, the session played, the layers, the work: [constant LISTED_BY]) changes when it
+## is written again - a session played again lists more pictures in the same `game.json`. What is worked out row by row is kept
+## here too (`asks`, `said`).
 func _facts() -> Dictionary:
 	var dir := _episode.dir
 	var files := DirAccess.get_files_at(dir) if DirAccess.dir_exists_absolute(dir) else PackedStringArray()
-	# ...and its size: a file's clock is in seconds, and a plan written again inside one must be read again
-	var plan_at := _episode.file_of("plan")
-	var now := [dir, files, _mtime(plan_at), FileAccess.get_size(plan_at) if FileAccess.file_exists(plan_at) else 0]
+	var now := [dir, files]
+	# ...each by its time and its size: a file's clock is in seconds, and one written again inside one must be read again
+	for step in LISTED_BY:
+		var at := _episode.file_of(String(step))
+		now.append_array([_mtime(at), FileAccess.get_size(at) if FileAccess.file_exists(at) else 0])
 	if now == _facts_of:
 		return _facts_kept
 	_facts_of = now
@@ -1199,6 +1215,7 @@ func _step_rows() -> Array:
 	var f := _facts()
 	var has: Array = f["steps"]
 	var busy := _making()
+	_group_steps = {}
 	# ...the direction it was made from, where it was given one ([Direction]): first, as the plan is made from it
 	var out: Array = ([_row_of("direction", "direction", "", busy, f)] if has.has("direction") else []) + [_row_of("plan", "plan", "", busy, f)]
 	if not bool(f["cardless"]):
@@ -1207,6 +1224,8 @@ func _step_rows() -> Array:
 		_players.visible = has.has("prep")
 	if has.has("prep"):
 		out.append(_row_of("prep", "prep", "", busy, f))
+	if has.has("diorama"):
+		out.append(_row_of("diorama", "diorama", "Table", busy, f))
 	# The table: a back only where cards are drawn, and a back per printing the drawn cards are in (TableEpisode.printings)
 	if has.has("image:back"):
 		out.append(_row_of("image:back", "image:back", "Table", busy, f))
@@ -1261,9 +1280,12 @@ func _step_rows() -> Array:
 		out.append(_row_of("say:%d" % k, "beat:K", "", busy, f, "%s %d" % [word, k]))
 	out.append(_row_of("say:close", "say:close", "", busy, f))
 	out.append(_row_of("script", "script", "", busy, f))
+	if has.has("minis"):
+		out.append(_row_of("minis", "minis", "", busy, f))
 	out.append(_take_row(busy))
 	# ...what the session turned out to need, each named, painted after it was played (next/tabletop.md)
 	var played: Dictionary = _episode.game()
+
 	for key in TableEpisode.GAME_PICTURES:
 		var word2 := String(TableEpisode.GAME_PICTURES[key])
 		var list: Array = played.get(key, [])
@@ -1406,8 +1428,51 @@ func _row_of(step: String, kind: String, group: String, busy: bool, f: Dictionar
 	if resumable:
 		r.asks = "This starts over and replaces the interrupted step's saved progress." + ("\n" + r.asks if not r.asks.is_empty() else "")
 	r.redo = _redo.bind(step)
+	# ...and its group's ⟳ makes it again with the rest of the group (group_again)
+	if not group.is_empty():
+		if not _group_steps.has(group):
+			_group_steps[group] = []
+		if not (_group_steps[group] as Array).has(step):
+			(_group_steps[group] as Array).append(step)
 	_edit_of(r, step)
 	return r
+
+
+## A group's own ⟳ ([method PipelineSection.group_again]): every step in [param group] that can be made again, made again - but those
+## kept by their 🔒 - and then everything made from them, in order. null for a group with nothing to make again.
+func group_again(group: String) -> PipelineRow:
+	if _episode == null:
+		return null
+	var all: Array = _group_steps.get(group, [])
+	var redo: Array = []
+	var going := false
+	for st in all:
+		var s := String(st)
+		var state := _producer.state_of(s)
+		going = going or state == "running" or state == "queued"
+		if _episode.has(s) and not _episode.kept(s):
+			redo.append(s)
+	if all.is_empty():
+		return null
+	var r := PipelineRow.new("group:" + group, group, group)
+	r.again = "Make everything in %s again" % group
+	r.asks = ("%d steps go a version back and are made again, and then everything made from them, in order - but those locked (🔒)."
+		% redo.size())
+	r.open = not redo.is_empty() and not going
+	r.redo = _redo_group.bind(group)
+	return r
+
+
+func _redo_group(group: String) -> void:
+	var all: Array = []
+	for st in _group_steps.get(group, []):
+		if _episode != null and _episode.has(String(st)) and not _episode.kept(String(st)):
+			all.append(String(st))
+	if all.is_empty():
+		return
+	print("ghost: table make %s again (%d steps), and what is made from them" % [group, all.size()])
+	_mark_stale()
+	_run(all + _episode.remade_with(all), true, "", true)
 
 
 ## The episode's timeline, docked under the show (its "Timeline…"; next/editing.md, "The Timeline" and step 6): its beats along the
@@ -2151,7 +2216,7 @@ func _doing_of(step: String) -> String:
 	if a.is_empty():
 		return ""
 	var piece := "%s %s" % [String(MAKERS.get(step.get_slice(":", 0), "agent")), a]
-	var calls := _tools_progress(step) if step in ["model", "skin", "table", "acts", "prep", "solve"] or (step.begins_with("say:") and _episode.wants_game()) else ""
+	var calls := _tools_progress(step) if step in ["model", "skin", "table", "acts", "prep", "solve", "diorama", "minis"] or (step.begins_with("say:") and _episode.wants_game()) else ""
 	if not calls.is_empty():
 		# The budget in view: a run with no clock ends at its last picture, and the row says how near that is
 		var looked: Array = _producer.looks_of(step)
@@ -2162,12 +2227,18 @@ func _doing_of(step: String) -> String:
 ## What [param step]'s redo throws away besides what it remakes: "" for nothing, and it starts at once; otherwise the row goes
 ## amber and asks.
 func _asks_of(step: String, f: Dictionary) -> String:
+	# ...said again once the record of what is locked changes: a 🔒 changes what a cascade remakes
+	var rec := _episode.dir.path_join(KeptSteps.RECORD_FILE)
+	var rec_now := [_mtime(rec), FileAccess.get_size(rec) if FileAccess.file_exists(rec) else 0]
+	if f.get("asks_rec") != rec_now:
+		f["asks_rec"] = rec_now
+		f["asks"] = {}
 	var kept: Dictionary = f["asks"]
 	if kept.has(step):
 		return String(kept[step])
 	var lost := PackedStringArray()
 	var with_it: Array = TOGETHER.get(step, [])
-	for s in (f["lost"] as Dictionary).get(step, []):
+	for s in _episode.remade_with([step] + with_it):
 		# the script is only the readings put together, and what is made along with it is remade now
 		if String(s) != "script" and not with_it.has(s) and _episode.has(String(s)):
 			lost.append(_step_name(String(s), f))
@@ -2176,8 +2247,8 @@ func _asks_of(step: String, f: Dictionary) -> String:
 		var named := ", ".join(lost.slice(0, NAMED_MOST))
 		if lost.size() > NAMED_MOST:
 			named += " and %d more" % (lost.size() - NAMED_MOST)
-		said = ("Nothing is thrown away - what stands goes a version back - but what was made from it goes stale, and Generate "
-			+ "makes it again unless it is locked: %s." % named)
+		said = ("Nothing is thrown away - what stands goes a version back - and everything made from it is made again after it, "
+			+ "in order, unless it is locked (🔒 stops it there): %s." % named)
 	kept[step] = said
 	return said
 

@@ -282,9 +282,9 @@ game_figure:
   - include: head
   - ""
   - >-
-      THE PICTURE: a paper game figure of {{name}}: {{looks}}. One figure, whole, head to foot, standing, facing the viewer, big in the frame: printed on a card to stand on a table. Painted by the people who run this game: {{art}}
+      THE PICTURE: a game figure's own picture, of {{name}}: {{looks}}. One figure, whole, head to foot, standing, facing the viewer, big in the frame. Painted by the people who run this game: {{art}}
   - >-
-      A plain pale background, nothing else in the picture and no ground under it. Bold shapes and a strong outline, for it is seen small and from across a table. No text, no border.
+      {{^own_hand}}A plain pale background. {{/own_hand}}Nothing else in the picture and no ground under it. Bold shapes and a strong outline: it is also the picture every page of this character is painted from. No text, no border.
   - "FORMAT: PORTRAIT 2:3 (1024x1536). No text, no watermark."
 
 game_reveal:
@@ -294,4 +294,22 @@ game_reveal:
       THE PICTURE: what a game master hands across the table: {{name}}: {{looks}}. Painted by the people who run this game: {{art}}
   - >-
       Fills the whole frame, edge to edge, with what it shows big and central, as a viewer sees it at a glance. Its colors: {{palette}}. No text, no border, no people at a table.
+  - "FORMAT: LANDSCAPE 3:2 (1536x1024). No text, no watermark."
+
+# A page of the night's book (GameTools `picture`): the story shown as an illustrated book shows it, full frame over the table. {{shows}} names who and what is in it;
+# `refs` when references go with it (earlier pages, the figures' own pictures).
+game_page:
+  - include: head
+  - ""
+  - >-
+      THE PICTURE: one page of an illustrated book of tonight's story: {{name}}: {{looks}}. Painted by the people who make this show: {{art}}
+  - when: has_shows
+    say: "In it: {{shows}}."
+  - when: refs
+    say: >-
+      THE REFERENCES WITH IT are earlier pages of this same book and the figures' own pictures: whoever and whatever is in this picture looks exactly as it does in them - their
+      faces, clothes, colors and build - and this page is painted in their hand. Do not copy their compositions: what happens here is only what is said above.
+  - >-
+      A real illustration, composed as a picture book's page is: a scene with depth, what matters big and clear, the light of the moment. It shows the story's own world, never a
+      table, dice, figures or the people playing. Fills the whole frame, edge to edge.{{^own_hand}} Its colors: {{palette}}.{{/own_hand}} No text, no lettering, no border, no caption.
   - "FORMAT: LANDSCAPE 3:2 (1536x1024). No text, no watermark."

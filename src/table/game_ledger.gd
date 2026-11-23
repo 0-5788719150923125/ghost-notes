@@ -26,6 +26,9 @@ const KINDS := {
 	"remove": {"table": true, "label": "Remove", "blurb": "a figure taken off the map"},
 	"map": {"table": true, "label": "Map", "blurb": "another map laid down: whatever stood on the last comes off"},
 	"reveal": {"table": true, "label": "Reveal", "blurb": "a picture held up for the table to see"},
+	"picture": {"table": true, "label": "Picture", "blurb": "a page of the night's book: what the viewer sees now, painted, over the table"},
+	"board": {"table": true, "label": "Board", "blurb": "the view comes back from the pictures to the table, to watch what happens on it"},
+	"turn": {"table": true, "label": "Turn", "blurb": "the turn passes to a person at the table, and the view goes round to where they sit"},
 	"change": {"table": false, "label": "Change", "blurb": "something written on a sheet"},
 	"over": {"table": false, "label": "Over", "blurb": "the game ends here"},
 }
@@ -42,6 +45,10 @@ var figures := {}
 var maps: Array = []
 ## Every picture shown: {name, looks}
 var reveals: Array = []
+## Every page of the night's book: {name, looks}
+var pictures: Array = []
+## Whose turn it is.
+var turn := ""
 ## What has happened, in order.
 var events: Array = []
 ## The game has ended.
@@ -49,10 +56,13 @@ var over := false
 var over_how := ""
 
 
-## A ledger beginning from [param start_sheets], then all [param past] applied.
-static func from(start_sheets: Dictionary, past: Array = []) -> GameLedger:
+## A ledger beginning from [param start_sheets], then all [param past] applied. [param board]: the model's board as a map ([method
+## GameDiorama.board_of]), what figures stand on before any map is laid.
+static func from(start_sheets: Dictionary, past: Array = [], board := {}) -> GameLedger:
 	var g := GameLedger.new()
 	g.sheets = start_sheets.duplicate(true)
+	if not board.is_empty():
+		g.maps.append(board.duplicate(true))
 	for e in past:
 		if e is Dictionary:
 			g.apply(e)
@@ -89,6 +99,10 @@ func apply(e: Dictionary) -> void:
 			figures.clear()
 		"reveal":
 			reveals.append({"name": String(e.get("name", "")), "looks": String(e.get("looks", ""))})
+		"picture":
+			pictures.append({"name": String(e.get("name", "")), "looks": String(e.get("looks", ""))})
+		"turn":
+			turn = String(e.get("who", ""))
 		"over":
 			over = true
 			over_how = String(e.get("how", ""))
@@ -278,6 +292,36 @@ func reveal(name: String, looks: String) -> Dictionary:
 	var e := {"id": next_id(), "kind": "reveal", "name": name, "looks": looks}
 	apply(e)
 	return {"ok": true, "event": e, "words": "%s is held up" % name}
+
+
+## A page of the night's book ([constant KINDS] `picture`): what the viewer sees now, painted from [param looks], with whoever and
+## whatever is in it by name ([param shows]), so each is painted as they look everywhere else.
+func picture(name: String, looks: String, shows: Array = []) -> Dictionary:
+	if name.is_empty() or looks.is_empty():
+		return {"ok": false, "words": "a picture needs a name and what it shows"}
+	var named: Array = []
+	for v in shows:
+		if not String(v).strip_edges().is_empty() and named.size() < 6:
+			named.append(String(v).strip_edges())
+	var e := {"id": next_id(), "kind": "picture", "name": name, "looks": looks, "shows": named}
+	apply(e)
+	return {"ok": true, "event": e, "words": "the picture of %s is on the page (%d so far tonight)" % [name, pictures.size()]}
+
+
+## The view comes back from the pictures to the table ([constant KINDS] `board`): what happens on it next is watched.
+func to_board() -> Dictionary:
+	var e := {"id": next_id(), "kind": "board"}
+	apply(e)
+	return {"ok": true, "event": e, "words": "the view is back on the table"}
+
+
+## The turn passes to [param who]: nothing where it is theirs already.
+func turn_to(who: String) -> Dictionary:
+	if who.is_empty() or who == turn:
+		return {"ok": false, "words": ""}
+	var e := {"id": next_id(), "kind": "turn", "who": who}
+	apply(e)
+	return {"ok": true, "event": e, "words": "%s's turn" % who}
 
 
 ## The game is over: however it came to that.

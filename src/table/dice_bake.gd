@@ -112,13 +112,13 @@ func _free_world() -> void:
 ## The table itself: flat to a good way past anything thrown at it, which is what leaving the table means here: a body that gets past it is off it, and not looked at again.
 func _slab() -> void:
 	var s := PhysicsServer3D.box_shape_create()
-	PhysicsServer3D.shape_set_data(s, Vector3(1.0, 0.2, 0.7) * SIM)
+	PhysicsServer3D.shape_set_data(s, Vector3(GameBoard.TOP_LEAST.x * 0.005, 0.2, GameBoard.TOP_LEAST.y * 0.005) * SIM)
 	var b := PhysicsServer3D.body_create()
 	PhysicsServer3D.body_set_mode(b, PhysicsServer3D.BODY_MODE_STATIC)
 	PhysicsServer3D.body_add_shape(b, s)
 	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_FRICTION, 0.5)
 	PhysicsServer3D.body_set_param(b, PhysicsServer3D.BODY_PARAM_BOUNCE, 0.3)
-	PhysicsServer3D.body_set_state(b, PhysicsServer3D.BODY_STATE_TRANSFORM, Transform3D(Basis.IDENTITY, Vector3(0.0, -0.2, 0.0) * SIM))
+	PhysicsServer3D.body_set_state(b, PhysicsServer3D.BODY_STATE_TRANSFORM, Transform3D(Basis.IDENTITY, Vector3(GameBoard.MIDDLE.x, -0.2, GameBoard.MIDDLE.y) * SIM))
 	PhysicsServer3D.body_set_space(b, _space)
 	_statics.append(b)
 	_static_shapes.append(s)
@@ -216,9 +216,9 @@ func _try(r: Dictionary, salt: int, attempt: int) -> Dictionary:
 	var seat := float(r.get("seat", 0.0))
 	var hand2 := GameBoard.at_seat(seat, GameBoard.HAND)
 	var hand := Vector3(hand2.x, rng.randf_range(GameBoard.THROW_UP.x, GameBoard.THROW_UP.y), hand2.y)
-	# ...aimed at open table, nearer the middle as a throw goes on being unreadable, and only ever across from where they sit
-	var aim := Vector2(rng.randf_range(GameBoard.AIM.position.x, GameBoard.AIM.end.x), rng.randf_range(GameBoard.AIM.position.y, GameBoard.AIM.end.y))
-	aim = aim.lerp(GameBoard.MIDDLE, clampf(float(attempt) * 0.08, 0.0, 0.7))
+	# ...aimed at the open table in front of them, nearer their own dice as a throw goes on being unreadable
+	var aim := GameBoard.aim_of(seat, rng)
+	aim = aim.lerp(GameBoard.at_seat(seat, GameBoard.HOME), clampf(float(attempt) * 0.08, 0.0, 0.7))
 	var toward := Vector3(aim.x, 0.02, aim.y)
 	var flight := rng.randf_range(FLIGHT.x, FLIGHT.y)
 	var bodies: Array = []
@@ -307,7 +307,7 @@ func _try(r: Dictionary, salt: int, attempt: int) -> Dictionary:
 		var p := xf.origin / SIM
 		var shape := int(bd["shape"])
 		var read := Dice.landed(shape, xf.basis.orthonormalized())
-		good = good and float(read["dot"]) >= Dice.flat_enough(shape) and GameBoard.LANDS.has_point(Vector2(p.x, p.z)) and p.y > 0.0
+		good = good and float(read["dot"]) >= Dice.flat_enough(shape) and GameBoard.lands(Vector2(p.x, p.z)) and p.y > 0.0
 		dur = maxf(dur, float(bd["rest"]) if float(bd["rest"]) >= 0.0 else WATCH_MOST)
 		out_dice.append({"keys": bd["keys"], "face": int(read["face"])})
 		PhysicsServer3D.free_rid(rid)

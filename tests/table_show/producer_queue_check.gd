@@ -3,6 +3,8 @@ extends Node
 ## Regeneration requests join an episode's active run without canceling jobs or resetting their bookkeeping.
 ## The real scheduler waits for upstream remakes even through an unchanged intermediate input, deduplicates requests,
 ## rebuilds the script after the requested reading, and preserves blocked requests for retry or Stop.
+## A row's redo that follows (`start`'s `follow`) makes what is made from its step after it, as Generate does, and a 🔒 stops it
+## there (the control: the same redo with Work locked makes Set alone).
 ## Jobs are held at the producer boundary; no agent runs and every file belongs to this gate.
 ##
 ##   tests/run_boot_probe.sh tests/table_show/producer_queue_check.gd 120
@@ -54,6 +56,7 @@ func _run() -> void:
 	_missing_input()
 	_widened()
 	_stale_generation()
+	_follows()
 	TableEpisode.root = was
 	_clean(ProjectSettings.globalize_path(ROOT))
 	print("producer_queue_check: %s" % ("ALL OK" if _fails == 0 else "%d FAILED" % _fails))
@@ -108,6 +111,29 @@ func _ordered() -> void:
 	_ok(not ep.versions("table").is_empty() and not ep.versions("acts").is_empty() and ep.kept("say:1"),
 		"explicit requests override locks, preserve versions and leave the locks in place")
 	p.stop()
+
+
+func _follows() -> void:
+	var ep := _episode(20)
+	ep.set_kept("acts", false)
+	var p := HeldProducer.new(ep)
+	p.start(["table"], true, "", -1, true)
+	_ok(p.only.is_empty() and p.started == ["table"], "a redo that follows starts with its own step")
+	p.complete("table", "followed set")
+	_ok(p.started == ["table", "acts"] and p.inputs["acts"]["table"] == ep.digest("table"), "and then makes what is made from it, from what it made")
+	p.complete("acts", "followed work")
+	p.stop()
+	# ...what a cascade will remake, known before it starts: made from Set, but not past a 🔒
+	var ahead := _episode(22)
+	ahead.set_kept("acts", false)
+	_ok(ahead.remade_with(["table"]).has("acts") and not ahead.remade_with(["table"]).has("table"), "a cascade's steps are known at once: what is made from its step")
+	_ok(not _episode(23).remade_with(["table"]).has("acts"), "control: a locked step is not among them")
+	var locked := _episode(21)
+	var q := HeldProducer.new(locked)
+	q.start(["table"], true, "", -1, true)
+	q.complete("table", "set alone")
+	_ok(q.started == ["table"] and locked.kept("acts"), "control: a 🔒 on what is made from it stops it there")
+	q.stop()
 
 
 func _failed_input() -> void:

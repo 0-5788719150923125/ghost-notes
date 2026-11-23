@@ -54,6 +54,9 @@ var camera: float = 1.0
 ## each medium lays them over its format's own, [method Medium.camera_follow]). Set through [method Director.set_camera_follow];
 ## persisted as `[director] camera_follow`.
 var camera_follow := {}
+## The cameras a show cuts between, in priority order, as the note's Camera card lists them ([Cameras]): `[{sort, ...}]`, empty
+## for a format's own. Set through [method Director.set_cameras]; persisted as `[director] cameras`.
+var cameras: Array = []
 ## The notebook's handwriting: a key of the notebook's hands, or "random" to draw one per session from the seed (a
 ## setting, not only a draw, because the seed comes from the audio's fingerprint). Set through
 ## [method Director.set_hand]; persisted as `[director] hand`.

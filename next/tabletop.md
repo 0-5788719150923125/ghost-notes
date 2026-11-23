@@ -6,6 +6,8 @@ buys a boat and becomes a fisherman). The system is generic: any game can be sup
 
 **Status: built, and its opening has been played by real agents ("The first real play", below). Nothing has been painted by a real painter or set by a real set dresser, no whole episode has played through to an export, and the author has not listened to it.** Trying it is below.
 
+**The second vision is built and unwatched ("The diorama", below): a big table with a model of the land in its middle, modeled figures that walk on it, a list of cameras that goes round to whoever's turn it is and down beside a march, and the story told mostly in painted pages. No real agent has made a land or a figure yet, and nothing of it has been seen rendered by the author.**
+
 ## Trying it
 
 1. In the notes list, "Existing note..." and pick `rift/animations/mistakes-were-made.md`.
@@ -178,6 +180,36 @@ Not yet done by anything real: a painter's maps, figures and pictures; a set dre
 5. **The table.** Done: `TableGame`, its verbs in `TableActions`, `CardTable.game_camera`, the map's shader, paper figures, sets at each place, pictures held up, the shot, the set dresser's rule. Gate: `table_game_check`. Look: `game_look_probe`. A long lens (29 degrees from 1.25 m) is used because a short one leaned every mug out of the picture.
 6. **The rest of the pipeline.** Done: the painter's rows, the Pipeline card's rows and the Players row, the producer's `game`, the description's attribution (the brief's words).
 7. **A real episode, end to end.** Next; it spends painter quota, so it is the author's call.
+
+## The diorama
+
+A game is played on A MODEL OF ITS LAND, as people build for wargames and model railways: a board 244 x 152 cm (eight feet, a model railway's layout) in the middle of a table at
+least 330 x 240 cm, its ground modeled (hills, hollows, rivers cut in and poured with resin, roads, flocked woods) and the night's places
+standing on it as scale models. The figures are modeled too, painted as a wargamer paints one, and walk across it. The camera goes round
+the table to whoever's turn it is, and down low beside the party as it marches. Most of the story is shown as an illustrated book shows it:
+pages painted afterward, over the table while the words go on.
+
+| step | who | what |
+|---|---|---|
+| `prep` | game master | as before, plus `land`: how the land lies and where each place is |
+| **`diorama`** | model maker ([DioramaTools] `land`, rules/table/diorama.yaml) | the ground as numbers and each place a thing of parts ([Props]), or one kept in the Library; looks at a place close up, and at the board from above |
+| `say:K` | game master | the board is the map: `place` and `move` by a place's name or centimeters, several figures in one move; **`picture`** a page of the night's book, called often; a turn passes on `ask` and `roll` |
+| **`minis`** | model maker (`figures`) | every figure placed tonight, modeled; this show's earlier nights' figures handed in already, so a character looks the same every night |
+| **`image:page:K`** | painter | each page, painted beside the figures' own pictures of whoever is in it and the pages before it |
+
+- **`GameDiorama`** (`table/`): the spec made safe, the ground built on the worker (a heightfield a centimeter a cell, flock colors by slope, height and noise, a board edge painted dark), resin one flat sheet under the flat ground (only what is cut deeper is water), trees one mesh drawn many times, each place built by `Props` on ground made flat for it. `height_at` stands figures; `place_at` names places; `solid` is the box dice bounce off; `plan_image` is the model maker's view from above. Gate: `tests/table/game_diorama_check.gd`.
+- **Figures**: `minis.json` names each figure's thing; `TableGame` stands it on a black base with its player's color round the rim, facing where it goes. A move on the board is a walk (`WALK`, 4.5 cm a second, 1.4 to 10 s). A figure with no model is its paper card, as before.
+- **Dice** are thrown from over each person's edge toward the open table in front of them, the board's edge to bounce off (`GameBoard.aim_of`).
+- **The hand**: a brief may fix how a game's pictures are painted under a heading `## The hand` (`TablePrompts.hand_of`): its words go to the painter word for word for every figure's picture and page, in place of the hand each episode's plan chooses, and its palette line is dropped.
+- **Pages** (`picture` events, `page_K.png`) are the story, told as a bard tells it: each covers the frame, pushed in slowly, and HOLDS until the next page or until the game master takes the view back to the table - `board`, or `watch` on a roll or a move; a throw that comes up its highest or lowest face is watched unless told not to be (`TableGame._watched`). Not every throw is watched.
+- **The cameras are a list** ([Cameras] in `motion/`; the Camera card's Cameras, an entry each, as the Props card lists props; the block's `cameras`; `ShowFeed.cameras`). Each sort wants moments of the session: `dice` as they land, from the thrower's side; `march`, low beside walking figures; `seat`, over the shoulder of whoever's turn it is; `drift`, round the model through long narration. The one higher in the list wins a moment two want; every change takes 1.8 s and goes round the table, not across it (`Cameras.blend`); a seat's camera always looks down past the horizon, since the room is only built to be seen from the table's head. Unset, the list is every sort. Gate: `tests/motion/cameras_check.gd`.
+- **The miniature**: each camera on the list has a `miniature` (the head of the table `HEAD_MINIATURE`): the table seen as a tilt-shift photograph of a model - a band across the frame in focus where the camera looks, softer above and below it, colors a little richer (`shaders/table_tilt.gdshader`, a sheet in front of the lens under the pages). The engine's own depth of field set on the table's camera drew nothing here, so it is screen space.
+- **Pictures, liberally**: the game master tells the night over a sequence of pages, each character shown as their player introduces them; `say` answers with how many words have gone by with nothing shown once it passes `PICTURE_EVERY` (130), and a stretch with fewer than 0.6 of that is sent back once to play on and show.
+- **Models kept as written**: a place's or figure's thing is stored as the model maker wrote it and made safe only where it is built - `Props.sanitize`'s output does not survive JSON (made safe again from it, a lathe is lost). A place or figure of fewer than `PARTS_LEAST` (5) parts is sent back once: a scale model is built up, never a block. The ground has flock's grain and bumps (`FLOCK_SCALE`).
+- **The cameras before the first mark**: a live reading places a stretch's marks only as its words come, so the cameras are planned as the table stands and the talk after the last placed mark is open (drift), never the head of the table frozen.
+- **Continuity**: the Props card lists the land's places and the night's figures (The land, Figures), each with Keep, so they go into the Library and the Dex; the model maker searches the Library first and uses a kept thing by name. A figure of the same name from this show's latest earlier night is handed in already.
+
+Open, for the author's eye: the land, the figures and the camera's moves, all unseen; whether pages a minute is the right rate; a march camera low enough to see past the table's edge sees the dark room (only the head of the table has a built room); figures knocked by dice; the `map` tool is not offered on a board (a room inside something is its outside with a way in); a story that leaves the board.
 
 ## Open
 

@@ -289,6 +289,7 @@ func reset_show() -> void:
 	set_flourish(1.0)
 	set_camera(1.0)
 	set_camera_follow({})
+	set_cameras([])
 	set_hand("kalam")
 	set_intro_hold(INTRO_DEFAULT)
 	set_outro_hold(OUTRO_DEFAULT)
@@ -362,6 +363,16 @@ func set_camera_follow(d: Dictionary) -> void:
 	if f == camera_follow:
 		return
 	camera_follow = f
+	_save_pacing()
+
+
+## The cameras a show cuts between ([member ShowFeed.cameras]), made safe ([method Cameras.sanitize]). A playing table
+## takes it on its next frame.
+func set_cameras(list: Array) -> void:
+	var c := Cameras.sanitize(list)
+	if c == cameras:
+		return
+	cameras = c
 	_save_pacing()
 
 
@@ -573,6 +584,7 @@ func _load_pacing() -> void:
 	flourish = clampf(float(Settings.read("director", "flourish", 1.0)), FLOURISH_MIN, FLOURISH_MAX)
 	camera = clampf(float(Settings.read("director", "camera", 1.0)), CAMERA_MIN, CAMERA_MAX)
 	camera_follow = CameraFollow.sanitize(Settings.read("director", "camera_follow", {}))
+	cameras = Cameras.sanitize(Settings.read("director", "cameras", []))
 	var h := String(Settings.read("director", "hand", "kalam"))
 	hand = h if (h == "random" or NotebookLayout.HANDS.has(h)) else "kalam"
 	intro_hold = clampf(float(Settings.read("director", "intro", intro_hold)), INTRO_MIN, INTRO_MAX)
@@ -602,6 +614,7 @@ func _save_pacing() -> void:
 	Settings.write("director", "flourish", flourish)
 	Settings.write("director", "camera", camera)
 	Settings.write("director", "camera_follow", camera_follow)
+	Settings.write("director", "cameras", cameras)
 	Settings.write("director", "hand", hand)
 	Settings.write("director", "intro", intro_hold)
 	Settings.write("director", "outro", outro_hold)

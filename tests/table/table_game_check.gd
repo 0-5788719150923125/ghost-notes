@@ -79,6 +79,8 @@ func _run() -> void:
 		when[int((e as Dictionary)["id"])] = t
 		sched.append({"a": {"kind": String((e as Dictionary)["kind"]), "card": int((e as Dictionary)["id"])}, "t0": t, "s": 1.0})
 		t += 6.0
+	# ...the dice's camera alone: the others (Cameras) are cameras_check's and the look probe's
+	tm.feed.cameras = [{"sort": "dice"}]
 	tg.schedule(sched)
 	_camera(tm, tg, ev, when)
 	_board(tg, ev, when)
@@ -113,7 +115,12 @@ func _camera(tm: TableMedium, tg: TableGame, ev: Array, when: Dictionary) -> voi
 	_check(tg.shot_at(float(when[id]) - 1.0, base).origin.is_equal_approx(base.origin), "before a throw the camera stands where it stands")
 	var close := tg.shot_at(thrown + dur + 0.2, base)
 	_check(close.origin.distance_to(base.origin) > 0.2, "as the dice land it goes to them: %.2f" % close.origin.distance_to(base.origin))
-	_check(tg.shot_at(thrown + dur + TableGame.SHOT_HOLDS + TableGame.SHOT_OUT + 0.5, base).origin.is_equal_approx(base.origin), "and it comes back")
+	var ease := TableGame.SHOT_OUT
+	for c in tg._claims:
+		if absf(float((c as Dictionary)["t0"]) - thrown) < 6.0:
+			ease = maxf(ease, float((c as Dictionary).get("ease", 0.0)))
+	var back := TableGame.SHOT_HOLDS + ease + 0.5
+	_check(tg.shot_at(thrown + dur + back, base).origin.is_equal_approx(base.origin), "and it comes back, as slowly as it went: %.1f s" % back)
 	var hidden: Dictionary = ev[6]
 	var ht := float(when[int(hidden["id"])]) + TableGame.RISE + TableGame.SHAKE + 1.0
 	_check(tg.shot_at(ht, base).origin.distance_to(base.origin) < 0.2, "a throw behind a screen is not gone to")
@@ -200,7 +207,7 @@ func _dice(tg: TableGame, ev: Array, when: Dictionary) -> void:
 			var up := Vector3.DOWN if shape == 4 else Vector3.UP
 			_check(world.dot(up) > 0.99, "roll %d die %d shows what was rolled: %.3f" % [id, k, world.dot(up)])
 			var pos := n.transform.origin
-			_check(GameBoard.LANDS.has_point(Vector2(pos.x, pos.z)), "it is on the table in the picture")
+			_check(GameBoard.lands(Vector2(pos.x, pos.z)), "it is on the table in the picture")
 			_check(pos.y < 0.04, "lying down: %.3f" % pos.y)
 	# ...the last throw's dice go home as the next is thrown: only one throw on the table
 	var r0: Dictionary = tg._rolls[0]

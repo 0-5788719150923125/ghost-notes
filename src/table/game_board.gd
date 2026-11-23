@@ -10,23 +10,28 @@ class_name GameBoard
 ##
 ## Units: meters, on the table's own axes (x to the right, z toward the viewer), as [Tables] has them.
 
-## The map's middle, and the most of the table it may cover: the middle of what the game's camera sees ([method CardTable.game_camera]), with room round it for dice and things.
+## The map's middle, and the most of the table it may cover: the model's board ([constant GameDiorama.SIZE]), with room round it for
+## dice and what is at each place.
 const MIDDLE := Vector2(0.0, -0.03)
-const MAP_MOST := Vector2(0.68, 0.44)
+const MAP_MOST := Vector2(2.44, 1.52)
 ## A paper figure, as a share of a square's width (`card`), with a floor and a ceiling (meters): a figure a viewer cannot see is no figure, whatever the map's scale.
 const FIGURE_SHARE := 0.95
 const FIGURE_LEAST := 0.024
 const FIGURE_MOST := 0.04
 const FIGURE_TALL := 1.5
-## Where each person keeps their dice, on an ellipse a little inside the picture, and where their hand starts a throw from, on one past it (half across, half down; a hand above the table by `THROW_UP`).
-const HOME := Vector2(0.47, 0.25)
-const HAND := Vector2(0.6, 0.38)
+## Where each person keeps their dice, just outside the board on the way round to them, and where their hand starts a throw from, out over the table's edge (half
+## across, half down, round the board's middle; a hand above the table by `THROW_UP`). A throw is aimed at `AIM`, between the two: the open table in front of them,
+## the board's edge to bounce off.
+const HOME := Vector2(1.34, 0.88)
+const HAND := Vector2(1.52, 1.04)
+const AIM := Vector2(1.28, 0.82)
 const THROW_UP := Vector2(0.09, 0.15)
-## Where dice are thrown toward: what the camera sees, in from the frame's edge. A throw's end is looked for inside `LANDS`.
-const AIM := Rect2(-0.26, -0.2, 0.52, 0.32)
-const LANDS := Rect2(-0.48, -0.31, 0.96, 0.58)
+## How far round either side of their seat a throw may be aimed (degrees).
+const AIM_SPREAD := 9.0
 ## The table the game wants, in centimeters: anything smaller leaves its dice on the floor.
-const TOP_LEAST := Vector2(150.0, 110.0)
+const TOP_LEAST := Vector2(330.0, 240.0)
+## How square the way round the board is: a rounded rectangle, which an ellipse's power makes.
+const ROUND := 5.0
 
 
 ## Where everyone sits, in degrees: what the voices say ([param given], by name), and otherwise spread round from the far side: the first is the one running the game, at its middle; the others on either hand.
@@ -64,10 +69,22 @@ static func seats_of(people: PackedStringArray, given: Dictionary) -> Dictionary
 	return out
 
 
-## A seat's point on an ellipse of half-sizes [param half], about the map's middle.
+## A seat's point on a rounded rectangle of half-sizes [param half] about the map's middle: the way round a board.
 static func at_seat(degrees: float, half: Vector2) -> Vector2:
 	var a := deg_to_rad(degrees)
-	return MIDDLE + Vector2(sin(a) * half.x, -cos(a) * half.y)
+	var d := Vector2(sin(a), -cos(a))
+	var s := 1.0 / pow(pow(absf(d.x) / half.x, ROUND) + pow(absf(d.y) / half.y, ROUND), 1.0 / ROUND)
+	return MIDDLE + d * s
+
+
+## Where a throw from [param degrees] is aimed: the open table in front of them, a little to either side.
+static func aim_of(degrees: float, rng: RandomNumberGenerator) -> Vector2:
+	return at_seat(degrees + rng.randf_range(-AIM_SPREAD, AIM_SPREAD), AIM * rng.randf_range(0.97, 1.03))
+
+
+## Whether a die at [param p] (meters, the table's) has landed where it can be read: on the table, never off its edge.
+static func lands(p: Vector2) -> bool:
+	return absf(p.x) < TOP_LEAST.x * 0.005 - 0.03 and absf(p.y - MIDDLE.y) < TOP_LEAST.y * 0.005 - 0.03
 
 
 ## Which ear they are heard in: -1 the left, 1 the right.
@@ -107,8 +124,10 @@ static func keep_out() -> Array:
 	return [Rect2(MIDDLE - MAP_MOST * 0.5, MAP_MOST).grow(0.015)]
 
 
-## What the session came to, for the table and the painter: every event, who sits where with which dice, and each thing it asked to have painted, once by name (`maps`, `figures`, `reveals`, each `{name, looks, ...}`). An event is told which one by `pic`, its place in its list, 1 up.
-static func gather(events: Array, people: PackedStringArray, prep: Dictionary, given_seats: Dictionary) -> Dictionary:
+## What the session came to, for the table and the painter: every event, who sits where with which dice, and each thing it asked to have painted, once by name (`maps`, `figures`, `reveals`, `pages`, each `{name, looks, ...}`). An event is told which one by `pic`, its place in its list, 1 up.
+## [param board]: the model's board as a map ([method GameDiorama.board_of]), what the figures stand on before any map is laid (`board`).
+static func gather(events: Array, people: PackedStringArray, prep: Dictionary, given_seats: Dictionary, board := {}) -> Dictionary:
+	var pages: Array = []
 	var maps: Array = []
 	var figures: Array = []
 	var figure_pic := {}
@@ -129,8 +148,12 @@ static func gather(events: Array, people: PackedStringArray, prep: Dictionary, g
 			"reveal":
 				reveals.append({"name": String(d.get("name", "")), "looks": String(d.get("looks", ""))})
 				d["pic"] = reveals.size()
+			"picture":
+				pages.append({"name": String(d.get("name", "")), "looks": String(d.get("looks", "")), "shows": d.get("shows", []) if d.get("shows") is Array else []})
+				d["pic"] = pages.size()
 		told.append(d)
-	return {"events": told, "people": people, "seats": seats_of(people, given_seats), "dice": _dice_of(people, prep), "maps": maps, "figures": figures, "reveals": reveals}
+	return {"events": told, "people": people, "seats": seats_of(people, given_seats), "dice": _dice_of(people, prep), "maps": maps, "figures": figures, "reveals": reveals,
+		"pages": pages, "board": board}
 
 
 ## Whose dice are whose: as the preparation wrote them, made safe; everyone's unlike the rest's, by a color from a wheel if nobody said.
@@ -157,7 +180,7 @@ static func _dice_of(people: PackedStringArray, prep: Dictionary) -> Dictionary:
 ## What stands on the map at each throw: the figures, by their squares, as the events have them just before it. `[{id, figures: [{at: Vector2, w, down}]}]`, one a roll.
 static func figures_at_rolls(game: Dictionary) -> Dictionary:
 	var out := {}
-	var map := {}
+	var map: Dictionary = game.get("board", {}) if game.get("board") is Dictionary else {}
 	var maps: Array = game.get("maps", [])
 	var standing := {}
 	for e in game.get("events", []):

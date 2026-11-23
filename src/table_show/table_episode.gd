@@ -21,7 +21,7 @@ const YouTube := preload("res://src/export/youtube.gd")
 const INTRO_CHAPTER := "Intro"
 const CLOSE_CHAPTER := "The close"
 ## What a game's session asks to have painted: a list of [method game] -> the pictures' step word.
-const GAME_PICTURES := {"maps": "map", "figures": "figure", "reveals": "reveal"}
+const GAME_PICTURES := {"maps": "map", "figures": "figure", "reveals": "reveal", "pages": "page"}
 ## What comes with the face painted first (`image:face`, `face.png`): the bare surface it was painted on, where the surface lies in it
 ## and which one it is, and the painting as the surface wears it ([method TableProducer._make_image], [method TableProducer._land_face]).
 const FACE_FILES := ["face_bare.png", "face.json", "face_ref.png"]
@@ -183,6 +183,10 @@ func file_of(step: String) -> String:
 			return dir.path_join("meta.json")
 		"prep":
 			return dir.path_join("prep.json")
+		"diorama":
+			return dir.path_join("diorama.json")
+		"minis":
+			return dir.path_join("minis.json")
 		"game":
 			return dir.path_join("game.json")
 		"upload":
@@ -437,12 +441,13 @@ func wants_ink() -> bool:
 	return has("acts") and not TableInk.items_of(read_json("acts")).is_empty()
 
 
-## A game played at the table (next/tabletop.md): the secret preparation, the table, the session played a stretch at a time, then what it turned out to need painted. Its dice are thrown as the table first stands ([TableGame]).
+## A game played at the table (next/tabletop.md): the secret preparation, the model of the land it is played on, the table, the session played a stretch at a
+## time, then its figures modeled and what it turned out to need painted. Its dice are thrown as the table first stands ([TableGame]).
 func _game_steps(out: Array) -> Array:
-	out.append_array(["prep", "image:surface", "image:backdrop", "table", "say:intro"])
+	out.append_array(["prep", "diorama", "image:surface", "image:backdrop", "table", "say:intro"])
 	for k in range(1, beat_count() + 1):
 		out.append("say:%d" % k)
-	out.append_array(["say:close", "script"])
+	out.append_array(["say:close", "script", "minis"])
 	var g := game()
 	for key in GAME_PICTURES:
 		for k in range(1, (g.get(key, []) as Array).size() + 1):
@@ -462,8 +467,9 @@ func game() -> Dictionary:
 	if not FileAccess.file_exists(p):
 		_game_cache = {}
 		return {}
-	var mt := FileAccess.get_modified_time(p)
-	if int(_game_cache.get("at", -1)) != mt:
+	# ...by its time and its size: a file's clock is in seconds, and a session gathered again inside one must be read again
+	var mt := "%d %d" % [FileAccess.get_modified_time(p), FileAccess.get_size(p)]
+	if String(_game_cache.get("at", "")) != mt:
 		var got: Variant = read_json("game")
 		_game_cache = {"at": mt, "data": got if got is Dictionary else {}}
 	return _game_cache["data"]
@@ -650,13 +656,17 @@ func _game_needs(parts: PackedStringArray) -> Array:
 	match String(parts[0]):
 		"prep":
 			return ["plan"]
+		"diorama":
+			return ["prep"]
+		"minis":
+			return ["script"]
 		"image":
 			if parts.size() == 3 and GAME_PICTURES.values().has(String(parts[1])):
 				return ["script"]
 		"say":
 			var who := String(parts[1])
 			if who == "intro":
-				return ["prep", "table"]
+				return ["prep", "diorama", "table"]
 			var n := beat_count()
 			if who == "close":
 				return ["say:%d" % n] if n > 0 else ["say:intro"]
@@ -822,6 +832,28 @@ func all_dependents() -> Dictionary:
 					frontier.append(t)
 		out[from] = reached
 	return out
+
+
+## What making [param roots] again makes again with them, as a cascade does: every step made from them, and from those, in the order
+## steps are made - but a 🔒 kept step ([method kept]) and whatever is reached only through one. The roots themselves are not in it.
+func remade_with(roots: Array) -> Array:
+	var made_from := {}
+	var all := steps()
+	for t in all:
+		for s in needs(String(t)):
+			if not _soft(String(s), String(t)):
+				if not made_from.has(String(s)):
+					made_from[String(s)] = []
+				(made_from[String(s)] as Array).append(String(t))
+	var reached := {}
+	var frontier: Array = roots.duplicate()
+	while not frontier.is_empty():
+		for t in made_from.get(String(frontier.pop_front()), []):
+			if reached.has(t) or roots.has(t) or kept(String(t)):
+				continue
+			reached[t] = true
+			frontier.append(t)
+	return all.filter(func(s: Variant) -> bool: return reached.has(String(s)))
 
 
 ## The edges [method needs] lists only for order: a card's picture waits for the back and for the card before it because it is sent

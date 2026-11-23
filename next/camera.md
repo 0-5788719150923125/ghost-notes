@@ -24,6 +24,10 @@ on a quicker clock, its end included (`long`, between `long_from` and `long_full
   under 0.6 of the time, the control at Long looks 1; a look turned mid-way keeps its pace; the top speed, the control
   without one; the ease in, the control without one; a pace).
 
+- **The cameras, a list** (next/tabletop.md, "The diorama"): below the rows, the card lists the cameras a show cuts between
+  ([Cameras], `src/motion/cameras.gd`), each an entry with its own settings in priority order, as the Props card lists props.
+  A game at the table reads it ([TableGame]); no other format does yet. Gate: `tests/motion/cameras_check.gd`.
+
 ## Open
 
 - The author's eye on the Dispatch desk's long looks, and whether Long looks 2 and 80 degrees suit every format.

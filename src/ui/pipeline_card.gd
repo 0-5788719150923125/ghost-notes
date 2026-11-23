@@ -409,8 +409,16 @@ func _group_of(section: PipelineSection, group: String) -> Dictionary:
 	head.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_theme_font_size_override("font_size", 12)
 	head.pressed.connect(func() -> void: _toggle(at))
-	_list.add_child(head)
-	var g := {"section": section, "group": group, "head": head, "rows": []}
+	# ...and its own ⟳, where the section makes the whole group again (PipelineSection.group_again)
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 4)
+	line.add_child(head)
+	var redo := _small_button("⟳", "")
+	redo.visible = false
+	redo.pressed.connect(func() -> void: _press_group(at))
+	line.add_child(redo)
+	_list.add_child(line)
+	var g := {"section": section, "group": group, "head": head, "redo": redo, "rows": []}
 	_groups[at] = g
 	if not _folds.has(at):
 		_folds[at] = bool(Settings.read(FOLDS, _fold_key(group), false))
@@ -665,6 +673,29 @@ func _show_group(at: String) -> void:
 	if head.text != text:
 		head.text = text
 		head.tooltip_text = text
+	var it := section.group_again(String(g["group"]))
+	var redo: Button = g["redo"]
+	redo.visible = it != null and not it.again.is_empty()
+	if redo.visible:
+		redo.disabled = not it.open or walking()
+		redo.tooltip_text = it.again + ("\n\n" + it.asks if not it.asks.is_empty() else "")
+
+
+## A group's ⟳: as a row's, asking first where it throws finished work away.
+func _press_group(at: String) -> void:
+	var g: Dictionary = _groups.get(at, {})
+	if g.is_empty():
+		return
+	var section: PipelineSection = g["section"]
+	var it := section.group_again(String(g["group"]))
+	if it == null or not it.open or walking() or not it.redo.is_valid():
+		return
+	section.told = ""
+	if it.asks.is_empty():
+		it.redo.call()
+		refresh()
+		return
+	_ask(it)
 
 
 func _toggle(at: String) -> void:

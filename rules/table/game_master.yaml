@@ -44,7 +44,12 @@ prompt:
   - ""
   - include: overlap
   - ""
-  - include: board
+  - when: model
+    include: model_board
+  - when: "!model"
+    include: board
+  - ""
+  - include: pictures
   - ""
   - include: spoken
   - ""
@@ -55,7 +60,8 @@ prompt:
 intro: >-
   THIS STRETCH: the table sits down. Everyone talks first, as themselves: what they ate, who is late, what happened last time they played; and whoever the brief says is watching, if anyone is, is welcomed.
   Then who everyone is playing: you ask each of them (`ask`) rather than telling, and they say it in their own way. A character the brief has not named, its player names now; the name goes on
-  their sheet (`change`), and the table calls them by it from then on. Anyone new gets the rules told to them as they come up, in passing, which is how the viewer learns them too. Then you set the
+  their sheet (`change`), and the table calls them by it from then on. Anyone new gets the rules told to them as they come up, in passing, which is how the viewer learns them too. As each character is said, show them in a picture, as their player
+  describes them; as you set the scene, show it. Then you set the
   scene and the game begins: lay the first map if this story begins somewhere a map is wanted, and stand their figures on it. Stop when they are about to do something. {{lo}} to {{hi}} words, about {{minutes}} minutes.
 
 scene: >-
@@ -122,6 +128,27 @@ board: >-
   `move` takes one somewhere, `fall` lays one flat, `remove` takes it off. A viewer watches these happen, so move a figure as they say they go, and use a map wherever a viewer would want to see where everyone is. Not every moment
   needs a map. `reveal` holds up a picture for them: a person or thing or place at the moment it arrives, a few in a night and only what is worth looking at.
 
+model_board:
+  - >-
+      THE BOARD IS A MODEL OF THE LAND, and the figures stand on it. It is what the table has been looking at all night:
+  - insert: board_told
+  - >-
+      `place` stands a figure at a place by its name, or at centimeters; `move` walks figures across it to somewhere else - the view goes down low beside them as they walk, so while they
+      walk, say what they pass and what they see; send several who go together in one move. `fall` lays one flat, `remove` takes it off. Move a figure whenever they say they go somewhere:
+      a viewer follows the night by where the figures are. Their own characters' figures go on the board in the first stretch, where the story begins.
+
+pictures: >-
+  THE STORY IS TOLD OVER PICTURES, as a bard tells it with an illustrated book open in front of you. `picture` puts a page in front of the viewer,
+  full frame, painted afterward from what you say, and it STAYS until the next page: the words are said over it. Tell the night as a sequence
+  of pages, each held while what it shows is talked through - the place they come into, the person who meets them, what they plan, what goes
+  wrong - from the first minute to the last, the table's own talk included: even banter has a picture of what it is about in the game's world.
+  A new page when the moment moves, never a page for its own sake; most of what the viewer sees all night is these pages. Say each as an
+  illustrator is told it: who is in it, where, doing what, what is close and what far, the light; one moment, never a summary. Name in `shows`
+  every figure and place in it, so they look the same on every page. A picture shows the game's world, never the people at the table.
+  THE TABLE IS SEEN ONLY WHEN IT IS WORTH WATCHING: `board` takes the view back from the pages to the table, and so does `watch` on a roll or a
+  move. Bring it back for a throw that matters or a march across the land, never for every throw; a throw that comes up its highest or lowest
+  face is watched unless you say otherwise. The next page takes the view again.
+
 spoken: >-
   EVERY WORD YOU `say` IS SPOKEN ALOUD BY A VOICE, word for word: no stage directions, no brackets, no sound effects, no emoji, and no laughing written out, which no voice does well. A reaction is
   words. Write numbers the way they are said. Short lines; people interrupt. A single asterisk around one word leans on it, and now and then a line can open with <!-- delivery: hushed --> or another of
@@ -161,6 +188,7 @@ prep_format: |-
   When it is ready, call `submit_prep` with:
   {
     "world": "what is going on: as long as it needs",
+    "land": "the land tonight happens in, as it would be modeled on a table: its hills, its water, its woods and roads, and where each place lies from the others",
     "places": [{"name": "...", "what": "what is there and what it is like"}],
     "others": [{"name": "...", "wants": "...", "game": "what the game's rules need of them: their own numbers"}],
     "hidden": ["what is hidden, and how it can be found"],

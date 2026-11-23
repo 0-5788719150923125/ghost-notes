@@ -79,6 +79,8 @@ const ROOM_SHADER := preload("res://shaders/table_room.gdshader")
 const ROOM_BLUR := 0.005
 ## How far out the room's picture stands from the camera (meters, level).
 const ROOM_REACH := 3.2
+## ...and at least this far past where the camera looks on the table (meters).
+const ROOM_PAST := 2.0
 ## Where a shown card and its booklet page float, in the camera's frame (meters right, up, and away). The page sits a
 ## hair farther back so the card always reads as in front.
 const PRESENT_DIST := 0.23
@@ -1441,11 +1443,12 @@ func _place_backdrop() -> void:
 	if not view.is_empty():
 		var lens := clampf(float(view.get("lens_mm", CardTable.BACKDROP_LENS)), 8.0, 200.0)
 		var ahead := Vector3(-_plan.cam_base.basis.z.x, 0.0, -_plan.cam_base.basis.z.z).normalized()
-		_backdrop.transform = Transform3D(Basis.looking_at(ahead, Vector3.UP), _plan.cam_base.origin + ahead * ROOM_REACH)
+		var reach := _room_reach(true)
+		_backdrop.transform = Transform3D(Basis.looking_at(ahead, Vector3.UP), _plan.cam_base.origin + ahead * reach)
 		# a 36 x 24 frame behind a lens of this length, seen at this reach
-		(_backdrop.mesh as QuadMesh).size = Vector2(36.0, 24.0) * ROOM_REACH / lens
+		(_backdrop.mesh as QuadMesh).size = Vector2(36.0, 24.0) * reach / lens
 	else:
-		var dist := ROOM_REACH
+		var dist := _room_reach(false)
 		var fwd := -_plan.cam_base.basis.z
 		var center := _plan.cam_base.origin + fwd * dist
 		var h := 2.0 * dist * tan(deg_to_rad(_cam.fov * 0.5))
@@ -1464,6 +1467,18 @@ func _place_backdrop() -> void:
 		(_backdrop.mesh as QuadMesh).size = size
 	_backdrop_mat.set_shader_parameter("radius", room_blur(_plan.cam_base, _cam.fov, _backdrop.transform,
 		(_backdrop.mesh as QuadMesh).size))
+
+
+## How far out the room's picture stands from the camera (meters; [param level]: along the floor, else along its axis):
+## [constant ROOM_REACH], or past the table where the camera stands farther back than that (a game's, over a big board).
+func _room_reach(level: bool) -> float:
+	var cam: Transform3D = _plan.cam_base
+	var fwd := -cam.basis.z
+	if fwd.y > -0.01:
+		return ROOM_REACH
+	var along := -cam.origin.y / fwd.y
+	var to := along * Vector2(fwd.x, fwd.z).length() if level else along
+	return maxf(ROOM_REACH, to + ROOM_PAST)
 
 
 ## How soft the room is, as the disc's radius in its picture's UV (per axis): [constant ROOM_BLUR] of the frame's width,
@@ -1817,6 +1832,9 @@ func _tick_camera(t: float) -> void:
 	var give := Rides.camera(_ride, t)
 	var base := _plan.cam_base if _work.game == null else _work.game.shot_at(t, _plan.cam_base)
 	_cam.transform = base if give == Vector3.ZERO else base * Transform3D(Basis.from_euler(give), Vector3.ZERO)
+	# ...a game cuts between cameras, each with its own lens ([Cameras])
+	if _work.game != null:
+		_cam.fov = _work.game.fov_at(t)
 	# ...or let go of for a free look ([method free_look]): turned about the middle of the reading, drawn in or out
 	if _free:
 		_cam.transform = free_eye(_cam.transform, _plan.mid, _free_yaw, _free_pitch, _free_reach)
@@ -2016,8 +2034,8 @@ func _air_stage() -> Dictionary:
 	var top: Dictionary = (_furniture.get("spec", {}) as Dictionary).get("top", Tables.DEFAULT_TOP)
 	return {"regions": CardTable.AIR, "camera": _plan.cam_base, "fov": _cam.fov, "aspect": 16.0 / 9.0, "occluders": under,
 		"wind": _wind, "on_top": func(p: Vector2) -> bool: return Tables.inside(top, p, 0.01), "cover": _cover_at,
-		"sharp": Vector2(near, far), "defocus": 2.0 * ROOM_BLUR / maxf(1.0 / far - 1.0 / ROOM_REACH, 1e-3),
-		"deep": ROOM_REACH * 0.9}
+		"sharp": Vector2(near, far), "defocus": 2.0 * ROOM_BLUR / maxf(1.0 / far - 1.0 / _room_reach(false), 1e-3),
+		"deep": _room_reach(false) * 0.9}
 
 
 ## What lies on the cloth at [param p] (xz, [param r] round it) at show time [param t]: the top of the deck or of a card

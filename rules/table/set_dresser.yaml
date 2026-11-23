@@ -387,7 +387,7 @@ prompt:
   - when: game
     say: >-
           A GAME IS PLAYED AT THIS TABLE, seen from high over its near edge. Its top is at least {{game_top_x}} by {{game_top_z}} cm: a real table, big enough for everyone. The board is laid by the show itself, {{game_keep_x}} by
-          {{game_keep_z}} cm in the middle (around [0, {{game_mid_z}}]): build nothing there, and nothing tall near it that would stand between the eye and the board. Dice are thrown across the open table from every side and bounce off what is really there,
+          {{game_keep_z}} cm in the middle (around [0, {{game_mid_z}}]): build nothing there, and nothing tall near it that would stand between the eye and the board. The board is as big as a model railway layout and the camera goes all over it: light the whole of it, as a games room lights a big table - more than one lamp, or a long one, over its length - with no corner of it left in the dark. Dice are thrown onto the open table in front of each person, between their edge and the board, and bounce off what is really there,
           so what stands on it is what a table has after some hours of a game and nothing that blocks the view: low, and toward the edges. What the brief says is at each person's place goes there: in the corners and along the sides, near the edge. Anything tall
           stands at the far side. Nobody is seen, and no one sits at the near edge.
   - when: game
@@ -529,6 +529,12 @@ in_one_reply:
 # (Props.describe()), {{max_parts}}, and for a table {{card_w}}, {{card_h}} with the flags `cardless` and `tools`.
 thing_language:
   - HOW A THING IS DESCRIBED
+  # A thing is kept in the library and set on other shows' tables, where nobody of this show exists: its name is generic
+  - >-
+      ITS NAME says what the thing is, as a shop would label it - a chipped enamel mug, a stack of paperbacks, a brass desk
+      lamp - never whose it is or where it is: no person's name, no character's, no place's or town's, nothing of this story.
+      Every thing may be kept and set on another show's table, where none of them exist. Whose it is and what it is for here
+      goes in its `why`.
   - >-
       In centimeters. Each thing has its own origin, the middle of its base on the cloth: y is up, x
       is the reader's right, and +z is toward the reader - the thing's front.

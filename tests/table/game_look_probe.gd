@@ -6,7 +6,13 @@ extends Node
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/table/game_look_probe.gd 400 [--times 12,30] [--out <dir>/game] [--size 1280x720]
 ##
+## `--diorama` plays a session on a model's board instead ([GameDiorama]): a hand-made land and figures, a march, turns round the
+## table and a page (a made picture standing in for a painted one; `--no-pages` for none, the board seen throughout), on a table
+## as big as a game on a board wants.
+##
 ## `--episode <dir>` stands a session really played instead (its `say_*` and `events_*`, [method TableProducer._write_game]'s way), its people from `--people A,B,C`.
+##
+## `--claims` prints what each camera wants of the session ([Cameras]) and quits, rendering nothing.
 ##
 ## `--clip A,B` writes every frame from A to B, for judging motion, and the dice's own sound under them to <out>.wav:
 ##   ffmpeg -framerate 30 -i <out>_c%04d.png -i <out>.wav -pix_fmt yuv420p -shortest game.mp4
@@ -80,6 +86,57 @@ static func _session() -> Dictionary:
 		"Rosa": {"dice": {"material": "stone", "color": "#5a3a70", "ink": "#f0e6c8"}},
 		"Guest": {"dice": {"material": "plastic", "color": "#c8452a", "size": 1.5}},
 		"Dell": {"dice": {"material": "wood", "color": "#8a6a40", "ink": "#1a120a"}}}}, {"Dell": 0.0, "Bea": -105.0, "Milo": 105.0, "Rosa": -50.0, "Guest": 50.0})
+	return {"script": script, "game": game}
+
+
+## The land, its places and the figures of [method _board_session].
+const LAND := {"name": "the vale", "hills": [{"at": [195, 39], "radius": 40, "height": 14, "rough": 0.6}, {"at": [38, 125], "radius": 29, "height": 5}],
+	"rivers": [{"path": [[0, 86], [75, 79], [131, 93], [244, 82]], "width": 7, "depth": 1.4}],
+	"roads": [{"path": [[53, 129], [98, 93], [113, 54], [188, 43]], "width": 2.5}],
+	"woods": [{"at": [47, 39], "radius": 25, "trees": 90, "sort": "pine", "tall": 9}, {"at": [169, 125], "radius": 22, "trees": 50, "sort": "leafy"}],
+	"places": [
+		{"name": "the inn", "at": [56, 132], "turn": 20, "thing": {"parts": [{"shape": "box", "size": [9, 6, 7], "material": "plaster"}, {"shape": "box", "size": [10, 4, 8], "taper": 0.9, "at": [0, 6, 0], "material": "thatch"}]}},
+		{"name": "the bridge", "at": [105, 88], "turn": 95, "thing": {"parts": [{"shape": "box", "size": [4, 1.2, 14], "material": "stone", "at": [0, 0.5, 0]}]}},
+		{"name": "the keep", "at": [195, 39], "thing": {"parts": [{"shape": "lathe", "profile": [[0, 0], [11, 0], [11, 32], [13, 32], [13, 38], [0, 38]], "sides": 8, "material": "stone"}]}}],
+	"materials": {"plaster": {"kind": "painted", "color": "#d8ccb0"}, "thatch": {"kind": "painted", "color": "#a8884a"}, "stone": {"kind": "stone", "color": "#8a867c"}}}
+const MINIS := {"figures": {
+		"Bea's knight": {"parts": [{"shape": "lathe", "profile": [[0, 0], [0.8, 0], [0.9, 2.2], [0.6, 2.9], [0, 2.9]], "material": "steel"}, {"shape": "ball", "size": [1.0, 1.1, 1.0], "at": [0, 3.3, 0], "material": "steel"}]},
+		"Milo's rogue": {"parts": [{"shape": "lathe", "profile": [[0, 0], [0.7, 0], [0.75, 2.0], [0.5, 2.6], [0, 2.6]], "material": "cloak"}, {"shape": "ball", "size": [0.9, 1.0, 0.9], "at": [0, 3.0, 0], "material": "skin"}]},
+		"The Goat": {"parts": [{"shape": "box", "size": [1.6, 1.6, 3.6], "round": 0.6, "at": [0, 1.4, 0], "material": "fur"}, {"shape": "ball", "size": [1.0, 1.1, 1.4], "at": [0, 2.6, 2.0], "material": "fur"}]}},
+	"materials": {"steel": {"kind": "metal", "color": "#b8bcc4"}, "cloak": {"kind": "painted", "color": "#2f5a3a"}, "skin": {"kind": "painted", "color": "#d8a888"}, "fur": {"kind": "painted", "color": "#e8e0d0"}}}
+
+
+## A session on a model's board: figures set at places by name, a march across the bridge, turns, throws and a page.
+static func _board_session() -> Dictionary:
+	var board := GameDiorama.board_of(GameDiorama.sanitize(LAND))
+	var g := GameLedger.from({"Bea": {"hit points": 22}, "Milo": {"hit points": 9}}, [], board)
+	var items: Array = []
+	var say := func(who: String, words: String) -> void:
+		items.append({"who": who, "says": words})
+	var mark := func(got: Dictionary, kind: String) -> void:
+		if bool(got.get("ok", false)):
+			items.append({"mark": kind, "id": int((got["event"] as Dictionary)["id"])})
+	say.call("Dell", "So. You are at the inn, it is late, and somebody has to go and look at that keep.")
+	mark.call(g.place("Bea's knight", [62, 125], "a stern knight", "Bea"), "place")
+	mark.call(g.place("Milo's rogue", [68, 129], "a small grinning thief", "Milo"), "place")
+	mark.call(g.place("The Goat", [113, 82], "an enormous goat", ""), "place")
+	mark.call(g.picture("The inn at night", "a low inn under the hill, one window lit, two travelers at its door", ["Bea's knight", "Milo's rogue", "the inn"]), "picture")
+	say.call("Dell", "The road goes down to the river, over the bridge, and up to the keep. It is a long walk and nobody has walked it in a while.")
+	say.call("Dell", "There is a goat on the bridge. There is always a goat on the bridge.")
+	mark.call(g.turn_to("Bea"), "turn")
+	say.call("Bea", "We walk. Together. Quietly. Milo, quietly.")
+	mark.call(g.move("Bea's knight", [101, 91]), "move")
+	mark.call(g.move("Milo's rogue", [98, 95]), "move")
+	say.call("Dell", "You go down the road. The grass is wet, the river is loud, and the keep gets no closer for a long while. Then the goat looks up.")
+	say.call("Milo", "I have a sandwich.")
+	mark.call(g.turn_to("Milo"), "turn")
+	mark.call(g.roll("Milo", "1d20+2", "befriending a goat", 41), "roll")
+	say.call("Milo", "Oh, come on.")
+	say.call("Dell", "It eats the sandwich, and then it looks at you, and I would like an attack from the goat.")
+	mark.call(g.roll("Dell", "1d20+5", "the goat", 41), "roll")
+	say.call("Dell", "That hits. Two dice for the horns. And for a while after that, nobody says anything at all, and the river goes on, and the keep is still up there on its hill, waiting for somebody braver.")
+	var script := "<!-- table: begin -->\n\n" + GameTools.compose(items, PackedStringArray(PEOPLE))
+	var game := GameBoard.gather(g.events, PackedStringArray(PEOPLE), {}, {"Dell": 0.0, "Bea": -105.0, "Milo": 105.0, "Rosa": -50.0, "Guest": 50.0}, board)
 	return {"script": script, "game": game}
 
 
@@ -159,10 +216,29 @@ func _run() -> void:
 					size = Vector2i(int(wh[0]), int(wh[1]))
 	DirAccess.make_dir_recursive_absolute(DIR)
 	DirAccess.make_dir_recursive_absolute(out.get_base_dir())
+	var on_board := args.has("--diorama")
+	var table := _table()
+	if on_board:
+		(table["top"] as Dictionary)["size"] = [GameBoard.TOP_LEAST.x, GameBoard.TOP_LEAST.y]
+		table["things"] = []
 	var h := FileAccess.open(DIR.path_join("table.json"), FileAccess.WRITE)
-	h.store_string(JSON.stringify(_table()))
+	h.store_string(JSON.stringify(table))
 	h.close()
+	for f in ["diorama.json", "minis.json", "page_1.png"]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(DIR).path_join(f))
 	var session := _session()
+	if on_board:
+		session = _board_session()
+		for pair in [["diorama.json", LAND], ["minis.json", MINIS]]:
+			var fh := FileAccess.open(DIR.path_join(String(pair[0])), FileAccess.WRITE)
+			fh.store_string(JSON.stringify(pair[1]))
+			fh.close()
+		# ...a picture standing in for a painted page: bands of color, so it is plain where it covers the frame
+		var page := Image.create(768, 512, false, Image.FORMAT_RGB8)
+		for y in 512:
+			page.fill_rect(Rect2i(0, y, 768, 1), Color.from_hsv(float(y) / 512.0 * 0.3 + 0.55, 0.5, 0.8))
+		if not args.has("--no-pages"):
+			page.save_png(ProjectSettings.globalize_path(DIR).path_join("page_1.png"))
 	var episode := ""
 	var people := PackedStringArray()
 	for i in args.size() - 1:
@@ -239,6 +315,14 @@ func _run() -> void:
 				if TableActions.names_event(String((d["a"] as Dictionary)["kind"])):
 					want.append(float(d["t0"]) + (2.4 if String((d["a"] as Dictionary)["kind"]) == "roll" else 0.9))
 			want.sort()
+		if args.has("--claims") and t > 0.5:
+			# ...what each camera wants of the session, in the order they are laid
+			for cl in w.game._claims:
+				var cd: Dictionary = cl
+				print("game_look_probe: claim %s %.1f-%.1f ease %.1f %s" % [String(cd["sort"]), float(cd["t0"]), float(cd["t1"]), float(cd.get("ease", Cameras.EASE)), String(cd.get("who", ""))])
+			print("game_look_probe: %d marks placed, the first at %.1f" % [w.game._times.size(), w.game._times.values().min() if not w.game._times.is_empty() else -1.0])
+			get_tree().quit(0)
+			return
 		var shoot := k < want.size() and t >= float(want[k])
 		var in_clip := clip.x >= 0.0 and t >= clip.x and t <= clip.y
 		if shoot or in_clip:

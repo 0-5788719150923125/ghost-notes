@@ -18,6 +18,16 @@ class_name TableGame
 ##
 ## The record is made when the table first stands on the stage: named by everything it depends on and kept, so a note
 ## opened again costs nothing. A preview draws no dice.
+##
+## ON A MODEL'S BOARD ([GameDiorama], the episode's `diorama.json`) the board is the map: it stands in the table's middle, a figure
+## modeled for the night (`minis.json`) stands on its ground on a base, faces where it goes and WALKS there ([constant WALK]),
+## and a figure with no model is its paper card. A page of the night's book (a `picture` event, `page_K.png`) covers the frame
+## while its words go on, pushed in slowly, until the next page or the table wants the eye back ([method _tick_pages]).
+##
+## THE CAMERA IS A LIST ([Cameras], the feed's `cameras`, every sort where it names none): each sort wants moments of the session
+## - the dice as they land, a march as figures walk, whoever's turn it is from their seat, long narration round the model - and
+## the one highest in the list has a moment two want; every change is eased, round the table rather than across it
+## ([method _shot]). A pure function of show time, as the rest.
 
 ## A roll's moments (seconds): rising from where dice are kept, shaken in the air; how long it lies before going home if nothing else is thrown, and how long going home takes.
 const RISE := 0.28
@@ -36,8 +46,10 @@ const SHOT_FAR := 0.56
 const SHOT_LEADS := 0.55
 const SHOT_IN := 1.5
 const SHOT_HOLDS := 1.6
-const SHOT_OUT := 2.0
+const SHOT_OUT := 3.0
 const SHOT_WEIGHT := 0.75
+## The farthest the eye goes toward a throw's dice (meters): from far off it goes part of the way.
+const DICE_TRAVEL := 1.4
 ## A figure's hop, at least and by how far it goes (seconds), and how high (a share of how far, at least and most in meters). A place from above, and a removal: seconds. A fall, then its give.
 const HOP_LEAST := 0.42
 const HOP_RATE := 0.1
@@ -58,8 +70,34 @@ const MAP_FROM := 0.7
 const MAP_Y := 0.0012
 const BASE_R := 0.46
 const BASE_H := 0.0035
+## A figure walking on a model's board: how fast (meters a second), the shortest and longest a walk takes (seconds), its step's bob
+## (meters) and rate (steps a second). A modeled figure's base: its radius and height (meters).
+const WALK := 0.045
+const WALK_LEAST := 1.4
+const WALK_MOST := 10.0
+const BOB := 0.0018
+const STEPS := 2.6
+const MINI_BASE := Vector2(0.0125, 0.0035)
+## A page of the night's book: how far in front of the lens it hangs (meters), how long it takes to come and go, the least it
+## stays before the table may take the eye back, and how far in it is pushed (a share).
+const PAGE_FAR := 0.25
+const PAGE_FADE := 0.9
+const PAGE_LEAST := 4.5
+## The longest a page is pushed in over (seconds): a page whose end is not placed yet is pushed as one held this long.
+const PAGE_HOLD := 45.0
+const PAGE_PUSH := 0.1
+## The least a seat's camera looks down past the top of its frame (degrees): no shot round the table shows the room's horizon.
+const BELOW_HORIZON := 4.0
+## The table seen whole from its head, as a tilt-shift photograph of a model (0 sharp throughout, 1 the most) - the one camera that
+## is not on the list ([constant Cameras.REGISTRY] `miniature`).
+const HEAD_MINIATURE := 0.55
+## A miniature's band in focus across the frame, either side of where the camera looks (a share of the frame's height, at none
+## and at the most), and how far in front of the lens its sheet hangs (meters, short of a page).
+const MINI_BAND := Vector2(0.24, 0.05)
+const MINI_FAR := 0.1
+const TILT_SHADER := preload("res://shaders/table_tilt.gdshader")
 ## A record's name changes when this does.
-const BAKE_VERSION := 1
+const BAKE_VERSION := 2
 const BAKES_KEPT := 24
 const PROBE_BAKES := "res://dist/game_bakes"
 ## Where records are kept; a gate sets it, and a show that plays while its record is made waits for it.
@@ -91,6 +129,13 @@ var _fov := 40.0
 var _top := "wood"
 var _pictures := {}           # a picture's file -> its texture, once loaded
 var _homes: Array = []        # each person's own dice, lying at their place: {node, who, shape}
+var _diorama: GameDiorama = null
+var _minis := {}              # the night's modeled figures: {figures: name -> thing, materials}
+var _pages: Array = []        # {node, mat, event, size}
+var _claims: Array = []       # what each camera wants: {sort, rank, t0, t1, ...} ([method _plan_cameras])
+var _tilt: MeshInstance3D = null
+var _shot_t := NAN
+var _shot_cache := {}
 
 
 func _init(owner: TableWork, game_data: Dictionary, folder: String, seed_of: int) -> void:
@@ -108,11 +153,36 @@ func stand() -> void:
 	work.medium._root3.add_child(root)
 	_cam = work.medium._plan.cam_base
 	_fov = float(work.medium._plan.fov)
+	_stand_board()
 	_stand_maps()
 	_stand_figures()
 	_stand_reveals()
+	_stand_pages()
 	_stand_rolls()
 	_stand_homes()
+	_stand_tilt()
+	# ...the cameras planned before any mark is placed: a live reading places a stretch's marks only as its words come, and
+	# until the first, the long talk before it is already a camera's
+	_plan_cameras()
+
+
+## The model's board and the night's figures, where the episode has them: built here, on the worker that builds the table.
+func _stand_board() -> void:
+	if (game.get("board", {}) as Dictionary).is_empty() or dir.is_empty():
+		return
+	var d: Variant = _read_json("diorama.json")
+	if d is Dictionary:
+		_diorama = GameDiorama.new(d, seed_value)
+		var breathe := Callable(work.medium, "_breathe") if work.medium != null and work.medium.has_method("_breathe") else Callable()
+		root.add_child(_diorama.build(breathe))
+	var m: Variant = _read_json("minis.json")
+	if m is Dictionary and (m as Dictionary).get("figures") is Dictionary:
+		_minis = m
+
+
+func _read_json(file: String) -> Variant:
+	var path := dir.path_join(file)
+	return JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
 
 
 func _stand_maps() -> void:
@@ -152,7 +222,7 @@ func _map_material(m: Dictionary, pic: int) -> ShaderMaterial:
 ## Every life of a figure: placed on a map, moved, fallen, stood up, taken off, or swept off as its map goes. One node each, whatever else happens on the table.
 func _stand_figures() -> void:
 	var maps: Array = game.get("maps", [])
-	var map := {}
+	var map: Dictionary = game.get("board", {}) if game.get("board") is Dictionary else {}
 	var alive := {}
 	var map_ids: Array = []
 	for e in game.get("events", []):
@@ -186,8 +256,14 @@ func _stand_figures() -> void:
 					alive.erase(name)
 
 
-## A figure's nodes: a low base, and the painted card held in it, its pivot where it stands in its base.
+## A figure's nodes: a low base, and the painted card held in it, its pivot where it stands in its base - or, where the night's figures
+## were modeled, its model on a round base, painted as a wargamer paints one: black, its rim in its player's color.
 func _figure_node(life: Dictionary) -> Node3D:
+	var figs: Dictionary = _minis.get("figures", {}) if _minis.get("figures") is Dictionary else {}
+	if figs.get(String(life["name"])) is Dictionary:
+		var made := _mini_node(life, figs[String(life["name"])])
+		if made != null:
+			return made
 	var w := GameBoard.figure_width(life["map"])
 	var tall := w * GameBoard.FIGURE_TALL
 	var node := Node3D.new()
@@ -225,6 +301,51 @@ func _figure_node(life: Dictionary) -> Node3D:
 	card.material_override = face
 	pivot.add_child(card)
 	life["pivot"] = pivot
+	return node
+
+
+func _mini_node(life: Dictionary, raw: Dictionary) -> Node3D:
+	var thing := raw.duplicate(true)
+	thing["name"] = String(life["name"])
+	var safe := Props.sanitize({"things": [thing], "materials": _minis.get("materials", {})}, [])
+	if (safe["things"] as Array).is_empty():
+		return null
+	var built := Props.build((safe["things"] as Array)[0], safe["materials"], hash([seed_value, String(life["name"]), "mini"]))
+	var node := Node3D.new()
+	node.visible = false
+	root.add_child(node)
+	var base := MeshInstance3D.new()
+	var disc := CylinderMesh.new()
+	disc.top_radius = MINI_BASE.x * 0.94
+	disc.bottom_radius = MINI_BASE.x
+	disc.height = MINI_BASE.y
+	disc.radial_segments = 24
+	base.mesh = disc
+	base.position = Vector3(0.0, MINI_BASE.y * 0.5, 0.0)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.06, 0.055, 0.05)
+	mat.roughness = 0.6
+	base.material_override = mat
+	node.add_child(base)
+	if not String(life["owner"]).is_empty():
+		var rim := MeshInstance3D.new()
+		var ring := TorusMesh.new()
+		ring.inner_radius = MINI_BASE.x * 0.9
+		ring.outer_radius = MINI_BASE.x * 1.02
+		ring.rings = 24
+		rim.mesh = ring
+		rim.scale = Vector3(1.0, 0.25, 1.0)
+		rim.position = Vector3(0.0, MINI_BASE.y * 0.85, 0.0)
+		var rm := StandardMaterial3D.new()
+		rm.albedo_color = _owner_color(String(life["owner"]))
+		rim.material_override = rm
+		node.add_child(rim)
+	var pivot := Node3D.new()
+	pivot.position = Vector3(0.0, MINI_BASE.y, 0.0)
+	node.add_child(pivot)
+	pivot.add_child(built["node"])
+	life["pivot"] = pivot
+	life["mini"] = true
 	return node
 
 
@@ -394,6 +515,7 @@ func schedule(sched: Array) -> void:
 			_times[int(a["card"])] = float(e["t0"])
 	_shots = []
 	if _record.is_empty():
+		_plan_cameras()
 		return
 	for r in _rolls:
 		var id := int((r as Dictionary)["id"])
@@ -410,7 +532,8 @@ func schedule(sched: Array) -> void:
 		if dice.is_empty():
 			continue
 		at /= float(dice.size())
-		_shots.append({"t0": thrown + float(rec["dur"]) - SHOT_LEADS, "t1": thrown + float(rec["dur"]) + SHOT_HOLDS, "at": at})
+		_shots.append({"t0": thrown + float(rec["dur"]) - SHOT_LEADS, "t1": thrown + float(rec["dur"]) + SHOT_HOLDS, "at": at, "who": String(((r as Dictionary)["event"] as Dictionary).get("who", ""))})
+	_plan_cameras()
 
 
 func _when(id: int) -> float:
@@ -491,7 +614,7 @@ static func _faces_key(solids: Array) -> int:
 
 ## What dice bounce off: everything stood on this table, as the table has it ([method TableWork._mesh_of]).
 func _solids() -> Array:
-	var out: Array = []
+	var out: Array = [GameDiorama.solid()] if _diorama != null else []
 	for ti in work.things.size():
 		var tm: TriangleMesh = work._mesh_of(ti)
 		if tm != null:
@@ -554,6 +677,8 @@ func tick(t: float) -> void:
 	_tick_maps(t)
 	_tick_figures(t)
 	_tick_reveals(t)
+	_tick_pages(t)
+	_tick_tilt(t)
 	_tick_rolls(t)
 	_tick_homes(t)
 
@@ -586,51 +711,95 @@ func _tick_figures(t: float) -> void:
 		var life: Dictionary = f
 		var node: Node3D = life["node"]
 		var placed := _when(int(life["placed"]))
-		var ended := INF
-		for e in life["ends"]:
-			ended = minf(ended, _when(int((e as Dictionary)["id"])))
+		var ended := _ended(life)
 		node.visible = t >= placed and t < ended + PLACE_TAKES
 		if not node.visible:
 			continue
-		var map: Dictionary = life["map"]
-		var at := GameBoard.at_map(map, life["from"])
-		var place := Vector3(at.x, 0.0, at.y)
-		var from := place
-		var fall := 0.0
-		var hop := 1.0
-		for s in life["steps"]:
-			var step: Dictionary = s
-			var when := _when(int(step["id"]))
-			if when > t:
-				continue
-			match String(step["kind"]):
-				"move":
-					var to2 := GameBoard.at_map(map, step["to"])
-					var to := Vector3(to2.x, 0.0, to2.y)
-					var far := place.distance_to(to)
-					var takes := HOP_LEAST + HOP_RATE * sqrt(far / maxf(GameBoard.cell_of(map), 0.01))
-					hop = clampf((t - when) / takes, 0.0, 1.0)
-					var lin := Hands.smooth(hop)
-					from = place.lerp(to, lin)
-					from.y = 4.0 * lin * (1.0 - lin) * clampf(far * 0.3, HOP_HIGH.x, HOP_HIGH.y)
-					place = to if hop >= 1.0 else place
-					if hop >= 1.0:
-						from = place
-				"fall":
-					fall = clampf((t - when) / FALL_TAKES, 0.0, 1.0)
-				"rise":
-					fall = 1.0 - clampf((t - when) / (FALL_TAKES * 1.6), 0.0, 1.0)
+		var pose := _pose(life, t)
 		var dropping := clampf((t - placed) / PLACE_TAKES, 0.0, 1.0)
 		var up := (1.0 - Hands.smooth(dropping)) * 0.16
 		var taken := clampf((t - ended) / PLACE_TAKES, 0.0, 1.0) if ended < INF else 0.0
 		up += Hands.smooth(taken) * 0.3
-		node.position = from + Vector3(0.0, up + MAP_Y * 1.5, 0.0)
-		# ...A fall: backward onto its back, painting up, with one small bounce
+		var fall := float(pose["fall"])
 		var drop := fall * fall
+		if bool(life.get("mini", false)):
+			# ...a model stands up straight, faces where it goes, and a fall tips it onto its side
+			node.position = (pose["at"] as Vector3) + Vector3(0.0, up, 0.0)
+			node.basis = Basis(Vector3.UP, float(pose["heading"]))
+			(life["pivot"] as Node3D).basis = Basis(Vector3.FORWARD, lerpf(0.0, deg_to_rad(84.0), drop))
+			continue
+		node.position = (pose["at"] as Vector3) + Vector3(0.0, up + MAP_Y * 1.5, 0.0)
+		# ...A fall: backward onto its back, painting up, with one small bounce
 		var lean := lerpf(deg_to_rad(LEAN_BACK), deg_to_rad(89.0), drop)
 		if fall >= 1.0:
 			lean = deg_to_rad(89.0)
 		(life["pivot"] as Node3D).basis = Basis(Vector3.RIGHT, -lean)
+
+
+func _ended(life: Dictionary) -> float:
+	var ended := INF
+	for e in life["ends"]:
+		ended = minf(ended, _when(int((e as Dictionary)["id"])))
+	return ended
+
+
+## Where a figure is at [param t] and how it stands: `{at, heading, fall, walking}` - on a model's board its ground under it,
+## walking each move at a walker's pace; on a laid map, hopping.
+func _pose(life: Dictionary, t: float) -> Dictionary:
+	var map: Dictionary = life["map"]
+	var model := bool(map.get("model", false))
+	var at := GameBoard.at_map(map, life["from"])
+	var place := Vector3(at.x, _ground(at), at.y)
+	var from := place
+	var fall := 0.0
+	var heading := 0.0
+	var walking := false
+	for s in life["steps"]:
+		var step: Dictionary = s
+		var when := _when(int(step["id"]))
+		if when > t:
+			continue
+		match String(step["kind"]):
+			"move":
+				var to2 := GameBoard.at_map(map, step["to"])
+				var to := Vector3(to2.x, _ground(to2), to2.y)
+				var far := Vector2(place.x, place.z).distance_to(to2)
+				if far > 0.001:
+					heading = atan2(to.x - place.x, to.z - place.z)
+				var done := false
+				if model:
+					var takes := _walk_takes(far)
+					var u := clampf((t - when) / takes, 0.0, 1.0)
+					var lin := Hands.smooth(u)
+					var p := Vector2(place.x, place.z).lerp(to2, lin)
+					from = Vector3(p.x, _ground(p) + absf(sin(u * takes * STEPS * PI)) * BOB, p.y)
+					walking = u < 1.0
+					done = u >= 1.0
+				else:
+					var takes := HOP_LEAST + HOP_RATE * sqrt(far / maxf(GameBoard.cell_of(map), 0.01))
+					var hop := clampf((t - when) / takes, 0.0, 1.0)
+					var lin := Hands.smooth(hop)
+					from = place.lerp(to, lin)
+					from.y = 4.0 * lin * (1.0 - lin) * clampf(far * 0.3, HOP_HIGH.x, HOP_HIGH.y)
+					done = hop >= 1.0
+				if done:
+					place = to
+					from = to
+			"fall":
+				fall = clampf((t - when) / FALL_TAKES, 0.0, 1.0)
+			"rise":
+				fall = 1.0 - clampf((t - when) / (FALL_TAKES * 1.6), 0.0, 1.0)
+	return {"at": from, "heading": heading, "fall": fall, "walking": walking}
+
+
+## How long a walk of [param far] meters takes on a model's board.
+static func _walk_takes(far: float) -> float:
+	return clampf(far / WALK, WALK_LEAST, WALK_MOST)
+
+
+## The ground's height at [param p] (meters, the table's): the model's where it stands, the table's elsewhere.
+func _ground(p: Vector2) -> float:
+	return _diorama.height_at(p.x, p.y) if _diorama != null else 0.0
 
 
 func _tick_reveals(t: float) -> void:
@@ -650,7 +819,7 @@ func _tick_reveals(t: float) -> void:
 		var up := Hands.smooth(clampf((t - at) / REVEAL_TAKES, 0.0, 1.0))
 		var down := Hands.smooth(clampf((t - going) / REVEAL_TAKES, 0.0, 1.0))
 		var show := up * (1.0 - down)
-		var held := _cam * Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, -HOLD_FAR))
+		var held := _eye(t) * Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, -HOLD_FAR))
 		var lying := Transform3D(Basis(Vector3.RIGHT, -PI * 0.5), Vector3(0.0, 0.03, -0.42))
 		node.transform = lying.interpolate_with(held, show)
 
@@ -742,22 +911,340 @@ static func _key_at(keys: PackedFloat32Array, i: int) -> Transform3D:
 
 # --- the shot ---------------------------------------------------------------------------------------------------------------------------------------
 
-## Where the camera is at [param t]: [param base], or on the way to the dice ([constant SHOT_FAR] from them, looking down at them from over their shoulder of the table), at most as far as [constant SHOT_WEIGHT] takes it.
-func shot_at(t: float, base: Transform3D) -> Transform3D:
-	var out := base
-	for s in _shots:
-		var d: Dictionary = s
-		var t0 := float(d["t0"])
-		var t1 := float(d["t1"])
-		if t < t0 - SHOT_IN or t > t1 + SHOT_OUT:
+## The cameras in force: the feed's list ([member ShowFeed.cameras]), or every sort.
+func _camera_list() -> Array:
+	var feed: ShowFeed = work.medium.feed if work != null and work.medium != null else null
+	return Cameras.sanitize(feed.cameras if feed != null else [], true)
+
+
+## What each camera on the list wants of the session, worked out once a schedule is known: the dice as they land, a march as
+## figures walk, whoever's turn it is, and long stretches with nothing else wanted, round the model.
+func _plan_cameras() -> void:
+	_claims = []
+	_shot_t = NAN
+	var list := _camera_list()
+	var e := Cameras.entry_of(list, "dice")
+	if not e.is_empty():
+		for sh in _shots:
+			var d: Dictionary = sh
+			_claims.append({"sort": "dice", "rank": Cameras.rank(list, "dice"), "t0": float(d["t0"]) - SHOT_OUT * 0.6,
+				"t1": float(d["t1"]) - SHOT_HOLDS + Cameras.value(e, "holds"), "at": d["at"], "who": d["who"], "entry": e,
+				"ease": SHOT_OUT, "weight": SHOT_WEIGHT})
+	e = Cameras.entry_of(list, "seat")
+	if not e.is_empty():
+		var turns: Array = []
+		for ev in game.get("events", []):
+			var d: Dictionary = ev
+			if String(d.get("kind", "")) in ["turn", "roll"] and _times.has(int(d["id"])):
+				turns.append({"t": float(_times[int(d["id"])]), "who": String(d.get("who", ""))})
+		turns.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return float(x["t"]) < float(y["t"]))
+		var i := 0
+		while i < turns.size():
+			var who := String(turns[i]["who"])
+			var t0 := float(turns[i]["t"])
+			var j := i + 1
+			while j < turns.size() and String(turns[j]["who"]) == who:
+				j += 1
+			var t1 := t0 + Cameras.value(e, "holds")
+			if j < turns.size():
+				# ...straight on round to the next seat, never back to the table between
+				t1 = minf(t1, float(turns[j]["t"]) + Cameras.EASE) if float(turns[j]["t"]) < t1 else t1
+			_claims.append({"sort": "seat", "rank": Cameras.rank(list, "seat"), "t0": t0, "t1": t1, "who": who, "entry": e})
+			i = j
+	e = Cameras.entry_of(list, "march")
+	if not e.is_empty() and bool((game.get("board", {}) as Dictionary).get("model", false)):
+		var group: Dictionary = {}
+		for ev in game.get("events", []):
+			var d: Dictionary = ev
+			if String(d.get("kind", "")) != "move" or not _times.has(int(d["id"])):
+				continue
+			var t := float(_times[int(d["id"])])
+			var board: Dictionary = game["board"]
+			var from := GameBoard.at_map(board, d.get("from", [0, 0]))
+			var to := GameBoard.at_map(board, d.get("to", [0, 0]))
+			if group.is_empty() or t - float(group["t0"]) > 1.0:
+				group = {"sort": "march", "rank": Cameras.rank(list, "march"), "t0": t, "t1": t, "names": [], "from": Vector2.ZERO, "to": Vector2.ZERO, "entry": e}
+				_claims.append(group)
+			(group["names"] as Array).append(String(d.get("figure", "")))
+			var n := float((group["names"] as Array).size())
+			group["from"] = (group["from"] as Vector2).lerp(from, 1.0 / n)
+			group["to"] = (group["to"] as Vector2).lerp(to, 1.0 / n)
+			group["t1"] = maxf(float(group["t1"]), t + _walk_takes(from.distance_to(to)) + Cameras.value(e, "lingers"))
+	e = Cameras.entry_of(list, "drift")
+	if not e.is_empty():
+		var spans: Array = []
+		for c in _claims:
+			spans.append(Vector2(float((c as Dictionary)["t0"]), float((c as Dictionary)["t1"])))
+		spans.sort_custom(func(x: Vector2, y: Vector2) -> bool: return x.x < y.x)
+		var last := 0.0
+		# ...and the talk after the last mark placed is open: what comes next is not placed yet
+		spans.append(Vector2(INF, INF))
+		for sp in spans:
+			var gap0 := last + Cameras.value(e, "after") + Cameras.EASE
+			if sp.x - gap0 > Cameras.EASE * 2.0:
+				_claims.append({"sort": "drift", "rank": Cameras.rank(list, "drift"), "t0": gap0, "t1": sp.x - Cameras.EASE, "entry": e})
+			last = maxf(last, sp.y)
+	# ...a long way to go takes longer: no cut is quicker at its quickest than Cameras.SPEED (a smoothstep's peak is 1.5 of its mean)
+	# ...measured from the shot in force before it (a seat's, a march's) or the table's head; and a throw's dice from far off are gone
+	# only part of the way to (DICE_TRAVEL), as a head turns to look rather than a body walking over
+	var over := _overhead()
+	for c in _claims:
+		var d: Dictionary = c
+		if not (String(d["sort"]) in ["dice", "seat", "drift"]):
 			continue
-		var w := Hands.smooth(clampf((t - (t0 - SHOT_IN)) / SHOT_IN, 0.0, 1.0)) * (1.0 - Hands.smooth(clampf((t - t1) / SHOT_OUT, 0.0, 1.0)))
-		var at: Vector3 = d["at"]
-		var toward := (base.origin - at).normalized()
-		var eye := at + toward * SHOT_FAR
-		var close := Transform3D(Basis.looking_at(at - eye, Vector3.UP), eye)
-		out = out.interpolate_with(close, w * SHOT_WEIGHT)
+		var t0 := float(d["t0"])
+		var from: Vector3 = over["eye"]
+		for o in _claims:
+			if o != c and String((o as Dictionary)["sort"]) in ["seat", "march"] and float((o as Dictionary)["t0"]) < t0 and t0 < float((o as Dictionary)["t1"]):
+				from = _claim_shot(o, t0)["eye"]
+		var full := from.distance_to(_claim_shot(d, t0)["eye"] as Vector3)
+		if String(d["sort"]) == "dice" and full > 0.001:
+			d["weight"] = minf(float(d.get("weight", 1.0)), DICE_TRAVEL / full)
+		d["ease"] = maxf(float(d.get("ease", Cameras.EASE)), full * float(d.get("weight", 1.0)) * 1.5 / Cameras.SPEED)
+	# ...the lowest in the list laid first, so the one above it takes what both want
+	_claims.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return int(x["rank"]) > int(y["rank"]) or (int(x["rank"]) == int(y["rank"]) and float(x["t0"]) < float(y["t0"])))
+
+
+## Where the camera is at [param t]: [param base] - the table from its head - with each camera's moments laid over it.
+func shot_at(t: float, base: Transform3D) -> Transform3D:
+	_cam = base
+	return Cameras.transform_of(_shot(t))
+
+
+## The lens at [param t] (degrees, up the frame).
+func fov_at(t: float) -> float:
+	return float(_shot(t)["fov"])
+
+
+func _eye(t: float) -> Transform3D:
+	return Cameras.transform_of(_shot(t))
+
+
+func _shot(t: float) -> Dictionary:
+	if t == _shot_t:
+		return _shot_cache
+	var mid := Vector3(GameBoard.MIDDLE.x, 0.0, GameBoard.MIDDLE.y)
+	var out := _overhead()
+	for c in _claims:
+		var d: Dictionary = c
+		var ease := float(d.get("ease", Cameras.EASE))
+		var w := Hands.smooth(clampf((t - float(d["t0"])) / ease, 0.0, 1.0)) * (1.0 - Hands.smooth(clampf((t - float(d["t1"])) / ease, 0.0, 1.0))) * float(d.get("weight", 1.0))
+		if w <= 0.0:
+			continue
+		out = Cameras.blend(out, _claim_shot(d, t), w, mid)
+	_shot_t = t
+	_shot_cache = out
 	return out
+
+
+## The table from its head, as the format stands it.
+func _overhead() -> Dictionary:
+	var fwd := -_cam.basis.z
+	var reach := -_cam.origin.y / fwd.y if fwd.y < -0.01 else 1.0
+	return {"eye": _cam.origin, "at": _cam.origin + fwd * reach, "fov": _fov, "mini": HEAD_MINIATURE}
+
+
+func _claim_shot(c: Dictionary, t: float) -> Dictionary:
+	var out := _claim_frame(c, t)
+	out["mini"] = Cameras.value(c["entry"], "miniature")
+	return out
+
+
+func _claim_frame(c: Dictionary, t: float) -> Dictionary:
+	var e: Dictionary = c["entry"]
+	match String(c["sort"]):
+		"dice":
+			var at: Vector3 = c["at"]
+			var seat := GameBoard.at_seat(float((game.get("seats", {}) as Dictionary).get(String(c["who"]), 180.0)), GameBoard.HAND)
+			var toward := Vector3(seat.x - at.x, 0.0, seat.y - at.y).normalized()
+			var far := Cameras.value(e, "far") * 0.01
+			return {"eye": at + (toward * cos(deg_to_rad(52.0)) + Vector3.UP * sin(deg_to_rad(52.0))) * far, "at": at, "fov": _fov}
+		"seat":
+			var a := float((game.get("seats", {}) as Dictionary).get(String(c["who"]), 0.0))
+			var reach := Vector2.ONE * (0.1 + Cameras.value(e, "back") * 0.01)
+			var p := GameBoard.at_seat(a + 7.0, GameBoard.MAP_MOST * 0.5 + reach)
+			var look := GameBoard.at_seat(a, GameBoard.MAP_MOST * 0.12)
+			return _below_horizon({"eye": Vector3(p.x, Cameras.value(e, "height") * 0.01, p.y), "at": Vector3(look.x, 0.04, look.y), "fov": Cameras.value(e, "lens")})
+		"march":
+			var sum := Vector3.ZERO
+			var n := 0
+			for nm in c["names"]:
+				var life := _life_at(String(nm), t)
+				if not life.is_empty():
+					sum += _pose(life, t)["at"] as Vector3
+					n += 1
+			var from: Vector2 = c["from"]
+			var to: Vector2 = c["to"]
+			var here := sum / float(n) if n > 0 else Vector3(from.x, _ground(from), from.y)
+			var dir := Vector3(to.x - from.x, 0.0, to.y - from.y)
+			dir = dir.normalized() if dir.length() > 0.001 else Vector3.FORWARD
+			var right := dir.cross(Vector3.UP)
+			var side := Cameras.value(e, "side")
+			var off := (-dir * (1.0 - absf(side)) + right * side).normalized() * Cameras.value(e, "back") * 0.01
+			var eye2 := Vector2(here.x + off.x, here.z + off.z)
+			var eye := Vector3(eye2.x, maxf(_ground(eye2), here.y) + Cameras.value(e, "low") * 0.01, eye2.y)
+			return {"eye": eye, "at": here + dir * 0.08 + Vector3.UP * 0.015, "fov": Cameras.value(e, "lens")}
+		"drift":
+			var ang := deg_to_rad(180.0 + (t - float(c["t0"])) * Cameras.value(e, "speed"))
+			var mid := Vector3(GameBoard.MIDDLE.x, 0.0, GameBoard.MIDDLE.y)
+			var r := Cameras.value(e, "reach") * 0.01
+			return _below_horizon({"eye": mid + Vector3(sin(ang) * r, Cameras.value(e, "height") * 0.01, cos(ang) * r * 0.75), "at": mid + Vector3(0.0, 0.03, 0.0), "fov": Cameras.value(e, "lens")})
+	return _overhead()
+
+
+## [param shot] looking down far enough that the top of its frame is under the horizon: no shot round the table shows the room
+## past its far edge, which is only ever built to be seen from the table's head.
+static func _below_horizon(shot: Dictionary) -> Dictionary:
+	var eye: Vector3 = shot["eye"]
+	var at: Vector3 = shot["at"]
+	var need := deg_to_rad(float(shot["fov"]) * 0.5 + BELOW_HORIZON)
+	var flat := Vector2(at.x - eye.x, at.z - eye.z)
+	var drop := eye.y - at.y
+	if drop <= 0.0 or flat.length() < 0.001:
+		return shot
+	if atan2(drop, flat.length()) >= need:
+		return shot
+	var near := drop / tan(need)
+	var p := Vector2(eye.x, eye.z) + flat.normalized() * near
+	return {"eye": eye, "at": Vector3(p.x, at.y, p.y), "fov": shot["fov"]}
+
+
+## The life of figure [param name] on the table at [param t], or {}.
+func _life_at(name: String, t: float) -> Dictionary:
+	for f in _figures:
+		var life: Dictionary = f
+		if String(life["name"]) == name and _when(int(life["placed"])) <= t and t < _ended(life):
+			return life
+	return {}
+
+
+# --- the miniature -----------------------------------------------------------------------------------------------------------------------------
+
+## The sheet that makes the table a tilt-shift photograph ([constant TILT_SHADER]): in front of the lens, under the pages.
+func _stand_tilt() -> void:
+	var quad := QuadMesh.new()
+	_tilt = MeshInstance3D.new()
+	_tilt.mesh = quad
+	var mat := ShaderMaterial.new()
+	mat.shader = TILT_SHADER
+	mat.render_priority = 50
+	_tilt.material_override = mat
+	_tilt.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_tilt.visible = false
+	root.add_child(_tilt)
+
+
+## The band in focus where the camera looks at [param t], as narrow as its `miniature` says; none at 0.
+func _tick_tilt(t: float) -> void:
+	if _tilt == null:
+		return
+	var s := _shot(t)
+	var m := clampf(float(s.get("mini", 0.0)), 0.0, 1.0)
+	_tilt.visible = m > 0.02
+	if not _tilt.visible:
+		return
+	var eye := Cameras.transform_of(s)
+	var lens := float(s["fov"])
+	var h := 2.0 * MINI_FAR * tan(deg_to_rad(lens * 0.5)) * 1.05
+	(_tilt.mesh as QuadMesh).size = Vector2(h * 16.0 / 9.0 * 1.3, h)
+	_tilt.transform = eye * Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, -MINI_FAR))
+	# ...where it looks, up the frame: the band's middle
+	var v := eye.affine_inverse() * (s["at"] as Vector3)
+	var up := 0.5 + 0.5 * (v.y / maxf(-v.z, 0.001)) / tan(deg_to_rad(lens * 0.5))
+	var mat := _tilt.material_override as ShaderMaterial
+	mat.set_shader_parameter("focus", clampf(up, 0.1, 0.9))
+	mat.set_shader_parameter("band", lerpf(MINI_BAND.x, MINI_BAND.y, m))
+	mat.set_shader_parameter("strength", m)
+
+
+# --- the night's book -----------------------------------------------------------------------------------------------------------------------------
+
+## Every page of the night's book that is painted: a sheet in front of the lens, filling the frame, its picture lit as it is.
+func _stand_pages() -> void:
+	var list: Array = game.get("pages", [])
+	for e in game.get("events", []):
+		var d: Dictionary = e
+		if String(d.get("kind", "")) != "picture":
+			continue
+		var pic := int(d.get("pic", 0))
+		var tex := _picture("page_%d.png" % pic) if pic >= 1 and pic <= list.size() else null
+		if tex == null:
+			continue
+		var quad := QuadMesh.new()
+		var h := 2.0 * PAGE_FAR * tan(deg_to_rad(_fov * 0.5))
+		var aspect := float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
+		# ...as big as covers the frame, whatever the lens: a wider lens is laid over it as it plays
+		quad.size = Vector2(maxf(h * 16.0 / 9.0, h * aspect), maxf(h, h * 16.0 / 9.0 / aspect))
+		var node := MeshInstance3D.new()
+		node.mesh = quad
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.albedo_texture = tex
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.no_depth_test = true
+		mat.render_priority = 100
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		node.material_override = mat
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.visible = false
+		root.add_child(node)
+		_pages.append({"node": node, "mat": mat, "event": int(d["id"]), "pic": pic})
+
+
+## When a page goes: at the next page, or once it has had its least, where the view goes back to the table - a `board`, a throw or a
+## walk watched (`watch`), a throw that came up its highest or lowest face unless told not to be. Otherwise it stays: the story is
+## told over its pages.
+func _page_end(at: float) -> float:
+	var going := INF
+	for e in game.get("events", []):
+		var d: Dictionary = e
+		var k := String(d.get("kind", ""))
+		if not _times.has(int(d["id"])):
+			continue
+		var when := float(_times[int(d["id"])])
+		if when <= at:
+			continue
+		if k == "picture":
+			going = minf(going, when)
+		elif k == "board" or (k in ["roll", "move"] and _watched(d)):
+			going = minf(going, maxf(when, at + PAGE_LEAST))
+	return going
+
+
+## Whether the view comes back to the table for [param e]: as the game master said, or a throw at its extreme.
+static func _watched(e: Dictionary) -> bool:
+	if e.has("watch"):
+		return bool(e["watch"])
+	return String(e.get("kind", "")) == "roll" and not String(e.get("extreme", "")).is_empty() and not bool(e.get("hidden", false))
+
+
+func _tick_pages(t: float) -> void:
+	for p in _pages:
+		var d: Dictionary = p
+		var node: MeshInstance3D = d["node"]
+		var at := _when(int(d["event"]))
+		if t < at or at == INF:
+			node.visible = false
+			continue
+		var going := float(d.get("_going", NAN))
+		if is_nan(going) or float(d.get("_at", NAN)) != at:
+			going = _page_end(at)
+			d["_going"] = going
+			d["_at"] = at
+		if t >= going + PAGE_FADE:
+			node.visible = false
+			continue
+		node.visible = true
+		var show := Hands.smooth(clampf((t - at) / PAGE_FADE, 0.0, 1.0)) * (1.0 - Hands.smooth(clampf((t - going) / PAGE_FADE, 0.0, 1.0)))
+		(d["mat"] as StandardMaterial3D).albedo_color = Color(1, 1, 1, show)
+		# ...pushed in slowly as it is looked at, toward a point of its own
+		# ...over its own time where its end is placed already, else over a long hold's
+		var u := clampf((t - at) / maxf(minf(going, at + PAGE_HOLD) + PAGE_FADE - at, 0.1), 0.0, 1.0)
+		var push := 1.0 + PAGE_PUSH * u
+		var drift := Vector2(sin(float(d["pic"]) * 2.3), cos(float(d["pic"]) * 1.7)) * 0.012 * u
+		var lens := fov_at(t)
+		var k := tan(deg_to_rad(lens * 0.5)) / tan(deg_to_rad(_fov * 0.5))
+		node.transform = _eye(t) * Transform3D(Basis.from_scale(Vector3.ONE * push * k), Vector3(drift.x * PAGE_FAR, drift.y * PAGE_FAR, -PAGE_FAR))
 
 
 # --- heard ------------------------------------------------------------------------------------------------------------------------------------------
@@ -801,4 +1288,5 @@ func sounds_in(t0: float, t1: float) -> Array:
 
 ## What a report says of it: for the probes.
 func report() -> String:
-	return "game: %d maps, %d figures, %d pictures, %d throws; record %s" % [_maps.size(), _figures.size(), _reveals.size(), _rolls.size(), "ready" if not _record.is_empty() else ("failed" if _failed else "not yet")]
+	return "game: %d maps, %d figures, %d pictures, %d pages, %d throws, %d camera moments%s; record %s" % [_maps.size(), _figures.size(), _reveals.size(), _pages.size(), _rolls.size(),
+		_claims.size(), ", a model's board" if _diorama != null else "", "ready" if not _record.is_empty() else ("failed" if _failed else "not yet")]

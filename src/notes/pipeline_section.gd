@@ -49,6 +49,12 @@ func group_said(_group: String) -> String:
 	return ""
 
 
+## The ⟳ on the group [param group]'s own line, making all of it again: a [PipelineRow] whose `again`, `asks`, `open` and `redo`
+## say it, as a row's do; null for a group with none.
+func group_again(_group: String) -> PipelineRow:
+	return null
+
+
 ## A line under the card's title, "" for none: what is being done, or what is ready.
 func line() -> String:
 	return ""

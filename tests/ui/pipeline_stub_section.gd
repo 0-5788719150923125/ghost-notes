@@ -9,6 +9,7 @@ var has_missing := true
 var made := 0
 var stopped := 0
 var is_part := false               # busy making only some of what it is missing (a row made again)
+var group_redo: PipelineRow = null # what a group's own ⟳ offers (group_again), null for none
 
 
 func _init(named := "") -> void:
@@ -47,3 +48,7 @@ func missing() -> bool:
 
 func widens() -> bool:
 	return is_part and has_missing
+
+
+func group_again(_group: String) -> PipelineRow:
+	return group_redo

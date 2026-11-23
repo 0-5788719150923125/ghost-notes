@@ -4,6 +4,8 @@ extends SceneTree
 ##
 ##   godot --headless --path . --script res://tests/table/thing_library_check.gd
 ##
+## - A prop is kept by what it is, whose it was taken off its name ("Mike's glass of water" is a glass of water); the control, a
+##   common noun's possessive ("a wizard's hat"), stays.
 ## - A prop kept is the thing alone: its parts, its scale (unless 1) and the materials they use - never where it stood, its group,
 ##   why it was there or that it held the cards. The control: a material on the table its parts do not use is not kept.
 ## - Its hash is what it is: the same prop under another name, placed and turned elsewhere, hashes the same; the control, one
@@ -71,6 +73,10 @@ func _entries() -> void:
 	_ok(not t.has("at") and not t.has("turn") and not t.has("place") and not t.has("group") and not t.has("why") and not t.has("holds_cards"),
 		"a prop kept is the thing alone, never where it stood or why (%s)" % str(t.keys()))
 	_ok(not t.has("scale"), "a scale of 1 is not kept")
+	_ok(ThingLibrary.generic("Mike's glass of water") == "glass of water" and ThingLibrary.generic("Old Tom’s pipe") == "pipe",
+		"a prop is kept by what it is, not whose it was")
+	_ok(ThingLibrary.generic("a wizard's hat") == "a wizard's hat" and ThingLibrary.generic("Tanner's") == "Tanner's",
+		"control: a common noun's possessive stays, and a name that would be left empty is kept whole")
 	var big := _cup()
 	big["scale"] = 1.5
 	_ok(float((ThingLibrary.entry_of(big, _mats())["thing"] as Dictionary).get("scale", 0.0)) == 1.5, "a scale other than 1 is kept")

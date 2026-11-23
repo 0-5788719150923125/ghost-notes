@@ -178,6 +178,19 @@ static func brief(body: String) -> String:
 	return TableProducer.voice_marks_only(TextNorm._expand_macros(CardDeck.strip(FixedTable.strip(body))))
 
 
+## The heading of a brief's own hand: how every picture of a game is painted, word for word, in every episode ([method hand_of]).
+const HAND := "^(#{1,6})\\s+(?i:the hand)\\s*$"
+
+
+## The hand brief [param body] fixes for its pictures (the text under [constant HAND]), "" where it fixes none: a game's figures and
+## pages are painted in it, in place of the hand each episode's plan chooses.
+static func hand_of(body: String) -> String:
+	var sec := Manuscript.section(body, HAND)
+	if sec.is_empty():
+		return ""
+	return " ".join(PackedStringArray(sec["lines"])).strip_edges()
+
+
 ## The context every agent shares: which show, and its brief - the same words for every show.
 static func show_context(title: String, brief: String) -> String:
 	return Rules.say("table/show.context", {"title": title, "brief": brief.strip_edges()})
@@ -648,12 +661,41 @@ static func game_prep(title: String, brief: String, plan: Dictionary, people: Pa
 
 
 ## One stretch of the game, as its master is told it: everything said so far, its own preparation and the table as it stands. [param step] is "intro", "close" or a number.
-static func game_master(title: String, brief: String, plan: Dictionary, people: PackedStringArray, step: String, n: int, prep: Dictionary, ledger: GameLedger, before: String, aim: Vector2i) -> Dictionary:
+## [param diorama]: the model's board it is played on ([GameDiorama]), or {} for maps laid as it goes.
+static func game_master(title: String, brief: String, plan: Dictionary, people: PackedStringArray, step: String, n: int, prep: Dictionary, ledger: GameLedger, before: String, aim: Vector2i, diorama := {}) -> Dictionary:
 	var vars := _game_vars(title, plan, people)
+	vars.merge({"model": not diorama.is_empty(), "board_told": GameDiorama.told(diorama) if not diorama.is_empty() else ""})
 	vars.merge({"prep": JSON.stringify(prep, "  "), "state": ledger.describe(), "said": not before.is_empty(), "before": before,
 		"intro": step == "intro", "close": step == "close", "scene": step != "intro" and step != "close", "k": step, "n": n,
 		"lo": aim.x, "hi": aim.y, "minutes": roundi(float(aim.y + aim.x) * 0.5 * SAID_WORD / 60.0), "hidden": true})
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/game_master.prompt", vars)}
+
+
+## The model maker, modeling the land of tonight's game ([DioramaTools] `land`): the preparation's world, places and land.
+static func diorama(title: String, brief: String, plan: Dictionary, prep: Dictionary) -> Dictionary:
+	var world := PackedStringArray()
+	for k in ["world", "land", "starts"]:
+		if not String(prep.get(k, "")).strip_edges().is_empty():
+			world.append("%s: %s" % [k.capitalize(), String(prep[k])])
+	for p in (prep.get("places", []) if prep.get("places") is Array else []):
+		if p is Dictionary:
+			world.append("- %s: %s" % [String((p as Dictionary).get("name", "")), String((p as Dictionary).get("what", ""))])
+	var vars := _game_vars(title, plan, PackedStringArray())
+	vars.merge({"world": "\n".join(world), "board": GameDiorama.describe(), "shapes": Props.describe()})
+	return {"system": show_context(title, brief), "prompt": Rules.say("table/diorama.land", vars)}
+
+
+## The model maker, modeling the night's figures ([DioramaTools] `figures`): each as it was described when it was set down, and those
+## modeled on earlier nights.
+static func miniatures(title: String, brief: String, plan: Dictionary, figures: Array, kept: Array) -> Dictionary:
+	var lines := PackedStringArray()
+	for f in figures:
+		var d: Dictionary = f
+		lines.append("- %s: %s%s" % [String(d["name"]), String(d.get("looks", "")), (" (played by %s)" % String(d["owner"])) if not String(d.get("owner", "")).is_empty() else ""])
+	var vars := _game_vars(title, plan, PackedStringArray())
+	vars.merge({"figures": "\n".join(lines), "has_kept": not kept.is_empty(), "kept": ", ".join(PackedStringArray(kept)), "shapes": Props.describe(),
+		"tall": str(DioramaTools.FIGURE_TALL), "most": str(DioramaTools.FIGURE_MOST)})
+	return {"system": show_context(title, brief), "prompt": Rules.say("table/diorama.figures", vars)}
 
 
 ## A player, asked ([GameTools]): only who they are playing (the preparation's line for them, and their sheet), their want, what was said aloud and what they were just asked.
@@ -681,9 +723,12 @@ static func game_words(step: String, scenes: int) -> Vector2i:
 
 
 ## What a game's session asked to have painted: a map seen from straight above, a figure on the card it stands on, or a picture handed across a table.
-static func game_image(look: Dictionary, kind: String, thing: Dictionary, target: String) -> String:
+## [param refs]: whether references go with it (a page's earlier pages and figures).
+static func game_image(look: Dictionary, kind: String, thing: Dictionary, target: String, refs := false) -> String:
 	var vars := _look_vars(look, target)
-	vars.merge({"name": String(thing.get("name", "")), "looks": String(thing.get("looks", "")), "art": String(look.get("art", ""))}, true)
+	var shows: Array = thing.get("shows", []) if thing.get("shows") is Array else []
+	vars.merge({"name": String(thing.get("name", "")), "looks": String(thing.get("looks", "")), "art": String(look.get("art", "")), "own_hand": bool(look.get("own_hand", false)),
+		"has_shows": not shows.is_empty(), "shows": ", ".join(PackedStringArray(shows)), "refs": refs}, true)
 	return Rules.say("table/painter.game_%s" % kind, vars)
 
 

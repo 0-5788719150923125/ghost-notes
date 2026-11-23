@@ -116,7 +116,9 @@ Gates: `producer_resume_check`, `agent_tools_check`, and `pipeline_check`, with 
 
 ## Status
 
-Built: the contract, the card, all seven sections, the gates. docs.py's rule "one pipeline" holds that a new card cannot
+Built: the contract, the card, all seven sections, the gates. A table show's row ⟳ makes its step again and then everything
+made from it, in order, as Generate makes what goes stale (a 🔒 stops it there; `TableProducer.start`'s `follow`), and every
+group's own line has a ⟳ that makes every step in it again but the locked (`PipelineSection.group_again`). docs.py's rule "one pipeline" holds that a new card cannot
 grow a ⟳ of its own (`ActorSourceList`'s stays - it lists a link again and makes nothing). Gate:
 `tests/ui/pipeline_check.gd`, with `tests/table_show/episode_rows_check.gd` and
 `tests/media/pictures_rows_check.gd` on the real cards; `tests/ui/pipeline_look_probe.gd` to look at it.

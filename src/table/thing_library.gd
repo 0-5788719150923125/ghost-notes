@@ -34,10 +34,18 @@ static func dir() -> String:
 	return Library.shelf(SHELF)
 
 
+## A kept prop's name made generic: whose it was taken off its front ("Mike's glass of water" is a glass of water). A prop is kept
+## to stand on any show's table, where nobody of the show it came from exists; a place's name in it is the namer's to leave out.
+static func generic(name: String) -> String:
+	var rx := RegEx.create_from_string("^(?:[A-Z][\\w.-]*\\s+)*[A-Z][\\w.-]*['\u2019]s\\s+")
+	var out := rx.sub(name.strip_edges(), "")
+	return out if not out.is_empty() else name.strip_edges()
+
+
 ## The entry [param thing] would be, kept with what [param materials] has of the ones its parts use and [param line] saying what it
 ## is: `{name, line, thing, materials, hash}`; {} for a thing with no name or no parts.
 static func entry_of(thing: Dictionary, materials: Dictionary, line := "") -> Dictionary:
-	var name := String(thing.get("name", "")).strip_edges()
+	var name := generic(String(thing.get("name", "")))
 	if name.is_empty() or not (thing.get("parts") is Array) or (thing["parts"] as Array).is_empty():
 		return {}
 	var own := {}

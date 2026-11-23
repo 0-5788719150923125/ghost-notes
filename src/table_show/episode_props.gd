@@ -11,12 +11,20 @@ class_name EpisodeProps
 ##
 ## An entry's × takes the thing off the table for good, from either list, as a hand's version too.
 ##
+## A game's model ([GameDiorama]) adds two lists, Keep alone on each, so what was modeled for one night can be kept in the
+## library and found again on the next:
+##
+##   The land   each place on the board (`diorama.json`)
+##   Figures    each figure modeled for the night (`minis.json`)
+##
 ## Its shelves on the Dex are the library's ([LibraryProps]: kept and seen props), each offered to Use on this episode's table. A
 ## prop's picture is taken once and kept by its hash ([PropStudio]); a row's when it first shows.
 
 const GROUPS := [
 	{"key": "table", "label": "Used", "tip": "What this episode's table uses. Untick one to set it aside: the table is then yours, and the work done on it is blocked again on Generate."},
 	{"key": "aside", "label": "Set aside", "tip": "Taken off this episode's table and kept here: tick one to use it again."},
+	{"key": "board", "label": "The land", "tip": "The places modeled on this game's board. Keep one to find it again on another night."},
+	{"key": "figures", "label": "Figures", "tip": "The figures modeled for this game. Keep one to find it again on another night."},
 ]
 ## What a row's tick says on hover.
 const ON_TIP := "Ticked, this episode's table uses it; unticked, it is set aside and kept here."
@@ -28,6 +36,8 @@ var library := LibraryProps.new()
 var _table_key := ""              # the episode and its table's digest, as last read
 var _table := {}
 var _hashes := {}                 # a thing's name -> its hash ([method ThingLibrary.hash_of]), for the table as last read
+var _models_key := ""
+var _models := {}                 # "place" / "figure" -> name -> {thing, materials, hash}, the board and the figures as last read
 
 
 func _init(c: EpisodeCard) -> void:
@@ -68,7 +78,45 @@ func rows() -> Array:
 				"tip": String(thing.get("why", name)), "group": "table" if list == "things" else "aside",
 				"picture": pics.of(h, thing, mats), "on": list == "things", "on_tip": ON_TIP, "verbs": verbs,
 				"remove_tip": "Take it off this episode's table for good: the table is then yours, as unticking it makes it."})
+	var models := _read_models()
+	for kind in ["place", "figure"]:
+		var by: Dictionary = models.get(kind, {})
+		for name in by:
+			var m: Dictionary = by[name]
+			var h := String(m["hash"])
+			var as_kept := String(kept.get(h, ""))
+			out.append({"key": "%s:%s" % [kind, name], "name": String(name), "line": "in your library" if not as_kept.is_empty() else "",
+				"tip": String(name), "group": "board" if kind == "place" else "figures", "picture": pics.of(h, m["thing"], m["materials"]),
+				"verbs": [{"key": "keep", "label": "Kept" if not as_kept.is_empty() else "Keep", "off": not as_kept.is_empty(),
+					"tip": ("In your library as %s." % as_kept) if not as_kept.is_empty() else "Keep it in your library, to use again on another night."}],
+				"remove_off": "Model it again from its row on the Episode card."})
 	return out
+
+
+## The board's places and the night's figures, each a thing: read again only when either file changes.
+func _read_models() -> Dictionary:
+	var ep := card._episode
+	if ep == null or not ep.wants_game():
+		return {}
+	var key := "%s|%s|%s" % [ep.dir, ep.digest("diorama") if ep.has("diorama") else "", ep.digest("minis") if ep.has("minis") else ""]
+	if key == _models_key:
+		return _models
+	_models_key = key
+	_models = {"place": {}, "figure": {}}
+	var d: Variant = ep.read_json("diorama") if ep.has("diorama") else null
+	if d is Dictionary:
+		var mats: Dictionary = (d as Dictionary).get("materials", {}) if (d as Dictionary).get("materials") is Dictionary else {}
+		for p in ((d as Dictionary).get("places", []) as Array):
+			if p is Dictionary and (p as Dictionary).get("thing") is Dictionary:
+				(_models["place"] as Dictionary)[String(p["name"])] = {"thing": p["thing"], "materials": mats, "hash": ThingLibrary.hash_of(p["thing"], mats)}
+	var m: Variant = ep.read_json("minis") if ep.has("minis") else null
+	if m is Dictionary and (m as Dictionary).get("figures") is Dictionary:
+		var mats: Dictionary = (m as Dictionary).get("materials", {}) if (m as Dictionary).get("materials") is Dictionary else {}
+		var figs: Dictionary = (m as Dictionary)["figures"]
+		for name in figs:
+			if figs[name] is Dictionary:
+				(_models["figure"] as Dictionary)[String(name)] = {"thing": figs[name], "materials": mats, "hash": ThingLibrary.hash_of(figs[name], mats)}
+	return _models
 
 
 func set_on(key: String, on: bool) -> String:
@@ -133,9 +181,13 @@ func act(key: String, verb: String) -> String:
 ## not kept again.
 func _keep_from(kind: String, name: String) -> Dictionary:
 	var th := _thing_of(kind, name)
+	var mats: Dictionary = _table.get("materials", {}) if _table.get("materials") is Dictionary else {}
+	if kind in ["place", "figure"]:
+		var m: Dictionary = (_read_models().get(kind, {}) as Dictionary).get(name, {})
+		th = m.get("thing", {})
+		mats = m.get("materials", {})
 	if th.is_empty():
 		return {"error": "%s is not on this table" % name}
-	var mats: Dictionary = _table.get("materials", {}) if _table.get("materials") is Dictionary else {}
 	var h := ThingLibrary.hash_of(th, mats)
 	var already := String(library.kept_by_hash().get(h, ""))
 	if not already.is_empty():
@@ -163,6 +215,9 @@ func prop_of(key: String) -> Dictionary:
 			return {}
 		var mats: Dictionary = _table.get("materials", {}) if _table.get("materials") is Dictionary else {}
 		return {"name": name, "thing": th, "materials": mats, "hash": String(_hashes.get(name, ""))}
+	if kind in ["place", "figure"]:
+		var m: Dictionary = (_read_models().get(kind, {}) as Dictionary).get(name, {})
+		return {} if m.is_empty() else {"name": name, "thing": m["thing"], "materials": m["materials"], "hash": String(m["hash"])}
 	return library.prop_of(key)
 
 

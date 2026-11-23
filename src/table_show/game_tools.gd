@@ -12,6 +12,8 @@ class_name GameTools
 ##   change    a field of a sheet                  move, place, fall, rise, remove   a figure on the map
 ##   map       another map goes down               reveal                            a picture held up
 ##   state     everything as it stands
+##   picture   a page of the night's book: what the viewer sees now, painted later and shown over the table until the next page
+##   board     the view back from the pages to the table, to watch it (as `watch` on a roll or a move)
 ##   ask       a player, asked: see below           ask_table                         all of them at once
 ##   end_scene this scene is done, and named         game_over                         the game is done, and the scenes left will not be played
 ##
@@ -23,12 +25,21 @@ class_name GameTools
 ## The players are other agents: [method _ask] starts a job for that person, knowing only their sheet, their own want and what has been said aloud, and hands its answer back to this
 ## one's call. The game master may not decide what they do, only what comes of it. A gate replaces the job ([member asker]).
 ##
+## Where the table has a model's board ([member diorama], [GameDiorama]) it is the map: a figure is set at a place by its name or at
+## centimeters, several go together in one move, and no other map is laid. A turn passes ([method GameLedger.turn_to]) to a player
+## asked and to whoever throws, its mark where it happens, so the view goes round to them ([Cameras] `seat`).
+##
 ## No game is named here: dice, fields, a board, a table of people. The rules are the brief's and the game master's.
 
 const SUBMITTED := "submitted.json"
 ## A line that overlaps the one before, when it does not say by how much ([constant Manuscript.OVER]'s bare mark).
 const OVER_LEAST := 0.1
 const OVER_MOST := 3.0
+## The most words said with nothing shown before the game master is told to show something ([method _running]), and the least
+## share of that a stretch must have shown to be handed in ([method _submit]): pictures break up the talk, and the viewer sees the
+## story through them.
+const PICTURE_EVERY := 130
+const PICTURES_LEAST := 0.6
 ## The most lines in one call: a scene is said in stretches, each answered with how long it has run.
 const LINES_MOST := 40
 ## How much of what has been said a player is told, in words (the rest is long ago, and the cost of a question grows with it).
@@ -58,11 +69,14 @@ var game_over := false
 var asker: Callable = Callable()
 ## How long this scene is meant to run, in words said (the rules tell it).
 var words_aim := Vector2i(400, 1000)
+## The model's board this game is played on ([GameDiorama]), or {} for maps laid as it goes.
+var diorama := {}
 
 var _released := false
 var _asked := {}          # a person -> [{q, a}] in this scene
 var _jobs := 0
 var _diceless_told := false
+var _pictures_told := false
 
 
 func _init(ep: TableEpisode, scene: String, plan_data: Dictionary, prep_data: Dictionary, cast: PackedStringArray, start: GameLedger, job_dir: String, before: String) -> void:
@@ -90,6 +104,30 @@ func instructions() -> String:
 
 
 func list_tools() -> Array:
+	var out := _tools()
+	out.insert(out.size() - 4, {"name": "picture", "description": "A page of tonight's book: what the viewer SEES now, painted later and shown full frame. It stays until the next page, or until you go back to the table (`board`, or `watch` on a roll or a move): the story is told over a sequence of pages, as a bard tells it, each held while its words are said. `looks`: the picture, as an illustrator is told it - who and what is in it, where, doing what, the light, what is close to us and what far off; never words or lettering in it. `shows`: the names of the figures and places in it, as the game calls them, so each is painted as it looks everywhere else.",
+		"inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "looks": {"type": "string"}, "shows": {"type": "array", "items": {"type": "string"}}}, "required": ["name", "looks"]}})
+	out.insert(out.size() - 4, {"name": "board", "description": "Take the view from the pages back to the table, to watch what happens on it now: the board, the figures, the dice. Only when it is worth watching - the next page takes the view again.",
+		"inputSchema": {"type": "object", "properties": {}}})
+	if diorama.is_empty():
+		return out
+	# ...on a model's board: it is the map, a place is a name on it, and several figures go together
+	var kept: Array = []
+	for t in out:
+		match String((t as Dictionary)["name"]):
+			"map":
+				continue
+			"place":
+				t = {"name": "place", "description": "Set a figure on the board. `at`: a place's name, or [x, z] in centimeters from the board's far left. `looks`: what the figure is, for the one who models it. `owner`: the person who plays it, if anyone.",
+					"inputSchema": {"type": "object", "properties": {"figure": {"type": "string"}, "at": {"description": "a place's name, or [x, z]"}, "looks": {"type": "string"}, "owner": {"type": "string"}}, "required": ["figure", "at", "looks"]}}
+			"move":
+				t = {"name": "move", "description": "Figures walk across the board to somewhere else: the view goes down beside them as they go, so say what they pass while they walk. `to`: a place's name, or [x, z] in centimeters. `figures`: several who go together. Answered with how far, for you to judge.",
+					"inputSchema": {"type": "object", "properties": {"figure": {"type": "string"}, "figures": {"type": "array", "items": {"type": "string"}}, "to": {"description": "a place's name, or [x, z]"}, "watch": {"type": "boolean", "description": "the view comes back from the pages to walk with them"}}, "required": ["to"]}}
+		kept.append(t)
+	return kept
+
+
+func _tools() -> Array:
 	var who := {"type": "string", "description": "the person at the table: %s" % ", ".join(people)}
 	return [
 		{"name": "say", "description": "Lines said at the table, in order, each by one person. A line is only ever words a person says aloud. `over`: it comes in before the last line has ended (true, or the seconds of overlap). `together`: it comes in with the last line, as a table reacts as one. Answered with how long the scene has run.",
@@ -99,7 +137,8 @@ func list_tools() -> Array:
 		{"name": "roll", "description": "Dice thrown onto the table, now, by the person named, from where they sit. Answered with what came up and, when it needed something, whether it made it: that stands, and nothing rolls it again. Say what the roll is for and who throws it BEFORE you know the result. Written as players write it: 1d20+5, 2d20kh1+5, 8d6, 20d6>=3, 1d100, 4dF.",
 			"inputSchema": {"type": "object", "properties": {"who": who, "dice": {"type": "string"}, "why": {"type": "string"},
 				"needs": {"type": "string", "description": "what it must come to, decided now, before it lands, from what is happening: a number it must reach (15), a comparison (<=40 for a game rolled under, >=3 for counted successes), or none when nothing is to be reached (an amount, an order of turns, a table to read). Never changed after."},
-				"hidden": {"type": "boolean", "description": "thrown behind a screen: the table sees and hears it land, and only the thrower knows"}}, "required": ["who", "dice", "why", "needs"]}},
+				"hidden": {"type": "boolean", "description": "thrown behind a screen: the table sees and hears it land, and only the thrower knows"},
+				"watch": {"type": "boolean", "description": "the view comes back from the pages to the table to watch it land (a throw that comes up its highest or lowest face is watched unless this is false)"}}, "required": ["who", "dice", "why", "needs"]}},
 		{"name": "change", "description": "Write on a sheet: a field `by` a number, `to` a value, or `add` / `remove` from a list. Fields are named by you: the game's own. Answered with what it was and what it is.",
 			"inputSchema": {"type": "object", "properties": {"who": {"type": "string"}, "field": {"type": "string"}, "by": {"type": "number"}, "to": {}, "add": {}, "remove": {}, "why": {"type": "string"}}, "required": ["who", "field"]}},
 		{"name": "map", "description": "Lay another map on the table. Whatever stood on the last comes off. `looks`: what it shows, from directly above, for the painter - any place at all, prepared or not. `size`: [across, down] in squares. `grid` false for a game measured with a tape, and `unit` what it measures in.",
@@ -136,16 +175,30 @@ func call_tool(name: String, args: Dictionary) -> Dictionary:
 			var need := str(int(needs)) if needs is float or needs is int else str(needs) if needs != null else ""
 			if need.strip_edges().is_empty():
 				return {"text": "`needs`: what it must come to, decided before it lands - a number (15), a comparison (<=40, >=3), or none. Nothing was thrown.", "error": true}
-			return _did(ledger.roll(_person(args.get("who", "")), String(args.get("dice", "")), String(args.get("why", "")), seed_value, bool(args.get("hidden", false)), need), "roll")
+			# ...the thrower's turn first, where the throw can be made at all
+			if bool(GameLedger.needs_of(need)["ok"]) and bool(DiceNotation.roll(String(args.get("dice", "")), 0)["ok"]):
+				_turn(_person(args.get("who", "")))
+			var thrown := ledger.roll(_person(args.get("who", "")), String(args.get("dice", "")), String(args.get("why", "")), seed_value, bool(args.get("hidden", false)), need)
+			if bool(thrown.get("ok", false)) and args.has("watch"):
+				(thrown["event"] as Dictionary)["watch"] = args["watch"] == true
+			return _did(thrown, "roll")
 		"change":
 			return _did(ledger.change(String(args.get("who", "")), String(args.get("field", "")), _how_changed(args), String(args.get("why", ""))))
 		"map":
 			var size: Array = args.get("size", [20, 14]) if args.get("size") is Array else [20, 14]
 			return _did(ledger.map_down(String(args.get("name", "")), String(args.get("looks", "")), size, bool(args.get("grid", true)), String(args.get("unit", GameLedger.UNIT))), "map")
 		"place":
-			return _did(ledger.place(String(args.get("figure", "")), _at(args.get("at")), String(args.get("looks", "")), _owner(args.get("owner", ""))), "place")
+			var at := _where(args.get("at"), String(args.get("figure", "")))
+			if at.is_empty():
+				return {"text": _nowhere(args.get("at")), "error": true}
+			return _did(ledger.place(String(args.get("figure", "")), at, String(args.get("looks", "")), _owner(args.get("owner", ""))), "place")
 		"move":
-			return _did(ledger.move(String(args.get("figure", "")), _at(args.get("to"))), "move")
+			return _move(args)
+		"board":
+			return _did(ledger.to_board(), "board")
+		"picture":
+			var shows: Array = args.get("shows", []) if args.get("shows") is Array else []
+			return _did(ledger.picture(String(args.get("name", "")), String(args.get("looks", "")), shows), "picture")
 		"fall", "rise", "remove":
 			return _did(ledger.figure_state(name, String(args.get("figure", ""))), name)
 		"reveal":
@@ -176,6 +229,65 @@ func _did(got: Dictionary, mark := "") -> Dictionary:
 		if bool(e.get("hidden", false)):
 			text += " Behind the screen: only you know it."
 	return {"text": text}
+
+
+## The turn passes to [param who], its mark here: nothing where it is theirs already.
+func _turn(who: String) -> void:
+	var got := ledger.turn_to(who)
+	if bool(got.get("ok", false)):
+		items.append({"mark": "turn", "id": int((got["event"] as Dictionary)["id"])})
+
+
+## Where [param v] says on the map: [x, y], or on a model's board a place's name, a little apart from whatever already stands there.
+func _where(v: Variant, figure: String) -> Array:
+	if v is Array:
+		return v
+	if diorama.is_empty() or not (v is String):
+		return []
+	var at := GameDiorama.place_at(diorama, String(v))
+	if at.is_empty():
+		return []
+	# ...a few figures sent to one place stand round it, as a hand sets them down
+	var k := 0
+	for name in ledger.figures:
+		if String(name) != figure and ledger.distance((ledger.figures[name] as Dictionary)["at"], at) < 6.0:
+			k += 1
+	var a := float(k) * 2.4
+	var r := 0.0 if k == 0 else 3.2 + float(k) * 0.35
+	return [clampf(float(at[0]) + cos(a) * r, 0.0, GameDiorama.SIZE.x), clampf(float(at[1]) + sin(a) * r, 0.0, GameDiorama.SIZE.y)]
+
+
+func _nowhere(v: Variant) -> String:
+	if diorama.is_empty():
+		return "`at` is [x, y] on the map."
+	var names := PackedStringArray()
+	for p in diorama.get("places", []):
+		names.append(String((p as Dictionary)["name"]))
+	return "There is no place called \"%s\" on the board. Its places: %s; or give [x, z] in centimeters." % [String(v), ", ".join(names)]
+
+
+## One figure moved, or several together (`figures`), each its own move.
+func _move(args: Dictionary) -> Dictionary:
+	var names: Array = []
+	if args.get("figures") is Array:
+		names = args["figures"]
+	if not String(args.get("figure", "")).is_empty():
+		names.push_front(String(args["figure"]))
+	if names.is_empty():
+		return {"text": "`figure`, or `figures` for several going together.", "error": true}
+	var said := PackedStringArray()
+	for n in names:
+		var to := _where(args.get("to"), String(n))
+		if to.is_empty():
+			return {"text": _nowhere(args.get("to")), "error": true}
+		var moved := ledger.move(String(n), to)
+		if bool(moved.get("ok", false)) and args.get("watch") == true:
+			(moved["event"] as Dictionary)["watch"] = true
+		var got := _did(moved, "move")
+		if bool(got.get("error", false)):
+			return got if said.is_empty() else {"text": "; ".join(said) + ". Then: " + String(got["text"]), "error": true}
+		said.append(String(got["text"]))
+	return {"text": "; ".join(said)}
 
 
 func _how_changed(args: Dictionary) -> Dictionary:
@@ -252,7 +364,32 @@ func _running() -> String:
 	for it in items:
 		if String((it as Dictionary).get("mark", "")) == "roll":
 			rolled += 1
-	return "This scene so far: %d words, about %d minutes, %d rolls (aim: %d to %d words)." % [n, roundi(float(n) * TablePrompts.SAID_WORD / 60.0), rolled, words_aim.x, words_aim.y]
+	var said := "This scene so far: %d words, about %d minutes, %d rolls, %d pictures (aim: %d to %d words)." % [n, roundi(float(n) * TablePrompts.SAID_WORD / 60.0), rolled, _pictures(), words_aim.x, words_aim.y]
+	var bare := _words_unshown()
+	if bare >= PICTURE_EVERY:
+		said += " %d words have gone by with nothing shown: call `picture` now, for what the viewer should be seeing while these words are said." % bare
+	return said
+
+
+## How many pages this stretch has shown.
+func _pictures() -> int:
+	var n := 0
+	for it in items:
+		if String((it as Dictionary).get("mark", "")) == "picture":
+			n += 1
+	return n
+
+
+## How many words have been said since the last thing a viewer was shown: a page, or figures walking.
+func _words_unshown() -> int:
+	var n := 0
+	for i in range(items.size() - 1, -1, -1):
+		var d: Dictionary = items[i]
+		if String(d.get("mark", "")) in ["picture", "move"]:
+			break
+		if d.has("says"):
+			n += String(d["says"]).split(" ", false).size()
+	return n
 
 
 static func words_said(list: Array) -> int:
@@ -272,6 +409,7 @@ func _ask(args: Dictionary) -> Dictionary:
 	var q := String(args.get("what", "")).strip_edges()
 	if q.is_empty():
 		return {"text": "`what` is what you say to them.", "error": true}
+	_turn(who)
 	var a: String = await _answer_of(who, q)
 	return {"text": "%s: %s" % [who, a]}
 
@@ -388,6 +526,10 @@ func _submit(chapter := "", ending := false, how := "") -> Dictionary:
 	if not ending and step.is_valid_int() and not _diceless_told and not _rolled_any():
 		_diceless_told = true
 		return {"text": "Nothing has been thrown in this stretch. If nothing anyone tried could have gone wrong, call it again; if something could, play on and roll it. Nothing was handed in.", "error": true}
+	var wanted := floori(float(words_said(items)) / float(PICTURE_EVERY) * PICTURES_LEAST)
+	if not _pictures_told and _pictures() < wanted:
+		_pictures_told = true
+		return {"text": "This stretch has shown %d pictures in %d words: the viewer sees the story through them, so it wants about %d. Play on a little and show what is happening as it is said - then end it. Nothing was handed in." % [_pictures(), words_said(items), wanted], "error": true}
 	if ending:
 		ledger.end_game(how)
 		game_over = true

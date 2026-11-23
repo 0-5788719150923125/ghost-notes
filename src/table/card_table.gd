@@ -262,13 +262,13 @@ static func game_of(plan: Dictionary) -> bool:
 const GAME_FOV := 29.0
 
 
-## The camera over a game: high over the near edge, looking well down, so that the whole board and what is round it are in the picture, a little different every episode.
+## The camera over a game: high over the near edge, looking well down, so that the whole board ([constant GameBoard.MAP_MOST]) and what is round it are in the picture, a little different every episode.
 static func game_camera(seed: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([seed, "game-camera"])
 	var pitch := rng.randf_range(60.0, 66.0)
 		# ...a long lens, from far off: at this angle a short one leans whatever stands at the table's edges out of the picture
-	var dist := rng.randf_range(1.22, 1.3)
+	var dist := rng.randf_range(3.75, 3.9)
 	var yaw := deg_to_rad(rng.randf_range(-2.5, 2.5))
 	var target := Vector3(rng.randf_range(-0.01, 0.01), 0.0, GameBoard.MIDDLE.y + 0.01)
 	var p := deg_to_rad(pitch)
