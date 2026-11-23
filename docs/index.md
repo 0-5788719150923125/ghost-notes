@@ -400,6 +400,7 @@ A note that makes its own sound (next/music.md): the theory and the banks a song
 
 Rendering a session to video (bake + Movie Maker, background processes) and uploading it to YouTube. Under the workspaces: a reading and a show of cards export a take and fill in an upload, and the exporter names neither.
 
+- [`export_space.gd`](../src/export/export_space.gd) **ExportSpace** - how much disk an export needs, and whether the disk it is saved to has that much.
 - [`exporter.gd`](../src/export/exporter.gd) **Exporter** - renders the visualization to a video in the background, as separate processes polled by PID.
 - [`oauth.gd`](../src/export/oauth.gd) **oauth** - OAuth - what every upload site's sign-in and requests share: the one-shot listener on 127.0.0.1 that catches the browser's redirect (`await_code`), the page it answers with, and one HTTP exchange (`send`).
 - [`stitch.gd`](../src/export/stitch.gd) **Stitch** - a stretch of an export rendered again and put back in its place (next/editing.md step 13; next/cloud_render.md's `--from` and stitch, on this machine): a late fix renders its stretch, not the whole video.

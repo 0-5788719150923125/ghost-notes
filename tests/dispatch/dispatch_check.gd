@@ -8,6 +8,8 @@ extends SceneTree
 ##   (the control: none again, as it was);
 ## - actions fit the voice's rests: each placed and done before the next word; two pings a hesitation apart stay apart;
 ## - phones: the one called is at the ear while its voice speaks, the previous one laid open, picked back up, all back at the end;
+##   on every desk, a phone held in the camera's frame at a close-up is drawn in toward the eye clear of the desk's things wherever
+##   its line has room (the control: held where it floats, some close-up has it in a thing);
 ## - the desk is seen first: nothing happens and the camera stays home through the opening rest;
 ## - the terminal: dark until a block wakes it to its command line; a command typed there a key at a time and cleared as the
 ##   panel it opens comes up, the header at once and the body a line at a time; redacted words are one run on their row,
@@ -1574,6 +1576,10 @@ func _layout() -> void:
 	var carried_clear := 0
 	var carried_low := 0
 	var straight_blocked := 0
+	var held_tries := 0
+	var held_met := 0
+	var held_drawn := 0
+	var held_bad := ""
 	for seed in range(1, 41):
 		var s := DispatchSet.new()
 		var node := s.build(labels, seed, tex, {"clock": true, "tablet": true} if seed % 2 == 0 else {})
@@ -1591,6 +1597,21 @@ func _layout() -> void:
 			if not s.slab_clear(s.tablet_box, lies, DispatchMedium.tablet_way(lies, hand,
 					Vector3(mid.x, lies.origin.y + DispatchMedium.TABLET_OVER.x, mid.z)), DispatchMedium.CARRY_GAP, ["tablet"]):
 				straight_blocked += 1
+		# a phone held in the camera's frame at each close-up, at the ear and up before the eye
+		for key in s.spots:
+			var sp: Dictionary = s.spots[key]
+			var cam := Transform3D.IDENTITY.looking_at((sp["aim"] as Vector3) - (sp["eye"] as Vector3), Vector3.UP)
+			cam.origin = sp["eye"]
+			for local in [DispatchMedium.ear_local(), DispatchMedium.read_local()]:
+				var as_held := cam * (local as Transform3D)
+				var held := DispatchMedium.held_in(s, cam, local)
+				var nearest := cam * Transform3D((local as Transform3D).basis, (local as Transform3D).origin * DispatchMedium.HELD_NEAREST)
+				held_tries += 1
+				held_met += int(not s.held_clear(s.phone_box, as_held, DispatchMedium.HELD_GAP))
+				held_drawn += int(not held.is_equal_approx(as_held))
+				if held_bad.is_empty() and not s.held_clear(s.phone_box, held, DispatchMedium.HELD_GAP) \
+						and s.held_clear(s.phone_box, nearest, DispatchMedium.HELD_GAP):
+					held_bad = "%s on desk %d" % [key, seed]
 		flips[int(s.flip)] = true
 		var m: Vector2 = s.at["mug"]
 		mugs[snappedf(m.x, 0.01)] = true
@@ -1661,6 +1682,10 @@ func _layout() -> void:
 		"the tablet is carried clear of what stands under its way on every desk, on most no higher than the hand holds it (%d desks, %d clear, %d no higher)"
 			% [carried, carried_clear, carried_low])
 	_ok(straight_blocked > 0, "the control: carried straight and at its least height, something stands in the tablet's way on %d desks" % straight_blocked)
+	_ok(held_bad.is_empty() and held_drawn > 0 and held_tries > 0,
+		"a phone held in the camera's frame is drawn in toward the eye clear of what the camera came close to, wherever its line has room (%d held, %d drawn in; %s)"
+			% [held_tries, held_drawn, held_bad])
+	_ok(held_met > 0, "the control: held where it floats, a phone in the camera's frame meets a thing on the desk at %d of %d close-ups" % [held_met, held_tries])
 	_ok(spots_follow, "the camera turns to where each thing is")
 	_ok(ring_ok, "the old coffee ring is a thin opaque rim, never a clear disc")
 

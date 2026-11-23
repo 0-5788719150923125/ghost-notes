@@ -219,8 +219,7 @@ func _ready() -> void:
 	layer = 250          # above the notes list (200), so status shows there too
 	# remove a stale override.cfg left by a killed render - never from a read-only process (a probe, the README's recording),
 	# which may run beside the author's own export
-	if not Settings.is_read_only():
-		_clear_override()
+	_clear_override()
 	_build_ui()
 	_place_status()
 	get_viewport().size_changed.connect(_place_status)
@@ -236,7 +235,7 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what != NOTIFICATION_WM_CLOSE_REQUEST and what != NOTIFICATION_EXIT_TREE:
 		return
-	if _state == "idle" or _state == "done":
+	if _state == "idle" or _state == "done" or _state == "space_wait":
 		return
 	if _state in ["preparing", "upload_wait", "uploading", "tiktok"]:
 		# the video is saved and the upload waits in pending.json: nothing to stop or clear
@@ -346,6 +345,7 @@ func _build_ui() -> void:
 	_sign_dialog.confirmed.connect(_on_sign_close)
 	_sign_dialog.canceled.connect(_on_sign_close)
 	add_child(_sign_dialog)
+	_build_space_dialog()
 
 
 func _process(dt: float) -> void:
@@ -361,7 +361,7 @@ func _process(dt: float) -> void:
 		"rendering":
 			_tick_render(dt)
 		"transcoding":
-			_tick_transcode()
+			_tick_transcode(dt)
 		"stitching":
 			_tick_stitch()
 		"preparing":
@@ -483,18 +483,27 @@ func _tick_render(dt: float) -> void:
 	var how := " …  %.1f%%" % (maxf(_stall_frac, 0.0) * 100.0)
 	if _note_no_virtual_display:
 		how += "   ⚠ leave the render window visible"
+	_watch_space(dt)
+	how += _space_note
 	_set_status("⏺  Rendering %s%s" % [_out.get_file(), how],
 		Color(0.95, 0.92, 0.7))
 
 
-func _tick_transcode() -> void:
+func _tick_transcode(dt: float) -> void:
 	if Subprocess.alive(_transcode_pid):
-		_set_status("⏳  Finalizing %s …  %d%%" % [_out.get_file(), _read_transcode_pct()], Color(0.95, 0.92, 0.7))
-	elif FileAccess.file_exists(_out) and _file_size(_out) > 4096 and not _stretch.is_empty():
+		_watch_space(dt)
+		_set_status("⏳  Finalizing %s …  %d%%%s" % [_out.get_file(), _read_transcode_pct(), _space_note],
+			Color(0.95, 0.92, 0.7))
+		return
+	_space_note = ""
+	if _space_dialog != null and _space_dialog.visible:
+		_space_dialog.hide()
+	if FileAccess.file_exists(_out) and _file_size(_out) > 4096 and not _stretch.is_empty():
 		_drop_scratch()
 		_start_stitch()                   # a stretch: put back into the earlier export
 	elif FileAccess.file_exists(_out) and _file_size(_out) > 4096:
 		_drop_scratch()                   # transcode ok -> the scratch goes, and its space with it
+		_remember_rate()
 		_state = "done"
 		_done_t = 30.0
 		_set_status("✓  Saved  %s%s" % [_out, _shorts_note()], Color(0.82, 0.95, 0.86))
@@ -826,10 +835,181 @@ func _on_path(out_path: String) -> void:
 	# the user.
 	_avi = _out.get_basename() + ".render.avi"
 	_cache = Bake.cache_path(_song)
+	_space_asked = false
+	if _ask_space():
+		return
+	_set_off()
+
+
+## The pipeline started: straight to the render when the take is already analyzed, else the bake first.
+func _set_off() -> void:
 	if FileAccess.file_exists(_cache):
-		_start_render()                          # already analyzed -> straight to render
+		_start_render()
 	else:
 		_start_bake()
+
+
+# --- disk space ([ExportSpace]) ---------------------------------------------------------------------------------------
+#
+# Asked before the render, when the estimate is more than the disk has; watched while it renders, where a shortfall is said
+# on the progress line and in a dialog that never stops the export: the render goes on while the person makes room. The
+# dialog opens once an export, before or during; after that only the progress line says it.
+
+## Seconds between in-flight checks.
+const SPACE_EVERY := 5.0
+
+var _space_dialog: AcceptDialog
+var _space_stop: Button           # the dialog's Cancel before the render, Stop the export during it
+var _space_t := 0.0
+var _space_asked := false        # this export has asked once, before or during: it never asks again
+var _space_note := ""            # the shortfall on the progress line, "" when there is room
+var _space_before := false       # the dialog is asking before the render (Cancel = never start), not during it
+
+
+func _build_space_dialog() -> void:
+	# closed with its × or Escape, it changes nothing: a render goes on, and one not yet started does not start
+	_space_dialog = AcceptDialog.new()
+	_space_dialog.title = "The disk may run short"
+	_space_dialog.dialog_autowrap = true
+	_space_dialog.exclusive = false
+	_space_stop = _space_dialog.add_button("Stop the export", true, "stop")
+	_space_dialog.confirmed.connect(_on_space_go)
+	_space_dialog.canceled.connect(_on_space_closed)
+	_space_dialog.custom_action.connect(func(_a: StringName) -> void:
+		_space_dialog.hide()
+		_on_space_stop())
+	add_child(_space_dialog)
+
+
+## Output pixels a second, and rendered pixels a second (the supersampled size Movie Maker writes).
+func _px_s() -> float:
+	return float(_quality.w) * float(_quality.h) * float(_quality.fps)
+
+
+func _render_px_s() -> float:
+	return float(_render_w()) * float(_render_h()) * float(_quality.fps)
+
+
+## The scratch is given back behind the encoder here ([method _punch_behind_encoder]).
+static func _gives_back() -> bool:
+	return OS.get_name() == "Linux" and Deps.has("fallocate")
+
+
+## Before the render: true when the estimate is more than the disk has and the person is being asked ([method _on_space_go]
+## starts it).
+func _ask_space() -> bool:
+	var free := ExportSpace.free_at(_out)
+	if free < 0 or _song_dur <= 0.0:
+		return false
+	var bpp := ExportSpace.rate_for(String(_quality.tag), Settings.read(ExportSpace.SECTION, ExportSpace.KEY, {}))
+	var extra := 0
+	if not _stretch.is_empty():
+		extra = 2 * _file_size(String(_stretch["old"]))      # the head, tail and whole copies of the earlier export
+	var need := ExportSpace.need_before(_song_dur, _px_s(), _render_px_s(), bpp, _gives_back(), extra)
+	print("ghost/export: about %s needed, %s free on the disk it is saved to" % [ExportSpace.size_text(need),
+		ExportSpace.size_text(free)])
+	if need <= free:
+		return false
+	_space_before = true
+	_space_dialog.ok_button_text = "Export anyway"
+	_space_stop.text = "Cancel"
+	_space_dialog.dialog_text = ("%s may need about %s, and the disk it is saved to has %s free. The estimate is generous: "
+		+ "a busy %s show takes the most, a calm one far less.\n\nDo you want to proceed?") % [_out.get_file(),
+		ExportSpace.size_text(need), ExportSpace.size_text(free), String(_quality.tag)]
+	_pop_space()
+	_state = "space_wait"
+	return true
+
+
+## While it renders and encodes: every [constant SPACE_EVERY] seconds, what is still to be written against what is free.
+func _watch_space(dt: float) -> void:
+	if _space_dialog == null:
+		return                           # built by hand, without its furniture
+	_space_t -= dt
+	if _space_t > 0.0:
+		return
+	_space_t = SPACE_EVERY
+	var free := ExportSpace.free_at(_out)
+	if free < 0:
+		return
+	var rendered := maxf(_stall_frac, 0.0) * _song_dur if _state == "rendering" else _song_dur
+	var scratch_more := 0 if _released else int((_song_dur - rendered) * _render_px_s() * ExportSpace.MJPEG_BYTES_PER_PX)
+	# until the encoder starts, its progress file and the file at the path are an earlier export's
+	var need := ExportSpace.need_more(_song_dur, _encoded_seconds(), _file_size(_out), scratch_more) \
+		if _transcode_pid > 0 else -1
+	if need < 0 and _state == "rendering" and not _live_encode:
+		# nothing encodes until the render ends: the whole MP4 is still to come, at the planned rate
+		var bpp := ExportSpace.rate_for(String(_quality.tag), Settings.read(ExportSpace.SECTION, ExportSpace.KEY, {}))
+		need = ExportSpace.padded(ExportSpace.mp4_bytes(_song_dur, _px_s(), bpp) + scratch_more)
+	if need < 0:
+		return                           # too early to project
+	if need <= free:
+		_space_note = ""
+		if _space_dialog.visible and not _space_before:
+			_space_dialog.dialog_text = ("There is room now: about %s more is needed and %s is free.\n\nThe export goes on."
+				% [ExportSpace.size_text(need), ExportSpace.size_text(free)])
+		return
+	_space_note = "   ⚠ the disk may run short: about %s more needed, %s free" % [ExportSpace.size_text(need),
+		ExportSpace.size_text(free)]
+	if _space_dialog.visible or not _space_asked:
+		_space_before = false
+		_space_dialog.ok_button_text = "Continue"
+		_space_stop.text = "Stop the export"
+		_space_dialog.dialog_text = ("%s looks like it will need about %s more by the time it is finished, and the disk it "
+			+ "is saved to has %s free.\n\nThe export keeps going while you decide, so there is time to free up some space. "
+			+ "Do you want to proceed?") % [_out.get_file(), ExportSpace.size_text(need), ExportSpace.size_text(free)]
+		if not _space_dialog.visible:
+			print("ghost/export: the disk may run short - about %s more needed, %s free" % [ExportSpace.size_text(need),
+				ExportSpace.size_text(free)])
+			_pop_space()
+
+
+func _pop_space() -> void:
+	_space_asked = true
+	_space_dialog.popup_centered(Vector2i(560, 0))
+	Shell.center_beside(_space_dialog, self)
+
+
+func _on_space_go() -> void:
+	if _space_before:
+		_space_before = false
+		_state = "idle"
+		_set_off()
+
+
+func _on_space_closed() -> void:
+	if _space_before:
+		_on_space_stop()
+
+
+func _on_space_stop() -> void:
+	if _space_before:
+		_space_before = false
+		_fail("⚠  Export not started - the disk it is saved to may be too small for it")
+		return
+	if _state != "rendering" and _state != "transcoding":
+		return
+	for pid in [_render_pid, _transcode_pid]:
+		Subprocess.stop(int(pid))
+	_render_pid = -1
+	_transcode_pid = -1
+	_live_encode = false
+	_drop_scratch()
+	if FileAccess.file_exists(_out):
+		DirAccess.remove_absolute(_out)          # a cut-off MP4 has no index and plays nowhere
+	_fail("⚠  Export stopped - %s was not finished" % _out.get_file())
+
+
+## The rate this export's MP4 took, kept for the next one's estimate ([method ExportSpace.remember]).
+func _remember_rate() -> void:
+	if not _stretch.is_empty():
+		return
+	var bpp := ExportSpace.measured(_file_size(_out), _song_dur, _px_s())
+	if bpp <= 0.0:
+		return
+	var kept: Dictionary = Settings.read(ExportSpace.SECTION, ExportSpace.KEY, {})
+	Settings.write(ExportSpace.SECTION, ExportSpace.KEY, ExportSpace.remember(kept, String(_quality.tag), bpp))
+	print("ghost/export: %s took %.4f bits a pixel (%.1f Mbps)" % [_quality.tag, bpp, bpp * _px_s() / 1e6])
 
 
 # Step 1: headless analysis (no window). Writes the spectrum cache, then exits.
@@ -854,6 +1034,8 @@ func _start_bake() -> void:
 func _start_render() -> void:
 	_pct = 0
 	_begin_scratch()
+	_space_t = SPACE_EVERY
+	_space_note = ""
 	Bake.write_progress(0.0)
 	# Movie Maker locks its output resolution to the project's viewport size at engine startup, so the only way to drive it is
 	# override.cfg, which Godot reads from the project root at boot. The chosen resolution is written there in "viewport"
@@ -1154,18 +1336,25 @@ func _progress_reset() -> void:
 # ffmpeg writes `out_time_us=<microseconds>` lines to the progress file; the fraction of the captured song duration
 # (`_song_dur`) it has reached is the transcode percent. Tolerates partial reads.
 func _read_transcode_pct() -> int:
-	if _song_dur <= 0.0 or not FileAccess.file_exists(_PROGRESS_FILE):
+	if _song_dur <= 0.0:
 		return _pct
-	var text := FileAccess.get_file_as_string(_PROGRESS_FILE)
+	var best := _encoded_seconds()
+	if best >= 0.0:
+		_pct = clampi(int(round(best / _song_dur * 100.0)), 0, 99)
+	return _pct
+
+
+## How many seconds of video the encoder has written, -1 before it says.
+func _encoded_seconds() -> float:
+	if not FileAccess.file_exists(_PROGRESS_FILE):
+		return -1.0
 	var best := -1.0
-	for line in text.split("\n"):
+	for line in FileAccess.get_file_as_string(_PROGRESS_FILE).split("\n"):
 		if line.begins_with("out_time_us="):
 			best = maxf(best, line.substr(12).to_float() / 1_000_000.0)
 		elif line.begins_with("out_time_ms="):     # older ffmpeg (value is microseconds despite the name)
 			best = maxf(best, line.substr(12).to_float() / 1_000_000.0)
-	if best >= 0.0:
-		_pct = clampi(int(round(best / _song_dur * 100.0)), 0, 99)
-	return _pct
+	return best
 
 
 # Godot's AVI writer keeps 32-bit RIFF/LIST size fields; past 4 GiB the sizes wrap (mod 2^32) while the chunks after them
@@ -1347,7 +1536,10 @@ func _write_override(w: int, h: int) -> void:
 	f.close()
 
 
+## The render's override.cfg removed - never by a read-only process (a gate, a probe), which may run beside a live export.
 func _clear_override() -> void:
+	if Settings.is_read_only():
+		return
 	var path := _override_path()
 	if FileAccess.file_exists(path):
 		DirAccess.remove_absolute(path)
@@ -1357,6 +1549,9 @@ func _fail(msg: String) -> void:
 	_clear_override()
 	_upload_this = false
 	_stretch = {}            # a stretch that failed is over: the next export is a whole one
+	_space_note = ""
+	if _space_dialog != null and _space_dialog.visible:
+		_space_dialog.hide()
 	_state = "done"
 	_done_t = 8.0
 	_set_status(msg, Color(1.0, 0.7, 0.6))

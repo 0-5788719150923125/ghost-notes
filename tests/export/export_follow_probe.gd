@@ -184,7 +184,7 @@ func _drive(ex: Exporter, done: Callable, limit_s: float) -> bool:
 			"rendering":
 				ex._tick_render(dt)
 			"transcoding":
-				ex._tick_transcode()
+				ex._tick_transcode(dt)
 		_sample(ex)
 	return true
 

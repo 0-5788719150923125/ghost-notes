@@ -44,6 +44,10 @@ const HELD_SLOTS := 3
 const HELD_FAN := 6.0
 ## The lid opens this far (degrees) about its hinge.
 const LID_OPEN := 158.0
+## The surfaces a thing held in the camera's frame keeps clear of ([method held_clear]): points this far apart (m), well under
+## an opened phone's box at its thinnest with its gap, kept by the cube of this side (m) they fall in.
+const SOLID_STEP := 0.015
+const SOLID_CELL := 0.04
 ## The terminal: where its case stands and its keyboard, and the case's size, which the cable and the switch's wire are laid
 ## by where a make names no point for them.
 const CASE := Vector3(0.44, 0.115, 0.40)
@@ -275,6 +279,8 @@ var _labels: PackedStringArray
 var _seed := 1
 var _faces := {}                  # a thing the camera turns to -> what of it must be seen ([method _sights]): Node3Ds
 var _parts := {}                  # a thing -> its parts as it stands ([method _parts_of]): what is packed keeps clear of them
+var _solid := {}                  # a cube of the set's space (Vector3i) -> points of the surfaces of the things in it ([method held_clear])
+var phone_box := AABB()           # a phone opened, in its own space: what is held in the camera's frame ([method held_clear])
 var _blocks := {}                 # a thing -> each of its meshes' boxes as it stands: what a line to a face may pass through
 var _wants := {}                  # the things built only where the script uses them: clock, tablet
 var _tex := {}
@@ -314,6 +320,9 @@ func build(labels: PackedStringArray, seed: int, tex: Dictionary, wants := {}) -
 		var s := spot_of(String(k))
 		if not s.is_empty():
 			spots[k] = s
+	for k in things:
+		if things[k] != null:
+			_solid_of(things[k], bounds_xf(things[k]))
 	for k in bodies:
 		# what stands on the desk or over it too low for a root to pass under, never what is held high over it
 		var foot := Rect2()
@@ -1206,6 +1215,12 @@ func _phones() -> void:
 		row_box = b if i == 0 else row_box.merge(b)
 		if (phones[i] as Dictionary)["tape"] != null:
 			(_faces["phones"] as Array).append((phones[i] as Dictionary)["tape"])
+	if made != null:
+		made.pose(0.0, {"open": 1.0})
+		var opened := _gather(made.node, Transform3D.IDENTITY)
+		if not opened.is_empty():
+			phone_box = _part_of(opened)["box"]
+		made.pose(0.0, {"open": 0.0})
 	if not phones.is_empty():
 		bodies["phones"] = row_box
 		var pts := PackedVector3Array()
@@ -2539,6 +2554,78 @@ func _chair() -> void:
 ## ([constant TABLET_TILT]).
 func tablet_held_xf() -> Transform3D:
 	return Transform3D(Basis(Vector3.RIGHT, deg_to_rad(TABLET_TILT)), Vector3(TABLET_HELD.x, DESK_Y + TABLET_HELD.y, TABLET_HELD.z))
+
+
+# --- what is held in the camera's frame -------------------------------------------------------------------------------
+
+## Whether a box [param body] (its own space) placed at [param xf] keeps [param gap] from the surface of everything standing on
+## the desk but the phones ([member _solid]) and stays over the desk's top - a phone held in the camera's frame, which floats
+## wherever the camera has come to.
+func held_clear(body: AABB, xf: Transform3D, gap: float) -> bool:
+	var grown := body.grow(gap)
+	var world := xf * grown
+	if world.position.y < DESK_Y:
+		return false
+	var inv := xf.affine_inverse()
+	var c0 := Vector3i((world.position / SOLID_CELL).floor())
+	var c1 := Vector3i((world.end / SOLID_CELL).floor())
+	for x in range(c0.x, c1.x + 1):
+		for y in range(c0.y, c1.y + 1):
+			for z in range(c0.z, c1.z + 1):
+				var pts: Variant = _solid.get(Vector3i(x, y, z))
+				if pts == null:
+					continue
+				for p in (pts as Array):
+					if grown.has_point(inv * (p as Vector3)):
+						return false
+	return true
+
+
+## Every mesh's surface under [param n] over the desk's top, placed by [param xf], as points about [constant SOLID_STEP] apart
+## kept by the cube they fall in ([member _solid]): each triangle in rows across it from its longest edge to the corner facing it,
+## each point the middle of its stretch of its row (no edge twice), a triangle smaller than that its middle.
+func _solid_of(n: Node3D, xf: Transform3D) -> void:
+	var mi := n as MeshInstance3D
+	if mi != null and mi.mesh != null and mi.visible:
+		var f := xf * mi.mesh.get_faces()
+		for t in range(0, f.size() - 2, 3):
+			var c := [f[t], f[t + 1], f[t + 2]]
+			if maxf(c[0].y, maxf(c[1].y, c[2].y)) < DESK_Y:
+				continue
+			var e := 0
+			for i in [1, 2]:
+				if (c[(i + 1) % 3] - c[i]).length() > (c[(e + 1) % 3] - c[e]).length():
+					e = i
+			var p0: Vector3 = c[e]
+			var p1: Vector3 = c[(e + 1) % 3]
+			var apex: Vector3 = c[(e + 2) % 3]
+			var base := p1 - p0
+			var tall := (apex - p0).cross(base).length() / maxf(base.length(), 1e-6)
+			if base.length() < SOLID_STEP:
+				_solid_add((p0 + p1 + apex) / 3.0)
+				continue
+			var rows := maxi(1, ceili(tall / SOLID_STEP))
+			for r in rows:
+				var s := (float(r) + 0.5) / float(rows)
+				var q0 := p0.lerp(apex, s)
+				var q1 := p1.lerp(apex, s)
+				var k := maxi(1, ceili(q0.distance_to(q1) / SOLID_STEP))
+				for i in k:
+					_solid_add(q0.lerp(q1, (float(i) + 0.5) / float(k)))
+	for c in n.get_children():
+		var c3 := c as Node3D
+		if c3 != null and c3.visible:
+			_solid_of(c3, xf * c3.transform)
+
+
+## A point of a surface kept by its cube ([member _solid]), unless it is under the desk's top.
+func _solid_add(p: Vector3) -> void:
+	if p.y < DESK_Y:
+		return
+	var cell := Vector3i((p / SOLID_CELL).floor())
+	if not _solid.has(cell):
+		_solid[cell] = []
+	(_solid[cell] as Array).append(p)
 
 
 # --- where the camera looks -------------------------------------------------------------------------------------------

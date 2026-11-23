@@ -27,11 +27,11 @@ class_name DispatchMedium
 ## back ([constant AWAY_LEAST]).
 ##
 ## A phone in hand is held to the ear: it rises out of its row, flips open and floats up beside the camera, in the frame's
-## lower right, its screen saying who is on it and for how long, and goes back the same way. A call is speed-dialed: the
-## phone comes up before the eye, 1 is held and Send pressed, then it goes to the ear for the rings. One on hold lies open
-## on the desk in front of the rows. A phone ringing buzzes and rattles in its row. A text chimes and the phone comes up
-## open before the eye with the message on its screen, never captioned; a reply is typed into it as it is said, under the
-## message, and sent; then it goes home.
+## lower right (drawn in nearer the eye where the camera has come close to something, [method held_in]), its screen saying
+## who is on it and for how long, and goes back the same way. A call is speed-dialed: the phone comes up before the eye, 1
+## is held and Send pressed, then it goes to the ear for the rings. One on hold lies open on the desk in front of the rows.
+## A phone ringing buzzes and rattles in its row. A text chimes and the phone comes up open before the eye with the message
+## on its screen, never captioned; a reply is typed into it as it is said, under the message, and sent; then it goes home.
 ##
 ## The receiver is open in its storms and under a voice that comes in on it ([method _build_receiver]): the storm brought
 ## down while the voice is said over it, the needle swinging with the storm and each word, the scope tracing the receiver's own
@@ -162,6 +162,11 @@ const EAR_TURN := Vector3(58.0, -28.0, -18.0)
 ## the eye and leaning back a little (degrees about its width: 90 holds it straight up at the eye).
 const READ := Vector3(0.0, -0.118, -0.27)
 const READ_LEAN := 74.0
+## A phone held in the camera's frame is held no further out than what stands on the desk lets it ([method held_in]): drawn in
+## along its own line from the eye, so it keeps its place in the frame, to this share of its reach at the nearest, this far (m)
+## clear of everything.
+const HELD_NEAREST := 0.45
+const HELD_GAP := 0.01
 ## A phone ringing rattles this far (m) and turns this much (degrees).
 const RATTLE := 0.0025
 const RATTLE_TURN := 3.0
@@ -2426,8 +2431,7 @@ func _pose(t: float) -> void:
 ## to the phone in hand, then those on the desk, then one ringing or texting.
 func _pose_phones(t: float) -> void:
 	var cam_xf := _cam.global_transform
-	var ear := cam_xf * Transform3D(Basis.from_euler(EAR_TURN * (PI / 180.0)), EAR)
-	var held := cam_xf * Transform3D(Basis(Vector3.RIGHT, deg_to_rad(READ_LEAN)), READ)
+	var hand := {}                        # "ear" / "read" -> where a phone held there is this frame, found when first asked
 	var lit: Array = []                   # [phone index, which screen, state]
 	for i in _set.phones.size():
 		var ph: Dictionary = _set.phones[i]
@@ -2443,6 +2447,13 @@ func _pose_phones(t: float) -> void:
 		if not mv.is_empty():
 			var u := clampf((t - float(mv["t0"])) / maxf(float(mv["dur"]), 0.01), 0.0, 1.0)
 			var e := _jerkless(u)
+			for end in [String(mv["from"]), String(mv["to"])]:
+				if end == "ear" and not hand.has("ear"):
+					hand["ear"] = held_in(_set, cam_xf, ear_local())
+				elif end == "read" and not hand.has("read"):
+					hand["read"] = held_in(_set, cam_xf, read_local())
+			var ear: Transform3D = hand.get("ear", cam_xf)
+			var held: Transform3D = hand.get("read", cam_xf)
 			var a := _where(String(mv["from"]), home, ear, held, int(mv.get("slot", 0)))
 			var b := _where(String(mv["to"]), home, ear, held, int(mv.get("slot", 0)))
 			xf = _arc(a, b, e, 0.08 if String(mv["from"]) == "row" or String(mv["to"]) == "row" else 0.04)
@@ -2598,6 +2609,36 @@ func _reading(label: String, t: float) -> Dictionary:
 	if thread.size() > 4:
 		thread = thread.slice(thread.size() - 4)
 	return {"mode": "read", "label": label, "thread": thread}
+
+
+## A phone at the ear and a phone held up to be read, in the camera's frame ([constant EAR], [constant READ]).
+static func ear_local() -> Transform3D:
+	return Transform3D(Basis.from_euler(EAR_TURN * (PI / 180.0)), EAR)
+
+
+static func read_local() -> Transform3D:
+	return Transform3D(Basis(Vector3.RIGHT, deg_to_rad(READ_LEAN)), READ)
+
+
+## A phone held at [param local] in the camera's frame ([constant EAR], [constant READ]), the camera at [param cam_xf], over
+## [param set]'s desk: as far out as it is held where that keeps [constant HELD_GAP] clear of the desk and its things ([method
+## DispatchSet.held_clear]), else the farthest out along its line from the eye that does, down to [constant HELD_NEAREST] of the
+## way; where none does, as it is held. Public for a gate.
+static func held_in(set: DispatchSet, cam_xf: Transform3D, local: Transform3D) -> Transform3D:
+	var full := cam_xf * local
+	if set.phone_box.size == Vector3.ZERO or set.held_clear(set.phone_box, full, HELD_GAP):
+		return full
+	var lo := HELD_NEAREST
+	var hi := 1.0
+	if not set.held_clear(set.phone_box, cam_xf * Transform3D(local.basis, local.origin * lo), HELD_GAP):
+		return full
+	for i in 8:
+		var mid := (lo + hi) * 0.5
+		if set.held_clear(set.phone_box, cam_xf * Transform3D(local.basis, local.origin * mid), HELD_GAP):
+			lo = mid
+		else:
+			hi = mid
+	return cam_xf * Transform3D(local.basis, local.origin * lo)
 
 
 ## Where a phone is in [param place] ("row", "ear" - [param ear], in the world - "read", held up before the eye
