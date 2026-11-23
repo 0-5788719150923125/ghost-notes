@@ -1339,6 +1339,8 @@ func _poll_pictures(force := false) -> void:
 		_build_table()
 		_plan_moves()
 	var room := _picture(dir.path_join("backdrop.png"), force)
+	# ...a game's table stands in the dark, seen from every side ([member TablePlan.dark_room]): no room picture behind it
+	_backdrop.visible = not _plan.dark_room
 	if room != null:
 		if _backdrop_mat.get_shader_parameter("picture") != room:
 			_backdrop_mat.set_shader_parameter("picture", room)

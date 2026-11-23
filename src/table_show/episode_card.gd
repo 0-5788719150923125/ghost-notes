@@ -1238,7 +1238,8 @@ func _step_rows() -> Array:
 	if has.has("solve"):
 		out.append(_row_of("solve", "solve", "", busy, f))
 	for st in ["image:surface", "image:backdrop", "table"]:
-		out.append(_row_of(st, st, "Table", busy, f))
+		if has.has(st):
+			out.append(_row_of(st, st, "Table", busy, f))
 	if bool(f["depth"]):
 		out.append(_row_of("image:height", "image:height", "Table", busy, f))
 	# ...what is painted, painted first as a picture and looked at, then copied (TableEpisode.wants_face)

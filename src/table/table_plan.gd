@@ -35,7 +35,10 @@ var fov := 40.0                    # ...and its lens
 var lamp_at := Vector3.ZERO        # the lamp, aimed at the middle of the table
 var lamp_color := Color.WHITE
 var lamp_base := 1.6                 # the lamp's light before a candle takes the key from it
+## The dark round a game's table: nearly black, a breath of the lamp's warmth in it.
+const GAME_DARK := Color(0.008, 0.007, 0.007)
 var background := Color.BLACK      # the room's dark, past the backdrop
+var dark_room := false             # no room at all: a game's table in the dark, seen from every side ([constant GAME_DARK])
 var fill := Color.WHITE            # the fill light's color
 var mid := Vector3.ZERO            # where it is shuffled, in the middle of the table
 var deck_base := Vector3.ZERO      # where the deck is drawn from, to one side
@@ -101,6 +104,10 @@ static func make(document: Dictionary, table_json: Variant, intro_hold: float) -
 	var pal: Array = p.look.get("palette", CardTable.FALLBACK_PALETTE)
 	var dark := CardTable.color(String(pal[0]))
 	p.background = dark.darkened(0.6)
+	# ...a game's table is seen from every side, and a room is painted for one side only: it stands in the dark, and none is painted
+	if CardTable.game_of(p.pay.get("plan", {}) if p.pay.get("plan") is Dictionary else {}):
+		p.background = GAME_DARK
+		p.dark_room = true
 	p.ambient = {"color": Color(0.5, 0.5, 0.5).lerp(dark.lightened(0.4), 0.35), "energy": 0.18}
 	p.fill = Color(0.75, 0.8, 1.0) if String(light.get("warmth", "warm")) == "warm" else lc
 	# The deck, squared where the reader keeps it

@@ -292,6 +292,13 @@ func _steps() -> void:
 	for s in ["image:map:1", "image:figure:1", "image:figure:2", "image:reveal:1"]:
 		_check(after.has(s), "the session asked for %s" % s)
 	_check(ep.needs("image:map:1") == ["script"], "a picture waits for what it shows to have happened")
+	ep.write_json("game", {"maps": [{"name": "M"}], "figures": [{"name": "F"}, {"name": "G"}], "reveals": [{"name": "R"}], "pages": [{"name": "P"}]})
+	var fig := FileAccess.open(ep.file_of("image:figure:2"), FileAccess.WRITE)
+	fig.store_string("not a picture")
+	fig.close()
+	_check(ep.needs("image:page:1").has("image:figure:2") and ep.has("image:figure:2") and not ep.made_from("image:page:1").has("image:figure:2"),
+		"a page waits for the figures' pictures it is painted beside, only for order (a figure painted again leaves it fresh)")
+	_check(not ep.needs("image:figure:1").has("image:page:1"), "control: a figure's picture waits for no page")
 	_check(ep.file_of("image:figure:2").ends_with("figure_2.png"), "a picture is kept by name: %s" % ep.file_of("image:figure:2"))
 	# ...a session gathered again lists what it asks for now, even written again inside the same second (a file's clock is in seconds)
 	ep.write_json("game", {"pages": [{"name": "P"}]})

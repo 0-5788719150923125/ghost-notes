@@ -28,6 +28,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **Light crossing terrain**
       A moving light sweeping a landscape and casting traveling shadows - true occlusion under `Lens3D`.
 
+- [ ] **Surroundings round a table**
+      A place painted round the whole table, window by window from a layout, cast back onto its blockout (next/surroundings.md).
+
 - [ ] **A new playlist from the YouTube card**
       The card picks one of the channel's playlists; making one there (`playlists.insert`, 50 units of quota) is not built.
 

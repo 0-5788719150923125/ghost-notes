@@ -444,7 +444,8 @@ func wants_ink() -> bool:
 ## A game played at the table (next/tabletop.md): the secret preparation, the model of the land it is played on, the table, the session played a stretch at a
 ## time, then its figures modeled and what it turned out to need painted. Its dice are thrown as the table first stands ([TableGame]).
 func _game_steps(out: Array) -> Array:
-	out.append_array(["prep", "diorama", "image:surface", "image:backdrop", "table", "say:intro"])
+	# ...no backdrop: a game's table stands in the dark, seen from every side ([member TablePlan.dark_room])
+	out.append_array(["prep", "diorama", "image:surface", "table", "say:intro"])
 	for k in range(1, beat_count() + 1):
 		out.append("say:%d" % k)
 	out.append_array(["say:close", "script", "minis"])
@@ -636,7 +637,7 @@ func needs(step: String) -> Array:
 			# its light must agree with (where the windows are, which side the sun comes from); a desk's from the plan alone
 			if at_desk():
 				return ["plan"]
-			return ["plan", "image:surface", "image:backdrop"] + (["model"] if wants_model() else [])
+			return ["plan", "image:surface"] + ([] if wants_game() else ["image:backdrop"]) + (["model"] if wants_model() else [])
 		"acts":
 			# the work is blocked on the table as it is set, with the cards as they were drawn (the work is
 			# made of them: an ingredient fetched and ground) - no reader sees past its own beat's - and, where
@@ -661,6 +662,12 @@ func _game_needs(parts: PackedStringArray) -> Array:
 		"minis":
 			return ["script"]
 		"image":
+			# ...a page is painted beside the figures' own pictures (TableProducer._page_refs): it waits for them, only for order
+			if parts.size() == 3 and String(parts[1]) == "page":
+				var out: Array = ["script"]
+				for k in range(1, (game().get("figures", []) as Array).size() + 1):
+					out.append("image:figure:%d" % k)
+				return out
 			if parts.size() == 3 and GAME_PICTURES.values().has(String(parts[1])):
 				return ["script"]
 		"say":
@@ -863,7 +870,8 @@ static func _soft(from: String, to: String) -> bool:
 	return (to.begins_with("image:card:") and (from.begins_with("image:card:") or from.begins_with("image:back"))) \
 		or (to.begins_with("design:") and from.begins_with("design:")) \
 		or (to == "table" and (from == "image:surface" or from == "image:backdrop")) \
-		or (to == "image:height" and from == "table")
+		or (to == "image:height" and from == "table") \
+		or (to.begins_with("image:page:") and from.begins_with("image:figure:"))
 
 
 ## Whether this episode designs what is painted ([Skins]; next/painted_surface.md): a plan that says what is painted, unless its work

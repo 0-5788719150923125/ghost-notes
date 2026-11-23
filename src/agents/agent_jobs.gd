@@ -28,7 +28,7 @@ class_name AgentJobs
 
 ## How many runs of each kind at once. Each mostly waits on a network round trip, but more than a couple
 ## is a burst against the author's quota.
-const LIMITS := {"text": 2, "image": 2, "aside": 4}
+const LIMITS := {"text": 2, "image": 8, "aside": 4}
 ## A job another job is waiting on ([GameTools]: a player asked what they do while the game master's job
 ## runs) takes a `slot` of its own, so a parent waiting on its children does not hold the place they would
 ## start in.
