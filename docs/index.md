@@ -112,6 +112,7 @@ The machine under Ghost Notes: the one owner of its settings file, the earliest 
 - [`provisioner.gd`](../src/platform/provisioner.gd) **provisioner** - Provisioner (autoload) - installs, updates and reports on everything ghost fetches for itself.
 - [`settings.gd`](../src/platform/settings.gd) **settings** - Settings - the one owner of `user://ghost.cfg` (autoload).
 - [`subprocess.gd`](../src/platform/subprocess.gd) **Subprocess** - every external program ghost starts, in one place, with one promise: nothing ghost starts outlives it, nor anything that program starts in turn. `OS.create_process` on Unix is fully detached, so closing or killing ghost would leave an `ffmpeg` transcoding to disk, or an agent's run starting Godot ...
+- [`ui_scale.gd`](../src/platform/ui_scale.gd) **UiScale** - how large the interface is drawn on a person's screen.
 
 ### `audio/` - Audio & analysis
 
@@ -263,6 +264,7 @@ What every note's panel is built from, and what it asks of the window it is in: 
 - [`find_bar.gd`](../src/ui/find_bar.gd) **FindBar** - find and replace in a `TextEdit`, as a code editor has it: a small panel over the text's top-right corner with a Find box and a Replace box, drawn over the words, never moving them. Every match is highlighted (`TextEdit.set_search_text`) and the current one selected. It stands beside the ...
 - [`graphics_panel.gd`](../src/ui/graphics_panel.gd) **GraphicsPanel** - how finely the picture is drawn, live and in an export, above the bottom-right row (Chrome's framed-picture button, beside the Environment's).
 - [`icons.gd`](../src/ui/icons.gd) **Icons** - the few pictures a button wears in place of words. Drawn, never imported: each is a stroke path on a 24-unit square, made into a texture at the size it is asked for (`texture`), so a phone's button is as sharp as a desktop's and a new icon is a row, with no file for the import step to miss ...
+- [`keys_window.gd`](../src/ui/keys_window.gd) **KeysWindow** - every keyboard shortcut, in a small window: F1 anywhere, or the "?" on a note's panel (`SidePanel.pin_title_row`).
 - [`note_cards.gd`](../src/ui/note_cards.gd) **NoteCards** - a note's component cards, built one way on whichever panel shows the note, and the two edits that change what a note is made of: attach and detach.
 - [`note_editor.gd`](../src/ui/note_editor.gd) **NoteEditor** - a note opened as a notes app opens one: its `NoteTile` grown into a card over the grid, its Title and its words both written in place - no Edit, no window.
 - [`note_grid.gd`](../src/ui/note_grid.gd) **NoteGrid** - the notes, as a notes app shows them: the name, a search field with the owner's icon buttons beside it (`actions`, `Icons`), and every note as a square `NoteTile` in a centered grid that scrolls up and down, newest first (`NoteStore.list`). The desktop's `NotesList` and the phone's ...
@@ -403,6 +405,7 @@ Rendering a session to video (bake + Movie Maker, background processes) and uplo
 - [`export_space.gd`](../src/export/export_space.gd) **ExportSpace** - how much disk an export needs, and whether the disk it is saved to has that much.
 - [`exporter.gd`](../src/export/exporter.gd) **Exporter** - renders the visualization to a video in the background, as separate processes polled by PID.
 - [`oauth.gd`](../src/export/oauth.gd) **oauth** - OAuth - what every upload site's sign-in and requests share: the one-shot listener on 127.0.0.1 that catches the browser's redirect (`await_code`), the page it answers with, and one HTTP exchange (`send`).
+- [`render_watch.gd`](../src/export/render_watch.gd) **RenderWatch** - a render stops itself once its frames are no longer being drawn, and leaves the exporter the reason.
 - [`stitch.gd`](../src/export/stitch.gd) **Stitch** - a stretch of an export rendered again and put back in its place (next/editing.md step 13; next/cloud_render.md's `--from` and stitch, on this machine): a late fix renders its stretch, not the whole video.
 - [`tiktok.gd`](../src/export/tiktok.gd) **tiktok** - TikTok - sign in to the author's TikTok account and send a finished export there: posted, or as a draft the author finishes in the TikTok app.
 - [`tiktok_rows.gd`](../src/export/tiktok_rows.gd) **tiktok_rows** - TikTok rows - the Upload card's TikTok rows (`YouTubeCard`), shown while TikTok is one of the card's targets: the account and the app's client, how the video goes up (`TikTok.MODES`) and, for a post, who may see it and what viewers may do. Its keys sit in the card's block beside the card's ...
@@ -653,7 +656,7 @@ The lifecycle around everything, and the one folder that names every other: main
 - [`auto_docs.gd`](../src/app/auto_docs.gd) **AutoDocs** - `docs.py` run at every development launch, so `docs/`, the README's lists and the roadmap's order follow the code without anyone running it by hand. It runs in the background and writes only the files whose text changed (the same output `python docs.py --check` holds); what it says lands in the ...
 - [`chrome.gd`](../src/app/chrome.gd) **Chrome** - the shared session furniture every mode of ghost carries. Main creates one Chrome and any mode gets the standard set, so no mode assembles its overlay stack by hand and forgets a piece.
 - [`console.gd`](../src/app/console.gd) **ConsoleView** - The in-app console - a live tail of Godot's own log file. print(), push_warning(), push_error() and engine SCRIPT ERRORs land in user://logs/godot*.log, which a compiled app or launcher run never shows. The `>_` toggle on the shared bottom-right row opens a panel tailing the newest log live. Part ...
-- [`delete_dialog.gd`](../src/app/delete_dialog.gd) **DeleteDialog** - "Delete this note?", asked before a note goes. Asked from the notes list's × and from every note's own "⋯" (see `Shell.note_menu`).
+- [`delete_dialog.gd`](../src/app/delete_dialog.gd) **DeleteDialog** - "Delete this note?", asked before a note goes. Asked from the notes list: a tile's × and the open note's bin.
 - [`deps_panel.gd`](../src/app/deps_panel.gd) **DepsPanel** - the Setup panel above the bottom-right row, behind its ⚙ (Chrome): what ghost runs on.
 - [`feedback.gd`](../src/app/feedback.gd) **FeedbackConsole** - the authoring feedback channel. Press the toggle key, type what feels off about the scene on screen, hit Enter, and it writes a self-contained record to `res://feedback/` in the editor or `user://feedback/` in an exported app:
 - [`main.gd`](../src/app/main.gd) **main** - ghost entry point.

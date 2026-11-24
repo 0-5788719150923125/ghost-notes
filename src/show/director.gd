@@ -420,6 +420,12 @@ func resolved_frame() -> String:
 	return want if Medium.supports(resolved_medium(), want) else "landscape"
 
 
+## The shape of [method resolved_frame], width over height ([method ShowFeed.frame_aspect]).
+func frame_aspect() -> float:
+	var s := Vector2(Medium.FRAME_SIZES[resolved_frame()])
+	return s.x / s.y
+
+
 ## Set one filter's amount, 0 being off (see [Filters.REGISTRY] for the keys). Takes effect at once on
 ## the running session: the post-process lives on the stage view, not inside any scene.
 func set_filter(key: String, amount: float) -> void:

@@ -40,15 +40,17 @@ const SHAKE_RATE := 6.5
 ## How much rattling is heard in a shake.
 const RATTLE_RATE := 11.0
 const RATTLE_HARD := 0.28
-## The shot: the most dice it goes to, how far from them it stands (meters), how long before they stop it begins (from their rest), how long it eases in, holds on after, and eases out; and how far from the camera's own place it comes (a share).
+## The shot: the most dice it goes to, how far from them it stands (meters), how long before they stop it begins (from their rest), how long it eases in, holds on after, and eases out.
+## How far from the camera's own place it comes is the dice camera's own (its `reach`, [constant Cameras.REGISTRY]).
 const SHOT_DICE := 4
 const SHOT_FAR := 0.56
 const SHOT_LEADS := 0.55
 const SHOT_IN := 1.5
 const SHOT_HOLDS := 1.6
 const SHOT_OUT := 3.0
-const SHOT_WEIGHT := 0.75
-## The farthest the eye goes toward a throw's dice (meters): from far off it goes part of the way.
+## A dice camera that arrives all the way is there this long before they stop (seconds).
+const SHOT_ARRIVES := 0.3
+## The farthest the eye goes toward a throw's dice (meters), where its camera arrives only part of the way: from far off it goes part of that.
 const DICE_TRAVEL := 1.4
 ## A figure's hop, at least and by how far it goes (seconds), and how high (a share of how far, at least and most in meters). A place from above, and a removal: seconds. A fall, then its give.
 const HOP_LEAST := 0.42
@@ -61,6 +63,10 @@ const LEAN_BACK := 24.0
 ## The picture held up: in front of the lens by this far (meters), this big (meters), how long it takes to come up and how long it lasts.
 const HOLD_FAR := 0.42
 const HOLD_SIZE := Vector2(0.27, 0.18)
+## How far ahead of the figures a march looks (meters), in a landscape frame: room for where they are going.
+const MARCH_LEAD := 0.08
+## The most of the frame's width a picture held up takes: it is held farther off in a frame too narrow for it.
+const HOLD_ACROSS := 0.86
 const REVEAL_TAKES := 0.8
 const REVEAL_LASTS := 9.0
 ## A map going down, a share of the show's time, and how far off it comes from.
@@ -537,7 +543,8 @@ func schedule(sched: Array) -> void:
 		if dice.is_empty():
 			continue
 		at /= float(dice.size())
-		_shots.append({"t0": thrown + float(rec["dur"]) - SHOT_LEADS, "t1": thrown + float(rec["dur"]) + SHOT_HOLDS, "at": at, "who": String(((r as Dictionary)["event"] as Dictionary).get("who", ""))})
+		_shots.append({"t0": thrown + float(rec["dur"]) - SHOT_LEADS, "t1": thrown + float(rec["dur"]) + SHOT_HOLDS, "at": at, "who": String(((r as Dictionary)["event"] as Dictionary).get("who", "")),
+			"thrown": thrown})
 	_plan_cameras()
 
 
@@ -824,7 +831,9 @@ func _tick_reveals(t: float) -> void:
 		var up := Hands.smooth(clampf((t - at) / REVEAL_TAKES, 0.0, 1.0))
 		var down := Hands.smooth(clampf((t - going) / REVEAL_TAKES, 0.0, 1.0))
 		var show := up * (1.0 - down)
-		var held := _eye(t) * Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, -HOLD_FAR))
+		# ...held out at arm's length, or farther where the frame is too narrow for it (a portrait one): never wider than most of it
+		var far := maxf(HOLD_FAR, HOLD_SIZE.x / (HOLD_ACROSS * 2.0 * _lens(fov_at(t)).x))
+		var held := _eye(t) * Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, -far))
 		var lying := Transform3D(Basis(Vector3.RIGHT, -PI * 0.5), Vector3(0.0, 0.03, -0.42))
 		node.transform = lying.interpolate_with(held, show)
 
@@ -932,9 +941,16 @@ func _plan_cameras() -> void:
 	if not e.is_empty():
 		for sh in _shots:
 			var d: Dictionary = sh
-			_claims.append({"sort": "dice", "rank": Cameras.rank(list, "dice"), "t0": float(d["t0"]) - SHOT_OUT * 0.6,
-				"t1": float(d["t1"]) - SHOT_HOLDS + Cameras.value(e, "holds"), "at": d["at"], "who": d["who"], "entry": e,
-				"ease": SHOT_OUT, "weight": SHOT_WEIGHT})
+			var stop := float(d["t1"]) - SHOT_HOLDS
+			var t0 := float(d["t0"]) - SHOT_OUT * 0.6
+			var ease := SHOT_OUT
+			# ...one that arrives all the way cuts in: under way as the hand throws, there just before the dice stop, so they land in its frame
+			if Cameras.value(e, "reach") >= 1.0:
+				t0 = minf(t0, float(d.get("thrown", stop)) - SHOT_LEADS)
+				ease = maxf(stop - SHOT_ARRIVES - t0, SHOT_IN)
+			_claims.append({"sort": "dice", "rank": Cameras.rank(list, "dice"), "t0": t0,
+				"t1": stop + Cameras.value(e, "holds"), "stop": stop, "at": d["at"], "who": d["who"], "entry": e,
+				"ease": ease, "weight": Cameras.value(e, "reach")})
 	e = Cameras.entry_of(list, "seat")
 	if not e.is_empty():
 		var turns: Array = []
@@ -1003,6 +1019,9 @@ func _plan_cameras() -> void:
 			if o != c and String((o as Dictionary)["sort"]) in ["seat", "march"] and float((o as Dictionary)["t0"]) < t0 and t0 < float((o as Dictionary)["t1"]):
 				from = _claim_shot(o, t0)["eye"]
 		var full := from.distance_to(_claim_shot(d, t0)["eye"] as Vector3)
+		# ...a dice camera that arrives all the way is a cut in: there in its own time however far, the one move quicker than SPEED
+		if String(d["sort"]) == "dice" and float(d.get("weight", 1.0)) >= 1.0:
+			continue
 		if String(d["sort"]) == "dice" and full > 0.001:
 			d["weight"] = minf(float(d.get("weight", 1.0)), DICE_TRAVEL / full)
 		d["ease"] = maxf(float(d.get("ease", Cameras.EASE)), full * float(d.get("weight", 1.0)) * 1.5 / Cameras.SPEED)
@@ -1037,8 +1056,25 @@ func _shot(t: float) -> Dictionary:
 		if w <= 0.0:
 			continue
 		out = Cameras.blend(out, _claim_shot(d, t), w, mid)
+	out = _kept_top(out)
 	_shot_t = t
 	_shot_cache = out
+	return out
+
+
+## [param s] as a frame taller than the dressed one sees it (a portrait one, [method CardTable.lens]): turned down until its top edge is
+## where a landscape frame's is, so what it gains in height is the board and the table in front - never more of the dark room past
+## the model, which is built to be seen from the table's head alone. What the shot looks at sits higher in it, a third of the way down.
+func _kept_top(s: Dictionary) -> Dictionary:
+	var fov := float(s["fov"])
+	var drop := atan(_lens(fov).y) - atan(CardTable.lens(fov).y)
+	var eye: Vector3 = s["eye"]
+	var ahead: Vector3 = (s["at"] as Vector3) - eye
+	var right := ahead.cross(Vector3.UP)
+	if drop < 1e-4 or right.length() < 1e-4 * ahead.length():
+		return s
+	var out := s.duplicate()
+	out["at"] = eye + ahead.rotated(right.normalized(), -drop)
 	return out
 
 
@@ -1063,7 +1099,11 @@ func _claim_frame(c: Dictionary, t: float) -> Dictionary:
 			var seat := GameBoard.at_seat(float((game.get("seats", {}) as Dictionary).get(String(c["who"]), 180.0)), GameBoard.HAND)
 			var toward := Vector3(seat.x - at.x, 0.0, seat.y - at.y).normalized()
 			var far := Cameras.value(e, "far") * 0.01
-			return {"eye": at + (toward * cos(deg_to_rad(52.0)) + Vector3.UP * sin(deg_to_rad(52.0))) * far, "at": at, "fov": _fov}
+			# ...from its angle as they land, rising to its other while it holds on them, so what landed reads
+			var held := maxf(float(c.get("t1", 0.0)) - float(c.get("stop", 0.0)), 0.1)
+			var up := deg_to_rad(lerpf(Cameras.value(e, "rise"), Cameras.value(e, "top"), Hands.smooth(clampf((t - float(c.get("stop", t))) / held, 0.0, 1.0))))
+			var lens := Cameras.value(e, "lens")
+			return {"eye": at + (toward * cos(up) + Vector3.UP * sin(up)) * far, "at": at, "fov": lens if lens > 0.0 else _fov}
 		"seat":
 			var a := float((game.get("seats", {}) as Dictionary).get(String(c["who"]), 0.0))
 			var reach := Vector2.ONE * (0.1 + Cameras.value(e, "back") * 0.01)
@@ -1085,10 +1125,14 @@ func _claim_frame(c: Dictionary, t: float) -> Dictionary:
 			dir = dir.normalized() if dir.length() > 0.001 else Vector3.FORWARD
 			var right := dir.cross(Vector3.UP)
 			var side := Cameras.value(e, "side")
-			var off := (-dir * (1.0 - absf(side)) + right * side).normalized() * Cameras.value(e, "back") * 0.01
+			# ...round from behind them to square beside (as it always stood), and past it toward ahead of them, looking back as they come
+			var round := atan2(absf(side), 1.0 - absf(side)) if absf(side) <= 1.0 else PI * 0.5 * absf(side)
+			var off := (-dir * cos(round) + right * signf(side) * sin(round)) * Cameras.value(e, "back") * 0.01
 			var eye2 := Vector2(here.x + off.x, here.z + off.z)
 			var eye := Vector3(eye2.x, maxf(_ground(eye2), here.y) + Cameras.value(e, "low") * 0.01, eye2.y)
-			return {"eye": eye, "at": here + dir * 0.08 + Vector3.UP * 0.015, "fov": Cameras.value(e, "lens")}
+			# ...looking a little ahead of them, as far as the frame is wide: a portrait one keeps them where a landscape one has them
+			var lead := MARCH_LEAD * _lens(1.0).x / CardTable.lens(1.0).x
+			return {"eye": eye, "at": here + dir * lead + Vector3.UP * 0.015, "fov": Cameras.value(e, "lens")}
 		"drift":
 			var ang := deg_to_rad(180.0 + (t - float(c["t0"])) * Cameras.value(e, "speed"))
 			var mid := Vector3(GameBoard.MIDDLE.x, 0.0, GameBoard.MIDDLE.y)
@@ -1098,7 +1142,8 @@ func _claim_frame(c: Dictionary, t: float) -> Dictionary:
 
 
 ## [param shot] looking down far enough that the top of its frame is under the horizon: no shot round the table shows the room
-## past its far edge, which is only ever built to be seen from the table's head.
+## past its far edge, which is only ever built to be seen from the table's head. The top of a landscape frame's: a taller one keeps
+## it there ([method _kept_top]).
 static func _below_horizon(shot: Dictionary) -> Dictionary:
 	var eye: Vector3 = shot["eye"]
 	var at: Vector3 = shot["at"]
@@ -1149,13 +1194,13 @@ func _tick_tilt(t: float) -> void:
 	if not _tilt.visible:
 		return
 	var eye := Cameras.transform_of(s)
-	var lens := float(s["fov"])
-	var h := 2.0 * MINI_FAR * tan(deg_to_rad(lens * 0.5)) * 1.05
-	(_tilt.mesh as QuadMesh).size = Vector2(h * 16.0 / 9.0 * 1.3, h)
+	var lens := _lens(float(s["fov"]))
+	var frame := lens * 2.0 * MINI_FAR * 1.05
+	(_tilt.mesh as QuadMesh).size = Vector2(frame.x * 1.3, frame.y)
 	_tilt.transform = eye * Transform3D(Basis.IDENTITY, Vector3(0.0, 0.0, -MINI_FAR))
 	# ...where it looks, up the frame: the band's middle
 	var v := eye.affine_inverse() * (s["at"] as Vector3)
-	var up := 0.5 + 0.5 * (v.y / maxf(-v.z, 0.001)) / tan(deg_to_rad(lens * 0.5))
+	var up := 0.5 + 0.5 * (v.y / maxf(-v.z, 0.001)) / lens.y
 	var mat := _tilt.material_override as ShaderMaterial
 	mat.set_shader_parameter("focus", clampf(up, 0.1, 0.9))
 	mat.set_shader_parameter("band", lerpf(MINI_BAND.x, MINI_BAND.y, m))
@@ -1164,7 +1209,8 @@ func _tick_tilt(t: float) -> void:
 
 # --- the night's book -----------------------------------------------------------------------------------------------------------------------------
 
-## Every page of the night's book that is painted: a sheet in front of the lens, filling the frame, its picture lit as it is.
+## Every page of the night's book that is painted: a sheet in front of the lens, filling the frame, its picture lit as it is. A unit
+## square, stretched as it plays to cover the frame the show is in ([method _page_size]).
 func _stand_pages() -> void:
 	var list: Array = game.get("pages", [])
 	for e in game.get("events", []):
@@ -1176,10 +1222,7 @@ func _stand_pages() -> void:
 		if tex == null:
 			continue
 		var quad := QuadMesh.new()
-		var h := 2.0 * PAGE_FAR * tan(deg_to_rad(_fov * 0.5))
-		var aspect := float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
-		# ...as big as covers the frame, whatever the lens: a wider lens is laid over it as it plays
-		quad.size = Vector2(maxf(h * 16.0 / 9.0, h * aspect), maxf(h, h * 16.0 / 9.0 / aspect))
+		quad.size = Vector2.ONE
 		var node := MeshInstance3D.new()
 		node.mesh = quad
 		var mat := StandardMaterial3D.new()
@@ -1195,7 +1238,20 @@ func _stand_pages() -> void:
 		node.sorting_offset = float(pic) * 0.01
 		node.visible = false
 		root.add_child(node)
-		_pages.append({"node": node, "mat": mat, "event": int(d["id"]), "pic": pic, "size": quad.size})
+		_pages.append({"node": node, "mat": mat, "event": int(d["id"]), "pic": pic, "aspect": float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)})
+
+
+## How big a page whose picture is [param aspect] wide for its height stands, [constant PAGE_FAR] out, to cover the frame at the
+## table's own lens, whatever the frame's shape - a landscape page in a portrait frame shows its middle; a wider lens is laid over it
+## as it plays.
+func _page_size(aspect: float) -> Vector2:
+	var frame := _lens(_fov) * 2.0 * PAGE_FAR
+	return Vector2(maxf(frame.x, frame.y * aspect), maxf(frame.y, frame.x / maxf(aspect, 0.01)))
+
+
+## What the camera sees at a distance of one with [param fov], in the frame the show is in ([method TableMedium.lens]).
+func _lens(fov: float) -> Vector2:
+	return CardTable.lens(fov, work.medium.aspect())
 
 
 ## When a page goes: at the next page, or once it has had its least, where the view goes back to the table - a `board`, a throw or a
@@ -1253,9 +1309,10 @@ func _tick_pages(t: float) -> void:
 		var drift := sin(float(d["pic"]) * 2.3) * 0.012 * u
 		var lens := fov_at(t)
 		var k := tan(deg_to_rad(lens * 0.5)) / tan(deg_to_rad(_fov * 0.5))
-		var frame_h := 2.0 * PAGE_FAR * tan(deg_to_rad(_fov * 0.5))
-		var over := maxf(((d["size"] as Vector2).y * push - frame_h) * 0.5, 0.0)
-		node.transform = _eye(t) * Transform3D(Basis.from_scale(Vector3.ONE * push * k), Vector3(drift * PAGE_FAR, -over * PAGE_TOP * k, -PAGE_FAR))
+		var size := _page_size(float(d["aspect"]))
+		var frame_h := _lens(_fov).y * 2.0 * PAGE_FAR
+		var over := maxf((size.y * push - frame_h) * 0.5, 0.0)
+		node.transform = _eye(t) * Transform3D(Basis.from_scale(Vector3(size.x, size.y, 1.0) * push * k), Vector3(drift * PAGE_FAR, -over * PAGE_TOP * k, -PAGE_FAR))
 
 
 # --- heard ------------------------------------------------------------------------------------------------------------------------------------------

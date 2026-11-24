@@ -247,7 +247,7 @@ func _light_stage() -> Dictionary:
 	var bounds: AABB = medium._furniture.get("bounds", AABB(Vector3(-TableMedium.TABLE.x * 0.5, -TableMedium.TABLE.y, TableMedium.TABLE_Z - TableMedium.TABLE.z * 0.5), TableMedium.TABLE))
 	for th in medium._things_part.on_table:
 		bounds = bounds.merge((th as Dictionary)["box"] as AABB)
-	return {"camera": medium._plan.cam_base, "fov": medium._cam.fov, "aspect": 16.0 / 9.0, "middle": Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y),
+	return {"camera": medium._plan.cam_base, "fov": medium._cam.fov, "aspect": medium.aspect(), "middle": Vector3(Tables.ORIGIN.x, 0.0, Tables.ORIGIN.y),
 		"bounds": bounds, "seen": _seen, "env": medium._env, "room": medium._backdrop_mat, "in_shot": _in_shot, "wind": medium._wind}
 
 

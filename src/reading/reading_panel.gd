@@ -587,7 +587,7 @@ func episode_left(feed: EpisodeFeed) -> void:
 
 
 func _build_header(_box: VBoxContainer) -> void:
-		# pinned over the scrolling body, so "⋯" and "‹" never scroll away (SidePanel.pin_title_row)
+		# pinned over the scrolling body, so "?" and "‹" never scroll away (SidePanel.pin_title_row)
 	(_panel as SidePanel).pin_title_row(self)
 
 

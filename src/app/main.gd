@@ -26,6 +26,8 @@ const CARD_TABLE := "res://src/table/card_table.gd"
 const TABLE_EPISODE := "res://src/table_show/table_episode.gd"
 const CARTOON_TOOL := "res://src/cartoon/cartoon_tool.gd"
 const LETTER_SKETCHES := "res://src/letter/letter_sketches.gd"
+## ...and the exporter, for `--deps`, which asks it whether a render really draws on its display of its own.
+const EXPORTER := "res://src/export/exporter.gd"
 
 ## How long the show clock may stand still in a render before it is reported, in seconds of render time.
 const CLOCK_STALL_WARN := 0.5
@@ -75,6 +77,10 @@ var _clock_watch := false
 var _clock_t := -1.0
 var _clock_stuck := 0.0
 var _clock_frames := 0
+## The draw watch (RenderWatch): a render whose frames stop being drawn - its window hidden or the screen locked, on a
+## desktop - stops itself rather than record stills. `--fault-file` is where it tells the exporter why.
+var _draw_watch := RenderWatch.new()
+var _fault_file := ""
 
 func _ready() -> void:
 	#window-close runs _shutdown (see _notification): the WM close button must run our teardown
@@ -89,6 +95,13 @@ func _ready() -> void:
 		return
 	if args.has("--app-version"):
 		print(JSON.stringify(AppUpdate.build_info()))
+		get_tree().quit()
+		return
+	#`--display-check` (with `--export`, so it boots as a render does: settings read-only, nothing provisioned, the window
+	#out of the way): which display driver came up and what graphics card draws it, then out. Run on the render's virtual
+	#display by Exporter.display_check, so Setup can say whether a render would really draw there.
+	if args.has("--display-check"):
+		print("ghost display: %s | %s" % [DisplayServer.get_name(), RenderingServer.get_video_adapter_name()])
 		get_tree().quit()
 		return
 	#Export templates ignore --script, so the exported app enters its offline analyzer through the main
@@ -141,6 +154,7 @@ func _ready() -> void:
 	#`--headless`; exits non-zero when something a feature needs is missing.
 	if args.has("--deps"):
 		var rows := Deps.report()
+		_script(EXPORTER).mark_display(rows, true)
 		print(Deps.format_report(rows))
 		get_tree().quit(0 if Deps.verdict(rows).is_empty() else 1)
 		return
@@ -185,6 +199,14 @@ func _ready() -> void:
 		#Boot (first autoload) already hid the window, and the exporter's override.cfg set the output
 		#resolution and stretch mode at engine startup (Movie Maker locks resolution before any script
 		#runs). Run clean and quit when the song ends.
+		_fault_file = _arg_value(args, "--fault-file")
+		var display := DisplayServer.get_name()
+		print("ghost export: display %s | %s" % [display, RenderingServer.get_video_adapter_name()])
+		#The exporter put it on a display of its own (Exporter.virtual_display). Anywhere else is the desktop, where the
+		#recording can be frozen - and the author's screen.
+		if args.has("--virtual-display") and display != "X11":
+			_stop_export("it was to draw on a display of its own (xvfb-run) but came up on %s" % display)
+			return
 		Spectrum.song_finished.connect(func(): get_tree().quit())
 		_begin_session()
 		#`--from <seconds>`: render only a stretch from there (Stitch puts it back into the earlier export)
@@ -375,7 +397,7 @@ func open_file(path: String) -> String:
 
 
 ## The note open now was saved into another file (its Script card's Save...): [param to] is the note
-## from here on - what "⋯" deletes, what the list shows and what opens next time. The panel has moved
+## from here on - what the list shows and what opens next time. The panel has moved
 ## already ([signal DocSource.moved]). One note, one file: a note Ghost Notes kept in its own folder
 ## goes to the trash once the new file is written, a file added by hand leaves the list, and a file
 ## in an added folder stays listed with its folder; all of those are the author's files, left as they
@@ -388,7 +410,7 @@ func note_moved(from: String, to: String) -> String:
 	_note = to
 	NoteStore.add(to)
 	if _chrome != null and is_instance_valid(_chrome):
-		_chrome.set_note(_note, delete_note, open_file)
+		_chrome.set_note(_note, open_file)
 	var kept := ""
 	var may := not Settings.is_read_only()
 	for why in [_script(LETTER_SKETCHES).call("carry", from, to, may),
@@ -408,23 +430,6 @@ func note_moved(from: String, to: String) -> String:
 		NoteStore.remove(from)
 		return "%s is left as it was, and is off the list.%s" % [from.get_file(), kept]
 	return "%s is left as it was.%s" % [from.get_file(), kept]
-
-
-## Delete the note open now (its panel's "⋯", once asked - see [DeleteDialog]): it is left as the ⌂
-## leaves it, its panel writing what it holds, then thrown away ([param answer] "trash") or let go of
-## the list with its file kept ("forget"). The list comes back without it.
-func delete_note(path: String, answer: String) -> void:
-	if not leave_blocker().is_empty():
-		return
-	_end_session(false)
-	var err := ""
-	if answer == "trash":
-		err = NoteStore.trash(path)
-	elif answer == "forget":
-		NoteStore.remove(path)
-	if not err.is_empty():
-		push_warning("ghost: " + err)
-	_show_list()
 
 
 ## Start a workspace - a key of [constant Components.WORKSPACES] - through one path: every note
@@ -599,8 +604,7 @@ func leave_blocker() -> String:
 func _entered_mode() -> void:
 	if _chrome != null and is_instance_valid(_chrome):
 		_chrome.set_home(leave_mode, leave_blocker)
-		_chrome.set_note(_note, delete_note if not _note.is_empty() else Callable(),
-			open_file if not _note.is_empty() else Callable())
+		_chrome.set_note(_note, open_file if not _note.is_empty() else Callable())
 
 
 ## Tear the session down and return to the notes list - the one teardown for every mode: the ⌂, and a
@@ -740,6 +744,14 @@ func _sync_filters() -> void:
 		print("ghost: look %s" % said)
 
 
+## A render that cannot go on to be the show: say why - on stderr, and to the exporter through `--fault-file` - and quit
+## non-zero. Movie Maker closes its file as the engine quits; the exporter throws it away.
+func _stop_export(why: String) -> void:
+	printerr("ghost: EXPORT STOPPED - " + why)
+	RenderWatch.write_fault(_fault_file, why)
+	get_tree().quit(3)
+
+
 ## Say so when the show's clock stops while the render keeps writing frames. Reports the first frame
 ## of a stall and again when it ends, with what the audio player was doing: `Spectrum` takes the clock
 ## from `get_playback_position()`, and a stopped player and one reporting a position that does not
@@ -788,8 +800,9 @@ func _sync_stage_size() -> void:
 		return
 	var r := _frame_rect()
 	#The stage is drawn at the Graphics menu's Resolution row: the frame's own canvas units unless
-	#chosen. What is on the stage is told the stage's size, what lies over it the frame's.
-	_stage.size = Graphics.stage_size(r.size)
+	#chosen. What is on the stage is told the stage's size, what lies over it the frame's. Units of the
+	#canvas a unit to a unit: an interface drawn larger (UiScale) has fewer of them, never a coarser show.
+	_stage.size = Graphics.stage_size(r.size * get_window().content_scale_factor)
 	_stage_view.position = r.position
 	_stage_view.size = r.size
 	Director.frame_rect = r
@@ -832,6 +845,10 @@ func _process(delta: float) -> void:
 		get_tree().quit()
 		return
 	if _export_mode:
+		if _draw_watch.step(Engine.get_frames_drawn(), delta, Spectrum.current.time):
+			_stop_export("its window stopped drawing at %s (on %s): the screen was locked, or the window hidden, covered or minimized"
+				% [Clock.text(_draw_watch.first_at), DisplayServer.get_name()])
+			return
 		_status_t += delta
 		if _status_t >= 0.3:
 			_status_t = 0.0
@@ -938,8 +955,16 @@ func _shutdown() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and _zooms(event as InputEventKey):
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
+			KEY_F1:
+				#the keys, every one (KeysWindow; a note's panel has it behind its "?"). Masking's F1 is its own,
+				#taken before it reaches here.
+				if _chrome != null and is_instance_valid(_chrome):
+					KeysWindow.toggle(self)
 			KEY_F11:
 				_toggle_fullscreen()
 			KEY_N:
@@ -948,6 +973,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				if _mask_editor == null or not is_instance_valid(_mask_editor):
 					Director.next()
 			KEY_ESCAPE:
+				#the keys first, when they are up behind a click elsewhere: an Esc meant for them never quits
+				var keys := get_tree().get_first_node_in_group(KeysWindow.GROUP) as Window
+				if keys != null:
+					keys.hide()
+					return
 				call_deferred("_shutdown")   # outside the input propagation
 											 # (children are locked during it)
 
@@ -1114,6 +1144,65 @@ func _open_mask_editor(path: String, note := "") -> void:
 	add_child(editor)
 	editor.open_source(path)
 	_entered_mode()
+
+
+## Ctrl+= and Ctrl+- (Cmd on a Mac; the keypad's too) draw the interface a step larger or smaller, Ctrl+0 at this
+## screen's own size again ([UiScale]); what it is now is said for a moment. True when [param k] was one of them.
+func _zooms(k: InputEventKey) -> bool:
+	if not k.is_command_or_control_pressed() or k.alt_pressed:
+		return false
+	var by := 0
+	match k.keycode:
+		KEY_EQUAL, KEY_PLUS, KEY_KP_ADD:
+			by = 1
+		KEY_MINUS, KEY_KP_SUBTRACT:
+			by = -1
+		KEY_0, KEY_KP_0:
+			by = 0
+		_:
+			return false
+	var said := UiScale.step(by)
+	if said.is_empty():
+		return false
+	_say_for_a_moment(said)
+	return true
+
+
+var _moment: Label = null
+var _moment_tween: Tween = null
+
+
+## [param text] in the middle of the window for a moment, over everything (the interface's size as it changes).
+func _say_for_a_moment(text: String) -> void:
+	if _moment == null or not is_instance_valid(_moment):
+		var layer := CanvasLayer.new()
+		layer.layer = 254
+		add_child(layer)
+		_moment = Label.new()
+		_moment.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_moment.add_theme_font_size_override("font_size", 15)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.07, 0.08, 0.11)
+		sb.border_color = Color(0.18, 0.21, 0.27)
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(6)
+		sb.set_content_margin_all(12)
+		_moment.add_theme_stylebox_override("normal", sb)
+		_moment.set_anchors_preset(Control.PRESET_CENTER)
+		_moment.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		_moment.grow_vertical = Control.GROW_DIRECTION_BOTH
+		layer.add_child(_moment)
+	_moment.text = text
+	_moment.offset_left = 0
+	_moment.offset_right = 0
+	_moment.offset_top = 0
+	_moment.offset_bottom = 0
+	_moment.modulate.a = 1.0
+	if _moment_tween != null and _moment_tween.is_valid():
+		_moment_tween.kill()
+	_moment_tween = create_tween()
+	_moment_tween.tween_interval(1.4)
+	_moment_tween.tween_property(_moment, "modulate:a", 0.0, 0.4)
 
 
 func _toggle_fullscreen() -> void:

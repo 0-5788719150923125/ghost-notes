@@ -397,9 +397,19 @@ static func work_lines(plan: Dictionary) -> Array:
 const SAID_WORD := 0.52
 ## The most characters of the runs of code a later role is shown whole ([method runs_text]); past it, a line each.
 const RUNS_SHOWN := 40000
-## A game's session at its longest (minutes), and how many words its opening and its close each run to.
+## A game's session at its longest (minutes), and how many words its opening and its close each run to, where its plan gives no
+## `minutes` of its own ([method game_words]).
 const GAME_MINUTES := 40
 const GAME_END_WORDS := Vector2i(350, 700)
+## A game whose plan gives its `minutes` (the brief's length): the share of that time that is talk - the rest is dice in the air,
+## figures walking and a beat of nobody saying anything - and how it is shared: the opening's and the close's, the stretches the rest.
+## The fewest words any stretch runs to.
+const GAME_TALK := 0.85
+const GAME_INTRO_SHARE := 0.2
+const GAME_CLOSE_SHARE := 0.12
+const GAME_WORDS_LEAST := 40
+## The longest and shortest a page of a game's book may be held, by the plan's `picture_seconds` ([method picture_words]).
+const PICTURE_SECONDS := Vector2(3.0, 120.0)
 ## The fewest words a passage over work runs to, however quiet the show: it still has to say something. And the most of the work
 ## that may pass in silence.
 const QUIET_WORDS_LEAST := 15
@@ -661,14 +671,26 @@ static func game_prep(title: String, brief: String, plan: Dictionary, people: Pa
 
 
 ## One stretch of the game, as its master is told it: everything said so far, its own preparation and the table as it stands. [param step] is "intro", "close" or a number.
-## [param diorama]: the model's board it is played on ([GameDiorama]), or {} for maps laid as it goes.
-static func game_master(title: String, brief: String, plan: Dictionary, people: PackedStringArray, step: String, n: int, prep: Dictionary, ledger: GameLedger, before: String, aim: Vector2i, diorama := {}) -> Dictionary:
+## [param diorama]: the model's board it is played on ([GameDiorama]), or {} for maps laid as it goes. [param tall]: its pages are painted
+## for a portrait show ([method TableEpisode.tall]), so each is told as one subject seen close.
+static func game_master(title: String, brief: String, plan: Dictionary, people: PackedStringArray, step: String, n: int, prep: Dictionary, ledger: GameLedger, before: String, aim: Vector2i, diorama := {}, tall := false) -> Dictionary:
 	var vars := _game_vars(title, plan, people)
+	vars["tall"] = tall
 	vars.merge({"model": not diorama.is_empty(), "board_told": GameDiorama.told(diorama) if not diorama.is_empty() else ""})
 	vars.merge({"prep": JSON.stringify(prep, "  "), "state": ledger.describe(), "said": not before.is_empty(), "before": before,
 		"intro": step == "intro", "close": step == "close", "scene": step != "intro" and step != "close", "k": step, "n": n,
-		"lo": aim.x, "hi": aim.y, "minutes": roundi(float(aim.y + aim.x) * 0.5 * SAID_WORD / 60.0), "hidden": true})
+		"lo": aim.x, "hi": aim.y, "minutes": _said_minutes(aim), "hidden": true,
+		"paced": plan.has("picture_seconds") and picture_words(plan) != GameTools.PICTURE_EVERY,
+		"picture_seconds": roundi(float(picture_words(plan)) * SAID_WORD),
+		"previously": String(plan.get("previously", "")).strip_edges()})
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/game_master.prompt", vars)}
+
+
+## How long [param aim]'s words take to say, in minutes, as a stretch is told it: a stretch under a minute and a half is told in
+## halves of one, so a short show's opening is not told it lasts no time at all.
+static func _said_minutes(aim: Vector2i) -> String:
+	var m := float(aim.y + aim.x) * 0.5 * SAID_WORD / 60.0
+	return str(roundi(m)) if m >= 1.5 else String.num(maxf(snappedf(m, 0.5), 0.5), 1)
 
 
 ## The model maker, modeling the land of tonight's game ([DioramaTools] `land`): the preparation's world, places and land.
@@ -714,21 +736,48 @@ static func game_player(title: String, brief: String, plan: Dictionary, who: Str
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/game_player.prompt", vars)}
 
 
-## How many words a stretch of the session runs to: an opening and a close are shorter than the night's middle, and a night is as long as its parts make it. [constant GAME_MINUTES] is the show's most: the brief may say less.
-static func game_words(step: String, scenes: int) -> Vector2i:
-	if step == "intro" or step == "close":
-		return GAME_END_WORDS
+## How many words a stretch of the session runs to: an opening and a close are shorter than the night's middle, and a night is as long as its parts make it.
+## Where the [param plan] gives `minutes` (the producer's, from the brief: a short show is short), the night's talk is shared out of it - the opening
+## [constant GAME_INTRO_SHARE] of it, the close [constant GAME_CLOSE_SHARE], each of at most [param scenes] stretches an even share of the rest - and
+## never past what a plan with none is given. A plan with none: [constant GAME_MINUTES] at most, the opening and close [constant GAME_END_WORDS].
+static func game_words(step: String, scenes: int, plan := {}) -> Vector2i:
+	var end := step == "intro" or step == "close"
 	var share := roundi(float(GAME_MINUTES) * 60.0 / SAID_WORD / float(maxi(scenes, 1)))
-	return Vector2i(roundi(float(share) * 0.6), share)
+	var most := GAME_END_WORDS if end else Vector2i(roundi(float(share) * 0.6), share)
+	var raw: Variant = plan.get("minutes")
+	if not (raw is Array and (raw as Array).size() == 2):
+		return most
+	var span := minutes_of(plan)
+	var words := span * 60.0 / SAID_WORD * GAME_TALK
+	var part := GAME_INTRO_SHARE if step == "intro" else (GAME_CLOSE_SHARE if step == "close" else (1.0 - GAME_INTRO_SHARE - GAME_CLOSE_SHARE) / float(maxi(scenes, 1)))
+	var hi := clampi(roundi(words.y * part), GAME_WORDS_LEAST, most.y)
+	var lo := clampi(roundi(words.x * part), mini(GAME_WORDS_LEAST, hi), hi)
+	return Vector2i(lo, hi)
+
+
+## The most words a page of a game's book is held over before the game master is told to show the next ([GameTools]): the plan's
+## `picture_seconds` (the producer's, from the brief), at a voice's pace, else [constant GameTools.PICTURE_EVERY].
+static func picture_words(plan: Dictionary) -> int:
+	var raw: Variant = plan.get("picture_seconds")
+	if not (raw is float or raw is int) or not is_finite(float(raw)) or float(raw) <= 0.0:
+		return GameTools.PICTURE_EVERY
+	return maxi(roundi(clampf(float(raw), PICTURE_SECONDS.x, PICTURE_SECONDS.y) / SAID_WORD), 4)
 
 
 ## What a game's session asked to have painted: a map seen from straight above, a figure on the card it stands on, or a picture handed across a table.
 ## [param refs]: whether references go with it (a page's earlier pages and figures).
-static func game_image(look: Dictionary, kind: String, thing: Dictionary, target: String, refs := false) -> String:
+## A page's [param attached] are its references in the order they go, each told what it is for ([method TableProducer._page_refs]);
+## [param story], what is said round it ([method TableProducer.page_story]), context the painter is told is not to be painted.
+## [param tall]: a page painted for a portrait show, 2:3 and composed for a phone held upright ([method TableEpisode.tall]).
+static func game_image(look: Dictionary, kind: String, thing: Dictionary, target: String, refs := false, attached: Array = [], story := {}, tall := false) -> String:
 	var vars := _look_vars(look, target)
+	vars["tall"] = tall
 	var shows: Array = thing.get("shows", []) if thing.get("shows") is Array else []
 	vars.merge({"name": String(thing.get("name", "")), "looks": String(thing.get("looks", "")), "art": String(look.get("art", "")), "own_hand": bool(look.get("own_hand", false)),
-		"has_shows": not shows.is_empty(), "shows": ", ".join(PackedStringArray(shows)), "refs": refs}, true)
+		"has_shows": not shows.is_empty(), "shows": ", ".join(PackedStringArray(shows)), "refs": refs,
+		"attached": attached, "has_attached": not attached.is_empty(), "attached_n": attached.size(),
+		"story_before": String(story.get("before", "")), "story_over": String(story.get("over", "")),
+		"has_story": not String(story.get("before", "")).is_empty() or not String(story.get("over", "")).is_empty()}, true)
 	return Rules.say("table/painter.game_%s" % kind, vars)
 
 

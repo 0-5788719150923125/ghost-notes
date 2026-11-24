@@ -4,9 +4,9 @@ class_name Shell
 ## Shell - what a panel asks of the window it is in.
 ##
 ## A panel asks for a place in the bottom-right row, for room along the bottom edge, for the way back
-## to the notes, for what can be done to the note that is open. It knows no exporter, no assistant and
-## no console. [Chrome] (`app/`) is the shell with the furniture in it, and answers the three questions
-## that need furniture ([method _inset_changed], [method _export_suppressed], [method ask_delete]).
+## to the notes, for the note that is open. It knows no exporter, no assistant and no console. [Chrome]
+## (`app/`) is the shell with the furniture in it, and answers the two questions that need furniture
+## ([method _inset_changed], [method _export_suppressed]).
 ## Panels live below the shell in `src/` (docs/structure.md): they name this, and `app/` names them.
 ##
 ## A panel built with no shell in the tree (a probe, a gate) finds none ([method of] is null) and
@@ -40,7 +40,6 @@ var _home_button: Button
 var _home_leave := Callable()     # () -> String: "" once it has left, else why not
 var _home_blocker := Callable()   # () -> String: why the mode cannot be left now, "" when it can
 var _note_path := ""             # the note open now, "" on the list
-var _note_delete := Callable()    # (path, answer) -> void: main's delete_note
 var _note_open := Callable()      # (path) -> String: main's open_file
 var _home_t := 0.0
 
@@ -323,11 +322,10 @@ func _go_home() -> void:
 	go_home()
 
 
-## The note open now, and how to delete it ([param delete]: (path, "trash" or "forget") -> void) -
-## what every panel's "⋯" acts on ([method note_menu]). "" and an invalid Callable on the list.
-func set_note(path: String, delete := Callable(), open := Callable()) -> void:
+## The note open now, and how to open another file as the note ([param open]: (path) -> String, main's
+## open_file). "" and an invalid Callable on the list.
+func set_note(path: String, open := Callable()) -> void:
 	_note_path = path
-	_note_delete = delete
 	_note_open = open
 
 
@@ -337,43 +335,6 @@ func open_file(path: String) -> String:
 	if not _note_open.is_valid():
 		return "No note is open."
 	return String(_note_open.call(path))
-
-
-## "⋯" for a panel's header: what can be done to the note itself - deleting it, asked first
-## ([method ask_delete]). Grayed, with the reason, while the note cannot be left. A panel built
-## without a Chrome (a probe) gets one that does nothing.
-static func note_menu(owner: Node) -> MenuButton:
-	var m := MenuButton.new()
-	m.text = "⋯"
-	m.flat = true
-	m.focus_mode = Control.FOCUS_NONE
-	m.tooltip_text = "This note"
-	var pop := m.get_popup()
-	pop.add_item("Delete this note…", 0)
-	m.about_to_popup.connect(func() -> void:
-		var ch := Shell.of(owner)
-		var why := ch.delete_blocker() if ch != null else "No note is open."
-		pop.set_item_disabled(0, not why.is_empty())
-		pop.set_item_tooltip(0, why))
-	pop.id_pressed.connect(func(id: int) -> void:
-		var ch := Shell.of(owner)
-		if ch != null and id == 0:
-			ch.ask_delete())
-	return m
-
-
-## Why the note open now cannot be deleted this moment, "" when it can.
-func delete_blocker() -> String:
-	if _note_path.is_empty() or not _note_delete.is_valid():
-		return "No note is open."
-	return String(_home_blocker.call()) if _home_blocker.is_valid() else ""
-
-
-## Ask, then delete the note open now - left first, then thrown away. The asking is a dialog,
-## which is furniture: the shell that has one answers ([Chrome]).
-func ask_delete() -> void:
-	pass
-
 
 
 func _paint_home() -> void:

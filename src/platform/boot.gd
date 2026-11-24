@@ -56,6 +56,12 @@ static func handheld() -> bool:
 ## window; Godot's default would open a window that size, a quarter of a 4K screen. Only for a person's
 ## session: a render, a probe or a headless run keeps the size it was given, as does a launch that names a size,
 ## a position or a mode. [param force] is the probe's seam. True when the window was resized.
+##
+## Maximized instead where three quarters would be smaller than the 1920x1080 the interface is laid out in
+## ([method maximizes]: a laptop's screen, a 1080p monitor), which would draw every word smaller than designed.
+## It also gets the window out of Godot's first size: opened at 1920x1080 on a 1920-wide screen, it is as wide
+## as the screen, KWin takes it as maximized across and holds it there, and a resize to three quarters kept
+## only the new height - a window the screen's full width and short of its height.
 func fit_window(force := false) -> bool:
 	if not force:
 		if DisplayServer.get_name() == "headless" or Settings.is_read_only():
@@ -72,7 +78,18 @@ func fit_window(force := false) -> bool:
 	var size := Vector2i(roundi(area.size.x * WINDOW_SHARE), roundi(area.size.y * WINDOW_SHARE))
 	win.size = size
 	win.position = area.position + (area.size - size) / 2
+	# the size above stays what un-maximizing comes back to
+	if maximizes(area.size):
+		win.mode = Window.MODE_MAXIMIZED
 	return true
+
+
+## Whether a window on [param area] of free screen opens maximized: three quarters of it would be smaller than the
+## interface's 1920x1080 either way.
+static func maximizes(area: Vector2i) -> bool:
+	var design := Vector2(ProjectSettings.get_setting("display/window/size/viewport_width", 1920),
+		ProjectSettings.get_setting("display/window/size/viewport_height", 1080))
+	return area.x * WINDOW_SHARE < design.x - 0.5 or area.y * WINDOW_SHARE < design.y - 0.5
 
 
 ## The phone shell on the desktop opens in a phone's shape (portrait, most of the screen's height) for a
@@ -112,6 +129,8 @@ func _ready() -> void:
 		_fit_handheld()
 	elif not OS.get_cmdline_user_args().has("--export"):
 		fit_window()
+		# the words as large as this screen's pixels ask for, at any window (a render and a probe are read-only: never)
+		UiScale.watch(get_window())
 	get_window().title = TITLE
 	# The window's icon is this machine's ghost ([AppIcon]); project.godot names none. An autoload's ready comes
 	# after Godot sets its own icon, so this one stays.

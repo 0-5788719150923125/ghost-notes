@@ -18,8 +18,7 @@ extends Node
 ##   supported agent, as paragraphs that survive Boot's re-flow; a press attaches nothing; restored, it is
 ##   lit exactly when the machine has both roles.
 ## - A note goes when asked: the list's × asks first ([DeleteDialog]) - canceled, the note stays; confirmed,
-##   it goes to the trash (the gate's seam, `NoteStore.discard`) and out of the list. A note's own "⋯" does
-##   the same and the list comes back.
+##   it goes to the trash (the gate's seam, `NoteStore.discard`) and out of the list.
 ## - The round trip: New, then "+" Sound (a Sound card, composed with nothing made yet, and the Pipeline card it
 ##   makes on; its song heard as it is made, so the transport is up but no stage until Play, a Medium no longer
 ##   grayed), "+" Medium (Auto: the seeded show); choosing a
@@ -33,7 +32,7 @@ extends Node
 ## - A show of cards starts with a brief: attaching Cards to a note with no words fills it with the bundled
 ##   starter, and the Cards workspace opens showing it.
 ## - Save… takes the note with it: the Script card has Save… and a [SaveMark], the editor window has no such
-##   button, and Save… asks for a file every time. Saved elsewhere, the note is that file for main, "⋯" and
+##   button, and Save… asks for a file every time. Saved elsewhere, the note is that file for main, the shell and
 ##   the list; the one Ghost Notes kept goes (`discard`); left and opened again it is still that file, with
 ##   the words typed before and after; and what was made for it (a letter's sketches and its steps' work, in
 ##   folders named by its path) is in the new file's. A file of the author's own stays on disk and leaves
@@ -299,21 +298,6 @@ func _check_delete() -> void:
 	_ok(not FileAccess.file_exists(path), "confirmed, it goes")
 	list.refresh()
 	_ok(not _row_of(list, path), "...and leaves the list")
-	# From inside the note: its own "⋯", asked first, and the list comes back
-	var inside := NoteStore.create("Delete me from inside", "Words.\n")
-	list._open(inside)
-	await _frames(12)
-	var ch: Chrome = _main._chrome
-	_ok(_main._note == inside and ch.delete_blocker().is_empty(), "an open note can be deleted")
-	ch.ask_delete()
-	await _frames(2)
-	dlg = _dialog_in(ch)
-	_ok(dlg != null, "its ⋯ asks first")
-	if dlg != null:
-		dlg.confirmed.emit()
-		await _frames(12)
-	_ok(not FileAccess.file_exists(inside), "...and once asked, the note goes")
-	_ok(_main._list != null and is_instance_valid(_main._list) and _main._note.is_empty(), "...and the list comes back")
 
 
 func _row_of(list: NotesList, path: String) -> bool:
@@ -597,7 +581,7 @@ func _check_save_moves_the_note() -> void:
 	var writes := mark.writes
 	_ok(editor._doc.save_to(now), "Save… into a file elsewhere")
 	_ok(_main._note == now and ch._note_path == now and editor.note_path == now,
-		"the note is that file: for main, for \"⋯\" and for its panel (%s)" % _main._note.get_file())
+		"the note is that file: for main, for the shell and for its panel (%s)" % _main._note.get_file())
 	_ok(not FileAccess.file_exists(old), "the one Ghost Notes was keeping for it is gone")
 	_ok(FileAccess.file_exists(LetterSketches.folder_of(now).path_join("sketches").path_join("a.json"))
 		and FileAccess.file_exists(NoteUpload.folder_of(now).path_join("youtube_tags.json"))

@@ -107,7 +107,7 @@ godot -- --note chapter.md     # open one note
 godot -- --audio ~/track.wav   # straight into a song
 ```
 
-Every flag is in [docs/cli.md](docs/cli.md). Keys: `Space` play/pause, `N` next scene, `F11` full screen, `` ` `` feedback, `Esc` quit.
+Every flag is in [docs/cli.md](docs/cli.md). Keys: `F1` (or the `?` on a note's panel) lists every one; `Space` play/pause, `N` next scene, `F11` full screen, `Ctrl+=` / `Ctrl+-` / `Ctrl+0` the interface's size, `` ` `` feedback, `Esc` quit.
 
 ## building and testing
 

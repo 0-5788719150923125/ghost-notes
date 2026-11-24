@@ -694,6 +694,8 @@ func _stand(raw: Dictionary, acts: Variant = null) -> String:
 		m._textures = (_medium._textures as Dictionary).duplicate()
 		m._mtimes = (_medium._mtimes as Dictionary).duplicate()
 	m.aside = true
+	# ...photographed in the frame it is dressed for, whatever frame the show is in (a portrait one: next/portrait.md)
+	m.previewed = true
 	# its acts are still being written: nothing out of the shot is hidden ([method TableMedium.hide_idle])
 	m.hides_idle = false
 	# What the last table baked goes on to this one ([method TablePhysics.carry]): stood over the same table, it bakes

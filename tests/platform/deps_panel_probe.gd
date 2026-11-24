@@ -32,6 +32,13 @@ func _run() -> void:
 		await get_tree().process_frame
 		if not panel._rows.is_empty():
 			break
+	# ...and, the panel being open, the xvfb-run row checked by starting a render on it (Exporter.display_check, a few
+	# seconds): the launch probe never checks it, so its answer lands with the probe after
+	for i in 1800:
+		var x: Dictionary = panel._row("xvfb")
+		if not bool(x.get("found", false)) or str(x.get("version", "")).begins_with("renders on it"):
+			break
+		await get_tree().process_frame
 	for i in 10:   # the rows landed this frame; let them draw before the shutter
 		await get_tree().process_frame
 	get_tree().root.get_texture().get_image().save_png(args[0])
@@ -49,6 +56,13 @@ func _run() -> void:
 		if String(r.get("key", "")) in ["ffmpeg", "voice_venv", "ytdlp_venv"]:
 			r["found"] = false
 			r["version"] = ""
+		# xvfb-run installed but no use to a render: this laptop's before 2026-11-23 (Exporter.mark_display)
+		if String(r.get("key", "")) == "xvfb":
+			r["found"] = false
+			r["broken"] = true
+			r["version"] = ""
+			r["note"] = "a render can't draw on it"
+			r["why"] = "None of the devices supports both graphics and present queues."
 	panel._apply(rows)
 	panel._toggle_detail("ytdlp_venv")
 	agent.emit_signal("changed", "ffmpeg")

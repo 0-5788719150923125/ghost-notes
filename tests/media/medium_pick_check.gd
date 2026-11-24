@@ -169,6 +169,23 @@ func _run() -> void:
 		print("vpick: at the desk, its own rows keep its things in the block (its light is the Environment's: a mood there is dropped); at the table none; a pick opens the note again")
 	at_desk.free()
 	at_its_table.free()
+	# A table show in portrait (TikTok, next/portrait.md): its table takes the frame, its block keeps it and gives it back; a landscape
+	# one writes none, so every other table show's block stays as it was. The control: the desk has no portrait frame.
+	var frame_was := Director.frame
+	var tall := MediumCard.new({"reading": true, "provides": episodic, "blocks": {"medium": {"format": "table"}}})
+	tall.apply({"format": "table", "frame": "portrait"})
+	var tall_block := tall.capture()
+	var took := Director.frame
+	Director.set_frame("landscape")
+	var flat_block := tall.capture()
+	if took != "portrait" or String(tall_block.get("frame", "")) != "portrait" or flat_block.has("frame") \
+			or not Medium.supports("table", "portrait") or Medium.supports("desk", "portrait"):
+		print("vpick: FAILED - a table show in portrait: took '%s', block %s; in landscape %s" % [took, str(tall_block), str(flat_block)])
+		fails += 1
+	else:
+		print("vpick: a table show takes portrait from its block and keeps it there; landscape writes no frame")
+	Director.set_frame(frame_was)
+	tall.free()
 	# The look filters, and the same three questions: a row per registry entry, each showing the live setting, and a
 	# tick that actually reaches the Director.
 	if (ed._block_cards["look"] as LookCard)._filter_rows.size() != Filters.REGISTRY.size():

@@ -41,6 +41,12 @@ const ROAD := "#a08a64"
 const WATER := "#26444c"
 const EDGE := "#2e2620"
 const SORTS := ["leafy", "pine", "dead"]
+## What the board's ground is: `land`, modeled country (flock, hills, resin water, woods), or `floor`, the inside of somewhere seen with
+## its roof off - flat, plain and dry, its rooms and halls the places standing on it (the author, 2026-11-23: "instead of a focus on the
+## macro, we can build a board for the micro. The inside of a building, a castle, a dungeon").
+const GROUNDS := ["land", "floor"]
+## A floor's color when the spec says none: worn boards and flags under lamplight.
+const FLOOR := "#6f6253"
 ## How many times flock's grain repeats a meter.
 const FLOCK_SCALE := 9.0
 
@@ -64,14 +70,15 @@ func _init(spec_of: Dictionary, seed_of: int) -> void:
 
 ## What the model maker may write, as it is told ([DioramaTools]).
 static func describe() -> String:
-	return """THE BOARD is %d x %d cm, measured from its far left corner: x across to the right (0 to %d), z toward the head of the table, where the viewer sits (0 to %d). It is as big as a model railway layout, eight feet long: work all of it, edge to edge - open country, hills, woods and water between the places, the far corners as worked as the middle. Its ground is flat flocked grass to begin with. Everything is in centimeters at model scale: a person's figure is about 4 cm tall, a cottage about 8 cm across, a castle's keep 20-30 cm high.
+	return """THE BOARD is %d x %d cm, measured from its far left corner: x across to the right (0 to %d), z toward the head of the table, where the viewer sits (0 to %d). It is as big as a model railway layout, eight feet long: work all of it, edge to edge, the far corners as worked as the middle. Everything is in centimeters at model scale: a person's figure is about 4 cm tall, a cottage about 8 cm across, a castle's keep 20-30 cm high.
 
+- `ground`: "land" (the default) - open country, hills, woods and water between the places, its ground flat flocked grass to begin with; or "floor" - the inside of somewhere, seen with its roof off: the board is one flat, dry floor (no hills, water or woods), and every room, hall, passage and stair is a place standing on it, built of its walls (low enough to see over, with gaps for its doorways), its own floor and what is in it
 - `hills` [{`at` [x, z], `radius`, `height` (up to %d; negative up to -%s is a hollow, filled with water where it is deep enough), `rough` 0-1 (rocky, stony slopes)}]
 - `rivers` [{`path` [[x, z], ...] (in from one edge and out at another, or into a lake), `width` (2-12), `depth` (0.6-2)}]: cut into the ground and poured with resin water
 - `lakes` [{`at`, `radius`}]
 - `roads` [{`path`, `width` (1-5)}]: packed earth, the way between places
 - `woods` [{`at`, `radius`, `trees` (how many), `sort` (leafy, pine or dead), `tall` (a tree's height, 4-14)}]
-- `colors` {`grass`, `earth`, `stone`, `road`, `water`}: the ground's own paint, as hex, if not the usual
+- `colors` {`grass`, `earth`, `stone`, `road`, `water`, `floor`}: the ground's own paint, as hex, if not the usual (`floor` is the whole board's, where `ground` is "floor")
 - `places` [{`name` (as the game will call it: the mill, the bridge, the old keep), `at` [x, z], `turn` (degrees about up), `line` (what it is, in a few words), and `thing` - a model built of parts, as a prop is, its base on y = 0, its front toward +z, in centimeters at this scale; its materials in the board's own `materials`}]. A bridge stands across a river; a building on a hill sits on it: the ground is made flat under each place.""" % [int(SIZE.x), int(SIZE.y), int(SIZE.x), int(SIZE.y), int(HILL_MOST), str(HOLLOW_MOST)]
 
 
@@ -80,6 +87,9 @@ static func describe() -> String:
 ## safe again from its own output a lathe is lost, so a thing is made safe only where it is built ([method build]).
 static func sanitize(raw: Dictionary) -> Dictionary:
 	var out := {"name": String(raw.get("name", "")).strip_edges().left(80)}
+	var ground := String(raw.get("ground", "land")).strip_edges().to_lower()
+	out["ground"] = ground if GROUNDS.has(ground) else "land"
+	var inside: bool = out["ground"] == "floor"
 	var hills: Array = []
 	for h in _list(raw, "hills"):
 		var r := clampf(_num(h, "radius", 12.0), 2.0, 100.0)
@@ -107,7 +117,11 @@ static func sanitize(raw: Dictionary) -> Dictionary:
 		woods.append({"at": _at(w.get("at")), "radius": clampf(_num(w, "radius", 10.0), 2.0, 80.0), "trees": clampi(int(_num(w, "trees", 12.0)), 1, 240),
 			"sort": sort if SORTS.has(sort) else "leafy", "tall": clampf(_num(w, "tall", 7.0), 4.0, 14.0)})
 	out["woods"] = woods
-	var colors := {"grass": GRASS, "earth": EARTH, "stone": STONE, "road": ROAD, "water": WATER}
+	# ...a floor has none of the country's: what is in a room is built in the room
+	if inside:
+		for k in ["hills", "rivers", "lakes", "woods"]:
+			out[k] = []
+	var colors := {"grass": GRASS, "earth": EARTH, "stone": STONE, "road": ROAD, "water": WATER, "floor": FLOOR}
 	var given: Dictionary = raw.get("colors", {}) if raw.get("colors") is Dictionary else {}
 	for k in colors:
 		if Color.html_is_valid(String(given.get(k, ""))):
@@ -200,7 +214,8 @@ static func _plain(s: String) -> String:
 
 ## What the board is, in words, for the one running the game: its places and where each is.
 static func told(diorama: Dictionary) -> String:
-	var out := PackedStringArray(["The board is a model of the land, %d x %d cm, measured from its far left corner (x across, z toward the head of the table). A person's figure is about 4 cm tall; 1 cm is about a pace and a half in the world. Its places, each a model standing on it:" % [int(SIZE.x), int(SIZE.y)]])
+	var what := "the inside of somewhere, seen with its roof off" if String(diorama.get("ground", "land")) == "floor" else "the land"
+	var out := PackedStringArray(["The board is a model of %s, %d x %d cm, measured from its far left corner (x across, z toward the head of the table). A person's figure is about 4 cm tall; 1 cm is about a pace and a half in the world. Its places, each a model standing on it:" % [what, int(SIZE.x), int(SIZE.y)]])
 	for p in diorama.get("places", []):
 		var d: Dictionary = p
 		var line := (": " + String(d["line"])) if not String(d.get("line", "")).is_empty() else ""
@@ -224,7 +239,9 @@ func _raw_height(x: float, z: float, noise: FastNoiseLite) -> float:
 			var k := 0.5 + 0.5 * cos(PI * d / r)
 			var lump := 1.0 + float(hl["rough"]) * 0.35 * noise.get_noise_2d(x * 3.1, z * 3.1)
 			h += float(hl["height"]) * k * k * (3.0 - 2.0 * k) * lump
-	# ...a little unevenness, all of it above the flat board, so only a cut is ever water
+	# ...a little unevenness, all of it above the flat board, so only a cut is ever water: none on a floor, which is laid flat
+	if _inside():
+		return h
 	h += (noise.get_noise_2d(x * 0.9, z * 0.9) * 0.5 + 0.5) * 0.35
 	for rv in spec["rivers"]:
 		var d := _to_path(Vector2(x, z), rv["path"])
@@ -328,7 +345,8 @@ func build(breathe := Callable()) -> Node3D:
 		places[String(d["name"])] = {"node": b["node"], "size": b["size"], "at": Vector2(d["at"][0], d["at"][1]), "turn": float(d["turn"])}
 	_heights(breathe)
 	root.add_child(_ground_mesh())
-	root.add_child(_water_mesh())
+	if not _inside():
+		root.add_child(_water_mesh())
 	var woods := _woods(breathe)
 	if woods != null:
 		root.add_child(woods)
@@ -340,6 +358,11 @@ func build(breathe := Callable()) -> Node3D:
 		n.name = String(name).validate_node_name()
 		root.add_child(n)
 	return root
+
+
+## Whether the board is the inside of somewhere ([constant GROUNDS]).
+func _inside() -> bool:
+	return String(spec.get("ground", "land")) == "floor"
 
 
 func _color(key: String) -> Color:
@@ -355,6 +378,8 @@ func _ground_mesh() -> MeshInstance3D:
 	var earth := _color("earth")
 	var stone := _color("stone")
 	var road := _color("road")
+	var floor := _color("floor")
+	var inside := _inside()
 	var bed := Color(BED)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -373,11 +398,14 @@ func _ground_mesh() -> MeshInstance3D:
 			var slope := Vector2(gx, gz).length()
 			var patch := noise.get_noise_2d(x, z) * 0.5 + 0.5
 			var c := grass.lerp(dry, smoothstep(0.55, 0.85, patch) * 0.8 + clampf(h / HILL_MOST, 0.0, 1.0) * 0.3)
+			# ...a floor is its own paint, worn a little paler where feet go and darker in the corners of the years
+			if inside:
+				c = floor.lerp(floor.lightened(0.12), smoothstep(0.45, 0.9, patch) * 0.6).lerp(floor.darkened(0.15), smoothstep(0.4, 0.05, patch) * 0.5)
 			c = c.lerp(stone, smoothstep(0.55, 1.1, slope))
 			for hl in spec["hills"]:
 				if float(hl["rough"]) > 0.0 and Vector2(x, z).distance_to(Vector2(hl["at"][0], hl["at"][1])) < float(hl["radius"]) * 0.8:
 					c = c.lerp(stone, float(hl["rough"]) * smoothstep(0.25, 0.6, slope + patch * 0.3))
-			if h < 0.1:
+			if h < 0.1 and not inside:
 				c = c.lerp(earth, smoothstep(0.1, -0.3, h))
 			if h < -WATER_DOWN:
 				c = c.lerp(bed, 0.8)
@@ -425,6 +453,12 @@ func _ground_mesh() -> MeshInstance3D:
 	mat.vertex_color_use_as_albedo = true
 	mat.roughness = 0.97
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# ...a floor is dry and plain, and catches the lamps a little: no flock on it
+	if inside:
+		mat.roughness = 0.82
+		mesh.material_override = mat
+		mesh.name = "Ground"
+		return mesh
 	# ...flock: a fine grain of light and dark over every color, and its own little bumps for the light to catch, seen close
 	mat.uv1_triplanar = true
 	mat.uv1_scale = Vector3.ONE * FLOCK_SCALE

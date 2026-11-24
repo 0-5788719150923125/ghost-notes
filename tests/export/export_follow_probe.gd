@@ -10,6 +10,9 @@ extends Node
 ##             leaves that Godot rendering)
 ##   lost    - the encoder dying after a release abandons the export and stops the render
 ##   early   - the encoder dying before any release falls back to encoding the whole AVI after
+##   undrawn - a render whose frames stop being drawn stops itself (RenderWatch, copied into the stand-in) and the export
+##             saves nothing: no "Saved", no MP4, the encoder stopped rather than left waiting, nothing left behind
+##   short   - a render that ends early: the MP4 is kept to look at but not called saved (Exporter.is_short)
 ##
 ##   tests/run_boot_probe.sh tests/export/export_follow_probe.gd 600 --dir <scratch on a real disk>
 ##
@@ -51,6 +54,8 @@ func _run() -> void:
 	await _control()
 	await _lost()
 	await _early()
+	await _undrawn()
+	await _short()
 	print("export_follow_probe: %s" % ("ALL OK" if _fails == 0 else "%d FAILED" % _fails))
 	get_tree().quit(1 if _fails > 0 else 0)
 
@@ -89,18 +94,29 @@ func _stopped() -> void:
 
 
 ## The control for the pact: a launch without it, stopped the same way, leaves its Godot rendering. Cleaned up by pid afterwards.
+## Without the pact only: the display's environment is the real launch's ([constant Exporter.VIRTUAL_ENV]), or on a machine
+## whose Godot cannot draw on Xvfb (Mesa, no DRI3) the control falls back to a window on the author's screen and measures that.
 func _control() -> void:
 	print("export_follow_probe: [control - the old launch]")
 	var avi := _dir.path_join("control.render.avi")
 	DirAccess.remove_absolute(avi)
 	var xvfb := Deps.resolve("xvfb-run")
-	var argv := PackedStringArray(["-a", "-s", "-screen 0 960x540x24", _exe])
+	var argv := PackedStringArray(["-u", "WAYLAND_SOCKET"] + Exporter.VIRTUAL_ENV)
+	argv.append_array([xvfb, "-a", "-s", "-screen 0 960x540x24", _exe])
 	argv.append_array(_writer_args(avi, 3000))
-	var pid := _start_writer(xvfb, argv, "probe control")
+	# Detached, and stopped by killing xvfb-run alone: a tracked start carries ghost's mark, and Subprocess.stop sweeps
+	# everything with the mark (since 2026-11-16) - this Godot too - so the control would measure the sweep, not the pact.
+	var was := OS.get_environment("XDG_DATA_HOME")
+	OS.set_environment("XDG_DATA_HOME", _dir.path_join("data"))
+	var pid := Subprocess.start_detached("env", argv)
+	if was.is_empty():
+		OS.unset_environment("XDG_DATA_HOME")
+	else:
+		OS.set_environment("XDG_DATA_HOME", was)
 	await _until(func() -> bool: return _godot_of(_tree(pid)) > 0 and _file_len(avi) > 65536, 60.0)
 	var tree := _tree(pid)
 	var godot := _godot_of(tree)
-	Subprocess.stop(pid)
+	OS.kill(pid)
 	await get_tree().create_timer(2.0).timeout
 	_check(godot > 0 and _alive(tree, godot), "control: stopping xvfb-run alone leaves its Godot rendering")
 	for p in tree.keys():
@@ -139,6 +155,36 @@ func _early() -> void:
 	ex.free()
 
 
+## A window that cannot draw is Wayland's to cause; the stand-in's watch is fed a count that stops moving instead (see
+## writer.gd), which is all RenderWatch reads.
+func _undrawn() -> void:
+	print("export_follow_probe: [undrawn - the render's frames stop being drawn]")
+	var ex: Exporter = _exporter("undrawn", 3000)
+	var tree: Dictionary = await _launch(ex, 3000, PackedStringArray(["--stall-draw-at", "300"]))
+	var t0 := Time.get_ticks_msec()
+	var over: bool = await _drive(ex, func() -> bool: return ex._state not in ["rendering", "transcoding"], 120.0)
+	_check(over, "the export ended")
+	_check(Time.get_ticks_msec() - t0 < 60000, "...at once, not after the whole render (%.0f s)" % ((Time.get_ticks_msec() - t0) / 1000.0))
+	_check(str(ex._status.text).begins_with("⚠  Render stopped") and str(ex._status.text).contains("stopped drawing"),
+		"it says why: %s" % ex._status.text)
+	_check(ex._state == "idle" and ex._status.visible, "...and keeps saying it until the next export")
+	_check(not FileAccess.file_exists(ex._out), "no MP4 is left to be taken for the show")
+	await _nothing_left(ex, tree)
+	ex.free()
+
+
+func _short() -> void:
+	print("export_follow_probe: [short - the render ends before the take does]")
+	var ex: Exporter = _exporter("short", 3000)     # asked for 100 s
+	var tree: Dictionary = await _launch(ex, 300)    # writes 10
+	var over: bool = await _drive(ex, func() -> bool: return ex._state not in ["rendering", "transcoding"], 300.0)
+	_check(over, "the export ended")
+	_check(str(ex._status.text).begins_with("⚠  The video came out 0:10 long of the 1:40"), "not saved as the show: %s" % ex._status.text)
+	_check(FileAccess.file_exists(ex._out), "the file is kept to look at")
+	await _nothing_left(ex, tree)
+	ex.free()
+
+
 # --- driving the exporter ----------------------------------------------------------------------
 
 func _exporter(tag: String, frames: int) -> Exporter:
@@ -157,9 +203,10 @@ func _exporter(tag: String, frames: int) -> Exporter:
 
 ## Start the render as _start_render does - fresh scratch, virtual display, pact - and return
 ## its process tree once Godot is up.
-func _launch(ex: Exporter, frames: int) -> Dictionary:
+func _launch(ex: Exporter, frames: int, extra := PackedStringArray()) -> Dictionary:
 	ex._begin_scratch()
-	var argv := Exporter.virtual_display(_exe, _writer_args(ex._avi, frames))
+	RenderWatch.clear_fault(Exporter.fault_path())
+	var argv := Exporter.virtual_display(_exe, _writer_args(ex._avi, frames, extra))
 	if argv.is_empty():
 		_check(false, "xvfb-run is installed")
 		return {}
@@ -236,9 +283,10 @@ func _writer_dir() -> String:
 	return _dir.path_join("writer")
 
 
-func _writer_args(avi: String, frames: int) -> PackedStringArray:
+## As the exporter's render: `--fault-file` where it says why it stopped itself. [param extra]: more for the stand-in.
+func _writer_args(avi: String, frames: int, extra := PackedStringArray()) -> PackedStringArray:
 	return PackedStringArray(["--path", _writer_dir(), "--write-movie", avi, "--fixed-fps", str(FPS),
-		"--quit-after", str(frames)])
+		"--quit-after", str(frames), "--", "--fault-file", Exporter.fault_path()]) + extra
 
 
 ## Start a writer with its user:// (Godot's shader caches) inside --dir, not the author's data.
@@ -253,10 +301,13 @@ func _start_writer(path: String, argv: PackedStringArray, tag: String) -> int:
 	return pid
 
 
-## The render's stand-in: a project Movie Maker records exactly as it records ghost's.
+## The render's stand-in: a project Movie Maker records exactly as it records ghost's, watched as ghost's render is (RenderWatch,
+## copied in whole - it names no other script - without its class_name, which is the copy's project's to register).
 func _write_writer() -> void:
 	var w := _writer_dir()
 	DirAccess.make_dir_recursive_absolute(w)
+	_put(w.path_join("render_watch.gd"),
+		FileAccess.get_file_as_string("res://src/export/render_watch.gd").replace("class_name RenderWatch\n", ""))
 	_put(w.path_join("project.godot"), "config_version=5\n\n[application]\n\nconfig/name=\"export_probe_writer\"\n"
 		+ "run/main_scene=\"res://writer.tscn\"\n\n[debug]\n\nfile_logging/enable_file_logging.pc=false\n\n"
 		+ "[display]\n\nwindow/size/viewport_width=1280\nwindow/size/viewport_height=720\n"
@@ -267,7 +318,20 @@ func _write_writer() -> void:
 		+ "[node name=\"Writer\" type=\"Node2D\"]\nscript = ExtResource(\"1\")\n")
 	_put(w.path_join("writer.gd"), """extends Node2D
 
+const Watch := preload("res://render_watch.gd")
+
+var _watch = Watch.new()
+var _fault := ""
+var _stall_at := -1     # --stall-draw-at <frame>: from there the watch is fed a count that does not move
+var _frozen := -1
+
 func _ready() -> void:
+	var a := OS.get_cmdline_user_args()
+	for i in a.size() - 1:
+		if a[i] == "--fault-file":
+			_fault = a[i + 1]
+		elif a[i] == "--stall-draw-at":
+			_stall_at = int(a[i + 1])
 	var rate := 44100
 	var data := PackedByteArray()
 	data.resize(rate * 2)
@@ -284,9 +348,17 @@ func _ready() -> void:
 	add_child(p)
 	p.play()
 
-func _process(_dt: float) -> void:
+func _process(dt: float) -> void:
 	OS.delay_msec(25)   # a render's pace: slower than the encoder, as a real one is
 	queue_redraw()
+	var drawn := Engine.get_frames_drawn()
+	if _stall_at >= 0 and drawn >= _stall_at:
+		if _frozen < 0:
+			_frozen = drawn
+		drawn = _frozen
+	if _watch.step(drawn, dt, Engine.get_process_frames() * dt):
+		Watch.write_fault(_fault, "its window stopped drawing at frame %d (the probe's stand-in)" % _stall_at)
+		get_tree().quit(3)
 
 func _draw() -> void:
 	var t := Engine.get_frames_drawn() / 30.0

@@ -5,7 +5,7 @@ class_name Chrome
 ## gets the standard set, so no mode assembles its overlay stack by hand and forgets a piece.
 ##
 ## What a panel asks of it is [Shell], which this extends: the row, the claims on the bottom edge, the way
-## home, the note's "⋯". A panel below `app/` names Shell and never this file (docs/structure.md); what is
+## home, the note open now. A panel below `app/` names Shell and never this file (docs/structure.md); what is
 ## here is the furniture itself and the answers that need it:
 ##
 ## - **row**         - the bottom-right row: one container holding every piece of furniture's button
@@ -91,15 +91,6 @@ func _inset_changed() -> void:
 func _export_suppressed(on: bool) -> void:
 	if exporter != null and is_instance_valid(exporter):
 		exporter.suppressed = on
-
-
-## Ask, then delete the note open now - left first, then thrown away (see [DeleteDialog]).
-func ask_delete() -> void:
-	if not delete_blocker().is_empty():
-		return
-	var path := _note_path
-	var del := _note_delete
-	DeleteDialog.ask(self, path, func(answer: String) -> void: del.call(path, answer))
 
 
 # --- the Setup panel ----------------------------------------------------------------------------

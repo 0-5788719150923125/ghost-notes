@@ -86,6 +86,7 @@ func _run() -> void:
 	_board(tg, ev, when)
 	_dice(tg, ev, when)
 	_sound(tg, ev, when)
+	_portrait(tm, tg, ev, when)
 	_end(dir)
 
 
@@ -134,6 +135,86 @@ func _camera(tm: TableMedium, tg: TableGame, ev: Array, when: Dictionary) -> voi
 		most = maxf(most, now.distance_to(was))
 		was = now
 	_check(most < 0.03, "the shot is gentle, frame to frame: %.3f m" % most)
+	# A dice camera set to arrive, low as they land and rising over them as they hold: there, close, looking down on the face at the end
+	var stop := thrown + dur
+	var rest: Vector3 = (tg._shots[0] as Dictionary)["at"] if not tg._shots.is_empty() else Vector3.ZERO
+	for sh in tg._shots:
+		if absf(float((sh as Dictionary)["t1"]) - TableGame.SHOT_HOLDS - stop) < 0.01:
+			rest = (sh as Dictionary)["at"]
+	tm.feed.cameras = [{"sort": "dice", "reach": 1.0, "far": 25.0, "rise": 20.0, "top": 80.0, "lens": 24.0}]
+	tg._plan_cameras()
+	tg._shot_t = NAN
+	var landed := tg.shot_at(stop, base)
+	var lifted := tg.shot_at(stop + TableGame.SHOT_HOLDS - 0.05, base)
+	var there := tg.shot_at(stop + 0.7, base)
+	var drop_landed := rad_to_deg(asin(clampf((landed.origin.y - rest.y) / maxf(landed.origin.distance_to(rest), 0.001), -1.0, 1.0)))
+	var drop_lifted := rad_to_deg(asin(clampf((lifted.origin.y - rest.y) / maxf(lifted.origin.distance_to(rest), 0.001), -1.0, 1.0)))
+	_check(there.origin.distance_to(rest) < 0.3, "a dice camera set to arrive is there once they land, close: %.2f m" % there.origin.distance_to(rest))
+	_check(drop_landed < 35.0 and drop_lifted > 60.0, "...low as they land, rising over them as it holds: %.0f then %.0f degrees" % [drop_landed, drop_lifted])
+	_check(absf(tg.fov_at(stop + 0.7) - 24.0) < 1.0, "...through its own lens: %.1f" % tg.fov_at(stop + 0.7))
+	tm.feed.cameras = [{"sort": "dice"}]
+	tg._plan_cameras()
+	tg._shot_t = NAN
+	_check(tg.shot_at(stop + 0.7, base).origin.distance_to(rest) > 0.3, "control: the camera as it stood goes only part of the way")
+
+
+## A portrait frame (TikTok, next/portrait.md): the lens is the frame's short side, so it sees the landscape view turned on end; each
+## shot keeps a landscape frame's top edge and grows downward; a page covers the tall frame; a picture held up fits its width. The
+## control: the same table in landscape, as it always was.
+func _portrait(tm: TableMedium, tg: TableGame, ev: Array, when: Dictionary) -> void:
+	var base: Transform3D = tm._plan.cam_base
+	var at := float(when[int((ev[0] as Dictionary)["id"])]) - 0.5
+	tg._shot_t = NAN
+	var flat_shot := tg._shot(at)
+	var flat_page := tg._page_size(1.5)
+	var flat_frame := CardTable.lens(tg._fov, tm.aspect()) * 2.0 * TableGame.PAGE_FAR
+	_check(is_equal_approx(tm.aspect(), 16.0 / 9.0), "control: a table nobody frames otherwise is 16:9: %.3f" % tm.aspect())
+	_check(is_equal_approx(flat_page.x, flat_frame.x), "control: a landscape page spans a landscape frame: %.3f of %.3f" % [flat_page.x, flat_frame.x])
+	var frame_was := Director.frame
+	Director.frame = "portrait"
+	Director.pin_medium("table", self)
+	tg._shot_t = NAN
+	_check(absf(tm.aspect() - 9.0 / 16.0) < 0.001, "a portrait table is 9:16: %.3f" % tm.aspect())
+	tm._tick_camera(at)
+	_check(tm._cam.keep_aspect == Camera3D.KEEP_WIDTH, "its lens holds the frame's width, its short side")
+	var k := tan(deg_to_rad(30.0))
+	var l := CardTable.lens(60.0, 9.0 / 16.0)
+	_check(absf(l.x - k) < 1e-4 and absf(l.y - k * 16.0 / 9.0) < 1e-4, "it sees across what landscape sees up, and up what landscape sees across: %s" % str(l))
+	# ...the top edge kept where landscape has it, the view turned down
+	var tall_shot := tg._shot(at)
+	var top := func(s: Dictionary, aspect: float) -> float:
+		var fwd: Vector3 = ((s["at"] as Vector3) - (s["eye"] as Vector3)).normalized()
+		return rad_to_deg(asin(fwd.y) + atan(CardTable.lens(float(s["fov"]), aspect).y))
+	var pitch := func(s: Dictionary) -> float:
+		return rad_to_deg(asin(((s["at"] as Vector3) - (s["eye"] as Vector3)).normalized().y))
+	var flat_top: float = top.call(flat_shot, 16.0 / 9.0)
+	var tall_top: float = top.call(tall_shot, 9.0 / 16.0)
+	_check(absf(flat_top - tall_top) < 0.3, "a portrait shot keeps a landscape one's top edge: %.1f against %.1f degrees" % [tall_top, flat_top])
+	_check(float(pitch.call(tall_shot)) < float(pitch.call(flat_shot)) - 2.0, "...and looks further down: %.1f against %.1f" % [pitch.call(tall_shot), pitch.call(flat_shot)])
+	# ...a tall page fills it, a landscape one shows its middle
+	var frame := CardTable.lens(tg._fov, tm.aspect()) * 2.0 * TableGame.PAGE_FAR
+	var tall_page := tg._page_size(2.0 / 3.0)
+	var wide_page := tg._page_size(1.5)
+	_check(is_equal_approx(tall_page.y, frame.y) and tall_page.x >= frame.x - 1e-5, "a tall page covers a portrait frame: %s for %s" % [str(tall_page), str(frame)])
+	_check(is_equal_approx(wide_page.y, frame.y) and wide_page.x > frame.x * 2.0, "a landscape page in it shows its middle, its sides off the frame: %s" % str(wide_page))
+	# ...a picture held up fits its width, held farther off
+	var rv: Dictionary = ev[7]
+	var held_at := float(when[int(rv["id"])]) + TableGame.REVEAL_TAKES + 0.4
+	tg._shot_t = NAN
+	tg._tick_reveals(held_at)
+	var shown: Array = tg._reveals.filter(func(r: Variant) -> bool: return ((r as Dictionary)["node"] as Node3D).visible)
+	if shown.is_empty():
+		_check(false, "a picture is held up at %.1f" % held_at)
+	else:
+		var node: Node3D = (shown[0] as Dictionary)["node"]
+		var dist := node.transform.origin.distance_to(tg._eye(held_at).origin)
+		var across := TableGame.HOLD_SIZE.x / (2.0 * dist * CardTable.lens(tg.fov_at(held_at), tm.aspect()).x)
+		_check(across <= TableGame.HOLD_ACROSS + 0.01 and dist > TableGame.HOLD_FAR, "a picture held up in a portrait frame fits it, held farther off: %.2f of its width at %.2f m" % [across, dist])
+	Director.unpin_medium(self)
+	Director.frame = frame_was
+	tg._shot_t = NAN
+	tm._tick_camera(at)
+	_check(tm._cam.keep_aspect == Camera3D.KEEP_HEIGHT, "control: back in landscape its lens holds the height")
 
 
 func _board(tg: TableGame, ev: Array, when: Dictionary) -> void:

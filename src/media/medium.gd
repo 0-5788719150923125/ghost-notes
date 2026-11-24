@@ -42,7 +42,8 @@ class_name Medium
 ##           through the intro hold ([Openings], [ShowOpening]) and the Intro & outro card offers one.
 ##   frames  the frames it can be shown in (next/notes.md, "Two frames"): landscape 16:9 for every
 ##           one, standard 4:3 where a narrower view still holds it (a set seen through a camera keeps
-##           its height and loses its sides), portrait 9:16 only where it was measured to work.
+##           its height and loses its sides), portrait 9:16 only where it was measured to work (a table's camera
+##           holds its frame's short side, [method CardTable.lens]: portrait sees the table turned on end).
 ##   needs   optional: what it needs from the note beyond a sound to cut on. Formats that show a
 ##           reading (its words, timed by the voice) are not offered for a note with only a song. An
 ##           `episode` (a table show's, which Table makes): offered to a note with one, and such a note
@@ -99,7 +100,7 @@ const REGISTRY := {
 		"outro_tip": "Seconds held after the last word, the desk in the dark, fading picture and sound out together.",
 		"blurb": "One desk late at night in a hollow under the ground, seen from the chair: an old terminal that types what is said, a dozen labeled flip phones that ring and are held to the ear (every voice but the room's heard through one), a radar, a shortwave receiver, a printer, small screens - the camera turning to whatever is active, roots growing across the desk."},
 	"table": {"label": "Table", "script": "res://src/table/table.gd",
-		"uses": ["opening"], "frames": ["landscape", "standard"], "mode": "table", "needs": ["episode"],
+		"uses": ["opening"], "frames": ["landscape", "standard", "portrait"], "mode": "table", "needs": ["episode"],
 		"blurb": "A show at a table the agents built, seen from the chair: its things, its light and its room, the cards drawn and read, the work done with the table's things - every move from the episode the agents produced."},
 	"desk": {"label": "Desk", "script": "res://src/desk/episode_desk.gd",
 		"uses": ["opening"], "frames": ["landscape", "standard"], "mode": "table", "needs": ["episode"],

@@ -335,7 +335,7 @@ Everything on the old home screen (`src/splash.gd`) has a new home:
 | agent gating (`Splash.AGENT_ROLES`, `missing_roles`, `agents_tooltip`)   | the component registry: anything needing a writer or a painter is grayed with the same tooltip, in "+" and New |
 | Import… and the path or URL field (`[audio] last`, `[video] last`, `[ui] kind`) | the Song and Clip cards; a file or link dropped on the list makes a note with that component attached |
 | the Assistant dropdown (`[assistant] backend`)                           | the Assistant's own panel, its only user                                                                    |
-| the key hint (F11, the feedback key, Esc)                                | tooltips                                                                                                    |
+| the key hint (F11, the feedback key, Esc)                                | the keyboard shortcuts (`KeysWindow`): F1, or the "?" on a note's panel                                     |
 | the Setup panel (`DepsPanel`)                                      | its own button in the bottom-right row                                                                      |
 
 **The list.** The notes in the default folder and in every folder or file the author has added, newest
@@ -403,7 +403,7 @@ landscape and says so on its card.
 | tablet              | after a parameter | its `landscape` and `portrait` marks turn the device, not the video; its camera distances assume 16:9 and would cut reading lines at 9:16, so they become a fit on both axes                                                                         |
 | comic               | not yet           | the two-page spread exists because one page cannot cover a 16:9 frame; portrait wants a single page - design work                                                                                                                                      |
 | book, notebook      | not yet           | the camera frames a spread; portrait means framing the page being read                                                                                                                                                                                |
-| table               | not yet           | the deck sits outside a 9:16 view, and several 16:9 values are hard-coded; a three-card reading also runs 4-6 minutes, past a Short                                                                                                                   |
+| table               | yes (a game)      | the lens is the frame's short side and each shot of a game keeps a landscape frame's top edge; pages are painted 2:3; the table is still dressed for 16:9, so a card reading's deck and spread can sit outside the view ([portrait.md](portrait.md)) |
 
 **The preview is the frame.** The stage is the frame, centered in the window - 16:9, or 608x1080 for
 portrait in a 1920x1080 window, black beside it. The side panel sits clear of a centered portrait frame,
@@ -1078,11 +1078,11 @@ A round of revisions to the first build. **Status: done.**
   (the panel keeps them), and so are Open… and the path/URL field. A song or a video is a component of a note:
   the Song card's Choose…, and Masking's Clip card, which takes a file or a link. New ends on "Existing
   note…", which brings a markdown file from anywhere into the list.
-- **Every note can be deleted.** The list's × and every panel's "⋯" (`Chrome.note_menu`) ask first
+- **Every note can be deleted.** From the list: a tile's × and the bin over the note it shows ask first
   (`src/app/delete_dialog.gd`); the note goes to the system's trash (`NoteStore.trash`, with a `discard` seam
-  so a gate never fills the author's trash), or, for a file added by hand, leaves the list. A note that is
-  open is left first - its panel writes what it holds - then trashed. The phone shell's editor has Delete…
-  too.
+  so a gate never fills the author's trash), or, for a file added by hand, leaves the list. The phone shell's
+  editor has Delete… too. (A note's own panel had a "⋯" that deleted it from inside; its place is the "?" of the
+  keyboard shortcuts now.)
 - **Every note starts from nothing.** The medium a note was shown in is freed with it (`main._clear_stage`),
   the stage is hidden until a show attaches, the Director's picture settings go back to their defaults as a
   note opens (`Director.reset_show`) for the note's blocks to set, and a song note opens loaded and stopped at
@@ -1105,7 +1105,7 @@ A round of revisions to the first build. **Status: done.**
   salts keep their `tarot-` names, so episodes already made come out the same. (CLAUDE.md's Names section has
   the later rename to Table.)
 - **Masking is in the framework.** Its panel is a `SidePanel` like every note's - "‹ Notes", the note's title,
-  its "⋯", a chip per card - with three cards: the Clip (its name, Track, Help, the time), the Effect (the key
+  its "?", a chip per card - with three cards: the Clip (its name, Track, Help, the time), the Effect (the key
   color, the effect and the options: one flat, sortable list) and the Markers, pinned under the rest
   (`SidePanel.add_footer_card`). With no clip, the panel asks for one (a file through the in-window dialog -
   the native one shows nothing without a portal - or a link), and what is chosen is written into the note's
@@ -1122,7 +1122,7 @@ A round of revisions to the first build. **Status: done.**
   panel back at that file every time, so edits made after a Sync went into the chosen file and the next open
   read the old one.
 - **Save…, on the Script card.** It always asks for a file. In a note the whole note goes there
-  (`DocSource.moved` -> the panel -> `main.note_moved`): that file is what "⋯" deletes, what the list shows and
+  (`DocSource.moved` -> the panel -> `main.note_moved`): that file is what the list shows and
   what opens next time. One note, one file - the note Ghost Notes kept in its own folder goes to the trash once
   the new file is written, a file added by hand leaves the list, and the author's own files are left as they
   were. Nothing is torn down: a reading or a generation under way carries on.

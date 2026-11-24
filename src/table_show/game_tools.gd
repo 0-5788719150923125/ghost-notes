@@ -69,6 +69,9 @@ var game_over := false
 var asker: Callable = Callable()
 ## How long this scene is meant to run, in words said (the rules tell it).
 var words_aim := Vector2i(400, 1000)
+## The most words said with nothing shown before the game master is told to show something: the plan's pace
+## ([method TablePrompts.picture_words]), else [constant PICTURE_EVERY].
+var picture_every := PICTURE_EVERY
 ## The model's board this game is played on ([GameDiorama]), or {} for maps laid as it goes.
 var diorama := {}
 
@@ -366,7 +369,7 @@ func _running() -> String:
 			rolled += 1
 	var said := "This scene so far: %d words, about %d minutes, %d rolls, %d pictures (aim: %d to %d words)." % [n, roundi(float(n) * TablePrompts.SAID_WORD / 60.0), rolled, _pictures(), words_aim.x, words_aim.y]
 	var bare := _words_unshown()
-	if bare >= PICTURE_EVERY:
+	if bare >= picture_every:
 		said += " %d words have gone by with nothing shown: call `picture` now, for what the viewer should be seeing while these words are said." % bare
 	return said
 
@@ -526,7 +529,7 @@ func _submit(chapter := "", ending := false, how := "") -> Dictionary:
 	if not ending and step.is_valid_int() and not _diceless_told and not _rolled_any():
 		_diceless_told = true
 		return {"text": "Nothing has been thrown in this stretch. If nothing anyone tried could have gone wrong, call it again; if something could, play on and roll it. Nothing was handed in.", "error": true}
-	var wanted := floori(float(words_said(items)) / float(PICTURE_EVERY) * PICTURES_LEAST)
+	var wanted := floori(float(words_said(items)) / float(maxi(picture_every, 1)) * PICTURES_LEAST)
 	if not _pictures_told and _pictures() < wanted:
 		_pictures_told = true
 		return {"text": "This stretch has shown %d pictures in %d words: the viewer sees the story through them, so it wants about %d. Play on a little and show what is happening as it is said - then end it. Nothing was handed in." % [_pictures(), words_said(items), wanted], "error": true}

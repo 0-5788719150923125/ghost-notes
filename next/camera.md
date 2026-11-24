@@ -28,6 +28,15 @@ on a quicker clock, its end included (`long`, between `long_from` and `long_full
   ([Cameras], `src/motion/cameras.gd`), each an entry with its own settings in priority order, as the Props card lists props.
   A game at the table reads it ([TableGame]); no other format does yet. Gate: `tests/motion/cameras_check.gd`.
 
+- **A dice camera that cuts in** (2026-11-23; the author: "cinematic camera angles on the board, on the dice rolls"): the dice camera's
+  new fields - `reach` (how much of the way it goes, 0.75 as before), `rise` (its angle as they land, 52 as before), `top` (the angle it
+  rises to while it holds, so the face reads) and `lens` (0, the table's own). At `reach` 1 it is a cut in: under way as the hand throws,
+  there `SHOT_ARRIVES` (0.3 s) before the dice stop, exempt from `SPEED` and `DICE_TRAVEL`. Measured by eye in the look probe (a d20
+  thrown on the model's board): at the defaults the die sat small at the frame's edge; at reach 1, far 22, rise 16, top 72, lens 26 it
+  fills the frame, low among the board, then rises over it. The landing place at the table's edge is dim: the lamps light the board.
+  A march camera's `side` now runs to 2: past square beside, round to ahead of the walkers, looking back as they come. Gate:
+  table_game_check (a camera set to arrive is there, low, rising, through its lens; the camera as it stood goes part of the way).
+
 ## Open
 
 - The author's eye on the Dispatch desk's long looks, and whether Long looks 2 and 80 degrees suit every format.

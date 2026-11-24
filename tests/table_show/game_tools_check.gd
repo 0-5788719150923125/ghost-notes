@@ -29,6 +29,8 @@ func _run() -> void:
 	_gather()
 	_prompts()
 	_steps()
+	_pages()
+	_budget()
 	_clean()
 	print("game_tools_check: ", "ok" if fails == 0 else "%d failed" % fails)
 	quit(1 if fails > 0 else 0)
@@ -319,3 +321,93 @@ func _steps() -> void:
 func _clean() -> void:
 	var dir := ProjectSettings.globalize_path(ROOT)
 	OS.execute("rm", ["-rf", dir])
+
+
+## A page of the book: painted beside the latest earlier pages that share something with it, never every page before it, each
+## attachment told what it is for, and told the story said round it (the author, 2026-11-23: a bloody spear where no fight was).
+func _pages() -> void:
+	var pages := [{"name": "A", "shows": ["Tanner", "the tannery"]}, {"name": "B", "shows": ["Bea"]}, {"name": "C", "shows": ["the Tannery", "Milo"]},
+		{"name": "D", "shows": ["tanner", "milo"]}, {"name": "E"}, {"name": "F", "shows": ["the river"]}]
+	_check(TableEpisode.window_of(pages, 1).is_empty(), "the first page has nothing before it")
+	_check(TableEpisode.window_of(pages, 3) == [1], "a page has the latest page it shares something with, by name whatever its case: %s" % str(TableEpisode.window_of(pages, 3)))
+	_check(TableEpisode.window_of(pages, 4) == [3, 1], "...nearest first, at most PAGE_WINDOW: %s" % str(TableEpisode.window_of(pages, 4)))
+	_check(not TableEpisode.window_of(pages, 3).has(2), "...and never one it shares nothing with (the control: B shows Bea alone)")
+	_check(TableEpisode.window_of(pages, 5) == [4], "a page that names nothing has the page just before it")
+	_check(TableEpisode.window_of(pages, 6).is_empty(), "a page somewhere else in the story has none, and paints at once")
+	var far := [{"name": "A", "shows": ["X"]}, {}, {}, {}, {}, {"name": "F", "shows": ["X"]}]
+	_check(TableEpisode.window_of(far, 6).is_empty(), "nor one further back than PAGE_LOOK_BACK (the control: the same names, near)")
+	_check(TableEpisode.window_of([{"shows": ["X"]}, {"shows": ["X"]}], 2) == [1], "...which it has")
+	var ep := TableEpisode.open("game-check", 99)
+	ep.write_json("plan", {"game": true, "staging": {"source": "none"}, "spread": {"positions": [{"name": "Part 1"}]}, "look": {}})
+	ep.write_json("game", {"figures": [], "pages": pages})
+	_check(ep.needs("image:page:4").has("image:page:3") and ep.needs("image:page:4").has("image:page:1") and not ep.needs("image:page:4").has("image:page:2"),
+		"a page waits for the pages of its window: %s" % str(ep.needs("image:page:4")))
+	_check(not ep.needs("image:page:6").has("image:page:5"), "...and for no other (the control)")
+	_check(not ep.made_from("image:page:4").has("image:page:3"), "...only for order: a page painted again leaves the next fresh")
+	# the story round a page, from the script: what was said before, what is said over it, up to the next page or the table
+	var script := "<!-- speaker: Narrator -->\nThe door creaks open.\n\n<!-- speaker: Bea -->\nI go in first.\n\n<!-- table: picture 12 -->\n\nBea: still here\n\n<!-- speaker: Milo -->\n<!-- over -->\nWait for me.\n\n<!-- speaker: Narrator -->\nInside, a vat steams.\n\n<!-- table: picture 13 -->\n\n<!-- speaker: Milo -->\nNEXT PAGE WORDS"
+	var story := TableProducer.page_story(script, 12, people)
+	_check(String(story.get("before", "")).contains("Dell: The door creaks open.") and String(story["before"]).contains("Bea: I go in first."),
+		"the painter hears what was said before the page, the game master by name: %s" % str(story))
+	_check(String(story.get("over", "")).contains("Milo: Wait for me.") and String(story["over"]).contains("Dell: Inside, a vat steams."), "...and what is said over it")
+	_check(String(story["over"]).begins_with("Bea: Bea: still here"), "...a line before any new cue said by whoever spoke last: %s" % String(story["over"]))
+	_check(not String(story["over"]).contains("NEXT PAGE") and not String(story["over"]).contains("<!--"), "...up to the next page, and no marks")
+	_check(TableProducer.page_story(script, 99, people).is_empty() and TableProducer.page_story(script, -1, people).is_empty(), "a page with no mark has no story (the control)")
+	# what the painter is told: each attachment by what it is for, who in an earlier page is not in this one, and the story as context
+	Rules.clear()
+	var attached := [{"file": "f.png", "figure": true, "page": false, "name": "Tanner", "looks": "a big man", "n": 1},
+		{"file": "p.png", "figure": false, "page": true, "name": "The yard", "looks": "a yard", "shared": "the tannery", "others": "Mike", "has_shared": true, "has_others": true, "just_before": true, "n": 2}]
+	var img := TablePrompts.game_image({"palette": ["#112233"], "art": "ink"}, "page", {"name": "The vat", "looks": "Tanner stirs a vat", "shows": ["Tanner", "the tannery"]},
+		"/tmp/x.png", true, attached, {"before": "Dell: BEFORE-WORDS", "over": "Bea: OVER-WORDS"})
+	_check(img.contains("Image 1 is the figure of Tanner") and img.contains("Image 2 is the page just before this one") and img.contains("which this page keeps exactly: the tannery."),
+		"each attachment is told what it is for")
+	_check(img.contains("NOT in this page, so left out of it: Mike."), "...and who in an earlier page is not in this one")
+	_check(img.contains("BEFORE-WORDS") and img.contains("OVER-WORDS") and img.contains("context only"), "the painter is told the story, as context")
+	_check(img.contains("ONLY WHAT IS DESCRIBED"), "...and to paint only what is described")
+	_check(not img.contains("{{") and Rules.missing.is_empty(), "nothing is left unfilled (a page): %s" % str(Rules.missing))
+	var bare := TablePrompts.game_image({"palette": ["#112233"], "art": "ink"}, "page", {"name": "N", "looks": "L"}, "/tmp/x.png")
+	_check(not bare.contains("ATTACHED") and not bare.contains("THE STORY ROUND"), "a page with nothing beside it and no story is told of neither (the control)")
+	# A portrait show's pages (TikTok, next/portrait.md): painted tall and composed for a phone held upright; a landscape page painted
+	# before goes stale in portrait, and Generate paints it again. The control: in landscape a page's key is the one it always had.
+	var tall := TablePrompts.game_image({"palette": ["#112233"], "art": "ink"}, "page", {"name": "N", "looks": "L"}, "/tmp/x.png", false, [], {}, true)
+	_check(tall.contains("FORMAT: PORTRAIT 2:3") and tall.contains("TALL page") and not tall.contains("LANDSCAPE"), "a portrait show's page is painted tall")
+	_check(bare.contains("FORMAT: LANDSCAPE 3:2") and bare.contains("its bottom trimmed") and not bare.contains("PORTRAIT"), "...a landscape one's wide (the control)")
+	_check(not tall.contains("{{") and Rules.missing.is_empty(), "nothing is left unfilled (a tall page): %s" % str(Rules.missing))
+	var flat_key := ep.page_key("image:page:2")
+	_check(flat_key == JSON.stringify(pages[1], "", true).sha256_text().left(16), "a landscape page's key is the one it always had (the control)")
+	ep.frame = "portrait"
+	_check(ep.tall() and ep.page_key("image:page:2") != flat_key, "in a portrait frame a page is painted tall, from another key: a landscape one goes stale")
+	ep.frame = "standard"
+	_check(not ep.tall() and ep.page_key("image:page:2") == flat_key, "...a 4:3 frame shows a landscape page")
+	ep.frame = "landscape"
+
+
+## A game's length is its plan's, where the plan gives one: a short show's stretches are short. And its pictures change as often as it says.
+func _budget() -> void:
+	var long_intro := TablePrompts.game_words("intro", 3)
+	_check(long_intro == TablePrompts.GAME_END_WORDS, "a plan with no minutes keeps the old opening (the control): %s" % str(long_intro))
+	var plan := {"minutes": [3, 5]}
+	var intro := TablePrompts.game_words("intro", 1, plan)
+	var one := TablePrompts.game_words("1", 1, plan)
+	var close := TablePrompts.game_words("close", 1, plan)
+	var said := float(intro.y + one.y + close.y) * TablePrompts.SAID_WORD / 60.0
+	_check(said <= 5.0 and said >= 3.0, "a three-to-five-minute night says about five minutes at most: %.1f min (%s %s %s)" % [said, str(intro), str(one), str(close)])
+	_check(intro.x <= intro.y and one.x <= one.y and intro.x >= TablePrompts.GAME_WORDS_LEAST, "each stretch has a length, and the least")
+	var two := TablePrompts.game_words("1", 2, plan)
+	_check(two.y < one.y, "two stretches share what one had: %s against %s" % [str(two), str(one)])
+	var huge := TablePrompts.game_words("intro", 3, {"minutes": [120, 240]})
+	_check(huge.y <= TablePrompts.GAME_END_WORDS.y, "never past what a plan with none is given: %s" % str(huge))
+	_check(TablePrompts.picture_words({}) == GameTools.PICTURE_EVERY and TablePrompts.picture_words({"picture_seconds": "often"}) == GameTools.PICTURE_EVERY,
+		"a plan with no pace keeps the old one (the control)")
+	_check(TablePrompts.picture_words({"picture_seconds": 10}) == roundi(10.0 / TablePrompts.SAID_WORD), "a page held ten seconds at most is a new one every %d words" % roundi(10.0 / TablePrompts.SAID_WORD))
+	var t := _tools()
+	t.picture_every = 10
+	await _call(t, "say", {"lines": [{"who": "Dell", "says": "one two three four five six seven eight nine ten eleven twelve"}]})
+	var r := await _call(t, "say", {"lines": [{"who": "Bea", "says": "Yes."}]})
+	_check(String(r.get("text", "")).contains("call `picture` now"), "the game master is told to show something at the plan's pace: %s" % String(r.get("text", "")))
+	var p: Dictionary = TablePrompts.game_master("T", "B", {"picture_seconds": 8, "previously": "THE-RECAP"}, people, "intro", 1, {}, GameLedger.from({}), "", intro)
+	_check(String(p["prompt"]).contains("THE-RECAP") and String(p["prompt"]).contains("TONIGHT'S PACE"), "the opening is told what came before, and the pace")
+	var q: Dictionary = TablePrompts.game_master("T", "B", {}, people, "intro", 1, {}, GameLedger.from({}), "", intro)
+	_check(not String(q["prompt"]).contains("WHAT CAME BEFORE") and not String(q["prompt"]).contains("TONIGHT'S PACE"), "...and a plan with neither is told of neither (the control)")
+	var tall: Dictionary = TablePrompts.game_master("T", "B", {}, people, "intro", 1, {}, GameLedger.from({}), "", intro, {}, true)
+	_check(String(tall["prompt"]).contains("TONIGHT'S PAGES ARE TALL") and not String(q["prompt"]).contains("PAGES ARE TALL"), "a portrait show's game master tells each page as one subject close; a landscape one is not told so (the control)")

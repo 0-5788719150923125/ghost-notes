@@ -2252,7 +2252,7 @@ func _update_face_model(src: Image) -> void:
 
 
 func _build_panel() -> void:
-	# The framework's panel: a [SidePanel] like every other note's, with "‹", the note's title and its "⋯" on top, a chip
+	# The framework's panel: a [SidePanel] like every other note's, with "‹", the note's title and its "?" on top, a chip
 	# per card, and three cards - the Clip, the Effect (the marker's key color, effect and options as one flat sortable
 	# list, never titled groups) and the Markers, pinned under the rest so the manage-markers workflow stays in view.
 	_panel = SidePanel.new(PANEL_W)
@@ -3106,6 +3106,21 @@ func _update_effect_controls(effect_id: int) -> void:
 	_apply_sort()   # visibility/labels just changed - re-rank the now-current set (see _apply_sort)
 
 
+## Masking's own keys: in its help overlay, and first in the keyboard shortcuts while it is up ([method shortcuts]).
+const MASK_KEYS := [
+	["V", "cycle view - raw → PiP (raw) → PiP (fx) → both → full fx"],
+	["P (hold)", "peek raw footage - display only, edits nothing"],
+	["T", "import a second video track (picture-in-picture)"],
+	["Ctrl+Z", "undo"],
+	["Ctrl+Shift+Z", "redo (also Ctrl+Y)"],
+]
+
+
+## The keyboard shortcuts' own section while Masking is up: its "?" ([KeysWindow]). Its F1 is its own help overlay.
+func shortcuts() -> Array:
+	return ["Masking", MASK_KEYS + [["F1", "Masking's help, over the video"]]]
+
+
 func _toggle_help() -> void:
 	if _help_panel != null:
 		_help_panel.visible = not _help_panel.visible
@@ -3131,11 +3146,7 @@ func _build_help_overlay() -> void:
 	for pair in [
 		["Space", "play / pause"],
 		["←  →", "back / ahead 10 s (Shift: a minute) · Home: the start"],
-		["V", "cycle view - raw → PiP (raw) → PiP (fx) → both → full fx"],
-		["P (hold)", "peek raw footage - display only, edits nothing"],
-		["T", "import a second video track (picture-in-picture)"],
-		["Ctrl+Z", "undo"],
-		["Ctrl+Shift+Z", "redo (also Ctrl+Y)"],
+	] + MASK_KEYS + [
 		["`", "feedback console"],
 		["F11", "fullscreen"],
 		["F1", "this help (Esc closes it)"],

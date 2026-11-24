@@ -22,6 +22,11 @@ const INTRO_CHAPTER := "Intro"
 const CLOSE_CHAPTER := "The close"
 ## What a game's session asks to have painted: a list of [method game] -> the pictures' step word.
 const GAME_PICTURES := {"maps": "map", "figures": "figure", "reveals": "reveal", "pages": "page"}
+## A page of a game's book is painted beside the latest earlier pages that show something it shows ([method window_of]): at most
+## this many, looked for among this many pages before it. Further back is another part of the story, and a page painted beside
+## everything before it paints everything before it in (the author, 2026-11-23: "we confused the painters").
+const PAGE_WINDOW := 2
+const PAGE_LOOK_BACK := 4
 ## What comes with the face painted first (`image:face`, `face.png`): the bare surface it was painted on, where the surface lies in it
 ## and which one it is, and the painting as the surface wears it ([method TableProducer._make_image], [method TableProducer._land_face]).
 const FACE_FILES := ["face_bare.png", "face.json", "face_ref.png"]
@@ -662,11 +667,14 @@ func _game_needs(parts: PackedStringArray) -> Array:
 		"minis":
 			return ["script"]
 		"image":
-			# ...a page is painted beside the figures' own pictures (TableProducer._page_refs): it waits for them, only for order
+			# ...a page is painted beside the figures' own pictures and the pages of its window (TableProducer._page_refs): it waits
+			# for them, only for order, so what it is painted beside is the same however many paint at once
 			if parts.size() == 3 and String(parts[1]) == "page":
 				var out: Array = ["script"]
 				for k in range(1, (game().get("figures", []) as Array).size() + 1):
 					out.append("image:figure:%d" % k)
+				for j in window_of(game().get("pages", []), int(parts[2])):
+					out.append("image:page:%d" % int(j))
 				return out
 			if parts.size() == 3 and GAME_PICTURES.values().has(String(parts[1])):
 				return ["script"]
@@ -702,12 +710,25 @@ static func _page_step(step: String) -> bool:
 	return step.begins_with("image:page:") and step.get_slice(":", 2).is_valid_int()
 
 
-## What page [param step] is painted from: its picture as the session has it (its name, what it shows, who is in it), as a key.
+## What page [param step] is painted from: its picture as the session has it (its name, what it shows, who is in it), as a key - and
+## the shape it is painted in where that is tall ([method tall]): a page painted for one frame goes stale in another, and Generate
+## paints it again. A page painted before frames had a shape is a landscape one, and stays fresh in landscape.
 func page_key(step: String) -> String:
 	var pages: Array = game().get("pages", [])
 	var k := int(step.get_slice(":", 2)) - 1
 	var page: Variant = pages[k] if k >= 0 and k < pages.size() else {}
-	return JSON.stringify(page, "", true).sha256_text().left(16)
+	return (JSON.stringify(page, "", true) + ("|tall" if tall() else "")).sha256_text().left(16)
+
+
+## The frame the episode's pages are painted for now, a key of [constant Medium.FRAME_SIZES]: the one its show is shown in, told
+## by whoever has it open ([method EpisodeCard._frame_episode]). Landscape for an episode nobody frames (a gate, a render).
+var frame := "landscape"
+
+
+## Whether its pages are painted tall, 2:3 for a portrait frame ([method TablePrompts.game_image], [method page_key]). A 4:3 frame
+## shows a landscape page.
+func tall() -> bool:
+	return frame == "portrait"
 
 
 ## Whether [param step] is made from something that has changed since ([method KeptSteps.stale]); a game's page, from its own
@@ -915,7 +936,39 @@ static func _soft(from: String, to: String) -> bool:
 		or (to.begins_with("design:") and from.begins_with("design:")) \
 		or (to == "table" and (from == "image:surface" or from == "image:backdrop")) \
 		or (to == "image:height" and from == "table") \
-		or (to.begins_with("image:page:") and from.begins_with("image:figure:"))
+		or (to.begins_with("image:page:") and (from.begins_with("image:figure:") or from.begins_with("image:page:")))
+
+
+## The earlier pages page [param k] (1 up) of [param pages] is painted beside, nearest first, by number (1 up): the latest of the
+## [constant PAGE_LOOK_BACK] before it that show something it shows (a figure or a place, by its name in `shows`), at most
+## [constant PAGE_WINDOW]. A page that names nothing has the page just before it, the moment it follows. A page that shares nothing
+## with the pages before it has none: it is somewhere else in the story, and paints at once.
+static func window_of(pages: Array, k: int) -> Array:
+	if k < 2 or k > pages.size():
+		return []
+	var mine := _shown(pages[k - 1])
+	if mine.is_empty():
+		return [k - 1]
+	var out: Array = []
+	for j in range(k - 1, maxi(k - 1 - PAGE_LOOK_BACK, 0), -1):
+		if out.size() >= PAGE_WINDOW:
+			break
+		for n in _shown(pages[j - 1]):
+			if mine.has(n):
+				out.append(j)
+				break
+	return out
+
+
+## The names a page shows, as they are matched: lowercase, trimmed.
+static func _shown(page: Variant) -> PackedStringArray:
+	var out := PackedStringArray()
+	var shows: Variant = (page as Dictionary).get("shows", []) if page is Dictionary else []
+	for v in shows if shows is Array else []:
+		var n := String(v).strip_edges().to_lower()
+		if not n.is_empty() and not out.has(n):
+			out.append(n)
+	return out
 
 
 ## Whether this episode designs what is painted ([Skins]; next/painted_surface.md): a plan that says what is painted, unless its work

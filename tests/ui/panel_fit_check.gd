@@ -7,7 +7,7 @@ extends Node
 ## Holds, on every panel and at every window height in a sweep:
 ## - the panel is inside the window, and scrolled to the bottom the last row is inside the panel's own
 ##   rectangle (either half alone passes on a broken panel);
-## - its title row stays pinned: "⋯" and "‹" are in view scrolled to the bottom;
+## - its title row stays pinned: "?" and "‹" are in view scrolled to the bottom;
 ## - a panel that fits is unchanged: it does not stretch to fill the window;
 ## - it keeps its declared width: checked on every panel, the Cards one holding real long titles;
 ## - nothing on a card scrolls of its own ([TextField]): what would take the wheel from the panel, found
@@ -189,7 +189,7 @@ func _check_fits(name: String, panel: SidePanel_) -> void:
 			+ "outside the %.0f..%.0f the panel shows" % [view.position.y, view.end.y])
 		# The bar has clear space beside it: clearance is measured rather than non-overlap, since a
 		# ScrollContainer reserves the bar's width and the content already stops at the bar's left edge.
-		# The header stays: scrolled to the bottom, the title row with its "⋯" and "‹" is still inside the
+		# The header stays: scrolled to the bottom, the title row with its "?" and "‹" is still inside the
 		# panel, above the scrolled body - and the body's first row, the control, has moved under it
 		var head: Control = panel._head.get_child(0) if panel._head.get_child_count() > 0 else null
 		_ok(head != null, "%s: no title row is pinned over the body" % name)
@@ -197,7 +197,8 @@ func _check_fits(name: String, panel: SidePanel_) -> void:
 			var hr: Rect2 = head.get_global_rect()
 			_ok(hr.position.y >= panel.get_global_rect().position.y - 1.0 and hr.end.y <= view.position.y + 1.0 and head.is_visible_in_tree(),
 				"%s at window %d: scrolled down, the title row is at %.0f..%.0f, not over the body at %.0f" % [name, h, hr.position.y, hr.end.y, view.position.y])
-			_ok(head.find_children("*", "MenuButton", true, false).size() > 0, "%s: the pinned row has no \"⋯\"" % name)
+			_ok(head.find_children("*", "Button", true, false).any(func(b: Node) -> bool: return (b as Button).text == "?"),
+				"%s: the pinned row has no \"?\"" % name)
 		# by all there was to scroll, not out of view: a panel only a little too tall has its first row still showing at the bottom
 		var top_row: Control = panel.body.get_child(0)
 		_ok(absf(first_was - top_row.global_position.y - hidden) < 2.0, "control: %s at window %d: scrolled to the bottom, the body's first row moved %.0f px of the %.0f there were" % [name, h, first_was - top_row.global_position.y, hidden])

@@ -157,6 +157,12 @@ func look_amount(_filter: String) -> float:
 func fisheye() -> float:
 	return 0.0
 
+
+## The shape of the frame the show is drawn in, width over height: what a part that frames its own picture (the table's
+## camera, [method TableMedium.aspect]) fits to before the stage is sized. 16:9 unless the show says otherwise.
+func frame_aspect() -> float:
+	return 16.0 / 9.0
+
 ## The music's harmonic signature now (12 chroma bins and a coarse shape - [HarmonicSignature]),
 ## empty when nothing is heard: the continuous half of harmonic seeding, a scene's palette pulled
 ## toward the music's key.

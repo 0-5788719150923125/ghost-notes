@@ -9,7 +9,7 @@ class_name SidePanel
 ##
 ## Add rows to [member body], never to the panel: the panel's own child is the scroll view.
 ##
-## A header is pinned over the scrolling body ([method pin_header]): the panel's title row - "⋯" and
+## A header is pinned over the scrolling body ([method pin_header]): the panel's title row - "?" and
 ## "‹" - stays in view however far the body is scrolled, and goes with the panel when it is hidden.
 ## A note's panel names no mode there ([method pin_title_row]).
 ##
@@ -242,16 +242,23 @@ func pin_header(row: Control) -> void:
 	_fit()
 
 
-## The title row of a note's panel, pinned ([method pin_header]): "⋯" and - where [param hides] - "‹"
-## at its right, which hides the panel and leaves "›" in its corner to bring it back; no name. The way
-## home is the chrome's row alone. [param owner] is the panel's mode, which [Shell] is asked through.
+## The title row of a note's panel, pinned ([method pin_header]): "?" and - where [param hides] - "‹"
+## at its right. "?" opens the keyboard shortcuts ([KeysWindow], with [param owner]'s own first where it has
+## some); "‹" hides the panel and leaves "›" in its corner to bring it back. No name. The way home is the
+## chrome's row alone. [param owner] is the panel's mode.
 func pin_title_row(owner: Node, hides := true) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(gap)
-	row.add_child(Shell.note_menu(owner))
+	var keys := Button.new()
+	keys.text = "?"
+	keys.tooltip_text = "Keyboard shortcuts (F1)"
+	keys.focus_mode = Control.FOCUS_NONE
+	keys.custom_minimum_size = Vector2(28, 28)
+	keys.pressed.connect(func() -> void: KeysWindow.toggle(owner))
+	row.add_child(keys)
 	if hides:
 		var hide := Button.new()
 		hide.text = "‹"

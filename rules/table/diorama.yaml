@@ -8,9 +8,13 @@
 # figures: {{figures}} (each to model, with what it looks like and who plays it), {{kept}} (those modeled on earlier nights, handed in already), {{shapes}}.
 land:
   - >-
-      You are the MODEL MAKER for {{show_title}}. Tonight's game is played on a model of its land: a board in the middle of a big table, of the kind people build for tabletop wargames
-      and model railways - modeled ground, flock grass, poured resin water, little flocked trees, and the places of the story standing on it as scale models. The players' figures walk
-      across it, and the camera goes down among it, low, beside them. It is seen close: make it rich, particular and true to this night.
+      You are the MODEL MAKER for {{show_title}}. Tonight's game is played on a model of where it happens: a board in the middle of a big table, of the kind people build for tabletop
+      wargames and model railways, and the places of the story standing on it as scale models. The players' figures walk across it, and the camera goes down among it, low, beside them.
+      It is seen close: make it rich, particular and true to this night.
+  - >-
+      WHICH BOARD. Where tonight happens out in a land, the board is that land (`ground` "land"): modeled ground, flock grass, poured resin water, little flocked trees. Where the brief
+      or the preparation puts tonight inside somewhere - a building, a castle, a cave, somewhere under the ground - the board is that inside, seen with its roof off, as a model
+      maker builds a cutaway (`ground` "floor"): one flat floor, and every room, hall, passage and stair a place of its own, built of its walls, its own floor and what is in it.
   - ""
   - "Tonight: {{episode_title}}"
   - ""
@@ -22,8 +26,14 @@ land:
   - >-
       THE PLACES. Every place the preparation names that stands somewhere stands on this board, each a model of its own, and nothing that is not somewhere. Lay them out as the
       land would really lie: how far apart they are is how far the party has to walk, so the beginning and its first trouble are close, and what is far in the story is far on the
-      board. Leave open ground round them and between them for figures to stand and walk: a figure's base is 2.5 cm across. A place that is inside something (a cellar, a cave, a hall)
-      is modeled as the outside of it with its way in: a door, a mouth in a hillside, steps going down.
+      board. Leave open ground round them and between them for figures to stand and walk: a figure's base is 2.5 cm across. On a land, a place that is inside something (a cellar, a
+      cave, a hall) is modeled as the outside of it with its way in: a door, a mouth in a hillside, steps going down.
+  - >-
+      ON A FLOOR, A PLACE IS A ROOM. Its walls stand round its own floor, no taller than a figure stands, so the table sees over them, and cut open at every
+      doorway, at least 4 cm wide, so figures and the camera can go in; rooms that lead into each other stand side by side, doorway to doorway, with a passage between where the
+      story needs one. What is in a room is in the room's model: its furniture, its tools, its trade, what is on its shelves and walls, each the size it would be at this scale. Most
+      of a room's sixteen parts are what is in it - repeat a part (`copies`) for what comes many times, a row of barrels, a rack of hides, benches - so each room reads at a glance as
+      what it is and no other. The floor between rooms is the building's ground: the yard, a corridor, the rock round a cave.
   - >-
       A PLACE HAS TWO NAMES. Its `name` is the game's, what the table calls it. Its thing's own `name` says what the model is,
       generic, as a model shop would label it - a stone watermill, a timber-framed inn, a round keep on a mound - never a person's,

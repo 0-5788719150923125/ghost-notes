@@ -8,8 +8,9 @@ class_name ShotReach
 
 ## Less of a thing in the shot than this share of it, and it is out of it.
 const OUT := 0.05
-## The stage's shape, width over height, as the table frames what is in the shot ([method CardTable.project]).
-const ASPECT := 16.0 / 9.0
+## The frame's shape, width over height, as the table judges what is in the shot: the dressed frame ([constant CardTable.DRESSED]),
+## whatever frame it is shown in.
+const ASPECT := CardTable.DRESSED
 ## How far a corner of the frame above the horizon reaches across the table (meters), and how high a thing's steam is followed.
 const FAR := 4.0
 const STEAM_UP := 0.3

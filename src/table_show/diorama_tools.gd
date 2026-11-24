@@ -66,8 +66,8 @@ func list_tools() -> Array:
 	var thing := {"type": "object", "description": "a thing built of parts, as a prop is: `parts` [...], centimeters, its base on y = 0, its front toward +z"}
 	var out: Array = []
 	if mode == "land":
-		out.append({"name": "land", "description": "The board's ground, whole: each list you give replaces the one there (`hills`, `rivers`, `lakes`, `roads`, `woods`, `colors`); a list you leave out stays as it was. Answered with the board as it stands.",
-			"inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "hills": {"type": "array"}, "rivers": {"type": "array"}, "lakes": {"type": "array"}, "roads": {"type": "array"}, "woods": {"type": "array"}, "colors": {"type": "object"}}}})
+		out.append({"name": "land", "description": "The board's ground, whole: `ground` (\"land\" or \"floor\"), and each list you give replaces the one there (`hills`, `rivers`, `lakes`, `roads`, `woods`, `colors`); what you leave out stays as it was. Answered with the board as it stands.",
+			"inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "ground": {"type": "string", "enum": GameDiorama.GROUNDS}, "hills": {"type": "array"}, "rivers": {"type": "array"}, "lakes": {"type": "array"}, "roads": {"type": "array"}, "woods": {"type": "array"}, "colors": {"type": "object"}}}})
 		out.append({"name": "place", "description": "Stand places on the board: each `{name, at [x, z], turn, line, thing}` - or `library` with a kept thing's name in place of `thing`. A place of a name already there is replaced. `materials`: the materials their parts use, added to the board's.",
 			"inputSchema": {"type": "object", "properties": {"places": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "at": {"type": "array", "items": {"type": "number"}}, "turn": {"type": "number"}, "line": {"type": "string"}, "thing": thing, "library": {"type": "string"}}, "required": ["name", "at"]}}, "materials": {"type": "object"}}, "required": ["places"]}})
 		out.append({"name": "plan", "description": "The board from straight above as it stands: its ground's heights shaded, water, roads, woods, each place a red dot, a line every 10 cm.", "inputSchema": {"type": "object", "properties": {}}})
@@ -86,7 +86,7 @@ func call_tool(name: String, args: Dictionary) -> Dictionary:
 		return {"text": "This is handed in, and the bench is closed.", "error": true}
 	match name:
 		"land":
-			for k in ["name", "hills", "rivers", "lakes", "roads", "woods", "colors"]:
+			for k in ["name", "ground", "hills", "rivers", "lakes", "roads", "woods", "colors"]:
 				if args.has(k):
 					land[k] = args[k]
 			return {"text": told()}

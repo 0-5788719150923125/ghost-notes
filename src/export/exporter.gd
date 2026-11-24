@@ -115,6 +115,7 @@ var _released := false           # some of it was given back, so it can never be
 ## True when this render runs on the real desktop rather than a display of its own, where burying the window corrupts the
 ## picture. Shown to the user before it can be spoiled.
 var _note_no_virtual_display := false
+var _on_virtual := false         # this render was started on a virtual display of its own
 var _out := ""           # the final file the user chose (.mp4)
 var _avi := ""           # the intermediate Movie Maker AVI (transcoded away, then deleted)
 var _song := ""
@@ -166,6 +167,15 @@ const STALL_LIMIT := 300.0
 const FOLLOW_TIMEOUT_US := 60000000
 ## Seconds the render's virtual display outlives its last client (see [method virtual_display]).
 const XVFB_LINGER := 10
+## What a render on a virtual display is run with ([method virtual_display]): Mesa's Vulkan presenting to Xvfb by a copy, and
+## a Wayland display that does not exist.
+const VIRTUAL_ENV := ["MESA_VK_WSI_DEBUG=sw", "WAYLAND_DISPLAY=ghost-xvfb-only"]
+## Where a render says why it stopped itself ([RenderWatch]; the render's `--fault-file`).
+const FAULT_FILE := "user://export_fault.txt"
+## A video shorter than asked for by more than this many seconds, or 1% of it, is not saved as a success ([method is_short]).
+const SHORT_SLACK := 2.0
+## How long [method display_check] waits for ghost to come up on the virtual display and say where it is (seconds).
+const DISPLAY_CHECK_S := 60
 ## The head of the AVI is never released: Movie Maker seeks back there to finish its header.
 const PUNCH_KEEP := 1 << 20
 ## ...and the release stays this far behind the encoder's read position.
@@ -436,6 +446,11 @@ func _process(dt: float) -> void:
 func _tick_render(dt: float) -> void:
 	if not Subprocess.alive(_render_pid):
 		_clear_override()                # render finished -> restore live resolution
+		# A render that stopped itself said why ([RenderWatch]): what it wrote is not the show.
+		var fault := RenderWatch.read_fault(fault_path())
+		if not fault.is_empty():
+			_refuse_render(fault)
+			return
 		# The render reports success only by PID exit; check it produced the AVI (a crashed Movie Maker exits too) before
 		# transcoding nothing.
 		if _live_encode:
@@ -444,6 +459,10 @@ func _tick_render(dt: float) -> void:
 		elif FileAccess.file_exists(_avi) and _file_size(_avi) > 65536:
 			_repair_avi_sizes(_avi)
 			_start_transcode()
+		elif _on_virtual:
+			# Godot that cannot start on the virtual display has nowhere else to go (see virtual_display)
+			_fail("⚠  Render produced no file - it may not start on its display of its own: Setup's (⚙) xvfb-run row checks"
+				+ " (see console)", true)
 		else:
 			_fail("⚠  Render produced no file (see console)")
 		return
@@ -498,10 +517,17 @@ func _tick_transcode(dt: float) -> void:
 	_space_note = ""
 	if _space_dialog != null and _space_dialog.visible:
 		_space_dialog.hide()
-	if FileAccess.file_exists(_out) and _file_size(_out) > 4096 and not _stretch.is_empty():
+	var made := FileAccess.file_exists(_out) and _file_size(_out) > 4096
+	# A file that plays is not yet the show: one shorter than asked for is kept to look at, never put back or uploaded.
+	var short := _shortfall() if made else ""
+	if not short.is_empty():
+		_drop_scratch()
+		var not_done := ("not put back into " + String(_stretch["old"]).get_file()) if not _stretch.is_empty() else "not uploaded"
+		_fail("⚠  %s - kept at %s, %s" % [short, _out, not_done], true)
+	elif made and not _stretch.is_empty():
 		_drop_scratch()
 		_start_stitch()                   # a stretch: put back into the earlier export
-	elif FileAccess.file_exists(_out) and _file_size(_out) > 4096:
+	elif made:
 		_drop_scratch()                   # transcode ok -> the scratch goes, and its space with it
 		_remember_rate()
 		_state = "done"
@@ -1043,9 +1069,11 @@ func _start_render() -> void:
 	# finishes. Render at the supersampled size; the transcode resolves it back to w x h (see QUALITIES).
 	_write_override(_render_w(), _render_h())
 	var exe := OS.get_executable_path()
+	# where the render says why, if it stops itself ([RenderWatch]); an earlier render's reason must not be read as this one's
+	RenderWatch.clear_fault(fault_path())
 	var args := Subprocess.own_log("render") + Boot.project_args() + PackedStringArray([
 		"--write-movie", _avi, "--fixed-fps", str(_quality.fps),
-		"--", "--export", "--bake-file", _cache, "--audio", _song])
+		"--", "--export", "--bake-file", _cache, "--audio", _song, "--fault-file", fault_path()])
 	# A STRETCH ONLY ([Stitch]): from the keyframe before it to the one after
 	if not _stretch.is_empty():
 		var sp := Stitch.span(float(_stretch["t0"]), float(_stretch["t1"]), _song_dur)
@@ -1074,20 +1102,30 @@ func _start_render() -> void:
 	# advances: the film holds a still for as long as the window is minimized, covered or throttled. On its own X display
 	# there is no compositor; the NVIDIA driver still renders on the real GPU (tests/run_quiet.sh relies on that).
 	#
-	# Not required: without xvfb the render works, and the caller is told the cost.
+	# Not required: without xvfb the render works, and the caller is told the cost. Either way the render stops itself the
+	# moment its frames stop being drawn ([RenderWatch]) rather than record stills for hours.
 	var runner := exe
 	var run_args := args
-	var virtual := virtual_display(exe, args)
+	_note_no_virtual_display = false
+	_on_virtual = false
+	# When Setup found xvfb-run installed but a render unable to draw on it ([method display_check]), the render goes on the
+	# desktop instead, with the warning below; a check not yet run leaves the virtual display to prove itself.
+	var known := display_known()
+	var virtual := PackedStringArray()
+	if known.is_empty() or bool(known.get("ok", false)):
+		virtual = virtual_display(exe, args + PackedStringArray(["--virtual-display"]))
 	if not virtual.is_empty():
 		runner = virtual[0]
 		run_args = virtual.slice(1)
-		print("ghost export: rendering on a virtual display - the desktop cannot freeze it")
+		_on_virtual = true
+		print("ghost export: rendering on a virtual display (xvfb-run); the render stops itself if it comes up anywhere else")
 	else:
 		# xvfb-run is Linux-only; elsewhere the advice is the whole message.
 		var fix := ("  " + Deps.hint("xvfb")) if OS.get_name() == "Linux" else ""
+		if not known.is_empty():
+			fix = "  xvfb-run is installed, but a render cannot draw on it: %s" % String(known.get("why", ""))
 		push_warning("ghost export: no virtual display; the render window must stay drawable "
-			+ "for the WHOLE render. Minimizing or burying it freezes the recorded picture "
-			+ "while the audio keeps going." + fix)
+			+ "for the WHOLE render. Minimizing, burying it or locking the screen stops the render." + fix)
 		_note_no_virtual_display = true
 	_render_pid = Subprocess.start(runner, run_args, "render")
 	if _render_pid > 0:
@@ -1113,15 +1151,136 @@ func _start_render() -> void:
 ## Godot dies with its wrapper: Subprocess binds xvfb-run's shell to ghost, but a pact does not pass to the shell's
 ## children, so Godot gets a pact with the shell, and Xvfb ends [constant XVFB_LINGER] seconds after its last client leaves
 ## (the delay covers a connection a client opens and closes before its own).
+##
+## NEVER ON THE AUTHOR'S SCREEN: inside the virtual display Godot's X11 driver must start, or Godot falls back to Wayland, and with the
+## session's WAYLAND_DISPLAY that is a window on the desktop (the author, 2026-11-23, an Intel laptop under Plasma: "it's opening a render
+## window, hijacking my screen"). Mesa's Vulkan cannot present to Xvfb, which has no DRI3: [constant VIRTUAL_ENV] has it present by a
+## copy, the rendering still on the GPU (NVIDIA ignores it), and names a Wayland display that does not exist, so a display that fails
+## anyway fails there. Unsetting WAYLAND_DISPLAY is not enough: libwayland then tries `wayland-0`, the usual name of the session's own
+## (this laptop's happens to be wayland-1). WAYLAND_SOCKET, an inherited connection, goes too.
+##
+## A render on it is also told so (`--virtual-display`), and stops itself if it came up on anything but X11; [method display_check]
+## asks the same question ahead of a render, for Setup.
 static func virtual_display(exe: String, args: PackedStringArray, screen := Vector2i(960, 540)) -> PackedStringArray:
 	var xvfb := Deps.resolve("xvfb-run")
 	if xvfb.is_empty():
 		return PackedStringArray()
-	var argv := PackedStringArray([xvfb, "-a", "-s", "-screen 0 %dx%dx24 -terminate %d" % [screen.x, screen.y, XVFB_LINGER]])
+	# (`env` execs xvfb-run in its own place, so the process Subprocess binds is still the wrapper)
+	var argv := PackedStringArray(["env", "-u", "WAYLAND_SOCKET"] + VIRTUAL_ENV)
+	argv.append_array([xvfb, "-a", "-s", "-screen 0 %dx%dx24 -terminate %d" % [screen.x, screen.y, XVFB_LINGER]])
 	argv.append_array(Subprocess.pact_prefix())
 	argv.append(exe)
 	argv.append_array(args)
 	return argv
+
+
+# --- does a render really draw on its display of its own? (Setup's xvfb-run row) -------------------------------------------
+
+static var _display := {}
+static var _display_lock := Mutex.new()
+
+
+## Whether a render on a display of its own ([method virtual_display]) really draws there: ghost itself is started on one with
+## `--display-check`, which says what display driver came up and what graphics card draws it, and quits. Installed is not
+## enough: Setup said "xvfb-run: installed" while every render on the author's Intel laptop fell back to a window on the
+## desktop (2026-11-23). A few seconds - it boots the app - so Setup asks from its probe thread, and the answer is kept for
+## the session ([method forget_display]). `{ok, display, adapter, why}`, or {} where there is no xvfb-run.
+static func display_check() -> Dictionary:
+	var known := display_known()
+	if not known.is_empty():
+		return known
+	# booted as a render is (`--export`): settings read-only, nothing provisioned, a log of its own
+	var args := Subprocess.own_log("display_check") + Boot.project_args() \
+		+ PackedStringArray(["--", "--export", "--display-check"])
+	var argv := virtual_display(OS.get_executable_path(), args)
+	if argv.is_empty():
+		return {}
+	# read as it comes, with a deadline of its own: a Godot that hangs on the display must not take the probe thread with it
+	var p := OS.execute_with_pipe(argv[0], argv.slice(1), false)
+	var pid := int(p.get("pid", -1))
+	var said := PackedByteArray()
+	var code := -1
+	if pid > 0:
+		var io: FileAccess = p["stdio"]
+		var err: FileAccess = p["stderr"]
+		var t0 := Time.get_ticks_msec()
+		while true:
+			said.append_array(io.get_buffer(65536))
+			said.append_array(err.get_buffer(65536))
+			if not OS.is_process_running(pid):
+				code = OS.get_process_exit_code(pid)
+				break
+			if Time.get_ticks_msec() - t0 > DISPLAY_CHECK_S * 1000:
+				OS.kill(pid)            # xvfb-run's shell: Godot's pact takes it along, and Xvfb ends behind its last client
+				code = 124
+				break
+			OS.delay_msec(100)
+		said.append_array(io.get_buffer(65536))
+		said.append_array(err.get_buffer(65536))
+		io.close()
+		err.close()
+	var r := read_display_check(said.get_string_from_utf8(), code)
+	print("ghost export: display check - %s" % (("draws on X11 | " + String(r["adapter"])) if bool(r["ok"]) else String(r["why"])))
+	_display_lock.lock()
+	_display = r
+	_display_lock.unlock()
+	return r
+
+
+## What a `--display-check` run printed, read ([method display_check]): its own line when it got that far, else the first
+## error, else how it ended.
+static func read_display_check(text: String, code: int) -> Dictionary:
+	var said := RegEx.create_from_string("ghost display: (\\S+) \\| ([^\\n]*)").search(text)
+	if said != null and said.get_string(1) == "X11":
+		return {"ok": true, "display": "X11", "adapter": said.get_string(2).strip_edges(), "why": ""}
+	if said != null:
+		return {"ok": false, "display": said.get_string(1), "adapter": said.get_string(2).strip_edges(),
+			"why": "Godot came up on %s, not on the virtual display" % said.get_string(1)}
+	if code == 124:
+		return {"ok": false, "display": "", "adapter": "", "why": "Godot did not answer within %d s" % DISPLAY_CHECK_S}
+	for line in text.split("\n"):
+		var l := line.strip_edges()
+		if l.begins_with("ERROR:"):
+			return {"ok": false, "display": "", "adapter": "", "why": l.trim_prefix("ERROR:").strip_edges()}
+	return {"ok": false, "display": "", "adapter": "", "why": "Godot did not start on it (exit %d)" % code}
+
+
+## The last [method display_check]'s answer, {} when none has run this session.
+static func display_known() -> Dictionary:
+	_display_lock.lock()
+	var r := _display.duplicate()
+	_display_lock.unlock()
+	return r
+
+
+## Forget the answer, so the next [method display_check] asks again (Setup's Rescan).
+static func forget_display() -> void:
+	_display_lock.lock()
+	_display = {}
+	_display_lock.unlock()
+
+
+## Setup's xvfb-run row, told whether a render really draws there: which card draws it when it does; when it does not, the
+## row is a problem (`broken`) with the reason (`why`). [param run]: ask now if nobody has ([method display_check], blocking);
+## otherwise only an answer already had is written in.
+static func mark_display(rows: Array, run: bool) -> void:
+	for r in rows:
+		if String(r.get("key", "")) != "xvfb" or not bool(r.get("found", false)):
+			continue
+		var d := display_check() if run else display_known()
+		if d.is_empty():
+			return
+		if bool(d.get("ok", false)):
+			var card := String(d.get("adapter", ""))
+			var soft := card.to_lower().contains("llvmpipe") or card.to_lower().contains("swiftshader")
+			r["version"] = "renders on it · %s%s" % [card, " (in software: slow)" if soft else ""]
+		else:
+			r["found"] = false
+			r["broken"] = true
+			r["version"] = ""
+			r["note"] = "a render can't draw on it"
+			r["why"] = String(d.get("why", ""))
+		return
 
 
 # Step 3: transcode the scratch AVI into the chosen MP4 (H.264 + AAC) via ffmpeg. `-fflags +genpts` re-derives timestamps so
@@ -1323,6 +1482,25 @@ func _encoder_quit_early() -> void:
 	_fail("⚠  Encoding stopped at %d%% while the render went on - export abandoned (see console)" % at)
 
 
+## The render stopped itself ([RenderWatch]): what it wrote is not the show, so none of it is kept, put back or uploaded. Its
+## encoder is stopped rather than left to wait out the quiet file, and the MP4 it had begun goes: it is this export's own (the
+## chosen path, which the encoder took over from its start, or a stretch's `.stretch.mp4`).
+func _refuse_render(why: String) -> void:
+	if Subprocess.alive(_transcode_pid):
+		Subprocess.stop(_transcode_pid)
+	_live_encode = false
+	_drop_scratch()
+	if not _out.is_empty() and FileAccess.file_exists(_out):
+		DirAccess.remove_absolute(_out)
+	var advice := "  Keep the render window visible, or install xvfb-run." if _note_no_virtual_display else ""
+	_fail("⚠  Render stopped: %s. Nothing was saved.%s" % [why, advice], true)
+
+
+## Where a render says why it stopped itself, as a path the render (another process, maybe another project's user://) can use.
+static func fault_path() -> String:
+	return ProjectSettings.globalize_path(FAULT_FILE)
+
+
 const _PROGRESS_FILE := "user://transcode_progress.txt"
 
 
@@ -1355,6 +1533,34 @@ func _encoded_seconds() -> float:
 		elif line.begins_with("out_time_ms="):     # older ffmpeg (value is microseconds despite the name)
 			best = maxf(best, line.substr(12).to_float() / 1_000_000.0)
 	return best
+
+
+## "" when the MP4 holds the whole of what the render was asked for, else what it came out as. Its length is the file's own
+## (ffprobe), or what the encoder said it wrote when that cannot be read.
+func _shortfall() -> String:
+	var want := _wanted_seconds()
+	var got := _media_seconds(_out)
+	if got <= 0.0:
+		got = _encoded_seconds()
+	if not is_short(got, want):
+		return ""
+	return "The video came out %s long of the %s asked for" % [Clock.text(got), Clock.text(want)]
+
+
+## How long the render was asked to be: a stretch's span ([Stitch]), else the whole take.
+func _wanted_seconds() -> float:
+	if not _stretch.is_empty():
+		var sp: Vector2 = _stretch.get("span", Vector2.ZERO)
+		return sp.y - sp.x
+	return _song_dur
+
+
+## Short of [param want] by more than an encode ends on - [constant SHORT_SLACK] seconds, or 1%, whichever is more. A length
+## not known (0 or less, either one) is never short.
+static func is_short(got: float, want: float) -> bool:
+	if got <= 0.0 or want <= 0.0:
+		return false
+	return got < want - maxf(SHORT_SLACK, want * 0.01)
 
 
 # Godot's AVI writer keeps 32-bit RIFF/LIST size fields; past 4 GiB the sizes wrap (mod 2^32) while the chunks after them
@@ -1545,7 +1751,9 @@ func _clear_override() -> void:
 		DirAccess.remove_absolute(path)
 
 
-func _fail(msg: String) -> void:
+## [param sticky]: the line stays until the next export rather than for a few seconds - for what failed after a render that
+## may have run for hours with nobody watching. The ⤓ comes back meanwhile.
+func _fail(msg: String, sticky := false) -> void:
 	_clear_override()
 	_upload_this = false
 	_stretch = {}            # a stretch that failed is over: the next export is a whole one
@@ -1554,6 +1762,9 @@ func _fail(msg: String) -> void:
 		_space_dialog.hide()
 	_state = "done"
 	_done_t = 8.0
+	if sticky:
+		_state = "idle"
+		_note_t = 0.0
 	_set_status(msg, Color(1.0, 0.7, 0.6))
 	push_warning("ghost export: " + msg)
 

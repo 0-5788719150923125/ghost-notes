@@ -296,21 +296,58 @@ game_reveal:
       Fills the whole frame, edge to edge, with what it shows big and central, as a viewer sees it at a glance. Its colors: {{palette}}. No text, no border, no people at a table.
   - "FORMAT: LANDSCAPE 3:2 (1536x1024). No text, no watermark."
 
-# A page of the night's book (GameTools `picture`): the story shown as an illustrated book shows it, full frame over the table. {{shows}} names who and what is in it;
-# `refs` when references go with it (earlier pages, the figures' own pictures).
+# A page of the night's book (GameTools `picture`): the story shown as an illustrated book shows it, full frame over the table. {{shows}} names who and what is in it.
+#
+# WHAT WENT WRONG BEFORE (the author, 2026-11-23: a soldier with a bloody spear where no fight was taking place; "we kept getting the same character painted into new
+# pictures, the same themes ... We confused the painters"): five unlabeled references, mostly whatever earlier pages happened to be painted already, under one line that
+# said whoever is in them looks exactly so - so whatever was in them walked into the next page. Now each attachment is NAMED and told what it is for
+# (`attached`, TableProducer._page_refs): a figure for how one character looks; an earlier page of the window (TableEpisode.window_of) for only what this page shares with
+# it, told by name what in it is NOT here. And the painter is told the story round the page (`story_before`, `story_over`, TableProducer.page_story) as context it does
+# not paint, so it knows what the moment is without inventing one.
 game_page:
   - include: head
   - ""
   - >-
       THE PICTURE: one page of an illustrated book of tonight's story: {{name}}: {{looks}}. Painted by the people who make this show: {{art}}
   - when: has_shows
-    say: "In it: {{shows}}."
-  - when: refs
-    say: >-
-      THE REFERENCES WITH IT are earlier pages of this same book and the figures' own pictures: whoever and whatever is in this picture looks exactly as it does in them - their
-      faces, clothes, colors and build - and this page is painted in their hand. Do not copy their compositions: what happens here is only what is said above.
+    say: "In it: {{shows}}. Nobody and nothing else that has a name in this story."
   - >-
+      ONLY WHAT IS DESCRIBED IS IN THE PICTURE. Paint no person, creature or thing it does not call for, and nothing it does not say about them: no weapon drawn, no wound,
+      no blood, no fire, no damage and no fight unless the description says so in words. Where it does not say how someone looks or stands, they look as they always do and
+      stand at ease.
+  - when: has_attached
+    say: "THE {{attached_n}} ATTACHED IMAGES, in the order they come. Each is here for one thing only:"
+  - each: attached
+    say: >-
+      {{#figure}}Image {{n}} is the figure of {{name}}: what {{name}} looks like - face, build, clothes and colors. Paint {{name}} as this page describes, in its own pose and place, never the figure's pose.{{/figure}}{{#page}}Image {{n}} is {{#just_before}}the page just before this one{{/just_before}}{{^just_before}}an earlier page{{/just_before}}, "{{name}}" [{{looks}}]. {{#has_shared}}It is here only for how these looked there, which this page keeps exactly: {{shared}}.{{/has_shared}}{{#has_others}} Also in it, and NOT in this page, so left out of it: {{others}}.{{/has_others}} Do not repeat its composition, its moment or anything that happens in it.{{/page}}
+  - when: has_attached
+    say: "Every image is painted in the one hand described above: match it. What happens in this page is only what is described above."
+  - when: has_story
+    say: >-
+      THE STORY ROUND THIS PAGE, so you know what is going on. It is being told aloud at a table, by people playing a game, so it has their jokes and their talk about the
+      game in it. It is context only: do NOT paint anything from it that the description above does not call for, and never the table or the people at it.
+  - when: [has_story, story_before]
+    say: "Said just before this page comes up:"
+  - when: [has_story, story_before]
+    insert: story_before
+  - when: [has_story, story_over]
+    say: "Said while this page is shown:"
+  - when: [has_story, story_over]
+    insert: story_over
+  - when: "!tall"
+    say: >-
       A real illustration, composed as a picture book's page is: a scene with depth, what matters big and clear, the light of the moment. It is shown wider than it is
       painted, its bottom trimmed: keep every head and face well clear of the top edge, and nothing that matters in the bottom sixth. It shows the story's own world, never a
       table, dice, figures or the people playing. Fills the whole frame, edge to edge.{{^own_hand}} Its colors: {{palette}}.{{/own_hand}} No text, no lettering, no border, no caption.
-  - "FORMAT: LANDSCAPE 3:2 (1536x1024). No text, no watermark."
+  # A portrait show (TikTok, 9:16; next/portrait.md): the page is painted tall and shown on a phone held upright, a little narrower than painted and pushed in
+  # slowly, so its sides and its bottom are trimmed (TableGame._page_size, _tick_pages); the subtitles stand over its lower middle and TikTok's buttons and
+  # caption over its right edge and bottom third (Subtitles.SAFE).
+  - when: tall
+    say: >-
+      A real illustration, composed for a TALL page, as a phone held upright shows it: one subject, big, and the scene stacked in depth from the bottom of the page to
+      the top - near things low, far things high - with the light of the moment. A face or a figure fills the width rather than standing small in a wide view. Faces
+      and what matters sit in the upper half, a little below the top: words are shown over the lower part, and a phone's buttons over the right edge. It is shown a
+      little narrower than it is painted, its sides and bottom trimmed: nothing that matters in the outer eighth at either side or in the bottom third, and every head
+      clear of the top edge. It shows the story's own world, never a table, dice, figures or the people playing. Fills the whole frame, edge to edge.{{^own_hand}} Its
+      colors: {{palette}}.{{/own_hand}} No text, no lettering, no border, no caption.
+  - "FORMAT: {{#tall}}PORTRAIT 2:3 (1024x1536){{/tall}}{{^tall}}LANDSCAPE 3:2 (1536x1024){{/tall}}. No text, no watermark."

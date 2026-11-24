@@ -256,6 +256,8 @@ reply_beats: |-
     "problem": "only where the brief's episodes work a problem a computer checks (PROBLEM, above): its object; left out otherwise",
     "game": "true only when the brief's show is a game really played at a table: then leave `beats` empty",
     "scenes": "where `game` is true: how many stretches this session may run to, at most",
+    "picture_seconds": "where `game` is true and the brief says how often the picture changes: the longest one picture is held, in seconds, as a number; left out otherwise",
+    "previously": "where `game` is true and the brief opens its episodes on what came before: what to recall, in two or three plain sentences - true to the most recent of the earlier episodes you were shown, or, where there are none or the brief or direction says otherwise, what they say; left out otherwise",
     "table_note": "where `game` is true: anything about who is at the table tonight that the brief leaves to you, such as a newcomer's name and work",
     "look": {
       "art": "where `game` is true: how the maps, the figures and the pictures of this game are painted, in a sentence",
@@ -489,3 +491,4 @@ work:
   - >-
       A SHOW THAT IS A GAME REALLY PLAYED AT A TABLE, when the brief's is one: `game` true. Nobody knows what will happen: it is played, with real dice, by people deciding as they go, so you plan no beats and no story. You
       plan the night: its title and angle are a situation someone might walk into and never a result, for it could end any way at all; `scenes`, how many stretches it may run to, a ceiling and nothing more; and `look.art`.
+      Its `minutes` are the brief's length, which the night is shared out of: a short show plans few stretches.

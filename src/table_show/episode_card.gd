@@ -237,11 +237,24 @@ func _process(delta: float) -> void:
 	_row_t -= delta
 	if _row_t <= 0.0:
 		_row_t = 0.25
+		_frame_episode()
 		if _producer != null and _producer.holder == self:
 			_producer.tick()
 		_keep_take()
 		_refresh_card()
 		_seed_globals()
+
+
+## The frame the episode's pages are painted for: the one the show is shown in now ([member TableEpisode.frame]) - told to the
+## episode the rows read and to the one its producer makes, which may be another of it ([method TableProducer.of]). A page painted
+## for another shows as stale, and Generate paints it again.
+func _frame_episode() -> void:
+	if _episode == null:
+		return
+	var f := Director.resolved_frame()
+	_episode.frame = f
+	if _producer != null and _producer.episode != null:
+		_producer.episode.frame = f
 
 
 # --- what the reading is asked ------------------------------------------------------------------
@@ -974,6 +987,7 @@ func _open_episode() -> void:
 	# document would land back in apply
 	_producer = TableProducer.of(_episode)
 	_producer.holder = self
+	_frame_episode()
 	if is_inside_tree() and reading != null:
 		Director.pin_medium(_shown_in(), self)
 	_brief_changed = false

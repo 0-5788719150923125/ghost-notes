@@ -320,6 +320,9 @@ var _spin_key := ""                 # ...the schedule it was chosen on
 var _spin_k := -1                   # ...and the card
 ## Built aside, on a worker thread ([method TablePreview._stand]): its long loops then [method _breathe]
 var aside := false
+## Photographed for the agents who make it ([TablePreview]) rather than shown: seen in the frame it is dressed for, whatever frame the
+## show is in ([method aspect]).
+var previewed := false
 ## Whether what stands out of the shot for nobody is hidden ([method hide_idle]): on a table played, never on a preview, whose acts
 ## are still being written ([TablePreview]).
 var hides_idle := true
@@ -446,6 +449,7 @@ func _build_world() -> void:
 	Graphics.dress(_env)
 	_cam = Camera3D.new()
 	_cam.fov = VFOV
+	_cam.keep_aspect = CardTable.keep(aspect())
 	_cam.near = 0.02
 	_cam.far = 40.0
 	_cam.environment = _env
@@ -1453,8 +1457,9 @@ func _place_backdrop() -> void:
 		var dist := _room_reach(false)
 		var fwd := -_plan.cam_base.basis.z
 		var center := _plan.cam_base.origin + fwd * dist
-		var h := 2.0 * dist * tan(deg_to_rad(_cam.fov * 0.5))
-		var w := h * 16.0 / 9.0
+		# ...wide enough for the frame at the dressed table's width and as tall as it reaches, whichever frame it is shown in
+		var frame := CardTable.lens(_cam.fov, aspect()) * 2.0 * dist
+		var w := maxf(frame.x, CardTable.lens(_cam.fov).x * 2.0 * dist)
 		var far_edge := Vector3(0.0, 0.0, TABLE_Z - TABLE.z * 0.5)
 		var up := _plan.cam_base.basis.y
 		# where the far edge's line of sight crosses the backdrop's plane, along the camera's up axis
@@ -1826,8 +1831,21 @@ func _breathe() -> void:
 
 # --- the camera ----------------------------------------------------------------------------------------
 
+## The frame the table is shown in, width over height, as the show says it ([method ShowFeed.frame_aspect]): 16:9 for a table
+## nobody shows, or one photographed for its agents ([constant CardTable.DRESSED], [member previewed]).
+func aspect() -> float:
+	return feed.frame_aspect() if feed != null and not previewed else CardTable.DRESSED
+
+
+## What the camera sees at a distance of one, half across and half up, in the frame it is shown in ([method CardTable.lens]).
+func lens() -> Vector2:
+	return CardTable.lens(_cam.fov, aspect())
+
+
 ## The reader's eye: still - or, on a table that rides ([Rides]), given what its mount gives.
 func _tick_camera(t: float) -> void:
+	# ...its lens the frame's short side, so a portrait frame sees the table turned on end ([method CardTable.keep])
+	_cam.keep_aspect = CardTable.keep(aspect())
 	# A locked-off camera: the table is filmed from a tripod. Aboard something that moves the tripod rides with the
 	# table, and only its give shows: a faint buzz, a quick nod at a jolt (Rides.camera) - turned about the lens, so
 	# what is posed from the camera's place (a card held up, its page) is where it was
@@ -2034,7 +2052,7 @@ func _air_stage() -> Dictionary:
 		near = minf(near, d)
 		far = maxf(far, d)
 	var top: Dictionary = (_furniture.get("spec", {}) as Dictionary).get("top", Tables.DEFAULT_TOP)
-	return {"regions": CardTable.AIR, "camera": _plan.cam_base, "fov": _cam.fov, "aspect": 16.0 / 9.0, "occluders": under,
+	return {"regions": CardTable.AIR, "camera": _plan.cam_base, "fov": _cam.fov, "aspect": aspect(), "occluders": under,
 		"wind": _wind, "on_top": func(p: Vector2) -> bool: return Tables.inside(top, p, 0.01), "cover": _cover_at,
 		"sharp": Vector2(near, far), "defocus": 2.0 * ROOM_BLUR / maxf(1.0 / far - 1.0 / _room_reach(false), 1e-3),
 		"deep": _room_reach(false) * 0.9}

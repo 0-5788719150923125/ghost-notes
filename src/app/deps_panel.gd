@@ -66,6 +66,7 @@ func _ready() -> void:
 	if agent != null:
 		agent.connect("changed", _on_changed)
 		agent.connect("finished", _on_finished)
+	visibility_changed.connect(_on_shown)
 	_start_probe()
 
 
@@ -271,12 +272,25 @@ func _start_probe() -> void:
 	_thread = Thread.new()
 	#`Deps.report` only reads the filesystem and spawns short-lived `--version` processes; nothing it
 	#touches is a Godot resource, so no main-thread hop is needed until the results come back.
-	_thread.start(_probe_worker)
+	_thread.start(_probe_worker.bind(is_visible_in_tree()))
 
 
-func _probe_worker() -> void:
+## [param shown]: the panel is open, so the xvfb-run row is checked by starting a render on it (Exporter.display_check, a few
+## seconds, once a session) - never at launch, where nobody is looking and a second ghost would boot on every start.
+func _probe_worker(shown: bool) -> void:
 	var rows := Deps.report()
+	Exporter.mark_display(rows, shown)
 	_apply.call_deferred(rows)
+
+
+## Opened: the xvfb-run row is checked if it has not been this session ([method _probe_worker]).
+func _on_shown() -> void:
+	if not is_visible_in_tree() or not Exporter.display_known().is_empty():
+		return
+	# (no row yet: the launch probe is still out, and is asked again behind it)
+	var x := _row("xvfb")
+	if x.is_empty() or bool(x.get("found", false)) or bool(x.get("broken", false)):
+		_start_probe()
 
 
 func _apply(rows: Array) -> void:
@@ -294,6 +308,7 @@ func _apply(rows: Array) -> void:
 
 func _rescan() -> void:
 	Deps.forget_all()
+	Exporter.forget_display()
 	var agent := Provision.agent()
 	if agent != null:
 		agent.call("forget")
@@ -372,6 +387,11 @@ func _live(key: String) -> void:
 			glyph = "▲"
 			tint = COL_BAD
 			value = "failed - click for why"
+		elif bool(r.get("broken", false)):
+			#installed, and checked by using it: it does not work (Exporter.mark_display)
+			glyph = "▲"
+			tint = COL_BAD
+			value = String(r.get("note", "not working"))
 	(ui["glyph"] as Label).text = glyph
 	(ui["glyph"] as Label).add_theme_color_override("font_color", tint)
 	(ui["name"] as Label).add_theme_color_override("font_color", COL_TEXT if found else COL_DIM)
@@ -429,6 +449,9 @@ func _problem() -> String:
 		if s.has("error") and not bool(s.get("running", false)) and not bool(r.get("found", false)) \
 				and Provision.unsupported(key).is_empty():
 			return "%s failed" % String(r.get("name", key))
+	for r in _rows:
+		if bool(r.get("broken", false)):
+			return "%s: %s" % [String(r.get("name", "?")), String(r.get("note", "not working"))]
 	var missing := PackedStringArray()
 	for r in _rows:
 		if Deps.group_of(r) == 2 and int(r.get("tier", Deps.TIER_EXTRA)) == Deps.TIER_FEATURE \
@@ -656,7 +679,11 @@ func _fill_detail(key: String) -> void:
 	elif s.has("error") and not bool(r.get("found", false)):
 		lines.append("The last attempt failed: %s" % String(s["error"]))
 		lines.append("Its log: " + Provision.log_path(key))
-	if group == 2:
+	if bool(r.get("broken", false)):
+		lines.append("found at: " + path)
+		lines.append("Checked by starting a render on it: %s" % String(r.get("why", "")))
+		lines.append("Exports render on the desktop meanwhile, and stop if their window is hidden or the screen locks.")
+	elif group == 2:
 		if bool(r.get("found", false)):
 			lines.append("found at: " + path)
 		else:

@@ -31,6 +31,9 @@ Ghost's own flags follow the Godot separator: `godot --path . -- <ghost flags>`.
 | `--app-version` |  | Print the embedded app build version as JSON, then exit (release diagnostics). | _internal_ |
 | `--apply-update` | `<target> <parent PID> <staged path> <sha256> <restart>` | Internal helper: after the parent exits, replace the portable executable with a verified update. | _internal_ |
 | `--update-smoke-hold` |  | Keep the exported app running briefly while the updater's replacement path is tested. | _internal_ |
+| `--fault-file` | `<path>` | With `--export`: where the render says why it stopped itself - its frames no longer being drawn (a window hidden or a screen locked, on a desktop), or it came up off its virtual display - for the exporter to show instead of saving stills (`src/export/render_watch.gd`). | _internal_ |
+| `--virtual-display` |  | With `--export`: the exporter put the render on a display of its own (xvfb-run); a render that came up anywhere but X11 stops itself. | _internal_ |
+| `--display-check` |  | With `--export`: say which display driver came up and what graphics card draws it, then exit. Run on the render's virtual display by Setup's xvfb-run row (`Exporter.display_check`). | _internal_ |
 | `--use-bake` |  | Drive `Spectrum` from the song's cached bake instead of the live analyzer. | _internal_ |
 | `--bake-file` | `<path>` | Explicit spectrum-bake cache for a render (implies `--use-bake`). | _internal_ |
 | `--showcase-now` |  | Record the README's animation (`docs/showcase.webp`) now, stale or not, and quit; pairs with `--headless`. A development launch records it by itself when what it shows has changed (`src/app/showcase.gd`). |  |

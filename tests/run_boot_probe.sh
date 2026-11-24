@@ -101,6 +101,14 @@ if [[ "${GHOST_PROBE_GPU:-0}" != "0" ]]; then
     else
       WRAP=(xvfb-run -a -n "$((100 + $$ % 20000))" -s "-screen 0 1280x1024x24")
     fi
+    # ...and never on the author's screen. Inside the virtual display, Godot's X11 driver must start, or Godot falls back to WAYLAND - and
+    # with the session's WAYLAND_DISPLAY it reaches, that is a window on the author's desktop (the author, 2026-11-23, on an Intel laptop
+    # under Plasma: "every test you run - it's opening a render window, hijacking my screen"). It failed there because Mesa's Vulkan cannot
+    # present to Xvfb, which has no DRI3 ("None of the devices supports both graphics and present queues"): MESA_VK_WSI_DEBUG=sw has
+    # Mesa present by a copy instead, the rendering still on the real GPU (NVIDIA ignores it). WAYLAND_DISPLAY names a display that
+    # does not exist, so one that fails anyway fails here, never on screen: unset is not enough, libwayland then tries wayland-0,
+    # the usual name of the session's own (Exporter.virtual_display).
+    WRAP=(env -u WAYLAND_SOCKET WAYLAND_DISPLAY=ghost-xvfb-only MESA_VK_WSI_DEBUG=sw "${WRAP[@]}")
     RUNNER=("$GODOT")
   else
     echo "run_boot_probe: GHOST_PROBE_GPU set but xvfb-run not found -" \

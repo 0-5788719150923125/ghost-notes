@@ -88,6 +88,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **A desktop build that runs everything**
       An exported build cannot yet run the Python hosts, relaunch itself to render, or write into `res://`, and the Steam list is open: URL import left out of a store build, the export's excludes, a GPL FFmpeg on Linux, the Assistant stripped, third-party notices. See [binary_export_and_steam.md](binary_export_and_steam.md).
 
+- [ ] **A table show in portrait**
+      Built 2026-11-23: a game at 9:16 for TikTok, its lens the frame's short side, each shot keeping a landscape frame's top edge, pages painted 2:3 (a landscape page goes stale and is painted again), the table still dressed for 16:9. Open: the first portrait episode exported and judged on a phone, and a card reading at 9:16 ([portrait.md](portrait.md)).
+
 - [ ] **A composed Sound, by ear, then a chorus**
       Built: Song became Sound - a file, or a song composed from seeded parts with the note's words sung by Kokoro on a reference's tune or one made for them (next/music.md). Open: ERROR ME FOUND judged by ear; a chorus of voices; lyrics aligned to the reference by Whisper; notes edited on the Timeline; MIDI and stems out; a Sound played from another note.
 

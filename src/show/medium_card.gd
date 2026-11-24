@@ -204,6 +204,9 @@ func capture() -> Dictionary:
 		if not _kept.is_empty():
 			return _kept.duplicate(true)
 		var mine := {"format": _fmt}
+		# ...and its frame where it is not landscape (portrait, for TikTok): every other table show's block stays as it was
+		if Director.frame != "landscape":
+			mine["frame"] = Director.frame
 		if _own != null and _card_of(_fmt) == _own_card:
 			mine.merge(_own.call("capture") as Dictionary, false)
 		return mine
@@ -235,6 +238,8 @@ func apply(block: Dictionary) -> void:
 			_kept = {}
 		elif not fmt.is_empty():
 			_kept = block.duplicate(true)
+		if Medium.FRAME_SIZES.has(String(block.get("frame", ""))):
+			Director.set_frame(String(block["frame"]))
 		if _own != null and _card_of(_fmt) == _own_card:
 			_own.call("apply", block)
 		elif _keys.has(fmt) and _card_of(fmt) != _own_card and _reshape.is_valid():
@@ -354,7 +359,9 @@ func _pick(i: int) -> void:
 
 ## The frame: landscape 16:9 or portrait 9:16 (next/notes.md), a property of the show kept beside the
 ## format. Only what the format can be shown in is offered (its row's `frames`, [method Medium.frames]);
-## a frame it cannot is grayed, saying so, and the show plays in landscape.
+## a frame it cannot is grayed, saying so, and the show plays in landscape. A table show's frame is the
+## note's, not an episode's: an episode is shown in whichever, and its pictures painted for it go stale
+## in another ([method TableEpisode.page_key]).
 func _frame_option() -> OptionButton:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)

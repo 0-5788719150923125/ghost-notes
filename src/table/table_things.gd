@@ -356,7 +356,7 @@ func stand(t: Dictionary, b: Dictionary, group: String, anchor: Dictionary, keep
 		var best := {}
 		var best_score := -INF
 		var cam_inv := medium._plan.cam_base.affine_inverse()
-		var lens := Vector2(tan(deg_to_rad(medium._cam.fov * 0.5)) * (16.0 / 9.0), tan(deg_to_rad(medium._cam.fov * 0.5)))
+		var lens := CardTable.lens(medium._cam.fov)
 		var z := top_center.y - top_half.y
 		while z <= front:
 			var x := top_center.x - top_half.x
@@ -493,7 +493,7 @@ func stand_at(t: Dictionary, b: Dictionary, group: String, keep_out: Array) -> b
 		for cy in [box.position.y, box.end.y]:
 			for cz in [box.position.z, box.end.z]:
 				corners.append(basis * Vector3(cx, cy, cz))
-	var lens := Vector2(tan(deg_to_rad(medium._cam.fov * 0.5)) * (16.0 / 9.0), tan(deg_to_rad(medium._cam.fov * 0.5)))
+	var lens := CardTable.lens(medium._cam.fov)
 	var placed := Geo.moved(shape, spot)
 	put(t, b, {"at": spot, "outline": placed, "bb": Geo.bounds(placed),
 		"rect": CardTable.screen_rect(corners, Vector3(spot.x, 0.0, spot.y), medium._plan.cam_base.affine_inverse(), lens),

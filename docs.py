@@ -312,6 +312,16 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
      "Internal helper: after the parent exits, replace the portable executable with a verified update.", True),
     ("--update-smoke-hold", "",
      "Keep the exported app running briefly while the updater's replacement path is tested.", True),
+    ("--fault-file", "<path>",
+     "With `--export`: where the render says why it stopped itself - its frames no longer being drawn (a window hidden or "
+     "a screen locked, on a desktop), or it came up off its virtual display - for the exporter to show instead of saving "
+     "stills (`src/export/render_watch.gd`).", True),
+    ("--virtual-display", "",
+     "With `--export`: the exporter put the render on a display of its own (xvfb-run); a render that came up anywhere "
+     "but X11 stops itself.", True),
+    ("--display-check", "",
+     "With `--export`: say which display driver came up and what graphics card draws it, then exit. Run on the render's "
+     "virtual display by Setup's xvfb-run row (`Exporter.display_check`).", True),
     ("--use-bake", "", "Drive `Spectrum` from the song's cached bake instead of the live analyzer.", True),
     ("--bake-file", "<path>", "Explicit spectrum-bake cache for a render (implies `--use-bake`).", True),
     ("--showcase-now", "",

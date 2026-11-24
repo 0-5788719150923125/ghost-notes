@@ -93,6 +93,30 @@ func _init() -> void:
 	_ok(not (empty.r > 0.6 and empty.g < 0.35), "control: where no place is, nothing red is")
 	root.free()
 
+	# The inside of somewhere: one flat, dry floor, its rooms the places on it; the country's hills, water and woods gone from it
+	var inside_spec := SPEC.duplicate(true)
+	inside_spec["ground"] = "floor"
+	inside_spec["colors"] = {"floor": "#554433"}
+	var fl := GameDiorama.sanitize(inside_spec)
+	_ok(String(fl["ground"]) == "floor" and (fl["hills"] as Array).is_empty() and (fl["rivers"] as Array).is_empty() and (fl["woods"] as Array).is_empty(),
+		"a floor has none of the country's hills, rivers or woods")
+	_ok((fl["places"] as Array).size() == 2 and String(fl["colors"]["floor"]) == "#554433", "...and keeps its places and its own paint")
+	_ok(String(GameDiorama.sanitize(SPEC)["ground"]) == "land" and String(GameDiorama.sanitize({"ground": "sky"})["ground"]) == "land",
+		"control: a spec that says none, or no ground there is, is a land")
+	_ok(GameDiorama.told(fl).contains("inside of somewhere") and not GameDiorama.told(d).contains("inside of somewhere"), "the one running the game is told which (with a control)")
+	var gf := GameDiorama.new(inside_spec, 7)
+	var froot := gf.build()
+	var fnames := []
+	for ch in froot.get_children():
+		fnames.append(String(ch.name))
+	_ok(fnames.has("Ground") and not fnames.has("Water") and not fnames.has("Woods"), "built, a floor has its ground and no water or woods (%s)" % ", ".join(fnames))
+	var f1 := GameDiorama.world_of(Vector2(70, 75))
+	var f2 := GameDiorama.world_of(Vector2(200, 120))
+	_ok(is_equal_approx(gf.height_at(f1.x, f1.y), gf.height_at(f2.x, f2.y)) and is_equal_approx(gf.height_at(f1.x, f1.y), GameDiorama.BOARD_H * 0.01),
+		"a floor is laid flat (%.4f, %.4f)" % [gf.height_at(f1.x, f1.y), gf.height_at(f2.x, f2.y)])
+	_ok(gf.places.size() == 2, "...and its rooms stand on it")
+	froot.free()
+
 	print("game_diorama_check: %d checks, %d failed" % [_checks, _fails])
 	quit(1 if _fails > 0 else 0)
 

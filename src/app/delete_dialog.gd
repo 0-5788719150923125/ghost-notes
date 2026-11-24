@@ -1,8 +1,8 @@
 extends ConfirmationDialog
 class_name DeleteDialog
 
-## DeleteDialog - "Delete this note?", asked before a note goes. Asked from the notes list's × and from
-## every note's own "⋯" (see [method Shell.note_menu]).
+## DeleteDialog - "Delete this note?", asked before a note goes. Asked from the notes list: a tile's × and the
+## open note's bin.
 ##
 ## It asks; the caller acts. The list trashes a note that is not open; an open note is left first (its
 ## panel writes what it holds as it goes) and only then trashed, so the answer is handed back ([member

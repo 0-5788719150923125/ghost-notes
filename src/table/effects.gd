@@ -417,7 +417,7 @@ static func fog_environment(env: Environment, on: bool) -> void:
 
 
 ## Build [param effects] (sanitized) for a host whose [param stage] is
-## `{regions: {name: AABB}, camera: Transform3D, fov: float (vertical, degrees), aspect: float,
+## `{regions: {name: AABB}, camera: Transform3D, fov: float (the frame's short side, degrees: [method CardTable.lens]), aspect: float,
 ## occluders: [AABB], sharp: Vector2, defocus: float, deep: float, around: bool}` - the occluders being what stands in
 ## the air (a table, the things on it); `sharp` the depths the lens has in focus (meters along its axis),
 ## `defocus` how fast a thing past them blurs (its blur, a share of the frame's width, is `defocus` times
@@ -640,15 +640,14 @@ static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, l
 	var each: Array = []
 	var lights: Array = []
 	var cam: Transform3D = stage.get("camera", Transform3D.IDENTITY)
-	var tan_half := tan(deg_to_rad(float(stage.get("fov", 42.0)) * 0.5))
-	var aspect := float(stage.get("aspect", 16.0 / 9.0))
+	var lens := _lens(stage)
 	for i in n:
 		var home := _in_view(box, stage, rng)
 		# A mote wanders across a share of the picture round a home in it - measured on screen at its own
 		# depth, across and up as the camera sees, with a little depth - so a mote past the table stays
 		# in the strip of room the camera sees there, and one near the lens does not fill it
 		var depth := maxf(-(cam.affine_inverse() * home).z, 0.1)
-		var frame_h := 2.0 * depth * tan_half
+		var frame_h := 2.0 * depth * lens.y
 		# built here and handed over whole: appended through the dictionary, a packed array grows a copy
 		var w := PackedFloat32Array()
 		var ph := PackedFloat32Array()
@@ -657,7 +656,7 @@ static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, l
 			ph.append(rng.randf() * TAU)
 		var m := {
 			"home": home,
-			"ax": cam.basis.x * frame_h * aspect * 0.08 * wander,
+			"ax": cam.basis.x * 2.0 * depth * lens.x * 0.08 * wander,
 			"ay": cam.basis.y * frame_h * 0.05 * wander,
 			"az": -cam.basis.z * depth * 0.1 * wander,
 			"w": w, "ph": ph,
@@ -762,12 +761,11 @@ static func _in_view(box: AABB, stage: Dictionary, rng: RandomNumberGenerator) -
 			if p.distance_to(cam.origin) > AROUND_CLEAR:
 				return p
 		return box.get_center()
-	var k := tan(deg_to_rad(float(stage.get("fov", 42.0)) * 0.5))
-	var aspect := float(stage.get("aspect", 16.0 / 9.0))
+	var lens := _lens(stage)
 	for i in 64:
 		var sx := rng.randf_range(0.06, 0.94)
 		var sy := rng.randf_range(0.03, 0.92)
-		var dir := (cam.basis * Vector3((sx * 2.0 - 1.0) * k * aspect, (1.0 - sy * 2.0) * k, -1.0)).normalized()
+		var dir := (cam.basis * Vector3((sx * 2.0 - 1.0) * lens.x, (1.0 - sy * 2.0) * lens.y, -1.0)).normalized()
 		var span := _ray_box(cam.origin, dir, box)
 		var near := maxf(span.x, 0.2)
 		var far := minf(span.y, float(stage.get("deep", INF)) / maxf(dir.dot(-cam.basis.z), 0.1))
@@ -832,12 +830,11 @@ static func _exit_of(home: Vector3, stage: Dictionary, rng: RandomNumberGenerato
 ## line of sight gets past what stands.
 static func _deep_of(stage: Dictionary, rng: RandomNumberGenerator) -> Variant:
 	var cam: Transform3D = stage.get("camera", Transform3D.IDENTITY)
-	var k := tan(deg_to_rad(float(stage.get("fov", 42.0)) * 0.5))
-	var aspect := float(stage.get("aspect", 16.0 / 9.0))
+	var lens := _lens(stage)
 	var deep := float(stage.get("deep", 6.0))
 	var floor_y := _air_floor(stage) + 0.05
 	for i in 96:
-		var dir := (cam.basis * Vector3(rng.randf_range(-0.9, 0.9) * k * aspect, rng.randf_range(-0.2, 0.95) * k, -1.0)).normalized()
+		var dir := (cam.basis * Vector3(rng.randf_range(-0.9, 0.9) * lens.x, rng.randf_range(-0.2, 0.95) * lens.y, -1.0)).normalized()
 		var reach := deep / maxf(dir.dot(-cam.basis.z), 0.1)
 		if dir.y < 0.0 and cam.origin.y > floor_y:
 			reach = minf(reach, (floor_y - cam.origin.y) / dir.y)
@@ -868,7 +865,7 @@ static func speck_ink(stage: Dictionary, pos: Vector3, size: float) -> float:
 	var z := maxf(-(cam.affine_inverse() * pos).z, 0.01)
 	var sharp: Vector2 = stage.get("sharp", Vector2(0.01, 1000.0))
 	var coc := float(stage.get("defocus", 0.0)) * (maxf(0.0, 1.0 / sharp.y - 1.0 / z) + maxf(0.0, 1.0 / z - 1.0 / sharp.x))
-	var blur := coc * 2.0 * z * tan(deg_to_rad(float(stage.get("fov", 42.0)) * 0.5)) * float(stage.get("aspect", 16.0 / 9.0))
+	var blur := coc * 2.0 * z * _lens(stage).x
 	return pow(size / maxf(size + blur, 1e-6), 2.0)
 
 
@@ -878,9 +875,14 @@ static func _screen(stage: Dictionary, p: Vector3) -> Variant:
 	var l: Vector3 = cam.affine_inverse() * p
 	if l.z > -0.01:
 		return null
-	var k := tan(deg_to_rad(float(stage.get("fov", 42.0)) * 0.5))
-	var aspect := float(stage.get("aspect", 16.0 / 9.0))
-	return Vector2(0.5 + l.x / (-l.z * k * aspect) * 0.5, 0.5 - l.y / (-l.z * k) * 0.5)
+	var k := _lens(stage)
+	return Vector2(0.5 + l.x / (-l.z * k.x) * 0.5, 0.5 - l.y / (-l.z * k.y) * 0.5)
+
+
+## What the stage's camera sees at a distance of one, half across and half up: its `fov` and the `aspect` of the frame it is shown
+## in ([method CardTable.lens]).
+static func _lens(stage: Dictionary) -> Vector2:
+	return CardTable.lens(float(stage.get("fov", 42.0)), float(stage.get("aspect", CardTable.DRESSED)))
 
 
 ## Mote [param m] of a population ([param pop]) at show time [param t]: `{pos, bright}`. Pure.

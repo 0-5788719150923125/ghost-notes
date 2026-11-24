@@ -88,8 +88,13 @@ const LOCAL := ["draw", "script", "ink", "direction"]
 ## The solver, tried more: a safeguard sometimes stops a sound run part way, and its run is the episode's work. It may work this long (seconds).
 const SOLVE_RETRIES := 2
 const SOLVE_TIMEOUT := 3600
-## The most pictures a page of a game's book is painted beside ([method _page_refs]).
-const PAGE_REFS := 5
+## The most figures' own pictures a page of a game's book is painted beside ([method _page_refs]); its earlier pages are
+## [constant TableEpisode.PAGE_WINDOW] more.
+const PAGE_FIGURES := 3
+## How much of the story a page's painter is told, in words: what was said just before the page came up, and what is said over it
+## ([method page_story]).
+const STORY_BEFORE := 90
+const STORY_OVER := 120
 ## Who makes each kind of step, as its record and its row name them (a step's first word -> its maker).
 const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "check": "art director",
 	"table": "set dresser", "say": "reader", "acts": "puppeteer", "model": "modeler", "skin": "decorator", "prep": "game master",
@@ -1008,14 +1013,18 @@ func _make_image(step: String) -> void:
 		var list: Array = episode.game().get(key, [])
 		var k := int(parts[2]) - 1
 		var thing: Dictionary = list[k] if k >= 0 and k < list.size() and list[k] is Dictionary else {}
-		var refs := _page_refs(k, thing) if String(parts[1]) == "page" else []
+		# ...a page beside what it shares with the story so far, each attachment told what it is for, and told the story around it
+		var attached := _page_refs(k + 1, thing) if String(parts[1]) == "page" else []
+		var refs: Array = attached.map(func(a: Dictionary) -> String: return String(a["file"]))
+		var story := page_story(episode.read_text("script"), _page_event(k + 1), _people()) if String(parts[1]) == "page" else {}
 		# ...in the brief's own hand, where it fixes one ([method TablePrompts.hand_of]): the same in every episode
 		var hand := String(spec.get("hand", ""))
 		var in_hand := look.duplicate()
 		if not hand.is_empty():
 			in_hand["art"] = hand
 			in_hand["own_hand"] = true
-		_submit_image(step, TablePrompts.game_image(in_hand, String(parts[1]), thing, target, not refs.is_empty()), refs)
+		_submit_image(step, TablePrompts.game_image(in_hand, String(parts[1]), thing, target, not refs.is_empty(), attached, story,
+			String(parts[1]) == "page" and episode.tall()), refs)
 		return
 	# A layer of the picture painted first: painted over the one before (the bare surface, for the first), the picture itself its guide
 	if parts.size() == 3 and String(parts[1]) == "layer":
@@ -1045,25 +1054,109 @@ func _make_image(step: String) -> void:
 
 # --- a game played at the table (next/tabletop.md) ---------------------------------------------------------------------------------------------------
 
-## What a page of the night's book is painted beside, so it is painted as the rest are: the figures' own pictures of whoever is in it,
-## then the pages just before it, each only where it is painted already.
+## What page [param k] (1 up) of the night's book is painted beside, each with what it is for (the painter is told, attachment by
+## attachment, [method TablePrompts.game_image]): the figures' own pictures of whoever it shows, for how they look; then the pages of
+## its window ([method TableEpisode.window_of]), oldest first, for what it shares with them - each told what it shows that this page
+## does not, so nobody walks in from the page before. Only what is painted already: a page waits for its window, so that is all of it.
+## `[{file, figure, page, name, looks, shared, others}]`.
 func _page_refs(k: int, page: Dictionary) -> Array:
 	var out: Array = []
 	var shows: Array = page.get("shows", []) if page.get("shows") is Array else []
+	var mine := PackedStringArray(shows.map(func(v: Variant) -> String: return String(v).strip_edges().to_lower()))
 	var figs: Array = episode.game().get("figures", [])
 	for i in figs.size():
 		var nm := String((figs[i] as Dictionary).get("name", ""))
-		for w in shows:
-			if String(w).to_lower() == nm.to_lower() and out.size() < PAGE_REFS - 1:
-				var f := episode.file_of("image:figure:%d" % (i + 1))
-				if FileAccess.file_exists(f):
-					out.append(f)
-	for j in range(k - 1, -1, -1):
-		if out.size() >= PAGE_REFS:
+		var f := episode.file_of("image:figure:%d" % (i + 1))
+		if out.size() < PAGE_FIGURES and mine.has(nm.strip_edges().to_lower()) and FileAccess.file_exists(f):
+			out.append({"file": f, "figure": true, "page": false, "name": nm, "looks": String((figs[i] as Dictionary).get("looks", ""))})
+	var pages: Array = episode.game().get("pages", [])
+	var window := TableEpisode.window_of(pages, k)
+	window.reverse()
+	for j in window:
+		var f := episode.file_of("image:page:%d" % int(j))
+		if not FileAccess.file_exists(f):
+			continue
+		var theirs: Dictionary = pages[int(j) - 1]
+		var shared := PackedStringArray()
+		var others := PackedStringArray()
+		for v in theirs.get("shows", []) if theirs.get("shows") is Array else []:
+			(shared if mine.has(String(v).strip_edges().to_lower()) else others).append(String(v).strip_edges())
+		out.append({"file": f, "figure": false, "page": true, "name": String(theirs.get("name", "")), "looks": String(theirs.get("looks", "")),
+			"shared": ", ".join(shared), "others": ", ".join(others), "has_shared": not shared.is_empty(), "has_others": not others.is_empty(),
+			"just_before": int(j) == k - 1})
+	for i in out.size():
+		(out[i] as Dictionary)["n"] = i + 1
+	return out
+
+
+## The id of page [param k]'s event (1 up) in the session, where its mark stands in the script; -1 where there is none.
+func _page_event(k: int) -> int:
+	var n := 0
+	for e in episode.events_before(""):
+		if String((e as Dictionary).get("kind", "")) == "picture":
+			n += 1
+			if n == k:
+				return int((e as Dictionary).get("id", -1))
+	return -1
+
+
+## The story round a page, for its painter ([param script], the episode's; [param id], the page's event; [param people], the game master
+## first): `before`, the last [constant STORY_BEFORE] words said before the page came up, and `over`, what is said while it is up - up to
+## the next page or the view's going back to the table, at most [constant STORY_OVER] words - each a line a speaker, by name. {} where the
+## page's mark is not in the script.
+static func page_story(script: String, id: int, people: PackedStringArray) -> Dictionary:
+	if id < 0:
+		return {}
+	var mark := Manuscript._rx("<!--\\s*table:\\s*picture\\s+%d\\s*-->" % id).search(script)
+	if mark == null:
+		return {}
+	var after := script.substr(mark.get_end())
+	var stop := Manuscript._rx("<!--\\s*table:\\s*(?:picture|board)\\s+\\d+\\s*-->").search(after)
+	var gm := people[0] if not people.is_empty() else ""
+	var before := _story_lines(script.substr(0, mark.get_start()), people, gm)
+	var over := _story_lines(after.substr(0, stop.get_start()) if stop != null else after, people, String(before["who"]))
+	return {"before": "\n".join(_last_words(before["lines"], STORY_BEFORE)), "over": "\n".join(_first_words(over["lines"], STORY_OVER))}
+
+
+## A stretch of the script as lines a speaker, `Name: words`, marks gone, the game master's under their own name; [param who] speaks
+## until a cue says otherwise. `{lines, who}`, [param who] the last to speak.
+static func _story_lines(text: String, people: PackedStringArray, who: String) -> Dictionary:
+	var out := PackedStringArray()
+	var cue := Manuscript._rx("<!--\\s*speaker\\s*:\\s*([^>]*?)\\s*-->")
+	var any := Manuscript._rx("<!--[\\s\\S]*?-->")
+	for block in text.split("\n\n", false):
+		var m := cue.search(block)
+		if m != null:
+			who = m.get_string(1)
+			if who == Manuscript.NARRATOR and not people.is_empty():
+				who = people[0]
+		var words := " ".join(any.sub(block, "", true).strip_edges().split("\n", false)).strip_edges()
+		if not words.is_empty():
+			out.append("%s: %s" % [who, words])
+	return {"lines": out, "who": who}
+
+
+## The lines of [param lines] from the last one back, until they hold [param most] words (the first of them whole).
+static func _last_words(lines: PackedStringArray, most: int) -> PackedStringArray:
+	var out := PackedStringArray()
+	var n := 0
+	for i in range(lines.size() - 1, -1, -1):
+		if n >= most:
 			break
-		var f := episode.file_of("image:page:%d" % (j + 1))
-		if FileAccess.file_exists(f):
-			out.append(f)
+		out.insert(0, lines[i])
+		n += lines[i].split(" ", false).size()
+	return out
+
+
+## The lines of [param lines] from the first, until they hold [param most] words (the last of them whole).
+static func _first_words(lines: PackedStringArray, most: int) -> PackedStringArray:
+	var out := PackedStringArray()
+	var n := 0
+	for l in lines:
+		if n >= most:
+			break
+		out.append(l)
+		n += l.split(" ", false).size()
 	return out
 
 
@@ -1130,13 +1223,14 @@ func _make_scene(who: String) -> void:
 	var toolset := GameTools.new(episode, who, plan, prep_d, people, ledger, episode.job_dir(step), before)
 	toolset.diorama = diorama
 	toolset.players = {"backend": String(spec.get("players", spec.get("writer", "claude"))), "model": String(spec.get("players_model", "")), "effort": String(spec.get("players_effort", ""))}
-	toolset.words_aim = TablePrompts.game_words(who, episode.beat_count())
+	toolset.words_aim = TablePrompts.game_words(who, episode.beat_count(), _plan())
+	toolset.picture_every = TablePrompts.picture_words(_plan())
 	var url := AgentTools.open(episode.job_dir(step), toolset)
 	if url.is_empty():
 		_errors[step] = "no tools can be served here"
 		return
 	_tools[step] = {"url": url, "set": toolset}
-	_submit_text(step, TablePrompts.game_master(title, String(spec.get("brief", "")), _plan(), people, who, episode.beat_count(), prep_d, ledger, before, toolset.words_aim, diorama), "best", {"tools_url": url})
+	_submit_text(step, TablePrompts.game_master(title, String(spec.get("brief", "")), _plan(), people, who, episode.beat_count(), prep_d, ledger, before, toolset.words_aim, diorama, episode.tall()), "best", {"tools_url": url})
 
 
 ## The model of the land the game is played on ([GameDiorama]), {} where it has none.
@@ -2722,6 +2816,8 @@ func _land_beats(plan: Dictionary) -> String:
 	plan["episode_title"] = not_shouted(String(plan["episode_title"]))
 	plan["game"] = plan.get("game") == true
 	plan["table_note"] = _str(plan.get("table_note", ""))
+	if plan.has("previously"):
+		plan["previously"] = _str(plan["previously"])
 	plan["beat_word"] = "Part" if plan["game"] else beat_word_of(plan.get("beat_word", ""))
 	# What the episode is made of: built from many small parts ([Assembly]) or not, and how much of it nobody talks through
 	plan["assembly"] = plan.get("assembly") == true

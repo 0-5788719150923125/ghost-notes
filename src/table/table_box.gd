@@ -110,7 +110,7 @@ func build(things: Array, built: Array) -> void:
 		for cy in [size.position.y, size.end.y]:
 			for cz in [size.position.z, size.end.z]:
 				corners.append(basis * Vector3(cx, cy, cz))
-	var lens := Vector2(tan(deg_to_rad(medium._cam.fov * 0.5)) * (16.0 / 9.0), tan(deg_to_rad(medium._cam.fov * 0.5)))
+	var lens := CardTable.lens(medium._cam.fov)
 	var rect := CardTable.screen_rect(corners, Vector3(at.x, 0.0, at.y), medium._plan.cam_base.affine_inverse(), lens)
 	medium._things_part.put(t, b, {"at": at, "outline": shape, "bb": Rect2(lo, hi - lo), "rect": rect}, basis, "#the box")
 	var world := Transform3D(basis, Vector3(at.x, 0.0, at.y)) * size

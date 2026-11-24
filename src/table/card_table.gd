@@ -355,18 +355,38 @@ static func screen_rect(corners: PackedVector3Array, at: Vector3, cam_inv: Trans
 	return Rect2(lo, hi - lo)
 
 
-## Where [param at] lands in the picture of a camera at [param cam] with [param fov] (16:9),
-## 0..1 across and down; null behind the camera.
-static func project(cam: Transform3D, fov: float, at: Vector3) -> Variant:
+## The frame the table is dressed for, width over height: what is set out, kept in the shot and pruned from it is judged in a
+## 16:9 picture from the table's head, whatever frame it is shown in. A portrait frame sees the middle of that table, and more of
+## it near and far ([method lens]).
+const DRESSED := 16.0 / 9.0
+
+
+## What a table's camera with [param fov] (degrees) sees at a distance of one, as half the frame across and half up, in a frame
+## [param aspect] wide for its height. A table's lens is its frame's SHORT side - its height in landscape and 4:3, its width in
+## portrait ([method keep]) - so a portrait frame sees what a landscape one does, turned on end, and a die framed to fill a
+## landscape picture's height fills a portrait one's width.
+static func lens(fov: float, aspect := DRESSED) -> Vector2:
+	var k := tan(deg_to_rad(fov * 0.5))
+	return Vector2(k * maxf(aspect, 1.0), k / clampf(aspect, 0.01, 1.0))
+
+
+## How a table's camera holds its lens in a frame [param aspect] wide for its height ([method lens]).
+static func keep(aspect: float) -> Camera3D.KeepAspect:
+	return Camera3D.KEEP_HEIGHT if aspect >= 1.0 else Camera3D.KEEP_WIDTH
+
+
+## Where [param at] lands in the picture of a camera at [param cam] with [param fov], in a frame [param aspect] wide for its height
+## ([method lens]), 0..1 across and down; null behind the camera.
+static func project(cam: Transform3D, fov: float, at: Vector3, aspect := DRESSED) -> Variant:
 	var l: Vector3 = cam.affine_inverse() * at
 	if l.z > -0.001:
 		return null
-	var k := tan(deg_to_rad(fov * 0.5))
-	return Vector2(0.5 + l.x / (-l.z * k * (16.0 / 9.0)) * 0.5, 0.5 - l.y / (-l.z * k) * 0.5)
+	var k := lens(fov, aspect)
+	return Vector2(0.5 + l.x / (-l.z * k.x) * 0.5, 0.5 - l.y / (-l.z * k.y) * 0.5)
 
 
-## Whether [param at] is in the picture of a camera at [param cam] with [param fov] (16:9), with a margin
-## of a tenth all round - a light there would light the table from where nothing is seen burning.
+## Whether [param at] is in the picture of a camera at [param cam] with [param fov] (the dressed frame, [constant DRESSED]), with a
+## margin of a tenth all round - a light there would light the table from where nothing is seen burning.
 static func in_shot(cam: Transform3D, fov: float, at: Vector3) -> bool:
 	var sp: Variant = project(cam, fov, at)
 	if sp == null:

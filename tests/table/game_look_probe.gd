@@ -12,7 +12,16 @@ extends Node
 ##
 ## `--episode <dir>` stands a session really played instead (its `say_*` and `events_*`, [method TableProducer._write_game]'s way), its people from `--people A,B,C`.
 ##
+## `--stand <dir>` plays an episode whole, as the app shows it ([method TableEpisode.document]): its table, its model's board and figures,
+## its painted pages (none with `--no-pages`) and its script - from a copy under user://, so the episode is never written to.
+##
+## `--frame portrait` (with `--medium table`, and a `--size` of that shape: 540x960, 1080x1920) frames it at 9:16, as a show for TikTok is
+## ([method Director.frame_aspect], [method CardTable.lens]).
+##
 ## `--claims` prints what each camera wants of the session ([Cameras]) and quits, rendering nothing.
+##
+## `--cameras <json>` sees through that list of cameras ([Cameras], as a note's `camera: cameras:` holds them) in place of every sort at
+## its defaults; `--floor` lays the model's board as the inside of somewhere ([GameDiorama] `ground` "floor") rather than a land.
 ##
 ## `--clip A,B` writes every frame from A to B, for judging motion, and the dice's own sound under them to <out>.wav:
 ##   ffmpeg -framerate 30 -i <out>_c%04d.png -i <out>.wav -pix_fmt yuv420p -shortest game.mp4
@@ -163,6 +172,21 @@ static func _played(dir: String, people: PackedStringArray) -> Dictionary:
 	return {"script": "\n\n".join(parts), "game": GameBoard.gather(events, people, prep if prep is Dictionary else {}, {"Bea": -105.0, "Milo": 105.0, "Rosa": -50.0, "Guest": 50.0})}
 
 
+## Episode [param from] copied (its files, not its jobs) to a folder of the probe's own and opened there: `{table: its document, script}`.
+## [param bare]: its pages left out (`--no-pages`), so the board is seen throughout.
+static func _stand_copy(from: String, bare := false) -> Dictionary:
+	var to := ProjectSettings.globalize_path("user://game_look_stand").path_join(from.trim_suffix("/").get_base_dir().get_file()).path_join(from.trim_suffix("/").get_file())
+	DirAccess.make_dir_recursive_absolute(to)
+	for f in DirAccess.get_files_at(to):
+		DirAccess.remove_absolute(to.path_join(f))
+	for f in DirAccess.get_files_at(from):
+		if not (bare and f.begins_with("page_")):
+			DirAccess.copy_absolute(from.path_join(f), to.path_join(f))
+	var ep := TableEpisode.at_dir(to)
+	print("game_look_probe: standing %s (%d pages)" % [to, (ep.game().get("pages", []) as Array).size()])
+	return {"table": ep.document(), "script": ep.read_text("script")}
+
+
 ## The words' times a voice would give them, with each mark's rest; a turn over the last or together with it comes in early, as the join has it.
 static func timeline(parse: Dictionary, intro: float) -> Array:
 	var out: Array = []
@@ -229,7 +253,10 @@ func _run() -> void:
 	var session := _session()
 	if on_board:
 		session = _board_session()
-		for pair in [["diorama.json", LAND], ["minis.json", MINIS]]:
+		var land := LAND.duplicate(true)
+		if args.has("--floor"):
+			land["ground"] = "floor"
+		for pair in [["diorama.json", land], ["minis.json", MINIS]]:
 			var fh := FileAccess.open(DIR.path_join(String(pair[0])), FileAccess.WRITE)
 			fh.store_string(JSON.stringify(pair[1]))
 			fh.close()
@@ -248,6 +275,14 @@ func _run() -> void:
 			people = String(args[i + 1]).split(",", false)
 	if not episode.is_empty():
 		session = _played(episode, people)
+	var standing := ""
+	for i in args.size() - 1:
+		if args[i] == "--stand":
+			standing = args[i + 1]
+	var stood := {}
+	if not standing.is_empty():
+		stood = _stand_copy(standing, args.has("--no-pages"))
+		session = {"script": String(stood["script"]), "game": (stood["table"] as Dictionary).get("game", {})}
 	var script := String(session["script"])
 	var plan := {"game": true, "look": {"candles": 0, "palette": ["#3a2a20", "#c8a060", "#6a5a48"], "light": {"kind": "a lamp over a table at night", "color": "#ffe2bd", "warmth": "warm"}}, "spread": {"positions": []}, "staging": {"source": "none"}}
 	var stage := SubViewport.new()
@@ -260,10 +295,17 @@ func _run() -> void:
 	medium.mount(stage)
 	Director.attach(stage, medium)
 	Director.hold(true)
+	for i in args.size() - 1:
+		if args[i] == "--cameras":
+			var list: Variant = JSON.parse_string(args[i + 1])
+			if list is Array:
+				medium.feed.cameras = list
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	var parse := CardReading.parse(script)
 	subs.words = timeline(parse, Director.intro_hold)
 	subs.document = {"source": script, "title": "Mistakes Were Made", "table": {"show": "game-look", "seed": 41, "dir": ProjectSettings.globalize_path(DIR), "plan": plan, "cards": [], "game": session["game"]}}
+	if not stood.is_empty():
+		subs.document["table"] = stood["table"]
 	add_child(subs)
 	medium.bind_captions(subs)
 	var tm := medium as TableMedium
