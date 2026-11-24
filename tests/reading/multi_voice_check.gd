@@ -233,12 +233,24 @@ func _check_scrub() -> void:
 	_ed._stream.plan(text)
 	var n: int = _ed._stream.chunks.size()
 	_ok(n >= 10 and Spectrum.seekable(), "a planned reading can be scrubbed (%d sentences)" % n)
-	var ordered := _ed._stream._chunk_t.size() == n + 1
+	var bar: PackedFloat32Array = _ed._stream._bar_t
+	var ordered := bar.size() == n + 1
 	for i in n:
-		ordered = ordered and _ed._stream._chunk_t[i + 1] > _ed._stream._chunk_t[i]
-	_ok(ordered and is_equal_approx(_ed._stream.length(), _ed._stream._chunk_t[n]), "the bar runs sentence by sentence, first to last")
-	_ed._stream.seek(_ed._stream._chunk_t[5] + 0.05)
-	_ok(_ed._stream._seek_k == 5 and is_equal_approx(_ed._stream.position(), _ed._stream._chunk_t[5]),
+		ordered = ordered and bar[i + 1] > bar[i]
+	_ok(ordered and is_equal_approx(_ed._stream.length(), bar[n] + _ed._stream._bar_outro), "the bar runs sentence by sentence, first to last")
+	_ok(is_equal_approx(bar[0], maxf(0.0, Director.intro_hold)) and is_equal_approx(_ed._stream._bar_outro, maxf(0.0, Director.outro_hold)),
+		"...the intro hold before the first and the outro hold after the last")
+	# a sentence joined spans what it was, and the voice's sentences not yet made are scaled by what it measured
+	var est5: float = _ed._stream._est[5]
+	var was_end: float = bar[n]
+	var who := String((_ed._stream.chunks[1] as Dictionary).get("speaker", ""))
+	_ed._stream._joined(1, (bar[2] - bar[1]) * 2.0)
+	bar = _ed._stream._bar_t
+	_ok(bar[n] > was_end + 0.5 * est5 * float(n - 2) and is_equal_approx(bar[6] - bar[5], est5 * _ed._stream._ratio(who)),
+		"a sentence measured at twice its estimate stretches the ones still to come: %.1f s -> %.1f s" % [was_end, bar[n]])
+	_ok(not is_equal_approx(_ed._stream._ratio(who), 1.0), "...its control: the ratio moved off 1")
+	_ed._stream.seek(bar[5] + 0.05)
+	_ok(_ed._stream._seek_k == 5 and is_equal_approx(_ed._stream.position(), bar[5]),
 		"a seek waits on the sentence under it, and the bar shows it there")
 	_ed._stream._seek_k = -1
 	var k: int = _ed._stream._start_at(5)

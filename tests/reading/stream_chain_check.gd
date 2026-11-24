@@ -386,7 +386,7 @@ func _check_a_long_plan_is_a_workers() -> void:
 	s.speak_from(30)
 	_ok(s.planning() and is_same(s.chunks, on_stream) and _host.asked.is_empty() and not _ed._plan_task.is_empty(),
 		"a seek after the words changed plans nothing in the call: the reading stays as it is, a worker has the plan")
-	_ok(is_equal_approx(s.position(), s._chunk_t[30]), "...the bar waiting on the sentence sought")
+	_ok(is_equal_approx(s.position(), s._bar_t[30]), "...the bar waiting on the sentence sought")
 	frames = 0
 	while s.planning() and frames < 3000:
 		await get_tree().process_frame

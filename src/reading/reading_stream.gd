@@ -61,9 +61,21 @@ var _planning := false
 var _plan_from := -1                     # ...the sentence a seek waits to read from, -1 for Play from the top
 ## The outro mark, live: how long the fade is (0 = no mark; where it starts is the join's, [member ReadingJoin.fade_at]).
 var _fade_len := 0.0
-# The predicted timeline: a scrub bar scaled by how much audio has been decoded would change length under the
-# pointer as the reading is synthesized, so the bar is scaled by an estimate.
-var _chunk_t := PackedFloat32Array()     # chunk -> its estimated start along the reading, s (n + 1)
+# The predicted timeline: every chunk has a place on the bar before it is made, and each place moves toward the real one as
+# the chunks before it are joined, rather than the bar growing with what has been decoded.
+var _chunk_t := PackedFloat32Array()     # chunk -> its estimated start along the reading, s (n + 1): the window's pacing
+## The bar's own scale (n + 1): where each chunk starts on the transport, the intro hold before the first and the outro hold
+## after the last ([member _bar_outro]). A chunk on the stream spans what was joined of it, the seam before it included; one not
+## yet made spans its estimate ([member _est]) times what its voice's joined chunks measured against theirs ([method _ratio]),
+## so the length settles toward the real one sentence by sentence.
+var _bar_t := PackedFloat32Array()
+var _est := PackedFloat32Array()         # chunk -> its estimated span: its words at its voice's pace, its rests, the seam before it
+var _real := PackedFloat32Array()        # chunk -> its span as joined (s), -1 not yet
+var _bar_outro := 0.0
+## What each voice's joined chunks measured against their estimates, `{who: Vector2(real s, estimated s)}`: kept from reading
+## to reading as the host's cost is, held to [constant PRIOR_SECONDS] of weight as a reading begins so the new one soon leads.
+var _measured := {}
+const PRIOR_SECONDS := 60.0
 ## Live scrubbing, by sentence. A live reading is synthesized a sentence or two ahead, so there is no audio to
 ## seek within. The transport's rail (through the panel's conductor hooks, [method ReadingPanel.transport_hooks])
 ## seeks by sentence: its positions are estimated sentence starts, and a seek is Stop + Play from that sentence, a
@@ -274,6 +286,15 @@ func plan(body: String) -> void:
 	_start_chunk = 0
 	_seek_k = -1
 	_chunk_t = ReadingPlan.timeline(chunks)
+	_real = PackedFloat32Array()
+	_real.resize(chunks.size())
+	_real.fill(-1.0)
+	_bar_outro = maxf(0.0, Director.outro_hold)
+	for who in _measured:
+		var m: Vector2 = _measured[who]
+		if m.y > PRIOR_SECONDS:
+			_measured[who] = m * (PRIOR_SECONDS / m.y)
+	_estimate()
 
 
 ## Every piece of state a reading owns, put back. Split out of [method plan] so that stopping and re-planning
@@ -398,7 +419,7 @@ func start_index() -> int:
 ## How far into the reading it starts (seconds, the scrub bar's estimated scale) - 0 from the top: what a medium
 ## keeping the reading's own time (a clock on the table) is set to.
 func start_time() -> float:
-	return _chunk_t[_start_chunk] if _start_chunk > 0 and _start_chunk < _chunk_t.size() else 0.0
+	return _bar_t[_start_chunk] if _start_chunk > 0 and _start_chunk < _bar_t.size() else 0.0
 
 
 ## The first words of the chunk a reading starts at, normalized ([method ReadingPlan.start_words]) -
@@ -450,6 +471,7 @@ func repace() -> void:
 	_ready_takes.clear()
 	_let_go()
 	_next_to_request = _next_to_play
+	_estimate()
 	panel._set_status("%s at pace %.2fx, pause %.2fx - regenerating from chunk %d…"
 		% [panel._cast.tab_name(), panel._cast._rate.value, clampf(panel._cast._pause.value, 0.0, Delivery.MAX_PAUSE_SCALE), _next_to_play + 1])
 	_pump()
@@ -463,40 +485,32 @@ func repace() -> void:
 # of the export, render the take and open the file: a file boot is seekable for real (see Spectrum.seek) and
 # replays the same deterministic show from the same seed. `--scene <name>` inspects one scene.
 
-## The scrub bar's length: the whole reading, estimated.
+## The scrub bar's length: the whole reading, the intro and outro holds included - what is joined as it is, the rest
+## estimated ([member _bar_t]).
 func length() -> float:
 	if not take_path.is_empty():
 		return Spectrum.song_length()
-	return _chunk_t[_chunk_t.size() - 1] if not _chunk_t.is_empty() else 0.0
+	return _bar_t[_bar_t.size() - 1] + _bar_outro if not _bar_t.is_empty() else 0.0
 
 
-## The scrub bar's position: where a waiting seek is going, else the sentence being heard and how far through it,
-## on the estimated scale.
+## The scrub bar's position: where a waiting seek is going, else how much of the stream has been heard, from where on
+## the bar the reading started (the intro's first frame for one from the top, so the bar moves through the intro).
 func position() -> float:
 	if not take_path.is_empty():
 		return Spectrum.current.time
-	var n := _chunk_t.size() - 1
+	var n := _bar_t.size() - 1
 	if n <= 0:
 		return 0.0
 	if _seek_k >= 0:
-		return _chunk_t[clampi(_seek_k, 0, n)]
-	var i := _start_chunk
-	var f := 0.0
-	if playback != null and _ring_capacity > 0 and not _join.chunk_at.is_empty():
-		var heard := _pushed - maxi(0, _ring_capacity - int(playback.get_frames_available()))
-		var best := -1
-		for c in _join.chunk_at:
-			if int(_join.chunk_at[c]) <= heard and int(c) > best:
-				best = int(c)
-		if best >= 0:
-			i = best
-			var est := maxf(0.2, _chunk_t[mini(i + 1, n)] - _chunk_t[mini(i, n)])
-			f = clampf(float(heard - int(_join.chunk_at[best])) / float(panel._sr) / est, 0.0, 0.99)
-	i = clampi(i, 0, n - 1)
-	return lerpf(_chunk_t[i], _chunk_t[i + 1], f)
+		return _bar_t[clampi(_seek_k, 0, n)]
+	var from := _bar_t[clampi(_start_chunk, 0, n)] if _start_chunk > 0 else 0.0
+	if playback == null or _ring_capacity <= 0:
+		return from
+	var heard := _pushed - maxi(0, _ring_capacity - int(playback.get_frames_available()))
+	return minf(from + float(maxi(heard, 0)) / float(maxi(panel._sr, 1)), length())
 
 
-## The scrub bar asks to go to [param t] (estimated seconds): remember the sentence there and
+## The scrub bar asks to go to [param t] (seconds on the bar): remember the sentence there and
 ## restart from it once the bar settles.
 func seek(t: float) -> void:
 	if not take_path.is_empty():
@@ -504,12 +518,78 @@ func seek(t: float) -> void:
 		Spectrum.seek_file(t)
 		return
 	var k := 0
-	for i in _chunk_t.size() - 1:
-		if _chunk_t[i] <= t:
+	for i in _bar_t.size() - 1:
+		if _bar_t[i] <= t:
 			k = i
 	_seek_k = k
 	if panel._seek_timer != null and panel._seek_timer.is_inside_tree():
 		panel._seek_timer.start()
+
+
+## Every chunk's estimated span ([member _est]): its words and rests ([method ReadingPlan.timeline]) at its voice's pace, and
+## the seam the join rests before it ([method Delivery.gap_before], the voice's Pause and the Turn dial in it) - then the bar.
+## A loop over the chunks, never their samples.
+func _estimate() -> void:
+	var n := chunks.size()
+	_est = PackedFloat32Array()
+	_est.resize(n)
+	var cfgs := {}
+	var turn := panel._cast.turn_scale()
+	for k in n:
+		var who := String((chunks[k] as Dictionary).get("speaker", ""))
+		if not cfgs.has(who):
+			cfgs[who] = panel._cast.cfg_of(who)
+		var cfg: Dictionary = cfgs[who]
+		var pace := 1.0
+		if cfg.has("pace") and cfg.has("tone"):
+			pace = maxf(float(cfg["pace"]) * float(Delivery.preset_of(cfg).get("pace", 1.0)), 0.1)
+		var said := (_chunk_t[k + 1] - _chunk_t[k]) / pace if k + 1 < _chunk_t.size() else 0.2
+		_est[k] = said + (Delivery.gap_before(chunks, k, cfg, turn) if k > 0 and cfg.has("pace") else 0.0)
+	_rebar()
+
+
+## Chunk [param k] joined onto the stream, [param secs] of it with the seam before it: its span on the bar, and what its
+## voice measures against the estimate - a chunk over another's words adds only what runs past them, so it says nothing of it.
+func _joined(k: int, secs: float) -> void:
+	if k < 0 or k >= _real.size():
+		return
+	_real[k] = secs
+	var ch: Dictionary = chunks[k] if k < chunks.size() else {}
+	if k < _est.size() and _est[k] > 0.0 and not ReadingJoin.overlaps(ch):
+		var who := String(ch.get("speaker", ""))
+		_measured[who] = (_measured.get(who, Vector2.ZERO) as Vector2) + Vector2(secs, _est[k])
+	_rebar()
+
+
+## What [param who]'s estimates are worth: their joined chunks' seconds over their estimated ones, every voice's together
+## for one not heard yet, 1 before anything is.
+func _ratio(who: String) -> float:
+	var m: Vector2 = _measured.get(who, Vector2.ZERO)
+	if m.y >= 1.0:
+		return m.x / m.y
+	var all := Vector2.ZERO
+	for v in _measured.values():
+		all += v as Vector2
+	return all.x / all.y if all.y >= 1.0 else 1.0
+
+
+## The bar laid again ([member _bar_t]): the intro hold first, then each chunk's span, joined or estimated.
+func _rebar() -> void:
+	var n := mini(chunks.size(), _est.size())
+	_bar_t = PackedFloat32Array()
+	_bar_t.resize(n + 1)
+	var ratios := {}
+	var at := maxf(0.0, Director.intro_hold)
+	for k in n:
+		_bar_t[k] = at
+		if k < _real.size() and _real[k] >= 0.0:
+			at += _real[k]
+		else:
+			var who := String((chunks[k] as Dictionary).get("speaker", ""))
+			if not ratios.has(who):
+				ratios[who] = _ratio(who)
+			at += _est[k] * float(ratios[who])
+	_bar_t[n] = at
 
 
 ## The bar has settled: read from the sentence a seek waits on. A seek while paused stays paused (next/editing.md
@@ -811,6 +891,7 @@ func _drain_ready() -> void:
 				# decoded, seconds ahead of when it is heard, so the marks carry their frames and [method tick] dials each
 				# as the push reaches it.
 		_join.sr = panel._sr
+		var before := _join.frames
 		_pending.append_array(_join.add(chunks, idx, pcm, take.get("spans", []), panel._cast.cfg_of(who), panel._cast.turn_scale(),
 			take.get("phones", [])))
 				# ...and the reading ends where the fade does: the rest of this chunk, and every chunk after it, is never heard
@@ -820,6 +901,8 @@ func _drain_ready() -> void:
 			_fade_done = true
 			_outro_queued = true
 			chunks = chunks.slice(0, _next_to_play)
+			_bar_outro = 0.0
+		_joined(idx, float(maxi(_join.frames - before, 0)) / float(panel._sr))
 				# The outro, after the last chunk: silence on the stream, as the intro is silence before the first. A stream
 				# that simply runs dry stops the session clock, so the show would freeze on the last word.
 		if _next_to_play >= chunks.size() and not _outro_queued:
@@ -830,6 +913,8 @@ func _drain_ready() -> void:
 				_fade_done = true
 			_pending.append_array(_join.pad(outro))
 			_outro_queued = true
+			_bar_outro = float(outro) / float(panel._sr)
+			_rebar()
 		panel._set_status("Chunk %d of %d - %.0fs of audio ready."
 			% [_next_to_play, chunks.size(), float(_join.frames) / float(panel._sr)])
 				# Hold the first sample until there is a lead. Chunks are one sentence each and sentence lengths are uneven

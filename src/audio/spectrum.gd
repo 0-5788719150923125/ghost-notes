@@ -58,6 +58,8 @@ var virtual_clock: float = -1.0
 ## the definition of the clock. A/V cannot drift under it: Movie Maker writes audio at the same fixed
 ## rate as frames. Live playback keeps asking the player, which is the authority on where the sound is.
 var render_clock := false
+## How far a followed player ([method follow]) may stray in a render before it is sought (s): only a jump (a loop round, a seek).
+const MOVIE_JUMP := 0.5
 var _render_t := 0.0
 var _sig: HarmonicSignature = null       # rolling perceptual harmonic descriptor + content seed
 var _sig_fast: HarmonicSignature = null  # short-memory twin for the Echo re-localizer: recognizing
@@ -249,7 +251,8 @@ func hear_silence(name: String) -> void:
 
 
 ## A nested song's sound at [param t] seconds into it while [param on], held while [param held]: its player started
-## there, sought where it strays more than [param drift] seconds.
+## there, sought where it strays more than [param drift] seconds. In a Movie Maker render the mixer moves one frame of sound a
+## frame and the wall clock since the last mix means nothing, so it is sought only where [param t] jumps ([constant MOVIE_JUMP]).
 func follow(t: float, on: bool, held: bool, drift := 0.12) -> void:
 	if _player == null or _player.stream == null:
 		return
@@ -264,7 +267,9 @@ func follow(t: float, on: bool, held: bool, drift := 0.12) -> void:
 	if not _player.playing:
 		_player.play(t)
 		return
-	if absf(_player.get_playback_position() + AudioServer.get_time_since_last_mix() - t) > drift:
+	var movie := not Engine.get_write_movie_path().is_empty()
+	var at := _player.get_playback_position() + (0.0 if movie else AudioServer.get_time_since_last_mix())
+	if absf(at - t) > (MOVIE_JUMP if movie else drift):
 		_player.seek(t)
 
 

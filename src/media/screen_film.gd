@@ -25,6 +25,8 @@ const WAIT_MOST := 8000
 const LARGEST := Vector2i(960, 720)
 ## How far the sound may stray from the film's time before it is sought (s).
 const DRIFT := 0.12
+## How far it may stray in a render before it is sought (s): only a jump.
+const MOVIE_JUMP := 0.5
 
 var video := ""
 var sound := ""
@@ -141,8 +143,11 @@ func hear(t: float, host: Node, on: bool, paused := false, wait := false) -> voi
 	if not _player.playing:
 		_player.play(t)
 		return
-	var at := _player.get_playback_position() + AudioServer.get_time_since_last_mix()
-	if absf(at - t) > DRIFT:
+	# a Movie Maker render mixes one frame of sound a frame: the wall clock since the last mix means nothing there, and only a jump
+	# (a loop round) is sought
+	var movie := not Engine.get_write_movie_path().is_empty()
+	var at := _player.get_playback_position() + (0.0 if movie else AudioServer.get_time_since_last_mix())
+	if absf(at - t) > (MOVIE_JUMP if movie else DRIFT):
 		_player.seek(t)
 
 
