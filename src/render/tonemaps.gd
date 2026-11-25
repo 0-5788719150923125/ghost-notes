@@ -83,6 +83,25 @@ static func choose(key: String, adjust: Dictionary) -> void:
 	_envs = kept
 
 
+## `--tonemap KEY` or `--tonemap KEY=EXPOSURE,CONTRAST,SATURATION` in [param args]: `{key, adjust}` for one run (a stretch
+## rendered again in the look it was first made in), null when it is not there.
+static func from_args(args: PackedStringArray) -> Variant:
+	var i := args.find("--tonemap")
+	if i < 0 or i + 1 >= args.size():
+		return null
+	var bits := String(args[i + 1]).split("=")
+	var key := String(bits[0]).strip_edges()
+	if not REGISTRY.has(key):
+		push_warning("ghost: --tonemap %s is not a tonemapper - ignored" % key)
+		return null
+	var adjust := {}
+	var nums := String(bits[1]).split(",", false) if bits.size() > 1 else PackedStringArray()
+	var names := ADJUSTMENTS.keys()
+	for n in mini(nums.size(), names.size()):
+		adjust[names[n]] = float(nums[n])
+	return {"key": key, "adjust": sanitize(adjust)}
+
+
 ## The tonemapper chosen now.
 static func chosen() -> String:
 	return _key

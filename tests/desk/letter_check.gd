@@ -97,6 +97,8 @@ extends SceneTree
 ## - The frame is cheap, held as a share of its control by this thread's own processor time ([WorkClock], the least of
 ##   several runs): asking whether a line written long ago is written; a plan made again with the past kept, against the
 ##   same plan with nothing kept; a finished line's ink asked again, against making it.
+## - A picture over the desk is taken once: the plate's shader never samples TEXTURE again, which squares every value
+##   (control: the line that did).
 ##
 ##   godot --headless --path . --script tests/desk/letter_check.gd
 
@@ -233,6 +235,7 @@ func _run() -> void:
 	_clock()
 	_caught_camera()
 	_pictures()
+	_plate_once()
 	_hesitant_picture()
 	_dense_sketch()
 	_struck()
@@ -256,6 +259,14 @@ func _run() -> void:
 		for f in _fails:
 			print("   ", f)
 		quit(1)
+
+
+## The plate's shader takes the picture once: a canvas shader's COLOR comes in with the texture already in it, so one that
+## samples TEXTURE again squares every value (control: the line that did, which must fail).
+func _plate_once() -> void:
+	var resamples := func(code: String) -> bool: return code.contains("texture(TEXTURE")
+	_check(not resamples.call(LetterMedium._plate_shader().code), "a picture over the desk is taken once, never squared")
+	_check(resamples.call("void fragment() {\n\tvec4 c = texture(TEXTURE, UV) * COLOR;"), "...its control: a shader that samples it again is caught")
 
 
 func _check(ok: bool, msg: String) -> void:

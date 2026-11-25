@@ -608,6 +608,11 @@ func _load_pacing() -> void:
 	subtitle_reveal = rv if Subtitles.REVEALS.has(rv) else "karaoke"
 	tonemap = Tonemaps.known(String(Settings.read("director", "tonemap", Tonemaps.DEFAULT)))
 	tonemap_adjust = _tonemap_kept(Settings.read("director", "tonemap_adjust", {}))
+	# `--tonemap KEY=EXPOSURE,CONTRAST,SATURATION` for one run, as `--filter` is; never written back (a render is read-only)
+	var over: Variant = Tonemaps.from_args(_cli())
+	if over is Dictionary:
+		tonemap = String(over["key"])
+		tonemap_adjust[tonemap] = over["adjust"]
 	_push_tonemap()
 
 

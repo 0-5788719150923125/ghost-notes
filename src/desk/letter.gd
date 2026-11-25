@@ -161,12 +161,13 @@ func mount(st: SubViewport) -> void:
 	move_child(_plate, _blur.get_index())
 
 
-## A flashback's look: the edges dimmed, the color a little warmer and quieter than the desk's.
+## A flashback's look: the edges dimmed, the color a little warmer and quieter than the desk's. A canvas shader's COLOR
+## comes in with the texture already in it, so the picture is never sampled again here (that would square every value).
 static func _plate_shader() -> Shader:
 	var sh := Shader.new()
 	sh.code = """shader_type canvas_item;
 void fragment() {
-	vec4 c = texture(TEXTURE, UV) * COLOR;
+	vec4 c = COLOR;
 	vec2 q = SCREEN_UV - 0.5;
 	float v = 1.0 - smoothstep(0.32, 0.78, length(q * vec2(1.0, 0.8)));
 	float g = dot(c.rgb, vec3(0.299, 0.587, 0.114));

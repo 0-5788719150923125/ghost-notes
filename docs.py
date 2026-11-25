@@ -246,6 +246,9 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
     ("--filter", "<k=v,...>",
      "The look over the whole picture for this run - `--filter monochrome=1,static=0.3`, or `--filter none`. Overrides "
      "the remembered set; see [filters.md](filters.md).", False),
+    ("--tonemap", "<key[=exposure,contrast,saturation]>",
+     "The tonemapper for this run and its adjustments - `--tonemap agx=0.75,0.95,0.9`. Overrides the remembered one, as "
+     "`--filter` does the filters: a stretch rendered again in the look it was first made in.", False),
     ("--live-tap", "",
      "Record what the mixer actually plays - the Master bus, the last two minutes - to user://synth/live_tap.wav when "
      "ghost quits. For when what you hear and what a measurement says disagree.", False),
