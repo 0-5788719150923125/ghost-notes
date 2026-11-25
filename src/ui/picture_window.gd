@@ -2,9 +2,11 @@ extends Window
 class_name PictureWindow
 
 ## PictureWindow - one picture at full size, in a window of its own: the picture, the words it was made
-## from under it, and a bar - its versions stepped through, then whatever its owner adds (delete the one
-## shown, Regenerate, Import...). A click on a picture opens it on the Pictures card ([IllustrationPanel])
-## and on the YouTube card's painted thumbnail ([YouTubeCard]). Escape or the window's close hides it.
+## from under it, and a bar - its versions stepped through, whatever its owner adds (delete the one
+## shown, Regenerate, Import...), then Show in folder, which opens the file manager at the picture's file
+## on a desktop. A click on a picture opens it on the Pictures card ([IllustrationPanel]), on an episode's
+## made pictures ([MadePictures]) and on the Upload card's thumbnail ([YouTubeCard]). Escape or the
+## window's close hides it.
 
 
 func _init() -> void:
@@ -17,8 +19,9 @@ func _init() -> void:
 
 ## What it holds: the picture at [param path], titled [param heading], [param words] under it; then the bar -
 ## "version [param at] + 1 of [param count]" (or [param counted]'s word for what is stepped through) and
-## [param note] after it, between a "‹" and a "›" that call [param step] with -1 or 1 (left out where
-## [param step] is not valid) - and [param extras], buttons its owner made, after them.
+## [param note] after it, between a "‹" and a "›" that call [param step] with -1 or 1 (all three left out
+## where [param step] is not valid) - [param extras], buttons its owner made, after them, and Show in folder
+## last ([method show_in_folder]).
 func fill(heading: String, path: String, words: String, at: int, count: int, note := "", step := Callable(),
 		extras: Array = [], counted := "version") -> void:
 	clear()
@@ -54,12 +57,26 @@ func fill(heading: String, path: String, words: String, at: int, count: int, not
 			b.disabled = at + dir < 0 or at + dir >= count
 			b.pressed.connect(step.bind(dir))
 			bar.add_child(b)
-		if dir < 0:
+		if dir < 0 and step.is_valid():
 			var v := Label.new()
 			v.text = "%s %d of %d%s" % [counted, at + 1, count, ("  " + note) if not note.is_empty() else ""]
 			bar.add_child(v)
 	for b in extras:
 		bar.add_child(b as Control)
+	if Capabilities.desktop() and img != null and not img.is_empty():
+		var shown := Button.new()
+		shown.text = "Show in folder"
+		shown.tooltip_text = "Open your file manager at this picture's file:\n" + ProjectSettings.globalize_path(path)
+		shown.focus_mode = Control.FOCUS_NONE
+		shown.pressed.connect(show_in_folder.bind(path))
+		bar.add_child(shown)
+
+
+## The file manager opened at [param path], the file picked out where the file manager can do that.
+static func show_in_folder(path: String) -> void:
+	var full := ProjectSettings.globalize_path(path)
+	if OS.shell_show_in_file_manager(full) != OK:
+		push_warning("ghost: could not open a file manager at " + full)
 
 
 ## Holds nothing - at once, so what looks in it next finds only what is there.

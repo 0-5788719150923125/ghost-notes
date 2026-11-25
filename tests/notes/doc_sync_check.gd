@@ -92,6 +92,7 @@ func _ready() -> void:
 	await _check_autosave_waits_for_quiet()
 	_check_speak_takes_the_voice()
 	await _check_outside_edit_survives()
+	await _check_outside_removal_stays()
 	_check_the_look_travels()
 	await _check_a_letters_look_travels()
 	_check_the_picture_travels()
@@ -375,6 +376,51 @@ func _check_outside_edit_survives() -> void:
 	_ok(after.contains("turn: 1.9"), "the panel's own change was lost in reconciling with the file")
 	_ok(is_equal_approx(float(_ed._cast.slot_cfg(0).get("pace", 0.0)), 0.7),
 		"the panel does not show the file's edit after reconciling: %s" % str(_ed._cast.slot_cfg(0)))
+	_doc._autosave_for_test = false
+
+
+## A voice taken out of the file by hand (a rename: one name gone, another come) stays out at the next autosave, the panel having
+## not touched it: the file had it, so its going is an edit. Controls, on the merge itself: a key the file never had (a default the
+## panel fills in) is kept, and so is every key where nothing says what the file had.
+func _check_outside_removal_stays() -> void:
+	_doc.allow_autosave_for_test()
+	var raw := FileAccess.get_file_as_string(_path)
+	# ...listed last, so the reader (the first listed) stays who it is
+	var at := raw.find("    voices:\n") + "    voices:\n".length()
+	var end := raw.find("\n    ", at)
+	while end >= 0 and raw.substr(end + 5, 1) == " ":
+		end = raw.find("\n    ", end + 1)
+	end = raw.find("\n---", at) if end < 0 else end
+	_write(raw.substr(0, end + 1) + "      Old Name:\n        voice: en_US-libritts-high\n        speaker: 9\n" + raw.substr(end + 1))
+	_doc.pull()                      # ghost reads it: three voices, one of them no cue uses
+	_ok(_ed._cast.cast_dict().has("Old Name"), "the fixture's extra voice was not read in")
+	var now := FileAccess.get_file_as_string(_path)
+	_write(now.replace("      Old Name:\n", "      New Name:\n"))
+	# ...and a dial of a voice on screen moved in the panel: a change inside the voices, the case that looks at each of them
+	_ed._cast._pause.value = _ed._cast._pause.value + _ed._cast._pause.step * 3.0
+	_ed._cast._turn.value = 2.2
+	await _wait(int(DocSource.AUTOSAVE_MS) + 900)
+	var after := FileAccess.get_file_as_string(_path)
+	_ok(after.contains("New Name:") and not after.contains("Old Name:"), "a voice renamed in the file came back under its old name too")
+	_ok(after.contains("turn: 2.2"), "the panel's own change was lost in reconciling with the file")
+	# ...and the file as it was, so what follows reads the cast it always did
+	var i := after.find("      New Name:\n")
+	var j := after.find("\n      ", i + 1)
+	while j >= 0 and after.substr(j + 7, 1) == " ":
+		j = after.find("\n      ", j + 1)
+	j = after.find("\n    ", i + 1) if j < 0 else j
+	_write(after.substr(0, i) + after.substr(j + 1))
+	_doc.pull()
+	# the merge, where the panel changed another voice (only then does it look inside the voices)
+	var base := {"voices": {"A": {"pace": 1.0}, "B": {"pace": 1.0}}}
+	var mine := {"voices": {"A": {"pace": 1.0}, "B": {"pace": 1.2}}}
+	var gone: Variant = DocSource.merge3(base, mine, {"voices": {"B": {"pace": 1.0}}}, base)
+	_ok(not ((gone as Dictionary)["voices"] as Dictionary).has("A") and is_equal_approx(float(gone["voices"]["B"]["pace"]), 1.2),
+		"a voice the file had and lost was put back, or the panel's change to another lost: %s" % str(gone))
+	var kept: Variant = DocSource.merge3(base, mine, {"voices": {"B": {"pace": 1.0}}}, {"voices": {"B": {"pace": 1.0}}})
+	_ok(((kept as Dictionary)["voices"] as Dictionary).has("A"), "control: a key the file never had was dropped")
+	var unknown: Variant = DocSource.merge3(base, mine, {"voices": {"B": {"pace": 1.0}}})
+	_ok(((unknown as Dictionary)["voices"] as Dictionary).has("A"), "control: with nothing saying what the file had, a key was dropped")
 	_doc._autosave_for_test = false
 
 

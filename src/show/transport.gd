@@ -234,7 +234,7 @@ func _process(delta: float) -> void:
 	if sh is Callable and (sh as Callable).is_valid():
 		stale = bool((sh as Callable).call())
 	_play.text = "❚❚" if playing else ("▶•" if stale else "▶")
-	# Only when it changes: Boot.wrap_tip rewrites a tooltip as it is hovered.
+	# Only when it changes.
 	if stale != _stale_tip:
 		_stale_tip = stale
 		_play.tooltip_text = PLAY_TIP + (STALE_TIP if stale else "")

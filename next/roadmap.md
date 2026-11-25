@@ -88,6 +88,9 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **A desktop build that runs everything**
       An exported build cannot yet run the Python hosts, relaunch itself to render, or write into `res://`, and the Steam list is open: URL import left out of a store build, the export's excludes, a GPL FFmpeg on Linux, the Assistant stripped, third-party notices. See [binary_export_and_steam.md](binary_export_and_steam.md).
 
+- [ ] **A game's pictures as a sticker book**
+      Built 2026-11-24: each set painted once, each character once and then in poses, cut off a flat ground and stuck on; the camera framing the cast on the set, gliding between pages on one set and wiping to another; kept in the library and the Dex. Open: the first episode painted this way, judged ([sticker_book.md](sticker_book.md)).
+
 - [ ] **A table show in portrait**
       Built 2026-11-23: a game at 9:16 for TikTok, its lens the frame's short side, each shot keeping a landscape frame's top edge, pages painted 2:3 (a landscape page goes stale and is painted again), the table still dressed for 16:9. Open: the first portrait episode exported and judged on a phone, and a card reading at 9:16 ([portrait.md](portrait.md)).
 

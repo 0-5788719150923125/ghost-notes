@@ -17,6 +17,12 @@ class_name EpisodeProps
 ##   The land   each place on the board (`diorama.json`)
 ##   Figures    each figure modeled for the night (`minis.json`)
 ##
+## A game told in sticker pages (next/sticker_book.md) adds two more, Keep alone on each, so a night's drawings are drawn the same on
+## the next ([StickerLibrary]):
+##
+##   Characters  each character and thing its pages drew, by its model, with how many poses it has
+##   Sets        each place its pages stand in
+##
 ## Its shelves on the Dex are the library's ([LibraryProps]: kept and seen props), each offered to Use on this episode's table. A
 ## prop's picture is taken once and kept by its hash ([PropStudio]); a row's when it first shows.
 
@@ -25,6 +31,8 @@ const GROUPS := [
 	{"key": "aside", "label": "Set aside", "tip": "Taken off this episode's table and kept here: tick one to use it again."},
 	{"key": "board", "label": "The land", "tip": "The places modeled on this game's board. Keep one to find it again on another night."},
 	{"key": "figures", "label": "Figures", "tip": "The figures modeled for this game. Keep one to find it again on another night."},
+	{"key": "cast", "label": "Characters", "tip": "Who and what this episode's pictures drew, each painted once and stuck on every page they are in. Keep one to draw it the same on another night."},
+	{"key": "sets", "label": "Sets", "tip": "The places this episode's pictures stand in, each painted once. Keep one to use it again on another night."},
 ]
 ## What a row's tick says on hover.
 const ON_TIP := "Ticked, this episode's table uses it; unticked, it is set aside and kept here."
@@ -38,6 +46,7 @@ var _table := {}
 var _hashes := {}                 # a thing's name -> its hash ([method ThingLibrary.hash_of]), for the table as last read
 var _models_key := ""
 var _models := {}                 # "place" / "figure" -> name -> {thing, materials, hash}, the board and the figures as last read
+var _thumbs := StickerThumbs.new()
 
 
 func _init(c: EpisodeCard) -> void:
@@ -90,7 +99,84 @@ func rows() -> Array:
 				"verbs": [{"key": "keep", "label": "Kept" if not as_kept.is_empty() else "Keep", "off": not as_kept.is_empty(),
 					"tip": ("In your library as %s." % as_kept) if not as_kept.is_empty() else "Keep it in your library, to use again on another night."}],
 				"remove_off": "Model it again from its row on the Episode card."})
+	out.append_array(_sticker_rows())
 	return out
+
+
+## A sticker book's characters, things and sets, each made ([StickerLibrary] says which are kept).
+func _sticker_rows() -> Array:
+	var out: Array = []
+	var ep := card._episode
+	if ep == null or not ep.wants_game() or not ep.composed():
+		return out
+	var g := ep.game()
+	var poses: Array = g.get("poses", [])
+	for kind in ["model", "thing"]:
+		var list: Array = g.get("cast" if kind == "model" else "things", [])
+		for i in list.size():
+			var e: Dictionary = list[i]
+			var st := "image:%s:%d" % [kind, i + 1]
+			if not ep.has(st):
+				continue
+			var name := String(e.get("name", ""))
+			var kept := StickerLibrary.kept_character(name, ep.file_of(st))
+			var n := 0
+			for j in poses.size():
+				if String((poses[j] as Dictionary).get("who", "")).to_lower() == name.to_lower() and ep.has("image:pose:%d" % (j + 1)):
+					n += 1
+			var line := PackedStringArray()
+			if kind == "model":
+				line.append("%d pose%s besides standing" % [n, "" if n == 1 else "s"])
+			if kept:
+				line.append("in your library")
+			out.append({"key": "%s:%s" % ["char" if kind == "model" else "stick", name], "name": name, "line": " - ".join(line),
+				"tip": String(e.get("looks", name)), "group": "cast", "picture": _thumbs.of(ep.file_of(st)),
+				"verbs": [{"key": "keep", "label": "Kept" if kept else "Keep", "off": kept,
+					"tip": "In your library: a later night that draws %s draws it this way." % name if kept else "Keep it in your library, with every pose drawn of it, to draw it the same on another night."}],
+				"remove_off": "Draw it again from its row on the Pipeline card."})
+	var sets: Array = g.get("sets", [])
+	for i in sets.size():
+		var st := "image:set:%d" % (i + 1)
+		if not ep.has(st):
+			continue
+		var name := String((sets[i] as Dictionary).get("name", ""))
+		var kept := StickerLibrary.kept_set(name, ep.file_of(st))
+		out.append({"key": "set:" + name, "name": name, "line": "in your library" if kept else "", "tip": String((sets[i] as Dictionary).get("looks", name)),
+			"group": "sets", "picture": _thumbs.of(ep.file_of(st)),
+			"verbs": [{"key": "keep", "label": "Kept" if kept else "Keep", "off": kept,
+				"tip": "In your library." if kept else "Keep it in your library, to use again on another night."}],
+			"remove_off": "Paint it again from its row on the Pipeline card."})
+	return out
+
+
+## Sticker row [param kind]:[param name] kept in the library: a character or thing with every pose drawn of it, or a set. "" done, else why not.
+func _keep_sticker(kind: String, name: String) -> String:
+	var ep := card._episode
+	if ep == null or not ep.composed():
+		return "this episode draws no sticker pages"
+	var g := ep.game()
+	if kind == "set":
+		var sets: Array = g.get("sets", [])
+		for i in sets.size():
+			if String((sets[i] as Dictionary).get("name", "")) == name and ep.has("image:set:%d" % (i + 1)):
+				return StickerLibrary.keep_set(name, String((sets[i] as Dictionary).get("looks", "")), ep.file_of("image:set:%d" % (i + 1)))
+		return "%s is not painted yet" % name
+	var step_kind := "model" if kind == "char" else "thing"
+	var list: Array = g.get("cast" if kind == "char" else "things", [])
+	for i in list.size():
+		var e: Dictionary = list[i]
+		var st := "image:%s:%d" % [step_kind, i + 1]
+		if String(e.get("name", "")) != name or not ep.has(st):
+			continue
+		var poses := {}
+		var all: Array = g.get("poses", [])
+		for j in all.size():
+			var q: Dictionary = all[j]
+			if kind == "char" and String(q.get("who", "")).to_lower() == name.to_lower() and ep.has("image:pose:%d" % (j + 1)):
+				poses[String(q.get("pose", ""))] = ep.file_of("image:pose:%d" % (j + 1))
+		return StickerLibrary.keep_character(name, String(e.get("looks", "")), float(e.get("height", 170.0)), ep.file_of(st), ep.painted_of(st),
+			poses, kind == "stick")
+	return "%s is not drawn yet" % name
 
 
 ## The board's places and the night's figures, each a thing: read again only when either file changes.
@@ -166,6 +252,8 @@ func act(key: String, verb: String) -> String:
 	var name := key.substr(kind.length() + 1)
 	match verb:
 		"keep":
+			if kind in ["char", "stick", "set"]:
+				return _keep_sticker(kind, name)
 			return _keep_from(kind, name).get("error", "")
 		"select":
 			if kind != "thing":

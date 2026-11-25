@@ -172,6 +172,8 @@ const XVFB_LINGER := 10
 const VIRTUAL_ENV := ["MESA_VK_WSI_DEBUG=sw", "WAYLAND_DISPLAY=ghost-xvfb-only"]
 ## Where a render says why it stopped itself ([RenderWatch]; the render's `--fault-file`).
 const FAULT_FILE := "user://export_fault.txt"
+## The show settings a render is handed ([method Director.write_show_settings]), written as it starts.
+const SHOW_FILE := "user://export_show.cfg"
 ## A video shorter than asked for by more than this many seconds, or 1% of it, is not saved as a success ([method is_short]).
 const SHORT_SLACK := 2.0
 ## How long [method display_check] waits for ghost to come up on the virtual display and say where it is (seconds).
@@ -1058,6 +1060,13 @@ func _start_bake() -> void:
 
 # Step 2: Movie Maker render that loads the cache (--bake-file) and draws at once.
 func _start_render() -> void:
+	# The show settings as they stand now (the note's look, subtitles, camera, bookends...): the render is handed them rather
+	# than reading the shared settings file, which holds whatever note is opened next
+	var show := ProjectSettings.globalize_path(SHOW_FILE)
+	var err := Director.write_show_settings(show)
+	if err != OK:
+		_fail("⚠  Could not write the show's settings for the render (error %d). Nothing was rendered." % err, true)
+		return
 	_pct = 0
 	_begin_scratch()
 	_space_t = SPACE_EVERY
@@ -1073,7 +1082,7 @@ func _start_render() -> void:
 	RenderWatch.clear_fault(fault_path())
 	var args := Subprocess.own_log("render") + Boot.project_args() + PackedStringArray([
 		"--write-movie", _avi, "--fixed-fps", str(_quality.fps),
-		"--", "--export", "--bake-file", _cache, "--audio", _song, "--fault-file", fault_path()])
+		"--", "--export", "--bake-file", _cache, "--audio", _song, "--fault-file", fault_path(), "--show-settings", show])
 	# A STRETCH ONLY ([Stitch]): from the keyframe before it to the one after
 	if not _stretch.is_empty():
 		var sp := Stitch.span(float(_stretch["t0"]), float(_stretch["t1"]), _song_dur)
@@ -2165,10 +2174,13 @@ static func _beside(image: String, video: String) -> String:
 	return to if DirAccess.copy_absolute(image, to) == OK else image
 
 
-## ffmpeg's arguments for [method _take_thumbnail]: seek, one frame, scaled to 1280x720 (720x1280 for a portrait frame).
+## ffmpeg's arguments for [method _take_thumbnail]: seek, one frame, cut about its middle to YouTube's shape and scaled to
+## 1280x720 (720x1280 for a portrait frame), as a painted one is cut ([method YouTubeThumbnail.fit]): a 4:3 frame loses its
+## top and bottom, never stretched.
 static func thumbnail_args(video: String, jpg: String, at: float, portrait := false) -> PackedStringArray:
+	var cut := "crop=w=min(iw\\,ih*9/16):h=min(ih\\,iw*16/9)" if portrait else "crop=w=min(iw\\,ih*16/9):h=min(ih\\,iw*9/16)"
 	return PackedStringArray(["-y", "-nostdin", "-loglevel", "error", "-ss", "%.3f" % maxf(at, 0.0), "-i", video,
-		"-frames:v", "1", "-vf", "scale=%s:flags=lanczos" % ("720:1280" if portrait else "1280:720"), "-q:v", "2", jpg])
+		"-frames:v", "1", "-vf", "%s,scale=%s:flags=lanczos" % [cut, "720:1280" if portrait else "1280:720"], "-q:v", "2", jpg])
 
 
 ## What a finished portrait export says when it is too long to be a Short.

@@ -107,15 +107,15 @@ func _fit_handheld() -> void:
 	win.position = area.position + (area.size - size) / 2
 
 
-## Tooltip wrapping, applied to the whole app.
-##
-## Godot's tooltip label has no autowrap and no theme item to turn it on, so a long description runs off the
-## screen. The text is re-flowed instead: real newlines inserted at a measured pixel width, in the font and size
-## the tooltip draws with. Hooked from `node_added`, so it covers every mode, dialog and later-added control.
-##
-## Re-flowing is idempotent (a wrapped paragraph collapses to one line and re-wraps identically), so it can
-## run on every hover and a tooltip rewritten at runtime stays wrapped. Blank-line paragraph breaks are kept.
+## Tooltip wrapping, applied to the whole app, AS EACH TOOLTIP IS SHOWN: Godot's tooltip label has no autowrap and no theme
+## item to turn it on, so a long description runs off the screen. The label Godot builds to show a tooltip (its theme type
+## variation `TooltipLabel`) is re-flowed as it enters the tree, before its panel is sized ([method fold_tooltip]): real
+## newlines at a measured pixel width, in the font and size it draws with, a word longer than a line broken where the line
+## ends. So every tooltip is folded - a control's, a menu item's, a tree item's, one a control works out where the pointer
+## is, one rewritten every frame - and no control's own `tooltip_text` is ever changed. Blank-line paragraph breaks are kept.
 const TIP_MAX_PX := 480.0
+## The theme type variation Godot gives the label it shows a tooltip in.
+const TIP_LABEL := &"TooltipLabel"
 
 
 func _ready() -> void:
@@ -180,47 +180,22 @@ func _notification(what: int) -> void:
 
 
 func _hook_tooltip(n: Node) -> void:
-	# A menu's items are not controls: each item's tooltip is re-flowed as the menu opens, after whatever fills
-	# it has run
-	if n is PopupMenu:
-		var pop: PopupMenu = n
-		if not pop.about_to_popup.is_connected(wrap_items):
-			pop.about_to_popup.connect(wrap_items.bind(pop))
+	if n is Label:
+		fold_tooltip(n as Label)
+
+
+## [param label], where it is the label Godot shows a tooltip in, its text re-flowed ([method wrap_tip]) - as it enters the tree, before
+## the tooltip's panel takes its size from it. Any other label is left as it is.
+static func fold_tooltip(label: Label) -> void:
+	if label.theme_type_variation != TIP_LABEL or label.text.is_empty():
 		return
-	if not (n is Control):
-		return
-	var c: Control = n
-	# On hover, because that also catches tooltips rewritten after the control was built.
-	if not c.mouse_entered.is_connected(_wrap_tooltip):
-		c.mouse_entered.connect(_wrap_tooltip.bind(c))
-	# And once now, for controls that never emit mouse_entered themselves (a Label defaults to
-	# MOUSE_FILTER_IGNORE) but whose tooltip is surfaced through an ancestor.
-	_wrap_tooltip.call_deferred(c)
+	var wrapped := wrap_tip(label.text, TIP_MAX_PX)
+	if wrapped != label.text:
+		label.text = wrapped
 
 
-func _wrap_tooltip(c: Control) -> void:
-	if not is_instance_valid(c) or c.tooltip_text.is_empty():
-		return
-	var wrapped := wrap_tip(c.tooltip_text, TIP_MAX_PX)
-	if wrapped != c.tooltip_text:
-		c.tooltip_text = wrapped
-
-
-## Every item of [param pop] with a tooltip, its tooltip re-flowed ([method wrap_tip]).
-static func wrap_items(pop: PopupMenu) -> void:
-	if not is_instance_valid(pop):
-		return
-	for i in pop.item_count:
-		var tip := pop.get_item_tooltip(i)
-		if tip.is_empty():
-			continue
-		var wrapped := wrap_tip(tip, TIP_MAX_PX)
-		if wrapped != tip:
-			pop.set_item_tooltip(i, wrapped)
-
-
-## Re-flow `text` so no line exceeds `max_px` in the tooltip's own font. Public, so anything that
-## builds a tooltip string by hand can pre-wrap it the same way.
+## Re-flow `text` so no line exceeds `max_px` in the tooltip's own font: broken between words, and a word longer than a line (a
+## path, a link) broken where the line ends. Public, so anything that builds a tooltip string by hand can fold it the same way.
 static func wrap_tip(text: String, max_px := TIP_MAX_PX) -> String:
 	var f: Font = ThemeDB.fallback_font
 	if f == null or max_px <= 0.0:
@@ -233,17 +208,33 @@ static func wrap_tip(text: String, max_px := TIP_MAX_PX) -> String:
 		var lines: Array = []
 		var line := ""
 		for word in String(para).replace("\n", " ").split(" ", false):
-			var w := String(word)
-			if line.is_empty():
-				line = w
-				continue
-			var probe := line + " " + w
-			if f.get_string_size(probe, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x > max_px:
-				lines.append(line)
-				line = w
-			else:
-				line = probe
+			for w in _pieces(String(word), f, fsize, max_px):
+				if line.is_empty():
+					line = w
+					continue
+				var probe := line + " " + w
+				if f.get_string_size(probe, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x > max_px:
+					lines.append(line)
+					line = w
+				else:
+					line = probe
 		if not line.is_empty():
 			lines.append(line)
 		paras.append("\n".join(lines))
 	return "\n\n".join(paras)
+
+
+## [param word] as it is, or - wider than [param max_px] alone - in pieces each as wide as a line holds.
+static func _pieces(word: String, f: Font, fsize: int, max_px: float) -> PackedStringArray:
+	if f.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x <= max_px:
+		return PackedStringArray([word])
+	var out := PackedStringArray()
+	var piece := ""
+	for ch in word:
+		if not piece.is_empty() and f.get_string_size(piece + ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x > max_px:
+			out.append(piece)
+			piece = ""
+		piece += ch
+	if not piece.is_empty():
+		out.append(piece)
+	return out

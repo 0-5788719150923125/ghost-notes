@@ -56,6 +56,9 @@ Every shelf a section puts on the Dex: the section, the shelf, and what it holds
 | [MakeShelf](../src/desk/make_shelf.gd) | Seen props | Every prop a set dresser has made: the one picked is kept in your library first. |
 | [DispatchProps](../src/dispatch/dispatch_props.gd) | Dispatch desk | What the Dispatch desk works, each as the first desk draws it. |
 | [SoundShelf](../src/music/sound_shelf.gd) | Kept sounds | The sound effects in your library, kept from any note's Sound card: any sound a note asks for can use one. |
+| [StickerShelf](../src/table/sticker_shelf.gd) | Characters | The characters and things kept from a sticker book's pages: a later night that draws one of the same name draws it this way. |
+| [StickerShelf](../src/table/sticker_shelf.gd) | Poses | Every pose kept with a character, drawn from its model. |
+| [StickerShelf](../src/table/sticker_shelf.gd) | Sets | The places kept from a sticker book's pages (and a cartoon's painted sets): a later night set in one of the same name uses it. |
 | [LibraryProps](../src/table_show/library_props.gd) | Kept props | The props in your library, kept from any show. |
 | [LibraryProps](../src/table_show/library_props.gd) | Seen props | Every prop a set dresser has made for any episode, as it stands there. Keep one to have it in your library. |
 | [LibraryVoices](../src/voice/library_voices.gd) | Kept voices | The voices in your library, kept from any note's Voice card: every note can read in one by name. |

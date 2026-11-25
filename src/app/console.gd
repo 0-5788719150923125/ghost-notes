@@ -12,16 +12,23 @@ class_name ConsoleView
 ## (Subprocess.start_logged / start_redirected) is echoed by its owner when a step finishes (see
 ## mask_editor._yt_echo_log). Release builds flush the log on every line
 ## (application/run/flush_stdout_on_print) because ghost quits by SIGKILL.
+##
+## IT FOLLOWS THE NEWEST LINES ONLY FROM THE BOTTOM: what is new since it last looked is appended, whole lines only, and the
+## view moves with it only where it was already at the bottom - scrolled up to read or copy, it stays put. Opened from
+## closed, it is at the bottom. A selection holds the view entirely until it is cleared.
 
 const _TAIL_BYTES := 16384
 const _REFRESH_EVERY := 0.5
+## The most lines kept: the oldest go once it holds more, while the newest are being followed.
+const _KEEP_LINES := 3000
 
 var _toggle: Button
 var _panel: PanelContainer
 var _text: RichTextLabel
 var _log_path := ""
 var _accum := 0.0
-var _last_shown := ""
+var _offset := -1          # bytes of the log shown so far; -1 for nothing yet, -2 for a note that there is no log
+var _to_bottom := false    # opened from closed: the next refresh lands at the bottom
 
 
 func _ready() -> void:
@@ -56,7 +63,7 @@ func _ready() -> void:
 
 	_text = RichTextLabel.new()
 	_text.selection_enabled = true
-	_text.scroll_following = true   # pinned to the newest lines, like a real terminal
+	_text.scroll_following = true   # ...while at the bottom ([method _process])
 	#Ctrl+C on a selection.
 	_text.shortcut_keys_enabled = true
 	_text.add_theme_font_size_override("normal_font_size", 12)
@@ -75,6 +82,7 @@ func _on_toggle() -> void:
 			ch.panel_closed(&"console")
 	if _panel.visible:
 		_accum = _REFRESH_EVERY   # first refresh lands this frame, not half a second in
+		_to_bottom = true
 
 
 func _process(dt: float) -> void:
@@ -88,17 +96,30 @@ func _process(dt: float) -> void:
 	#The backlog lands the moment the selection is cleared.
 	if not _text.get_selected_text().is_empty():
 		return
-	var tail := _read_tail()
-	if tail == _last_shown:
-		return
-	#Append what is new rather than replacing the lot: this keeps a selection alive and the scroll position
-	#still. The window slides as the file grows, so when the new tail does not extend the old one (a
-	#rotation, a seek past the window, the first read) the whole thing is redrawn.
-	if not _last_shown.is_empty() and tail.begins_with(_last_shown):
-		_text.add_text(tail.substr(_last_shown.length()))
-	else:
-		_text.text = tail
-	_last_shown = tail
+	var at_end := _to_bottom or _at_bottom()
+	var got := _read_new()
+	_text.scroll_following = at_end
+	if bool(got["whole"]):
+		_text.text = String(got["text"])
+	elif not String(got["text"]).is_empty():
+		_text.add_text(String(got["text"]))
+	if at_end:
+		while _text.get_paragraph_count() > _KEEP_LINES:
+			_text.remove_paragraph(0)
+	if _to_bottom:
+		_to_bottom = false
+		_scroll_end.call_deferred()
+
+
+## Whether the view is at the newest line (or everything fits): only then does what is new move it.
+func _at_bottom() -> bool:
+	var bar := _text.get_v_scroll_bar()
+	return bar.value + bar.page >= bar.max_value - 2.0
+
+
+func _scroll_end() -> void:
+	var bar := _text.get_v_scroll_bar()
+	bar.value = bar.max_value
 
 
 ## The current session's log. The engine writes to the configured path (user://logs/godot.log by default)
@@ -126,24 +147,42 @@ func _resolve_log() -> String:
 	return best
 
 
-func _read_tail() -> String:
+## What the log has said since it was last read: `{text, whole}` - whole lines only (the rest of a line waits for its end), and
+## `whole` where the view is to be drawn again from the log's last [constant _TAIL_BYTES] (the first read, a log rotated or cut
+## short, or one grown too far past what was shown).
+func _read_new() -> Dictionary:
 	if _log_path.is_empty():
 		_log_path = _resolve_log()
+	var said := ""
 	if _log_path.is_empty():
-		return "(no log file - is debug/file_logging/enable_file_logging off?)"
-	var f := FileAccess.open(_log_path, FileAccess.READ)
+		said = "(no log file - is debug/file_logging/enable_file_logging off?)"
+	var f := FileAccess.open(_log_path, FileAccess.READ) if said.is_empty() else null
+	if f == null and said.is_empty():
+		said = "(could not open %s)" % _log_path
 	if f == null:
-		return "(could not open %s)" % _log_path
-	var sz := f.get_length()
-	if sz > _TAIL_BYTES:
-		f.seek(sz - _TAIL_BYTES)
-	var s := f.get_buffer(mini(int(sz), _TAIL_BYTES)).get_string_from_utf8()
+		var first := _offset != -2
+		_offset = -2
+		return {"text": said if first else "", "whole": first}
+	var sz := int(f.get_length())
+	var whole := _offset < 0 or sz < _offset or sz - _offset > _TAIL_BYTES
+	var from := maxi(0, sz - _TAIL_BYTES) if whole else _offset
+	if from >= sz:
+		if whole:
+			_offset = sz
+		return {"text": "", "whole": whole}
+	f.seek(from)
+	var buf := f.get_buffer(sz - from)
+	var last := buf.rfind(10)
+	if last < 0:
+		_offset = from
+		return {"text": "", "whole": whole}
+	_offset = from + last + 1
+	var s := buf.slice(0, last + 1).get_string_from_utf8()
 	# A window that starts mid-line reads as a torn first line - drop it.
-	if sz > _TAIL_BYTES:
+	if whole and from > 0:
 		var nl := s.find("\n")
-		if nl >= 0:
-			s = s.substr(nl + 1)
-	return s
+		s = s.substr(nl + 1) if nl >= 0 else ""
+	return {"text": s, "whole": whole}
 
 
 ## Lift the toggle - and the panel above it - clear of whatever the mode has put along the bottom of the

@@ -95,6 +95,8 @@ const PAGE_FIGURES := 3
 ## ([method page_story]).
 const STORY_BEFORE := 90
 const STORY_OVER := 120
+## Beside a sticker's painting, what it was painted for ([method _painted_fits]).
+const KEY_SIDE := ".key"
 ## Who makes each kind of step, as its record and its row name them (a step's first word -> its maker).
 const MAKERS := {"plan": "producer", "design": "designer", "image": "painter", "check": "art director",
 	"table": "set dresser", "say": "reader", "acts": "puppeteer", "model": "modeler", "skin": "decorator", "prep": "game master",
@@ -118,6 +120,7 @@ var _errors := {}      # step -> why it failed, once it is out of tries
 var _tries := {}       # step -> runs started
 var _hosts := {}       # step -> the painter host making it: {pid, out, log} ([method _make_skin_host])
 var _waiting := {}     # step -> what it waits on being installed
+var _cut_owed := {}    # a sticker step whose painting landed and waits to be cut off its ground ([method _start_cut])
 var _from := {}        # step -> what it was made from as its making began ([method TableEpisode.made_from])
 ## One layer laid again ([method lay_layer]; next/editing.md step 4): its index from 0, -1 for the whole painting.
 var skin_layer := -1
@@ -260,6 +263,7 @@ func stop() -> void:
 		Subprocess.stop(int((_hosts[step] as Dictionary)["pid"]))
 	_hosts.clear()
 	_waiting.clear()
+	_cut_owed.clear()
 	for step in _tools.keys():
 		_close_tools(String(step))
 	changed.emit()
@@ -296,6 +300,8 @@ func error_of(step: String) -> String:
 func activity_of(step: String) -> String:
 	if _hosts.has(step) and step == "ink":
 		return "laying out what is written with TeX"
+	if _hosts.has(step) and bool((_hosts[step] as Dictionary).get("cut", false)):
+		return "cutting it off its ground"
 	if _hosts.has(step):
 		# (...the painter host's last line: which layer, how far)
 		var lines := FileAccess.get_file_as_string(String((_hosts[step] as Dictionary)["log"])).strip_edges().split("\n")
@@ -328,7 +334,8 @@ func tick() -> void:
 		AgentJobs.forget(id)
 		_jobs.erase(step)
 		_land(String(step), res)
-		if episode.has(String(step)) and not _errors.has(step):
+		# (...a sticker cut off its ground once it lands is made when its cut is, not as its painting arrives)
+		if episode.has(String(step)) and not _errors.has(step) and not _hosts.has(step) and not _cut_owed.has(step):
 			_made(String(step), String(MAKERS.get(String(step).get_slice(":", 0), "agent")))
 		moved = true
 	for step in _hosts.keys():
@@ -336,6 +343,20 @@ func tick() -> void:
 			continue
 		var h: Dictionary = _hosts[step]
 		_hosts.erase(step)
+		# ...a sticker cut off its ground ([method _start_cut]); a painting that will not cut is painted again, as a painting that failed
+		# is, until it is out of tries
+		if bool(h.get("cut", false)):
+			var cut := _land_cut(String(step), h)
+			if not cut.is_empty():
+				push_warning("ghost: table %s - %s" % [step, cut])
+				DirAccess.remove_absolute(episode.painted_of(String(step)))
+				DirAccess.remove_absolute(episode.painted_of(String(step)) + KEY_SIDE)
+				if int(_tries.get(step, 0)) > RETRIES:
+					_errors[step] = cut
+			else:
+				_made(String(step), "painter")
+			moved = true
+			continue
 		# ...tex's layout of what the work writes: ghost's own, no painter's
 		if String(step) == "ink":
 			var why := _land_ink(h)
@@ -357,9 +378,14 @@ func tick() -> void:
 			_made(String(step), "painter host")
 		moved = true
 	if running:
+		# ...a sticker whose painting waits for its environment to be cut, tried again
+		for s in _cut_owed.keys():
+			if not _hosts.has(s):
+				_start_cut(String(s))
+				moved = moved or _hosts.has(s)
 		for step in episode.steps():
 			var s := String(step)
-			if (episode.has(s) and not owed(s)) or _jobs.has(s) or _hosts.has(s) or _errors.has(s) or passes_by(s):
+			if (episode.has(s) and not owed(s)) or _jobs.has(s) or _hosts.has(s) or _errors.has(s) or passes_by(s) or _cut_owed.has(s):
 				continue
 			# Generate must not silently erase an interrupted draft. Resume continues it; an explicit
 			# row redo (again) starts over after the row has said what it will replace.
@@ -371,7 +397,7 @@ func tick() -> void:
 				continue
 			_make(s)
 			moved = true
-		if _jobs.is_empty() and _hosts.is_empty() and _waiting.is_empty():
+		if _jobs.is_empty() and _hosts.is_empty() and _waiting.is_empty() and _cut_owed.is_empty():
 			running = false          # done, or stopped on a failure nothing else can get past
 			if again.is_empty():
 				_forget_live()
@@ -753,13 +779,14 @@ func _submit_text(step: String, p: Dictionary, tier: String, extra: Dictionary =
 	_jobs[step] = id
 
 
-func _submit_image(step: String, prompt: String, refs: Array) -> void:
+## [param target]: where the picture goes, the step's own file unless given (a sticker's painting, cut into the step's file after).
+func _submit_image(step: String, prompt: String, refs: Array, target := "") -> void:
 	_tries[step] = int(_tries.get(step, 0)) + 1
 	# (the painter writes its picture straight over the one there: that one a version back first)
 	episode.keep_version(step)
 	var id := AgentJobs.submit({"kind": "image", "backend": String(spec.get("painter", "codex")),
 		"dir": episode.job_dir(step), "prompt": _asked(step, prompt), "refs": refs,
-		"target": episode.file_of(step), "label": "table %s" % step,
+		"target": episode.file_of(step) if target.is_empty() else target, "label": "table %s" % step,
 		"model": String(spec.get("painter_model", "")), "effort": String(spec.get("painter_effort", ""))})
 	if id.is_empty():
 		_errors[step] = "this session cannot start agents (read-only)"
@@ -1007,6 +1034,10 @@ func _make_image(step: String) -> void:
 		_submit_image(step, TablePrompts.back_image(CardTable.look_of(look, {"series": name}), target,
 			CardTable.reads_reversed(_plan()), printed), [])
 		return
+	# A sticker book's set, character, pose or thing (next/sticker_book.md): painted once and stuck on every page it is in
+	if parts.size() == 3 and String(parts[1]) in ["set", "angle", "model", "pose", "thing"]:
+		_make_sticker(step, look)
+		return
 	# What the session asked to have painted ([method TableEpisode.game]), the map's own in its look, a figure's on the card it stands on
 	if parts.size() == 3 and TableEpisode.GAME_PICTURES.values().has(String(parts[1])):
 		var key := String(TableEpisode.GAME_PICTURES.find_key(String(parts[1])))
@@ -1050,6 +1081,181 @@ func _make_image(step: String) -> void:
 				f.close()
 				DirAccess.rename_absolute(view + ".part", view)
 			_submit_image(step, TablePrompts.backdrop_image(look, target), [])
+
+
+# --- a sticker book (next/sticker_book.md) -----------------------------------------------------------------------------------------------------------
+
+## Sticker step [param step] made: kept from the library or an earlier night of this show where the same set, character, pose or thing
+## was drawn ([method _reused]); else painted in the show's hand - a set as it is, the rest on a flat ground cut away once it lands
+## ([method _start_cut]), a pose beside its character's model. A painting whose cut is owed (its environment was being installed), or
+## one made for this very entry that was never cut ([method _painted_fits]), is cut, not painted again - unless it is asked for again.
+func _make_sticker(step: String, look: Dictionary) -> void:
+	if _cut_owed.has(step) or (not again.has(step) and not episode.has(step) and _painted_fits(step)):
+		_start_cut(step)
+		return
+	var kind := step.get_slice(":", 1)
+	var entry := episode.picture_entry(step)
+	if entry.is_empty():
+		_errors[step] = "the session names no such picture"
+		return
+	var by := _reused(step, kind, entry) if kind != "angle" else ""
+	if not by.is_empty():
+		if episode.has(step):
+			_made(step, by)
+		else:
+			_errors[step] = "what was kept could not be copied in"
+		return
+	var hand := String(spec.get("hand", ""))
+	var in_hand := look.duplicate()
+	if not hand.is_empty():
+		in_hand["art"] = hand
+		in_hand["own_hand"] = true
+	var who := {}
+	var refs: Array = []
+	# ...an angle beside its set as first painted: the same place, seen from elsewhere
+	if kind == "angle":
+		var w := episode.set_of_angle(step)
+		who = (episode.game().get("sets", []) as Array)[w - 1] if w > 0 else {"name": String(entry.get("set", ""))}
+		if w > 0 and episode.has("image:set:%d" % w):
+			refs.append(episode.file_of("image:set:%d" % w))
+	if kind == "pose":
+		var m := episode.model_of_pose(step)
+		who = (episode.game().get("cast", []) as Array)[m - 1] if m > 0 else {"name": String(entry.get("who", ""))}
+		var painted := episode.painted_of("image:model:%d" % m)
+		if m > 0 and FileAccess.file_exists(painted):
+			refs.append(painted)
+		elif m > 0 and episode.has("image:model:%d" % m):
+			refs.append(episode.file_of("image:model:%d" % m))
+	var target := "" if kind in ["set", "angle"] else episode.painted_of(step)
+	if not target.is_empty():
+		DirAccess.make_dir_recursive_absolute(target.get_base_dir())
+		DirAccess.remove_absolute(target)
+		# ...what it is painted for, beside it: a painting never cut is cut later only for the entry it was made for
+		TextGen.put(target + KEY_SIDE, episode.sticker_key(step))
+	_submit_image(step, TablePrompts.sticker_image(in_hand, kind, entry, AgentJobs.paint_target(episode.job_dir(step)), who,
+		String(entry.get("pose", entry.get("angle", ""))), not refs.is_empty()), refs, target)
+
+
+## Whether sticker step [param step]'s painting, waiting in `painted/`, was made for its entry as it stands: the key written beside it
+## when it was asked for, or - one asked for before keys were written - painted since the session was gathered.
+func _painted_fits(step: String) -> bool:
+	var painted := episode.painted_of(step)
+	if not FileAccess.file_exists(painted):
+		return false
+	if FileAccess.file_exists(painted + KEY_SIDE):
+		return FileAccess.get_file_as_string(painted + KEY_SIDE).strip_edges() == episode.sticker_key(step)
+	return FileAccess.get_modified_time(painted) >= FileAccess.get_modified_time(episode.file_of("game"))
+
+
+## The painting of sticker step [param step] cut off its flat ground into the step's own file, by the puppet host (`rig.py sticker`):
+## the drawing with what is round it clear, its soft edge kept, cropped to it.
+func _start_cut(step: String) -> void:
+	_waiting.erase(step)
+	if not Provision.ensure("puppet_venv"):
+		_waiting[step] = "waiting for the puppet environment to be installed (%s), to cut it off its ground" % String(Deps.entry("puppet_venv").get("size", ""))
+		_cut_owed[step] = true
+		return
+	_cut_owed.erase(step)
+	var py := Deps.venv_bin(RiggerTools.VENV, "python")
+	var host := BundledHosts.path(RiggerTools.HOST)
+	if not FileAccess.file_exists(py) or host.is_empty():
+		_errors[step] = "the puppet environment is not installed"
+		return
+	var dir := episode.job_dir(step).path_join("cut")
+	DirAccess.make_dir_recursive_absolute(dir)
+	DirAccess.remove_absolute(dir.path_join("done.json"))
+	var spec_path := dir.path_join("spec.json")
+	var err := TextGen.put(spec_path, JSON.stringify({"src": episode.painted_of(step), "out": episode.file_of(step) + ".part.png", "dir": dir}))
+	if not err.is_empty():
+		_errors[step] = err
+		return
+	var log := dir.path_join("cut.log")
+	var pid := Subprocess.start_logged(py, PackedStringArray(["-I", host, "sticker", spec_path]), log, "sticker " + step)
+	if pid <= 0:
+		_errors[step] = "could not start the puppet host to cut it"
+		return
+	_hosts[step] = {"pid": pid, "out": dir, "log": log, "cut": true}
+
+
+## A cut ended ([param h], its host): its sticker moved into the step's file whole and the step made, or why not.
+func _land_cut(step: String, h: Dictionary) -> String:
+	var done: Variant = JSON.parse_string(FileAccess.get_file_as_string(String(h["out"]).path_join("done.json"))) if FileAccess.file_exists(String(h["out"]).path_join("done.json")) else null
+	if not (done is Dictionary) or not bool((done as Dictionary).get("ok", false)):
+		return String((done as Dictionary).get("error", "")) if done is Dictionary else "the cut left no answer (%s)" % String(h["log"])
+	var part := episode.file_of(step) + ".part.png"
+	if not FileAccess.file_exists(part):
+		return "the cut wrote nothing"
+	DirAccess.remove_absolute(episode.file_of(step))
+	if DirAccess.rename_absolute(part, episode.file_of(step)) != OK:
+		return "the sticker could not be put in place"
+	return ""
+
+
+## Sticker step [param step] ([param kind], its session [param entry]) copied in from where the same was drawn before: the library's
+## ([StickerLibrary], what the author kept), else this show's latest earlier night that drew it - a set, character or thing of the same
+## name and looks (or one said by name alone), a pose of a character drawn from the very same model.
+## Who it came from ("library", "earlier night"), or "" where nothing was.
+func _reused(step: String, kind: String, entry: Dictionary) -> String:
+	var name := String(entry.get("who" if kind == "pose" else "name", ""))
+	var found := {}
+	if kind == "pose":
+		var m := episode.model_of_pose(step)
+		var model := episode.digest("image:model:%d" % m) if m > 0 else ""
+		if model.is_empty():
+			return ""
+		found = StickerLibrary.find_pose(name, String(entry.get("pose", "")), model)
+		if found.is_empty():
+			found = _earlier_pose(name, String(entry.get("pose", "")), model)
+	else:
+		found = StickerLibrary.find(kind, name, String(entry.get("looks", "")))
+		if found.is_empty():
+			found = _earlier(kind, name, String(entry.get("looks", "")))
+	if found.is_empty():
+		return ""
+	episode.keep_version(step)
+	if DirAccess.copy_absolute(String(found["file"]), episode.file_of(step)) != OK:
+		return ""
+	if not String(found.get("painted", "")).is_empty() and FileAccess.file_exists(String(found["painted"])):
+		DirAccess.make_dir_recursive_absolute(episode.painted_of(step).get_base_dir())
+		DirAccess.copy_absolute(String(found["painted"]), episode.painted_of(step))
+	print("ghost: table %s - %s kept from %s" % [step, name, String(found["by"])])
+	return String(found["by"])
+
+
+## The set, character or thing [param name] of [param kind] as this show's latest earlier night drew it: {file, painted, by}, {} for none.
+## Its looks must be [param looks], or none be said now ([method StickerLibrary.same_looks]).
+func _earlier(kind: String, name: String, looks: String) -> Dictionary:
+	var list_key := String(TableEpisode.STICKER_PICTURES.find_key(kind))
+	for h in TableEpisode.history(episode.show):
+		var ep := TableEpisode.open(episode.show, int((h as Dictionary)["seed"]))
+		if ep.seed == episode.seed:
+			continue
+		var list: Array = ep.game().get(list_key, [])
+		for i in list.size():
+			var e: Dictionary = list[i]
+			if String(e.get("name", "")).to_lower() != name.to_lower() or not StickerLibrary.same_looks(String(e.get("looks", "")), looks):
+				continue
+			var st := "image:%s:%d" % [kind, i + 1]
+			if ep.has(st):
+				return {"file": ep.file_of(st), "painted": ep.painted_of(st), "by": "earlier night"}
+	return {}
+
+
+## Pose [param pose] of [param name] as an earlier night drew it, from the very model this night has ([param model], its digest): {} for none.
+func _earlier_pose(name: String, pose: String, model: String) -> Dictionary:
+	for h in TableEpisode.history(episode.show):
+		var ep := TableEpisode.open(episode.show, int((h as Dictionary)["seed"]))
+		if ep.seed == episode.seed:
+			continue
+		var poses: Array = ep.game().get("poses", [])
+		for i in poses.size():
+			var q: Dictionary = poses[i]
+			var st := "image:pose:%d" % (i + 1)
+			if String(q.get("who", "")).to_lower() == name.to_lower() and String(q.get("pose", "")) == pose and ep.has(st):
+				var m := ep.model_of_pose(st)
+				if m > 0 and ep.digest("image:model:%d" % m) == model:
+					return {"file": ep.file_of(st), "painted": ep.painted_of(st), "by": "earlier night"}
+	return {}
 
 
 # --- a game played at the table (next/tabletop.md) ---------------------------------------------------------------------------------------------------
@@ -1222,7 +1428,8 @@ func _make_scene(who: String) -> void:
 	var before := _heard_so_far(step)
 	var toolset := GameTools.new(episode, who, plan, prep_d, people, ledger, episode.job_dir(step), before)
 	toolset.diorama = diorama
-	toolset.players = {"backend": String(spec.get("players", spec.get("writer", "claude"))), "model": String(spec.get("players_model", "")), "effort": String(spec.get("players_effort", ""))}
+	# ...the players by the writer itself: its agent, model and effort
+	toolset.players = {"backend": String(spec.get("writer", "claude")), "model": String(spec.get("writer_model", "")), "effort": String(spec.get("writer_effort", ""))}
 	toolset.words_aim = TablePrompts.game_words(who, episode.beat_count(), _plan())
 	toolset.picture_every = TablePrompts.picture_words(_plan())
 	var url := AgentTools.open(episode.job_dir(step), toolset)
@@ -2624,6 +2831,15 @@ func _land(step: String, res: Dictionary) -> void:
 						push_warning("ghost: table %s - kept with notation in its words: %s" % [step, notation[0]])
 					err = episode.write_text(step, t)
 			"image":
+				# ...a sticker's painting lands beside the episode, and is cut into the step's own file ([method _start_cut])
+				if step.get_slice(":", 1) in TableEpisode.STICKERS and step.get_slice(":", 2).is_valid_int():
+					if not FileAccess.file_exists(episode.painted_of(step)):
+						err = "the picture did not arrive"
+					else:
+						_start_cut(step)
+					if err.is_empty():
+						_errors.erase(step)
+						return
 				err = "" if episode.has(step) else "the picture did not arrive"
 				if err.is_empty() and step == "image:height":
 					err = _land_height()

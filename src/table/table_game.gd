@@ -21,8 +21,13 @@ class_name TableGame
 ##
 ## ON A MODEL'S BOARD ([GameDiorama], the episode's `diorama.json`) the board is the map: it stands in the table's middle, a figure
 ## modeled for the night (`minis.json`) stands on its ground on a base, faces where it goes and WALKS there ([constant WALK]),
-## and a figure with no model is its paper card. A page of the night's book (a `picture` event, `page_K.png`) covers the frame
-## while its words go on, pushed in slowly, until the next page or the table wants the eye back ([method _tick_pages]).
+## and a figure with no model is its paper card. A page of the night's book (a `picture` event) covers the frame while its words go
+## on, until the next page or the table wants the eye back ([method _tick_pages]): a STICKER PAGE drawn by the night's [StickerBook]
+## (a set with its cast stuck on it, the camera moving across it from page to page), or a whole painted page (`page_K.png`), pushed in
+## slowly, in a session told that way.
+##
+## THE OPENING HOLDS THE TABLE FROM ITS HEAD ([method opening_end]): pushed slowly in from the intro's start, settled, and seen
+## [constant OPENING_SEES] past the show's first words before any page or other camera may take the view.
 ##
 ## THE CAMERA IS A LIST ([Cameras], the feed's `cameras`, every sort where it names none): each sort wants moments of the session
 ## - the dice as they land, a march as figures walk, whoever's turn it is from their seat, long narration round the model - and
@@ -89,6 +94,16 @@ const MINI_BASE := Vector2(0.0125, 0.0035)
 const PAGE_FAR := 0.25
 const PAGE_FADE := 0.9
 const PAGE_LEAST := 4.5
+## The opening: once the show opens (its `begin`), how long the table is seen whole from its head before a page or any other camera
+## may take the view, and how much of that the camera is settled and still at its end (seconds); how far in it is pushed by then (a
+## share of the way to what it looks at), slowly from the very start of the intro - at least OPENING_PUSH, and in a frame taller than
+## the table is dressed for as far as it takes for the frame's bottom to fall on the board, OPENING_MARGIN (meters) of table in front of
+## it, rather than past the table into the dark, at most OPENING_PUSH_MOST ([method _opening_push]).
+const OPENING_SEES := 5.0
+const OPENING_STILL := 1.5
+const OPENING_PUSH := 0.12
+const OPENING_PUSH_MOST := 0.6
+const OPENING_MARGIN := 0.08
 ## The longest a page is pushed in over (seconds): a page whose end is not placed yet is pushed as one held this long.
 const PAGE_HOLD := 45.0
 const PAGE_PUSH := 0.1
@@ -144,6 +159,11 @@ var _claims: Array = []       # what each camera wants: {sort, rank, t0, t1, ...
 var _tilt: MeshInstance3D = null
 var _shot_t := NAN
 var _shot_cache := {}
+var _opened := INF             # when the show opened (its `begin`), seconds of show time
+var _push := OPENING_PUSH      # how far in the opening pushes ([method _opening_push]), as the cameras were last planned
+var _book: StickerBook = null  # the night's book as a sticker book, where its pages are stuck on sets ([StickerBook])
+var _sheet: MeshInstance3D = null
+var _sheet_mat: StandardMaterial3D = null
 
 
 func _init(owner: TableWork, game_data: Dictionary, folder: String, seed_of: int) -> void:
@@ -517,10 +537,22 @@ func clear() -> void:
 ## When each event was reached: the placed marks of the reading ([method ReadingFollower.place]), whose `card` is the event's id. Asked again every sentence of a live reading: nothing here is decided by when it asks.
 func schedule(sched: Array) -> void:
 	_times = {}
+	var opened := INF
+	var whole := false
+	var opens := false
 	for e in sched:
 		var a: Dictionary = e["a"]
 		if TableActions.names_event(String(a["kind"])):
 			_times[int(a["card"])] = float(e["t0"])
+			continue
+		whole = true
+		if not TableActions.source_of(String(a["kind"])).is_empty():
+			opens = true
+			opened = minf(opened, float(e["t0"]))
+	# ...a schedule of the game's own events alone ([method schedule_again]) keeps the opening it had; one whose opening the voice has
+	# not reached yet holds the table until it does; one with no opening at all holds nothing
+	if whole:
+		_opened = opened if opens else -INF
 	_shots = []
 	# ...when each page goes is worked out again from the marks placed now: a page cached before the next one was placed never went
 	for p in _pages:
@@ -1027,6 +1059,10 @@ func _plan_cameras() -> void:
 		d["ease"] = maxf(float(d.get("ease", Cameras.EASE)), full * float(d.get("weight", 1.0)) * 1.5 / Cameras.SPEED)
 	# ...the lowest in the list laid first, so the one above it takes what both want
 	_claims.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return int(x["rank"]) > int(y["rank"]) or (int(x["rank"]) == int(y["rank"]) and float(x["t0"]) < float(y["t0"])))
+	# ...and over them all, the opening: the table from its head, pushed slowly in from the intro's start and settled, until it has been
+	# seen ([method opening_end]); what any other camera wanted by then it takes from there
+	_push = _opening_push()
+	_claims.append({"sort": "opening", "rank": -1, "t0": -INF, "t1": opening_end(), "entry": {}, "ease": Cameras.EASE})
 
 
 ## Where the camera is at [param t]: [param base] - the table from its head - with each camera's moments laid over it.
@@ -1086,9 +1122,66 @@ func _overhead() -> Dictionary:
 
 
 func _claim_shot(c: Dictionary, t: float) -> Dictionary:
+	if String(c["sort"]) == "opening":
+		return _opening_shot(t)
 	var out := _claim_frame(c, t)
 	out["mini"] = Cameras.value(c["entry"], "miniature")
 	return out
+
+
+## When the opening is over: [constant OPENING_SEES] after the show opens, INF until its opening is placed (-INF for a show with
+## none). No page shows before it.
+func opening_end() -> float:
+	return _opened + OPENING_SEES if is_finite(_opened) else _opened
+
+
+## The table from its head at [param t] of the opening: pushed in toward what it looks at, from the intro's start until
+## [constant OPENING_STILL] before the opening ends, eased, and still from there.
+func _opening_shot(t: float) -> Dictionary:
+	var out := _overhead()
+	var end := opening_end() - OPENING_STILL
+	if not is_finite(end) or end <= 0.0:
+		return out
+	var u := Hands.smooth(clampf(t / end, 0.0, 1.0))
+	out["eye"] = (out["eye"] as Vector3).lerp(out["at"] as Vector3, _push * u)
+	return out
+
+
+## How far in the opening pushes: [constant OPENING_PUSH], or as far as it takes (at most [constant OPENING_PUSH_MOST]) for the bottom of
+## the frame, as it is shown ([method _kept_top]), to fall on the board's near edge with [constant OPENING_MARGIN] of table before it.
+func _opening_push() -> float:
+	if work == null or work.medium == null:
+		return OPENING_PUSH
+	var map: Dictionary = game.get("board", {}) if game.get("board") is Dictionary else {}
+	var board := GameBoard.rect_of(map) if not map.is_empty() else Rect2(GameBoard.MIDDLE - GameBoard.MAP_MOST * 0.5, GameBoard.MAP_MOST)
+	var near := board.end.y + OPENING_MARGIN
+	var lo := OPENING_PUSH
+	var hi := OPENING_PUSH_MOST
+	if _bottom_z(lo) <= near:
+		return lo
+	if _bottom_z(hi) > near:
+		return hi
+	for i in 18:
+		var mid := (lo + hi) * 0.5
+		if _bottom_z(mid) <= near:
+			hi = mid
+		else:
+			lo = mid
+	return hi
+
+
+## Where on the table the bottom of the frame falls (its distance toward the head, meters) with the head's camera pushed [param u] of
+## the way in: INF where it never reaches the table.
+func _bottom_z(u: float) -> float:
+	var s := _overhead()
+	s["eye"] = (s["eye"] as Vector3).lerp(s["at"] as Vector3, u)
+	s = _kept_top(s)
+	var xf := Cameras.transform_of(s)
+	var lens := _lens(float(s["fov"]))
+	var d := xf.basis * Vector3(0.0, -lens.y, -1.0)
+	if d.y >= -1e-4:
+		return INF
+	return (xf.origin + d * (-xf.origin.y / d.y)).z
 
 
 func _claim_frame(c: Dictionary, t: float) -> Dictionary:
@@ -1213,6 +1306,9 @@ func _tick_tilt(t: float) -> void:
 ## square, stretched as it plays to cover the frame the show is in ([method _page_size]).
 func _stand_pages() -> void:
 	var list: Array = game.get("pages", [])
+	if StickerBook.composed(game):
+		_stand_book()
+		return
 	for e in game.get("events", []):
 		var d: Dictionary = e
 		if String(d.get("kind", "")) != "picture":
@@ -1241,6 +1337,39 @@ func _stand_pages() -> void:
 		_pages.append({"node": node, "mat": mat, "event": int(d["id"]), "pic": pic, "aspect": float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)})
 
 
+## The night's book as a sticker book ([StickerBook]): built here on the worker, its picture one sheet in front of the lens, as a page
+## is; each page an entry by its event, drawn by the book.
+func _stand_book() -> void:
+	_book = StickerBook.new(game, dir, work.medium.aspect() if work != null and work.medium != null else 16.0 / 9.0)
+	_book.build()
+	root.add_child(_book.viewport)
+	var quad := QuadMesh.new()
+	quad.size = Vector2.ONE
+	_sheet = MeshInstance3D.new()
+	_sheet.mesh = quad
+	_sheet_mat = StandardMaterial3D.new()
+	_sheet_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_sheet_mat.albedo_texture = _book.viewport.get_texture()
+	_sheet_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_sheet_mat.no_depth_test = true
+	_sheet_mat.render_priority = 100
+	_sheet_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_sheet.material_override = _sheet_mat
+	_sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_sheet.visible = false
+	root.add_child(_sheet)
+	for e in game.get("events", []):
+		var d: Dictionary = e
+		if String(d.get("kind", "")) == "picture" and int(d.get("pic", 0)) >= 1:
+			_pages.append({"event": int(d["id"]), "pic": int(d["pic"]), "composed": true})
+
+
+## When page [param p] comes up: its event's moment, held until the opening is over ([method opening_end]); INF until placed.
+func _page_at(p: Dictionary) -> float:
+	var at := _when(int(p["event"]))
+	return at if at == INF else maxf(at, opening_end() if is_finite(opening_end()) else at)
+
+
 ## How big a page whose picture is [param aspect] wide for its height stands, [constant PAGE_FAR] out, to cover the frame at the
 ## table's own lens, whatever the frame's shape - a landscape page in a portrait frame shows its middle; a wider lens is laid over it
 ## as it plays.
@@ -1254,17 +1383,23 @@ func _lens(fov: float) -> Vector2:
 	return CardTable.lens(fov, work.medium.aspect())
 
 
-## When a page goes: at the next page, or once it has had its least, where the view goes back to the table - a `board`, a throw or a
-## walk watched (`watch`), a throw that came up its highest or lowest face unless told not to be. Otherwise it stays: the story is
-## told over its pages.
-func _page_end(at: float) -> float:
+## When a page goes: at the next page, or once it has had its least, where the view goes back to the table - a `board`, a throw (every
+## one unless told not to be) or a walk watched (`watch`). Otherwise it stays: the story is told over its pages.
+func _page_end(at: float, id := -1) -> float:
 	var going := INF
+	var held := opening_end()
 	for e in game.get("events", []):
 		var d: Dictionary = e
 		var k := String(d.get("kind", ""))
 		if not _times.has(int(d["id"])):
 			continue
 		var when := float(_times[int(d["id"])])
+		# ...a page placed before the opening is over comes up as it ends, and the latest of those is the one that does
+		if k == "picture" and is_finite(held):
+			when = maxf(when, held)
+		if k == "picture" and when == at and int(d["id"]) > id and id >= 0:
+			going = minf(going, when)
+			continue
 		if when <= at:
 			continue
 		if k == "picture":
@@ -1274,27 +1409,32 @@ func _page_end(at: float) -> float:
 	return going
 
 
-## Whether the view comes back to the table for [param e]: as the game master said, or a throw at its extreme.
+## Whether the view comes back to the table for [param e]: as the game master said, or - unsaid - every throw but one behind the screen:
+## the dice landing are the game, and the show cuts to them.
 static func _watched(e: Dictionary) -> bool:
 	if e.has("watch"):
 		return bool(e["watch"])
-	return String(e.get("kind", "")) == "roll" and not String(e.get("extreme", "")).is_empty() and not bool(e.get("hidden", false))
+	return String(e.get("kind", "")) == "roll" and not bool(e.get("hidden", false))
 
 
 func _tick_pages(t: float) -> void:
+	if _book != null:
+		_tick_book(t)
+		return
 	for p in _pages:
 		var d: Dictionary = p
 		var node: MeshInstance3D = d["node"]
-		var at := _when(int(d["event"]))
+		var at := _page_at(d)
 		if t < at or at == INF:
 			node.visible = false
 			continue
 		var going := float(d.get("_going", NAN))
 		if is_nan(going) or float(d.get("_at", NAN)) != at:
-			going = _page_end(at)
+			going = _page_end(at, int(d["event"]))
 			d["_going"] = going
 			d["_at"] = at
-		if t >= going + PAGE_FADE:
+		# ...a page whose next comes up the moment it does never shows (several placed before the opening was over)
+		if t >= going + PAGE_FADE or going <= at:
 			node.visible = false
 			continue
 		node.visible = true
@@ -1313,6 +1453,46 @@ func _tick_pages(t: float) -> void:
 		var frame_h := _lens(_fov).y * 2.0 * PAGE_FAR
 		var over := maxf((size.y * push - frame_h) * 0.5, 0.0)
 		node.transform = _eye(t) * Transform3D(Basis.from_scale(Vector3(size.x, size.y, 1.0) * push * k), Vector3(drift * PAGE_FAR, -over * PAGE_TOP * k, -PAGE_FAR))
+
+
+## The sticker book at [param t]: the page up now (or the last, fading as the view goes back to the table), drawn by the book from the
+## page before it where they come back to back, and its sheet faded in from the table and out again as a page is.
+func _tick_book(t: float) -> void:
+	var shown: Array = []
+	for p in _pages:
+		var d: Dictionary = p
+		var at := _page_at(d)
+		if at == INF:
+			continue
+		var going := float(d.get("_going", NAN))
+		if is_nan(going) or float(d.get("_at", NAN)) != at:
+			going = _page_end(at, int(d["event"]))
+			d["_going"] = going
+			d["_at"] = at
+		if going > at:
+			shown.append({"i": int(d["pic"]) - 1, "at": at, "going": going})
+	shown.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["at"]) < float(b["at"]))
+	var cur := -1
+	for j in shown.size():
+		var d: Dictionary = shown[j]
+		if float(d["at"]) <= t and t < float(d["going"]) + PAGE_FADE:
+			cur = j
+	if cur < 0:
+		_sheet.visible = false
+		_book.show(false)
+		return
+	var now: Dictionary = shown[cur]
+	var before: Dictionary = shown[cur - 1] if cur > 0 else {}
+	var back_to_back := not before.is_empty() and absf(float(before["going"]) - float(now["at"])) < 0.05
+	var show := 1.0 if back_to_back else Hands.smooth(clampf((t - float(now["at"])) / PAGE_FADE, 0.0, 1.0))
+	show *= 1.0 - Hands.smooth(clampf((t - float(now["going"])) / PAGE_FADE, 0.0, 1.0))
+	_book.show(true)
+	_book.pose_at(t, int(now["i"]), float(now["at"]), int(before["i"]) if back_to_back else -1, float(before.get("at", 0.0)))
+	_sheet.visible = true
+	_sheet_mat.albedo_color = Color(1, 1, 1, show)
+	var k := tan(deg_to_rad(fov_at(t) * 0.5)) / tan(deg_to_rad(_fov * 0.5))
+	var frame := _lens(_fov) * 2.0 * PAGE_FAR
+	_sheet.transform = _eye(t) * Transform3D(Basis.from_scale(Vector3(frame.x, frame.y, 1.0) * k), Vector3(0.0, 0.0, -PAGE_FAR))
 
 
 # --- heard ------------------------------------------------------------------------------------------------------------------------------------------
@@ -1356,5 +1536,6 @@ func sounds_in(t0: float, t1: float) -> Array:
 
 ## What a report says of it: for the probes.
 func report() -> String:
-	return "game: %d maps, %d figures, %d pictures, %d pages, %d throws, %d camera moments%s; record %s" % [_maps.size(), _figures.size(), _reveals.size(), _pages.size(), _rolls.size(),
+	return "game: %d maps, %d figures, %d pictures, %d %spages, %d throws, %d camera moments%s; record %s" % [_maps.size(), _figures.size(), _reveals.size(), _pages.size(),
+		"sticker " if _book != null else "", _rolls.size(),
 		_claims.size(), ", a model's board" if _diorama != null else "", "ready" if not _record.is_empty() else ("failed" if _failed else "not yet")]

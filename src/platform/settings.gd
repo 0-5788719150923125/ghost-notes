@@ -96,6 +96,26 @@ func read(section: String, key: String, dflt: Variant) -> Variant:
 	return _own(_cfg.get_value(section, key, dflt))
 
 
+## [param values] as section [param section] of a file of their own at [param path], written at once: an export render's show
+## settings ([method Director.write_show_settings]), handed to it rather than read from this file.
+static func save_apart(path: String, section: String, values: Dictionary) -> Error:
+	var cfg := ConfigFile.new()
+	for key in values:
+		var v: Variant = values[key]
+		cfg.set_value(section, key, v.duplicate(true) if (v is Dictionary or v is Array) else v)
+	return cfg.save(path)
+
+
+## ...and back: the file at [param path], or null (said) where it cannot be read.
+static func load_apart(path: String) -> ConfigFile:
+	var cfg := ConfigFile.new()
+	var err := cfg.load(path)
+	if err != OK:
+		push_error("ghost: the settings at %s could not be read (error %d)" % [path, err])
+		return null
+	return cfg
+
+
 ## Whether this key has ever been stored. An empty string is still a user's stored choice.
 func has(section: String, key: String) -> bool:
 	if not _reads_dir.is_empty():

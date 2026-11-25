@@ -121,6 +121,23 @@ func _join() -> void:
 	var rosa_end := int(rosa["at"]) + (rosa["pcm"] as PackedFloat32Array).size()
 	_check(j.frames >= rosa_end, "the take runs as far as anyone said anything")
 	_check(int(j.chunk_at[4]) >= rosa_end, "the next on the line waits for what overlaps: %d, %d" % [int(j.chunk_at[4]), rosa_end])
+	# what is talked over is its words, never the take's own silence after them: over 0.8 s, a line whose words end 0.5 s before
+	# its audio does is come in on 0.8 s before its last word ends - and never before OVER_HEARD of it is said alone
+	var two := ReadingPlan.make("<!-- speaker: Narrator -->\nThe door opens slowly now.\n\n<!-- speaker: Bea -->\n<!-- over -->\nA bear.", "", ASK)["chunks"] as Array
+	var j4 := ReadingJoin.new(SR, [])
+	var tail := _tone(2.0, 220.0)
+	tail.append_array(_silence(0.5))
+	j4.add(two, 0, tail, _spans(two[0], 2.0), s, 0.2)
+	j4.add(two, 1, _tone(0.6, 300.0), _spans(two[1], 0.6), s, 0.2)
+	var said_end := int(j4.chunk_at[0]) + int(2.0 * float(SR))
+	_check(j4.side.size() == 1 and int((j4.side[0] as Dictionary)["at"]) == said_end - int(Manuscript.OVER_BARE * float(SR)),
+		"a bare over comes in OVER_BARE before the last word ends, not the take: %d, %d" % [int((j4.side[0] as Dictionary)["at"]) if not j4.side.is_empty() else -1, said_end - int(Manuscript.OVER_BARE * float(SR))])
+	var short := ReadingPlan.make("<!-- speaker: Narrator -->\nNo.\n\n<!-- speaker: Bea -->\n<!-- over: 3 -->\nYes.", "", ASK)["chunks"] as Array
+	var j5 := ReadingJoin.new(SR, [])
+	j5.add(short, 0, _tone(0.5, 220.0), _spans(short[0], 0.5), s, 0.2)
+	j5.add(short, 1, _tone(0.5, 300.0), _spans(short[1], 0.5), s, 0.2)
+	var heard_at := int(j5.chunk_at[0]) + int(ReadingJoin.OVER_HEARD * 0.5 * float(SR))
+	_check(j5.side.size() == 1 and absi(int((j5.side[0] as Dictionary)["at"]) - heard_at) <= 1, "a long over on a short line still lets its start be heard alone")
 	# the control: nothing to come in over at a take's opening
 	var alone := ReadingPlan.make("<!-- speaker: Bea -->\n<!-- over: 0.5 -->\nBea is first.", "", ASK)["chunks"] as Array
 	var j2 := ReadingJoin.new(SR, [])

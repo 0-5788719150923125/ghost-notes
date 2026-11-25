@@ -24,6 +24,10 @@ class_name AgentTools
 ## A toolset is any object with `list_tools() -> Array` (MCP tool descriptors: name, description,
 ## inputSchema), `call_tool(name, args) -> Dictionary` (`{text, images: [Image], error}`; it may await,
 ## since a picture can take frames) and, optionally, `instructions() -> String`.
+##
+## A call's arguments are held to the types its tool declares before the toolset sees them ([method typed]): a list or a map where
+## text or a number is declared is refused in words (nothing done), and a number or a flag where text is declared is its text - so no
+## toolset raises over what an agent wrote in the wrong shape, however deep in a list of objects.
 
 ## Where the endpoint lives; a job's token follows it.
 const PATH := "/mcp/"
@@ -224,9 +228,13 @@ func _rpc(job: Dictionary, msg: Dictionary) -> Dictionary:
 			var args: Dictionary = params.get("arguments", {}) if params.get("arguments") is Dictionary else {}
 			job["calls"] = int(job["calls"]) + 1
 			var res: Dictionary
+			var checked := typed(args, _schema_of(job, toolset, name))
 			if int(job["calls"]) > MAX_CALLS:
 				res = {"text": "No calls left: this job has made %d. Stop here." % MAX_CALLS, "error": true}
+			elif not String(checked["error"]).is_empty():
+				res = {"text": "%s Nothing was done." % String(checked["error"]), "error": true}
 			else:
+				args = checked["args"]
 				var dir := String(job["dir"])
 				_active[dir] = int(_active.get(dir, 0)) + 1
 				var got: Variant = await toolset.call("call_tool", name, args)
@@ -236,6 +244,68 @@ func _rpc(job: Dictionary, msg: Dictionary) -> Dictionary:
 				return AgentTools.rpc_error(id, -32000, "This job's tools are closed.")
 			return AgentTools.rpc_result(id, _content(job, name, args, res))
 	return AgentTools.rpc_error(id, -32601, "Method not found: %s" % String(msg["method"]))
+
+
+## The input schema tool [param name] of [param toolset] declares, read once a job ({} for none).
+func _schema_of(job: Dictionary, toolset: Object, name: String) -> Dictionary:
+	if not job.has("schemas"):
+		var all := {}
+		for t in toolset.call("list_tools"):
+			if t is Dictionary and (t as Dictionary).get("inputSchema") is Dictionary:
+				all[String((t as Dictionary).get("name", ""))] = t["inputSchema"]
+		job["schemas"] = all
+	return (job["schemas"] as Dictionary).get(name, {})
+
+
+## [param args] held to [param schema] (a JSON schema's `properties`, `items` and `type`, as a tool declares them): `{args, error}` -
+## the arguments with a number or a flag where text is declared made its text, and a number written as text where a number is declared
+## made the number; `error` says the first list or map (or non-number) where text, a number or a flag is declared, by where it is.
+## What declares no type is passed as it is.
+static func typed(args: Dictionary, schema: Dictionary) -> Dictionary:
+	var box := {"error": ""}
+	var out: Variant = _typed(args, schema, "", box)
+	return {"args": out if out is Dictionary else args, "error": String(box["error"])}
+
+
+static func _typed(v: Variant, schema: Dictionary, at: String, box: Dictionary) -> Variant:
+	if not String(box["error"]).is_empty():
+		return v
+	var kind := String(schema.get("type", "")) if schema.get("type") is String else ""
+	var named := "`%s`" % at if not at.is_empty() else "the call"
+	match kind:
+		"string":
+			if v is String or v == null:
+				return v
+			if v is float or v is int or v is bool:
+				return str(v)
+			box["error"] = "%s is text; it was given a %s." % [named, "list" if v is Array else "map" if v is Dictionary else type_string(typeof(v))]
+			return v
+		"number", "integer":
+			if v is float or v is int or v == null:
+				return v
+			if v is String and (v as String).strip_edges().is_valid_float():
+				return float(v)
+			box["error"] = "%s is a number; it was given %s." % [named, "a list" if v is Array else "a map" if v is Dictionary else "\"%s\"" % str(v).left(40)]
+			return v
+		"boolean":
+			if v is bool or v == null:
+				return v
+			if v is Array or v is Dictionary:
+				box["error"] = "%s is true or false; it was given a %s." % [named, "list" if v is Array else "map"]
+			return v
+	if v is Dictionary and schema.get("properties") is Dictionary:
+		var props: Dictionary = schema["properties"]
+		var d := (v as Dictionary).duplicate()
+		for k in d:
+			if props.get(k) is Dictionary:
+				d[k] = _typed(d[k], props[k], ("%s.%s" % [at, k]) if not at.is_empty() else String(k), box)
+		return d
+	if v is Array and schema.get("items") is Dictionary:
+		var a := (v as Array).duplicate()
+		for i in a.size():
+			a[i] = _typed(a[i], schema["items"], "%s[%d]" % [at, i], box)
+		return a
+	return v
 
 
 ## A tool's outcome as MCP content - its words, then its pictures (as JPEGs) - logged as it goes.

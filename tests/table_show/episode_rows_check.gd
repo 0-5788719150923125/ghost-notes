@@ -15,7 +15,9 @@ extends SceneTree
 ## over what stands, and what was made from it goes stale (the control: invalidate, which moves them a version back, out of place).
 ## A made row carries a lock, and locked it is kept.
 ## Generate includes stale unlocked outputs even when every file exists; Script's lock remains available without a ⟳.
-## An unused optional Voice recording leaves a completed 15-step tally at 15/15; requested and saved recordings count normally.
+## An unused optional Voice recording leaves a completed 15-step tally at 15/15; requested and saved recordings count normally. A take
+## being said is its episode's alone: left, the episode stops it (the control: opened again, it goes on), a take still stopping for
+## another is not this one's, and a take is never kept into an episode thrown away while it was said.
 ## What it takes with it is worked out once, the same as [method TableEpisode.dependents] says for every step (the control: a
 ## card's painting takes its reading), and read again only when the episode's files change (the control: a new file).
 
@@ -312,10 +314,36 @@ func _optional_voice() -> void:
 	_ok(not voice.open and counter.row("take")["redo"].disabled,
 		"without a ready voice, the recording action is unavailable even when Script exists")
 	_show._taking = true
+	_show._taking_dir = _ep.dir
 	section.listed = completed + [_show._take_row(false)]
 	counter.refresh()
 	_ok(counter._tally.text.ends_with("15/16"), "the control: a recording explicitly being made counts as work in progress")
+	_show._taking_dir = _ep.dir + "_another"
+	section.listed = completed + [_show._take_row(false)]
+	counter.refresh()
+	_ok(counter._tally.text.ends_with("15/15"), "a take still stopping for an episode left is not this episode's")
+	# ...left: the take being said of it is stopped (the control: opening the episode it is of stops nothing)
+	_show._take_stop = {}
+	_show._taking_dir = _ep.dir
+	_show._open_episode()
+	_ok(not bool(_show._take_stop.get("stop", false)), "the control: the episode the take is of, opened again, keeps it going")
+	_show._taking_dir = _ep.dir + "_another"
+	_show._open_episode()
+	_ok(bool(_show._take_stop.get("stop", false)), "an episode left while its take is said stops it")
 	_show._taking = false
+	_show._taking_dir = ""
+	# ...and a take is never kept into an episode thrown away while it was said: its folder does not come back
+	var gone := TableEpisode.open("rows", 987654)
+	DirAccess.make_dir_recursive_absolute(gone.dir)
+	var said: String = _ep.dir.path_join("gone_take.wav")
+	var gw := FileAccess.open(said, FileAccess.WRITE)
+	gw.store_string("RIFF")
+	gw.close()
+	var gs := FileAccess.open(said.get_basename() + ".json", FileAccess.WRITE)
+	gs.store_string(JSON.stringify({"sig": "x", "words": []}))
+	gs.close()
+	_rmrf(gone.dir)
+	_ok(not gone.keep_take(said).is_empty() and not DirAccess.dir_exists_absolute(gone.dir), "a take is never kept into an episode that is gone, nor its folder made again")
 	var scratch: String = _ep.dir.path_join("recorded_voice.wav")
 	var wav := FileAccess.open(scratch, FileAccess.WRITE)
 	wav.store_string("RIFF")

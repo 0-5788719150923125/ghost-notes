@@ -11,8 +11,8 @@ extends Node
 ## - A chip brings its card into view: on a panel scrolled to its top, the last card's chip brings it out of the bottom
 ##   pile, and its rows still show - on the Generative and Cards panels, which overflow the window.
 ## - Every card says what it is for: its title bar's tooltip is its blurb, and its chip's says it before what a click
-##   does - a component's card the blurb of its row, the words "+" offered it with. "+"'s own tooltips are folded as the
-##   menu opens (Boot.wrap_items): no line wider than a tooltip is let be.
+##   does - a component's card the blurb of its row, the words "+" offered it with. "+"'s own tooltips are folded as each
+##   is shown (Boot.fold_tooltip): no line wider than a tooltip is let be.
 ##
 ## Controls: before the press the last card lies in the bottom pile, or "brought" proves nothing. A card made with no
 ## blurb must not pass as saying what it is for, and the menu's widest blurb must be wider than a tooltip unfolded. The
@@ -157,8 +157,8 @@ static func _flat(tip: String) -> String:
 	return tip.replace("\n\n", "\u0001").replace("\n", " ").replace("\u0001", "\n\n")
 
 
-## "+" opened as a press opens it, its tooltips folded by then: no line of one is wider than a tooltip may be. The control:
-## the widest item's tooltip, unfolded, is wider than that.
+## "+" opened as a press opens it, each of its tooltips as it is shown ([method Boot.fold_tooltip], on the label Godot shows a tooltip
+## in): no line of one is wider than a tooltip may be. The control: the widest item's tooltip, unfolded, is wider than that.
 func _menu_folds(panel: SidePanel) -> void:
 	var pop := panel.plus.get_popup()
 	panel.plus.show_popup()
@@ -173,13 +173,18 @@ func _menu_folds(panel: SidePanel) -> void:
 		if tip.is_empty():
 			continue
 		tips += 1
-		for line in tip.split("\n"):
+		var shown := Label.new()
+		shown.theme_type_variation = Boot.TIP_LABEL
+		shown.text = tip
+		Boot.fold_tooltip(shown)
+		for line in shown.text.split("\n"):
 			widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x)
+		shown.free()
 		for para in _flat(tip).split("\n\n"):
 			unfolded = maxf(unfolded, font.get_string_size(para, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x)
 	pop.hide()
 	_ok(tips > 0 and unfolded > Boot.TIP_MAX_PX, "the control - '+' offers tooltips (%d), the widest %d px unfolded" % [tips, int(unfolded)])
-	_ok(tips > 0 and widest <= Boot.TIP_MAX_PX + 1.0, "'+' folds its tooltips as it opens: the widest line %d px of %d" % [int(widest), int(Boot.TIP_MAX_PX)])
+	_ok(tips > 0 and widest <= Boot.TIP_MAX_PX + 1.0, "'+' shows its tooltips folded: the widest line %d px of %d" % [int(widest), int(Boot.TIP_MAX_PX)])
 
 
 ## Masking, before a clip is chosen: the framework's panel with one card, the Clip.

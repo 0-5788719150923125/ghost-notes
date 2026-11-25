@@ -364,7 +364,7 @@ static func sanitize(spec: Dictionary, palette: Array) -> Dictionary:
 
 static func sanitize_material(m: Variant, fallback: String) -> Dictionary:
 	var d: Dictionary = m if m is Dictionary else {}
-	var kind := String(d.get("kind", "")).strip_edges().to_lower()
+	var kind := word(d.get("kind"), "").strip_edges().to_lower()
 	if not MATERIALS.has(kind):
 		kind = "painted"
 	var base: Dictionary = MATERIALS[kind]
@@ -427,7 +427,7 @@ static func _sanitize_parts(raw: Variant, mats: Dictionary, pal: Array, depth: i
 
 
 static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dictionary:
-	var shape := String(p.get("shape", "")).strip_edges().to_lower()
+	var shape := word(p.get("shape"), "").strip_edges().to_lower()
 	if not SHAPES.has(shape):
 		return {}
 	var out := {"shape": shape, "at": _vec3(p.get("at"), Vector3.ZERO, MAX_SIZE),
@@ -491,7 +491,7 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			out["length"] = Vector2(minf(lv.x, lv.y), maxf(lv.x, lv.y)).clamp(Vector2(0.3, 0.3), Vector2(30.0, 30.0))
 			out["spread"] = _num(p.get("spread"), 35.0, 0.0, 80.0)
 			out["thickness"] = _num(p.get("thickness"), 0.17, 0.06, 0.4)
-			var b := String(p.get("base", "")).strip_edges()
+			var b := word(p.get("base"), "").strip_edges()
 			out["base"] = b if mats.has(b) else ""
 		"geode":
 			var r := _num(p.get("radius"), 6.0, 1.0, 25.0)
@@ -502,7 +502,7 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			# enough points to line the hollow, each standing in about its own width
 			var each := pow(float(out["length"]) * 0.45, 2.0)
 			out["count"] = int(_num(p.get("count"), clampf(TAU * hollow * hollow * 0.6 / each, 12.0, 90.0), 6.0, 160.0))
-			var b := String(p.get("base", "")).strip_edges()
+			var b := word(p.get("base"), "").strip_edges()
 			if not mats.has(b):
 				b = "geode rock"
 				if not mats.has(b):
@@ -510,9 +510,10 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 						"wear": 0.5, "pattern": 0.15}, "#7a7168")
 			out["base"] = b
 		"extrude":
-			var outline := String(p.get("outline", "polygon")).strip_edges().to_lower()
+			var outline := word(p.get("outline"), "polygon").strip_edges().to_lower()
 			out["outline"] = outline if EXTRUDE_OUTLINES.has(outline) else "polygon"
-			out["points"] = _points2(p.get("points"), Vector2(-MAX_SIZE, -MAX_SIZE), Vector2(MAX_SIZE, MAX_SIZE))
+			# ...an outline written as its points is those points
+			out["points"] = _points2(p.get("points") if p.get("points") is Array else p.get("outline"), Vector2(-MAX_SIZE, -MAX_SIZE), Vector2(MAX_SIZE, MAX_SIZE))
 			var sz := _points2([p.get("size")], Vector2(0.2, 0.2), Vector2(MAX_SIZE, MAX_SIZE))
 			out["size"] = sz[0] if not sz.is_empty() else Vector2(6.0, 6.0)
 			out["height"] = _num(p.get("height"), 2.0, 0.05, MAX_SIZE)
@@ -553,7 +554,7 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			out["height"] = _num(p.get("height"), 0.0, 0.0, MAX_SIZE)
 			out["thickness"] = _num(p.get("thickness"), 0.3, 0.03, 5.0)
 		"sheet":
-			var outline := String(p.get("outline", "leaf")).strip_edges().to_lower()
+			var outline := word(p.get("outline"), "leaf").strip_edges().to_lower()
 			out["outline"] = outline if OUTLINES.has(outline) else "leaf"
 			out["points"] = _points2(p.get("points"), Vector2(-MAX_SIZE, -MAX_SIZE), Vector2(MAX_SIZE, MAX_SIZE))
 			var sz := _points2([p.get("size")], Vector2(0.2, 0.2), Vector2(40.0, 40.0))
@@ -562,9 +563,9 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			out["fold"] = _num(p.get("fold"), 0.0, 0.0, 1.0)
 			out["thickness"] = _num(p.get("thickness"), 0.08, 0.02, 1.0)
 		"strand":
-			var kind := String(p.get("kind", "")).strip_edges().to_lower()
+			var kind := word(p.get("kind"), "").strip_edges().to_lower()
 			out["kind"] = kind if STRANDS.has(kind) else "cord"
-			var lay := String(p.get("lay", "")).strip_edges().to_lower()
+			var lay := word(p.get("lay"), "").strip_edges().to_lower()
 			out["lay"] = lay if LAYS.has(lay) else "coil"
 			out["thickness"] = _num(p.get("thickness"), float((STRANDS[out["kind"]] as Dictionary)["thickness"]), 0.05, 5.0)
 			out["length"] = _num(p.get("length"), 120.0, 5.0, MAX_STRAND)
@@ -576,19 +577,19 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			if out["lay"] in ["path", "drape"] and (out["path"] as Array).size() < 2:
 				out["lay"] = "heap"
 			out["leaf"] = _num(p.get("leaf"), 3.0, 0.5, 15.0)
-			var lm := String(p.get("leaves", "")).strip_edges() if p.get("leaves") is String else ""
+			var lm := word(p.get("leaves"), "").strip_edges() if p.get("leaves") is String else ""
 			out["leaves"] = lm if mats.has(lm) else ""
 		"bone":
-			var kind := String(p.get("kind", "")).strip_edges().to_lower()
+			var kind := word(p.get("kind"), "").strip_edges().to_lower()
 			out["kind"] = kind if BONES.has(kind) else "long"
 			var dl: Vector2 = BONES[out["kind"]]
 			out["length"] = _num(p.get("length"), dl.x, 1.0, MAX_SIZE)
 			out["thickness"] = _num(p.get("thickness"), dl.y * float(out["length"]) / dl.x, 0.1, 8.0)
 		"skull":
-			var kind := String(p.get("kind", "")).strip_edges().to_lower()
+			var kind := word(p.get("kind"), "").strip_edges().to_lower()
 			out["kind"] = kind if SKULLS.has(kind) else "human"
 			out["length"] = _num(p.get("length"), float(SKULLS[out["kind"]]), 2.0, 40.0)
-			var horns := String(p.get("horns", "curved")).strip_edges().to_lower() if p.get("horns") is String else "curved"
+			var horns := word(p.get("horns"), "curved").strip_edges().to_lower() if p.get("horns") is String else "curved"
 			out["horns"] = horns if horns in ["straight", "curved", "curled", "none"] else "curved"
 		"sculpt":
 			out["strokes"] = _strokes(p.get("strokes"))
@@ -608,7 +609,7 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 		"face":
 			var fz := _points2([p.get("size")], Vector2(0.2, 0.2), Vector2(MAX_SIZE, MAX_SIZE))
 			out["size"] = fz[0] if not fz.is_empty() else Vector2(10.0, 7.5)
-			var fo := String(p.get("outline", "rect")).strip_edges().to_lower()
+			var fo := word(p.get("outline"), "rect").strip_edges().to_lower()
 			out["outline"] = fo if FACE_OUTLINES.has(fo) else "rect"
 			out["round"] = _num(p.get("round"), 0.5, 0.0, minf((out["size"] as Vector2).x, (out["size"] as Vector2).y) * 0.5)
 			out["lit"] = _num(p.get("lit"), 0.0, 0.0, 1.0)
@@ -621,7 +622,7 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			var words := _text(p.get("text", ""), 200) if p.get("text") is String else ""
 			if not words.is_empty():
 				out["text"] = words
-			var hand := String(p.get("hand", "print")).strip_edges().to_lower() if p.get("hand") is String else "print"
+			var hand := word(p.get("hand"), "print").strip_edges().to_lower() if p.get("hand") is String else "print"
 			out["hand"] = hand if FACE_HANDS.has(hand) else "print"
 			out["ink"] = _color(p.get("ink", ""), "#141414")
 		"bloom":
@@ -642,10 +643,10 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 		out["light"] = lt
 	# How it moves with the ride and the wind ([Rides]): never a flame's (its light stands where it was lit), and never a strand laid
 	# across the table
-	out["move"] = {} if bool(out["wick"]) or String(out.get("lay", "")) == "drape" else Rides.sanitize_move(p.get("move"))
+	out["move"] = {} if bool(out["wick"]) or word(out.get("lay"), "") == "drape" else Rides.sanitize_move(p.get("move"))
 	# What it does at the table ([Motions]): its name, joint, points, states, what it runs and emits - never a flame's wax, and never a
 	# strand laid across the table
-	var work := {} if bool(out["wick"]) or String(out.get("lay", "")) == "drape" else Motions.sanitize_work(p)
+	var work := {} if bool(out["wick"]) or word(out.get("lay"), "") == "drape" else Motions.sanitize_work(p)
 	# A heap's or a scatter's copies lie loose unless written otherwise ([Particles]): a dish's stones, a pot's cloves, a brazier's coals
 	# tumble out when what holds them tips
 	if shape != "strand" and not bool(out["wick"]) and String((out["copies"] as Dictionary).get("kind", "")) in ["heap", "scatter"] \
@@ -673,7 +674,7 @@ static func _sanitize_light(v: Variant) -> Dictionary:
 	if not (v is Dictionary):
 		return {}
 	var d: Dictionary = v
-	var kind := String(d.get("kind", "point")).strip_edges().to_lower() if d.get("kind") is String else "point"
+	var kind := word(d.get("kind"), "point").strip_edges().to_lower() if d.get("kind") is String else "point"
 	if not LIGHT_KINDS.has(kind):
 		kind = "point"
 	var aim := _vec3(d.get("aim"), Vector3.DOWN, 1e6)
@@ -691,7 +692,7 @@ static func played(parts: Array) -> bool:
 		if not (q is Dictionary):
 			continue
 		var d: Dictionary = q
-		if String(d.get("shape", "")) == "face" or d.get("light") is Dictionary or (d.get("parts") is Array and played(d["parts"])):
+		if word(d.get("shape"), "") == "face" or d.get("light") is Dictionary or (d.get("parts") is Array and played(d["parts"])):
 			return true
 		for law in (d["runs"] if d.get("runs") is Array else [d.get("runs")]):
 			if law is Dictionary and String((law as Dictionary).get("law", "")) == "follow":
@@ -752,8 +753,9 @@ static func _sections(p: Dictionary) -> Array:
 
 
 static func _section(d: Dictionary, base: Dictionary) -> Dictionary:
-	var outline := String(d.get("outline", base.get("outline", "circle"))).strip_edges().to_lower()
-	var pts := _points2(d.get("points"), Vector2(-MAX_SIZE, -MAX_SIZE), Vector2(MAX_SIZE, MAX_SIZE))
+	var outline := word(d.get("outline"), base.get("outline", "circle")).strip_edges().to_lower()
+	# ...an outline written as its points is those points
+	var pts := _points2(d.get("points") if d.get("points") is Array else d.get("outline"), Vector2(-MAX_SIZE, -MAX_SIZE), Vector2(MAX_SIZE, MAX_SIZE))
 	if pts.size() < 3:
 		pts = [] if d.has("outline") else base.get("points", [])
 	var size: Vector2 = base.get("size", Vector2(2.0, 2.0))
@@ -860,7 +862,7 @@ static func _sanitize_ornament(o: Variant) -> Dictionary:
 	if not (o is Dictionary):
 		return {}
 	var d: Dictionary = o
-	var kind := String(d.get("kind", "")).strip_edges().to_lower()
+	var kind := word(d.get("kind"), "").strip_edges().to_lower()
 	if not ORNAMENTS.has(kind):
 		return {}
 	var out := {"kind": kind, "count": _num(d.get("count"), 8.0, 1.0, 64.0),
@@ -894,6 +896,16 @@ static func _sanitize_copies(c: Variant) -> Dictionary:
 				out["radius"] = _num(k.get("radius"), 4.0, 0.0, MAX_SIZE * 0.5)
 		return out
 	return {}
+
+
+## [param v] as a word, where an agent wrote one: a string as it is, anything else (a list, a map, a number where a name goes)
+## [param fallback] - never raised over, for what is made safe is whatever was written.
+static func word(v: Variant, fallback: Variant = "") -> String:
+	if v is String:
+		return v
+	if v is StringName:
+		return String(v)
+	return String(fallback) if fallback is String or fallback is StringName else ""
 
 
 static func _num(v: Variant, fallback: float, lo: float, hi: float) -> float:

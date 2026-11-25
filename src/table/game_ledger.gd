@@ -26,7 +26,7 @@ const KINDS := {
 	"remove": {"table": true, "label": "Remove", "blurb": "a figure taken off the map"},
 	"map": {"table": true, "label": "Map", "blurb": "another map laid down: whatever stood on the last comes off"},
 	"reveal": {"table": true, "label": "Reveal", "blurb": "a picture held up for the table to see"},
-	"picture": {"table": true, "label": "Picture", "blurb": "a page of the night's book: what the viewer sees now, painted, over the table"},
+	"picture": {"table": true, "label": "Picture", "blurb": "a page of the night's book: what the viewer sees now - a set with its cast stuck on it in poses - over the table"},
 	"board": {"table": true, "label": "Board", "blurb": "the view comes back from the pictures to the table, to watch what happens on it"},
 	"turn": {"table": true, "label": "Turn", "blurb": "the turn passes to a person at the table, and the view goes round to where they sit"},
 	"change": {"table": false, "label": "Change", "blurb": "something written on a sheet"},
@@ -47,6 +47,10 @@ var maps: Array = []
 var reveals: Array = []
 ## Every page of the night's book: {name, looks}
 var pictures: Array = []
+## What the night's sticker pages have drawn so far ([method page], next/sticker_book.md): each set by name -> its looks, and each
+## character or thing by name -> {looks, height, thing}. Named again, it is drawn as it was.
+var sets := {}
+var drawn := {}
 ## Whose turn it is.
 var turn := ""
 ## What has happened, in order.
@@ -101,6 +105,15 @@ func apply(e: Dictionary) -> void:
 			reveals.append({"name": String(e.get("name", "")), "looks": String(e.get("looks", ""))})
 		"picture":
 			pictures.append({"name": String(e.get("name", "")), "looks": String(e.get("looks", ""))})
+			if e.has("set"):
+				var where := String(e["set"])
+				if not sets.has(where.to_lower()):
+					sets[where.to_lower()] = {"name": where, "looks": String(e.get("set_looks", ""))}
+				for c in e.get("cast", []) if e.get("cast") is Array else []:
+					var m: Dictionary = c
+					var nm := String(m.get("who", m.get("thing", "")))
+					if not drawn.has(nm.to_lower()):
+						drawn[nm.to_lower()] = {"name": nm, "looks": String(m.get("looks", "")), "height": float(m.get("height", 0.0)), "thing": m.has("thing")}
 		"turn":
 			turn = String(e.get("who", ""))
 		"over":
@@ -308,6 +321,108 @@ func picture(name: String, looks: String, shows: Array = []) -> Dictionary:
 	return {"ok": true, "event": e, "words": "the picture of %s is on the page (%d so far tonight)" % [name, pictures.size()]}
 
 
+## The most in one page's cast: more than this is a crowd nobody reads on a phone.
+const PAGE_CAST_MOST := 5
+## A character or a thing first drawn with no height: how tall it stands (centimeters).
+const HEIGHT_DEFAULT := 170.0
+const THING_DEFAULT := 40.0
+## The parts of a set a page may stand in ([StickerBook]), and how close or far a member of its cast may stand.
+const WHERE := ["left", "middle", "right"]
+const DEPTHS := ["near", "far"]
+
+
+## A page of the night's book laid out of what is painted once and stuck on again (next/sticker_book.md): a SET, the place painted
+## empty ([param p] `set`, its `looks` the first time it is named), the ANGLE it is seen from ([constant StickerPoses.ANGLES], its wide
+## where unsaid), where in it (`where`: left, middle, right), its CAST left to
+## right - each `{who, pose}` for a character in a pose ([StickerPoses]) or `{thing}` for an object that matters, either with
+## `looks` and `height` (centimeters) the first time it is drawn, `facing` (left, right) and `depth` (near, far) where it matters -
+## who or what the camera is CLOSE on, and its EFFECTS. Named again, a set, character or thing is drawn as it was. A refusal
+## says what is wrong, and nothing happened.
+func page(p: Dictionary) -> Dictionary:
+	var where := String(p.get("set", "")).strip_edges()
+	if where.is_empty():
+		return {"ok": false, "words": "a picture is set somewhere: `set`, the place's name. Nothing was shown."}
+	var set_looks := String(p.get("looks", "")).strip_edges()
+	var new_set := not sets.has(where.to_lower())
+	if new_set and set_looks.is_empty():
+		return {"ok": false, "words": "%s is a new set: `looks` says what the place itself looks like, empty, for the painter (sets so far: %s). Nothing was shown." % [where, _names(sets)]}
+	var raw: Array = p.get("cast", []) if p.get("cast") is Array else []
+	if raw.size() > PAGE_CAST_MOST:
+		return {"ok": false, "words": "%d in one picture is a crowd: at most %d, the rest are off it. Nothing was shown." % [raw.size(), PAGE_CAST_MOST]}
+	var cast: Array = []
+	var said := PackedStringArray()
+	var fresh := PackedStringArray()
+	for c in raw:
+		if not (c is Dictionary):
+			return {"ok": false, "words": "each of the cast is {who, pose} or {thing}. Nothing was shown."}
+		var d: Dictionary = c
+		var thing := not String(d.get("thing", "")).strip_edges().is_empty()
+		var nm := String(d.get("thing" if thing else "who", "")).strip_edges()
+		if nm.is_empty():
+			return {"ok": false, "words": "each of the cast is {who, pose} or {thing}: one has no name. Nothing was shown."}
+		if said.has(nm.to_lower()):
+			return {"ok": false, "words": "%s is in this picture twice. Nothing was shown." % nm}
+		said.append(nm.to_lower())
+		var m := {"thing" if thing else "who": nm}
+		var looks := String(d.get("looks", "")).strip_edges()
+		var known := drawn.has(nm.to_lower()) or (not thing and _figure_looks(nm) != "")
+		if not known and looks.is_empty():
+			return {"ok": false, "words": "%s has not been drawn yet tonight: say `looks` (what %s looks like, for the painter) and `height` in centimeters. Drawn so far: %s. Nothing was shown." % [nm, nm, _names(drawn)]}
+		if not looks.is_empty() and not drawn.has(nm.to_lower()):
+			m["looks"] = looks
+			var h: Variant = d.get("height")
+			m["height"] = clampf(float(h), 3.0, 3000.0) if (h is float or h is int) and float(h) > 0.0 else (THING_DEFAULT if thing else HEIGHT_DEFAULT)
+			fresh.append(nm)
+		if not thing:
+			m["pose"] = StickerPoses.key_of(String(d.get("pose", "")))
+		var facing := String(d.get("facing", "")).strip_edges().to_lower()
+		if facing in ["left", "right"]:
+			m["facing"] = facing
+		var depth := String(d.get("depth", "")).strip_edges().to_lower()
+		if depth in DEPTHS:
+			m["depth"] = depth
+		cast.append(m)
+	var close := String(p.get("close", "")).strip_edges()
+	if not close.is_empty() and not said.has(close.to_lower()):
+		return {"ok": false, "words": "the camera is close on someone or something in the picture: %s is not in its cast. Nothing was shown." % close}
+	var e := {"id": next_id(), "kind": "picture", "name": String(p.get("name", "")).strip_edges(), "set": where, "cast": cast,
+		"fx": StickerPoses.effects_of(p.get("fx", []))}
+	var angle := StickerPoses.angle_of(p.get("angle"))
+	if angle != "wide":
+		e["angle"] = angle
+	if new_set:
+		e["set_looks"] = set_looks
+	var part := String(p.get("where", "")).strip_edges().to_lower()
+	if part in WHERE:
+		e["where"] = part
+	if not close.is_empty():
+		for m in cast:
+			if String((m as Dictionary).get("who", (m as Dictionary).get("thing", ""))).to_lower() == close.to_lower():
+				e["close"] = String((m as Dictionary).get("who", (m as Dictionary).get("thing", "")))
+	apply(e)
+	var words := "the picture is up: %s%s%s" % [where, (" (" + StickerPoses.ANGLES[angle]["label"].to_lower() + ")") if angle != "wide" else "", (", with " + ", ".join(cast.map(func(m: Dictionary) -> String: return String(m.get("who", m.get("thing", ""))) + (" (" + StickerPoses.label(String(m["pose"])) + ")" if m.has("pose") else "")))) if not cast.is_empty() else ", empty"]
+	if new_set:
+		words += "; a new set, painted from your words"
+	if not fresh.is_empty():
+		words += "; drawn for the first time: %s" % ", ".join(fresh)
+	return {"ok": true, "event": e, "words": words + " (%d pictures so far tonight)" % pictures.size()}
+
+
+## What figure [param name] was set on the board looking like, "" for none.
+func _figure_looks(name: String) -> String:
+	for f in figures:
+		if String(f).to_lower() == name.to_lower():
+			return String((figures[f] as Dictionary).get("looks", ""))
+	return ""
+
+
+static func _names(d: Dictionary) -> String:
+	var out := PackedStringArray()
+	for k in d:
+		out.append(String((d[k] as Dictionary).get("name", k)))
+	return ", ".join(out) if not out.is_empty() else "none"
+
+
 ## The view comes back from the pictures to the table ([constant KINDS] `board`): what happens on it next is watched.
 func to_board() -> Dictionary:
 	var e := {"id": next_id(), "kind": "board"}
@@ -359,6 +474,10 @@ func describe() -> String:
 		for name in figures:
 			var f: Dictionary = figures[name]
 			out.append("- %s at %s%s%s" % [name, _at(f["at"]), " (down)" if bool(f["down"]) else "", " (%s's)" % String(f["owner"]) if not String(f["owner"]).is_empty() else ""])
+	if not sets.is_empty():
+		out.append("SETS DRAWN SO FAR: %s" % _names(sets))
+	if not drawn.is_empty():
+		out.append("DRAWN SO FAR: %s" % _names(drawn))
 	if over:
 		out.append("THE GAME IS OVER: %s" % over_how)
 	return "\n".join(out)

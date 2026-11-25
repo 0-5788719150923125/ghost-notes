@@ -30,6 +30,7 @@ func _run() -> void:
 	_prompts()
 	_steps()
 	_pages()
+	await _stickers()
 	_budget()
 	_clean()
 	print("game_tools_check: ", "ok" if fails == 0 else "%d failed" % fails)
@@ -308,14 +309,109 @@ func _steps() -> void:
 	ep.write_json("game", {"pages": [{"name": "P"}, {"name": "Q"}, {"name": "S"}]})
 	_check(ep.steps().has("image:page:3"), "gathered again with more pages, at once, it lists them all")
 	_check(ep.steps().has("diorama") and ep.steps().has("minis") and ep.needs("say:intro").has("diorama"), "a game models its land before play and its figures after")
-	# ...the view comes back from the pages only where it is worth watching: told so, or a throw at its extreme
-	_check(TableGame._watched({"kind": "roll", "extreme": "lowest"}) and TableGame._watched({"kind": "move", "watch": true}),
-		"a throw at its extreme, and a walk watched, bring the view back to the table")
-	_check(not TableGame._watched({"kind": "roll"}) and not TableGame._watched({"kind": "move"}) and not TableGame._watched({"kind": "roll", "extreme": "highest", "watch": false})
-		and not TableGame._watched({"kind": "roll", "extreme": "highest", "hidden": true}), "control: any other throw or walk stays under the page")
+	# ...the view comes back from the pages for every throw unless told not to, and for a walk told to
+	_check(TableGame._watched({"kind": "roll"}) and TableGame._watched({"kind": "roll", "extreme": "lowest"}) and TableGame._watched({"kind": "move", "watch": true}),
+		"every throw, and a walk watched, bring the view back to the table")
+	_check(not TableGame._watched({"kind": "move"}) and not TableGame._watched({"kind": "roll", "watch": false})
+		and not TableGame._watched({"kind": "roll", "hidden": true}), "control: a throw told not to be watched, one behind the screen, and a walk stay under the page")
 	var not_game := TableEpisode.open("game-check", 89)
 	not_game.write_json("plan", {"staging": {"source": "none"}, "spread": {"positions": [{"name": "A"}]}, "look": {}})
 	_check(not not_game.steps().has("prep"), "the control: a show with no game has none of this")
+
+
+## A sticker book (next/sticker_book.md): `picture` takes a set and its cast in poses, refused in words where something new has no looks;
+## the session lists each set, character, pose and thing as a step of its own, a pose made from its character's model (a model painted
+## again leaves its poses stale, control: a set painted again leaves them fresh), and no whole page or figure's picture; every sticker
+## prompt renders whole, on its flat ground, and a pose says its model goes with it.
+func _stickers() -> void:
+	var t := _tools("4")
+	var tool: Dictionary = {}
+	for d in t.list_tools():
+		if String((d as Dictionary)["name"]) == "picture":
+			tool = d
+	_check(String(tool.get("description", "")).contains("face_shock") and String(tool.get("description", "")).contains("lines"), "the game master is told every pose and effect")
+	_check((await _call(t, "picture", {"set": "The Barn", "cast": []})).has("error"), "a new set without its looks is refused")
+	var shown := await _call(t, "picture", {"set": "The Barn", "looks": "a dark barn", "cast": [{"who": "Bea", "pose": "shock", "looks": "a tall woman", "height": 180}], "close": "Bea"})
+	_check(not shown.has("error") and String((t.items.back() as Dictionary).get("mark", "")) == "picture", "a picture is shown, its mark where it happened: %s" % shown.get("text", ""))
+	var ep := TableEpisode.open("game-check", 90)
+	ep.write_json("plan", {"game": true, "staging": {"source": "none"}, "spread": {"positions": [{"name": "Part 1"}]}, "look": {}})
+	ep.write_json("game", {"sets": [{"name": "The Barn", "looks": "a dark barn"}], "cast": [{"name": "Bea", "looks": "a tall woman", "height": 180.0}],
+		"poses": [{"who": "Bea", "pose": "shock"}], "things": [{"name": "A Cake", "looks": "a cake", "height": 30.0}], "figures": [{"name": "Bea"}],
+		"pages": [{"name": "", "set": "The Barn", "cast": [{"who": "Bea", "pose": "shock"}], "fx": []}]})
+	var steps := ep.steps()
+	for st in ["image:set:1", "image:model:1", "image:pose:1", "image:thing:1"]:
+		_check(steps.has(st), "a sticker book paints %s: %s" % [st, str(steps)])
+	_check(not steps.has("image:page:1") and not steps.has("image:figure:1"), "and no whole page, nor a figure's own picture")
+	_check(ep.needs("image:pose:1").has("image:model:1"), "a pose is made from its character's model")
+	_check(ep.painted_of("image:pose:1").ends_with("painted/pose_1.png"), "a sticker's painting lands beside the episode, to be cut")
+	for st in ["image:model:1", "image:set:1"]:
+		var f := FileAccess.open(ep.file_of(st), FileAccess.WRITE)
+		f.store_string("one")
+		f.close()
+	var pose_key := ep.sticker_key("image:pose:1")
+	var set_key := ep.sticker_key("image:set:1")
+	var f2 := FileAccess.open(ep.file_of("image:set:1"), FileAccess.WRITE)
+	f2.store_string("another set")
+	f2.close()
+	_check(ep.sticker_key("image:pose:1") == pose_key and ep.sticker_key("image:set:1") == set_key, "control: a set painted again leaves a pose as it was")
+	var f3 := FileAccess.open(ep.file_of("image:model:1"), FileAccess.WRITE)
+	f3.store_string("another model")
+	f3.close()
+	_check(ep.sticker_key("image:pose:1") != pose_key, "a model painted again leaves its poses stale")
+	Rules.clear()
+	var look := {"palette": ["#112233"], "art": "ink on brown paper"}
+	for kind in ["set", "model", "thing"]:
+		var entry: Dictionary = {"set": {"name": "The Barn", "looks": "a dark barn"}, "model": {"name": "Bea", "looks": "a tall woman", "height": 180.0},
+			"thing": {"name": "A Cake", "looks": "a cake", "height": 30.0}}[kind]
+		var p := TablePrompts.sticker_image(look, kind, entry, "/tmp/x.png")
+		_check(p.contains(String(entry["looks"])) and p.contains("ink on brown paper") and not p.contains("{{"), "a %s's prompt is whole" % kind)
+		_check(p.contains("MAGENTA") == (kind != "set"), "a %s is painted %s" % [kind, "empty, as it is" if kind == "set" else "on a flat ground to be cut away"])
+	var pose := TablePrompts.sticker_image(look, "pose", {"who": "Bea", "pose": "face_shock"}, "/tmp/x.png", {"name": "Bea", "looks": "a tall woman"}, "face_shock", true)
+	_check(pose.contains("a tall woman") and pose.contains("CLOSE") and pose.contains("model drawing") and not pose.contains("{{"), "a pose is told its model goes with it, and a close one is close")
+	_check(Rules.missing.is_empty(), "every name was given: %s" % str(Rules.missing))
+	_reuse()
+
+
+## Drawn the same next time: a character this show drew on an earlier night, by its name and looks (or by name alone), is copied in
+## rather than painted, and its pose with it where the model is the very same; control: other looks are painted afresh.
+func _reuse() -> void:
+	var before := TableEpisode.open("sticker-reuse", 1)
+	DirAccess.make_dir_recursive_absolute(before.dir)
+	before.write_json("plan", {"game": true, "staging": {"source": "none"}, "spread": {"positions": [{"name": "Part 1"}]}, "look": {}})
+	before.write_json("game", {"sets": [{"name": "The Barn", "looks": "a dark barn"}], "cast": [{"name": "Bea", "looks": "a tall woman", "height": 180.0}],
+		"poses": [{"who": "Bea", "pose": "shock"}], "things": [], "pages": []})
+	for st in ["image:model:1", "image:pose:1"]:
+		var f := FileAccess.open(before.file_of(st), FileAccess.WRITE)
+		f.store_string("drawing of " + st)
+		f.close()
+	var now := TableEpisode.open("sticker-reuse", 2)
+	DirAccess.make_dir_recursive_absolute(now.dir)
+	now.write_json("plan", {"game": true, "staging": {"source": "none"}, "spread": {"positions": [{"name": "Part 1"}]}, "look": {}})
+	now.write_json("game", {"sets": [{"name": "The Yard", "looks": "a yard"}], "cast": [{"name": "bea", "looks": ""}, {"name": "Milo", "looks": "a short man"}],
+		"poses": [{"who": "Bea", "pose": "shock"}], "things": [], "pages": []})
+	var prod := TableProducer.new(now, {"title": "S", "brief": "B"})
+	_check(prod._reused("image:model:1", "model", now.picture_entry("image:model:1")) == "earlier night" and now.has("image:model:1"),
+		"a character drawn on an earlier night is copied in, by name alone")
+	_check(prod._reused("image:pose:1", "pose", now.picture_entry("image:pose:1")) == "earlier night" and now.has("image:pose:1"),
+		"and its pose, from the very same model")
+	_check(prod._reused("image:model:2", "model", now.picture_entry("image:model:2")).is_empty(), "control: someone never drawn is painted")
+	var other := TableEpisode.open("sticker-reuse", 3)
+	DirAccess.make_dir_recursive_absolute(other.dir)
+	other.write_json("plan", {"game": true, "staging": {"source": "none"}, "spread": {"positions": [{"name": "Part 1"}]}, "look": {}})
+	other.write_json("game", {"sets": [{"name": "The Yard", "looks": "a yard"}], "cast": [{"name": "Bea", "looks": "Bea, now a cow"}], "poses": [], "things": [], "pages": []})
+	var p3 := TableProducer.new(other, {"title": "S", "brief": "B"})
+	_check(p3._reused("image:model:1", "model", other.picture_entry("image:model:1")).is_empty(), "control: the same name with other looks is drawn afresh")
+	# ...a painting never cut is cut, not painted again, only for the entry it was painted for
+	var painted := other.painted_of("image:model:1")
+	DirAccess.make_dir_recursive_absolute(painted.get_base_dir())
+	var pf := FileAccess.open(painted, FileAccess.WRITE)
+	pf.store_string("a painting")
+	pf.close()
+	_check(p3._painted_fits("image:model:1"), "a painting made since the session was gathered, with nothing beside it, is cut as it is")
+	TextGen.put(painted + TableProducer.KEY_SIDE, other.sticker_key("image:model:1"))
+	_check(p3._painted_fits("image:model:1"), "and one whose key beside it is its entry's")
+	TextGen.put(painted + TableProducer.KEY_SIDE, "another entry")
+	_check(not p3._painted_fits("image:model:1"), "control: one painted for another entry is painted again")
 
 
 func _clean() -> void:
@@ -410,4 +506,4 @@ func _budget() -> void:
 	var q: Dictionary = TablePrompts.game_master("T", "B", {}, people, "intro", 1, {}, GameLedger.from({}), "", intro)
 	_check(not String(q["prompt"]).contains("WHAT CAME BEFORE") and not String(q["prompt"]).contains("TONIGHT'S PACE"), "...and a plan with neither is told of neither (the control)")
 	var tall: Dictionary = TablePrompts.game_master("T", "B", {}, people, "intro", 1, {}, GameLedger.from({}), "", intro, {}, true)
-	_check(String(tall["prompt"]).contains("TONIGHT'S PAGES ARE TALL") and not String(q["prompt"]).contains("PAGES ARE TALL"), "a portrait show's game master tells each page as one subject close; a landscape one is not told so (the control)")
+	_check(String(tall["prompt"]).contains("TONIGHT'S PICTURES ARE TALL") and not String(q["prompt"]).contains("PICTURES ARE TALL"), "a portrait show's game master keeps each picture to one or two, close; a landscape one is not told so (the control)")

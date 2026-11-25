@@ -122,6 +122,9 @@ var _field_memo := {}
 # `_settled_ms` when `_seen` stopped changing. A quiet period is "unchanged since", which a dirty bit cannot express.
 var _seen := ""
 var _saved := ""
+# ...and our blocks as the file itself had them when last read or written: what tells a key the file lost (taken out by a
+# hand, a voice renamed) from one it never had (a default, a newer key), which [method merge3] keeps.
+var _filed := ""
 var _settled_ms := 0
 var _polled_ms := 0
 var _autosave_note := ""         # last failure said, so a retry does not repeat it
@@ -431,7 +434,8 @@ func save() -> bool:
 		_note("This panel cannot save a voice.")
 		return false
 	# Read-modify-write of our blocks: whatever else the document keeps under `ghost:` is carried through untouched.
-	var err := FrontMatter_.write_block(_path, _merged_ghost())
+	var merged := _merged_ghost()
+	var err := FrontMatter_.write_block(_path, merged)
 	if not err.is_empty():
 		_autosave_note = err
 		_note("⚠  " + err)
@@ -439,6 +443,7 @@ func save() -> bool:
 	# The autosave must not now write the same thing again a moment later.
 	_seen = _snapshot()
 	_saved = _seen
+	_filed = JSON.stringify(_own(merged))
 	_autosave_note = ""
 	_wrote()
 	_note("✓  Voice saved into %s" % _path.get_file())
@@ -530,8 +535,9 @@ func _write_reconciled() -> String:
 	var mine: Variant = capture.call()
 	var theirs := _own(ghost)
 	var base: Variant = JSON.parse_string(_saved) if not _saved.is_empty() else null
+	var filed: Variant = JSON.parse_string(_filed) if not _filed.is_empty() else null
 	if mine is Dictionary and base is Dictionary and not same_value(theirs, base):
-		var merged: Variant = merge3(base, mine, theirs)
+		var merged: Variant = merge3(base, mine, theirs, filed)
 		if apply.is_valid() and not same_value(merged, mine):
 			apply.call(_dict_blocks(merged as Dictionary))
 			mine = capture.call()
@@ -541,6 +547,7 @@ func _write_reconciled() -> String:
 	_lay_over(ghost, mine)
 	var err := FrontMatter_.write_block(_path, ghost)
 	if err.is_empty():
+		_filed = JSON.stringify(_own(ghost))
 		_wrote()
 	return err
 
@@ -610,22 +617,26 @@ func _lay_over(ghost: Dictionary, mine: Variant) -> void:
 
 
 ## `theirs` with every value `mine` changed from `base` laid over it, key by key down through nested blocks. A value
-## only one side changed survives; where both changed the same value, the panel (the more recent hand) wins.
-static func merge3(base: Variant, mine: Variant, theirs: Variant) -> Variant:
+## only one side changed survives; where both changed the same value, the panel (the more recent hand) wins. A key the
+## panel did not touch that is gone from the file was taken out of it where [param filed] (the file as last read or
+## written) had it - a voice renamed or removed by hand - and stays out; one the file never had (a default the panel
+## fills in, a newer key) is kept.
+static func merge3(base: Variant, mine: Variant, theirs: Variant, filed: Variant = null) -> Variant:
 	if not (mine is Dictionary and theirs is Dictionary):
 		return mine if not same_value(mine, base) else theirs
 	var out := (theirs as Dictionary).duplicate(true)
 	var b: Dictionary = base if base is Dictionary else {}
+	var f: Dictionary = filed if filed is Dictionary else {}
 	for k in mine:
 		if not b.has(k):
 			if not out.has(k):
 				out[k] = mine[k]           # new in the panel, unknown to the file
 			continue
 		if same_value(mine[k], b[k]):
-			if not out.has(k):
-				out[k] = mine[k]           # absent from the file is not an edit (a newer key)
-			continue                       # the panel did not touch it: the file's stands
-		out[k] = merge3(b[k], mine[k], out.get(k, null))
+			if not out.has(k) and not f.has(k):
+				out[k] = mine[k]           # absent from a file that never had it is not an edit (a newer key)
+			continue                       # the panel did not touch it: the file's stands, or its taking out
+		out[k] = merge3(b[k], mine[k], out.get(k, null), f.get(k, null))
 	return out
 
 
@@ -762,6 +773,7 @@ func _import(raw: String, quiet := false) -> void:
 			% [_path.get_file(), String(res.error)])
 		return
 	var ghost := res.data as Dictionary
+	_filed = JSON.stringify(_own(ghost))
 	var mine := _dict_blocks(_own(ghost))
 	if not mine.is_empty() and apply.is_valid():
 		apply.call(mine)

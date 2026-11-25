@@ -209,12 +209,13 @@ const PANEL_CONTRAST := 7.0
 ## The title screen: the show's name over the table thrown out of focus, which is also the video's thumbnail. The name is as large as a
 ## line of it fits across TITLE_WIDTH of the frame (a margin of an eighth each side), and no larger than TITLE_SIZE of its height; a name
 ## that would come out under TITLE_TWO_LINES of that on one line is set on two. The byline is TITLE_BYLINE of the name's size, and the
-## whole block is centered TITLE_MIDDLE down the frame.
+## whole block, byline and all, is centered TITLE_MIDDLE down the frame: as much space above it as below, the name a little above the
+## middle since the byline hangs under it. Any higher and the name, the block's weight, reads as high.
 const TITLE_SIZE := 0.15
 const TITLE_WIDTH := 0.74
 const TITLE_TWO_LINES := 0.7
 const TITLE_BYLINE := 0.4
-const TITLE_MIDDLE := 0.45
+const TITLE_MIDDLE := 0.5
 ## How tall the title face's capitals stand, as a share of its size (Cinzel's), and how far apart
 ## two lines of the name are.
 const TITLE_CAP := 0.7

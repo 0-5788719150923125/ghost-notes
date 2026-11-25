@@ -93,10 +93,10 @@ func _run() -> void:
 	_ok(card.row_count() == 2, "the card draws a row for each (%d)" % card.row_count())
 
 	# Used, Keep, Select
-	_ok(sec.groups().map(func(g: Dictionary) -> String: return String(g["label"])) == ["Used", "Set aside", "The land", "Figures"],
-		"the groups are Used and Set aside, and a game's land and figures")
-	_ok(sec.rows().filter(func(r: Dictionary) -> bool: return String(r["group"]) in ["board", "figures"]).is_empty(),
-		"a show with no game lists nothing under the land or figures")
+	_ok(sec.groups().map(func(g: Dictionary) -> String: return String(g["label"])) == ["Used", "Set aside", "The land", "Figures", "Characters", "Sets"],
+		"the groups are Used and Set aside, a game's land and figures, and its sticker book's characters and sets")
+	_ok(sec.rows().filter(func(r: Dictionary) -> bool: return String(r["group"]) in ["board", "figures", "cast", "sets"]).is_empty(),
+		"a show with no game lists nothing under the land, figures, characters or sets")
 	var verbs_of := func(key: String) -> Array:
 		var row: Array = sec.rows().filter(func(r: Dictionary) -> bool: return String(r["key"]) == key)
 		return (row[0]["verbs"] as Array).map(func(v: Dictionary) -> String: return String(v["key"])) if not row.is_empty() else []

@@ -40,6 +40,8 @@ func _run() -> void:
 	var s := _session()
 	var game: Dictionary = s["game"]
 	var ev: Array = s["events"]
+	# ...in the frame it judges, never the author's: their settings may keep another
+	Director.frame = "landscape"
 	var stage := SubViewport.new()
 	stage.size = Vector2i(320, 180)
 	stage.own_world_3d = true
@@ -71,10 +73,10 @@ func _run() -> void:
 		return
 	tg.wait_whole()
 	_check(not tg._record.is_empty(), "the dice were really thrown: %s" % tg.report())
-	# ...when each happened: the marks a reading would place
+	# ...when each happened: the marks a reading would place, after the show opens and its opening has held the table (TableGame.opening_end)
 	var when := {}
-	var t := 1.0
-	var sched: Array = []
+	var t := TableGame.OPENING_SEES + Cameras.EASE + 1.0
+	var sched: Array = [{"a": {"kind": "begin"}, "t0": 0.0, "s": 1.0}]
 	for e in ev:
 		when[int((e as Dictionary)["id"])] = t
 		sched.append({"a": {"kind": String((e as Dictionary)["kind"]), "card": int((e as Dictionary)["id"])}, "t0": t, "s": 1.0})

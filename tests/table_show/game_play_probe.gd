@@ -50,7 +50,7 @@ func _run() -> void:
 	episode = TableEpisode.open("game-play", seed_value)
 	DirAccess.make_dir_recursive_absolute(episode.dir)
 	producer = TableProducer.new(episode, {"title": title, "byline": "", "uploads_as": "", "brief": TablePrompts.brief(body), "deck": [], "chooses": false, "voices": voices, "seats": {},
-		"writer": "claude", "writer_model": "", "writer_effort": effort, "painter": "codex", "painter_model": "", "painter_effort": "", "players": "claude", "players_model": "", "players_effort": "low"})
+		"writer": "claude", "writer_model": "", "writer_effort": effort, "painter": "codex", "painter_model": "", "painter_effort": ""})
 	want = ["plan", "draw", "prep", "say:intro"]
 	for k in range(1, scenes + 1):
 		want.append("say:%d" % k)

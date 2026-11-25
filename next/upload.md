@@ -9,6 +9,10 @@
 - **Built:** a painted thumbnail's Refine… (under it and in its full-size window): a painter changes only what the author
   asks in the one shown, and it lands as a new version that goes up (`YouTubeThumbnail.refine`, rules/youtube/thumbnail.yaml
   `refine`). Not yet tried on a real painter; the user still has to judge whether its words stay put when not asked about.
+- **Built:** a Title screen thumbnail shows under the card as the stage had it on the last Play from the top
+  (`TitleScreen`, title_screen.gd: caught at the title screen's moment, the Look over it, kept as the episode's
+  `title_screen.jpg`); a frame taken from an export is cut about its middle to 16:9, never stretched. Every full-size
+  picture window has Show in folder. The user still has to judge whether a Play from the top is soon enough to see it.
 - **Not yet tried:** a real TikTok account and app. Everything about TikTok is built from its documentation alone.
 - **The user still has to judge:** whether drafts or posts suit; the caption's shape; whether TikTok's portrait export
   (Medium frame 9:16) should be offered when TikTok is a target.

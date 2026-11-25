@@ -15,6 +15,9 @@ extends SceneTree
 ##   incomplete); a chunked body reads as the same request; a batch gets a batch; GET is not served; a
 ##   browser's Origin is refused and a local one is not; junk is a parse error.
 ## - A runaway loop ends: past the most calls a job may make, a call is refused.
+## - A call's arguments are held to the types its tool declares: a list where text is declared is refused in words and never reaches
+##   the toolset, however deep in a list of objects; a number where text is declared is its text, and text that is a number where a
+##   number is (the control: arguments of the declared types come through as they are).
 ## - A read-only process serves nothing.
 
 const DIR := "user://agent_tools_check"
@@ -70,6 +73,7 @@ func _ok(cond: bool, what: String) -> void:
 
 
 func _run() -> void:
+	_typed()
 	var dir := ProjectSettings.globalize_path(DIR)
 	if DirAccess.dir_exists_absolute(dir):
 		for f in DirAccess.get_files_at(dir):
@@ -222,6 +226,22 @@ func _run() -> void:
 
 	print("agent_tools_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
 	quit(1 if _fails > 0 else 0)
+
+
+## A call's arguments held to their tool's declared types ([method AgentTools.typed]).
+func _typed() -> void:
+	var schema := {"type": "object", "properties": {"say": {"type": "string"}, "n": {"type": "number"}, "loose": {"description": "anything"},
+		"cast": {"type": "array", "items": {"type": "object", "properties": {"who": {"type": "string"}, "tall": {"type": "number"}}}}}}
+	var good := {"say": "hi", "n": 3, "loose": [1, 2], "cast": [{"who": "Bea", "tall": 170}]}
+	var g := AgentTools.typed(good, schema)
+	_ok(String(g["error"]).is_empty() and g["args"] == good, "control: arguments of the declared types come through as they are: %s" % str(g))
+	var bad := AgentTools.typed({"say": ["a", "b"]}, schema)
+	_ok(String(bad["error"]).contains("`say` is text"), "a list where text is declared is refused in words: %s" % bad["error"])
+	var deep := AgentTools.typed({"cast": [{"who": "Bea"}, {"who": {"name": "Milo"}}]}, schema)
+	_ok(String(deep["error"]).contains("`cast[1].who`"), "however deep in a list of objects: %s" % deep["error"])
+	var made := AgentTools.typed({"say": 15, "n": "2.5"}, schema)
+	_ok(String(made["error"]).is_empty() and (made["args"] as Dictionary)["say"] == "15" and is_equal_approx(float((made["args"] as Dictionary)["n"]), 2.5),
+		"a number where text is declared is its text, and a number written as text a number: %s" % str(made))
 
 
 func _late_call(job: Dictionary, pending: Dictionary) -> void:

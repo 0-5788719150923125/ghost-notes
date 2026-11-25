@@ -14,7 +14,7 @@ class_name Chrome
 ##                     what it is installing. Open until the user first closes it (`[deps] open`).
 ## - **graphics**    - the Graphics panel ([GraphicsPanel]) behind the row's picture: how finely the stage
 ##                     is drawn, live and in an export ([Graphics]).
-## - **dex**         - the Dex ([DexWindow]) behind the row's books: what the library keeps, props, voices and environments
+## - **dex**         - the Dex ([DexWindow]) behind the row's books: what the library keeps, props, voices, environments, characters and sets
 ##                     ([LibraryProps], [LibraryVoices]), browsed from anywhere.
 ## - **exporter**    - the ⤓ render-to-video button and background pipeline (persistent: an in-flight
 ##                     export survives session churn).
@@ -45,7 +45,7 @@ var _dex_shelves: Array = []    # what the Dex opened on its own shows: the libr
 const DEX := "res://src/ui/dex_window.gd"
 const DEX_SHELVES := ["res://src/table_show/library_props.gd", "res://src/voice/library_voices.gd",
 	"res://src/desk/desk_recipes.gd", "res://src/dispatch/dispatch_props.gd", "res://src/table/environment_section.gd",
-	"res://src/music/sound_shelf.gd"]
+	"res://src/music/sound_shelf.gd", "res://src/table/sticker_shelf.gd"]
 
 var _env_layer: CanvasLayer
 var _env_button: Button

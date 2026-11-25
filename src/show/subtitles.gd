@@ -5,7 +5,7 @@ class_name Subtitles
 ##
 ## Draws the current sentence at the bottom in the source spelling (caps, quotes and punctuation intact;
 ## the phoneme normalization never reaches the reader), wrapping onto up to three lines before it shrinks
-## the font. Emphasis is drawn as emphasis: markdown's `*italic*` and `**bold**` reach here as a level on
+## the font, and never wider than its area ([method text_area]): a word too wide for it shrinks until it fits. Emphasis is drawn as emphasis: markdown's `*italic*` and `**bold**` reach here as a level on
 ## the word (see TextNorm's emphasis sentinels) and the overlay synthesizes a slanted or emboldened face.
 ##
 ## The tracker is a narrator's eye, not a metronome: an eased cursor that chases the true playback
@@ -34,7 +34,15 @@ const REVEALS := {
 	"karaoke": "the whole line shown, each word lit as it is spoken",
 	"glitch": "the words appear as they are spoken, a few scrambled glyphs running just ahead of the voice - reaching on, falling back, reaching again",
 	"credits": "every line rolling slowly up the whole frame as a film's end credits do, the line being said near the middle, lit as it is spoken",
+	"word": "one word at a time where a line goes, on its dark plate, each shown as it is spoken",
 }
+## The word reveal ([constant REVEALS] `word`): only the word being said ([method word_at]), where a line of the karaoke goes and as it
+## is set - its type, its dark plate, its shadow ([method text_area]) - shrunk only where a word is wider than the line's area. A word
+## shows from WORD_EARLY before it is said until the next one shows, or WORD_HANG past its end, then fades over WORD_FADE. The
+## punctuation that ends a phrase and the quotes round a word are left off ([method word_shown]). A pure function of the clock.
+const WORD_EARLY := 0.04
+const WORD_HANG := 0.45
+const WORD_FADE := 0.15
 ## The credits ([constant REVEALS] `credits`): every line of the words, each centered and wrapped, rolling up the frame at ONE SPEED
 ## all the way, as a film's end credits do - the speed the lines need to stand apart where they come closest ([method credits_pace]),
 ## each line set down the roll where that speed has it when it is said, so its middle crosses CREDITS_AT of the frame's height at
@@ -210,21 +218,66 @@ var reveal := ""
 ## over (Google's safe zones for 1080x1920 keep the top 288, the bottom 672 and the right 192 pixels
 ## clear; the left keeps a small margin of its own).
 const SAFE := {"top": 0.15, "bottom": 0.35, "right": 0.178, "left": 0.044}
+## The share of a landscape frame's width a line's plate may span, centered: platforms crop a frame's sides, and a line run to the
+## edge reads as cut off (and is long to read).
+const WIDE := 0.76
+## Space between words and round a line inside its plate, at 1080 (scaled with the type).
+const GAP := 14.0
+const PAD := 12.0
 
 
-## Where a line of subtitles goes in [param frame]: `{k, max_w, cx, base_y}`: the type's scale (off the
-## frame's short side, as the scenes size themselves), the widest a line may run, the middle it is centered
-## on, and the last line's baseline. A landscape frame keeps 92% of its width and 70 px up at 1080; a
-## portrait one lays out inside its SAFE area.
+## Where a line of subtitles goes in [param frame]: `{k, max_w, cx, base_y, pad, gap}`: the type's scale (off the frame's short side,
+## as the scenes size themselves), the widest a line's words may run (its plate's padding already taken off), the middle it is
+## centered on, the last line's baseline, and the plate's padding and the space between words at that scale. A landscape frame keeps
+## its middle WIDE and 70 px up at 1080; a portrait one lays out inside its SAFE area, centered on the frame's middle - as wide as the
+## SAFE area allows on both sides of it - so a line is never off to one side.
 static func text_area(frame: Rect2) -> Dictionary:
 	var vp := frame.size
 	var k := minf(vp.x, vp.y) / 1080.0
+	var pad := PAD * k
 	if vp.y <= vp.x:
-		return {"k": k, "max_w": vp.x * 0.92, "cx": frame.position.x + vp.x * 0.5,
-			"base_y": frame.position.y + vp.y - 70.0 * k, "area": frame}
-	var area := Rect2(frame.position.x + vp.x * float(SAFE["left"]), frame.position.y + vp.y * float(SAFE["top"]),
-		vp.x * (1.0 - float(SAFE["left"]) - float(SAFE["right"])), vp.y * (1.0 - float(SAFE["top"]) - float(SAFE["bottom"])))
-	return {"k": k, "max_w": area.size.x, "cx": area.position.x + area.size.x * 0.5, "base_y": area.end.y, "area": area}
+		var wide := vp.x * WIDE
+		return {"k": k, "max_w": wide - 2.0 * pad, "cx": frame.position.x + vp.x * 0.5, "pad": pad, "gap": GAP * k,
+			"base_y": frame.position.y + vp.y - 70.0 * k, "area": Rect2(frame.position.x + (vp.x - wide) * 0.5, frame.position.y, wide, vp.y)}
+	var side := vp.x * maxf(float(SAFE["left"]), float(SAFE["right"]))
+	var area := Rect2(frame.position.x + side, frame.position.y + vp.y * float(SAFE["top"]),
+		vp.x - 2.0 * side, vp.y * (1.0 - float(SAFE["top"]) - float(SAFE["bottom"])))
+	return {"k": k, "max_w": area.size.x - 2.0 * pad, "cx": frame.position.x + vp.x * 0.5, "base_y": area.end.y, "area": area,
+		"pad": pad, "gap": GAP * k}
+
+
+## The word the word reveal shows at [param t] of [param words] (in time order, as a reading lays them): `[index, alpha]`, or
+## `[-1, 0.0]` for none. The last word begun (from WORD_EARLY before it) holds until WORD_HANG past its end and fades over WORD_FADE.
+static func word_at(words: Array, t: float) -> Array:
+	var lo := 0
+	var hi := words.size()
+	while lo < hi:
+		var mid := (lo + hi) >> 1
+		if float((words[mid] as Dictionary).get("t0", 0.0)) - WORD_EARLY <= t:
+			lo = mid + 1
+		else:
+			hi = mid
+	var k := lo - 1
+	if k < 0:
+		return [-1, 0.0]
+	var past := t - float((words[k] as Dictionary).get("t1", 0.0)) - WORD_HANG
+	var a := 1.0 if past <= 0.0 else 1.0 - past / WORD_FADE
+	return [k, a] if a > 0.0 else [-1, 0.0]
+
+
+## A word as the word reveal shows it: the quotes round it and the commas, stops, colons, semicolons and dashes ending it left off;
+## a question or exclamation mark kept. A word that is nothing but those marks is shown as it is.
+static func word_shown(text: String) -> String:
+	var s := text.strip_edges()
+	for q in ["\"", "“", "”"]:
+		s = s.trim_prefix(q).trim_suffix(q)
+	if s.begins_with("‘") and s.ends_with("’"):
+		s = s.substr(1, s.length() - 2)
+	while not s.is_empty() and ",.;:…-–—".contains(s[s.length() - 1]):
+		s = s.left(s.length() - 1)
+	for q in ["\"", "”", "’"]:
+		s = s.trim_suffix(q)
+	return s if not s.is_empty() else text.strip_edges()
 var _cursor := 0.0                  # the narrator's eye: global word progress, eased
 var _hue_sm := 0.6
 ## The water the line's color moves on: the eye raises its waves ([method _process]), the draw reads them.
@@ -439,6 +492,9 @@ func _presence_target(t: float) -> float:
 	if reveal_now() == "credits":
 		var spans := _spans_now()
 		return 1.0 if not spans.is_empty() and t >= float(spans[0].lo) - CREDITS_LEAD and t <= float(spans.back().hi) + CREDITS_HANG else 0.0
+	if reveal_now() == "word":
+		var at := word_at(words, t)
+		return 1.0 if int(at[0]) >= 0 and word_captioned(int(at[0]), t) else 0.0
 	var i := span_at(t)
 	if i < 0:
 		return 0.0
@@ -446,6 +502,17 @@ func _presence_target(t: float) -> float:
 		var e: Dictionary = _spans_now()[i]
 		return 1.0 if bool(captions.call(int(e.w0), int(e.w1), t)) else 0.0
 	return 1.0
+
+
+## Whether the medium captions word [param k] at [param t] ([member captions], asked with the word's sentence as for a line).
+func word_captioned(k: int, t: float) -> bool:
+	if not captions.is_valid():
+		return true
+	var si := int((words[k] as Dictionary).get("sentence", 0))
+	for e in _spans_now():
+		if int(e.si) == si:
+			return bool(captions.call(int(e.w0), int(e.w1), t))
+	return true
 
 
 func _process(delta: float) -> void:
@@ -537,6 +604,9 @@ class Overlay:
 	func _draw() -> void:
 		if owner_node == null or owner_node.words.is_empty():
 			return
+		if owner_node.reveal_now() == "word":
+			_draw_word()
+			return
 	# Nothing is being read: draw nothing at all, plate included (an empty line would still draw its
 	# dark plate, a black bar waiting for words).
 		var vis: float = owner_node.presence
@@ -559,18 +629,14 @@ class Overlay:
 	# come out smaller in the file than in the viewer. Sizing off the frame makes the type occupy the same
 	# fraction at any render resolution.
 		var k: float = box["k"]
-		# wrap first, shrink only as a last resort
-		var fs := int(round(BASE_FS * k))
-		var min_fs := int(round(MIN_FS * k))
-		var lines := _wrap(line_words, font, fs, max_w)
-		while lines.size() > MAX_LINES and fs > min_fs:
-			fs -= maxi(1, int(round(2.0 * k)))
-			lines = _wrap(line_words, font, fs, max_w)
+		var fit := fit_line(line_words, font, k, max_w, float(box["gap"]))
+		var fs: int = fit["fs"]
+		var lines: Array = fit["lines"]
 		var lh := float(fs) + 12.0 * k
 		# the harmonic hue is the BASE the sea turns each letter from (see _glyph_color)
 		var base_hue := _harmonic_hue()
 		var now := owner_node._now()
-		var gap := 14.0 * k
+		var gap: float = box["gap"]
 	# the cursor as a character position within this sentence, so the flare is measured in glyphs
 		var ccur: float = _char_cursor(line_words)
 	# the sea along this line, a letter at a time: its places are the reading's, so a wave stays in the
@@ -611,7 +677,7 @@ class Overlay:
 				drawn = _written(row, float(front + reach), font, fs, gap)
 			starts.append(x0)
 			if drawn > 0.0:
-				var pad := 12.0 * k
+				var pad: float = box["pad"]
 				var plate := Rect2(x0 - pad, y - float(fs) - 4.0 * k, drawn + pad * 2.0, lh + 2.0 * k)
 				draw_rect(plate, Color(0.04, 0.04, 0.05, 0.72 * vis), true)
 			y += lh
@@ -687,7 +753,7 @@ class Overlay:
 		var k := minf(frame.size.x, frame.size.y) / REF_H
 		var fs := int(round(Subtitles.CREDITS_FS * k))
 		var lh := float(fs) * Subtitles.CREDITS_ROW
-		var lay := _credits_layout(font, fs, frame.size.x * Subtitles.CREDITS_WIDE)
+		var lay := _credits_layout(font, fs, frame.size.x * Subtitles.CREDITS_WIDE, Subtitles.GAP * k)
 		var rows: Array = lay["rows"]
 		if rows.is_empty():
 			return
@@ -696,7 +762,7 @@ class Overlay:
 		var mid_y := frame.position.y + frame.size.y * Subtitles.CREDITS_AT + float(fs) * 0.35
 		var edge := frame.size.y * Subtitles.CREDITS_EDGE
 		var cx := frame.position.x + frame.size.x * 0.5
-		var gap := 14.0 * k
+		var gap := Subtitles.GAP * k
 		var pos: int = owner_node.span_at(now)
 		var lit_si := int(owner_node._spans_now()[pos].si) if pos >= 0 else -1
 		var base_hue := _harmonic_hue()
@@ -748,7 +814,7 @@ class Overlay:
 	## How the credits lie for the words as they stand at size [param fs], [param wide] across: each line (a sentence) wrapped into rows,
 	## the roll's one speed ([method Subtitles.credits_pace]), each line's middle down the roll ([method Subtitles.credits_places]) and
 	## each row's place from it. Laid out again only when the words, the size or the width change.
-	func _credits_layout(font: Font, fs: int, wide: float) -> Dictionary:
+	func _credits_layout(font: Font, fs: int, wide: float, gap: float) -> Dictionary:
 		var all: Array = owner_node.words
 		var key := "%d|%d|%d|%s" % [all.size(), fs, int(wide), str(float(all.back().t1)) if not all.is_empty() else ""]
 		if key == _roll_of:
@@ -767,7 +833,7 @@ class Overlay:
 		var times := PackedFloat32Array()
 		for li in lines.size():
 			var items: Array = (lines[li] as Dictionary)["items"]
-			wrapped.append(_wrap(items, font, fs, wide))
+			wrapped.append(_wrap(items, font, fs, wide, gap))
 			times.append((float(items[0].word.t0) + float(items.back().word.t1)) * 0.5)
 		var needs := PackedFloat32Array()
 		for li in range(lines.size() - 1):
@@ -884,9 +950,71 @@ class Overlay:
 		_glitch_sets[face] = out
 		return out
 
-	## Greedy wrap into rows that fit max_w at the given font size; also fills each item's pixel width.
-	func _wrap(items: Array, font: Font, fs: int, max_w: float) -> Array:
-		var gap := 14.0
+	## The size and rows a line is drawn in at scale [param k], no row wider than [param max_w] with [param gap] between its words:
+	## `{fs, lines}`. Wrapped onto up to MAX_LINES rows before it shrinks toward MIN_FS; a word wider than the area alone shrinks the
+	## line past that until it fits.
+	func fit_line(items: Array, font: Font, k: float, max_w: float, gap: float) -> Dictionary:
+		var fs := int(round(BASE_FS * k))
+		var min_fs := int(round(MIN_FS * k))
+		var step := maxi(1, int(round(2.0 * k)))
+		var lines := _wrap(items, font, fs, max_w, gap)
+		while fs > min_fs and (lines.size() > MAX_LINES or _widest(lines, gap) > max_w):
+			fs -= step
+			lines = _wrap(items, font, fs, max_w, gap)
+		while fs > 6 and _widest(lines, gap) > max_w:
+			fs -= 1
+			lines = _wrap(items, font, fs, max_w, gap)
+		return {"fs": fs, "lines": lines}
+
+	## The widest of [param lines]' rows: its words' widths and [param gap] between each two.
+	static func _widest(lines: Array, gap: float) -> float:
+		var most := 0.0
+		for row in lines:
+			var w := -gap
+			for item in row:
+				w += float(item.w) + gap
+			most = maxf(most, w)
+		return most
+
+	## The word reveal ([constant Subtitles.REVEALS] `word`): the word being said ([method Subtitles.word_at]) alone, where a karaoke line
+	## goes, at its size, on its plate ([method Subtitles.text_area]).
+	func _draw_word() -> void:
+		var t: float = owner_node._now()
+		var at := Subtitles.word_at(owner_node.words, t)
+		var wi := int(at[0])
+		if wi < 0 or not owner_node.word_captioned(wi, t):
+			return
+		var word: Dictionary = owner_node.words[wi]
+		var text := Subtitles.word_shown(String(word.get("text", "")))
+		var frame: Rect2 = owner_node.frame_rect if owner_node.frame_rect.has_area() else get_viewport_rect()
+		var box := Subtitles.text_area(frame)
+		var face := _face(get_theme_default_font(), int(word.get("emph", 0)))
+		var k: float = box["k"]
+		var fs := word_size(face, text, k, float(box["max_w"]))
+		var w := face.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var a := float(at[1])
+		var order := owner_node.voice_order(String(word.get("speaker", "")))
+		var col := Color.from_hsv(Scheme.voice_hue(_harmonic_hue(), order), 0.26, 1.0, a)
+		var pad: float = box["pad"]
+		var pos := Vector2(float(box["cx"]) - w * 0.5, float(box["base_y"]))
+		# ...on the line's own plate, as the karaoke sets a line
+		draw_rect(Rect2(pos.x - pad, pos.y - float(fs) - 4.0 * k, w + pad * 2.0, float(fs) + 14.0 * k), Color(0.04, 0.04, 0.05, 0.72 * a), true)
+		draw_string(face, pos + Vector2(1.5 * k, 1.5 * k), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.85 * a))
+		draw_string(face, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+
+	## The size the word reveal sets [param text] in at scale [param k]: a karaoke line's ([constant BASE_FS]), or smaller where the
+	## word would be wider than [param max_w].
+	static func word_size(face: Font, text: String, k: float, max_w: float) -> int:
+		var fs := int(round(BASE_FS * k))
+		while fs > 6:
+			var w := face.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			if w <= max_w:
+				break
+			fs = maxi(6, mini(fs - 1, int(floor(float(fs) * max_w / w))))
+		return fs
+
+	## Greedy wrap into rows that fit max_w at the given font size, [param gap] between words; also fills each item's pixel width.
+	func _wrap(items: Array, font: Font, fs: int, max_w: float, gap: float) -> Array:
 		var lines: Array = []
 		var row: Array = []
 		var used := -gap

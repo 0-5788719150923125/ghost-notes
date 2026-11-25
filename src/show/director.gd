@@ -13,6 +13,11 @@ signal frame_changed                  # the frame (or what the medium allows of 
 ## spectral cue: a beat, a movement or a lull; a maximum hold is the backstop). Most changes are
 ## jump cuts, some blend. Everything is seeded from the song hash, so a track always yields the same
 ## scenes, behaviors, triggers and cut/blend choices.
+##
+## THE SHOW SETTINGS (the medium, frame, look, subtitles, tonemapper, camera, bookends, pacing, hand: [method show_values]) are
+## the open note's, set from its cards as it opens, and kept in `user://ghost.cfg`'s `[director]` for the next launch. An export
+## render reads none of that: the exporter hands it a snapshot of the settings as they stand when Export is pressed
+## ([method write_show_settings], `--show-settings PATH`), so a render shows what the author saw whatever note is opened since.
 
 
 # The auto show is deterministic per song (see _resolve_seed); this salt is mixed into the seed, so
@@ -74,8 +79,7 @@ var pacing: float = 1.0
 ## `pacing`, which is how long an ordinary scene holds.
 var flourish: float = 1.0
 ## The medium the show is carried on, a key from [constant Medium.REGISTRY] (`full` = full frame,
-## `comic` = a comic page). See [Medium]. Held here, persisted in `user://ghost.cfg`, so the export
-## render (a separate process that reads it on boot) inherits it with no flag. `--medium NAME`
+## `comic` = a comic page). See [Medium]. A show setting ([method show_values]). `--medium NAME`
 ## overrides it for one run.
 var medium := "full"
 ## A medium pinned by the mode that is up, for its sessions only; "" when the author's [member
@@ -89,9 +93,8 @@ var _pinned_by := 0            # the instance that pinned [member medium_overrid
 ## uses [method resolved_frame].
 var frame := "landscape"
 ## The look: a post-process over the whole picture as `{filter key: amount}` with only the live
-## ones present (see [Filters]); filters combine. Held here for the same reason as `medium` (the
-## export render inherits it from `user://ghost.cfg`). `--filter KEY=AMOUNT,...` (or `--filter none`)
-## overrides it for one run.
+## ones present (see [Filters]); filters combine. A show setting ([method show_values]).
+## `--filter KEY=AMOUNT,...` (or `--filter none`) overrides it for one run.
 var filters: Dictionary = {}
 ## How the subtitles reveal a line ([constant Subtitles.REVEALS]); an export render draws them the same way.
 var subtitle_reveal := "karaoke"
@@ -244,7 +247,7 @@ const OUTRO_MAX := 60.0
 # a session already uses the remembered pacing. A nested one keeps the defaults its host sets.
 func _ready() -> void:
 	if not nested:
-		_load_pacing()
+		_load_pacing(_given_show())
 
 
 ## The song the show hears: the session's ([Spectrum]), or a nested one's own ([member song]).
@@ -296,6 +299,7 @@ func reset_show() -> void:
 	set_opening(Openings.DEFAULT)
 	for k in filters.keys():
 		set_filter(String(k), 0.0)
+	set_subtitle_reveal("karaoke")
 	set_tonemap_all(Tonemaps.DEFAULT, {})
 
 
@@ -585,29 +589,34 @@ func resolved_medium() -> String:
 	return medium
 
 
-func _load_pacing() -> void:
-	pacing = clampf(float(Settings.read("director", "pacing", 1.0)), PACING_MIN, PACING_MAX)
-	flourish = clampf(float(Settings.read("director", "flourish", 1.0)), FLOURISH_MIN, FLOURISH_MAX)
-	camera = clampf(float(Settings.read("director", "camera", 1.0)), CAMERA_MIN, CAMERA_MAX)
-	camera_follow = CameraFollow.sanitize(Settings.read("director", "camera_follow", {}))
-	cameras = Cameras.sanitize(Settings.read("director", "cameras", []))
-	var h := String(Settings.read("director", "hand", "kalam"))
+## Take the show settings from [param given] (a [method write_show_settings] file), or from `user://ghost.cfg` for null.
+func _load_pacing(given: ConfigFile = null) -> void:
+	var read := func(key: String, dflt: Variant) -> Variant:
+		if given != null:
+			return given.get_value("director", key, dflt)
+		return Settings.read("director", key, dflt)
+	pacing = clampf(float(read.call("pacing", 1.0)), PACING_MIN, PACING_MAX)
+	flourish = clampf(float(read.call("flourish", 1.0)), FLOURISH_MIN, FLOURISH_MAX)
+	camera = clampf(float(read.call("camera", 1.0)), CAMERA_MIN, CAMERA_MAX)
+	camera_follow = CameraFollow.sanitize(read.call("camera_follow", {}))
+	cameras = Cameras.sanitize(read.call("cameras", []))
+	var h := String(read.call("hand", "kalam"))
 	hand = h if (h == "random" or NotebookLayout.HANDS.has(h)) else "kalam"
-	intro_hold = clampf(float(Settings.read("director", "intro", intro_hold)), INTRO_MIN, INTRO_MAX)
-	outro_hold = clampf(float(Settings.read("director", "outro", outro_hold)), OUTRO_MIN, OUTRO_MAX)
-	opening = Openings.known(String(Settings.read("director", "opening", opening)))
+	intro_hold = clampf(float(read.call("intro", intro_hold)), INTRO_MIN, INTRO_MAX)
+	outro_hold = clampf(float(read.call("outro", outro_hold)), OUTRO_MIN, OUTRO_MAX)
+	opening = Openings.known(String(read.call("opening", opening)))
 	# `vehicle` is this key's old name; read it once so the choice survives
-	var v := String(Settings.read("director", "medium", Settings.read("director", "vehicle", "full")))
+	var v := String(read.call("medium", Settings.read("director", "vehicle", "full") if given == null else "full"))
 	medium = v if Medium.pickable().has(v) else "full"
-	var f := String(Settings.read("director", "frame", "landscape"))
+	var f := String(read.call("frame", "landscape"))
 	frame = f if Medium.FRAME_SIZES.has(f) else "landscape"
 	# Through `sanitize`: a filter no longer in the registry would come back as a key nothing declares a
 	# uniform for (a silent no-op), so it is discarded.
-	filters = Filters.sanitize(Settings.read("director", "filters", {}))
-	var rv := String(Settings.read("director", "subtitle_reveal", "karaoke"))
+	filters = Filters.sanitize(read.call("filters", {}))
+	var rv := String(read.call("subtitle_reveal", "karaoke"))
 	subtitle_reveal = rv if Subtitles.REVEALS.has(rv) else "karaoke"
-	tonemap = Tonemaps.known(String(Settings.read("director", "tonemap", Tonemaps.DEFAULT)))
-	tonemap_adjust = _tonemap_kept(Settings.read("director", "tonemap_adjust", {}))
+	tonemap = Tonemaps.known(String(read.call("tonemap", Tonemaps.DEFAULT)))
+	tonemap_adjust = _tonemap_kept(read.call("tonemap_adjust", {}))
 	# `--tonemap KEY=EXPOSURE,CONTRAST,SATURATION` for one run, as `--filter` is; never written back (a render is read-only)
 	var over: Variant = Tonemaps.from_args(_cli())
 	if over is Dictionary:
@@ -616,26 +625,42 @@ func _load_pacing() -> void:
 	_push_tonemap()
 
 
+## The show settings handed to this run (`--show-settings PATH`, [method write_show_settings]), or null to read
+## `user://ghost.cfg`. A path given and unreadable is said, and the run falls back to the file.
+func _given_show() -> ConfigFile:
+	var args := _cli()
+	var i := args.find("--show-settings")
+	if i < 0 or i + 1 >= args.size():
+		return null
+	return show_file(String(args[i + 1]))
+
+
+## The show settings at [param path], or null (said, and `user://ghost.cfg` used) where it cannot be read.
+static func show_file(path: String) -> ConfigFile:
+	return Settings.load_apart(path)
+
+
+## Every show setting as it stands, by the key it is kept under: what `[director]` keeps and what an export render is handed.
+func show_values() -> Dictionary:
+	return {"pacing": pacing, "flourish": flourish, "camera": camera, "camera_follow": camera_follow, "cameras": cameras,
+		"hand": hand, "intro": intro_hold, "outro": outro_hold, "opening": opening, "medium": medium, "frame": frame,
+		"filters": filters, "subtitle_reveal": subtitle_reveal, "tonemap": tonemap, "tonemap_adjust": tonemap_adjust}
+
+
+## Write [method show_values] to [param path] (a ConfigFile, its `[director]` section) for a render to be handed with
+## `--show-settings`.
+func write_show_settings(path: String) -> Error:
+	return Settings.save_apart(path, "director", show_values())
+
+
 ## Hand the current values to [Settings], which owns the file and the flushing; writing an unchanged
 ## value is a no-op.
 func _save_pacing() -> void:
 	if nested:
 		return
-	Settings.write("director", "pacing", pacing)
-	Settings.write("director", "flourish", flourish)
-	Settings.write("director", "camera", camera)
-	Settings.write("director", "camera_follow", camera_follow)
-	Settings.write("director", "cameras", cameras)
-	Settings.write("director", "hand", hand)
-	Settings.write("director", "intro", intro_hold)
-	Settings.write("director", "outro", outro_hold)
-	Settings.write("director", "opening", opening)
-	Settings.write("director", "medium", medium)
-	Settings.write("director", "frame", frame)
-	Settings.write("director", "filters", filters)
-	Settings.write("director", "subtitle_reveal", subtitle_reveal)
-	Settings.write("director", "tonemap", tonemap)
-	Settings.write("director", "tonemap_adjust", tonemap_adjust)
+	var values := show_values()
+	for key in values:
+		Settings.write("director", key, values[key])
 
 
 ## The medium the show is in now, null for none.

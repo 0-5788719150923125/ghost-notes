@@ -405,8 +405,8 @@ const GAME_END_WORDS := Vector2i(350, 700)
 ## figures walking and a beat of nobody saying anything - and how it is shared: the opening's and the close's, the stretches the rest.
 ## The fewest words any stretch runs to.
 const GAME_TALK := 0.85
-const GAME_INTRO_SHARE := 0.2
-const GAME_CLOSE_SHARE := 0.12
+const GAME_INTRO_SHARE := 0.1
+const GAME_CLOSE_SHARE := 0.1
 const GAME_WORDS_LEAST := 40
 ## The longest and shortest a page of a game's book may be held, by the plan's `picture_seconds` ([method picture_words]).
 const PICTURE_SECONDS := Vector2(3.0, 120.0)
@@ -778,6 +778,21 @@ static func game_image(look: Dictionary, kind: String, thing: Dictionary, target
 		"attached": attached, "has_attached": not attached.is_empty(), "attached_n": attached.size(),
 		"story_before": String(story.get("before", "")), "story_over": String(story.get("over", "")),
 		"has_story": not String(story.get("before", "")).is_empty() or not String(story.get("over", "")).is_empty()}, true)
+	return Rules.say("table/painter.game_%s" % kind, vars)
+
+
+## What the painter is told for a sticker book's picture (next/sticker_book.md, rules/table/painter.yaml `game_set`, `game_model`,
+## `game_pose`, `game_thing`, `game_angle`): [param kind] one of those words, [param entry] its entry in the session (a set or thing
+## `{name, looks}`, a character `{name, looks, height}`), [param who] the character a pose is of or the set an angle is of, [param pose]
+## a pose's key or an angle's ([StickerPoses]), [param model] whether the character's model drawing (or the set's first painting) goes
+## with it.
+static func sticker_image(look: Dictionary, kind: String, entry: Dictionary, target: String, who := {}, pose := "", model := false) -> String:
+	var vars := _look_vars(look, target)
+	var of: Dictionary = who if kind in ["pose", "angle"] else entry
+	vars["angle"] = String(Registry.field(StickerPoses.ANGLES, pose, "ask", "")) if kind == "angle" else ""
+	vars.merge({"name": String(of.get("name", "")), "looks": String(of.get("looks", "")), "height": str(roundi(float(of.get("height", 170.0)))),
+		"art": String(look.get("art", "")), "own_hand": bool(look.get("own_hand", false)), "pose": StickerPoses.ask(pose),
+		"close": StickerPoses.close(pose), "has_model": model}, true)
 	return Rules.say("table/painter.game_%s" % kind, vars)
 
 

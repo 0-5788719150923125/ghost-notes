@@ -24,6 +24,8 @@ class_name ReadingJoin
 ## How long after the line's last start a table's turn together comes in (seconds), each by its own.
 const TOGETHER_LEAST := 0.05
 const TOGETHER_MOST := 0.26
+## The share of the last sentence said alone before a turn may come in over it: whoever is talked over is heard starting.
+const OVER_HEARD := 0.3
 
 ## The take's sample rate.
 var sr := 22050
@@ -57,6 +59,7 @@ var _heard := ""           # ...and what it was heard through
 var _near := {}            # the distance the last near mark set
 var _last_at := 0          # where the last chunk joined, line or side, begins and ends
 var _last_end := 0
+var _last_said := 0        # ...and where its last word ends: a take's own silence after it is no talk to come in over
 var _group_at := 0         # where the last on the line began: what a table's turns together come in after
 var _side_read := 0        # the first of [member side] still wanted by what asks in order
 
@@ -126,9 +129,22 @@ func add(chunks: Array, idx: int, pcm: PackedFloat32Array, spans: Array, s: Dict
 	out.append_array(take)
 	_last_at = frames
 	_group_at = frames
+	_last_said = _said_end(frames, take.size(), t0)
 	frames += take.size()
 	_last_end = frames
 	return out
+
+
+## Where the words of the chunk just joined end, in frames of the take: its last word's end ([member words], appended from
+## [param t0] seconds on), or the end of its audio ([param at] and [param n] frames) where none of its words came back timed.
+func _said_end(at: int, n: int, t0: float) -> int:
+	var end := -1.0
+	for i in range(words.size() - 1, -1, -1):
+		var d: Dictionary = words[i]
+		if float(d.get("t0", 0.0)) < t0 - 0.0005:
+			break
+		end = maxf(end, float(d.get("t1", 0.0)))
+	return clampi(int(end * float(sr)), at, at + n) if end >= 0.0 else at + n
 
 
 ## A chunk that comes in over the one before ([member side]), rather than after it?
@@ -152,9 +168,10 @@ static func overlaps_ready(chunks: Array, idx: int, ready: Array) -> bool:
 	return true
 
 
-## A turn over the last: it comes in before the last chunk's end, never before its start ([constant Manuscript.OVER]),
-## or just after the line's last start, a person's reaction apart ([constant Manuscript.TOGETHER]); its words on the
-## take's clock, its audio on the side track. The line gets back only the silence of what it runs past its end.
+## A turn over the last: it comes in on the last chunk's last words, the seconds it says ([constant Manuscript.OVER]) before
+## they end - never before [constant OVER_HEARD] of them is said alone - or just after the line's last start, a person's
+## reaction apart ([constant Manuscript.TOGETHER]); its words on the take's clock, its audio on the side track. The line gets
+## back only the silence of what it runs past its end.
 func _add_over(ch: Dictionary, idx: int, who: String, spliced: Dictionary, spans: Array, said: Array) -> PackedFloat32Array:
 	var take: PackedFloat32Array = spliced["pcm"]
 	var at: int
@@ -162,7 +179,8 @@ func _add_over(ch: Dictionary, idx: int, who: String, spliced: Dictionary, spans
 		var after := TOGETHER_LEAST + (TOGETHER_MOST - TOGETHER_LEAST) * fposmod(float(hash([idx, who])) * 0.000317, 1.0)
 		at = _group_at + int(after * float(sr))
 	else:
-		at = maxi(_last_at, _last_end - int(float(ch.get("over", 0.0)) * float(sr)))
+		var heard := _last_at + int(OVER_HEARD * float(_last_said - _last_at))
+		at = maxi(heard, _last_said - int(float(ch.get("over", 0.0)) * float(sr)))
 	side.append({"at": at, "pcm": take, "speaker": who})
 	var t0 := float(at) / float(sr)
 	for w in ReadingPlan.words_for(ch, spans, "%s %d" % [label, idx]):
@@ -177,6 +195,7 @@ func _add_over(ch: Dictionary, idx: int, who: String, spliced: Dictionary, spans
 			"t1": Splice.shifted(float(p.get("t1", 0.0)), spliced["cuts"], 1.0, false) + t0})
 	chunk_at[idx] = at
 	_last_at = at
+	_last_said = _said_end(at, take.size(), t0)
 	_last_end = at + take.size()
 	var out := PackedFloat32Array()
 	if _last_end > frames:

@@ -51,14 +51,6 @@ static func writer(what: String, model_tip := "", effort_tip := "") -> AgentPick
 	return p
 
 
-## A row for who plays the players at a game's table (next/tabletop.md): writers too, asked often and briefly.
-static func players(what: String, model_tip: String, effort_tip: String) -> AgentPick:
-	var p := AgentPick.new()
-	p.role = "writer"
-	p._build("Players", TextGen.REGISTRY, what, model_tip, effort_tip)
-	return p
-
-
 ## The assistant's row (the chat panel): Off, then every CLI [AssistantBackends] can hand a note to, each with the models and
 ## levels of the writer it is - and its own blurb, for it runs with tools in the repository, as no writer does.
 static func assistant(what: String) -> AgentPick:

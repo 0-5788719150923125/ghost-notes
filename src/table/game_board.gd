@@ -126,6 +126,11 @@ static func keep_out() -> Array:
 
 ## What the session came to, for the table and the painter: every event, who sits where with which dice, and each thing it asked to have painted, once by name (`maps`, `figures`, `reveals`, `pages`, each `{name, looks, ...}`). An event is told which one by `pic`, its place in its list, 1 up.
 ## [param board]: the model's board as a map ([method GameDiorama.board_of]), what the figures stand on before any map is laid (`board`).
+## A sticker page (a `picture` with a `set`, next/sticker_book.md) is laid out of what is painted once: its page says its set, its cast
+## (each `{who, pose}` or `{thing}`), `angle`, `where`, `close` and `fx`; each set (`sets`) and each of its angles but its wide (`angles`:
+## {set, angle}), each character (`cast`: {name, looks, height}, its looks
+## its own the first time it was drawn, else its figure's), each pose of each character but standing, which its model is (`poses`:
+## {who, pose}), and each thing (`things`: {name, looks, height}) listed once by name, in the order they came up.
 static func gather(events: Array, people: PackedStringArray, prep: Dictionary, given_seats: Dictionary, board := {}) -> Dictionary:
 	var pages: Array = []
 	var maps: Array = []
@@ -133,6 +138,13 @@ static func gather(events: Array, people: PackedStringArray, prep: Dictionary, g
 	var figure_pic := {}
 	var reveals: Array = []
 	var told: Array = []
+	var book := {"sets": [], "angles": [], "cast": [], "poses": [], "things": []}
+	var looks_of := {}
+	for e in events:
+		if String((e as Dictionary).get("kind", "")) == "place":
+			var nm := String((e as Dictionary).get("figure", "")).to_lower()
+			if not looks_of.has(nm):
+				looks_of[nm] = String((e as Dictionary).get("looks", ""))
 	for e in events:
 		var d: Dictionary = (e as Dictionary).duplicate()
 		match String(d.get("kind", "")):
@@ -149,11 +161,59 @@ static func gather(events: Array, people: PackedStringArray, prep: Dictionary, g
 				reveals.append({"name": String(d.get("name", "")), "looks": String(d.get("looks", ""))})
 				d["pic"] = reveals.size()
 			"picture":
-				pages.append({"name": String(d.get("name", "")), "looks": String(d.get("looks", "")), "shows": d.get("shows", []) if d.get("shows") is Array else []})
+				if d.has("set"):
+					pages.append(_stuck(d, book, looks_of))
+				else:
+					pages.append({"name": String(d.get("name", "")), "looks": String(d.get("looks", "")), "shows": d.get("shows", []) if d.get("shows") is Array else []})
 				d["pic"] = pages.size()
 		told.append(d)
-	return {"events": told, "people": people, "seats": seats_of(people, given_seats), "dice": _dice_of(people, prep), "maps": maps, "figures": figures, "reveals": reveals,
+	var out := {"events": told, "people": people, "seats": seats_of(people, given_seats), "dice": _dice_of(people, prep), "maps": maps, "figures": figures, "reveals": reveals,
 		"pages": pages, "board": board}
+	if not (book["sets"] as Array).is_empty():
+		out.merge(book)
+	return out
+
+
+## A sticker page's own entry, from its event [param d]; each set, character, pose and thing it names listed in [param book] the first time.
+static func _stuck(d: Dictionary, book: Dictionary, looks_of: Dictionary) -> Dictionary:
+	var where := String(d.get("set", ""))
+	if _index(book["sets"], where) < 0:
+		(book["sets"] as Array).append({"name": where, "looks": String(d.get("set_looks", ""))})
+	var cast: Array = []
+	for c in d.get("cast", []) if d.get("cast") is Array else []:
+		var m: Dictionary = (c as Dictionary).duplicate()
+		var thing := m.has("thing")
+		var nm := String(m.get("thing" if thing else "who", ""))
+		var list: Array = book["things" if thing else "cast"]
+		if _index(list, nm) < 0:
+			var looks := String(m.get("looks", ""))
+			if looks.is_empty() and not thing:
+				looks = String(looks_of.get(nm.to_lower(), ""))
+			list.append({"name": nm, "looks": looks, "height": float(m.get("height", GameLedger.THING_DEFAULT if thing else GameLedger.HEIGHT_DEFAULT))})
+		m.erase("looks")
+		m.erase("height")
+		if not thing:
+			var pose := String(m.get("pose", "stand"))
+			if pose != "stand" and not (book["poses"] as Array).any(func(q: Dictionary) -> bool: return String(q["who"]).to_lower() == nm.to_lower() and String(q["pose"]) == pose):
+				(book["poses"] as Array).append({"who": nm, "pose": pose})
+		cast.append(m)
+	# ...each angle of a set but its wide, which its own painting is, listed once
+	var angle := String(d.get("angle", "wide"))
+	if angle != "wide" and not (book["angles"] as Array).any(func(a: Dictionary) -> bool: return String(a["set"]).to_lower() == where.to_lower() and String(a["angle"]) == angle):
+		(book["angles"] as Array).append({"set": where, "angle": angle})
+	var out := {"name": String(d.get("name", "")), "set": where, "cast": cast, "fx": d.get("fx", []) if d.get("fx") is Array else []}
+	for k in ["where", "close", "angle"]:
+		if d.has(k):
+			out[k] = d[k]
+	return out
+
+
+## Where [param name] is in [param list] (each `{name}`), any case; -1 for nowhere.
+static func _index(list: Array, name: String) -> int:
+	for i in list.size():
+		if String((list[i] as Dictionary).get("name", "")).to_lower() == name.to_lower():
+			return i
+	return -1
 
 
 ## Whose dice are whose: as the preparation wrote them, made safe; everyone's unlike the rest's, by a color from a wheel if nobody said.

@@ -351,3 +351,95 @@ game_page:
       clear of the top edge. It shows the story's own world, never a table, dice, figures or the people playing. Fills the whole frame, edge to edge.{{^own_hand}} Its
       colors: {{palette}}.{{/own_hand}} No text, no lettering, no border, no caption.
   - "FORMAT: {{#tall}}PORTRAIT 2:3 (1024x1536){{/tall}}{{^tall}}LANDSCAPE 3:2 (1536x1024){{/tall}}. No text, no watermark."
+
+# A STICKER BOOK'S PICTURES (next/sticker_book.md): a game told in sticker pages paints each SET once, empty, and each CHARACTER once
+# as a model, then each of its POSES from that model, and each THING once - all but a set on a flat magenta ground, which the code cuts
+# away (hosts/puppet/rig.py `sticker`), so each drawing is laid over any set as a cel is over its background, and the pictures read as a manga's action shots. The
+# code shows the set behind every page there and moves its camera across it, so a set is a wide view with room to stand in. The
+# hand is the show's ({{art}}); the magenta is no part of it. TablePrompts.sticker_image fills these in: {{name}}, {{looks}},
+# {{height}} for a character or thing, {{pose}} for a pose (what the painter is told of it, StickerPoses), {{close}} for a close
+# pose, {{has_model}} where a model is attached.
+game_set:
+  - include: head
+  - ""
+  - >-
+      THE PICTURE: a SET for the pictures of a story - {{name}}: {{looks}}. Drawn by the people who make this show: {{art}}
+  - >-
+      The place itself, EMPTY: nobody in it - no person, no creature, no figure, nothing held - only the place and what is always in it.
+      Seen from eye level, as a stage set is seen from the front row: its floor or ground runs across the lower third of the picture,
+      open and clear, so people can be stood on it near and far; the walls, the furniture and the far distance above and behind that.
+      Nothing big in the foreground cuts across the picture. Wide, calm and simple enough to be read at a glance behind people stood
+      in front of it, with its own light. The whole picture, edge to edge.{{^own_hand}} Its colors: {{palette}}.{{/own_hand}}
+  - "FORMAT: LANDSCAPE 3:2 (1536x1024). No text, no lettering, no border, no watermark, no signature."
+
+game_model:
+  - include: head
+  - ""
+  - >-
+      THE PICTURE: the MODEL DRAWING of a character in a story - {{name}}: {{looks}} (about {{height}} cm tall). Drawn by the people who
+      make this show: {{art}}
+  - >-
+      ONE character, whole, from the top of its head to its feet, standing at ease, turned a little toward the RIGHT side of the page,
+      arms relaxed, whatever it always carries held as it carries it; big in the frame, its head near the top and its feet near the
+      bottom. Every picture of this character is drawn from this one, so it is clear and complete: its face, build, clothes and colors.
+  - >-
+      ON A FLAT MAGENTA GROUND: everything round the character is one flat, even, pure bright magenta (#FF00FF), edge to edge, like a
+      chroma-key screen - no paper texture, no shadow, no floor, no ground line, no other thing. The character itself is drawn exactly in the hand
+      above, its own colors and its own paper inside its outline; only the ground round it is magenta. That magenta appears nowhere in the character itself.
+  - "FORMAT: PORTRAIT 2:3 (1024x1536). No text, no lettering, no border, no watermark, no signature."
+
+game_pose:
+  - include: head
+  - ""
+  - >-
+      THE PICTURE: the same character as the attached image - {{name}}: {{looks}} - drawn again in one pose: {{pose}}. Drawn by the
+      people who make this show: {{art}}
+  - when: has_model
+    say: >-
+      THE ATTACHED IMAGE is this character's model drawing: draw EXACTLY this character - the same face, build, proportions, hair,
+      clothes, colors and things it carries, in the same hand - changed in its pose alone. Never copy the model's pose.
+  - when: "!close"
+    say: >-
+      Whole, from the top of its head to its feet, at the same size on the page as the model, its feet near the bottom; the pose caught
+      at its strongest moment, the whole body thrown into it, readable at a glance as a silhouette, pushed as far as a manga's action
+      shot pushes it.
+  - when: close
+    say: >-
+      CLOSE: its head and shoulders fill the page, the face big and clear, the expression pushed hard, as a manga's reaction shot is,
+      readable at a glance.
+  - >-
+      ON A FLAT MAGENTA GROUND: everything round the character is one flat, even, pure bright magenta (#FF00FF), edge to edge, like a
+      chroma-key screen - no paper texture, no shadow, no floor, no ground line, no other thing, nothing else in the picture. The character itself
+      is drawn exactly in the hand above, its own colors and its own paper inside its outline. That magenta appears nowhere in the character itself.
+  - "FORMAT: PORTRAIT 2:3 (1024x1536). No text, no lettering, no border, no watermark, no signature."
+
+game_thing:
+  - include: head
+  - ""
+  - >-
+      THE PICTURE: one thing that matters in a story - {{name}}: {{looks}} (about {{height}} cm). Drawn by the people who make this show: {{art}}
+  - >-
+      The thing alone, whole, big in the frame and seen plainly from the front and a little above, as it would stand or lie. Nobody
+      holding it, no hands, nothing else.
+  - >-
+      ON A FLAT MAGENTA GROUND: everything round the thing is one flat, even, pure bright magenta (#FF00FF), edge to edge, like a
+      chroma-key screen - no paper texture, no shadow, no table, no ground line. The thing itself is drawn exactly in the hand above, its own colors
+      and its own paper inside its outline. That magenta appears nowhere in the thing itself.
+  - "FORMAT: SQUARE 1:1 (1024x1024). No text, no lettering, no border, no watermark, no signature."
+
+# Another ANGLE of a set (StickerPoses.ANGLES): the same place as its first painting, attached, seen from elsewhere - so a scene is cut
+# between views of one place as a film's coverage is. {{name}}, {{looks}}: the set's; {{angle}}: what the view is.
+game_angle:
+  - include: head
+  - ""
+  - >-
+      THE PICTURE: the same SET as the attached image - {{name}}: {{looks}} - {{angle}}. Drawn by the people who make this show: {{art}}
+  - when: has_model
+    say: >-
+      THE ATTACHED IMAGE is this place as it was first painted: keep everything in it exactly - its walls, floor, things, light, colors
+      and hand - and show it from this other view. Nothing is added that is not in it, and nothing in it changes.
+  - >-
+      The place itself, EMPTY: nobody in it - no person, no creature, no figure, nothing held. Seen from eye level, its floor or ground
+      across the lower third of the picture, open and clear, so people can be stood on it; nothing big in the foreground cuts across the
+      picture. The whole picture, edge to edge.{{^own_hand}} Its colors: {{palette}}.{{/own_hand}}
+  - "FORMAT: LANDSCAPE 3:2 (1536x1024). No text, no lettering, no border, no watermark, no signature."

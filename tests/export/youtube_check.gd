@@ -65,7 +65,12 @@ extends SceneTree
 ##   window holds the chosen version. Refine: the shown one's painting handed to a painter with only the author's ask (control:
 ##   no ask, or no such version, is refused, saying why); it lands as a new version, chosen, with its source's brief and words'
 ##   fingerprint and what was asked; a refine that fails is tried as itself, then said apart, leaving the step as it was.
-## - the title screen's moment and ffmpeg's arguments for taking a frame.
+## - the title screen's moment and ffmpeg's arguments for taking a frame: one frame, cut about its middle to 16:9.
+## - the Title screen thumbnail's preview (title_screen.gd): a Play from the top catches the stage once, at the title screen's moment,
+##   and again on the next Play from the top (controls: a Play started part way, a seek away, a note with no title screen catch
+##   nothing); what comes back is written whole at the thumbnail's size (control: pixels of the wrong size write nothing); the card
+##   shows it and says when it was caught, a click opens it full size with Show in folder and nothing to step through (controls: an
+##   episode with none caught asks for a Play from the top; YouTube's choice shows nothing).
 
 ## By path, not by class name: a new class is unknown to `--script` runs until the editor rescans.
 const YouTube := preload("res://src/export/youtube.gd")
@@ -94,7 +99,7 @@ func _run() -> void:
 	_wipe(TAROT)
 	_wipe(ROOT + "_files")
 	for check in [_client, _import, _clients, _channels, _pkce, _auth_url, _query, _wire, _fit, _body, _records, _episode_notes,
-			_menu, _card, _episode_tags, _thumbnails, _tag_field, _panel_fields, _note_steps, _doc_file]:
+			_menu, _card, _episode_tags, _thumbnails, _title_preview, _tag_field, _panel_fields, _note_steps, _doc_file]:
 		if not bool(check.call()):
 			_ok(false, "a check stopped part way (script error?)")
 	_wipe(ROOT)
@@ -1246,7 +1251,8 @@ func _panel_fields() -> bool:
 		"the title screen's frame is taken with the name up and the table still out of focus")
 	var args: PackedStringArray = load("res://src/export/exporter.gd").thumbnail_args("/v/a b.mp4", "/v/a b.thumbnail.jpg", 3.6)
 	_ok(Array(args) == ["-y", "-nostdin", "-loglevel", "error", "-ss", "3.600", "-i", "/v/a b.mp4", "-frames:v", "1",
-		"-vf", "scale=1280:720:flags=lanczos", "-q:v", "2", "/v/a b.thumbnail.jpg"], "one frame, at the moment, 1280x720")
+		"-vf", "crop=w=min(iw\\,ih*16/9):h=min(ih\\,iw*9/16),scale=1280:720:flags=lanczos", "-q:v", "2", "/v/a b.thumbnail.jpg"],
+		"one frame, at the moment, cut about its middle to 16:9 and 1280x720")
 	ed.free()
 	return true
 
@@ -1608,6 +1614,101 @@ func _thumbnails() -> bool:
 		and Thumb._next_in(dir) == "youtube_thumbnail_1", "a record kept before there were versions is one, its files named in it")
 	card.free()
 	names.free()
+	ex.free()
+	return true
+
+
+## The Title screen thumbnail's preview: when the stage is caught, what is written, and what the card shows of it.
+func _title_preview() -> bool:
+	var Screen: GDScript = load("res://src/export/title_screen.gd")
+	var at := Openings.title_moment(9.0)
+	var ts = Screen.new(Callable(), func() -> float: return at)
+	var hits := []
+	for i in 600:
+		if ts.due(i / 60.0, true):
+			hits.append(i / 60.0)
+	_ok(hits.size() == 1 and float(hits[0]) >= at and float(hits[0]) <= at + Screen.LATE,
+		"a Play from the top catches the title screen once, at its moment (%s)" % str(hits))
+	ts.due(9.0, false)
+	var midway := 0
+	for i in 600:
+		midway += 1 if ts.due(2.0 + i / 60.0, true) else 0
+	_ok(midway == 0, "the control: a Play started part way catches nothing")
+	ts.due(0.0, false)
+	var away := 0
+	for i in 600:
+		var t := i / 60.0 if i <= 60 else 30.0 + (i - 60) / 60.0
+		if i == 61:
+			ts._sought(30.0)
+		away += 1 if ts.due(t, true) else 0
+	_ok(away == 0, "the control: a seek away before the moment catches nothing")
+	ts.due(0.0, false)
+	var again := 0
+	for i in 600:
+		again += 1 if ts.due(i / 60.0, true) else 0
+	_ok(again == 1, "the next Play from the top catches it again")
+	var bare = Screen.new(Callable(), func() -> float: return -1.0)
+	var none := 0
+	for i in 600:
+		none += 1 if bare.due(i / 60.0, true) else 0
+	_ok(none == 0, "the control: a note with no title screen catches nothing")
+	ts.free()
+	bare.free()
+	# what comes back, written
+	var dir := ProjectSettings.globalize_path(ROOT + "_files").path_join("title_episode")
+	DirAccess.make_dir_recursive_absolute(dir)
+	var px := Image.create(1280, 720, false, Image.FORMAT_RGBA8)
+	px.fill(Color(0.2, 0.3, 0.6))
+	var to := dir.path_join(Screen.FILE)
+	var wrote: String = Screen.write(px.get_data(), Vector2i(1280, 720), to)
+	_ok(wrote == to and Image.load_from_file(to).get_size() == Vector2i(1280, 720) and not FileAccess.file_exists(to + ".part.jpg"),
+		"what comes back is written whole, at the thumbnail's size (%s)" % wrote)
+	var short := dir.path_join("short.jpg")
+	_ok(String(Screen.write(px.get_data().slice(0, 100), Vector2i(1280, 720), short)).is_empty() and not FileAccess.file_exists(short),
+		"the control: pixels that are not the size asked write nothing")
+	# on the card
+	var ex = load("res://src/export/exporter.gd").new()
+	ex._build_ui()
+	var card = load("res://src/export/youtube_card.gd").new()
+	card.exporter = ex
+	var feed := FakeFeed.new()
+	feed.dir = dir
+	card._section.episode = func() -> EpisodeFeed: return feed
+	var director := root.get_node("Director")
+	var keep_medium: String = director.medium_override
+	var keep_opening: String = director.opening
+	director.medium_override = "desk"
+	director.opening = "title"
+	card.apply({"upload": true, "thumbnail": "title"})
+	card._refresh_thumbnail()
+	_ok(card._thumb_view.visible and card._thumb_view.texture != null and card._thumb_note.text.contains("last Play from the top")
+		and card._thumb_note.text.contains("today at") and not card._thumb_steps.visible,
+		"Title screen: the card shows the one caught and says when (%s)" % card._thumb_note.text)
+	card._fill_thumb_window()
+	var big: Array = card._thumb_window.find_children("*", "TextureRect", true, false)
+	var said := " ".join(card._thumb_window.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text))
+	var buttons: Array = card._thumb_window.find_children("*", "Button", true, false).map(func(b: Button) -> String: return b.text)
+	_ok(big.size() == 1 and (big[0] as TextureRect).texture != null and Vector2i((big[0] as TextureRect).texture.get_size()) == Vector2i(1280, 720)
+		and said.contains("into the last Play from the top") and buttons.has("Show in folder") and not buttons.has("‹ previous")
+		and not said.contains("version"), "a click opens it full size, with Show in folder and nothing to step through (%s; %s)" % [said, buttons])
+	var empty := dir.path_join("none_yet")
+	DirAccess.make_dir_recursive_absolute(empty)
+	feed.dir = empty
+	card._refresh_thumbnail()
+	_ok(not card._thumb_view.visible and card._thumb_note.text.contains("Play the note from the top"),
+		"the control: an episode with none caught yet asks for a Play from the top (%s)" % card._thumb_note.text)
+	px.save_jpg(empty.path_join(Screen.FILE))
+	card._refresh_thumbnail()
+	_ok(not card._thumb_view.visible, "a file put there since is not looked for on every refresh")
+	card._thumbnail.item_selected.emit(card._thumbnail.selected)
+	_ok(card._thumb_view.visible, "...and is shown once the Thumbnail is picked again")
+	feed.dir = dir
+	card._select(card._thumbnail, "youtube")
+	card._refresh_thumbnail()
+	_ok(not card._thumb_view.visible, "the control: YouTube's choice shows nothing")
+	director.medium_override = keep_medium
+	director.opening = keep_opening
+	card.free()
 	ex.free()
 	return true
 

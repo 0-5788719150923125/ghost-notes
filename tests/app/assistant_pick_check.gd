@@ -59,7 +59,7 @@ func _run() -> void:
 	for k in AssistantBackends.REGISTRY:
 		_ok(tip.contains(AssistantBackends.label(k).replace(" ", " ")), "the tooltip lists the supported %s" % AssistantBackends.label(k))
 	_ok(tip.contains("Install one or several of them"), "the tooltip suggests installing one or several")
-	_ok(await _hover(_pick) == _pick.tooltip_text, "the grayed picker shows its tooltip on hover")
+	_ok(await _hover(_pick) == Boot.wrap_tip(_pick.tooltip_text), "the grayed picker shows its tooltip on hover")
 	_press(_pick)
 	await get_tree().process_frame
 	_ok(not _pick.get_popup().visible, "a click on the grayed picker opens nothing")

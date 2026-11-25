@@ -334,8 +334,10 @@ static func parse(text: String, said := {}) -> Array:
 			if not mark.is_empty() and mark != "\n":
 				prev["display"] = String(prev.get("display", "")) + " " + mark
 		if bare.length() > 0:
-			# a word the script says how to say ([method said_as]): exactly so
+			# a word the script says how to say ([method said_as]): exactly so - and its possessive or plural, the s said as ever
 			var told: Dictionary = said.get(bare, {})
+			if not said.has(bare):
+				told = told_with_s(said, bare)
 			var got := told if not (told.get("phones", []) as Array).is_empty() else lookup(bare)
 			var phones: Array = got.phones
 			if phones.is_empty():
@@ -531,6 +533,26 @@ static func said_as(body: String) -> Dictionary:
 
 
 static var _said_ipa := RegEx.create_from_string("/([^/]+)/")
+
+
+## [param word] as [param said] tells it where it is a told word with an `'s`, `s'` or `s` on it (Uthal's): the told word's phones,
+## the s voiced as a possessive or plural is ([method _attach_s]), its IPA left off (the voice spells the whole from the phones).
+## {} where it is not.
+static func told_with_s(said: Dictionary, word: String) -> Dictionary:
+	for tail in ["'s", "s'", "s"]:
+		var stem := word.trim_suffix(tail)
+		if stem == word or not said.has(stem):
+			continue
+		var st: Dictionary = said[stem]
+		var phones: Array = st.get("phones", [])
+		if phones.is_empty():
+			return {}
+		var with_s := _attach_s(phones, stem)
+		var stress: Array = (st.get("stress", []) as Array).duplicate()
+		while stress.size() < with_s.size():
+			stress.append(0)
+		return {"phones": with_s, "stress": stress}
+	return {}
 
 
 # ---- the external language data ---------------------------------------------

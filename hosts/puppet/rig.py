@@ -5,6 +5,7 @@ placed on it - what the stage's puppet reads ([PuppetRig]).
     rig.py cut <spec.json>     the drawing off its paper:  cut.png, cut.json, cut_look.png
     rig.py build <spec.json>   its skeleton, jaw and eyes: rig.json, skin.png, jaw.png, look.png
     rig.py align <spec.json>   a drawing set onto another's canvas (grown where it reaches past it): its cut.png, as tall as the other's, its feet on theirs
+    rig.py sticker <spec.json> a drawing on a flat ground (next/sticker_book.md) keyed off it: the sticker, its soft edge kept, cropped to it
 
 A spec is JSON, never argv. Every coordinate is a pixel of `cut.png` (x right, y down). Each step writes `done.json` beside what it
 made: `{ok, ...}` or `{ok: false, error}` - errors are sentences for the agent that wrote the spec.
@@ -22,6 +23,14 @@ ALIGN  {"dir": the drawing's folder (its cut.png), "base": the folder of the dra
   A drawing of a model sheet (next/cartoon.md) is resampled onto its base's canvas: scaled to the base figure's height, its feet's
   middle on theirs - so it shares the base's coordinates, and a skeleton placed on the base fits it; `by: width` matches widths
   instead (a bed whose sleeper sits up in it keeps its size). The cut as painted is kept as `cut_raw.png`.
+
+STICKER  {"src": the painting, "out": where the sticker goes (a .png), "dir": where done.json goes}
+  The ground is the commonest color round the painting's edge, flat (a sticker book's drawings are painted on flat magenta) - at least
+  GROUND_EDGE of the edge, for a close drawing runs off the bottom and both sides and leaves the ground only above - and VIVID (a
+  painting on paper is refused: its paper is the drawing's own color, and keyed it would punch holes in it). A pixel as near it
+  as KEY_NEAR is ground. In the band along the drawing's edge (KEY_BAND px) a pixel is the drawing nearest it laid over the ground, as
+  much of it as its color goes from the ground's toward the drawing's - a stroke's soft edge - its color taken back out of the ground's.
+  Past that band a pixel is drawing however near the ground's color it is. Specks the painter left (pieces smaller than SPECK of the largest) go; the rest is cropped to.
 
 BUILD  {"dir", "bones": [{name, parent, head: [x, y], tail: [x, y], role?, side?}], "jaw"?: {outline: [[x, y], ...], hinge: [x, y],
         parent?, cavity?: "#rrggbb", open?: degrees, drop?: px}, "eyes"?: [{name?, center, radius: r | [rx, ry], lid?: "#rrggbb"}],
@@ -83,15 +92,32 @@ PALETTE = [(230, 25, 75), (60, 180, 75), (255, 205, 25), (0, 130, 200), (245, 13
            (128, 0, 0), (120, 255, 200), (128, 128, 0), (255, 215, 180), (0, 0, 128), (128, 128, 128)]
 
 
+## A sticker's ground and its drawing (an RGB distance, 0-441): as near the ground's color as KEY_NEAR is ground, as far as KEY_FAR
+## drawing; between, along the drawing's edge (KEY_BAND px of the ground), that much of each. How much of the painting's edge must be
+## its flat ground (a close drawing fills the bottom and the sides); the least share of the painting the drawing is; specks smaller than SPECK of the largest piece; the margin kept
+## round it (px); the largest side it is worked at (px).
+KEY_NEAR = 70.0
+KEY_FAR = 160.0
+KEY_BAND = 3
+GROUND_EDGE = 0.25
+## How vivid a ground must be to be keyed: its saturation, and its brightest channel (0-255).
+GROUND_VIVID = 0.6
+GROUND_BRIGHT = 140
+STICKER_LEAST = 0.005
+SPECK = 0.01
+STICKER_PAD = 8
+STICKER_SIDE = 2048
+
+
 def main(argv):
-    if len(argv) < 3 or argv[1] not in ("cut", "build", "align"):
+    if len(argv) < 3 or argv[1] not in ("cut", "build", "align", "sticker"):
         print(__doc__)
         return 2
     spec = json.loads(Path(argv[2]).read_text())
     out = Path(spec["dir"])
     out.mkdir(parents=True, exist_ok=True)
     try:
-        res = {"cut": cut, "build": build, "align": align}[argv[1]](spec)
+        res = {"cut": cut, "build": build, "align": align, "sticker": sticker}[argv[1]](spec)
         res["ok"] = True
     except SpecError as e:
         res = {"ok": False, "error": str(e)}
@@ -189,6 +215,68 @@ def cut(spec):
     _cut_look(rgba, regions, out / "cut_look.png")
     return {"cut": str(out / "cut.png"), "look": str(out / "cut_look.png"), "size": info["size"],
             "regions": [{k: r[k] for k in ("id", "share", "at", "marked", "hole")} for r in regions]}
+
+
+def sticker(spec):
+    src = Path(spec["src"]).expanduser()
+    if not src.exists():
+        raise SpecError("there is no picture at %s" % src)
+    img = Image.open(src).convert("RGB")
+    if max(img.size) > STICKER_SIDE:
+        k = STICKER_SIDE / max(img.size)
+        img = img.resize((round(img.width * k), round(img.height * k)), Image.LANCZOS)
+    rgb = np.asarray(img).astype(np.float32)
+    h, w = rgb.shape[:2]
+    edge = np.concatenate([rgb[0], rgb[-1], rgb[:, 0], rgb[:, -1]])
+    # the commonest color round the edge, never its middle value: a close drawing covers most of the edge
+    q = (edge // 16).astype(np.int64)
+    keys = q[:, 0] * 256 + q[:, 1] * 16 + q[:, 2]
+    vals, counts = np.unique(keys, return_counts=True)
+    ground = np.median(edge[keys == vals[np.argmax(counts)]], axis=0)
+    if (np.linalg.norm(edge - ground, axis=1) < KEY_NEAR).mean() < GROUND_EDGE:
+        raise SpecError("the painting has no flat ground round its edge to cut away")
+    if ground.max() < GROUND_BRIGHT or (ground.max() - ground.min()) / max(ground.max(), 1.0) < GROUND_VIVID:
+        raise SpecError("the painting's ground is not a vivid flat color (it is %s): it was painted on paper or a plain ground, not the flat magenta asked for"
+                        % "#%02x%02x%02x" % tuple(int(c) for c in ground))
+    d = np.linalg.norm(rgb - ground, axis=2)
+    bare = d < KEY_NEAR
+    band = (ndi.distance_transform_edt(~bare) <= KEY_BAND) & ~bare
+    a = np.where(bare, 0.0, 1.0)
+    # an edge pixel is the drawing nearest it laid over the ground, as much of it as its color goes from the ground toward the drawing's
+    inner = ~bare & ~band
+    if inner.any() and band.any():
+        _, (iy, ix) = ndi.distance_transform_edt(~inner, return_indices=True)
+        fg = rgb[iy[band], ix[band]] - ground
+        pg = rgb[band] - ground
+        den = (fg * fg).sum(axis=1)
+        ramp = np.clip((d[band] - KEY_NEAR) / (KEY_FAR - KEY_NEAR), 0.0, 1.0)
+        a[band] = np.where(den > (2.0 * KEY_NEAR) ** 2, np.clip((pg * fg).sum(axis=1) / np.maximum(den, 1.0), 0.0, 1.0), ramp)
+    else:
+        a[band] = np.clip((d[band] - KEY_NEAR) / (KEY_FAR - KEY_NEAR), 0.0, 1.0)
+    # the specks the painter left go: what is not part of a piece at least SPECK of the largest
+    lab, n = ndi.label(a > 0.5, structure=np.ones((3, 3)))
+    if n == 0:
+        raise SpecError("nothing was found on the ground")
+    areas = ndi.sum(np.ones_like(a), lab, range(1, n + 1))
+    keep = np.isin(lab, 1 + np.nonzero(areas >= SPECK * areas.max())[0])
+    keep = ndi.binary_dilation(keep, iterations=KEY_BAND + 1)
+    a = np.where(keep, a, 0.0)
+    share = float((a > 0.5).sum()) / float(w * h)
+    if share < STICKER_LEAST:
+        raise SpecError("nothing was found on the ground (%.2f%% of the painting)" % (share * 100.0))
+    # a soft edge's color is the drawing's alone: the ground taken back out of it
+    col = rgb.copy()
+    soft = (a > 0.02) & (a < 1.0)
+    col[soft] = np.clip((col[soft] - ground * (1.0 - a[soft, None])) / a[soft, None], 0, 255)
+    ys, xs = np.nonzero(a > 0.02)
+    x0, y0 = max(0, xs.min() - STICKER_PAD), max(0, ys.min() - STICKER_PAD)
+    x1, y1 = min(w, xs.max() + STICKER_PAD + 1), min(h, ys.max() + STICKER_PAD + 1)
+    rgba = np.dstack([col, a * 255.0]).astype(np.uint8)[y0:y1, x0:x1]
+    out = Path(spec["out"])
+    out.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(rgba).save(out)
+    return {"out": str(out), "size": [int(x1 - x0), int(y1 - y0)], "crop": [int(x0), int(y0)], "ground": [int(c) for c in ground],
+            "share": round(share, 4)}
 
 
 def _largest(mask):

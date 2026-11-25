@@ -249,6 +249,10 @@ CLI_FLAGS: List[Tuple[str, str, str, bool]] = [
     ("--tonemap", "<key[=exposure,contrast,saturation]>",
      "The tonemapper for this run and its adjustments - `--tonemap agx=0.75,0.95,0.9`. Overrides the remembered one, as "
      "`--filter` does the filters: a stretch rendered again in the look it was first made in.", False),
+    ("--show-settings", "<path>",
+     "The show settings for this run (the medium, frame, look, subtitles, tonemapper, camera, bookends, pacing, hand), from a "
+     "file the exporter writes as Export is pressed (`Director.write_show_settings`), in place of `user://ghost.cfg`'s, which "
+     "hold whatever note was opened last.", False),
     ("--live-tap", "",
      "Record what the mixer actually plays - the Master bus, the last two minutes - to user://synth/live_tap.wav when "
      "ghost quits. For when what you hear and what a measurement says disagree.", False),

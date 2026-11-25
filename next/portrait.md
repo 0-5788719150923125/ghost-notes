@@ -23,7 +23,11 @@ beside the same at 960x540.
   march at 2 cm off the board left the top half of the frame black.
 - **A march looks ahead of its figures as far as the frame is wide** (`TableGame.MARCH_LEAD`): at the landscape lead, figures a
   landscape march had at the frame's edge were off a portrait one.
-- **Pages are painted 2:3 for portrait** (`TableEpisode.tall`, rules/table/painter.yaml `game_page`, `tall`): composed for a phone
+- **A sticker page is framed, not painted, for portrait** (next/sticker_book.md): its sets are painted 3:2 whatever the frame and the
+  camera frames the cast on them at the frame's shape - a tall frame sees a third of a set's width, so a crowded row overlaps and steps
+  back to fit, and the game master is told to keep a tall picture to one or two (rules/table/game_master.yaml `tall`); its characters
+  are drawn 2:3, whole. Nothing goes stale with the frame.
+- **Whole painted pages are painted 2:3 for portrait** (`TableEpisode.tall`, rules/table/painter.yaml `game_page`, `tall`): composed for a phone
   held upright, faces in the upper half (TikTok's buttons and caption cover the right edge and the bottom third, the subtitles the
   lower middle). A page's key carries its shape (`TableEpisode.page_key`), so a landscape page goes **stale** in portrait and
   Generate paints it again - pages alone: the script, the session, the board and the figures do not depend on the frame. Until

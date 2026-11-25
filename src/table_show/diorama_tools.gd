@@ -101,15 +101,15 @@ func call_tool(name: String, args: Dictionary) -> Dictionary:
 					gone.append(String(n))
 			return {"text": ("Taken away: %s." % ", ".join(gone)) if not gone.is_empty() else "Nothing of those names is here."}
 		"library":
-			var found := ThingLibrary.search(String(args.get("words", "")))
+			var found := ThingLibrary.search(Props.word(args.get("words"), ""))
 			if found.is_empty():
 				return {"text": "Nothing in the Library is like that: model it."}
 			var lines := PackedStringArray()
 			for e in found:
-				lines.append("- %s: %s" % [String(e["name"]), String(e.get("line", ""))])
+				lines.append("- %s: %s" % [String(e["name"]), Props.word(e.get("line"), "")])
 			return {"text": "Kept, and yours to use by name (`library`):\n" + "\n".join(lines)}
 		"look":
-			return await _look(String(args.get("name", "")))
+			return await _look(Props.word(args.get("name"), ""))
 		"plan":
 			return await _plan()
 		"submit":
@@ -130,7 +130,7 @@ func _put(list_key: String, raw: Variant, mats: Variant) -> Dictionary:
 			continue
 		var d: Dictionary = (v as Dictionary).duplicate(true)
 		var nm := String(d["name"]).strip_edges()
-		if not String(d.get("library", "")).is_empty():
+		if not Props.word(d.get("library"), "").is_empty():
 			var e := ThingLibrary.read(String(d["library"]))
 			if e.is_empty():
 				return {"text": "Nothing called \"%s\" is kept in the Library: search it with `library`." % String(d["library"]), "error": true}
@@ -141,7 +141,7 @@ func _put(list_key: String, raw: Variant, mats: Variant) -> Dictionary:
 			return {"text": "%s has no `thing` and no `library`." % nm, "error": true}
 		# ...the thing keeps its own name, what it is (a kept model stands on other boards); the game's name is the place's or figure's
 		if String((d["thing"] as Dictionary).get("name", "")).strip_edges().is_empty():
-			(d["thing"] as Dictionary)["name"] = String(d.get("line", "")).strip_edges() if not String(d.get("line", "")).strip_edges().is_empty() else nm
+			(d["thing"] as Dictionary)["name"] = Props.word(d.get("line"), "").strip_edges() if not Props.word(d.get("line"), "").strip_edges().is_empty() else nm
 		var safe := Props.sanitize({"things": [d["thing"]], "materials": materials}, [])
 		if (safe["things"] as Array).is_empty():
 			return {"text": "%s has nothing that can be built: give it parts." % nm, "error": true}

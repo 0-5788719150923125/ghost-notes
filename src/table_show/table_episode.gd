@@ -22,6 +22,12 @@ const INTRO_CHAPTER := "Intro"
 const CLOSE_CHAPTER := "The close"
 ## What a game's session asks to have painted: a list of [method game] -> the pictures' step word.
 const GAME_PICTURES := {"maps": "map", "figures": "figure", "reveals": "reveal", "pages": "page"}
+## ...and a session told in sticker pages ([method composed], next/sticker_book.md): each set and its other angles, each character's model
+## and its other poses, each thing - painted once and laid on every page they are in, in place of whole pages and the figures' own pictures.
+const STICKER_PICTURES := {"maps": "map", "reveals": "reveal", "sets": "set", "angles": "angle", "cast": "model", "poses": "pose", "things": "thing"}
+## The sticker steps' words, and the folder their paintings land in before they are cut off their ground ([TableProducer]).
+const STICKERS := ["model", "pose", "thing"]
+const PAINTED := "painted"
 ## A page of a game's book is painted beside the latest earlier pages that show something it shows ([method window_of]): at most
 ## this many, looked for among this many pages before it. Further back is another part of the story, and a page painted beside
 ## everything before it paints everything before it in (the author, 2026-11-23: "we confused the painters").
@@ -455,10 +461,57 @@ func _game_steps(out: Array) -> Array:
 		out.append("say:%d" % k)
 	out.append_array(["say:close", "script", "minis"])
 	var g := game()
-	for key in GAME_PICTURES:
+	var pictures := game_pictures()
+	for key in pictures:
 		for k in range(1, (g.get(key, []) as Array).size() + 1):
-			out.append("image:%s:%d" % [String(GAME_PICTURES[key]), k])
+			out.append("image:%s:%d" % [String(pictures[key]), k])
 	return out
+
+
+## Whether the session tells its story in sticker pages (next/sticker_book.md): a set, a cast in poses and things, each painted once.
+func composed() -> bool:
+	return not (game().get("sets", []) as Array).is_empty()
+
+
+## What this session paints: [constant STICKER_PICTURES] where it is [method composed], else [constant GAME_PICTURES].
+func game_pictures() -> Dictionary:
+	return STICKER_PICTURES if composed() else GAME_PICTURES
+
+
+## Where sticker step [param step]'s painting lands, before it is cut off its ground into the step's own file.
+func painted_of(step: String) -> String:
+	return dir.path_join(PAINTED).path_join(file_of(step).get_file())
+
+
+## The entry of picture step [param step] (`image:<word>:K`) in its list of [method game], {} for none.
+func picture_entry(step: String) -> Dictionary:
+	var parts := step.split(":")
+	if parts.size() != 3 or not parts[2].is_valid_int():
+		return {}
+	var key := String(game_pictures().find_key(String(parts[1])) if game_pictures().values().has(String(parts[1])) else "")
+	var list: Array = game().get(key, []) if not key.is_empty() else []
+	var k := int(parts[2]) - 1
+	return list[k] if k >= 0 and k < list.size() and list[k] is Dictionary else {}
+
+
+## Which set (1 up) angle step [param step] is of, 0 for none.
+func set_of_angle(step: String) -> int:
+	var where := String(picture_entry(step).get("set", "")).to_lower()
+	var sets: Array = game().get("sets", [])
+	for i in sets.size():
+		if String((sets[i] as Dictionary).get("name", "")).to_lower() == where:
+			return i + 1
+	return 0
+
+
+## Which character of the cast (1 up) pose step [param step] is of, 0 for none.
+func model_of_pose(step: String) -> int:
+	var who := String(picture_entry(step).get("who", "")).to_lower()
+	var cast: Array = game().get("cast", [])
+	for i in cast.size():
+		if String((cast[i] as Dictionary).get("name", "")).to_lower() == who:
+			return i + 1
+	return 0
 
 
 ## Whether the plan makes this a game ([method CardTable.game_of]).
@@ -676,7 +729,15 @@ func _game_needs(parts: PackedStringArray) -> Array:
 				for j in window_of(game().get("pages", []), int(parts[2])):
 					out.append("image:page:%d" % int(j))
 				return out
-			if parts.size() == 3 and GAME_PICTURES.values().has(String(parts[1])):
+			# ...a pose is painted from its character's model, and made from it: a model painted again paints its poses again
+			if parts.size() == 3 and String(parts[1]) == "pose":
+				var m := model_of_pose("image:pose:" + parts[2])
+				return ["script"] + (["image:model:%d" % m] if m > 0 else [])
+			# ...and an angle from its set's first painting
+			if parts.size() == 3 and String(parts[1]) == "angle":
+				var w := set_of_angle("image:angle:" + parts[2])
+				return ["script"] + (["image:set:%d" % w] if w > 0 else [])
+			if parts.size() == 3 and game_pictures().values().has(String(parts[1])):
 				return ["script"]
 		"say":
 			var who := String(parts[1])
@@ -695,6 +756,9 @@ func made_from(step: String) -> Dictionary:
 	# ...a game's page is made from its own picture alone ([method page_key]): a word of the script changed paints no page again
 	if _page_step(step):
 		return {"page": page_key(step)}
+	# ...and so is a sticker book's set, model and thing, and a pose from its own entry and its model as painted
+	if _sticker_step(step):
+		return {"page": sticker_key(step)}
 	var out := {}
 	var from: Array = needs(step)
 	if step == "script":
@@ -708,6 +772,24 @@ func made_from(step: String) -> Dictionary:
 ## A game's page step: `image:page:K`.
 static func _page_step(step: String) -> bool:
 	return step.begins_with("image:page:") and step.get_slice(":", 2).is_valid_int()
+
+
+## A sticker book's picture step: `image:set:K`, `image:model:K`, `image:pose:K` or `image:thing:K`.
+static func _sticker_step(step: String) -> bool:
+	return step.get_slice(":", 0) == "image" and step.get_slice(":", 1) in ["set", "angle", "model", "pose", "thing"] and step.get_slice(":", 2).is_valid_int()
+
+
+## What sticker step [param step] is painted from, as a key: its own entry (a set's or a thing's name and looks, a character's name,
+## looks and height, a pose's character and pose) - and a pose's model as painted, so a model painted again leaves its poses stale.
+func sticker_key(step: String) -> String:
+	var from := JSON.stringify(picture_entry(step), "", true)
+	if step.begins_with("image:pose:"):
+		var m := model_of_pose(step)
+		from += "|" + (digest("image:model:%d" % m) if m > 0 and has("image:model:%d" % m) else "")
+	if step.begins_with("image:angle:"):
+		var w := set_of_angle(step)
+		from += "|" + (digest("image:set:%d" % w) if w > 0 and has("image:set:%d" % w) else "")
+	return from.sha256_text().left(16)
 
 
 ## What page [param step] is painted from: its picture as the session has it (its name, what it shows, who is in it), as a key - and
@@ -738,6 +820,10 @@ func stale(step: String) -> bool:
 		var from: Variant = record(step).get("from")
 		if from is Dictionary and (from as Dictionary).has("page"):
 			return String((from as Dictionary)["page"]) != page_key(step)
+	if _sticker_step(step) and has(step):
+		var from: Variant = record(step).get("from")
+		if from is Dictionary and (from as Dictionary).has("page"):
+			return String((from as Dictionary)["page"]) != sticker_key(step)
 	return super(step)
 
 
@@ -828,7 +914,9 @@ func keep_take(wav: String) -> String:
 	if not (side is Dictionary):
 		return "the take's sidecar is unreadable"
 	(side as Dictionary)["script_sha"] = digest("script")
-	DirAccess.make_dir_recursive_absolute(dir)
+	# ...never into an episode thrown away while it was said: its folder made again would bring it back
+	if not DirAccess.dir_exists_absolute(dir):
+		return "its episode is gone"
 	if DirAccess.copy_absolute(ProjectSettings.globalize_path(wav), take_file() + ".part") != OK \
 			or DirAccess.rename_absolute(take_file() + ".part", take_file()) != OK:
 		return "could not keep the take"

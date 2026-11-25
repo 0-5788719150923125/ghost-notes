@@ -1014,8 +1014,9 @@ func _plan_ask(body := "") -> Dictionary:
 	var ask := _cast.hesitation()
 	ask["reader"] = _cast.reader()
 	ask["outro"] = Director.outro_hold
-	# how the note says its words ([constant Manuscript.SAY]), read off its own text: a medium's walk hands on only what is said
-	ask["said"] = ReadingPlan.said_in(body)
+	# how the note says its words ([constant Manuscript.SAY]), read off its own text as well as the words read: a medium's walk
+	# hands on only what is said, and an episode's script (a walk that reads something else) has none of the note's
+	ask["said"] = ReadingPlan.said_in(_text.text if _text != null else "").merged(ReadingPlan.said_in(body), true)
 	return ask
 
 
@@ -1363,14 +1364,15 @@ func take_ended() -> void:
 
 ## The whole take, rendered as an export renders it and nothing else done (no upload notes, no publish): what a
 ## show's "Voice" row keeps (next/editing.md step 3). Every sentence said before comes from the [TakeCache]. The
-## take's path, "" for none.
-func render_take() -> String:
-	return await _render_take()
+## take's path, "" for none. [param stop] is the caller's to stop it by (`stop: true`): it ends after the sentence being
+## said, keeping what is cached and nothing else - a take whose episode is left or thrown away.
+func render_take(stop: Dictionary = {}) -> String:
+	return await _render_take(stop)
 
 
 ## A coroutine, because the host answers asynchronously and the exporter awaits this. It does not reuse the
 ## playback queue: an export captures the entire reading and must not disturb a reading in progress.
-func _render_take() -> String:
+func _render_take(stop: Dictionary = {}) -> String:
 	var body := _reading_body().strip_edges()
 	if body.is_empty() or _cast.voice_pick.selected < 0:
 		return ""
@@ -1421,6 +1423,8 @@ func _render_take() -> String:
 			if not wav.is_empty() and not Settings.is_read_only():
 				TakeCache.put(key, wav, out)
 			parts.append({"wav": wav, "out": out, "temp": true, "s": s})
+		if bool(stop.get("stop", false)):
+			return _take_stopped(parts)
 		if Time.get_ticks_msec() - t0 > 8:
 			_set_status("Gathering the take: %d of %d…" % [i + 1, chunks.size()])
 			await get_tree().process_frame
@@ -1438,6 +1442,8 @@ func _render_take() -> String:
 	for who in join_speakers(chunks):
 		if not cfgs.has(who):
 			cfgs[who] = _cast.cfg_of(who)
+	if bool(stop.get("stop", false)):
+		return _take_stopped(parts)
 	var box := {"at": 0, "mixing": false}
 	var job := {"chunks": chunks, "parts": parts, "cfgs": cfgs, "turn": turn, "head": head, "intro": intro, "outro": outro,
 		"fade": fade_len, "seed": hash(body), "env": env, "path": take_dir + "/take_%d.wav" % stamp, "sr": _sr}
@@ -1477,6 +1483,15 @@ func _render_take() -> String:
 		side.close()
 	_set_status("Rendered %.1fs for export (%.0fs intro, %.0fs outro)." % [spoken, intro, outro])
 	return abs_path
+
+
+## A take stopped part way ([method render_take]'s `stop`): the sentences said for it alone thrown away (the cached keep), said so. "".
+func _take_stopped(parts: Array) -> String:
+	for part in parts:
+		if bool((part as Dictionary).get("temp", false)) and not String((part as Dictionary).get("wav", "")).is_empty():
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(String(part["wav"])))
+	_set_status("Stopped saying the take: its episode was left.")
+	return ""
 
 
 ## The take joins under way ([method _join_take]), held here so a panel freed mid-join never frees a running thread.

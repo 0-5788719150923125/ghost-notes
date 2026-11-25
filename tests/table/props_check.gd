@@ -16,7 +16,8 @@ extends SceneTree
 ##   built coarse and warped, it has nothing halfway up to bend).
 ## - Normals follow a warp: a ball scaled into an ellipsoid shades as the ellipsoid.
 ## - A wobble opens no seam, and the same seed wobbles the same (control: pushed out along its normals, it splits at its corners).
-## - Whatever is written is buildable: junk sections, warps and roundings come out in range.
+## - Whatever is written is buildable: junk sections, warps and roundings come out in range, and a word written as a list or a map
+##   raises nothing (an outline written as its points is those points).
 ## - A strand rests on itself: where a coil or a tangle crosses itself the crossing rides over, never through, and it never lies
 ##   below the cloth or jumps up a step (two-sided: the same tangle laid flat passes through itself).
 ## - A strand draped over the table's edge hangs down past it as far as it ran past, to the floor at most, and never into the table
@@ -345,6 +346,14 @@ func _junk() -> void:
 	for i in g.v.size():
 		bad += 0 if g.v[i].is_finite() and g.n[i].is_finite() and absf(g.n[i].length() - 1.0) < 0.01 else 1
 	_ok(not g.v.is_empty() and bad == 0, "a junk loft built %d bad points or normals" % bad)
+	# ...a word written as a list or a map is no word, and raises nothing: an outline written as its points is those points
+	var lists := _part({"shape": "loft", "path": [[0, 0], [0, 4]], "outline": {"a": 1}, "material": ["x"],
+		"sections": [{"outline": [[0, 0], [2, 0], [2, 2], [0, 2]]}, {"outline": {"kind": "star"}, "size": 2}]})
+	_ok(not lists.is_empty() and ((lists["sections"] as Array)[0]["points"] as Array).size() == 4
+		and Props.EXTRUDE_OUTLINES.has(String((lists["sections"] as Array)[1]["outline"])), "words written as lists or maps were not made safe: %s" % str(lists.get("sections")))
+	var cut := _part({"shape": "extrude", "outline": [[0, 0], [3, 0], [3, 3]], "height": 1})
+	_ok((cut["points"] as Array).size() == 3, "an extrude's outline written as its points was not taken as them: %s" % str(cut.get("points")))
+	_ok(Props.word(["a"], "x") == "x" and Props.word({"a": 1}) == "" and Props.word("y", "x") == "y", "control: a word is a string, anything else its fallback")
 
 
 ## The closest two points of [param line] come that lie further than [param apart] from each other along it.

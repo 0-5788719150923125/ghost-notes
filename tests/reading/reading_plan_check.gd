@@ -204,6 +204,15 @@ func _check_said() -> void:
 	_ok(told.get("io-a", []) == ["AY1", "OW0", "EY1"] and (told.get("io-b", []) as Array).size() == 4 and said_words.has("io-a,"),
 		"a word a `say:` mark tells goes to the voice pinned to its phonemes, and is shown as written (%s; shown %s)" % [str(told.get("io-a")), str(said_words)])
 	_ok((told.get("io-c", []) as Array).is_empty() and told.has("io-c"), "the control: a word no mark tells goes to the voice to say as it would")
+	# ...its possessive and plural as told, the s voiced as ever; and a mark in the note's own words reaches a script that carries none
+	var owner := "<!-- say: Uthal = UW1 TH AA0 L -->\n\nUthal's hat. Two Uthals. Uthal."
+	var op: Dictionary = _plan.call("make", "Uthal's hat. Two Uthals.", "", {"reader": "Ryan", "said": _plan.call("said_in", owner)})
+	var ot := {}
+	for c in op["chunks"]:
+		for t in (c as Dictionary).get("tokens", []):
+			ot[String((t as Dictionary).get("text", ""))] = (t as Dictionary).get("arpa", [])
+	_ok(ot.get("uthal's", []) == ["UW1", "TH0", "AA0", "L0", "Z0"] and ot.get("uthals", []) == ["UW1", "TH0", "AA0", "L0", "Z0"],
+		"a told word's possessive and plural are said as told, the s on it: %s, %s" % [str(ot.get("uthal's")), str(ot.get("uthals"))])
 	_ok(not said_words.has("say") and not said_words.has("say:"), "the mark itself is never said (%s)" % " ".join(PackedStringArray(said_words)))
 	# IPA between slashes goes beside the phonemes, for a neural voice to say; IPA alone beside the word's own reading (the
 	# control: a mark with phonemes alone sends none)

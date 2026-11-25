@@ -12,14 +12,16 @@ class_name GameTools
 ##   change    a field of a sheet                  move, place, fall, rise, remove   a figure on the map
 ##   map       another map goes down               reveal                            a picture held up
 ##   state     everything as it stands
-##   picture   a page of the night's book: what the viewer sees now, painted later and shown over the table until the next page
+##   picture   a page of the night's book (next/sticker_book.md): a set with its cast stuck on it in poses, close on one of them, with its
+##             effects - each set, character, pose and thing painted once, later, and shown over the table until the next page
 ##   board     the view back from the pages to the table, to watch it (as `watch` on a roll or a move)
 ##   ask       a player, asked: see below           ask_table                         all of them at once
 ##   end_scene this scene is done, and named         game_over                         the game is done, and the scenes left will not be played
 ##
 ## So nothing written can contradict the dice, which came first; no mark can be malformed; a roll cannot be hidden or re-thrown, for everything rolled is on the table
 ## by the time the agent knows it; what a roll needed is set before it lands and judged by the ledger; and everyone speaking is someone at the table. No tool takes
-## anything back. A scene is not handed in on a roll nobody has answered, and a stretch of the session with no dice in it is handed in only when asked twice.
+## anything back. A scene is not handed in on a roll nobody has answered, and a stretch of the session with fewer throws than its words call for
+## ([constant ROLL_WORDS]) is handed in only when asked twice.
 ## The answer to a roll never carries the event's id: a number in it is read as a die.
 ##
 ## The players are other agents: [method _ask] starts a job for that person, knowing only their sheet, their own want and what has been said aloud, and hands its answer back to this
@@ -32,14 +34,20 @@ class_name GameTools
 ## No game is named here: dice, fields, a board, a table of people. The rules are the brief's and the game master's.
 
 const SUBMITTED := "submitted.json"
-## A line that overlaps the one before, when it does not say by how much ([constant Manuscript.OVER]'s bare mark).
-const OVER_LEAST := 0.1
+## How far a line may come in over the one before, when it says ([constant Manuscript.OVER]): less than half a second is heard as
+## one voice handing straight on to the next.
+const OVER_LEAST := 0.5
 const OVER_MOST := 3.0
 ## The most words said with nothing shown before the game master is told to show something ([method _running]), and the least
 ## share of that a stretch must have shown to be handed in ([method _submit]): pictures break up the talk, and the viewer sees the
 ## story through them.
 const PICTURE_EVERY := 100
 const PICTURES_LEAST := 0.6
+## What the game master is told `picture` is (next/sticker_book.md): the poses and the effects filled in.
+const PICTURE_TOLD := "A picture of tonight's story, shown full frame: a SET (the place, painted once, empty) seen from one of its ANGLES, with its CAST in POSES - a still action shot, as a comic book or a manga tells a story, and the next picture CUTS to it. It stays until the next picture, or until you go back to the table (`board`, or `watch` on a roll or a move). Each character keeps their looks and only their pose changes, so tell the story by what each one is in the middle of doing, one moment at a time, caught at its strongest - and show whoever is talking. Cover a scene from its set's angles as a film does: open on the wide, cut to the reverse and the side as people talk and act, put the close angle behind a close shot, come back to the wide when someone arrives or leaves. Someone or something is drawn from `looks` the first time; after that, by name alone. `close` brings the camera in on one of the cast: with a close pose (face...), their face fills the frame.\n\nANGLES:\n%s\n\nPOSES:\n%s\n\nEFFECTS (`fx`), sparingly, for a beat that earns one:\n%s"
+## How many words of a stretch of play go with one throw of the dice, at most: a stretch with fewer throws than its words call for is
+## sent back once ([method _submit]) - a game is played by rolling, and a story told with no dice is no game.
+const ROLL_WORDS := 70
 ## The most lines in one call: a scene is said in stretches, each answered with how long it has run.
 const LINES_MOST := 40
 ## How much of what has been said a player is told, in words (the rest is long ago, and the cost of a question grows with it).
@@ -58,7 +66,7 @@ var ledger: GameLedger
 var dir := ""
 ## What was said in the scenes before this one, with names ([method heard]).
 var said_before := ""
-## Who plays the players, and at what: `{backend, model, effort}`.
+## Who plays the players, and at what: `{backend, model, effort}` - the writer's own.
 var players := {}
 var seed_value := 0
 ## The items of the script, in order: `{who, says, over, together}`, `{mark, id}`, `{chapter}`.
@@ -108,8 +116,24 @@ func instructions() -> String:
 
 func list_tools() -> Array:
 	var out := _tools()
-	out.insert(out.size() - 4, {"name": "picture", "description": "A page of tonight's book: what the viewer SEES now, painted later and shown full frame. It stays until the next page, or until you go back to the table (`board`, or `watch` on a roll or a move): the story is told over a sequence of pages, as a bard tells it, each held while its words are said. `looks`: the picture, as an illustrator is told it - who and what is in it, where, doing what, the light, what is close to us and what far off; never words or lettering in it. `shows`: the names of the figures and places in it, as the game calls them, so each is painted as it looks everywhere else.",
-		"inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "looks": {"type": "string"}, "shows": {"type": "array", "items": {"type": "string"}}}, "required": ["name", "looks"]}})
+	out.insert(out.size() - 4, {"name": "picture", "description": PICTURE_TOLD % [StickerPoses.angles_told(), StickerPoses.told(), StickerPoses.effects_told()],
+		"inputSchema": {"type": "object", "properties": {
+			"set": {"type": "string", "description": "the place this picture is in, by its name: the same name is the same painted place"},
+			"looks": {"type": "string", "description": "only the first time a set is named: the place itself, EMPTY of people, as a painter is told it"},
+			"angle": {"type": "string", "enum": StickerPoses.ANGLES.keys(), "description": "which view of the set this picture is seen from (wide where unsaid)"},
+			"where": {"type": "string", "enum": GameLedger.WHERE, "description": "which part of the set this picture is in (the curtain at the back is at the right, say): kept from the last picture on this set where unsaid"},
+			"cast": {"type": "array", "description": "who and what is in the picture, LEFT TO RIGHT", "items": {"type": "object", "properties": {
+				"who": {"type": "string", "description": "a character, by the one name the game uses"},
+				"pose": {"type": "string", "description": "one of the poses, or a few words of your own for one they lack"},
+				"thing": {"type": "string", "description": "in place of who: an object that matters, by name"},
+				"looks": {"type": "string", "description": "only the first time someone or something is drawn tonight: what they look like, for the painter"},
+				"height": {"type": "number", "description": "with looks: how tall they stand, or the thing is, in centimeters"},
+				"facing": {"type": "string", "enum": ["left", "right"]},
+				"depth": {"type": "string", "enum": GameLedger.DEPTHS}}}},
+			"close": {"type": "string", "description": "who or what in the cast the camera is close on: give a character a close pose (face...) for a close shot of their face"},
+			"fx": {"type": "array", "items": {"type": "string"}, "description": "effects marking this moment, from the list"},
+			"name": {"type": "string", "description": "this moment, in a few words"}},
+			"required": ["set", "cast"]}})
 	out.insert(out.size() - 4, {"name": "board", "description": "Take the view from the pages back to the table, to watch what happens on it now: the board, the figures, the dice. Only when it is worth watching - the next page takes the view again.",
 		"inputSchema": {"type": "object", "properties": {}}})
 	if diorama.is_empty():
@@ -133,7 +157,7 @@ func list_tools() -> Array:
 func _tools() -> Array:
 	var who := {"type": "string", "description": "the person at the table: %s" % ", ".join(people)}
 	return [
-		{"name": "say", "description": "Lines said at the table, in order, each by one person. A line is only ever words a person says aloud. `over`: it comes in before the last line has ended (true, or the seconds of overlap). `together`: it comes in with the last line, as a table reacts as one. Answered with how long the scene has run.",
+		{"name": "say", "description": "Lines said at the table, in order, each by one person. A line is only ever words a person says aloud. `over`: it comes in on the last line's last words, which are lost under it (true, or the seconds of overlap, at least half a second). `together`: it comes in with the last line, as a table reacts as one. Answered with how long the scene has run.",
 			"inputSchema": {"type": "object", "properties": {"lines": {"type": "array", "items": {"type": "object", "properties": {
 				"who": who, "says": {"type": "string"}, "over": {"description": "true, or seconds"}, "together": {"type": "boolean"}, "chapter": {"type": "string", "description": "this line begins a chapter of the video, named so"}},
 				"required": ["who", "says"]}}}, "required": ["lines"]}},
@@ -141,7 +165,7 @@ func _tools() -> Array:
 			"inputSchema": {"type": "object", "properties": {"who": who, "dice": {"type": "string"}, "why": {"type": "string"},
 				"needs": {"type": "string", "description": "what it must come to, decided now, before it lands, from what is happening: a number it must reach (15), a comparison (<=40 for a game rolled under, >=3 for counted successes), or none when nothing is to be reached (an amount, an order of turns, a table to read). Never changed after."},
 				"hidden": {"type": "boolean", "description": "thrown behind a screen: the table sees and hears it land, and only the thrower knows"},
-				"watch": {"type": "boolean", "description": "the view comes back from the pages to the table to watch it land (a throw that comes up its highest or lowest face is watched unless this is false)"}}, "required": ["who", "dice", "why", "needs"]}},
+				"watch": {"type": "boolean", "description": "whether the view comes back from the pictures to the table to watch it land: every throw is watched unless this is false - false for a small one"}}, "required": ["who", "dice", "why", "needs"]}},
 		{"name": "change", "description": "Write on a sheet: a field `by` a number, `to` a value, or `add` / `remove` from a list. Fields are named by you: the game's own. Answered with what it was and what it is.",
 			"inputSchema": {"type": "object", "properties": {"who": {"type": "string"}, "field": {"type": "string"}, "by": {"type": "number"}, "to": {}, "add": {}, "remove": {}, "why": {"type": "string"}}, "required": ["who", "field"]}},
 		{"name": "map", "description": "Lay another map on the table. Whatever stood on the last comes off. `looks`: what it shows, from directly above, for the painter - any place at all, prepared or not. `size`: [across, down] in squares. `grid` false for a game measured with a tape, and `unit` what it measures in.",
@@ -200,8 +224,7 @@ func call_tool(name: String, args: Dictionary) -> Dictionary:
 		"board":
 			return _did(ledger.to_board(), "board")
 		"picture":
-			var shows: Array = args.get("shows", []) if args.get("shows") is Array else []
-			return _did(ledger.picture(String(args.get("name", "")), String(args.get("looks", "")), shows), "picture")
+			return _did(ledger.page(args), "picture")
 		"fall", "rise", "remove":
 			return _did(ledger.figure_state(name, String(args.get("figure", ""))), name)
 		"reveal":
@@ -451,7 +474,7 @@ func _start_answer(who: String, q: String) -> String:
 	var p := TablePrompts.game_player(String(plan.get("_show_title", "")), String(plan.get("_brief", "")), plan, who, people, sheet, _want_of(who), heard(who), _asked.get(who, []), q, _prepared(who, "character"))
 	var ask_dir := dir.path_join("ask_%03d" % _jobs)
 	DirAccess.make_dir_recursive_absolute(ask_dir)
-	return AgentJobs.submit({"kind": "text", "slot": "aside", "backend": String(players.get("backend", "claude")), "tier": "fast", "dir": ask_dir,
+	return AgentJobs.submit({"kind": "text", "slot": "aside", "backend": String(players.get("backend", "claude")), "tier": "best", "dir": ask_dir,
 		"system": String(p["system"]), "prompt": String(p["prompt"]), "label": "table ask %s" % who,
 		"model": String(players.get("model", "")), "effort": String(players.get("effort", ""))})
 
@@ -526,9 +549,10 @@ func _submit(chapter := "", ending := false, how := "") -> Dictionary:
 		return {"text": "Nothing has been said in this scene.", "error": true}
 	if not items.is_empty() and String((items.back() as Dictionary).get("mark", "")) == "roll":
 		return {"text": "The last dice thrown have not been answered: someone says what landed, and you say what came of it, before this ends. Nothing was handed in.", "error": true}
-	if not ending and step.is_valid_int() and not _diceless_told and not _rolled_any():
+	var rolls_wanted := maxi(1, floori(float(words_said(items)) / float(ROLL_WORDS)))
+	if not ending and step.is_valid_int() and not _diceless_told and _rolls() < rolls_wanted:
 		_diceless_told = true
-		return {"text": "Nothing has been thrown in this stretch. If nothing anyone tried could have gone wrong, call it again; if something could, play on and roll it. Nothing was handed in.", "error": true}
+		return {"text": "This stretch has thrown %d dice in %d words; a game is played by rolling, about %d here. Play on: when someone tries something, call for the roll, they throw it, the number is said and the table reacts - then end it. Nothing was handed in." % [_rolls(), words_said(items), rolls_wanted], "error": true}
 	var wanted := floori(float(words_said(items)) / float(maxi(picture_every, 1)) * PICTURES_LEAST)
 	if not _pictures_told and _pictures() < wanted:
 		_pictures_told = true
@@ -554,10 +578,16 @@ func _submit(chapter := "", ending := false, how := "") -> Dictionary:
 
 
 func _rolled_any() -> bool:
+	return _rolls() > 0
+
+
+## How many throws this stretch has made.
+func _rolls() -> int:
+	var n := 0
 	for it in items:
 		if String((it as Dictionary).get("mark", "")) == "roll":
-			return true
-	return false
+			n += 1
+	return n
 
 
 ## The scene as a script ([CardReading]): each line under its speaker's cue, an overlap's mark after the cue, each thing a viewer sees as its own-line mark, in order.

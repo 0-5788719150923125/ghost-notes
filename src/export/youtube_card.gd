@@ -41,7 +41,9 @@ class_name YouTubeCard
 ## The thumbnail is chosen here ([constant YouTube.THUMBNAILS]): YouTube's own choice (a new card's), a frame of the title
 ## screen (asked of the take, which says whether it opened on its title, [method Openings.of_take]), or one painted for the
 ## episode by the writer and the painter picked under it, a step this card hands the note's Pipeline card
-## ([YouTubeThumbnail]). What cannot be had is said under it, and the video goes up with YouTube's. Every painted one is kept:
+## ([YouTubeThumbnail]). What cannot be had is said under it, and the video goes up with YouTube's. The title screen shows
+## under it as the stage had it on the last Play from the top ([TitleScreen], title_screen.gd), a click opening it full size;
+## YouTube's own is YouTube's to pick, so nothing shows for it. Every painted one is kept:
 ## ‹ › under it picks the one that goes up, ✕ pressed twice deletes the one shown, and a click opens it full size in a window
 ## of its own ([method open_thumbnail]) with what the writer asked of it. Refine…, there and under it, opens the Refine window a
 ## picture has on the Pictures card ([PropRefine]) beside it: a painter changes only what the author says in the one shown, and
@@ -65,6 +67,8 @@ const YouTube := preload("res://src/export/youtube.gd")
 const Macros := preload("res://src/data/macros.gd")
 ## The TikTok target's rows.
 const TikTokRows := preload("res://src/export/tiktok_rows.gd")
+## The title screen caught off the stage, the Title screen thumbnail's preview.
+const TitleScreen := preload("res://src/export/title_screen.gd")
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "youtube"
@@ -145,6 +149,7 @@ var _refine_n := 0              # how many versions there were when it was asked
 var _thumb: YouTubeThumbnail
 var _thumb_seen := []           # what the thumbnail's rows were last drawn for
 var _thumb_shown := ""          # the picture the preview holds, with its time
+var _title_screen: TitleScreen  # catches the title screen off the stage, for the preview while the Thumbnail is Title screen
 var _tags_seen := []            # what the tag rows were last drawn for
 ## The Script card the note's names are read from ([method name_from]); null until a panel binds it.
 var _names: ScriptWriter
@@ -159,7 +164,7 @@ var _looked := ""               # the channel they were last asked for, by ↻ o
 var _loading := false
 var _poll := 0.0
 var _seen := []                 # what the account rows were last drawn for
-var _tip := ""                  # the title's tooltip as last set, before Boot.wrap_tip folded it on hover
+var _tip := ""                  # the title's tooltip as last set
 
 
 ## This card for a note's panel, from what the panel says of itself ([method NoteCards.make]); it asks nothing of it.
@@ -377,7 +382,9 @@ func _build_thumbnail() -> void:
 	_thumbnail.tooltip_text = "\n\n".join(tips) + ("\n\nA channel YouTube has not verified (youtube.com/verify) "
 		+ "cannot set one of its own: YouTube's stays.")
 	_select(_thumbnail, YouTube.THUMBNAIL)
-	_thumbnail.item_selected.connect(func(_i: int) -> void: refresh())
+	_thumbnail.item_selected.connect(func(_i: int) -> void:
+		_title_screen.forget()
+		refresh())
 	_row("Thumbnail", _thumbnail)
 	_thumb_writer = AgentPick.writer("Reads the episode and writes what its thumbnail shows - the subject, the "
 		+ "light, the colors, a few words on it or none - and which of the episode's own pictures the painter follows.")
@@ -388,6 +395,8 @@ func _build_thumbnail() -> void:
 	_into.add_child(_thumb_painter)
 	_thumb = YouTubeThumbnail.new(func() -> bool: return thumbnail() == "painted", _thumb_writer.choice,
 		_thumb_painter.choice, func() -> bool: return _thumb_match.button_pressed)
+	_title_screen = TitleScreen.new(_episode_folder, _title_moment)
+	add_child(_title_screen)
 	_thumb_note = _small("")
 	_into.add_child(_thumb_note)
 	_thumb_view = TextureRect.new()
@@ -747,7 +756,7 @@ func refresh() -> void:
 	if _preview == null:
 		return
 	var v := values_now()
-	# only when it changes: Boot.wrap_tip rewrites a tooltip as it is hovered, so the field's own text is never the tip as made
+	# only when it changes
 	var tip := _title_tip(v)
 	if tip != _tip:
 		_tip = tip
@@ -956,9 +965,10 @@ func _refresh_thumbnail() -> void:
 	var n := _thumb.versions(feed).size() if feed != null else 0
 	var at := _thumb.chosen(feed) if feed != null else -1
 	var none_to_match := feed != null and _thumb.matching() and feed.pictures().is_empty()
+	var screen := _title_screen.shown_in(_episode_folder()) if th == "title" else {"path": "", "at": 0}
 	var now := [th, Director.opening_shown(), Director.intro_hold, feed.made_by() if feed != null else "", feed.folder() if feed != null else "",
 		st, img, FileAccess.get_modified_time(img) if not img.is_empty() else 0, words, stale, n, at, none_to_match,
-		_thumb.said(feed) if st in ["failed", "running", "queued"] else ""]
+		_thumb.said(feed) if st in ["failed", "running", "queued"] else "", screen]
 	if now == _thumb_seen:
 		return
 	_thumb_seen = now
@@ -978,8 +988,15 @@ func _refresh_thumbnail() -> void:
 	var t := ""
 	match th:
 		"title":
-			if Openings.titled(Director.opening_shown()):
-				t = "A frame of the title screen, %.1f s in, goes up as the thumbnail." % Openings.title_moment(Director.intro_hold)
+			var moment := Openings.title_moment(Director.intro_hold)
+			if Openings.titled(Director.opening_shown()) and not String(screen["path"]).is_empty():
+				t = ("A frame of the title screen, %.1f s in, goes up as the thumbnail - shown here as the stage had it on the "
+					+ "last Play from the top, %s.") % [moment, _caught_when(int(screen["at"]))]
+			elif Openings.titled(Director.opening_shown()) and _episode_folder().is_empty():
+				t = "A frame of the title screen, %.1f s in, goes up as the thumbnail." % moment
+			elif Openings.titled(Director.opening_shown()):
+				t = ("A frame of the title screen, %.1f s in, goes up as the thumbnail. Play the note from the top and it shows "
+					+ "here as the stage has it then.") % moment
 			elif Medium.uses(Director.resolved_medium(), "opening"):
 				t = "⚠  This note does not open on its title (Opening, on the Intro & outro card): YouTube chooses the thumbnail."
 			else:
@@ -1008,7 +1025,7 @@ func _refresh_thumbnail() -> void:
 		t += " This episode has no pictures of its own yet, so there is no look to match: it is painted free of one."
 	_thumb_note.text = t
 	_thumb_note.visible = not t.is_empty()
-	_show_painted(img if th == "painted" else "")
+	_show_picture(img if th == "painted" else _title_shown())
 
 
 func _thumb_button(text: String, tip: String) -> Button:
@@ -1059,7 +1076,7 @@ func _armed_delete(text: String, act: Callable, tip := "Delete this thumbnail - 
 ## The thumbnail at full size, in the window a picture opens in on the Pictures card ([PictureWindow]): the one chosen, what
 ## the writer asked of it, and its versions to step through or delete there. Escape or the window's close hides it.
 func open_thumbnail() -> void:
-	if _thumb_feed() == null or not is_inside_tree():
+	if (_thumb_feed() == null and _title_shown().is_empty()) or not is_inside_tree():
 		return
 	_fill_thumb_window()
 	_thumb_window.open_over(self)
@@ -1071,6 +1088,15 @@ func _fill_thumb_window() -> void:
 	if _thumb_window == null:
 		_thumb_window = PictureWindow.new()
 		add_child(_thumb_window)
+	var screen := _title_shown()
+	if not screen.is_empty():
+		var feed_now := _section.current() if _section != null else null
+		var named := feed_now.episode_title() if feed_now != null else ""
+		_thumb_window.fill("Thumbnail  ·  title screen%s" % ("  ·  " + named if not named.is_empty() else ""), screen,
+			("The stage as it stood %.1f s into the last Play from the top, %s, the Look over it, cut to YouTube's shape. What "
+			+ "goes up is that moment of the export.") % [Openings.title_moment(Director.intro_hold),
+			_caught_when(int(_title_screen.shown_in(_episode_folder())["at"]))], 0, 1)
+		return
 	var feed := _thumb_feed()
 	var vs := _thumb.versions(feed) if feed != null else []
 	if vs.is_empty():
@@ -1166,8 +1192,34 @@ func _follow_refine() -> void:
 		_refine.say("Not refined: %s." % (why if not why.is_empty() else "the painter made nothing"))
 
 
-## The painted thumbnail at [param path] on the card, read again only when it changes; none for "".
-func _show_painted(path: String) -> void:
+## The episode's folder, absolute - where its title screen is kept - whatever the Thumbnail is; "" with no episode.
+func _episode_folder() -> String:
+	var feed := _section.current() if _section != null else null
+	return feed.folder() if feed != null else ""
+
+
+## When the title screen stands whole, seconds into the take ([method Openings.title_moment]); below zero while the note
+## does not open on its title.
+func _title_moment() -> float:
+	return Openings.title_moment(Director.intro_hold) if Openings.titled(Director.opening_shown()) else -1.0
+
+
+## The title screen caught for the episode, while the Thumbnail is Title screen and the note opens on its title; "" otherwise.
+func _title_shown() -> String:
+	if thumbnail() != "title" or not Openings.titled(Director.opening_shown()):
+		return ""
+	return String(_title_screen.shown_in(_episode_folder())["path"])
+
+
+## When a preview was caught ([param at], the file's time) as a line says it: "today at 21:20", "Oct 3 at 9:05".
+static func _caught_when(at: int) -> String:
+	var local := Time.get_datetime_dict_from_unix_time(at + int(Time.get_time_zone_from_system().get("bias", 0)) * 60)
+	return "%s at %d:%02d" % [NoteTile.when(at), int(local["hour"]), int(local["minute"])]
+
+
+## The thumbnail at [param path] on the card (a painted one, or the title screen caught), read again only when it changes;
+## none for "".
+func _show_picture(path: String) -> void:
 	var key := ("%s|%d" % [path, FileAccess.get_modified_time(path)]) if not path.is_empty() else ""
 	if key == _thumb_shown:
 		return

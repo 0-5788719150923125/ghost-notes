@@ -86,8 +86,8 @@ static func describe() -> String:
 ## Props.sanitize]) - KEPT AS WRITTEN, with its materials as written: what [method Props.sanitize] makes does not survive JSON, and made
 ## safe again from its own output a lathe is lost, so a thing is made safe only where it is built ([method build]).
 static func sanitize(raw: Dictionary) -> Dictionary:
-	var out := {"name": String(raw.get("name", "")).strip_edges().left(80)}
-	var ground := String(raw.get("ground", "land")).strip_edges().to_lower()
+	var out := {"name": Props.word(raw.get("name"), "").strip_edges().left(80)}
+	var ground := Props.word(raw.get("ground"), "land").strip_edges().to_lower()
 	out["ground"] = ground if GROUNDS.has(ground) else "land"
 	var inside: bool = out["ground"] == "floor"
 	var hills: Array = []
@@ -113,7 +113,7 @@ static func sanitize(raw: Dictionary) -> Dictionary:
 	out["roads"] = roads
 	var woods: Array = []
 	for w in _list(raw, "woods"):
-		var sort := String(w.get("sort", "leafy"))
+		var sort := Props.word(w.get("sort"), "leafy")
 		woods.append({"at": _at(w.get("at")), "radius": clampf(_num(w, "radius", 10.0), 2.0, 80.0), "trees": clampi(int(_num(w, "trees", 12.0)), 1, 240),
 			"sort": sort if SORTS.has(sort) else "leafy", "tall": clampf(_num(w, "tall", 7.0), 4.0, 14.0)})
 	out["woods"] = woods
@@ -124,25 +124,25 @@ static func sanitize(raw: Dictionary) -> Dictionary:
 	var colors := {"grass": GRASS, "earth": EARTH, "stone": STONE, "road": ROAD, "water": WATER, "floor": FLOOR}
 	var given: Dictionary = raw.get("colors", {}) if raw.get("colors") is Dictionary else {}
 	for k in colors:
-		if Color.html_is_valid(String(given.get(k, ""))):
+		if Color.html_is_valid(Props.word(given.get(k), "")):
 			colors[k] = String(given[k])
 	out["colors"] = colors
 	# ...each place's thing, as a prop is made safe, and the materials they use
 	var things: Array = []
 	var named: Array = []
 	for p in _list(raw, "places"):
-		var name := String(p.get("name", "")).strip_edges().left(60)
+		var name := Props.word(p.get("name"), "").strip_edges().left(60)
 		if name.is_empty() or named.has(name.to_lower()):
 			continue
 		named.append(name.to_lower())
 		var t: Dictionary = (p.get("thing", {}) as Dictionary).duplicate(true) if p.get("thing") is Dictionary else {}
 		# ...the model's own name is what it is, generic (it may be kept and stand on other boards); matched back by the place's below
-		var generic := String(t.get("name", "")).strip_edges()
+		var generic := Props.word(t.get("name"), "").strip_edges()
 		if generic.is_empty():
-			generic = String(p.get("line", "")).strip_edges() if not String(p.get("line", "")).strip_edges().is_empty() else name
+			generic = Props.word(p.get("line"), "").strip_edges() if not Props.word(p.get("line"), "").strip_edges().is_empty() else name
 		t["name"] = name
-		things.append({"generic": generic.left(80), "place": {"name": name, "at": _at(p.get("at")), "turn": fposmod(_num(p, "turn", 0.0), 360.0), "line": String(p.get("line", "")).left(160),
-			"library": String(p.get("library", "")).left(80)}, "thing": t})
+		things.append({"generic": generic.left(80), "place": {"name": name, "at": _at(p.get("at")), "turn": fposmod(_num(p, "turn", 0.0), 360.0), "line": Props.word(p.get("line"), "").left(160),
+			"library": Props.word(p.get("library"), "").left(80)}, "thing": t})
 	var mats: Dictionary = (raw.get("materials", {}) as Dictionary).duplicate(true) if raw.get("materials") is Dictionary else {}
 	var safe := Props.sanitize({"things": things.map(func(d: Dictionary) -> Dictionary: return d["thing"]), "materials": mats}, [])
 	var buildable := {}
@@ -194,7 +194,7 @@ static func board_of(diorama: Dictionary) -> Dictionary:
 	var names: Array = []
 	for p in diorama.get("places", []):
 		names.append(String((p as Dictionary).get("name", "")))
-	return {"name": String(diorama.get("name", "the board")), "size": [SIZE.x, SIZE.y], "grid": false, "unit": "cm", "model": true, "places": names}
+	return {"name": Props.word(diorama.get("name"), "the board"), "size": [SIZE.x, SIZE.y], "grid": false, "unit": "cm", "model": true, "places": names}
 
 
 ## Where the place named [param name] stands ([x, z] centimeters), or [] where no place has that name; any case, and a leading
@@ -214,11 +214,11 @@ static func _plain(s: String) -> String:
 
 ## What the board is, in words, for the one running the game: its places and where each is.
 static func told(diorama: Dictionary) -> String:
-	var what := "the inside of somewhere, seen with its roof off" if String(diorama.get("ground", "land")) == "floor" else "the land"
+	var what := "the inside of somewhere, seen with its roof off" if Props.word(diorama.get("ground"), "land") == "floor" else "the land"
 	var out := PackedStringArray(["The board is a model of %s, %d x %d cm, measured from its far left corner (x across, z toward the head of the table). A person's figure is about 4 cm tall; 1 cm is about a pace and a half in the world. Its places, each a model standing on it:" % [what, int(SIZE.x), int(SIZE.y)]])
 	for p in diorama.get("places", []):
 		var d: Dictionary = p
-		var line := (": " + String(d["line"])) if not String(d.get("line", "")).is_empty() else ""
+		var line := (": " + String(d["line"])) if not Props.word(d.get("line"), "").is_empty() else ""
 		out.append("- %s at [%d, %d]%s" % [String(d["name"]), roundi(float(d["at"][0])), roundi(float(d["at"][1])), line])
 	for r in diorama.get("rivers", []):
 		out.append("- a river, from [%d, %d] to [%d, %d]" % [roundi(float(r["path"][0][0])), roundi(float(r["path"][0][1])), roundi(float(r["path"].back()[0])), roundi(float(r["path"].back()[1]))])
@@ -362,7 +362,7 @@ func build(breathe := Callable()) -> Node3D:
 
 ## Whether the board is the inside of somewhere ([constant GROUNDS]).
 func _inside() -> bool:
-	return String(spec.get("ground", "land")) == "floor"
+	return Props.word(spec.get("ground"), "land") == "floor"
 
 
 func _color(key: String) -> Color:

@@ -32,7 +32,7 @@ const KEY := "table"
 ## draw knob: the brief says what its episodes draw and the producer plans that many, or none ([method TableProducer._land_plan]).
 const KNOBS := {"show": "", "seed": 1, "environment": 0.5,
 	"writer": "claude", "writer_model": "", "writer_effort": "", "painter": "codex", "painter_model": "",
-	"painter_effort": "", "players": "", "players_model": "", "players_effort": ""}
+	"painter_effort": ""}
 ## Who makes each kind of step (a step's name up to its first ":"), as a row's status names them.
 const MAKERS := TableProducer.MAKERS
 ## Every step as its row says it, "K" each card or beat: what it is called, and what its redo does ("" for a step with no redo of
@@ -62,6 +62,11 @@ const STEPS := {
 	"image:figure:K": {"label": "Figure", "again": "Paint this figure again"},
 	"image:reveal:K": {"label": "Picture", "again": "Paint this picture again"},
 	"image:page:K": {"label": "Page", "again": "Paint this page again"},
+	"image:set:K": {"label": "Set", "again": "Paint this set again, and every angle of it"},
+	"image:angle:K": {"label": "Angle", "again": "Paint this angle of the set again"},
+	"image:model:K": {"label": "Character", "again": "Draw this character again, and every pose of theirs"},
+	"image:pose:K": {"label": "Pose", "again": "Draw this pose again"},
+	"image:thing:K": {"label": "Thing", "again": "Draw this thing again"},
 	"diorama": {"label": "The land", "again": "Model the land again"},
 	"minis": {"label": "Figures", "again": "Model the figures again"},
 	"image:height": {"label": "Depth", "again": ""},
@@ -76,6 +81,8 @@ const STEPS := {
 	"say:close": {"label": "Close", "again": "Rewrite the close"},
 	"script": {"label": "Script", "again": ""},
 }
+## The group on the Pipeline card each kind of picture a game paints stands in ([method TableEpisode.game_pictures]).
+const PICTURE_GROUPS := {"set": "Sets", "angle": "Sets", "model": "Cast", "pose": "Cast", "thing": "Things"}
 ## How much of what a ⟳ would throw away it names, before "and 12 more".
 const NAMED_MOST := 6
 ## What a redo makes along with its step: what is made from it and nothing else, so no choice is left. The cloth's depth is
@@ -102,6 +109,8 @@ var _tune := {}                     # the show's `tune:` ([TableTune]), as its b
 var _laws_seen := "-"               # the episode and acts the laws below were read from ([method pacing_rows])
 var _laws_now: Array = []
 var _taking := false                # the voice's take being made ([method _make_take])
+var _taking_dir := ""                # ...of the episode in this folder
+var _take_stop := {}                 # ...and what stops it ([method ReadingPanel.render_take]): its episode left or thrown away
 var _design_window: DesignWindow = null    # a painted design's elements as rows, made the first time its ✎ is pressed
 var _producer: TableProducer = null
 var _episode_pick: OptionButton
@@ -110,7 +119,6 @@ var _new_btn: Button
 var _del_btn: Button
 var _writer: AgentPick
 var _painter: AgentPick
-var _players: AgentPick
 var _environment_dial: HSlider
 var _row_t := 0.0
 ## What it hands the note's pipeline card ([method pipeline]).
@@ -454,7 +462,7 @@ class Feed extends EpisodeFeed:
 				group = "Layers"
 			elif parts.size() > 2:
 				label += " " + String(parts[2])
-				group = "Cards" if step.begins_with("image:card:") else ""
+				group = "Cards" if step.begins_with("image:card:") else String(EpisodeCard.PICTURE_GROUPS.get(String(parts[1]), ""))
 			out.append({"path": ProjectSettings.globalize_path(path), "label": label, "row": step, "group": group})
 		return out
 
@@ -678,7 +686,6 @@ func _spec() -> Dictionary:
 		"chooses": CardDeck.chooses(body), "voices": reading.cast_names(), "seats": reading.cast_seats(), "said_word": reading.reader_said_word(),
 		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"], "writer_effort": _knobs["writer_effort"],
 		"painter": _knobs["painter"], "painter_model": _knobs["painter_model"], "painter_effort": _knobs["painter_effort"],
-		"players": _knobs["players"] if not String(_knobs["players"]).is_empty() else _knobs["writer"], "players_model": _knobs["players_model"], "players_effort": _knobs["players_effort"],
 		# ...and where to take the next episode, as the Direction card says it now ([Direction]): an episode takes it up as its plan is made
 		"direction": Direction.text_of(reading.block_now(Direction.KEY)) if reading != null else "",
 		# ...and what it is shown in, as the Medium card says it now: the episode keeps it in its plan ([method TableEpisode.medium])
@@ -697,9 +704,6 @@ func _note_medium() -> String:
 func capture() -> Dictionary:
 	var t := {}
 	for k in KNOBS:
-		# (who plays the players is written only where someone chose: every other show's block stays as it was)
-		if String(k).begins_with("players") and String(_knobs[k]).is_empty():
-			continue
 		t[k] = _knobs[k]
 	# The show's youtube description: a global value (each episode's title is its plan's)
 	if not _cur_desc.is_empty():
@@ -887,13 +891,6 @@ func _build() -> void:
 		+ "low for Codex (its job is to call one tool); Bedrock's painter takes no setting."))
 	_painter.changed.connect(_agents_chosen.bind(_painter, "painter"))
 	box.add_child(_painter)
-	# ...and who plays the players, in a game (next/tabletop.md): seen only where the episode is one
-	_players = AgentPick.players("Who plays the players at the table: each is asked what they do as the game is played, knowing only what they know. Takes effect at the next Generate.",
-		"The model that plays them. Default is the writer's own, on its quicker tier: they are asked a hundred questions a night.",
-		"How hard a player thinks before they answer. Default is what the CLI does unasked: a player is not meant to think long.")
-	_players.changed.connect(_agents_chosen.bind(_players, "players"))
-	_players.visible = false
-	box.add_child(_players)
 
 	# ...and its timeline (next/editing.md, "The Timeline"): its beats, acts and cues docked under the show, read from its files
 	var tl := Button.new()
@@ -953,8 +950,6 @@ func _show_knobs() -> void:
 	_environment_dial.value = float(_knobs["environment"])
 	_writer.set_choice(String(_knobs["writer"]), String(_knobs["writer_model"]), String(_knobs["writer_effort"]))
 	_painter.set_choice(String(_knobs["painter"]), String(_knobs["painter_model"]), String(_knobs["painter_effort"]))
-	var who_plays := String(_knobs["players"]) if not String(_knobs["players"]).is_empty() else String(_knobs["writer"])
-	_players.set_choice(who_plays, String(_knobs["players_model"]), String(_knobs["players_effort"]))
 	_syncing = false
 
 
@@ -974,6 +969,9 @@ func _open_episode() -> void:
 	var ep := TableEpisode.open(_show_key(), int(_knobs["seed"]))
 	if _making() and (_episode == null or _episode.dir != ep.dir):
 		_producer.stop()
+	# ...and the take being said of the one left: an episode's take is said only while it is open
+	if _taking and _taking_dir != ep.dir:
+		_take_stop["stop"] = true
 	if reading != null:
 		reading.episode_left(_feed)   # ...and what the other cards were making of it
 	_flush_upload_fields()      # an edit still waiting belongs to the episode being left
@@ -1108,7 +1106,7 @@ func _ask_delete() -> void:
 	ask.popup_centered(Vector2i(520, 0))
 
 
-## Delete [param ep]: whatever is making it stops, a reading of it stops (the table is showing its
+## Delete [param ep]: whatever is making it stops (its take being said too), a reading of it stops (the table is showing its
 ## pictures), its folder goes to the trash, and the panel moves to the newest episode left - or to
 ## a fresh seed, not made yet, when none is.
 func _delete_episode(ep: TableEpisode) -> void:
@@ -1117,6 +1115,8 @@ func _delete_episode(ep: TableEpisode) -> void:
 	var open := _episode != null and _episode.dir == ep.dir
 	if open and _producer != null:
 		_producer.stop()
+	if _taking and _taking_dir == ep.dir:
+		_take_stop["stop"] = true
 	if reading != null:
 		reading.episode_left(Feed.new(self, ep))
 	if _live_episode_dir() == ep.dir:
@@ -1249,8 +1249,6 @@ func _step_rows() -> Array:
 	var out: Array = ([_row_of("direction", "direction", "", busy, f)] if has.has("direction") else []) + [_row_of("plan", "plan", "", busy, f)]
 	if not bool(f["cardless"]):
 		out.append(_row_of("draw", "draw", "", busy, f))
-	if _players != null:
-		_players.visible = has.has("prep")
 	if has.has("prep"):
 		out.append(_row_of("prep", "prep", "", busy, f))
 	if has.has("diorama"):
@@ -1316,13 +1314,20 @@ func _step_rows() -> Array:
 	# ...what the session turned out to need, each named, painted after it was played (next/tabletop.md)
 	var played: Dictionary = _episode.game()
 
-	for key in TableEpisode.GAME_PICTURES:
-		var word2 := String(TableEpisode.GAME_PICTURES[key])
+	var pictures := _episode.game_pictures()
+	for key in pictures:
+		var word2 := String(pictures[key])
 		var list: Array = played.get(key, [])
 		for k in list.size():
 			var st := "image:%s:%d" % [word2, k + 1]
 			if has.has(st):
-				out.append(_row_of(st, "image:%s:K" % word2, "Pictures", busy, f, String((list[k] as Dictionary).get("name", "%s %d" % [word2, k + 1]))))
+				var entry: Dictionary = list[k]
+				var named := String(entry.get("name", "%s %d" % [word2, k + 1]))
+				if word2 == "pose":
+					named = "%s, %s" % [String(entry.get("who", "")), StickerPoses.label(String(entry.get("pose", "")))]
+				elif word2 == "angle":
+					named = "%s, %s" % [String(entry.get("set", "")), Registry.label(StickerPoses.ANGLES, String(entry.get("angle", "")))]
+				out.append(_row_of(st, "image:%s:K" % word2, String(PICTURE_GROUPS.get(word2, "Pictures")), busy, f, named))
 	return out
 
 
@@ -1345,9 +1350,11 @@ func set_tune(key: String, value: Variant) -> void:
 func _take_row(busy: bool) -> PipelineRow:
 	var r := PipelineRow.new("take", "Voice")
 	var has_take := FileAccess.file_exists(_episode.take_file())
-	r.state = "running" if _taking else ("made" if bool(_take_now()["matches"]) else ("stale" if has_take else "none"))
-	r.said = ("being said, a sentence at a time" if _taking else (Clock.text(_episode.take_length()) if has_take else "said on its own once nothing else is running"))
-	r.wraps = _taking
+	# ...this episode's take: one still stopping for an episode left is not this one's
+	var taking := _taking and _taking_dir == _episode.dir
+	r.state = "running" if taking else ("made" if bool(_take_now()["matches"]) else ("stale" if has_take else "none"))
+	r.said = ("being said, a sentence at a time" if taking else (Clock.text(_episode.take_length()) if has_take else "said on its own once nothing else is running"))
+	r.wraps = taking
 	r.tip = ("The whole reading kept as audio, said on its own whenever the script or a voice changes, while nothing else is being made "
 		+ "and nothing plays. Play plays it as the export will, the table plans on when each word is really said rather than a guess, and "
 		+ "a seek lands where it is asked. Its ⟳ says it now.")
@@ -1406,12 +1413,21 @@ func _make_take() -> void:
 		return
 	_taking = true
 	var ep := _episode
-	var path: String = await reading.render_take()
+	_taking_dir = ep.dir
+	_take_stop = {}
+	var stop := _take_stop
+	var path: String = await reading.render_take(stop)
 	_taking = false
-	var err := "the voice made no take" if path.is_empty() else ep.keep_take(path)
+	_taking_dir = ""
 	_take_cache = {}
-	_take_failed = String(_take_now()["sig"]) if not err.is_empty() else ""
-	_set_status(("Could not keep the take: " + err) if not err.is_empty() else "The take is kept (%s): Play plays it, and the table plans on its times." % Clock.text(ep.take_length()))
+	# ...stopped, its episode left or thrown away: nothing to keep and nothing failed - the episode open now says its own when it may
+	if bool(stop.get("stop", false)):
+		_mark_stale()
+		return
+	var err := "the voice made no take" if path.is_empty() else ep.keep_take(path)
+	_take_failed = String(_take_now()["sig"]) if not err.is_empty() and ep == _episode else ""
+	if ep == _episode:
+		_set_status(("Could not keep the take: " + err) if not err.is_empty() else "The take is kept (%s): Play plays it, and the table plans on its times." % Clock.text(ep.take_length()))
 	_mark_stale()
 
 

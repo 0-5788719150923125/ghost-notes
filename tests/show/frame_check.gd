@@ -24,7 +24,7 @@ extends Node
 ##
 ## The subtitles' safe area: a portrait frame's last line sits above its bottom 35% and its lines keep
 ## off the right 17.8% (Google's safe zones for 1080x1920), type sized off the short side; a landscape
-## frame lays out as before (92% of the width, 70 px up at 1080).
+## frame's lines and their plates keep to its middle Subtitles.WIDE, 70 px up at 1080.
 
 const SONG_DIR := "user://frame_check"
 var _fails: Array = []
@@ -112,9 +112,10 @@ func _frames() -> void:
 func _subtitles() -> void:
 	print("-- the subtitles' safe area")
 	var land := Subtitles.text_area(Rect2(0, 0, 1920, 1080))
-	_ok(is_equal_approx(float(land["base_y"]), 1010.0) and is_equal_approx(float(land["max_w"]), 1920.0 * 0.92)
+	_ok(is_equal_approx(float(land["base_y"]), 1010.0)
+		and is_equal_approx(float(land["max_w"]), 1920.0 * Subtitles.WIDE - 2.0 * Subtitles.PAD)
 		and is_equal_approx(float(land["cx"]), 960.0) and is_equal_approx(float(land["k"]), 1.0),
-		"a landscape frame lays out as before")
+		"a landscape frame does not keep its lines and plates to its middle %d%%, 70 px up" % roundi(Subtitles.WIDE * 100.0))
 	var f := Rect2(656, 0, 608, 1080)
 	var port := Subtitles.text_area(f)
 	_ok(float(port["base_y"]) <= f.position.y + f.size.y * 0.65 + 0.5, "the last line sits above the bottom 35%")
@@ -122,6 +123,8 @@ func _subtitles() -> void:
 	_ok(area.end.x <= f.end.x - f.size.x * 0.178 + 0.5 and area.position.y >= f.position.y + f.size.y * 0.15 - 0.5,
 		"lines keep off the right 17.8% and the top 15%")
 	_ok(is_equal_approx(float(port["k"]), 608.0 / 1080.0), "type sized off the frame's short side")
+	_ok(is_equal_approx(float(port["cx"]), f.get_center().x) and is_equal_approx(area.get_center().x, f.get_center().x),
+		"a portrait line is centered on the frame, not off to one side: %.1f against %.1f" % [float(port["cx"]), f.get_center().x])
 	var full := Subtitles.text_area(Rect2(0, 0, 1080, 1920))
 	_ok(is_equal_approx(float(full["k"]), 1.0), "a 1080x1920 frame sets type as a 1080-tall landscape one does")
 

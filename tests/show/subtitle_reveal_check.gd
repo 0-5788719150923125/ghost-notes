@@ -23,7 +23,15 @@ extends Node
 ##   - A line being written is centered: the plate round the words and the noise past them sits on the
 ##     middle, on the mean, as the sweep crosses a row; a row written out is centered on its words.
 ##     Two-sided: centered on what is written alone, the line sits right of center.
-##   - Both draw: the overlay draws a line in either reveal without an error.
+##   - A line stays inside its area: at 1080p, at 4K and in portrait, a long sentence and one with a word wider than the area are
+##     drawn no wider than the area allows (the space between words measured as it is drawn, the plate's padding inside), and the
+##     plate stays clear of the frame's edges. Two-sided: wrapped with the space unscaled and drawn with it scaled, a 4K row runs
+##     past its area; the long word is wider than the area at the usual size.
+##   - The word reveal shows the word being said: nothing before the first, each from just before it is said until the next or a
+##     short hang past its end, then gone; the marks ending a phrase and the quotes round a word left off, a question kept; the
+##     word set as a karaoke line is, a long one shrunk to the line's area. Two-sided: within the hang the word still shows; a word
+##     wider than the area is set smaller.
+##   - Every reveal draws: the overlay draws a line in each without an error.
 ##
 ##   tests/run_boot_probe.sh tests/show/subtitle_reveal_check.gd 60
 
@@ -48,6 +56,8 @@ func _run() -> void:
 	_choice()
 	_rows()
 	_centered()
+	_fits()
+	_word()
 	await _draws()
 	print("subtitle_reveal_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
 	get_tree().quit(1 if _fails > 0 else 0)
@@ -183,6 +193,8 @@ func _choice() -> void:
 	var was := Director.subtitle_reveal
 	Director.set_subtitle_reveal("glitch")
 	_ok(Director.subtitle_reveal == "glitch", "the Director did not take the glitch reveal")
+	Director.set_subtitle_reveal("word")
+	_ok(Director.subtitle_reveal == "word", "the Director did not take the word reveal")
 	Director.set_subtitle_reveal("sparkle")
 	_ok(Director.subtitle_reveal == "karaoke", "an unknown reveal was kept")
 	var card := LookCard.new()
@@ -241,6 +253,73 @@ func _centered() -> void:
 	ov.free()
 
 
+func _fits() -> void:
+	var ov := Subtitles.Overlay.new()
+	var font := ThemeDB.fallback_font
+	var long_words: Array = []
+	for i in 40:
+		long_words.append(["Something", "moved", "behind", "the", "factory", "gate", "tonight,", "and", "nobody", "saw"][i % 10])
+	var wide_word := "Antidisestablishmentarianism-and-everything-after-it-in-one-breath"
+	for size in [Vector2(1920, 1080), Vector2(3840, 2160), Vector2(1080, 1920)]:
+		var frame := Rect2(Vector2.ZERO, size)
+		var box := Subtitles.text_area(frame)
+		var area: Rect2 = box["area"]
+		_ok(area.position.x >= size.x * 0.04 and area.end.x <= size.x * 0.96, "the %s area runs to the frame's edge (%.0f..%.0f)"
+			% [size, area.position.x, area.end.x])
+		for words in [long_words, ["A", wide_word, "came", "in."]]:
+			var items: Array = []
+			var c := 0
+			for w in words:
+				items.append({"idx": items.size(), "word": {"text": w}, "w": 0.0, "cstart": c})
+				c += String(w).length() + 1
+			var fit := ov.fit_line(items, font, float(box["k"]), float(box["max_w"]), float(box["gap"]))
+			var lines: Array = fit["lines"]
+			for row in lines:
+				var drawn := -float(box["gap"])
+				for item in row:
+					drawn += float(item.w) + float(box["gap"])
+				var left := float(box["cx"]) - drawn * 0.5 - float(box["pad"])
+				var right := float(box["cx"]) + drawn * 0.5 + float(box["pad"])
+				_ok(left >= area.position.x - 0.5 and right <= area.end.x + 0.5, "a %s row's plate runs %.0f..%.0f, past its area %.0f..%.0f (%d words)"
+					% [size, left, right, area.position.x, area.end.x, row.size()])
+	# control: the space unscaled when wrapping and scaled when drawn, a 4K row runs past its area
+	var box4 := Subtitles.text_area(Rect2(0, 0, 3840, 2160))
+	var items4: Array = []
+	for w in long_words:
+		items4.append({"idx": items4.size(), "word": {"text": w}, "w": 0.0, "cstart": 0})
+	var rows := ov._wrap(items4, font, int(round(Subtitles.Overlay.BASE_FS * float(box4["k"]))), float(box4["max_w"]), Subtitles.GAP)
+	_ok(Subtitles.Overlay._widest(rows, float(box4["gap"])) > float(box4["max_w"]), "control: the unscaled space keeps a 4K row inside its area")
+	_ok(font.get_string_size(wide_word, HORIZONTAL_ALIGNMENT_LEFT, -1, Subtitles.Overlay.BASE_FS).x > float(Subtitles.text_area(Rect2(0, 0, 1080, 1920))["max_w"]),
+		"control: the long word fits the portrait area at the usual size, so its shrinking is untested")
+	ov.free()
+
+
+func _word() -> void:
+	var words: Array = [{"text": "\"Hello,", "t0": 1.0, "t1": 1.3, "sentence": 0}, {"text": "there.\"", "t0": 1.4, "t1": 1.8, "sentence": 0},
+		{"text": "Why?", "t0": 4.0, "t1": 4.4, "sentence": 1}]
+	_ok(int(Subtitles.word_at(words, 0.9)[0]) == -1, "a word shows before the first is said")
+	_ok(int(Subtitles.word_at(words, 1.0 - Subtitles.WORD_EARLY + 0.001)[0]) == 0, "the first word does not show just before it is said")
+	_ok(int(Subtitles.word_at(words, 1.35)[0]) == 0, "a word does not hold through the gap before the next")
+	_ok(int(Subtitles.word_at(words, 1.4 - Subtitles.WORD_EARLY + 0.001)[0]) == 1, "the next word does not take over as it is begun")
+	var hang: Array = Subtitles.word_at(words, 1.8 + Subtitles.WORD_HANG * 0.5)
+	_ok(int(hang[0]) == 1 and float(hang[1]) == 1.0, "control: within its hang the word is not shown whole")
+	var fading: Array = Subtitles.word_at(words, 1.8 + Subtitles.WORD_HANG + Subtitles.WORD_FADE * 0.5)
+	_ok(int(fading[0]) == 1 and float(fading[1]) > 0.0 and float(fading[1]) < 1.0, "the word does not fade after its hang")
+	_ok(int(Subtitles.word_at(words, 3.0)[0]) == -1, "a word stays up through a long pause")
+	_ok(int(Subtitles.word_at(words, 4.2)[0]) == 2, "the word after a pause does not show")
+	for pair in [["\"Hello,", "Hello"], ["there.\"", "there"], ["Why?", "Why?"], ["“stop”", "stop"], ["wait...", "wait"], ["now:", "now"],
+			["‘yes’", "yes"], ["don't", "don't"], ["—", "—"], ["Go!", "Go!"]]:
+		_ok(Subtitles.word_shown(pair[0]) == pair[1], "%s is shown as %s, not %s" % [pair[0], Subtitles.word_shown(pair[0]), pair[1]])
+	var portrait := Subtitles.text_area(Rect2(0, 0, 1080, 1920))
+	var face := ThemeDB.fallback_font
+	_ok(Subtitles.Overlay.word_size(face, "a", 1.0, float(portrait["max_w"])) == Subtitles.Overlay.BASE_FS, "a word is not set at a karaoke line's size")
+	var long := "Unbelievably-long-hyphenated-word-that-goes-on"
+	var fs := Subtitles.Overlay.word_size(face, long, 1.0, float(portrait["max_w"]))
+	var w := face.get_string_size(long, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	_ok(fs < Subtitles.Overlay.BASE_FS and w <= float(portrait["max_w"]), "control: a word wider than the line's area is %.0f wide at %d, past it %.0f" % [w, fs, float(portrait["max_w"])])
+	_ok(540.0 + w * 0.5 <= 1080.0 * (1.0 - float(Subtitles.SAFE["right"])) + 0.5, "the portrait word reaches under the buttons down the right edge")
+
+
 func _draws() -> void:
 	var was := Director.subtitle_reveal
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
@@ -254,12 +333,13 @@ func _draws() -> void:
 	# the clock in the middle of the second sentence, so the line is up and part of it is still to come
 	Spectrum.virtual_clock = 2.0
 	Spectrum.current.time = 2.0
-	for reveal in ["karaoke", "glitch"]:
+	for reveal in ["karaoke", "glitch", "credits", "word"]:
 		Director.set_subtitle_reveal(reveal)
 		for f in 12:
 			subs._process(1.0 / 30.0)
 			await get_tree().process_frame
-		_ok(subs.presence > 0.5 and subs.span_at(subs._now()) >= 0, "the %s line is not up to be drawn" % reveal)
+		var up := subs.span_at(subs._now()) >= 0 if reveal != "word" else int(Subtitles.word_at(words, subs._now())[0]) == 3
+		_ok(subs.presence > 0.5 and up, "the %s line is not up to be drawn" % reveal)
 	Spectrum.virtual_clock = -1.0
 	subs.queue_free()
 	Director.set_subtitle_reveal(was)

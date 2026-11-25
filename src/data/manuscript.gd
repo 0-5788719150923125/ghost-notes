@@ -49,10 +49,10 @@ const DELIVERY := "<!--\\s*delivery\\s*(?::\\s*([^>]*?))?\\s*-->"
 const INFLECT := "<!--\\s*(/)?\\s*inflect\\s*(?::\\s*([A-Za-z]+))?\\s*-->"
 ## Text before the first cue belongs to this voice. A chapter that opens on a cue never has one.
 const NARRATOR := "Narrator"
-## Voices over each other (next/tabletop.md): `<!-- over -->`, at the top of a speaker's turn: the turn comes in before the last one has ended, by [constant OVER_BARE] or the seconds given: group 1. `<!-- together -->`: it comes in just after the last one began, as a table reacts as one. [ReadingPlan], [ReadingJoin].
+## Voices over each other (next/tabletop.md): `<!-- over -->`, at the top of a speaker's turn: the turn comes in on the last one's last words, [constant OVER_BARE] or the seconds given before they end: group 1. Less than half a second is heard as one voice handing straight on to the next, never as two at once. `<!-- together -->`: it comes in just after the last one began, as a table reacts as one. [ReadingPlan], [ReadingJoin].
 const OVER := "<!--\\s*over\\s*(?::\\s*([0-9]*\\.?[0-9]+)\\s*(?:s|secs?|seconds)?)?\\s*-->"
 const TOGETHER := "<!--\\s*together\\s*-->"
-const OVER_BARE := 0.35
+const OVER_BARE := 0.8
 ## A voice heard through something (next/dispatch.md): `<!-- heard: phone -->` at the top of a speaker's turn:
 ## the whole turn is heard through that, a key of [constant VoiceFX.HEARD] - group 1. A turn with none is heard
 ## in the room. [ReadingPlan], [ReadingJoin].
