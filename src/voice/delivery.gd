@@ -274,14 +274,29 @@ static func presence_of(s: Dictionary) -> float:
 	return clampf(float(s["presence"]), 0.25, 1.0)
 
 
+## THE THREE PAUSES of a voice row: at a comma, a semicolon or a colon (`pause`), at a sentence's end (`pause_sentence`) and at a
+## paragraph's end (`pause_paragraph`), each scaling its whole rest along the same curve ([method rest_for]).
 static func pause_scale_of(s: Dictionary) -> float:
 	return clampf(float(s["pause"]), 0.0, MAX_PAUSE_SCALE)
 
 
-## The silence at a chunk seam. The host inserts the same figure between sentences inside a chunk, so a
-## seam and an interior boundary stay the same length however the reading is cut up.
+static func sentence_scale_of(s: Dictionary) -> float:
+	return clampf(float(s.get("pause_sentence", s["pause"])), 0.0, MAX_PAUSE_SCALE)
+
+
+static func paragraph_scale_of(s: Dictionary) -> float:
+	return clampf(float(s.get("pause_paragraph", s["pause"])), 0.0, MAX_PAUSE_SCALE)
+
+
+## The silence at a chunk seam, at the Pause at sentence ends. The host inserts the same figure between sentences inside a
+## chunk, so a seam and an interior boundary stay the same length however the reading is cut up.
 static func seam_gap_of(s: Dictionary) -> float:
-	return rest_for(SENTENCE_GAP, SENTENCE_DWELL, pause_scale_of(s))
+	return rest_for(SENTENCE_GAP, SENTENCE_DWELL, sentence_scale_of(s))
+
+
+## The silence at a seam where a paragraph ends: the sentence end's rest at the Pause at paragraph ends.
+static func paragraph_gap_of(s: Dictionary) -> float:
+	return rest_for(SENTENCE_GAP, SENTENCE_DWELL, paragraph_scale_of(s))
 
 
 ## The silence to place at a mark whose natural rest is `dwell` and whose top-up at Pause 1.0 is
@@ -307,10 +322,12 @@ static func pause_multiplier(scale: float) -> float:
 	return pow(clampf(scale, 0.0, MAX_PAUSE_SCALE), PAUSE_GAIN)
 
 
-## The silence before chunk `idx`: the ordinary sentence seam, plus the turn rest when the chunk before
-## it was somebody else's. Written once for the live window and the export, as [method request_args].
+## The silence before chunk `idx`: the sentence seam - or the paragraph's, where the chunk begins a paragraph (`para_start`,
+## [method ReadingPlan.place]) - plus the turn rest when the chunk before it was somebody else's. Written once for the live window
+## and the export, as [method request_args].
 static func gap_before(chunks: Array, idx: int, s: Dictionary, turn := 1.0) -> float:
-	var g := seam_gap_of(s)
+	var starts := idx > 0 and idx < chunks.size() and bool((chunks[idx] as Dictionary).get("para_start", false))
+	var g := paragraph_gap_of(s) if starts else seam_gap_of(s)
 	if idx <= 0 or idx >= chunks.size():
 		return g
 	if String((chunks[idx - 1] as Dictionary).get("speaker", "")) \
@@ -352,6 +369,10 @@ static func request_args(s: Dictionary, ch: Dictionary, speaker := 0, blend := "
 		"play_ratio": r,
 		"tokens": ch["tokens"],
 	}
+	# the Pause at sentence ends, for the sentence ends inside the chunk: asked only where it is not the Pause at commas, so a
+	# take said before the two were apart keeps its key
+	if not is_equal_approx(sentence_scale_of(s), pause_scale_of(s)):
+		args["sentence_scale"] = sentence_scale_of(s) * pow(LEAN_PAUSE, lean.z)
 	if not blend.is_empty():
 		args["blend"] = blend
 		if VoiceBlend.moves(blend):

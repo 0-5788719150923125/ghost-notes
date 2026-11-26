@@ -101,7 +101,8 @@ static func tuned(spec: Voice.Spec, args: Dictionary) -> Voice.Spec:
 	spec.formant_scale *= ratio
 	var pause := float(args.get("pause_scale", 1.0))
 	spec.pause_comma *= pause
-	spec.pause_stop *= pause
+	# a sentence's stop at the Pause at sentence ends, where the request asks one apart from the Pause at commas
+	spec.pause_stop *= float(args.get("sentence_scale", pause))
 	return spec
 
 

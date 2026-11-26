@@ -55,7 +55,9 @@ var voice_pick: OptionButton
 var _test: Button
 var _rate: HSlider
 var _rate_row: HBoxContainer
-var _pause: HSlider
+var _pause: HSlider               # the Pause at commas, semicolons and colons
+var _pause_sentence: HSlider      # ...at a sentence's end
+var _pause_paragraph: HSlider     # ...at a paragraph's end
 var voice_meta: Array = []
 var _want_voice := ""          # remembered selection, applied once voices load
 var _made_voice := ""          # a voice made while the note is open, the reader's once the list has it
@@ -367,35 +369,6 @@ func _build_sound(box: VBoxContainer) -> void:
 	_rate_row.add_child(_rate)
 	Card.readout(_rate_row, _rate, "x")
 
-		# Pause: how long the reading rests on punctuation, as a multiple of the host's default rests (roughly a tenth
-		# of a second on a comma, a quarter on a colon, a third at a sentence end). VITS runs straight through a comma
-		# and a colon, so the host splices the silence in around the mark.
-		#
-		# Always visible, unlike Pace (no duration_control needed). Not a live buffer effect like Echo/Ambience: it
-		# changes what gets synthesized, so it takes the debounced re-plan path below, as a pace change does.
-	var prow := HBoxContainer.new()
-	prow.add_theme_constant_override("separation", 8)
-	box.add_child(prow)
-	var pl := Label.new()
-	pl.text = "Pause"
-	pl.custom_minimum_size = Vector2(72, 0)
-	pl.add_theme_font_size_override("font_size", 12)
-	prow.add_child(pl)
-	_pause = HSlider.new()
-	_pause.min_value = 0.0
-	_pause.max_value = 10.0
-	_pause.step = 0.05
-	_pause.value = 1.0
-	_pause.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_pause.tooltip_text = "How long to rest on punctuation - commas, semicolons, colons and sentence ends. It scales the WHOLE rest, the model's own included, so every mark keeps its share of the reading at every setting rather than the long ones running away from the short ones. 1 is the natural rest; 0 runs straight through; 10 is five times natural, a two-and-a-half second full stop, and deliberately too much for most material. A quicker Tone rests proportionally less at the same setting - that is what quicker means - so a fast reading wants a higher number here than a slow one. Takes effect from the next chunk; already-generated audio keeps its pauses."
-	_pause.value_changed.connect(func(_v: float) -> void:
-		if _syncing:
-			return
-		voice_edited()
-		_repace_timer.start())
-	prow.add_child(_pause)
-	Card.readout(prow, _pause, "x")
-
 		# Debounced: a slider drag emits a value per pixel, and each change throws away work in flight.
 	_repace_timer = Timer.new()
 	_repace_timer.wait_time = 0.3
@@ -430,6 +403,20 @@ func _build_sound(box: VBoxContainer) -> void:
 		+ "one and a half, and 1 is four. The whole travel is usable now: the shift holds the "
 		+ "reader's own formants, so the register moves without the speaker changing SIZE, and "
 		+ "the ceiling is set by what a speaker would actually do rather than by the DSP.", true)
+		# Pause: how long the reading rests on punctuation, as a multiple of the host's default rests (roughly a tenth
+		# of a second on a comma, a quarter on a colon, a third at a sentence end). VITS runs straight through a comma
+		# and a colon, so the host splices the silence in around the mark.
+		#
+		# Always visible, unlike Pace (no duration_control needed). Not a live buffer effect like Echo/Ambience: it
+		# changes what gets synthesized, so it takes the debounced re-plan path (`_repace_timer`), as a pace change does.
+	var how := (" It scales the WHOLE rest, the model's own included, so the rest keeps its share of the reading at every setting. "
+		+ "1 is the natural rest; 0 runs straight through; 10 is five times natural. A quicker Tone rests proportionally less at the "
+		+ "same setting, so a fast reading wants a higher number here than a slow one. Takes effect from the next chunk; "
+		+ "already-generated audio keeps its pauses.")
+	box.add_child(ReaderBrowser._heading("Pause"))
+	_pause = _pause_row(box, "Commas", "How long to rest at a comma, a semicolon or a colon." + how)
+	_pause_sentence = _pause_row(box, "Sentences", "How long to rest at the end of a sentence - a full stop, a question or an exclamation." + how)
+	_pause_paragraph = _pause_row(box, "Paragraphs", "How long to rest at the end of a paragraph, where the text leaves a blank line." + how)
 	box.add_child(ReaderBrowser._heading("Space"))
 	_fx_echo = _fx_slider(box, "Echo", 0.0,
 		"The room the voice is in. Low settings are a small close room - the repeat is short enough "
@@ -482,6 +469,36 @@ func _build_sound(box: VBoxContainer) -> void:
 		+ "the bed at full level; the dial is SEVERITY - how often a low bass swell answers the "
 		+ "reader's pitch moving. Low is the bed alone; higher, the bass comes more often.")
 	_build_singing(box)
+
+
+## A Pause row in [param box] called [param label] (0 runs straight through, 10 five times natural): a change is the voice's,
+## heard from the next chunk (the debounced re-plan, as a pace change is).
+func _pause_row(box: VBoxContainer, label: String, tip: String) -> HSlider:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	box.add_child(row)
+	var l := Label.new()
+	l.text = label
+	l.custom_minimum_size = Vector2(72, 0)
+	l.add_theme_font_size_override("font_size", 12)
+	l.tooltip_text = tip
+	l.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.add_child(l)
+	var sl := HSlider.new()
+	sl.min_value = 0.0
+	sl.max_value = Delivery.MAX_PAUSE_SCALE
+	sl.step = 0.05
+	sl.value = 1.0
+	sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sl.tooltip_text = tip
+	sl.value_changed.connect(func(_v: float) -> void:
+		if _syncing:
+			return
+		voice_edited()
+		_repace_timer.start())
+	row.add_child(sl)
+	Card.readout(row, sl, "x")
+	return sl
 
 
 ## The Lab's Singing rows: how this voice sings where a composed Sound casts it (kept with it, [constant
@@ -1117,7 +1134,8 @@ func capture_slot() -> void:
 		return
 	_slots[slot] = {
 		"voice": _selected_voice_id(), "speaker": _speaker, "blend": _blend, "formant": _formant.duplicate(true),
-		"tone": _tone.selected, "pace": _rate.value, "pause": _pause.value,
+		"tone": _tone.selected, "pace": _rate.value, "pause": _pause.value, "pause_sentence": _pause_sentence.value,
+		"pause_paragraph": _pause_paragraph.value,
 		"dynamics": _dynamics.value, "arc": _arc.value, "effort": _effort.value,
 		"echo": _fx_echo.value, "room": _fx_room.value, "resonance": _fx_res.value,
 		"presence": _fx_presence.value, "ambience": _fx_pad.value, "lean": _fx_lean.value,
@@ -1143,6 +1161,8 @@ func _apply_slot(i: int) -> void:
 	_tone.select(clampi(int(s["tone"]), 0, Delivery.TONE_PRESETS.size() - 1))
 	_rate.value = float(s["pace"])
 	_pause.value = float(s["pause"])
+	_pause_sentence.value = float(s["pause_sentence"])
+	_pause_paragraph.value = float(s["pause_paragraph"])
 	_dynamics.value = float(s["dynamics"])
 	_arc.value = float(s["arc"])
 	_effort.value = float(s["effort"])

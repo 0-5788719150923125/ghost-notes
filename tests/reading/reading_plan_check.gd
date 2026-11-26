@@ -26,6 +26,10 @@ extends SceneTree
 ##
 ## - a chunk carries the last words of the sentence before it in its paragraph (`before`, at most `BEFORE_WORDS`), how
 ##   each is said and nothing of how it is delivered;
+## - the first chunk of each of the text's own paragraphs after the first is marked `para_start`, a turn that begins one too, and
+##   its seam rests at the Pause at paragraph ends (control: a long paragraph cut at PARA_CEILING is not marked at the cut, and a
+##   sentence's seam rests at the Pause at sentence ends); the host is told the Pause at sentence ends only where it is not the Pause
+##   at commas (control: equal, the request is as it was);
 ##
 ## Controls: a word no mark tells goes to the host to say as it would; a mark with phonemes alone sends no IPA; Hesitate off rests nowhere and tells the voice of nothing; a reader asked by another name gets the
 ## cue; a second piece planned from sentence 0 collides with the first; the first chunk of a paragraph or a turn
@@ -56,6 +60,7 @@ func _run() -> void:
 	_check_grows(ask)
 	_check_said()
 	_check_before(ask)
+	_check_paragraphs(ask)
 	for f in _fails:
 		printerr("FAIL: ", f)
 	print("reading_plan_check: %s" % ("ALL OK" if _fails.is_empty() else "%d FAILED" % _fails.size()))
@@ -180,6 +185,29 @@ func _said(chunks: Array) -> Array:
 		for w in (c as Dictionary)["words"]:
 			out.append([int((w as Dictionary)["sentence"]), String((w as Dictionary)["text"])])
 	return out
+
+
+func _check_paragraphs(ask: Dictionary) -> void:
+	var long := ""
+	for i in _plan.PARA_CEILING + 3:
+		long += "Sentence %d is here. " % (i + 1)
+	var text := "One. Two.\n\nThree. " + long.strip_edges() + "\n\n<!-- speaker: Judge -->\nThe judge."
+	var chunks: Array = _plan.make(text, "", ask)["chunks"]
+	var starts: Array = []
+	for i in chunks.size():
+		if bool((chunks[i] as Dictionary).get("para_start", false)):
+			starts.append(i)
+	_ok(starts == [2, chunks.size() - 1], "the first of each paragraph after the first, and a turn beginning one, start a paragraph: %s of %d" % [str(starts), chunks.size()])
+	var s := {"pause": 1.0, "pause_sentence": 2.0, "pause_paragraph": 6.0}
+	_ok(is_equal_approx(Delivery.gap_before(chunks, 2, s), Delivery.paragraph_gap_of(s)), "a paragraph's seam rests at the Pause at paragraph ends")
+	_ok(is_equal_approx(Delivery.gap_before(chunks, 1, s), Delivery.seam_gap_of(s)) and Delivery.seam_gap_of(s) < Delivery.paragraph_gap_of(s),
+		"the control: a sentence's seam rests at the Pause at sentence ends")
+	var cut := 3 + int(_plan.PARA_CEILING)
+	_ok(cut < chunks.size() and not bool((chunks[cut] as Dictionary).get("para_start", false)), "the control: a long paragraph is not marked where it is cut")
+	var row := {"tone": 0, "pace": 1.0, "pause": 1.0, "pause_sentence": 2.0, "dynamics": 0.5, "arc": 0.4, "effort": 0.35}
+	var same := row.merged({"pause_sentence": 1.0}, true)
+	_ok(Delivery.request_args(row, chunks[0]).has("sentence_scale") and not Delivery.request_args(same, chunks[0]).has("sentence_scale"),
+		"the host is told the Pause at sentence ends only where it differs")
 
 
 func _ok(cond: bool, msg: String) -> void:

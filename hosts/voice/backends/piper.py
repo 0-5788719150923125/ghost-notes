@@ -91,6 +91,13 @@ DWELL: dict[str, float] = {
 PAUSE_GAIN = 0.69897
 
 
+# THE SENTENCES RENDERED, KEPT (`PiperBackend._rendered_key`): the latest this many, each what the splice starts from (about
+# 300 KB for a sentence of three seconds); and the arguments only the splice and the gap between sentences read, which a
+# sentence's key leaves out (the Pause reaches the speech only through each word's floor and trail, which it keeps).
+RENDERED_KEPT = 160
+SPLICE_ONLY = ("pause_scale", "sentence_scale", "sentence_gap", "tokens")
+
+
 def _pause_multiplier(params: dict) -> float:
     """How much longer than natural every rest in this reading is. 1.0 at Pause 1.0."""
     return _pause_scale(params) ** PAUSE_GAIN
@@ -1333,11 +1340,20 @@ def _pitch_length(pr: float) -> float:
     return pr + f * (pr - 1.0)
 
 
+def _sentence_params(params: dict) -> dict:
+    """The request as a sentence's end reads it: its `sentence_scale` (the Pause at sentence ends) in place of
+    `pause_scale` (the Pause at commas, semicolons and colons) where the caller gives one."""
+    if params.get("sentence_scale") is None:
+        return params
+    return {**params, "pause_scale": params["sentence_scale"]}
+
+
 def _gap_for(mark: str, params: dict) -> float:
     """Seconds between two sentences, for a sentence ending in `mark`.
 
     Unified with PAUSE_AFTER rather than added to it: a full stop's pause is
-    this gap and nothing else, so `pause_scale` cannot double-count it.
+    this gap and nothing else, so the Pause cannot double-count it. Scaled by the
+    Pause at sentence ends (`sentence_scale`, `_sentence_params`).
     """
     raw = params.get("sentence_gap")
     if raw is None:
@@ -1349,7 +1365,7 @@ def _gap_for(mark: str, params: dict) -> float:
             base = PAUSE_AFTER["."]
     # The same rule as every other mark: the dial scales the whole rest and the model's share is
     # subtracted. A caller's `sentence_gap` still wins over the table, as a top-up at 1.0.
-    return _rest_for(str(mark), params, base)
+    return _rest_for(str(mark), _sentence_params(params), base)
 
 
 def _trough(audio, lo: int, hi: int, sr: int, quiet: float) -> int:
@@ -2624,102 +2640,116 @@ class PiperBackend(Backend):
             gp["noise_w"] = float(
                 params.get("noise_w", cfg.get("inference", {}).get("noise_w", 0.333))
             ) * float(step["noise_w_mul"])
-            audio, per_token = self._run(group, voice, gp, cfg, sess, phonemizer)
-            # every voice at one level, as it comes out of the model (level.py)
-            audio = audio * float(params.get("level_gain", 1.0))
-            said = [dict(ph) for ph in getattr(self, "_last_phones", [])]
-            # The frame plan's word-boundary rests and each word's sounds, before anything
-            # resamples them.
-            group_rests = list(self._last_rests)
-            edges = dict(self._last_edges)
-            frame = self.hop / float(sr)
-            audio = _emphasize(audio, edges, group, sr)
-            if self.quiets_lead:
-                audio = _quiet_lead(audio, edges, group, params, sr)
-            if self.trails:
-                audio = _trail(audio, edges, group, params, sr, dict(self._last_hisses),
-                               walk_back=self.trail_early, through=self.trail_through)
-            # Say which words came back without a span. ghost keeps them in the karaoke line either way (it
-            # interpolates their timing; see GenerativeEditor._bridge_words), but a token the aligner cannot
-            # place means the phoneme stream carries nothing for that word, so it is likely not spoken
-            # either.
-            unplaced = [
-                str(t.get("text", ""))
-                for ti, t in enumerate(group)
-                if ti not in per_token and str(t.get("text", "")).strip()
-            ]
-            if unplaced:
-                print(
-                    "ghost/voice: no alignment for %d of %d tokens in this sentence: %s"
-                    % (len(unplaced), len(group), " ".join(unplaced[:8])),
-                    file=sys.stderr,
-                )
-            audio = _effort(audio, sr, float(step["tilt"]), float(step["gain_db"]))
-            # The source, if this reading wants a different one. Before the pitch move because a whisper has
-            # no pitch to move and the other order spends the work twice.
-            audio = _whisper(audio, sr, float(params.get("whisper", 0.0)))
-            audio = _muffle(audio, sr, float(params.get("muffle", 0.0)))
-            if abs(pr - 1.0) > 1e-4:
-                # The ratio is measured, not assumed: playing back by exactly `pr` tilts the pace across a
-                # paragraph; playing back by the ratio between what this sentence rendered to and what it
-                # would have unshifted lands the timing exactly, whatever the voice did with the length
-                # scale. The pitch then moves by that measured ratio, a few percent off what was asked,
-                # which nobody can hear.
-                nominal = self._nominal(
-                    self._last_frames, _pitch_length(pr), sr, self._last_floor
-                )
-                played = float(audio.size) / float(sr)
-                ratio = pr
-                if nominal > 0.05 and played > 0.05:
-                    ratio = played / nominal
-                    # A guard, not a tuning: a mis-shaped frame plan must not halve or double a sentence.
-                    if ratio < pr * 0.6 or ratio > pr * 1.6:
-                        ratio = pr
-                pr = ratio
-                shifted = _resample(audio, pr)
-                # ...and the filter held still while the source moves (default on): the arc changes
-                # register, and a register change must not change how big the speaker is. `formant_lock` = 0
-                # disables it, for the gate's A/B.
-                if float(params.get("formant_lock", 1.0)) > 0.5:
-                    shifted = _restore_formants(shifted, audio, pr, sr)
-                audio = shifted
-                # the alignment was measured before the resample, so it moves with it
-                per_token = {k: (v[0] / pr, v[1] / pr) for k, v in per_token.items()}
-                for ph in said:
-                    ph["t0"], ph["t1"] = ph["t0"] / pr, ph["t1"] / pr
-                group_rests = [(a / pr, b / pr, w) for a, b, w in group_rests]
-                edges = {k: (a / pr, b / pr) for k, (a, b) in edges.items()}
-                frame /= pr
-            # A rest nobody asked for, shortened before the ones that were asked for are put in. Unmarked
-            # boundaries only: a mark's rest belongs to `_splice_pauses` and the Pause dial, and so does a
-            # rest the caller splices in after a word.
-            audio, cut = _trim_rests(
-                audio,
-                [
-                    (a, b)
-                    for a, b, w in group_rests
-                    if w < len(group)
-                    and not str(group[w].get("punct", ""))
-                    and _rest_after(group[w]) <= 0.0
-                ],
-                sr,
-            )
-            if cut:
-                per_token = {
-                    k: (
-                        max(0.0, _shift(v[0], cut, True)),
-                        max(0.0, _shift(v[1], cut, False)),
+            # THE SENTENCE AS RENDERED, kept (`_rendered_key`): everything up to its marks' silence is a function of the
+            # request save the Pause, which reaches it only through each word's rest floor and trail - so a change to the
+            # Pause that leaves those alone splices the same speech again, never rendering it again.
+            rkey = self._rendered_key(group, voice, gp, step, params, sess)
+            kept = self._rendered_cache().get(rkey)
+            if kept is not None:
+                self._rendered_cache().move_to_end(rkey)
+                audio = kept["audio"].copy()
+                per_token = dict(kept["per_token"])
+                said = [dict(ph) for ph in kept["said"]]
+                edges = dict(kept["edges"])
+                frame = kept["frame"]
+            else:
+                audio, per_token = self._run(group, voice, gp, cfg, sess, phonemizer)
+                # every voice at one level, as it comes out of the model (level.py)
+                audio = audio * float(params.get("level_gain", 1.0))
+                said = [dict(ph) for ph in getattr(self, "_last_phones", [])]
+                # The frame plan's word-boundary rests and each word's sounds, before anything
+                # resamples them.
+                group_rests = list(self._last_rests)
+                edges = dict(self._last_edges)
+                frame = self.hop / float(sr)
+                audio = _emphasize(audio, edges, group, sr)
+                if self.quiets_lead:
+                    audio = _quiet_lead(audio, edges, group, params, sr)
+                if self.trails:
+                    audio = _trail(audio, edges, group, params, sr, dict(self._last_hisses),
+                                   walk_back=self.trail_early, through=self.trail_through)
+                # Say which words came back without a span. ghost keeps them in the karaoke line either way (it
+                # interpolates their timing; see GenerativeEditor._bridge_words), but a token the aligner cannot
+                # place means the phoneme stream carries nothing for that word, so it is likely not spoken
+                # either.
+                unplaced = [
+                    str(t.get("text", ""))
+                    for ti, t in enumerate(group)
+                    if ti not in per_token and str(t.get("text", "")).strip()
+                ]
+                if unplaced:
+                    print(
+                        "ghost/voice: no alignment for %d of %d tokens in this sentence: %s"
+                        % (len(unplaced), len(group), " ".join(unplaced[:8])),
+                        file=sys.stderr,
                     )
-                    for k, v in per_token.items()
-                }
-                per_token = {k: (a, max(a, b)) for k, (a, b) in per_token.items()}
-                for ph in said:
-                    a0 = max(0.0, _shift(ph["t0"], cut, True))
-                    ph["t0"], ph["t1"] = a0, max(a0, _shift(ph["t1"], cut, False))
-                edges = {
-                    k: (_shift(a, cut, True), _shift(b, cut, False))
-                    for k, (a, b) in edges.items()
-                }
+                audio = _effort(audio, sr, float(step["tilt"]), float(step["gain_db"]))
+                # The source, if this reading wants a different one. Before the pitch move because a whisper has
+                # no pitch to move and the other order spends the work twice.
+                audio = _whisper(audio, sr, float(params.get("whisper", 0.0)))
+                audio = _muffle(audio, sr, float(params.get("muffle", 0.0)))
+                if abs(pr - 1.0) > 1e-4:
+                    # The ratio is measured, not assumed: playing back by exactly `pr` tilts the pace across a
+                    # paragraph; playing back by the ratio between what this sentence rendered to and what it
+                    # would have unshifted lands the timing exactly, whatever the voice did with the length
+                    # scale. The pitch then moves by that measured ratio, a few percent off what was asked,
+                    # which nobody can hear.
+                    nominal = self._nominal(
+                        self._last_frames, _pitch_length(pr), sr, self._last_floor
+                    )
+                    played = float(audio.size) / float(sr)
+                    ratio = pr
+                    if nominal > 0.05 and played > 0.05:
+                        ratio = played / nominal
+                        # A guard, not a tuning: a mis-shaped frame plan must not halve or double a sentence.
+                        if ratio < pr * 0.6 or ratio > pr * 1.6:
+                            ratio = pr
+                    pr = ratio
+                    shifted = _resample(audio, pr)
+                    # ...and the filter held still while the source moves (default on): the arc changes
+                    # register, and a register change must not change how big the speaker is. `formant_lock` = 0
+                    # disables it, for the gate's A/B.
+                    if float(params.get("formant_lock", 1.0)) > 0.5:
+                        shifted = _restore_formants(shifted, audio, pr, sr)
+                    audio = shifted
+                    # the alignment was measured before the resample, so it moves with it
+                    per_token = {k: (v[0] / pr, v[1] / pr) for k, v in per_token.items()}
+                    for ph in said:
+                        ph["t0"], ph["t1"] = ph["t0"] / pr, ph["t1"] / pr
+                    group_rests = [(a / pr, b / pr, w) for a, b, w in group_rests]
+                    edges = {k: (a / pr, b / pr) for k, (a, b) in edges.items()}
+                    frame /= pr
+                # A rest nobody asked for, shortened before the ones that were asked for are put in. Unmarked
+                # boundaries only: a mark's rest belongs to `_splice_pauses` and the Pause dial, and so does a
+                # rest the caller splices in after a word.
+                audio, cut = _trim_rests(
+                    audio,
+                    [
+                        (a, b)
+                        for a, b, w in group_rests
+                        if w < len(group)
+                        and not str(group[w].get("punct", ""))
+                        and _rest_after(group[w]) <= 0.0
+                    ],
+                    sr,
+                )
+                if cut:
+                    per_token = {
+                        k: (
+                            max(0.0, _shift(v[0], cut, True)),
+                            max(0.0, _shift(v[1], cut, False)),
+                        )
+                        for k, v in per_token.items()
+                    }
+                    per_token = {k: (a, max(a, b)) for k, (a, b) in per_token.items()}
+                    for ph in said:
+                        a0 = max(0.0, _shift(ph["t0"], cut, True))
+                        ph["t0"], ph["t1"] = a0, max(a0, _shift(ph["t1"], cut, False))
+                    edges = {
+                        k: (_shift(a, cut, True), _shift(b, cut, False))
+                        for k, (a, b) in edges.items()
+                    }
+                self._keep_rendered(rkey, audio, per_token, said, edges, frame)
             # mid-sentence marks: splice their silence into this group's audio
             points, unplaceable = [], []
             for ti, tok in enumerate(group):
@@ -2817,6 +2847,39 @@ class PiperBackend(Backend):
             "sentences": len(groups),
             "played": played,
         }
+
+    def _rendered_cache(self):
+        """The sentences rendered lately (`_rendered_key` -> what the splice starts from), the latest RENDERED_KEPT."""
+        cache = self.__dict__.get("_rendered")
+        if cache is None:
+            from collections import OrderedDict
+
+            cache = OrderedDict()
+            self.__dict__["_rendered"] = cache
+        return cache
+
+    def _keep_rendered(self, key: str, audio, per_token: dict, said: list, edges: dict, frame: float) -> None:
+        cache = self._rendered_cache()
+        cache[key] = {"audio": audio.copy(), "per_token": dict(per_token), "said": [dict(ph) for ph in said],
+                      "edges": dict(edges), "frame": frame}
+        while len(cache) > RENDERED_KEPT:
+            cache.popitem(last=False)
+
+    @staticmethod
+    def _rendered_key(group: list, voice: str, gp: dict, step: dict, params: dict, sess) -> str:
+        """What sentence `group` renders from, as one key: the voice and its graph, the sentence's tokens, its prosody step
+        and every argument but those only the splice reads (SPLICE_ONLY) - the Pause standing in it only as each word's
+        rest floor and trail weight, all it changes of the speech before its marks' silence is spliced in."""
+        import hashlib
+
+        reach = [
+            (round(_floor_of(t, params, _tail_share(group, ti)), 6),
+             round(_trail_weight(str(t.get("punct", "")), params, _rest_after(t), _tail_share(group, ti)), 6))
+            for ti, t in enumerate(group)
+        ]
+        rest = {k: v for k, v in gp.items() if k not in SPLICE_ONLY}
+        said = json.dumps([voice, id(sess), group, rest, step, reach], sort_keys=True, default=str)
+        return hashlib.sha256(said.encode("utf-8")).hexdigest()
 
     @staticmethod
     def _gap(edges: dict, ti, frame: float):

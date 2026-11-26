@@ -325,6 +325,7 @@ func _check_settings_reach_the_request() -> void:
 	_ed._cast._slots[1]["pace"] = 0.5
 	_ed._cast._slots[1]["tone"] = 4                      # Spooky: slower, three semitones down
 	_ed._cast._slots[1]["pause"] = 3.0
+	_ed._cast._slots[1]["pause_sentence"] = 3.0
 	_ed._cast._slots[1]["speaker"] = 7
 	var ch := {"tokens": [], "plan_u": 0.0, "plan_v": 0.0}
 	var a: Dictionary = _ed._request_args(_ed._cast.slot_cfg(0), ch)
@@ -344,9 +345,10 @@ func _check_settings_reach_the_request() -> void:
 		and absf(float(a.get("play_ratio", 0.0)) - 1.0) < 1e-6,
 		"the tone's playback ratio did not reach the request: %s / %s"
 		% [a.get("play_ratio"), b.get("play_ratio")])
-	# ...and the seam between sentences is the incoming voice's own rest
+	# ...and the seam between sentences is the incoming voice's own rest, at its Pause at sentence ends
 	_ok(Delivery.seam_gap_of(_ed._cast.slot_cfg(1)) > Delivery.seam_gap_of(_ed._cast.slot_cfg(0)),
 		"the seam did not follow the tab")
+	_ok(is_equal_approx(float(b.get("sentence_scale", float(b["pause_scale"]))), 3.0), "the Pause at sentence ends did not follow the tab")
 
 
 ## The room is per voice, applied by dialing one shared chain: the same chain must answer two slots differently.

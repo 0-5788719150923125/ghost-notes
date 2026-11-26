@@ -14,6 +14,8 @@ extends SceneTree
 ## - Set aside, an element is the table's `environment_aside` and nothing plays it; used again it plays again and the list goes.
 ## - An element from the Dex stands at a table where its kind does: fireflies beyond the table as many as their kind, a fog beyond the
 ##   table with all it is told, rain heard on what it falls on.
+## - Every sound has a Volume: +12 dB is about four times as loud (control: 0 dB is as made); its line says what it is like and how far
+##   off, never its size as a loudness. Each of a creature's bodies calls at its rate (control: one body calls a third as often).
 ## - A table's element kept and used on any note: a creature keeps its calls (the control: one with no words of its own chirps);
 ##   motes at a place that note has not got stand where their kind does. A host's as written is never drawn: an unset property is its
 ##   default for any number (the control: a plain element's is drawn by its number). The ride is not offered on the Dex; a creature
@@ -30,6 +32,7 @@ func _init() -> void:
 	_aside()
 	_from_dex()
 	_portable()
+	_volume()
 	print("table_surroundings_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
 	quit(1 if _fails > 0 else 0)
 
@@ -190,3 +193,37 @@ func _portable() -> void:
 	var offered := Surroundings.offers()
 	_ok(not offered.has("kind:ride") and offered.has("kind:creature") and offered.has("kind:flies"),
 		"the ride is not offered on the Dex; a creature and flies are")
+
+
+## The loudest sample of [param sound] over [param secs] seconds, at the Environment's level.
+func _peak(sound: Dictionary, secs: float) -> float:
+	var bed := Soundscape.new(Soundscape.sanitize(sound), {}, 9, 22050, 0.0, {})
+	bed.set_level(Surroundings.BED_LEVEL)
+	var pk := 0.0
+	for f in bed.render(int(22050.0 * secs)):
+		pk = maxf(pk, absf(f.x))
+	bed.finish()
+	return pk
+
+
+func _volume() -> void:
+	var stream := {"size": 0.4, "distance": 0.3}
+	var as_made := _peak({"stream": stream}, 2.0)
+	var louder := _peak({"stream": stream.merged({"volume": 12.0})}, 2.0)
+	var same := _peak({"stream": stream.merged({"volume": 0.0})}, 2.0)
+	_ok(as_made > 0.0 and louder / as_made > 3.5 and louder / as_made < 4.5, "+12 dB is about four times as loud (%s)" % str(louder / maxf(as_made, 1e-9)))
+	_ok(is_equal_approx(same, as_made), "the control: 0 dB is as made")
+	var el := Surroundings.element({"kind": "stream", "seed": 1, "size": 0.05, "distance": 0.9, "volume": 6.0})
+	var line := Surroundings.line_of(el)
+	_ok(line.contains("trickle") and line.contains("far off") and line.contains("+6 dB") and not line.contains("%"),
+		"a sound's line says what it is like and how far off, never its size as a loudness: %s" % line)
+	_ok(Surroundings.fields_of("creature").has("volume") and Surroundings.fields_of("wind").has("volume"), "every sound has a Volume")
+	var bird: Dictionary = Soundscape.sanitize({"creatures": [{"size": 0.2, "calls": ["chirp"], "count": 3, "rate": 12.0, "awake": [1, 1]}]})["creatures"][0]
+	var lone := (bird as Dictionary).duplicate(true)
+	lone["count"] = 1
+	var n3 := 0
+	var n1 := 0
+	for k in 60:
+		n3 += Soundscape._calls_in(bird, 0, k, 7).size()
+		n1 += Soundscape._calls_in(lone, 0, k, 7).size()
+	_ok(n1 > 0 and float(n3) / float(n1) > 2.2, "each of a creature's bodies calls at its rate: three bodies %d calls, one %d" % [n3, n1])

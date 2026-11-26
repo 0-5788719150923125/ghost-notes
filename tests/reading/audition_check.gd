@@ -18,6 +18,9 @@ extends Node
 ## - Test has the host: the reading's sentences in its line are let go and asked again from the first once Test is
 ##   done, and the reading asks nothing while Test plays ([method ReadingStream.yield_host]).
 ##
+## - A sentence already said in the voice as it is now ([TakeCache]) lands at once and is never asked of the host (control: one
+##   not kept is asked); a dial of the room moved mid-test asks nothing again (control: a pace changed does, above).
+##
 ## Controls: a reply held back leaves nothing joined until the one ahead arrives; a Stop after every
 ## sentence has arrived cancels nothing; a Test with the show paused pauses nothing; a take before the first let go
 ## stays; with nothing of the reading's in line, nothing is cancelled.
@@ -50,6 +53,9 @@ var _host: Host
 
 
 func _ready() -> void:
+	# the gate's own takes, never the author's
+	TakeCache.root = "user://audition_check_takes"
+	_rmrf(ProjectSettings.globalize_path(TakeCache.root))
 	_ed = ReadingPanel.new()
 	_ed._build_panel()
 	# the words read are the plain reading's: a format's walk (a Letter's, a desk's) taken from the Director's last
@@ -84,6 +90,7 @@ func _run() -> void:
 	_ok(_ed._cast._test.text == "Test ■" and a.busy(), "Test does not say it is testing")
 	# nobody listens here, so nothing is heard: the lead is widened, or the asking would stop LEAD seconds in
 	a.lead = 1.0e9
+	a.fx_ahead = 1.0e9
 	var sizes: Array = []
 	var files: Array = []
 	for i in n:
@@ -150,6 +157,30 @@ func _run() -> void:
 	var gone := _host.cancelled.duplicate()
 	gone.sort()
 	_ok(gone == asked_now, "Stop cancelled %d of the %d sentences still asked on the host" % [gone.size(), asked_now.size()])
+	# A sentence said before in the voice as it is now lands at once, never asked; and a dial of the room asks nothing again
+	_ed._on_test()
+	_ed._stop_test()
+	var cfg: Dictionary = _ed._cast.cfg_of(Manuscript.NARRATOR)
+	for i in 2:
+		TakeCache.put(_ed.take_key(cfg, _ed._request_args(cfg, a.chunks[i])), _wav(100 + i, int(SR * 0.4)), {"sample_rate": SR, "tokens": []})
+	_host.cancelled = []
+	var from := _host.asked.size()
+	_ed._on_test()
+	for _r in 6:
+		await _settle(a)
+	var idx_of := func(q: Dictionary) -> int: return int(String(q["out"]).get_file().get_basename().get_slice("_", 2))
+	var asked_idx: Array = _host.asked.slice(from).map(idx_of)
+	_ok(not asked_idx.has(0) and not asked_idx.has(1) and a._next >= 2, "a sentence kept was asked of the host again: %s" % [asked_idx])
+	_ok(asked_idx.has(2), "control: a sentence not kept was not asked (%s)" % [asked_idx])
+	_ok(not a._req.is_empty(), "the test's ground: a sentence is still asked of the host")
+	_ed._cast._slots[0]["echo"] = 0.7
+	_ed._cast._slots[0]["room"] = 0.5
+	await _settle(a)
+	_ok(_host.cancelled.is_empty(), "a dial of the room asked %d sentences again" % _host.cancelled.size())
+	_ed._cast._slots[0]["echo"] = 0.0
+	_ed._cast._slots[0]["room"] = 0.0
+	_ed._stop_test()
+	_host.cancelled = []
 	# Test has the host: what the reading on the stream has in line is let go and asked again from its first once Test
 	# is done, a later take already in goes, and the stream asks nothing while Test plays
 	var st := _ed._stream
@@ -212,6 +243,7 @@ func _run() -> void:
 	for _i in 4:
 		await get_tree().process_frame
 	_ed.free()
+	_rmrf(ProjectSettings.globalize_path(TakeCache.root))
 	get_tree().quit(0 if _fails.is_empty() else 1)
 
 
@@ -238,3 +270,11 @@ func _settle(a: ReadingAudition) -> void:
 func _ok(cond: bool, msg: String) -> void:
 	if not cond:
 		_fails.append(msg)
+
+
+func _rmrf(path: String) -> void:
+	if not DirAccess.dir_exists_absolute(path):
+		return
+	for f in DirAccess.get_files_at(path):
+		DirAccess.remove_absolute(path.path_join(f))
+	DirAccess.remove_absolute(path)

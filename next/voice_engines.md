@@ -201,6 +201,21 @@ guess (the stress rule only). About a second a new word, once.
 word normalization wrote, a numeral or a letter's name, is still not one): the page spelling keeps the word's
 marks, so "cosine," never matched whole. g2p_check's "guessed" holds the sentence.
 
+## Built: three Pauses
+
+A voice row's Pause is three (`pause`, `pause_sentence`, `pause_paragraph`; the Voice card's Pause heading, its rows Commas, Sentences and Paragraphs): at a comma, a
+semicolon or a colon, at a sentence's end, and at a paragraph's end, each scaling its whole rest on the same curve
+(`Delivery.rest_for`). The host's sentence gap reads `sentence_scale` (`piper._sentence_params`), sent only where it is not the comma's,
+so a take said before they were apart keeps its key; a paragraph's end is a seam (`Delivery.gap_before`, a chunk's `para_start`:
+the first sentence of each of the text's own paragraphs, a turn after a blank line too). A kept voice hashes as before while the two
+equal the comma's (`VoiceLibrary.hash_of`). Every voice row in ~/repos/rift and each kept voice was given its `pause` in both. Gates:
+reading_plan_check, voice_library_check, multi_voice_check, `test_pauses.py`.
+
+A Pause changed renders nothing again where it moves no word's rest floor or trail: the host keeps each sentence as rendered, up to
+its marks' silence (`PiperBackend._rendered_key`, the latest `RENDERED_KEPT`), keyed by what the voice is given - the Pause in it only
+as each word's floor and trail weight, which saturate (a floor at the mark's dwell, a trail at half a second of rest) - and splices
+it again. A paragraph's Pause is a seam alone and asks the host nothing. Gate: `test_pauses.py` `check_a_sentence_rendered_is_kept`.
+
 ## Still proposed
 
 1. **Rests rendered, not spliced:** the comma rest whole from `rest_floor`, no digital silence

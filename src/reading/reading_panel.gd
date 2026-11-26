@@ -58,7 +58,7 @@ const DEFAULT_VOICE := "en_US-libritts-high"
 ## One tab's worth of settings, and the schema: [method ReadingCast.slot_cfg] merges a stored slot onto this, so
 ## a slot saved by an older build is missing keys rather than broken.
 const SLOT_DEFAULTS := {
-	"voice": DEFAULT_VOICE, "speaker": 0, "tone": 0, "pace": 1.0, "pause": 1.0,
+	"voice": DEFAULT_VOICE, "speaker": 0, "tone": 0, "pace": 1.0, "pause": 1.0, "pause_sentence": 1.0, "pause_paragraph": 1.0,
 	# a new voice made of the voice's readers (VoiceBlend: "mix: af_heart 2, bf_emma 1"); "" is the Speaker alone
 	"blend": "",
 	# Ghost Notes' own voice as the Lab's fishing game bred it (FormantVoice.kept), read where `voice` is formant

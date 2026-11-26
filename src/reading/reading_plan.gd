@@ -81,6 +81,9 @@ static func make(body: String, title: String, ask: Dictionary, from_sentence := 
 				# measuring it against the whole chapter would hand the second voice the contour of a paragraph it is not in.
 		place(chunks, text)
 		lead_ins(chunks)
+		# a turn that begins one of the text's paragraphs rests at its seam as a paragraph's end
+		if not out.is_empty() and bool((seg as Dictionary).get("para", false)):
+			(chunks[0] as Dictionary)["para_start"] = true
 				# ...the turn comes in over the one before: its first sentence is that one's on the screen too, so they read as one line, each word lit in its own voice's color ([ReadingJoin])
 		if not out.is_empty() and (float((seg as Dictionary).get("over", -1.0)) >= 0.0 or bool((seg as Dictionary).get("together", false))):
 			var head: Dictionary = chunks[0]
@@ -161,8 +164,13 @@ static func passages(body: String, title: String, ask: Dictionary) -> Array:
 	# every word a `say:` mark has told so far, as its phones ([constant Manuscript.SAY]): the note's own (a medium's walk hands
 	# on only what is spoken, its marks gone), and any in the text read
 	var said: Dictionary = (ask.get("said", {}) as Dictionary).duplicate()
+	# whether the passage before ended its paragraph: a blank line before a cue leaves it ending on a line break (the cue's own line
+	# takes the last), and the next one then begins a paragraph - as one with a blank line after its cue does
+	var broke := false
 	for p in Manuscript.passages(body):
 		var raw := String((p as Dictionary)["text"])
+		var opens := broke or raw.lstrip(" \t").begins_with("\n")
+		broke = raw.rstrip(" \t").ends_with("\n")
 		for sm in Manuscript._rx(Manuscript.SAY).search_all(raw):
 			said = said.merged(Phonemes.said_as(sm.get_string(1)), true)
 				# the first passage with anything in it: a chapter opening on a cue has an empty one before it, and a title
@@ -205,7 +213,7 @@ static func passages(body: String, title: String, ask: Dictionary) -> Array:
 			if not out.replace(TextNorm.HOLD_MARK, "").strip_edges().is_empty():
 				kept.append({"speaker": reader if name == Manuscript.NARRATOR else name, "text": out,
 					"fade": fading, "leans": res["leans"], "holds": res["holds"], "over": over, "together": together,
-					"heard": heard, "said": said})
+					"heard": heard, "said": said, "para": opens and k == 0})
 		# A tablet's opening run (wake, open the browser, type) comes after the intro, end to end: the intro is the
 		# tablet lying dark on the desk, and its rest is the run's own
 	return kept
@@ -432,8 +440,9 @@ static func cut(body: String, sentence_no: int, holds: Array = [], said := {}) -
 
 
 ## Each chunk of [param out] given its place in its paragraph (`plan_u`), its paragraph's place in its section
-## (`plan_v`), which paragraph of the reading it is (`plan_p`, from 0) and where it starts and ends in its paragraph
-## by its words (`plan_span`, 0 to 1), read off [param body], the passage the chunks were cut from.
+## (`plan_v`), which paragraph of the reading it is (`plan_p`, from 0), where it starts and ends in its paragraph
+## by its words (`plan_span`, 0 to 1), and `para_start` on the first of each of the text's own paragraphs after the first,
+## read off [param body], the passage the chunks were cut from.
 static func place(out: Array, body: String) -> void:
 		# Paragraph boundaries come from the source text (a blank line), the only place they exist: Phonemes.parse
 		# hands back a flat run of sentences. Counting sentence-final marks per paragraph maps one onto the other.
@@ -470,14 +479,18 @@ static func place(out: Array, body: String) -> void:
 		per_para.append(maxi(1, c))
 	if per_para.is_empty():
 		per_para = [maxi(1, out.size())]
+	# where the text's own paragraphs begin, among the pieces a long one is cut into below: a paragraph's rest is at these alone
 		# ...and prose pasted as one unbroken block has no marker of either kind, so a paragraph's length is bounded
 		# whether the text says where they end or not.
 	var capped: Array = []
+	var begins: Array = []
 	for n in per_para:
 		var left := int(n)
+		begins.append(true)
 		while left > PARA_CEILING:
 			capped.append(PARA_CEILING)
 			left -= PARA_CEILING
+			begins.append(false)
 		capped.append(maxi(1, left))
 	per_para = capped
 	# sentence index -> (paragraph index, position within it)
@@ -496,6 +509,10 @@ static func place(out: Array, body: String) -> void:
 		var sp := pi % SECTION_PARAS
 		out[i]["plan_v"] = float(sp) / float(maxi(1, SECTION_PARAS - 1))
 		out[i]["plan_p"] = pi
+		# the first sentence of one of the text's own paragraphs, after the first: its seam rests as a paragraph's end
+		# ([method Delivery.gap_before])
+		if within == 0 and i > 0 and pi < begins.size() and bool(begins[pi]):
+			out[i]["para_start"] = true
 		within += 1
 	# ...and where each chunk starts and ends in its paragraph, by its words: a voice that moves within a sentence reads
 	# each word where it stands

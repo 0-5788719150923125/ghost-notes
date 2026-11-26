@@ -85,6 +85,11 @@ Built:
   hand's version of the table step, and what is set aside is the table's `environment_aside`. "+ Add" puts a Dex element on the table
   (no light: the table's light is the set dresser's). At the desk, where the episode has no table, the card is the note's own and the
   reading hears its sound (`ReadingBed.under`).
+- **Every sound has a Volume** (`Surroundings.VOLUME_FIELD`, `Soundscape.VOLUME`: -30 to +30 dB over how it is made, never drawn): a part
+  of the Soundscape scaled where its bands, eddies, bubbles and calls reach the mix (each band tagged with its part as it is made).
+  A sound's line says what it is like and how far off ("a trickle, far off"; a creature how many, its calls, how far, how often),
+  never its size as a loudness. Each of a creature's bodies calls at its `rate`. The Episode card's Place dial is gone: a table's
+  sound plays at the Environment's level (`BED_LEVEL`), each sound turned up or down on its own.
 - **An element keeps its host's own words** (`own`, `Surroundings.OWN`): where a sound is heard from, a wind's own gusts, a creature's
   name and calls, where motes fly and fog lies at a table. Such an element is never drawn (an unset property is its default), so it
   goes back to the table unchanged, and kept it plays the same on any note; a place the note has not got is its kind's. New kinds for

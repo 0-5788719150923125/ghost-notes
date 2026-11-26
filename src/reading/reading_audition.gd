@@ -6,9 +6,11 @@ class_name ReadingAudition
 ## or Director.
 ##
 ## Streamed, like a reading: sentences are asked of the host a few seconds ahead of what is heard ([method
-## _ask_ahead]), each with the voice's settings as they are when it is asked; a change on the card (a share, Push,
-## Breath, the noise, the pace) asks again what is not yet joined ([method _ask_again]), so it is heard once the few
-## seconds already joined have played. Each is joined onto the stream the moment it and everything
+## _ask_ahead]), each with the voice's settings as they are when it is asked - and a sentence already said in this voice as it is
+## now lands at once, never asked again ([TakeCache], where every one the host says is kept). A change on the card that reaches
+## the host (a share, Push, Breath, the noise, the pace, a pause) asks again what is not yet joined ([method _ask_again]), so it
+## is heard once the few seconds already joined have played; one that only colors what is heard (the room, its echo, presence,
+## ambience) asks nothing again and reaches the next piece of the room ([method _said_with]). Each is joined onto the stream the moment it and everything
 ## before it has arrived, and playback starts with the first sentence. A Stop cancels what is still asked ([method
 ## stop]).
 ##
@@ -58,6 +60,9 @@ Tom met me at the station in a coat that had been our father's. He looked older,
 ## one piece at a time (the chain is stateful, so pieces run in order), and the main thread only moves finished
 ## samples into the ring. A dial moved mid-test reaches the next piece: settings are taken when a piece starts.
 const FX_PIECE := 0.5
+## How far the room runs ahead of what is heard (seconds): a dial of the room moved is heard this soon, the speech already
+## made never asked again.
+const FX_AHEAD := 1.0
 ## Sentences are asked while less than LEAD seconds of joined audio wait unheard, at most AHEAD asked or decoding at
 ## once: far enough ahead that the voice never waits, near enough that a change on the card is heard soon.
 const LEAD := 6.0
@@ -73,13 +78,16 @@ var chunks: Array = []
 var _player: AudioStreamPlayer
 var _sr := 22050
 var _req := {}                 # host request id -> chunk index
+var _keys := {}                # host request id -> what its sentence is kept under ([TakeCache]) once it lands
 var _parts := {}               # chunk index -> {wav, spans}, as they arrive
 var _tasks := {}               # chunk index -> {box, task}: decoding on a worker
 var _next := 0                 # the next sentence to join onto the stream
 var _asked := 0                # the next sentence to ask the host for
 ## Seconds asked ahead of what is heard ([constant LEAD]); a gate with no one listening widens it.
 var lead := LEAD
-var _asked_with := 0           # the voice's settings (their hash) the sentences not yet joined were asked with
+## Seconds the room runs ahead of what is heard ([constant FX_AHEAD]); a gate with no one listening widens it too.
+var fx_ahead := FX_AHEAD
+var _asked_with := 0           # what reaches the host of the voice's settings ([method _said_with]) the sentences not yet joined were asked with
 var _round := 0                # how many times the sentences were asked again: a take's file is its round's
 var _join: ReadingJoin = null  # the dry take: seams, rests, where the reader moves
 var _dry := PackedFloat32Array()   # joined audio waiting for the room (see _pump_fx)
@@ -120,11 +128,27 @@ func _ask_ahead() -> void:
 	while _asked < chunks.size() and _req.size() + _tasks.size() < AHEAD \
 			and float(_dry_at + _dry.size() - _pushed) < lead * float(_sr):
 		var s := panel._cast.cfg_of(voice)
-		_asked_with = s.hash()
-		var id := panel._host.request("", panel._cast.voice_id_of(s),
-			ReadingPanel.TAKE_DIR + "/test_%d_%d.wav" % [_round, _asked], panel._request_args(s, chunks[_asked]), null)
+		_asked_with = _said_with(s)
+		var args: Dictionary = panel._request_args(s, chunks[_asked])
+		var key: String = panel.take_key(s, args)
+		var to := ReadingPanel.TAKE_DIR + "/test_%d_%d.wav" % [_round, _asked]
+		# said before in this voice as it is now: it lands as the host's reply would, no host asked
+		var kept := TakeCache.find(key)
+		var copy := TakeCache.copy_out(key, to) if not kept.is_empty() else ""
+		if not copy.is_empty():
+			_asked += 1
+			_landed(_asked - 1, copy, kept["out"], "")
+			continue
+		var id := panel._host.request("", panel._cast.voice_id_of(s), to, args, null)
 		_req[id] = _asked
+		_keys[id] = key
 		_asked += 1
+
+
+## What of voice settings [param s] reaches the host, as one number: the voice and every argument a sentence is asked with
+## ([method ReadingPanel._request_args]), never the room it is heard in - a change to this alone asks a sentence again.
+func _said_with(s: Dictionary) -> int:
+	return [panel._cast.voice_id_of(s), panel._request_args(s, {"tokens": []})].hash()
 
 
 ## The voice changed on the card while sentences were still being made: those asked with the old settings are
@@ -134,6 +158,7 @@ func _ask_again() -> void:
 	if not _req.is_empty() and panel._host != null:
 		panel._host.cancel(_req.keys())
 	_req = {}
+	_keys = {}
 	for k in _tasks:
 		WorkerThreadPool.wait_for_task_completion(int((_tasks[k] as Dictionary)["task"]))
 	_tasks = {}
@@ -214,6 +239,7 @@ func stop() -> void:
 	_fx_task = {}
 	_dry = PackedFloat32Array()
 	_req = {}
+	_keys = {}
 	_asked = chunks.size()
 	for k in _parts:
 		_forget(String((_parts[k] as Dictionary)["wav"]))
@@ -230,7 +256,16 @@ func stop() -> void:
 func take(id: int, result: Dictionary) -> void:
 	var i := int(_req[id])
 	_req.erase(id)
-	var wav := String(result.get("wav", ""))
+	# kept where this process may keep the author's things (a test reads the cache, never adds to it)
+	var key := "" if Settings.is_read_only() else String(_keys.get(id, ""))
+	_keys.erase(id)
+	_landed(i, String(result.get("wav", "")), result, key)
+	_ask_ahead()
+
+
+## Sentence [param i]'s take at [param wav] (the host's [param result], or one kept), decoded on a worker - and kept under
+## [param key] first where it came from the host, so it is never asked again in this voice as it is now.
+func _landed(i: int, wav: String, result: Dictionary, key: String) -> void:
 	_parts[i] = {"wav": wav, "spans": result.get("tokens", [])}
 	# the host's rate is the panel's to know: every take after this one is at it
 	_sr = int(result.get("sample_rate", _sr))
@@ -245,9 +280,10 @@ func take(id: int, result: Dictionary) -> void:
 	# sentence. A pure function of the file, so a worker can do it; the join below waits for it.
 	var box := [PackedFloat32Array()]
 	_tasks[i] = {"box": box, "task": WorkerThreadPool.add_task(func() -> void:
+		if not key.is_empty():
+			TakeCache.put(key, wav, result)
 		box[0] = Splice.decode_wav(wav))}
 	_join_parts()
-	_ask_ahead()
 
 
 ## Every frame: join what the workers finished, keep the room going, feed the ring a frame's worth of finished
@@ -256,7 +292,7 @@ func take(id: int, result: Dictionary) -> void:
 func tick() -> void:
 	if not _tasks.is_empty():
 		_join_parts()
-	if (not _req.is_empty() or not _tasks.is_empty()) and panel._cast.cfg_of(voice).hash() != _asked_with:
+	if (not _req.is_empty() or not _tasks.is_empty()) and _said_with(panel._cast.cfg_of(voice)) != _asked_with:
 		_ask_again()
 	if _asked < chunks.size():
 		_ask_ahead()
@@ -316,6 +352,9 @@ func _pump_fx() -> void:
 		_fx_task = {}
 	if _dry.is_empty() or _fx == null:
 		_start_playback()
+		return
+	# no further ahead of the ear than FX_AHEAD (once it plays): what is through the room is heard as the dials were
+	if _player != null and _player.playing and float(_hold.size() - _read) > fx_ahead * float(_sr):
 		return
 	var n := mini(_dry.size(), int(FX_PIECE * float(_sr)))
 	# a distance the piece has reached goes in before it; a piece stops at the next one (the voice

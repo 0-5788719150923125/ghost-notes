@@ -313,6 +313,9 @@ const SOUND_FIELDS := {
 	"ride": {"level": {"label": "Level", "blurb": "How loud the ride is.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05,
 		"default": 0.6, "roll": [0.4, 0.75]}},
 }
+## How loud a sound is over how it is made (dB), every sound's: never drawn, 0 until set ([constant Soundscape.VOLUME]).
+const VOLUME_FIELD := {"label": "Volume", "blurb": "How loud it is, over how it is made (dB): 0 as it is, below quieter, above louder.",
+	"type": "float", "min": -30.0, "max": 30.0, "step": 1.0, "default": 0.0}
 ## The block's keys and what each is when it says nothing.
 const KNOBS := {"elements": [], "lights": {}, "heard": {}}
 ## The most elements a scene has, and the keys of an element that are no property of it.
@@ -459,6 +462,7 @@ static func fields_of(kind: String, color := "") -> Dictionary:
 	if row.has("part"):
 		var part := String(row["part"])
 		var out: Dictionary = (SOUND_FIELDS.get(part, {}) as Dictionary).duplicate(true)
+		out["volume"] = VOLUME_FIELD.duplicate()
 		var spec: Dictionary = row["spec"]
 		var tables := {"on": Soundscape.RAINS, "through": Soundscape.THROUGH, "sort": Soundscape.INSECTS if part == "insects" else Soundscape.WATERS}
 		for k in out:
@@ -801,14 +805,52 @@ static func line_of(el: Dictionary) -> String:
 	if String(el.get("kind", "")) == "creature":
 		var calls: Array = (el.get("own", {}) as Dictionary).get("calls", (KINDS["creature"] as Dictionary)["spec"]["calls"])
 		var n := int(v["count"])
-		return "%s, %s" % ["one" if n == 1 else "%d of them" % n, ", ".join(PackedStringArray(calls))]
+		var near := float(v["near"])
+		var line := "%s, %s, %s, %s a minute %s" % ["one" if n == 1 else "%d of them" % n, " and ".join(PackedStringArray(calls)),
+			"close by" if near > 0.66 else ("some way off" if near > 0.33 else "far off"), str(snappedf(float(v["rate"]), 0.1)),
+			"each" if n > 1 else "or so"]
+		var vol := float(v.get("volume", 0.0))
+		return line + (", %+d dB" % roundi(vol) if absf(vol) >= 0.5 else "")
 	var kind_row: Dictionary = KINDS.get(String(el.get("kind", "")), {})
 	if kind_row.has("effect"):
 		if String((kind_row["effect"] as Dictionary)["kind"]) == "fog":
 			return "%s%% thick" % str(roundi(float(v["density"]) * 100.0))
 		return "%d%% as many, %s mm" % [roundi(float(v["amount"]) * 100.0), str(snappedf(float(v["size"]), 0.1))]
-	var loud := float(v.get("strength", v.get("level", v.get("size", 0.5))))
-	return "%s%% loud" % str(roundi(loud * 100.0))
+	return _heard_line(String(el.get("kind", "")), v)
+
+
+## What sound [param kind] is, in a line, from its values [param v]: what it is like, how far off, and its volume where it is turned
+## up or down.
+static func _heard_line(kind: String, v: Dictionary) -> String:
+	var how := func(x: float, words: Array) -> String: return String(words[clampi(int(x * float(words.size())), 0, words.size() - 1)])
+	var off := func(d: float) -> String: return how.call(d, ["close by", "some way off", "far off"])
+	var parts := PackedStringArray()
+	match kind:
+		"wind":
+			parts.append("through the %s" % String(v.get("through", "")) if String(v.get("through", "")) != "open" else "in the open")
+			parts.append(how.call(float(v.get("level", 0.5)), ["faint", "soft", "steady", "strong"]))
+		"rain":
+			parts.append("on the %s" % String(v.get("on", "")))
+			parts.append(how.call(float(v.get("strength", 0.5)), ["a few drops", "light", "steady", "a downpour"]))
+		"fire":
+			parts.append(how.call(float(v.get("size", 0.5)), ["embers", "a small fire", "a good fire", "a blaze"]))
+			parts.append(off.call(float(v.get("distance", 0.5))))
+		"stream":
+			parts.append(how.call(float(v.get("size", 0.5)), ["a trickle", "a brook", "a stream", "a rush"]))
+			parts.append(off.call(float(v.get("distance", 0.5))))
+		"sea":
+			parts.append(String(v.get("sort", "")))
+			parts.append(how.call(float(v.get("size", 0.5)), ["calm", "moderate", "rough"]))
+			parts.append(off.call(float(v.get("distance", 0.5))))
+		"insects":
+			parts.append(String(v.get("sort", "")))
+			parts.append(how.call(float(v.get("amount", 0.25)), ["a lone one", "a few", "many", "a field of them"]))
+		"ride":
+			parts.append(how.call(float(v.get("level", 0.6)), ["faint", "soft", "steady", "loud"]))
+	var vol := float(v.get("volume", 0.0))
+	if absf(vol) >= 0.5:
+		parts.append("%+d dB" % roundi(vol))
+	return ", ".join(parts)
 
 
 # --- an element's picture ------------------------------------------------------------------------------------------------

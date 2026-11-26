@@ -23,7 +23,10 @@ scenes from scratch and debug them in manual mode. The C# question is answered i
 2. **Words and the script** - cues bind to acts or layers (`TableWork.resolve_cues`); the script edited whole
    (`TableProducer.write_script`); `--episode-check <dir>` lists what is wrong.
 3. **The voice** - `TakeCache`; a seek while paused stays paused; the Voice row keeps a take for the words and voices it was said
-   in (`ReadingPanel.take_sig`), and Play plays it as a file, as a render does; an export takes a copy.
+   in (`ReadingPanel.take_sig`), and Play plays it as a file, as a render does; an export takes a copy. The Voice card's Test
+   (`ReadingAudition`) lands a sentence already said in the voice as it is now from the cache and keeps each new one; a dial
+   that only colors what is heard (the room, echo, presence, ambience) asks nothing again (`_said_with`) and is heard within a
+   second (`FX_AHEAD`).
 4. **✎ on a row** - `SourceWindow` (words, data as JSON, versions put back, its agent asked again with a note); a design's
    elements as rows (`DesignWindow`); a picture imported; one painted layer laid again alone (`lay_layer`, the host's `only`).
    On a copy of a finished episode, laying layer 13 of 16 (35 s) left every other layer's elements and design as they were, and

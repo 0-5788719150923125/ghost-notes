@@ -22,7 +22,7 @@ const SHELF := "voices"
 ## The ending of a voice handed on as a file ([method export_to]).
 const EXPORT := ".voice.json"
 ## What a voice keeps when it is kept: who speaks and how. Every other field of a cast row is the room ([constant ROOM]).
-const OWN := ["voice", "speaker", "blend", "formant", "tone", "pace", "pause", "dynamics", "arc", "effort", "ink",
+const OWN := ["voice", "speaker", "blend", "formant", "tone", "pace", "pause", "pause_sentence", "pause_paragraph", "dynamics", "arc", "effort", "ink",
 	"vibrato", "vibrato_rate", "drift"]
 ## How a voice sings, and each dial's range. A voice's hash leaves one out while it is at its default (a voice kept
 ## before these were is the same voice), and its spoken sample never hears them.
@@ -30,7 +30,8 @@ const SINGING := {"vibrato": [0.0, 1.0], "vibrato_rate": [3.0, 8.0], "drift": [0
 ## Where a voice is heard: each note's own, never kept.
 const ROOM := ["echo", "room", "resonance", "presence", "ambience", "lean", "near", "seat"]
 ## A kept field's value where a file gives none (a voice names its model, or it is no voice).
-const DEFAULTS := {"voice": "", "speaker": 0, "blend": "", "formant": {}, "tone": 0, "pace": 1.0, "pause": 1.0,
+const DEFAULTS := {"voice": "", "speaker": 0, "blend": "", "formant": {}, "tone": 0, "pace": 1.0, "pause": 1.0, "pause_sentence": 1.0,
+	"pause_paragraph": 1.0,
 	"dynamics": 0.5, "arc": 0.4, "effort": 0.35, "ink": "", "vibrato": 0.15, "vibrato_rate": 5.4, "drift": 0.03}
 ## The Pace row's range.
 const PACE_LEAST := 0.4
@@ -74,7 +75,8 @@ static func own_of(row: Dictionary) -> Dictionary:
 	out["formant"] = _formant(row.get("formant", {}))
 	out["tone"] = _int(row.get("tone"), 0, 0, Delivery.TONE_PRESETS.size() - 1)
 	out["pace"] = _num(row.get("pace"), float(DEFAULTS["pace"]), PACE_LEAST, PACE_MOST)
-	out["pause"] = _num(row.get("pause"), float(DEFAULTS["pause"]), 0.0, Delivery.MAX_PAUSE_SCALE)
+	for k in ["pause", "pause_sentence", "pause_paragraph"]:
+		out[k] = _num(row.get(k), float(DEFAULTS[k]), 0.0, Delivery.MAX_PAUSE_SCALE)
 	for k in ["dynamics", "arc", "effort"]:
 		out[k] = _num(row.get(k), float(DEFAULTS[k]), 0.0, 1.0)
 	out["ink"] = _ink(row.get("ink", ""))
@@ -84,11 +86,17 @@ static func own_of(row: Dictionary) -> Dictionary:
 
 
 ## What [param voice] is, as a short hash: only its kept fields count, never its name, its line or its room; numbers equal
-## to a millionth hash the same.
+## to a millionth hash the same; the singing at its defaults and the pauses at sentence and paragraph ends equal to the Pause at
+## commas are left out.
 static func hash_of(voice: Dictionary) -> String:
 	var own := own_of(voice)
 	for k in SINGING:
 		if is_equal_approx(float(own[k]), float(DEFAULTS[k])):
+			own.erase(k)
+	# the pauses at sentence and paragraph ends say nothing while they are the Pause at commas: a voice kept before they were apart
+	# is the same voice
+	for k in ["pause_sentence", "pause_paragraph"]:
+		if is_equal_approx(float(own[k]), float(own["pause"])):
 			own.erase(k)
 	return JSON.stringify(_canon(own), "", true).sha256_text().left(16)
 

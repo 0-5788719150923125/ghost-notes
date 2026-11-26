@@ -100,6 +100,8 @@ const CEILING := 0.56
 const LIMIT_RELEASE := 1.2
 ## ...faded in over this much of its travel, so 0 is a clean off and not a step.
 const FADE_IN := 0.05
+## How far a part's own volume turns it down or up over how it is made (dB): a person's, on the Environment card.
+const VOLUME := Vector2(-30.0, 30.0)
 
 ## The vocabulary: what each part of `sound` is, as an agent reads it.
 const LAYERS := {
@@ -219,7 +221,7 @@ static func describe() -> String:
 	lines.append("- creatures: [{\"name\", \"size\" 0-1, \"breath\" 0-1, \"calls\", \"count\" 1-%d, \"rate\", \"side\" -1..1, \"near\" 0-1, \"awake\" [start, end], \"over\"}, ...] - %s; at most %d. What it sounds like is its numbers: `size` from small, quick and high (0) to large, slow and deep (1); `breath` from clear (0) to breathy (1); `calls`, the sounds it makes, any of:" % [MAX_BODIES, String(LAYERS["creatures"]), MAX_CREATURES])
 	for k in CALLS:
 		lines.append("  - %s: %s" % [k, String((CALLS[k] as Dictionary)["about"])])
-	lines.append("  count: how many of them there are, each its own voice; rate: about how many calls a minute when lively, fewer when drowsy, in uneven bunches; side: where they are, -1 the reader's far left to 1 the far right; near: 0 far off to 1 close by the table - quieter and duller far off; awake: how lively they are at the start and at the end, 0 fast asleep (snores and purrs) to 1 wide awake (chirps and squeaks), reached over `over` seconds (900 when left out). They are heard only - nothing on the table shows them.")
+	lines.append("  count: how many of them there are, each its own voice; rate: about how many calls a minute each makes when lively, fewer when drowsy, in uneven bunches; side: where they are, -1 the reader's far left to 1 the far right; near: 0 far off to 1 close by the table - quieter and duller far off; awake: how lively they are at the start and at the end, 0 fast asleep (snores and purrs) to 1 wide awake (chirps and squeaks), reached over `over` seconds (900 when left out). They are heard only - nothing on the table shows them.")
 	lines.append("  from: where a sound is, as a sun's `from` (front, right, back left, ... or degrees). distance: 0 at the table's edge, 1 far off - quieter and duller.")
 	lines.append("A sound belongs to the place the room's painting and the light show: the sea where the sea is, rain where the sky is gray, no fire where none burns. Most places have one or two sounds; a quiet room none.")
 	return "\n".join(lines)
@@ -312,6 +314,10 @@ static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray(
 		notes.append("the creatures were not a list of objects {name, size, breath, calls, ...} - left out")
 	if out.is_empty():
 		return {}
+	# how loud each part is over how it is made (dB), where a person set it ([constant VOLUME])
+	for part in out:
+		if out[part] is Dictionary and d.get(part) is Dictionary and typeof((d[part] as Dictionary).get("volume")) in [TYPE_INT, TYPE_FLOAT]:
+			(out[part] as Dictionary)["volume"] = clampf(float((d[part] as Dictionary)["volume"]), VOLUME.x, VOLUME.y)
 	out["why"] = Props._text(d.get("why", ""), 200)
 	return out
 
@@ -408,7 +414,8 @@ static func _creature(c: Dictionary, notes: PackedStringArray) -> Dictionary:
 		"breath": Props._num(c.get("breath"), 0.4, 0.0, 1.0), "calls": calls,
 		"count": int(Props._num(c.get("count"), 1.0, 1.0, float(MAX_BODIES))), "rate": Props._num(c.get("rate"), 6.0, 0.2, 40.0),
 		"side": Props._num(c.get("side"), 0.0, -1.0, 1.0), "near": Props._num(c.get("near"), 0.5, 0.0, 1.0),
-		"awake": awake, "over": Props._num(c.get("over"), 900.0, 30.0, 7200.0)}
+		"awake": awake, "over": Props._num(c.get("over"), 900.0, 30.0, 7200.0)}.merged(
+			{"volume": clampf(float(c["volume"]), VOLUME.x, VOLUME.y)} if typeof(c.get("volume")) in [TYPE_INT, TYPE_FLOAT] else {})
 
 
 ## How lively creature [param c] is at show time [param t], 0 asleep to 1 wide awake: from its `awake` at the start to its end over its
@@ -482,7 +489,7 @@ static func _drawn_in(c: Dictionary, ci: int, k: int, seed: int) -> Array:
 	var w0 := float(k) * CREATURE_WINDOW
 	var aw := _awake_at(c, w0 + CREATURE_WINDOW * 0.5, hash([seed, "awake", ci]))
 	var bunch := 1.0 + 1.6 * aw
-	var lam := float(c["rate"]) / 60.0 * CREATURE_WINDOW * lerpf(0.3, 1.0, aw) / bunch
+	var lam := float(c["rate"]) / 60.0 * CREATURE_WINDOW * lerpf(0.3, 1.0, aw) / bunch * float(int(c["count"]))
 	# a Poisson count, by inversion
 	var n := 0
 	var p := exp(-lam)
@@ -567,6 +574,7 @@ static func seen_calls(sound: Dictionary, seed: int, t0: float, t1: float) -> Ar
 ## level for each ear eased across the block, an envelope struck by events (a difference of two exponentials - an attack and a decay) and
 ## an optional pulse (a flap, a buzz).
 class Band:
+	var part := ""         # the part of the place it sounds for ([member _gains]: its volume)
 	var src := 0           # 0 white, 1 brown
 	var leak := BROWN      # brown's leak and its input (see BROWN)
 	var leak_in := BROWN_IN
@@ -730,6 +738,8 @@ var _ride := {}                   # the table's ride (Rides.plan), heard when th
 var _ri := {}
 var _seed := 0                    # the place's seed, as made: the creatures' plan is drawn from it
 var _cr: Array = []               # the creatures heard: [{c, ci, bodies, next_k, queue}]
+var _gains := {}                  # each part's volume, linear (its `volume`, dB): what its bands, eddies, bubbles and calls are scaled by
+var _making := ""                 # the part whose bands and bubbles are being made now
 var _calls: Array[Call] = []      # their calls sounding now
 var _crng := 1                    # the creatures' own dice: a creature added changes nothing else in a place
 
@@ -929,6 +939,7 @@ func _band(src: int, mode: int, fc: float, q: float, wide: bool) -> Band:
 	b.fc = fc
 	b.q = q
 	b.wide = wide
+	b.part = _making
 	_bands.append(b)
 	return b
 
@@ -950,6 +961,10 @@ static func _pan(p: float) -> Vector2:
 
 
 func _setup() -> void:
+	for part in LAYERS:
+		if _sound.get(part) is Dictionary:
+			_gains[part] = db_to_linear(float((_sound[part] as Dictionary).get("volume", 0.0)))
+	_making = "wind"
 	if _sound.get("wind") is Dictionary and not _wind.is_empty():
 		var w: Dictionary = _sound["wind"]
 		var through := String(w["through"])
@@ -998,6 +1013,7 @@ func _setup() -> void:
 				_w["flap_in"] = _range(0.2, 1.2)
 				_w["flap_k"] = 0
 				_w["flap_back"] = 0.0
+	_making = "water"
 	if _sound.get("water") is Dictionary:
 		var x: Dictionary = _sound["water"]
 		var kind := String(x["kind"])
@@ -1019,6 +1035,7 @@ func _setup() -> void:
 			spray.steady = 0.0
 			_wa["spray"] = spray
 			_wa["k"] = 0
+	_making = "rain"
 	if _sound.get("rain") is Dictionary:
 		var r: Dictionary = _sound["rain"]
 		var on: Dictionary = RAINS[String(r["on"])]
@@ -1035,6 +1052,7 @@ func _setup() -> void:
 				var b := _band(0, 1, 3000.0, 1.0, false)
 				b.steady = 0.0
 				(_ra["drops"] as Array).append(b)
+	_making = "fire"
 	if _sound.get("fire") is Dictionary:
 		var f: Dictionary = _sound["fire"]
 		_fi = {"size": float(f["size"]), "from": float(f["from"]), "ears": _ears(float(f["from"]), 0.7), "far": float(f["distance"]),
@@ -1044,10 +1062,12 @@ func _setup() -> void:
 			var b := _band(0, 1, 3000.0, 2.5, false)
 			b.steady = 0.0
 			(_fi["crackles"] as Array).append(b)
+	_making = "stream"
 	if _sound.get("stream") is Dictionary:
 		var s: Dictionary = _sound["stream"]
 		_st = {"size": float(s["size"]), "from": float(s["from"]), "ears": _ears(float(s["from"]), 0.7), "far": float(s["distance"]),
 			"burble": _band(0, 1, 700.0, 0.6, true), "low": _band(1, 0, 350.0, 0.7, false), "next": 0.0, "mod": 0.0}
+	_making = "ride"
 	if _sound.get("ride") is Dictionary and not _ride.is_empty():
 		var on := String(_ride["on"])
 		var tone: Dictionary = RIDE_TONES[on]
@@ -1067,6 +1087,7 @@ func _setup() -> void:
 		var thud := _band(1, 0, float(tone["thump"]) * 0.55, 0.9, false)
 		thud.steady = 0.0
 		_ri["thud"] = thud
+	_making = "insects"
 	if _sound.get("insects") is Dictionary:
 		var i: Dictionary = _sound["insects"]
 		var kind := String(i["kind"])
@@ -1124,20 +1145,28 @@ func _block() -> void:
 		b._gr0 = b.gr
 	_air(t, dt)
 	if not _w.is_empty():
+		_making = "wind"
 		_wind_block(dt)
 	if not _wa.is_empty():
+		_making = "water"
 		_water_block(t, dt)
 	if not _ra.is_empty():
+		_making = "rain"
 		_rain_block(t, dt)
 	if not _fi.is_empty():
+		_making = "fire"
 		_fire_block(t, dt)
 	if not _st.is_empty():
+		_making = "stream"
 		_stream_block(dt)
 	if not _in.is_empty():
+		_making = "insects"
 		_insects_block(t, dt)
 	if not _ri.is_empty():
+		_making = "ride"
 		_ride_block(t, dt)
 	if not _cr.is_empty():
+		_making = "creatures"
 		_creatures_block(t, dt)
 	for b in _bands:
 		_run(b)
@@ -1755,6 +1784,7 @@ func _insects_block(t: float, dt: float) -> void:
 ## A sine that rises as it dies: [param f] Hz, decaying over [param decay] seconds while its pitch climbs by [param rise] (a fraction)
 ## over that time - a bubble closing (Minnaert). A chirp is one that does not rise.
 func _bubble(f: float, decay: float, rise: float, amp: float, ears: Vector2, attack := 0.0004) -> void:
+	amp *= float(_gains.get(_making, 1.0))
 	if f >= _sr * 0.45 or amp <= 0.0:
 		return
 	# The quietest voice is taken, never one still sounding: cut short mid-ring, a bubble clicks
@@ -1796,10 +1826,11 @@ func _run_eddy(e: Eddy) -> void:
 	var p0 := s[4]
 	var p1 := s[5]
 	var p2 := s[6]
-	var gl := e.gl0
-	var gr := e.gr0
-	var dgl := (e.gl - e.gl0) / float(CR)
-	var dgr := (e.gr - e.gr0) / float(CR)
+	var vol := float(_gains.get("wind", 1.0))
+	var gl := e.gl0 * vol
+	var gr := e.gr0 * vol
+	var dgl := (e.gl - e.gl0) * vol / float(CR)
+	var dgr := (e.gr - e.gr0) * vol / float(CR)
 	var nz := _noise
 	var o := int(_rand() * 65536.0)
 	var obl := _bl
@@ -1987,15 +2018,16 @@ func _run(b: Band) -> void:
 	var brn := s[5]
 	var k1 := b.k1
 	var k2 := b.k2
-	var gl := b._gl0 * steady
-	var gr := b._gr0 * steady
-	var dgl := (b.gl - b._gl0) * steady / float(CR)
-	var dgr := (b.gr - b._gr0) * steady / float(CR)
+	var vol := float(_gains.get(b.part, 1.0))
+	var gl := b._gl0 * steady * vol
+	var gr := b._gr0 * steady * vol
+	var dgl := (b.gl - b._gl0) * steady * vol / float(CR)
+	var dgr := (b.gr - b._gr0) * steady * vol / float(CR)
 	# a struck envelope's ears ease across the block too: moved at a stroke under a ringing tail, they click
-	var el := b._gl0
-	var er := b._gr0
-	var del := (b.gl - b._gl0) / float(CR)
-	var der := (b.gr - b._gr0) / float(CR)
+	var el := b._gl0 * vol
+	var er := b._gr0 * vol
+	var del := (b.gl - b._gl0) * vol / float(CR)
+	var der := (b.gr - b._gr0) * vol / float(CR)
 	var o1 := int(_rand() * 65536.0)
 	var o2 := int(_rand() * 65536.0)
 	var brown := b.src == 1
@@ -2140,7 +2172,7 @@ func _voice_of(c: Dictionary, body: Dictionary, e: Dictionary) -> Call:
 	v.dur = float(e["dur"])
 	v.parts = e["parts"]
 	v.rng = (int(e["salt"]) & 0x7FFFFFFF) | 1
-	v.amp = float(CALL_LEVEL[kind]) * float(e["amp"])
+	v.amp = float(CALL_LEVEL[kind]) * float(e["amp"]) * db_to_linear(float(c.get("volume", 0.0)))
 	match kind:
 		"chirp":
 			v.tonal = true

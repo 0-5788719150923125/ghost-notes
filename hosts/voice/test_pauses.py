@@ -302,6 +302,19 @@ def test_table_and_scale():
         0.5,
         "...and is itself, exactly, at 1.0",
     )
+    # The Pause at sentence ends is its own: a sentence's gap rides `sentence_scale` where it is given, the marks inside the
+    # sentence `pause_scale` (control: with no sentence_scale, the sentence end rides pause_scale as before)
+    eq(
+        _gap_for(".", {"pause_scale": 1.0, "sentence_scale": 3.0}),
+        _gap_for(".", {"pause_scale": 3.0}),
+        "a sentence's end rides its own Pause",
+    )
+    eq(
+        _pause_for(",", {"pause_scale": 1.0, "sentence_scale": 3.0}),
+        _pause_for(",", {"pause_scale": 1.0}),
+        "...and a comma is left to the Pause at commas",
+    )
+    eq(_gap_for(".", {"pause_scale": 2.0}), _gap_for(".", {"pause_scale": 2.0, "sentence_scale": None}), "control: no sentence_scale, the old rule")
 
 
 # -- 2. splice maths -------------------------------------------------------
@@ -1057,6 +1070,43 @@ def test_byte_identical_to_head():
 
 
 # -- runner ----------------------------------------------------------------
+
+
+@check
+def check_a_sentence_rendered_is_kept():
+    """A Pause changed where it changes no word's rest floor or trail splices the same speech again: the voice is not asked
+    to render it (PiperBackend._rendered_key), and the take is the one a fresh render makes, sample for sample. Controls: a
+    Pause low enough to move a floor, and a length scale, render again."""
+    from backends.piper import PiperBackend
+
+    class _Counting(_FakeSession):
+        runs = 0
+
+        def run(self, outputs, feeds):
+            _Counting.runs += 1
+            return super().run(outputs, feeds)
+
+    def take(be, sess, params):
+        with tempfile.TemporaryDirectory() as td:
+            out = str(Path(td) / "take.wav")
+            res = be._synth_tokens(list(TOKENS_MARKS), "fake", out, {"phonemizer": "ghost", "trail": 0.0, **params},
+                                   _cfg(), sess)
+            return _result(Path(out).read_bytes(), res)
+
+    be = PiperBackend()
+    sess = _Counting()
+    take(be, sess, {"pause_scale": 6.0})
+    first = _Counting.runs
+    again = take(be, sess, {"pause_scale": 8.0})
+    eq(_Counting.runs, first, "a Pause that moves no floor or trail renders nothing again")
+    fresh = take(PiperBackend(), _Counting(), {"pause_scale": 8.0})
+    eq(again["sha256"], fresh["sha256"], "...and the take is the fresh render's, its silence spliced at the new Pause")
+    eq(again["tokens"], fresh["tokens"], "...its words timed as the fresh render's")
+    take(be, sess, {"pause_scale": 0.3})
+    ok(_Counting.runs > first, "control: a Pause low enough to move a word's floor renders again")
+    runs = _Counting.runs
+    take(be, sess, {"pause_scale": 8.0, "length_scale": 1.3})
+    ok(_Counting.runs > runs, "control: a length scale renders again")
 
 
 @check

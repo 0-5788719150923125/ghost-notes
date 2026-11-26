@@ -136,6 +136,16 @@ func _hashes() -> void:
 	var toned := _row()
 	toned["tone"] = 5
 	_ok(VoiceLibrary.sound_of(toned) != VoiceLibrary.sound_of(_row()), "control: the tone changed sounds the same")
+	# the pauses at sentence and paragraph ends equal to the Pause at commas say nothing: the voice hashes as it did before they were
+	# apart (its own fields without them); one apart is another voice
+	var paused := _row().merged({"pause_sentence": 2.5, "pause_paragraph": 2.5}, true)
+	var before := VoiceLibrary.own_of(paused)
+	for k in ["vibrato", "vibrato_rate", "drift", "pause_sentence", "pause_paragraph"]:
+		before.erase(k)
+	_ok(VoiceLibrary.hash_of(paused) == JSON.stringify(VoiceLibrary._canon(before), "", true).sha256_text().left(16),
+		"pauses at sentence and paragraph ends equal to the Pause at commas leave the voice as it was")
+	_ok(VoiceLibrary.hash_of(paused.merged({"pause_paragraph": 6.0}, true)) != VoiceLibrary.hash_of(paused),
+		"control: a paragraph's pause apart from the comma's is another voice")
 
 
 func _shelf(trashed: Array) -> void:
