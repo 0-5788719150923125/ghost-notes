@@ -3,13 +3,13 @@ class_name MakeShelf
 
 ## MakeShelf - the makes that may play one role on the Dex ([PropMakes]): the role's own (its recipe drawn from many numbers, or the
 ## prop it is shipped as), and every prop kept or seen ([LibraryProps]) that has the faces the scene shows something on, the Dex first
-## filtered by the role's words. Use hands the one picked to the scene, which keeps the choice; a seen prop is kept in the library
-## first, so the choice can name it. The one chosen now says so.
+## filtered by the role's words. Use hands the one picked to the scene, which keeps the choice; a seen prop is held as a draft first,
+## so the choice can name it - kept only by a person's Keep in the 3D view. The one chosen now says so.
 
 const SHELVES := [
 	{"key": "drawn", "label": "Its own", "tip": "The part's own make: its recipe drawn from many numbers, or the one the scene comes with."},
 	{"key": "kept_makes", "label": "Kept props", "tip": "The props in your library: any can play the part, made the size it wants."},
-	{"key": "seen_makes", "label": "Seen props", "tip": "Every prop a set dresser has made: the one picked is kept in your library first."},
+	{"key": "seen_makes", "label": "Seen props", "tip": "Every prop a set dresser has made: any can play the part. Keep one in its 3D view to have it in your library."},
 ]
 
 ## The role chosen for ([constant PropMakes.ROLES]).
@@ -56,7 +56,7 @@ func offers() -> Array:
 		var d := _draw(String(k))
 		out.append({"key": k, "name": PropMakes.name_of(role, choice_of(String(k))), "line": library.pictures.size_of(String(d[0])),
 			"shelf": "drawn", "tip": tip, "picture": library.pictures.image(String(d[0])), "verbs": _now(now == k)})
-	var kept := library.kept_by_hash()
+	var held := library.held_by_hash()
 	for o in library.offers():
 		var od: Dictionary = o
 		var shelf := String(od["shelf"])
@@ -66,7 +66,7 @@ func offers() -> Array:
 		if not ((PropMakes.ROLES.get(role, {}) as Dictionary).get("faces", []) as Array).is_empty() \
 				and not PropMakes.fits(role, library.prop_of(String(od["key"])).get("thing", {})):
 			continue
-		var as_kept := String(od["key"]).substr(5) if shelf == "kept" else String(kept.get(String(library.prop_of(String(od["key"])).get("hash", "")), ""))
+		var as_kept := String(od["key"]).substr(5) if shelf == "kept" else String(held.get(String(library.prop_of(String(od["key"])).get("hash", "")), ""))
 		var m := od.duplicate()
 		m["shelf"] = "kept_makes" if shelf == "kept" else "seen_makes"
 		m["named"] = false
@@ -85,14 +85,15 @@ func add(key: String) -> String:
 		var p := library.prop_of(key)
 		if p.is_empty():
 			return "that prop is gone"
-		var name := String(library.kept_by_hash().get(String(p["hash"]), ""))
+		# a seen one plays the part as a draft: chosen is not kept, which is a person's Keep in the 3D view
+		var name := String(library.held_by_hash().get(String(p["hash"]), ""))
 		if name.is_empty():
-			var err := library.keep(p["thing"], p["materials"], "")
+			var err := library.keep(p["thing"], p["materials"], "", true)
 			if not err.is_empty():
 				return err
-			name = String(library.kept_by_hash().get(String(p["hash"]), ""))
+			name = String(library.held_by_hash().get(String(p["hash"]), ""))
 		if name.is_empty():
-			return "it could not be kept"
+			return "it could not be held"
 		return _chosen.call({"kept": name})
 	if not key.begins_with("kept:") and not _drawn.has(key) and not _draw_keys().has(key):
 		return "nothing here is called that"

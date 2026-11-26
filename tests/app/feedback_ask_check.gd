@@ -5,6 +5,9 @@ extends Node
 ##
 ##   GHOST_PROBE_GPU=1 tests/run_boot_probe.sh tests/app/feedback_ask_check.gd 60
 ##
+## The console's key works from any window the app opens (a prop's 3D view, the Dex, a Refine window): pressed there it opens the
+## console (control: another key pressed there does not).
+##
 ## A boot probe: the box is remembered through [Settings] and the backend read through [AssistantBackends].
 ## The console writes into a scratch folder, the backend is chosen in memory only, and the Assistant is held
 ## (`hold`) throughout, so even an entry that wrongly queues cannot start a run (the control case queues
@@ -173,6 +176,26 @@ func _run() -> void:
 	_present("codex", true)
 	a._running_count = 0
 	a.queue_free()
+
+	print("from another window")
+	if fc.is_open():
+		fc._close()
+	var other := Window.new()
+	other.size = Vector2i(200, 120)
+	add_child(other)
+	await get_tree().process_frame
+	var key := func(code: Key) -> InputEventKey:
+		var k := InputEventKey.new()
+		k.keycode = code
+		k.pressed = true
+		return k
+	other.window_input.emit(key.call(KEY_A))
+	_ok(not fc.is_open(), "the control: another key pressed in a window opens nothing")
+	other.window_input.emit(key.call(FeedbackConsole.TOGGLE_KEY))
+	_ok(fc.is_open(), "the console's key pressed in another window opens it")
+	if fc.is_open():
+		fc._close()
+	other.queue_free()
 
 	Settings.write("assistant", "backend", backend_was)
 	Settings.write(FeedbackConsole.ASK_SECTION, FeedbackConsole.ASK_KEY, ask_was)

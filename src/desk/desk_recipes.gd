@@ -5,7 +5,7 @@ class_name DeskRecipes
 ## at in 3D and keep in the library, where a set dresser and any scene can use it. A desk's mat lies under its pad, never on its own,
 ## and is not offered.
 
-const SHELVES := [{"key": "desk_things", "label": "Desk things", "tip": "What a desk sets out - mugs, pencils, books, candles - as the first desk draws each. Keep one to use it anywhere."}]
+const SHELVES := [{"key": "desk_things", "label": "Desk things", "tip": "What a desk sets out - mugs, pencils, books, candles - as the first desk draws each. Open one and Keep it to use it anywhere."}]
 ## The desk's number each is drawn at.
 const SEED := 1
 
@@ -26,20 +26,17 @@ func offers() -> Array:
 		var h := String(sp[0])
 		var as_kept := String(kept.get(h, ""))
 		var row: Dictionary = DeskLook.THINGS[k]
-		out.append({"key": "desk:" + String(k), "name": DeskRows.thing_name(String(row["label"])), "line": library.pictures.size_of(h),
-			"shelf": "desk_things", "tip": String(row["blurb"]), "picture": library.pictures.image(h),
-			"verbs": [{"key": "keep", "label": "Kept" if not as_kept.is_empty() else "Keep", "off": not as_kept.is_empty(),
-				"tip": ("In your library as %s." % as_kept) if not as_kept.is_empty() else "Keep it in your library, to use on any scene."}]})
+		var line := library.pictures.size_of(h)
+		if not as_kept.is_empty():
+			line = "in your library as %s" % as_kept + (" - " + line if not line.is_empty() else "")
+		out.append({"key": "desk:" + String(k), "name": DeskRows.thing_name(String(row["label"])), "line": line,
+			"shelf": "desk_things", "tip": String(row["blurb"]), "picture": library.pictures.image(h)})
 	return out
 
 
-func act(key: String, verb: String) -> String:
-	if verb != "keep":
-		return "nothing here does that"
-	var p := prop_of(key)
-	if p.is_empty():
-		return "there is nothing to keep"
-	return library.keep(p["thing"], p["materials"], String((DeskLook.THINGS[key.substr(5)] as Dictionary)["blurb"]))
+## A desk's thing is said, kept, to be what the desk's row says it is.
+func keep_line(key: String) -> String:
+	return String((DeskLook.THINGS[key.substr(5)] as Dictionary)["blurb"]) if key.begins_with("desk:") and DeskLook.THINGS.has(key.substr(5)) else ""
 
 
 func prop_of(key: String) -> Dictionary:

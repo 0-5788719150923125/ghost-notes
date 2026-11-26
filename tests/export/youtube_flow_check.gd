@@ -781,7 +781,7 @@ func _card_sign_in() -> bool:
 	card._seen = []
 	card._refresh_account()
 	var chips: Array = card._chips.get_children().filter(func(c: Node) -> bool: return c != card._add)
-	_ok(chips.map(func(b: Button) -> String: return b.text) == ["@the-arc", "@the-ink"] and (chips[1] as Button).button_pressed,
+	_ok(chips.map(func(b: Button) -> String: return Card.toggle_words(b)) == ["@the-arc", "@the-ink"] and (chips[1] as Button).button_pressed,
 		"a toggle each, the new one pressed")
 	(chips[0] as Button).pressed.emit()
 	_ok(card.capture()["channel"] == "UC-arc" and ex._sign == "ok", "a toggle switches back, with nothing to sign in to")

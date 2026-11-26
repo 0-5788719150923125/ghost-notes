@@ -215,9 +215,10 @@ static func family_color(f: StringName) -> Color:
 	return Color.from_hsv(hue / 360.0, SAT, VAL)
 
 
-## A toggle among others on a card (a section a part is used in), told on and off at a glance: on, filled in its card's
-## [param family] color with bright words and a ✓; off, an outline with its words dimmed. Small, and as wide on as off (the ✓'s
-## room kept either way), so toggling one never moves the others. [param text] is its words without the ✓.
+## A toggle among others on a card (a section a part is used in, a channel uploads go to), told on and off at a glance: on, filled
+## in its card's [param family] color with bright words and a ✓; off, an outline with its words dimmed. Small, and as wide on as off
+## (the ✓'s room kept either way), so toggling one never moves the others. [param text] is its words without the ✓. Set without a
+## signal, it is set with [method put_toggle], so its ✓ follows.
 static func toggle_look(b: Button, family: StringName, text: String) -> void:
 	var col := family_color(family)
 	var on := StyleBoxFlat.new()
@@ -250,9 +251,23 @@ static func toggle_look(b: Button, family: StringName, text: String) -> void:
 	if font != null:
 		b.custom_minimum_size.x = ceilf(font.get_string_size("✓ " + text, HORIZONTAL_ALIGNMENT_LEFT, -1, TOGGLE_FONT).x) \
 			+ on.content_margin_left + on.content_margin_right
+	b.set_meta(&"toggle_words", text)
 	var said := func(pressed: bool) -> void: b.text = ("✓ " + text) if pressed else text
 	said.call(b.button_pressed)
 	b.toggled.connect(said)
+
+
+## Toggle [param b]'s words without its ✓ ([method toggle_look]); a plain button's text.
+static func toggle_words(b: Button) -> String:
+	return String(b.get_meta(&"toggle_words", b.text))
+
+
+## Toggle [param b] ([method toggle_look]) pressed or not ([param on]) without telling anyone - a value arriving, not a hand
+## pressing it - its ✓ shown as it now is.
+static func put_toggle(b: Button, on: bool) -> void:
+	b.set_pressed_no_signal(on)
+	if b.has_meta(&"toggle_words"):
+		b.text = ("✓ " + toggle_words(b)) if on else toggle_words(b)
 
 
 ## Recolor (a note's choice) and redraw.

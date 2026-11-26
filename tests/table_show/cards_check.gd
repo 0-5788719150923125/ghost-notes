@@ -26,7 +26,7 @@ extends SceneTree
 ##   to announce a move.
 ## - The table is its own step, set from the plan while looking at the cloth: a new cloth keeps it, a new plan takes it, no card
 ##   reaches the set dresser, and its prompt names every shape, material, ornament and zone the builder knows, with the headroom of
-##   each zone - but a shape only a scene fills (a face, `Props.SCENE_SHAPES`), which it is never told.
+##   each zone - a shape a scene fills (a face, `Props.SCENE_SHAPES`) told only as words written on a thing (`Props.FACE_WORDS`).
 ## - What is built is safe whatever was written: junk is dropped or clamped, flames are capped, a thing stands on y = 0 with a foot
 ##   to go round (every shape, lofts, coils and warps among them), and a candle's flame is lit at its wax's top.
 ## - Candles of every form: wicks set round a top or placed by hand, a candelabra written once as a group copied round, groups
@@ -1110,7 +1110,8 @@ func _table_step() -> bool:
 	# candles, what earlier tables held
 	for k in Props.SHAPES:
 		if k in Props.SCENE_SHAPES:
-			_ok(not text.contains("- %s:" % k), "the set dresser is told %s, a shape only a scene fills" % k)
+			_ok(text.contains("- %s: %s" % [k, Props.FACE_WORDS]) and not text.contains(String(Props.SHAPES[k])),
+				"the set dresser is told %s as words on a thing, never as a scene fills it" % k)
 		else:
 			_ok(text.contains("- %s:" % k), "the set dresser is not told the shape %s" % k)
 	for k in Props.MATERIALS:

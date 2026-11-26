@@ -15,6 +15,10 @@ ThingLibrary - props kept to stand on any table (next/library.md): the library's
 
 A prop refined is still one prop: its file keeps every version (`versions`, oldest first, `versions`) and which of them is used (`at`), and its own `thing`, `materials` and `hash` are that one's (`use_version`). A new version is added beside the rest and used only when a person says so (`add_version`); none is ever taken away. It is found as kept by the hash of any of its versions (`kept_as`, `hashes_of`), so the prop it was kept from is never kept again.
 
+A DRAFT IS NOT KEPT: a prop refined, or chosen to play a part, before a person keeps it holds its versions in a file of its own here (`draft`), found by its hash and its name as a kept one is, but never listed as kept, searched or offered to an agent (`names`, `search`) until a person keeps it (`mark_kept`).
+
+A VERSION MAY CARRY A NAME AND A LINE of its own (an agent's refinement that made it something else, or a person's naming it), and the prop takes them when that version is used. A prop renamed keeps its former names (`aka`), so whatever chose it by one of them (a desk's part, a Dispatch role) still finds it (`read`); a new prop is never kept under one.
+
 Put on a table (`put_on`) it is that thing again: named so no other thing there shares its name, each material it uses added under its own name, and renamed where the table has another of that name, so it looks the same on every table. A file from anywhere (one handed on, or edited by hand) comes in through `sanitized`, bounded as a made one is (`Props.sanitize`).
 
 Source: [src/table/thing_library.gd](../src/table/thing_library.gd)
@@ -50,23 +54,26 @@ Every shelf a section puts on the Dex: the section, the shelf, and what it holds
 | Section | Shelf | What it holds |
 | --- | --- | --- |
 | [DeskProps](../src/desk/desk_props.gd) | A desk's things | What a desk can hold and this one does not, each as the desk's number draws it. |
-| [DeskRecipes](../src/desk/desk_recipes.gd) | Desk things | What a desk sets out - mugs, pencils, books, candles - as the first desk draws each. Keep one to use it anywhere. |
+| [DeskRecipes](../src/desk/desk_recipes.gd) | Desk things | What a desk sets out - mugs, pencils, books, candles - as the first desk draws each. Open one and Keep it to use it anywhere. |
 | [MakeShelf](../src/desk/make_shelf.gd) | Its own | The part's own make: its recipe drawn from many numbers, or the one the scene comes with. |
 | [MakeShelf](../src/desk/make_shelf.gd) | Kept props | The props in your library: any can play the part, made the size it wants. |
-| [MakeShelf](../src/desk/make_shelf.gd) | Seen props | Every prop a set dresser has made: the one picked is kept in your library first. |
+| [MakeShelf](../src/desk/make_shelf.gd) | Seen props | Every prop a set dresser has made: any can play the part. Keep one in its 3D view to have it in your library. |
 | [DispatchProps](../src/dispatch/dispatch_props.gd) | Dispatch desk | What the Dispatch desk works, each as the first desk draws it. |
 | [SoundShelf](../src/music/sound_shelf.gd) | Kept sounds | The sound effects in your library, kept from any note's Sound card: any sound a note asks for can use one. |
 | [OrnamentShelf](../src/table/ornament_shelf.gd) | Ornaments | Ornament written by a designer, worn on any prop by its name: relief, and where a color is laid in it. |
+| [OrnamentShelf](../src/table/ornament_shelf.gd) | Textures | Texture written by a designer, worn by any material by its name: relief, roughness and its second color all over it. |
 | [StickerShelf](../src/table/sticker_shelf.gd) | Characters | The characters and things kept from a sticker book's pages: a later night that draws one of the same name draws it this way. |
 | [StickerShelf](../src/table/sticker_shelf.gd) | Poses | Every pose kept with a character, drawn from its model. |
 | [StickerShelf](../src/table/sticker_shelf.gd) | Sets | The places kept from a sticker book's pages (and a cartoon's painted sets): a later night set in one of the same name uses it. |
 | [LibraryProps](../src/table_show/library_props.gd) | Kept props | The props in your library, kept from any show. |
-| [LibraryProps](../src/table_show/library_props.gd) | Seen props | Every prop a set dresser has made for any episode, as it stands there. Keep one to have it in your library. |
+| [LibraryProps](../src/table_show/library_props.gd) | Seen props | Every prop a set dresser has made for any episode, as it stands there. Open one and Keep it to have it in your library. |
 | [LibraryVoices](../src/voice/library_voices.gd) | Kept voices | The voices in your library, kept from any note's Voice card: every note can read in one by name. |
 
 ## The Props card
 
 PropsCard - the panel's Props card: what the note's presentation sets down, one entry a prop (`EntryCard`) - its picture, its name and size, and a × that takes it off - under the groups its sections give (`PropSection`, handed by whatever shows props), and "+ Add a prop", which opens the Dex on the section's shelves (`DexWindow`). A click on an entry opens it: its Used tick, its verbs and its properties (`PropSection`'s `fields`, `SchemaForm`), each change handed to its section. A click on a picture opens the prop whole, in 3D, to be turned (`PropViewer`). Shown only while some section has a row or something to add. Looked at again every second (what a section has follows what is shown and made), and drawn again only when that changed. The Environment card's list is one of these.
+
+A PROP AN AGENT IS REFINING SAYS SO ON ITS ROW (`PropRefining`): what the agent is doing, said again in place each look, then that a new version is ready, or why not, until its 3D view has shown it - so the progress of every prop refined at once is read here.
 
 Source: [src/ui/props_card.gd](../src/ui/props_card.gd)
 
@@ -74,7 +81,9 @@ Source: [src/ui/props_card.gd](../src/ui/props_card.gd)
 
 PropViewer - one prop whole, in 3D, in a window of its own: built as it stands (`PropSection.model_of`), lit as its picture is (`StudioLook`), and turned in the hand. A drag turns it about any axis (across the window about the upright, up and down about the level), a drag with Shift rolls it, the wheel brings it closer, a right or middle drag moves it, and a double click or "Set straight" puts it back as it opened. Opened by a click on a prop's picture on the Props card (`PropsCard`) or a shelf (`DexWindow`), centered beside the side panel (`Shell.center_beside`). Drawn only while it is shown; what it holds is let go when it closes. Escape or the window's close hides it.
 
-A prop kept with versions (`PropVersions`) is stepped through here, ‹ and ›, and the one shown made the prop by Use this one; the section it was opened from follows (`PropSection.refined`). Refine… asks an agent to change the version shown as a person says (`PropRefine`): a prop not kept yet is kept first, and what the agent makes is shown as a new version, used only when chosen.
+A prop kept with versions (`PropVersions`) is stepped through here, ‹ and ›, and THE VERSION SHOWN WHEN IT IS LEFT IS THE PROP: the one on screen when the view closes, or opens another prop, is made the one used (`keep_shown`) and the section it was opened from follows (`PropSection.refined`) - never on each step, which would write the table again for every version passed. Refine… asks an agent to change the version shown as a person says (`PropRefine`): a prop not kept yet is held as a draft first (its versions' home, never in the library), the words' window closes, and the agent works on in the background (`PropRefining`) - the view says what it is doing while it is on that prop, with Stop, and may close or turn to another prop to refine it too; what the agent makes is shown as a new version when the view is on the prop, the prop if it is still shown when the view is left. KEEP IS HERE, never on a card's row: it puts the prop in the library with every version it has, through the section it was opened from (`PropSection.keep_prop`), and says Kept once it is.
+
+THE NAME AT ITS TOP IS THE VERSION SHOWN'S: what an agent called it where its refinement made it something else, or the prop's. A kept prop's name is typed over to rename the version shown (`name_shown`); the prop takes a version's name when that version is used, at once where it is the one used already.
 
 Source: [src/ui/prop_viewer.gd](../src/ui/prop_viewer.gd)
 
@@ -114,7 +123,7 @@ Source: [src/desk/prop_makes.gd](../src/desk/prop_makes.gd)
 
 ## Refining a prop
 
-LibraryVersions - the versions of the library's props, and refining one (`PropVersions`, `ThingLibrary`; next/library.md, "Refining a prop"). A prop is found kept by the hash of any of its versions, and one not kept yet is kept on its first refine. Refining hands the version shown to an agent - the writer a person picks (`AgentPick`) - with three pictures of it as built (`PropStudio.views`) and the author's direction, as rules/table/prop_refiner.yaml tells it; what it answers is added as a new version (`land`), never used until a person chooses it. One refining at a time; one given up adds nothing.
+LibraryVersions - the versions of the library's props, and refining one (`PropVersions`, `ThingLibrary`; next/library.md, "Refining a prop"). A prop is found by the hash of any of its versions, and one not kept yet is held as a draft on its first refine - its versions' home, kept only when a person keeps it. Refining hands the version shown to an agent - the writer a person picks (`AgentPick`) - with three pictures of it as built (`PropStudio.views`) and the author's direction, as rules/table/prop_refiner.yaml tells it; what it answers is added as a new version (`land`), never used until a person chooses it - with the name and line it gives where the change made it something else, which the prop takes when that version is used (`ThingLibrary.use_version`). One refining a prop at a time, any number of props at once, each running to its end whoever lets go of it (`start_refine`, `PropRefining`); one given up adds nothing.
 
 Source: [src/table_show/library_versions.gd](../src/table_show/library_versions.gd)
 
@@ -165,7 +174,7 @@ Each part's surface is one material (`Props.MATERIALS`), procedural.
 | --- | --- |
 | `metal` | brass, copper, bronze, silver, iron, pewter, gold; `wear` is tarnish or patina in `color2`, `pattern` a hammered surface |
 | `wax` | candle wax - beeswax, paraffin, tallow; `clarity` how much the light glows through it |
-| `glass` | see-through; `color` tints it, a low `clarity` frosts it, an ornament on glass is etched |
+| `glass` | see-through; its `color` is how deep it is - near white is clear, a light color a tint, and a DARK color (an amber medicine bottle #3a1c07, cobalt #0b1d5e, smoked glass) is hard to see through yet still translucent and its color; a low `clarity` frosts it; an ornament on glass is etched into it, but flutes and hammering are its shape, clear glass that catches the light |
 | `crystal` | quartz, amethyst, citrine, obsidian, selenite, any mineral; `clarity` from milky 0 to water-clear 1, `pattern` banding in `color2` - curving round in rings with `rings` true (agate, malachite, onyx) |
 | `ceramic` | glazed or bare clay - porcelain, stoneware, terracotta, faience; `polish` is the glaze, `pattern` speckle, `wear` crazing, `color2` where the glaze pools |
 | `stone` | marble, slate, granite, soapstone, alabaster, jasper; `pattern` veins in `color2` - curving round in rings with `rings` true (banded jasper) - and `wear` flecks |
@@ -175,7 +184,7 @@ Each part's surface is one material (`Props.MATERIALS`), procedural.
 | `fabric` | cloth, velvet, silk, cord; `polish` is a velvet's sheen |
 | `bone` | bone, ivory, horn, shell; `wear` yellows it toward `color2` |
 | `plant` | leaves, petals, stems, herbs; `wear` dries them toward `color2` |
-| `liquid` | what is IN a vessel - a brew, ink, oil, wine, water, honey - wet and never quite still, `pattern` its foam in `color2`, `clarity` the light in its depth; a part of its own filling the vessel to its surface (see WORKING PARTS: it boils, fills, empties, changes color and glows) |
+| `liquid` | what is IN a vessel - a brew, ink, oil, wine, water, honey - wet and never quite still, `pattern` its foam in `color2`; `clarity` how far you see into it, from murky or milky 0 to clear 1 - from 0.8 it is SEEN THROUGH, as clear water, tea or wine is, tinted by `color` (then without foam, ripples, boil or glow of its own), below that opaque with light in its depth; a part of its own filling the vessel to its surface (see WORKING PARTS: it boils, fills, empties, changes color and glows) |
 | `powder` | loose fine stuff, and what is ground: snow, flour, ash, chalk, salt, sugar, pollen, ground spice, dust - matte and soft, `pattern` the sparkle of the grains that catch the light (snow, salt, sugar) in `color2`; its grains dissolve in a liquid in `dissolves` seconds (snow melts in 2, sugar in 6, salt in 10; 0 never - ash, sand) |
 | `cream` | a soft paste in a pot or a stick - greasepaint, cream makeup, a lipstick, a balm, frosting, butter, wax polish: smooth and a little waxy, `polish` its sheen, `pattern` the swirls a finger or a brush has left in its top; what a tool is loaded with paint from |
 | `sponge` | soft foam full of fine holes - a makeup sponge, a sea sponge, a foam wedge, a powder puff's face: matte, `pattern` how open its pores are, `wear` the paint soaked into it in `color2`; it gives where it is pressed |
@@ -211,3 +220,24 @@ What moves in a material as it turns (`Props.PLAYS`).
 | `glitter` | tiny flakes of `color2` that sparkle in the flames - goldstone, sunstone, aventurine, the pyrite in lapis |
 | `rainbow` | an oily rainbow film over the surface - aura quartz, rainbow obsidian, bismuth, paua, abalone, mother of pearl |
 | `glow` | a soft light of `color2` floating under the surface - moonstone |
+
+### Textures (14)
+
+What a material is like to the touch, worked all over it (`Props.TEXTURES`; a material's `texture`, `bumps`, `texture_size` and `mottle`, or a texture kept in the library by its name).
+
+| Texture | What it is | Features (cm) |
+| --- | --- | --- |
+| `grit` | fine sandy grit all over - sandstone, chalk, unglazed clay, plaster, concrete, cast iron, a rough-sawn face | 0.12 |
+| `pitted` | small pits scattered over it, a little of `color2` in them - pumice, travertine, lava rock, old concrete, weathered bone, orange peel | 0.25 |
+| `cracked` | a web of fine cracks between plates, `color2` in the cracks - dried mud, crackle glaze, old paint, aged leather, weathered rock | 0.8 |
+| `chipped` | the shell-shaped scallops of a stone broken by striking, each rippled in rings, sharp ridges where they meet - flint, obsidian, chert, knapped or chipped stone and glass | 0.9 |
+| `fibers` | raised fibers running up the part (along its height) - rough-sawn or weathered wood, bark, driftwood, bone, coarse rope and cord, dried stems | 0.25 |
+| `brushed` | fine parallel scratches running up the part - brushed or worn metal, sanded wood, combed plaster | 0.06 |
+| `lumpy` | broad soft lumps and hollows - hand-formed clay, rough-cast plaster, weathered stone, a bread crust, beaten earth | 1.2 |
+| `granular` | packed grains, each a tiny flat facet catching the light its own way, some of them `color2` - granite, coarse salt, sugar, sandstone, galena, a geode's rind | 0.2 |
+| `pebbled` | rounded bumps packed close - pebbled leather, a lizard's or a toad's skin, an orange's peel, a basketball | 0.25 |
+| `bricks` | bricks laid in courses, each course shifted half a brick, the mortar sunk between them in `color2`; `texture_size` a brick's length - a wall, a hearth, a chimney, an oven | 4 |
+| `tiles` | square tiles with sunk joints in `color2`; `texture_size` a tile's width - a floor, a hearth, a tiled box or tray | 2.5 |
+| `planks` | boards side by side with seams between, each board ended at a joint of its own; `texture_size` a board's width - a floor, a crate, a door, a chest, a tabletop | 3 |
+| `rough` | HEAVY ROUGHNESS at every scale at once - bumps its size, smaller ones over them, finer and finer down to grit, as a rough surface is rough all the way down: raw rock, coal, a rough casting, unglazed earthenware, a broken loaf, weathered wood | 1 |
+| `crumbled` | the same at every scale, but of sharp creases and ridges, as a thing broken and crumbled is - fractured coal, shale, slate's broken edge, broken rock, crumpled paper or foil, cracked bark | 0.8 |

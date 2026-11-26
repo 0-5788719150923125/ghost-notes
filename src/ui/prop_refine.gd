@@ -4,7 +4,8 @@ class_name PropRefine
 ## PropRefine - the 3D view's Refine ([PropViewer], [PropVersions]): what to change in the prop shown, in words, and who changes it -
 ## the agent, its model and how hard it thinks ([AgentPick]) - then the agent at work: a bar that keeps moving and the line it
 ## reports (what it is doing, for how long, and how long since it last said anything) until its version lands or it is stopped. It
-## stays open, its words kept, for the next change. The agent picked is every refine's of its kind for the rest of the run.
+## stays open, its words kept, for the next change. The agent picked is every refine's of its kind from then on, kept between
+## sessions ([method AgentPick.keep_for]).
 ##
 ## The same window refines a picture ([IllustrationPanel]'s Refine…), built with `PropRefine.new("picture", painter)`: its agent
 ## a painter, its words a picture's ([constant WORDS]), and what is made a new version of the picture.
@@ -21,15 +22,14 @@ const SIZE := Vector2i(580, 400)
 const WORDS := {
 	"prop": {"say": "What to change. The agent changes only what you ask; every other part, size and color stays as it is.",
 		"hint": "Which part is wrong, and how it should be instead.", "who": "Who refines the prop.",
-		"go": "Have the agent make a new version from the one shown. It is added beside the others; Use this one in the view makes it the prop."},
+		"go": "Have the agent make a new version from the one shown. It is added beside the others; the one shown when you close the view is the prop."},
 	"picture": {"say": "What to change. The painter changes only what you ask; the rest of the picture stays as it is.",
 		"hint": "What is wrong in the picture, and how it should be instead.", "who": "Who repaints the picture.",
 		"go": "Have the painter make a new version from the one shown, changed as you say. It is shown at once; the one it was made from stays a version before it."},
 }
 
-## The agent picked last for each kind ([member last_pick] the prop's), so each refine starts where the one before left off.
-static var last_pick := {}
-static var _last_picture := {}
+## The kind of job the agent picked last is kept for between sessions ([method AgentPick.last_for]): a prop's refiner, a picture's.
+const PICKED := {"prop": "refine_prop", "picture": "refine_picture"}
 
 var _what := "prop"
 
@@ -76,7 +76,9 @@ func _init(what := "prop", start := {}) -> void:
 	col.add_child(_text)
 	var picture := _what == "picture"
 	_pick = AgentPick.painter(String(words["who"])) if picture else AgentPick.writer(String(words["who"]))
-	var was: Dictionary = (_last_picture if not _last_picture.is_empty() else start) if picture else last_pick
+	var was := AgentPick.last_for(String(PICKED[_what]))
+	if was.is_empty() and picture:
+		was = start
 	if not was.is_empty():
 		_pick.set_choice(String(was.get("agent", "")), String(was.get("model", "")), String(was.get("effort", "")))
 	_pick.changed.connect(_remember)
@@ -170,7 +172,4 @@ func _ask() -> void:
 
 
 func _remember() -> void:
-	if _what == "picture":
-		_last_picture = _pick.choice()
-	else:
-		last_pick = _pick.choice()
+	AgentPick.keep_for(String(PICKED[_what]), _pick.choice())

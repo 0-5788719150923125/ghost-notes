@@ -8,9 +8,18 @@ class_name PropViewer
 ## ([DexWindow]), centered beside the side panel ([method Shell.center_beside]). Drawn only while it is shown; what it holds is let
 ## go when it closes. Escape or the window's close hides it.
 ##
-## A prop kept with versions ([PropVersions]) is stepped through here, ‹ and ›, and the one shown made the prop by Use this one; the
-## section it was opened from follows ([method PropSection.refined]). Refine… asks an agent to change the version shown as a person
-## says ([PropRefine]): a prop not kept yet is kept first, and what the agent makes is shown as a new version, used only when chosen.
+## A prop kept with versions ([PropVersions]) is stepped through here, ‹ and ›, and THE VERSION SHOWN WHEN IT IS LEFT IS THE PROP: the
+## one on screen when the view closes, or opens another prop, is made the one used ([method keep_shown]) and the section it was opened
+## from follows ([method PropSection.refined]) - never on each step, which would write the table again for every version passed.
+## Refine… asks an agent to change the version shown as a person says ([PropRefine]): a prop not kept yet is held as a draft first (its
+## versions' home, never in the library), the words' window closes, and the agent works on in the background ([PropRefining]) - the
+## view says what it is doing while it is on that prop, with Stop, and may close or turn to another prop to refine it too; what the
+## agent makes is shown as a new version when the view is on the prop, the prop if it is still shown when the view is left. KEEP IS HERE, never on a card's row: it puts the prop in the library with every version it has, through the section
+## it was opened from ([method PropSection.keep_prop]), and says Kept once it is.
+##
+## THE NAME AT ITS TOP IS THE VERSION SHOWN'S: what an agent called it where its refinement made it something else, or the prop's. A
+## kept prop's name is typed over to rename the version shown ([method name_shown]); the prop takes a version's name when that
+## version is used, at once where it is the one used already.
 
 ## Its size, at most, against the room beside the panel.
 const SIZE := Vector2i(760, 660)
@@ -30,6 +39,7 @@ var _cam: Camera3D
 var _pivot: Node3D               # what turns: the prop hangs under it, its middle on the pivot
 var _caption: Label
 var _waiting: Label
+var _named: LineEdit             # the version shown's name, typed over to rename it
 var _dist := 0.5                 # how far the camera stands when it opens (meters)
 var _zoom := 1.0
 var _pan := Vector2.ZERO         # the camera moved across the window (meters)
@@ -40,12 +50,15 @@ var _name := ""
 var _pv: PropVersions = null     # where its versions are kept, null for none
 var _kept := ""                  # the name it is kept by, "" while it is not
 var _shown := -1                 # which of its versions is shown, -1 where it has none
+var _moved := false              # whether another version was shown since it opened (stepped to, or made by Refine…)
 var _prev: Button
 var _next: Button
 var _ver: Label
-var _use: Button
 var _refine_btn: Button
+var _keep_btn: Button
+var _stop_btn: Button
 var _status: Label
+var _status_box: PanelContainer  # the status's ground, laid over the foot of the 3D view: it takes no room from it
 var _refine: PropRefine = null
 
 
@@ -61,13 +74,39 @@ func _init() -> void:
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 6)
 	bg.add_child(col)
+	# the 3D view and, over its foot, what is said of it: a status that comes and goes never resizes the view (it would refit the
+	# prop each time)
+	var stage := Control.new()
+	stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stage.mouse_filter = Control.MOUSE_FILTER_PASS
+	col.add_child(stage)
 	_view = SubViewportContainer.new()
 	_view.stretch = true
-	_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_view.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_view.mouse_filter = Control.MOUSE_FILTER_STOP
 	_view.tooltip_text = "Drag to turn it, with Shift to roll it; the wheel brings it closer; drag with the right button to move it. A double click sets it straight."
 	_view.gui_input.connect(_on_input)
-	col.add_child(_view)
+	stage.add_child(_view)
+	_status_box = PanelContainer.new()
+	_status_box.anchor_left = 0.0
+	_status_box.anchor_right = 1.0
+	_status_box.anchor_top = 1.0
+	_status_box.anchor_bottom = 1.0
+	_status_box.offset_left = 8.0
+	_status_box.offset_right = -8.0
+	_status_box.offset_bottom = -8.0
+	_status_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_status_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ground := StyleBoxFlat.new()
+	ground.bg_color = Color(0.05, 0.06, 0.07, 0.72)
+	ground.set_corner_radius_all(4)
+	ground.content_margin_left = 8.0
+	ground.content_margin_right = 8.0
+	ground.content_margin_top = 4.0
+	ground.content_margin_bottom = 4.0
+	_status_box.add_theme_stylebox_override("panel", ground)
+	_status_box.visible = false
+	stage.add_child(_status_box)
 	_vp = SubViewport.new()
 	_vp.own_world_3d = true
 	_vp.msaa_3d = Viewport.MSAA_4X
@@ -92,25 +131,32 @@ func _init() -> void:
 	var bar := HBoxContainer.new()
 	bar.add_theme_constant_override("separation", 8)
 	col.add_child(bar)
+	_named = LineEdit.new()
+	_named.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_named.flat = true
+	_named.select_all_on_focus = true
+	_named.text_submitted.connect(func(_t: String) -> void: name_shown(_named.text))
+	_named.focus_exited.connect(func() -> void: name_shown(_named.text))
+	bar.add_child(_named)
 	_caption = Label.new()
-	_caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_caption.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_caption.clip_text = true
+	_caption.modulate = Color(1, 1, 1, 0.6)
 	bar.add_child(_caption)
-	_prev = _bar_button(bar, "‹", "The version before.", func() -> void: step(-1))
+	_prev = _bar_button(bar, "‹", "The version before. The one shown when you close this is the prop.", func() -> void: step(-1))
 	_ver = Label.new()
 	_ver.mouse_filter = Control.MOUSE_FILTER_STOP
 	bar.add_child(_ver)
-	_next = _bar_button(bar, "›", "The version after.", func() -> void: step(1))
-	_use = _bar_button(bar, "Use this one", "Make the version shown the prop: what the Dex shows, and what every scene that uses it stands.", use_shown)
+	_next = _bar_button(bar, "›", "The version after. The one shown when you close this is the prop.", func() -> void: step(1))
 	_refine_btn = _bar_button(bar, "Refine…", "Have an agent change what you say about the version shown - a part's shape, a size, a color - and keep the rest. It makes a new version beside the others.", open_refine)
+	_stop_btn = _bar_button(bar, "Stop", "Give up the refining under way: nothing is added.", stop_refining)
+	_stop_btn.visible = false
+	_keep_btn = _bar_button(bar, "Keep", "Keep it in your library, to use on any scene.", keep_prop)
 	_bar_button(bar, "Set straight", "Put it back as it opened: upright, seen from a little above its front, whole in the window.", set_straight)
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.add_theme_font_size_override("font_size", 11)
-	_status.modulate = Color(0.75, 1.0, 0.85, 0.9)
-	_status.visible = false
-	col.add_child(_status)
+	_status.modulate = Color(0.75, 1.0, 0.85, 0.95)
+	_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_status_box.add_child(_status)
 	_show_versions()
 
 
@@ -126,6 +172,7 @@ func _bar_button(bar: HBoxContainer, text: String, tip: String, pressed: Callabl
 
 ## Opened on the entry of row or offer [param key] of [param sec], called [param name]: shown at once, the entry when it is built.
 func open(sec: ShelfSection, key: String, name: String) -> void:
+	keep_shown()
 	_asked += 1
 	var mine := _asked
 	_drop()
@@ -135,10 +182,12 @@ func open(sec: ShelfSection, key: String, name: String) -> void:
 	_pv = (sec as PropSection).versions_of() if sec is PropSection else null
 	_kept = _pv.name_of((sec as PropSection).prop_of(key)) if _pv != null else ""
 	_shown = _index_of_row()
+	_moved = false
 	_say("")
 	_show_versions()
 	title = name
-	_caption.text = name
+	_named.text = _shown_name()
+	_caption.text = ""
 	_waiting.text = "Building it…"
 	_waiting.visible = true
 	if not visible:
@@ -168,7 +217,8 @@ func hold(got: Dictionary, name: String) -> void:
 	# its bounds are measured at its own scale already
 	node.position = -box.get_center()
 	_pivot.add_child(node)
-	_caption.text = "%s - %s" % [name, String(got.get("size", ""))] if not String(got.get("size", "")).is_empty() else name
+	_named.text = _shown_name() if not _kept.is_empty() else name
+	_caption.text = String(got.get("size", ""))
 	var r := maxf(box.size.length() * 0.5, 0.01)
 	var half := deg_to_rad(StudioLook.FOV) * 0.5
 	var at := _view.size if _view.size.x > 1.0 and _view.size.y > 1.0 else Vector2(SIZE)
@@ -243,6 +293,7 @@ func _drop() -> void:
 
 
 func _close() -> void:
+	keep_shown()
 	_asked += 1
 	_drop()
 	if _refine != null and is_instance_valid(_refine):
@@ -268,6 +319,8 @@ func show_version(i: int) -> void:
 	_asked += 1
 	var mine := _asked
 	_shown = i
+	_moved = true
+	_named.text = _shown_name()
 	_show_versions()
 	_waiting.text = "Building it…"
 	_waiting.visible = true
@@ -277,19 +330,80 @@ func show_version(i: int) -> void:
 			(got["node"] as Node).queue_free()
 		return
 	var turn := _pivot.basis
-	hold(got, _name)
+	hold(got, _shown_name())
 	# stepping keeps it turned as it was, to compare the two
 	_pivot.basis = turn
 
 
-## The version shown made the prop, and the section it came from told.
-func use_shown() -> void:
-	if _pv == null or _kept.is_empty() or _shown < 0:
+## The version shown made the prop where it is not already, and the section it came from told: what the view is left on, once
+## another version has been shown in it (only opened and closed, it changes nothing: a row may stand an older version than the one
+## used). Said in the log ([StatusLog]), the view being gone.
+func keep_shown() -> void:
+	if not _moved or _pv == null or _kept.is_empty() or _shown < 0 or _shown == _pv.used(_kept):
 		return
+	_moved = false
+	var vs := _pv.list(_kept)
+	var h := String((vs[_shown] as Dictionary).get("hash", "")) if _shown < vs.size() else ""
 	var err := _pv.use(_kept, _shown)
+	if err.is_empty():
+		_follow(h)
 	if err.is_empty() and _sec is PropSection:
 		err = (_sec as PropSection).refined(_key, _kept)
-	_say(err if not err.is_empty() else "Version %d is the prop now." % (_shown + 1))
+	StatusLog.say("prop view", ("%s: version %d not used: %s" % [_kept, _shown + 1, err]) if not err.is_empty()
+		else "%s: version %d is the prop now" % [_kept, _shown + 1])
+
+
+## What the version shown is called: its own name, else the prop's; the name it was opened with where it is not kept.
+func _shown_name() -> String:
+	if _pv == null or _kept.is_empty():
+		return _name
+	var vs := _pv.list(_kept)
+	if _shown < 0 or _shown >= vs.size():
+		return _kept
+	var n := String((vs[_shown] as Dictionary).get("name", ""))
+	return n if not n.is_empty() else _kept
+
+
+## The name the prop is kept by now, found by the hash [param h] of one of its versions: what it was renamed to.
+func _follow(h: String) -> void:
+	var now := _pv.name_of({"hash": h}) if not h.is_empty() else ""
+	if not now.is_empty():
+		_kept = now
+		_name = now
+		title = now
+
+
+## The version shown called [param to], as typed over its name: the prop too where it is the version used, and what uses it told.
+## Nothing where it is unchanged, or the prop is not kept (its name is the scene's).
+func name_shown(to: String) -> void:
+	var named := to.strip_edges()
+	if _pv == null or _kept.is_empty() or _shown < 0 or named.is_empty() or named == _shown_name():
+		_named.text = _shown_name()
+		return
+	var vs := _pv.list(_kept)
+	var h := String((vs[_shown] as Dictionary).get("hash", "")) if _shown < vs.size() else ""
+	var used := _shown == _pv.used(_kept)
+	var err := _pv.name_version(_kept, _shown, named)
+	if err.is_empty() and used:
+		_follow(h)
+		if _sec is PropSection:
+			err = (_sec as PropSection).refined(_key, _kept)
+	_say(err if not err.is_empty() else ("Renamed %s." % named if used else "Version %d is called %s: the prop takes the name if you close this on it." % [_shown + 1, named]))
+	_named.text = _shown_name()
+	_show_versions()
+
+
+## The prop kept in the library, with every version it has (a person's choice: refining or choosing it keeps nothing), through the
+## section it was opened from, which says what it is.
+func keep_prop() -> void:
+	if not (_sec is PropSection):
+		return
+	var err := (_sec as PropSection).keep_prop(_key)
+	if err.is_empty() and _pv != null:
+		var now := _pv.name_of((_sec as PropSection).prop_of(_key))
+		if not now.is_empty():
+			_kept = now
+	_say(err if not err.is_empty() else "Kept in your library as %s." % (_kept if not _kept.is_empty() else _name))
 	_show_versions()
 
 
@@ -299,15 +413,12 @@ func open_refine() -> void:
 		_refine = PropRefine.new()
 		add_child(_refine)
 		_refine.asked.connect(_refine_asked)
-		_refine.stopped.connect(func() -> void:
-			if _pv != null:
-				_pv.stop())
 	_refine.open_for(_name, self)
-	if _pv != null and _pv.busy():
-		_refine.working(true)
 
 
-## Refining asked for: the prop kept where it is not, the version shown handed to the agent, and what it makes shown.
+## Refining asked for: the prop held as a draft where it is not kept, the version shown handed to an agent, and the words' window
+## closed - the agent works on whether or not this stays open ([PropRefining]); what it says shows here while the view is on the prop,
+## and the version it makes is shown when it lands ([method _watch]).
 func _refine_asked(direction: String, pick: Dictionary) -> void:
 	if _pv == null or not (_sec is PropSection):
 		_refine.say("This cannot be refined.")
@@ -321,25 +432,52 @@ func _refine_asked(direction: String, pick: Dictionary) -> void:
 		(_sec as PropSection).refined(_key, _kept)
 		_shown = _pv.used(_kept)
 		_show_versions()
-	var name := _kept
-	var from := _shown if _shown >= 0 else _pv.used(name)
-	var refine := _refine
-	refine.working(true)
-	refine.say("Starting…")
-	var got: Dictionary = await _pv.refine(name, from, direction, pick, func(line: String) -> void:
-		if is_instance_valid(refine):
-			refine.say(line))
-	if not is_instance_valid(refine):
+	var from := _shown if _shown >= 0 else _pv.used(_kept)
+	var err := _pv.start_refine(_kept, from, direction, pick)
+	if not err.is_empty():
+		_refine.say("Not refined: %s." % err)
 		return
-	refine.working(false)
-	if got.has("error"):
-		refine.say("Not refined: %s." % String(got["error"]))
+	_refine.set_direction("")
+	_refine.say("")
+	_refine.hide()
+	_watch()
+
+
+## The refining of the prop shown, as it stands ([PropRefining]): what the agent is doing said here, with Stop; the version it made
+## shown once it lands, or why not - each seen, so said once. Looked at every frame the view is shown.
+func _watch() -> void:
+	if _kept.is_empty():
+		_stop_btn.visible = false
 		return
-	var i := int(got["index"])
-	refine.say("Made version %d from version %d. It is shown now; Use this one makes it the prop." % [i + 1, from + 1])
-	if visible and _kept == name:
-		_say("Version %d is new: compare it with ‹ and ›, and Use this one to make it the prop." % (i + 1))
-		show_version(i)
+	var w := PropRefining.of(_kept)
+	var working := String(w.get("state", "")) == "working"
+	if working != _stop_btn.visible:
+		_stop_btn.visible = working
+		_show_versions()
+	match String(w.get("state", "")):
+		"working":
+			_say("An agent is refining it: %s. You can close this and work on another prop meanwhile." % String(w["line"]))
+		"ready":
+			PropRefining.seen(_kept)
+			var i := int(w["index"])
+			var called := String(w.get("name", ""))
+			var renamed := "" if called.is_empty() or called == _kept else " It calls it %s, a name the prop takes with it." % called
+			_say("Version %d is new: compare it with ‹ and ›. The one shown when you close this is the prop.%s" % [i + 1, renamed])
+			show_version(i)
+		"failed":
+			PropRefining.seen(_kept)
+			_say("Not refined: %s." % String(w["error"]))
+
+
+func _process(_delta: float) -> void:
+	if visible:
+		_watch()
+
+
+## The refining of the prop shown given up: nothing is added.
+func stop_refining() -> void:
+	if _pv != null and not _kept.is_empty():
+		_pv.stop(_kept)
 
 
 ## Which version the row or offer opened on is, by what it is: -1 where it is not kept.
@@ -354,19 +492,28 @@ func _index_of_row() -> int:
 	return _pv.used(_kept)
 
 
-## The bar's version controls as the prop stands: shown for a prop kept with more than one version, Use this one offered on any
-## but the one used, Refine… on what can be refined.
+## The bar's version controls as the prop stands: shown for a prop kept with more than one version, Refine… on what can be refined;
+## the name typed over where it is kept.
 func _show_versions() -> void:
 	if _prev == null:
 		return
+	_named.editable = _pv != null and not _kept.is_empty()
+	_named.tooltip_text = "The version shown's name. Type over it to rename it: the prop takes the name when this version is the one it uses." \
+		if _named.editable else "Its name in this scene. Keep it in your library, or refine it, to rename it."
 	var vs := _pv.list(_kept) if _pv != null and not _kept.is_empty() else []
 	var many := vs.size() > 1
-	for c in [_prev, _ver, _next, _use]:
+	for c in [_prev, _ver, _next]:
 		(c as Control).visible = many
 	var can := _pv != null and _sec is PropSection and _pv.refinable((_sec as PropSection).prop_of(_key))
-	_refine_btn.disabled = not can
+	_refine_btn.disabled = not can or (not _kept.is_empty() and PropRefining.busy(_kept))
 	_refine_btn.tooltip_text = ("Have an agent change what you say about the version shown - a part's shape, a size, a color - and keep "
 		+ "the rest. It makes a new version beside the others.") if can else "This is built by code, not written as parts, so it cannot be refined."
+	var kept := _pv != null and not _kept.is_empty() and _pv.kept(_kept)
+	_keep_btn.visible = can
+	_keep_btn.disabled = kept
+	_keep_btn.text = "Kept" if kept else "Keep"
+	_keep_btn.tooltip_text = ("In your library as %s, with every version." % _kept) if kept \
+		else "Keep it in your library, with every version it has, to use on any scene."
 	if not many:
 		return
 	var used := _pv.used(_kept)
@@ -374,17 +521,15 @@ func _show_versions() -> void:
 	_ver.text = "%d / %d" % [i + 1, vs.size()]
 	var v: Dictionary = vs[i]
 	var made := Time.get_datetime_string_from_unix_time(int(v["made"]), true) if int(v["made"]) > 0 else ""
-	_ver.tooltip_text = ("Version %d of %d%s." % [i + 1, vs.size(), ", the one used" if i == used else ""]) + \
+	_ver.tooltip_text = ("Version %d of %d%s. The one shown when you close this is the prop." % [i + 1, vs.size(), ", the one used" if i == used else ""]) + \
 		(("\nMade by %s%s from: %s" % [String(v["by"]) if not String(v["by"]).is_empty() else "an agent", " on " + made if not made.is_empty() else "",
 			String(v["note"])]) if not String(v["note"]).is_empty() else "\nAs it was kept.")
 	_prev.disabled = i <= 0
 	_next.disabled = i >= vs.size() - 1
-	_use.disabled = i == used
-	_use.text = "In use" if i == used else "Use this one"
 
 
 func _say(text: String) -> void:
-	if _status == null:
+	if _status == null or (_status.text == text and _status_box.visible == not text.is_empty()):
 		return
 	_status.text = text
-	_status.visible = not text.is_empty()
+	_status_box.visible = not text.is_empty()

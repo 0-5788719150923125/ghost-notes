@@ -17,7 +17,9 @@ class_name EnvironmentCard
 ## [EpisodeEnvironment]), the list is that show's, in place of the note's own.
 ##
 ## Each element that is heard has a Test: it alone, at the level it has under the voice, following what is changed on it until
-## pressed again ([method test], [SoundTest]).
+## pressed again ([method test], [SoundTest]); and Refine…, a conversation with a designer who hears it and changes it, each change a
+## version kept in the note's folder ([EnvironmentSoundDesign], [ElementVersions]). A note's scene hears its sounds as a table with no
+## wind of its own does ([method heard]): a wind is planned for what is heard, or a wind element would be silent.
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "environment"
@@ -27,6 +29,9 @@ var section: EnvironmentSection
 var list: PropsCard
 var _panel: ReadingPanel = null
 var _spec := Surroundings.sanitize({})
+## The note's folder (where a sound's Refine… and its versions are kept, "" for none) and its file.
+var folder := ""
+var note_path := ""
 ## What a Test plays, and the element it plays (-1 none).
 var tester := SoundTest.new()
 var _test_i := -1
@@ -37,6 +42,8 @@ var _test_i := -1
 static func for_note(ctx: Dictionary) -> EnvironmentCard:
 	var card := EnvironmentCard.new()
 	card._panel = ctx.get("workspace") as ReadingPanel
+	card.folder = String(ctx.get("folder", ""))
+	card.note_path = String(ctx.get("path", ""))
 	if card._panel != null:
 		card._panel.document_parts[KEY] = func() -> Dictionary: return {KEY: card.capture()}
 		if card._panel.bed.get_script() == ReadingBed:
@@ -130,13 +137,42 @@ func _keep_testing() -> void:
 		return
 	var el: Dictionary = (els[_test_i] as Dictionary).duplicate(true)
 	el.erase("off")
-	var sound := Surroundings.sound_of({"elements": [el]})
-	if sound.is_empty():
+	var made := heard({"elements": [el]})
+	if (made["sound"] as Dictionary).is_empty():
 		_test_i = -1
 		tester.stop()
 		return
+	tester.play(String(made["key"]), func(rate: int, t0: float) -> SoundBed: return made_bed(made, rate, t0), Surroundings.BED_LEVEL)
+
+
+## What the elements of [param spec] in use are heard as round a note's scene: `{sound, wind, ride, seed, key}` - the sound, a wind
+## planned for it as a table with no wind of its own plans one (its own, or a breath: [method Soundscape.of_table]), its seed the
+## sound's own, and `key` the sound as one value to tell a change by.
+static func heard(spec: Dictionary) -> Dictionary:
+	var sound := Surroundings.sound_of(spec)
 	var key := JSON.stringify(sound)
-	tester.play(key, func(rate: int, t0: float) -> SoundBed: return Soundscape.new(sound, {}, hash(key), rate, t0), Surroundings.BED_LEVEL)
+	var made := Soundscape.of_table({"sound": sound}, hash(key))
+	made["seed"] = hash(key)
+	made["key"] = key
+	return made
+
+
+## What [method heard] gave, made into sound at [param rate] from show time [param t0].
+static func made_bed(made: Dictionary, rate: int, t0: float) -> SoundBed:
+	return Soundscape.new(made["sound"], made["wind"], int(made["seed"]), rate, t0, made["ride"])
+
+
+## Element [param i] put in place of the one there ([param el], of the same kind: a version picked, a refinement landed). "" done,
+## else why not.
+func replace(i: int, el: Dictionary) -> String:
+	var els: Array = _spec["elements"]
+	if i < 0 or i >= els.size():
+		return "it is no longer round the scene"
+	var made := Surroundings.element(el)
+	if made.is_empty() or String(made["kind"]) != String((els[i] as Dictionary)["kind"]):
+		return "that would make it something else"
+	els[i] = made
+	return _changed()
 
 
 ## Element [param i] drawn again: a new number, every property not set drawn from it ([Roll]).
@@ -212,11 +248,10 @@ class Bed extends ReadingBed:
 		card = c
 
 	func of(_export := false) -> Dictionary:
-		var sound := Surroundings.sound_of(card._spec)
-		var key := JSON.stringify(sound)
-		if sound.is_empty():
-			return {"key": key}
-		return {"key": key, "make": func(rate: int, t0: float) -> SoundBed: return Soundscape.new(sound, {}, hash(key), rate, t0)}
+		var made := EnvironmentCard.heard(card._spec)
+		if (made["sound"] as Dictionary).is_empty():
+			return {"key": made["key"]}
+		return {"key": made["key"], "make": func(rate: int, t0: float) -> SoundBed: return EnvironmentCard.made_bed(made, rate, t0)}
 
 	func level() -> float:
 		return Surroundings.BED_LEVEL

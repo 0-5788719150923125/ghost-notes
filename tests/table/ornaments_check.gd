@@ -18,10 +18,19 @@ extends SceneTree
 ## - The designer's prompts render whole, told the language, the ornament's name and its words (control: a name nobody gives is said).
 ## - The shelf stands under Surfaces: a tile to make one, then each kept one with Refine…, its versions and Remove; ‹ and › choose its
 ##   version.
+## - A TEXTURE: its check says what it ends with; its variant holds its body where its own mark was, the ornament's mark kept (control),
+##   and both bodies at once in one shader; its language names its function and every helper. Kept, it is a texture: named and
+##   numbered as one, told to an agent apart from the ornaments, its swatch a bowl and a block wearing it. A material wears a built-in
+##   one by its kind (its size and bumps defaulted and bounded; control: a kind nobody made wears none), a kept one by its name
+##   (following a version chosen), its own code; an ornament's name is no texture and a texture's no ornament. Its material sets the
+##   texture's code, size and relief, the plain shader for a built-in one and the variant for its own; mottle is kept only where
+##   given. Its designer's prompt is a texture designer's; its shelf is Textures, with a tile of its own.
 
 const ROOT := "user://ornaments_check"
 const GOOD := "vec2 q = rot(p, 0.3);\nfloat d = sd_spiral(q, 0.09, 2.5);\nfloat h = stroke(d, 0.035);\nreturn vec2(h, h);"
 const OTHER := "float d = sd_circle(p, 0.3);\nreturn vec2(fill(d), stroke(d, 0.05));"
+const TEX := "vec3 to;\nvec3 c = near_cell(p, to);\nfloat h = c.x * c.x;\nreturn vec3(h, (0.5 - h) * 0.3, step(0.8, c.z));"
+const TEX2 := "vec3 c = cellsid(p * 2.0);\nreturn vec3(1.0 - c.x, 0.0, 0.0);"
 
 var _fails := 0
 
@@ -39,6 +48,7 @@ func _init() -> void:
 	_worn()
 	_designer()
 	_shelf()
+	_textures()
 	_rmrf(ProjectSettings.globalize_path(ROOT))
 	Library.root = was
 	Library.discard = Callable()
@@ -144,7 +154,7 @@ func _designer() -> void:
 
 func _shelf() -> void:
 	var sh := OrnamentShelf.new()
-	_ok(sh.category() == "Surfaces" and sh.title() == "Ornaments", "the shelf stands under Surfaces")
+	_ok(sh.category() == "Surfaces" and sh.title() == "Ornaments and textures", "the shelf stands under Surfaces")
 	var offers := sh.offers()
 	_ok(String((offers[0] as Dictionary)["key"]) == "new" and ((offers[0] as Dictionary)["verbs"] as Array)[0]["key"] == "make",
 		"a tile makes a new one")
@@ -153,6 +163,78 @@ func _shelf() -> void:
 	_ok(verbs == ["refine", "older", "newer", "forget"], "a kept one has Refine…, its versions and Remove: %s" % str(verbs))
 	_ok(sh.act("kept:Fine scrolls", "newer").is_empty() and OrnamentLibrary.code_of("Fine scrolls") == OTHER, "› chooses the next version")
 	_ok(sh.act("kept:Fine scrolls", "older").is_empty() and OrnamentLibrary.code_of("Fine scrolls") == GOOD, "‹ the one before")
+
+
+func _material_of(m: Dictionary) -> Dictionary:
+	return Props.sanitize_material(m, "#888888")
+
+
+func _textures() -> void:
+	# the check and the variant
+	_ok(Ornaments.check(TEX, Ornaments.TEXTURE).is_empty(), "a texture's body passes: %s" % Ornaments.check(TEX, Ornaments.TEXTURE))
+	var why := Ornaments.check("float h = 1.0;", Ornaments.TEXTURE)
+	_ok(why.contains("return vec3(relief, rough, tint)"), "a texture with no return is told what it ends with: %s" % why)
+	_ok(Ornaments.check("vec3 q = p;\nreturn vec3(uv.x);", Ornaments.TEXTURE).is_empty(), "the check reads no types: the compiler does")
+	var base: Shader = load("res://shaders/prop.gdshader")
+	var mark := String(Registry.field(Ornaments.HOOKS, Ornaments.TEXTURE, "mark", ""))
+	var src := Ornaments.source_for(base, "", TEX)
+	_ok(src.contains("near_cell(p, to)") and not src.contains(mark) and src.contains(Ornaments.MARK),
+		"a texture's variant holds its body where its mark was, the ornament's mark kept")
+	var both := Ornaments.shader_for(base, GOOD, TEX)
+	_ok(both.code.contains("near_cell(p, to)") and both.code.contains("sd_spiral(q, 0.09, 2.5)"), "an ornament and a texture of its own in one shader")
+	_ok(Ornaments.shader_for(base, "", "return vec3(sin(TIME));") == base, "a texture the check refuses is the shader as it was")
+	var told := Ornaments.describe(Ornaments.TEXTURE)
+	_ok(told.contains(Registry.label(Ornaments.HOOKS, Ornaments.TEXTURE)) and Ornaments.HELPERS.keys().all(func(k: String) -> bool: return told.contains(k)),
+		"a texture's language names its function and every helper")
+	# the library
+	var t := OrnamentLibrary.make("flint knapped to an edge", "", OrnamentLibrary.TEXTURE)
+	var t2 := OrnamentLibrary.make("", "", OrnamentLibrary.TEXTURE)
+	_ok(t == "Texture" and t2 == "Texture 2" and String(OrnamentLibrary.find(t)["kind"]) == OrnamentLibrary.TEXTURE, "a texture is kept as one, named and numbered: %s, %s" % [t, t2])
+	_ok(OrnamentLibrary.add_version(t, "return vec3(sin(TIME));") == -1 and OrnamentLibrary.add_version(t, TEX) == 0
+		and OrnamentLibrary.add_version(t, TEX2) == 1 and OrnamentLibrary.use_version(t, 0).is_empty(), "its versions are kept as an ornament's are")
+	var textures := OrnamentLibrary.listing(OrnamentLibrary.TEXTURE)
+	_ok(textures.size() == 1 and String((textures[0] as Dictionary)["name"]) == t
+		and not OrnamentLibrary.listing().any(func(e: Dictionary) -> bool: return String(e["name"]) == t),
+		"an agent is told the textures apart from the ornaments: %s" % str(textures))
+	var sw := OrnamentLibrary.swatch(TEX, OrnamentLibrary.TEXTURE)
+	var sm: Dictionary = (sw["materials"] as Dictionary)["swatch stone"]
+	_ok((sw["thing"]["parts"] as Array).size() == 2 and String(sm.get("texture_code", "")) == TEX, "its swatch is a bowl and a block wearing it")
+	# worn by a material
+	var chipped := _material_of({"kind": "stone", "texture": "Chipped", "bumps": 3.0})
+	_ok(String(chipped.get("texture", "")) == "chipped" and float(chipped["bumps"]) == 1.0
+		and is_equal_approx(float(chipped["texture_size"]), float(Props.TEXTURES["chipped"]["size"])) and not chipped.has("mottle"),
+		"a built-in texture is worn by its kind, its bumps bounded, its size its own, no mottle unless given: %s" % str(chipped))
+	_ok(not _material_of({"kind": "stone", "texture": "velvety moss", "bumps": 0.5}).has("texture"), "the control: a kind nobody made wears none")
+	var kept := _material_of({"kind": "stone", "texture": "texture", "mottle": 0.4, "texture_size": 0.001})
+	_ok(String(kept.get("texture", "")) == t and String(kept.get("texture_code", "")) == TEX and float(kept["mottle"]) == 0.4
+		and float(kept["texture_size"]) == Props.TEXTURE_SIZE.x, "a kept texture is worn by its name, its size bounded, its mottle kept")
+	OrnamentLibrary.use_version(t, 1)
+	_ok(String(_material_of({"kind": "stone", "texture": t}).get("texture_code", "")) == TEX2, "and follows a version chosen")
+	OrnamentLibrary.use_version(t, 0)
+	var own := _material_of({"kind": "wood", "texture": "own", "texture_code": TEX2})
+	_ok(String(own.get("texture", "")) == "own" and String(own.get("texture_code", "")) == TEX2, "a texture of its own keeps its code")
+	_ok(not _material_of({"kind": "metal", "texture": "Fine scrolls"}).has("texture"), "an ornament's name is no texture")
+	_ok((_part_of({"kind": t})["ornament"] as Dictionary).is_empty(), "and a texture's name is no ornament")
+	# its material
+	var mat := Props.material(chipped, {}, 10.0, 10.0, 1, true)
+	var row: Dictionary = Props.TEXTURES["chipped"]
+	_ok(mat.shader == Props._SHADER and int(mat.get_shader_parameter("tex")) == int(row["code"])
+		and is_equal_approx(float(mat.get_shader_parameter("tex_relief")), 1.0 * float(row["size"]) * 0.01 * float(row["deep"])),
+		"a built-in texture keeps the shader, setting its code, size and relief")
+	var mine := Props.material(kept, {"kind": "own", "code": GOOD, "count": 6}, 10.0, 10.0, 1, true)
+	_ok(mine.shader != Props._SHADER and int(mine.get_shader_parameter("tex")) == Props.TEX_OWN and mine.shader.code.contains("near_cell(p, to)")
+		and mine.shader.code.contains("sd_spiral(q, 0.09, 2.5)") and float(mine.get_shader_parameter("mottle")) == 0.4,
+		"a texture of its own is the variant, its ornament of its own in it too")
+	var bare := Props.material(_material_of({"kind": "stone"}), {}, 10.0, 10.0, 1, true)
+	_ok(bare.shader == Props._SHADER and bare.get_shader_parameter("tex") == null, "the control: a material with no texture sets none")
+	# its designer and its shelf
+	var info := OrnamentDesign.new(t).about()
+	var system := Rules.say("table/ornament_designer.system", info.merged({"tools": true}))
+	_ok(not system.contains("{{") and system.contains("texture designer") and not system.contains("ornament designer")
+		and system.contains(Registry.label(Ornaments.HOOKS, Ornaments.TEXTURE)), "its designer's prompt is a texture designer's")
+	var offers := OrnamentShelf.new().offers()
+	var on := offers.filter(func(o: Dictionary) -> bool: return String(o["key"]) in ["kept:" + t, "new_texture"])
+	_ok(on.size() == 2 and on.all(func(o: Dictionary) -> bool: return String(o["shelf"]) == "textures"), "the Textures shelf holds it, with a tile of its own")
 
 
 func _rmrf(path: String) -> void:

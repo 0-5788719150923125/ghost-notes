@@ -9,6 +9,9 @@ class_name EpisodeEnvironment
 ##
 ## The episode card hands it to the panel ([member ReadingPanel.environment]) while its episode is shown at its table ([method owns]);
 ## at the desk, where the table is a pad and a pen, the card lists the note's own environment.
+##
+## A sound's Refine… and its versions are kept in the episode's folder ([method home]); it is heard as the table hears it, and a
+## version made or picked is a hand's version of the table, as any change here is.
 
 const EPISODE_GROUPS := [
 	{"key": "here", "label": "This episode's", "tip": "What this episode's table is heard with and what lasts in its air. Change one and the table is yours: kept as your version, passed by Generate."},
@@ -79,7 +82,9 @@ func rows() -> Array:
 				"tip": "Hear it alone, as the table hears it under the voice; it follows what you change. Press again to stop."})
 		verbs.append({"key": "keep", "label": "Kept" if not as_kept.is_empty() else "Keep", "off": not as_kept.is_empty(),
 			"tip": ("In your library as %s." % as_kept) if not as_kept.is_empty() else "Keep it in your library, to use on any note or table."})
-		out.append({"key": "el:%d" % i, "name": name_of(el), "line": Surroundings.line_of(el), "group": "aside" if el.get("off") == true else "here",
+		if heard:
+			verbs.append_array(refine_verbs(_els, i))
+		out.append({"key": "el:%d" % i, "name": name_of(el), "line": refining_line(_els, i, Surroundings.line_of(el)), "group": "aside" if el.get("off") == true else "here",
 			"tip": Registry.blurb(Surroundings.KINDS, kind), "picture": _picture(el, plain), "on": el.get("off") != true,
 			"on_tip": "Ticked, this episode's table has it; unticked, it is set aside and kept here.",
 			"remove_tip": "Take it off this episode's table for good: the table is then yours.",
@@ -142,6 +147,8 @@ func act(key: String, verb: String) -> String:
 	if i < 0:
 		return "nothing here does that"
 	var el: Dictionary = _els[i]
+	if verb == "refine" or verb.begins_with("version:"):
+		return refine_act(i, verb)
 	match verb:
 		"test":
 			return test(i)
@@ -180,6 +187,46 @@ func add(key: String) -> String:
 				(els[j] as Dictionary)["off"] = true
 	els.append(el)
 	return _write(els)
+
+
+# --- refining a sound: where its table is ------------------------------------------------------------------------------------
+
+func home() -> String:
+	return episode._episode.dir if episode != null and is_instance_valid(episode) and episode._episode != null else ""
+
+
+func elements() -> Array:
+	if episode == null or not is_instance_valid(episode):
+		return []
+	_read()
+	return _els
+
+
+func heard_of(el: Dictionary) -> Dictionary:
+	if episode == null or not is_instance_valid(episode) or episode._episode == null:
+		return {"sound": {}}
+	_read()
+	var made := TableSurroundings.heard_alone(_table, el, episode._episode.seed)
+	made["seed"] = episode._episode.seed
+	return made
+
+
+func put_at(i: int, el: Dictionary) -> String:
+	if episode == null or not is_instance_valid(episode):
+		return "the episode was left"
+	_read()
+	if i < 0 or i >= _els.size():
+		return "it is no longer on this episode's table"
+	var made := Surroundings.element(el)
+	if made.is_empty() or String(made["kind"]) != String((_els[i] as Dictionary)["kind"]):
+		return "that would make it something else"
+	var els := _els.duplicate(true)
+	els[i] = made
+	return _write(els)
+
+
+func window_host() -> Node:
+	return episode if episode != null and is_instance_valid(episode) and episode.is_inside_tree() else null
 
 
 # --- Test ------------------------------------------------------------------------------------------------------------------
@@ -274,4 +321,8 @@ func _write(els: Array) -> String:
 		return ep.write_json("table", TableSurroundings.with_elements(raw if raw is Dictionary else {}, els, ep.seed, _palette)))
 	episode._after_hand("table", err)
 	_read()
+	# ...and the table playing it told at once: what drifts in its air redrawn as the dial moves, never waiting on the file's time
+	var medium: Object = Director._medium
+	if err.is_empty() and medium != null and medium.has_method("table_changed"):
+		medium.call("table_changed")
 	return err

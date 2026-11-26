@@ -18,6 +18,9 @@ class_name SidePanel
 ##
 ## A footer can be pinned under the scrolling body ([method add_footer_card]): a card that stays in view
 ## however far the body is scrolled, taken off the room the body has (Masking's marker list).
+##
+## Open, it takes its width from the show ([method Shell.claim_stage_left]): the frame is fitted to its
+## right, never under it, and has the whole window back once the panel is hidden ("‹", F2).
 
 ## Distance from the window's edge, and the gap left at the bottom. The panel is placed here, so "how
 ## much room is there" has one answer.
@@ -62,6 +65,7 @@ var _foot_pad: MarginContainer      # the footer's own margin, matched to the bo
 var _deck: PanelDeck                # the title bars of the body's cards
 ## Controls already named for making the panel too wide (see [method _check_width]).
 var _warned := {}
+var _claimed: WeakRef = null        # the shell it claimed the show's room from, while it holds a claim
 
 
 func _init(width := 380.0) -> void:
@@ -305,6 +309,8 @@ func _ready() -> void:
 	_scroll.get_v_scroll_bar().visibility_changed.connect(_fit)
 	get_viewport().size_changed.connect(_fit)
 	_fit()
+	resized.connect(_claim_room)
+	_claim_room()
 	# The wheel scrolls the panel, never a slider: every slider made here is drag-only.
 	_no_wheel(self)
 	get_tree().node_added.connect(func(n: Node) -> void:
@@ -346,6 +352,37 @@ func _notification(what: int) -> void:
 			_restore.visible = not visible
 		if visible:
 			_fit()
+		_claim_room()
+	elif what == NOTIFICATION_EXIT_TREE:
+		_let_go_room()
+
+
+## The show's room claimed as far as its right edge while it is shown on the left of the window - the frame
+## touching it, no gap between - and let go while it is hidden.
+func _claim_room() -> void:
+	if not is_inside_tree() or not is_visible_in_tree():
+		_let_go_room()
+		return
+	var r := get_global_rect()
+	if r.position.x >= get_viewport().get_visible_rect().size.x * 0.5:
+		_let_go_room()
+		return
+	var sh := Shell.of(self)
+	if sh == null:
+		return
+	sh.claim_stage_left(_claim_key(), r.end.x)
+	_claimed = weakref(sh)
+
+
+func _let_go_room() -> void:
+	var sh: Shell = _claimed.get_ref() if _claimed != null else null
+	if sh != null:
+		sh.release_stage_left(_claim_key())
+	_claimed = null
+
+
+func _claim_key() -> StringName:
+	return StringName("side_panel_%d" % get_instance_id())
 
 
 ## Take the smaller of what the contents want and what the window has room for. Deferred: it is reached

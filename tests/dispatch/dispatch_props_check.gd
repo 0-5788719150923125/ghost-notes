@@ -178,14 +178,15 @@ func _format_and_card() -> void:
 		"the card's rows: the mug and the cup, then every thing the desk works, no clock its script does not use (%s)" % str(keys))
 	var mug_row: Dictionary = rows[0]
 	var verbs: Array = (mug_row["verbs"] as Array).map(func(v: Dictionary) -> String: return String(v["key"]))
-	_ok(String(mug_row["name"]) == "mug no. 5" and verbs.has("choose") and verbs.has("own") and verbs.has("keep")
-		and bool((mug_row["verbs"] as Array)[0].get("opens", false)), "the mug's row names its make and offers Choose…, the desk's own and Keep (%s)" % str(verbs))
+	_ok(String(mug_row["name"]) == "mug no. 5" and verbs.has("choose") and verbs.has("own") and not verbs.has("keep")
+		and bool((mug_row["verbs"] as Array)[0].get("opens", false)), "the mug's row names its make and offers Choose… and the desk's own; Keep is its 3D view's (%s)" % str(verbs))
 	var choices := sec.choices("role:mug")
 	_ok(choices is MakeShelf and sec.choices("role:terminal") is MakeShelf and sec.choices("role:bookshelf") == null,
 		"Choose… opens the Dex on a part's makes (the control: no such part has none)")
 	_ok(choices.add("draw:9").is_empty() and fmt.things()["mug"] == {"recipe": "mug", "seed": 9}, "Use there chooses for the desk")
 	_ok(sec.act("role:mug", "own").is_empty() and fmt.things().is_empty(), "the desk's own takes it back")
-	_ok(sec.act("role:mug", "keep").is_empty() and not ThingLibrary.read("a mug").is_empty(), "Keep puts the mug on the desk in the library")
+	_ok(sec.keep_prop("role:mug").is_empty() and not ThingLibrary.read("a mug").is_empty()
+		and String(ThingLibrary.read("a mug")["line"]) == String(PropMakes.ROLES["mug"]["blurb"]), "Keep puts the mug on the desk in the library, said to be what the part is")
 	# taken off: a spare thing's × takes it off and "+ Add a prop" sets it out again; what the desk or its script works stays
 	var by_key := func(k: String) -> Dictionary:
 		for r in sec.rows():
@@ -391,7 +392,7 @@ func _format_and_card() -> void:
 	var recipes := DeskRecipes.new()
 	var desk_keys: Array = recipes.offers().map(func(o: Dictionary) -> String: return String(o["key"]))
 	_ok(desk_keys.has("desk:mug") and desk_keys.has("desk:taper") and not desk_keys.has("desk:mat"), "a desk's recipes are offered, never its mat (%s)" % str(desk_keys))
-	_ok(recipes.act("desk:cactus", "keep").is_empty() and not ThingLibrary.read("a cactus").is_empty(), "and one is kept in the library")
+	_ok(recipes.keep_prop("desk:cactus").is_empty() and not ThingLibrary.read("a cactus").is_empty(), "and one is kept in the library from its 3D view")
 	sec.settle()
 	alone.settle()
 	recipes.settle()

@@ -6,19 +6,20 @@ class_name EpisodeProps
 ##
 ##   Used       the things in `table.json`, each ticked: unticked, it moves to the table's `aside` list, which nothing stands and no
 ##              agent reads - the table is a hand's version then (kept, passed by Generate) and the work blocked on it goes stale
-##              ([method EpisodeCard._hand_write]). Keep puts the thing in the library ([ThingLibrary]); Select picks it on the stage.
+##              ([method EpisodeCard._hand_write]). Select picks it on the stage; Keep, in the 3D view its picture opens ([PropViewer],
+##              [method PropSection.keep_prop]), puts the thing in the library ([ThingLibrary]), and the row then says so.
 ##   Set aside  the `aside` list, each unticked: ticked, it is used again.
 ##
 ## An entry's × takes the thing off the table for good, from either list, as a hand's version too.
 ##
-## A game's model ([GameDiorama]) adds two lists, Keep alone on each, so what was modeled for one night can be kept in the
+## A game's model ([GameDiorama]) adds two lists, each kept from its 3D view, so what was modeled for one night can be kept in the
 ## library and found again on the next:
 ##
 ##   The land   each place on the board (`diorama.json`)
 ##   Figures    each figure modeled for the night (`minis.json`)
 ##
-## The kept ornaments its things wear ([OrnamentLibrary], next/surfaces.md) stand under Ornaments worn, each with Refine… and its
-## versions ([OrnamentDesign]): every prop wearing one follows the version used.
+## The kept ornaments and textures its things wear ([OrnamentLibrary], next/surfaces.md) stand under Surfaces worn, each with Refine…
+## and its versions ([OrnamentDesign]): every prop wearing one follows the version used.
 ##
 ## A game told in sticker pages (next/sticker_book.md) adds two more, Keep alone on each, so a night's drawings are drawn the same on
 ## the next ([StickerLibrary]):
@@ -32,11 +33,11 @@ class_name EpisodeProps
 const GROUPS := [
 	{"key": "table", "label": "Used", "tip": "What this episode's table uses. Untick one to set it aside: the table is then yours, and the work done on it is blocked again on Generate."},
 	{"key": "aside", "label": "Set aside", "tip": "Taken off this episode's table and kept here: tick one to use it again."},
-	{"key": "board", "label": "The land", "tip": "The places modeled on this game's board. Keep one to find it again on another night."},
-	{"key": "figures", "label": "Figures", "tip": "The figures modeled for this game. Keep one to find it again on another night."},
+	{"key": "board", "label": "The land", "tip": "The places modeled on this game's board. Open one and Keep it to find it again on another night."},
+	{"key": "figures", "label": "Figures", "tip": "The figures modeled for this game. Open one and Keep it to find it again on another night."},
 	{"key": "cast", "label": "Characters", "tip": "Who and what this episode's pictures drew, each painted once and stuck on every page they are in. Keep one to draw it the same on another night."},
 	{"key": "sets", "label": "Sets", "tip": "The places this episode's pictures stand in, each painted once. Keep one to use it again on another night."},
-	{"key": "ornaments", "label": "Ornaments worn", "tip": "The ornaments from your library this episode's things wear. Refine one, or step through its versions: every prop wearing it follows."},
+	{"key": "ornaments", "label": "Surfaces worn", "tip": "The ornaments and textures from your library this episode's things wear. Refine one, or step through its versions: every prop wearing it follows."},
 ]
 ## What a row's tick says on hover.
 const ON_TIP := "Ticked, this episode's table uses it; unticked, it is set aside and kept here."
@@ -82,9 +83,8 @@ func rows() -> Array:
 				line.append(pics.size_of(h))
 			if not as_kept.is_empty():
 				line.append("in your library" if as_kept == name else "in your library as %s" % as_kept)
-			var verbs: Array = [
-				{"key": "keep", "label": "Kept" if not as_kept.is_empty() else "Keep", "off": not as_kept.is_empty(),
-					"tip": ("In your library as %s." % as_kept) if not as_kept.is_empty() else "Keep it in your library, to use again later."}]
+			# kept from its 3D view (the picture opens it): the row says where it is
+			var verbs: Array = []
 			if list == "things":
 				verbs.append({"key": "select", "label": "Select", "tip": "Select it on the stage: its rows open in the timeline's inspector."})
 			out.append({"key": ("thing:" if list == "things" else "aside:") + name, "name": name, "line": " - ".join(line),
@@ -100,30 +100,32 @@ func rows() -> Array:
 			var as_kept := String(kept.get(h, ""))
 			out.append({"key": "%s:%s" % [kind, name], "name": String(name), "line": "in your library" if not as_kept.is_empty() else "",
 				"tip": String(name), "group": "board" if kind == "place" else "figures", "picture": pics.of(h, m["thing"], m["materials"]),
-				"verbs": [{"key": "keep", "label": "Kept" if not as_kept.is_empty() else "Keep", "off": not as_kept.is_empty(),
-					"tip": ("In your library as %s." % as_kept) if not as_kept.is_empty() else "Keep it in your library, to use again on another night."}],
-				"remove_off": "Model it again from its row on the Episode card."})
+				"verbs": [], "remove_off": "Model it again from its row on the Episode card."})
 	out.append_array(_sticker_rows())
 	out.append_array(_ornament_rows(t))
 	return out
 
 
-## The kept ornaments the table's things wear by name, once each.
+## The kept ornaments the table's things wear by name, and the kept textures its materials wear, once each.
 func _ornament_rows(t: Dictionary) -> Array:
 	var names := {}
 	for th in (t.get("things", []) if t.get("things") is Array else []):
 		if th is Dictionary:
 			_worn((th as Dictionary).get("parts", []), names)
+	var textures := {}
+	for m in ((t["materials"] as Dictionary).values() if t.get("materials") is Dictionary else []):
+		if m is Dictionary and (m as Dictionary).get("texture") is String:
+			textures[String((m as Dictionary)["texture"]).strip_edges().to_lower()] = true
 	var out: Array = []
-	for nm in names:
-		var e := OrnamentLibrary.find(String(nm))
-		if e.is_empty():
+	for nm in names.keys() + textures.keys():
+		var e := OrnamentLibrary.find(String(nm), OrnamentLibrary.ORNAMENT if names.has(nm) else OrnamentLibrary.TEXTURE)
+		if e.is_empty() or out.any(func(r: Dictionary) -> bool: return String(r["name"]) == String(e["name"])):
 			continue
 		var n := (e["versions"] as Array).size()
 		var used := int(e["used"])
 		out.append({"key": "ornament:" + String(e["name"]), "name": String(e["name"]), "group": "ornaments",
 			"line": "%s  ·  version %d of %d" % [String(e["words"]).left(60), used + 1, n], "tip": String(e["words"]),
-			"picture": _swatch(String(e["code"])),
+			"picture": _swatch(String(e["code"]), String(e["kind"])),
 			"remove_off": "Take it off a thing by refining that thing; remove it from your library on the Dex.",
 			"verbs": [{"key": "refine", "label": "Refine…", "tip": "Ask its designer for a change: a new version, which every prop wearing it shows."},
 				{"key": "older", "label": "‹", "tip": "Use the version before this one.", "off": used <= 0},
@@ -142,11 +144,12 @@ static func _worn(parts: Variant, into: Dictionary) -> void:
 		_worn((p as Dictionary).get("parts", []), into)
 
 
-## The swatch of an ornament's code once taken ([method OrnamentLibrary.swatch]), asked for if not; null until then.
-func _swatch(code: String) -> Variant:
+## The swatch of an ornament's or a texture's code ([param kind]) once taken ([method OrnamentLibrary.swatch]), asked for if not; null
+## until then.
+func _swatch(code: String, kind: String) -> Variant:
 	if code.is_empty():
 		return null
-	var sw := OrnamentLibrary.swatch(code)
+	var sw := OrnamentLibrary.swatch(code, kind)
 	return library.pictures.of(ThingLibrary.hash_of(sw["thing"], sw["materials"]), sw["thing"], sw["materials"])
 
 
@@ -301,9 +304,10 @@ func act(key: String, verb: String) -> String:
 		return _act_ornament(name, verb)
 	match verb:
 		"keep":
+			# a sticker's Keep is its row's; a prop's is its 3D view's ([method PropSection.keep_prop])
 			if kind in ["char", "stick", "set"]:
 				return _keep_sticker(kind, name)
-			return _keep_from(kind, name).get("error", "")
+			return "keep a prop from its 3D view"
 		"select":
 			if kind != "thing":
 				return "only what is used can be selected"
@@ -326,25 +330,6 @@ func _act_ornament(name: String, verb: String) -> String:
 		"older", "newer":
 			return OrnamentLibrary.use_version(name, int(e["used"]) + (-1 if verb == "older" else 1))
 	return "nothing here does that"
-
-
-## The thing a row names kept in the library, its picture taken: `{name}` (what it is kept as), or `{error}`. One kept already is
-## not kept again.
-func _keep_from(kind: String, name: String) -> Dictionary:
-	var th := _thing_of(kind, name)
-	var mats: Dictionary = _table.get("materials", {}) if _table.get("materials") is Dictionary else {}
-	if kind in ["place", "figure"]:
-		var m: Dictionary = (_read_models().get(kind, {}) as Dictionary).get(name, {})
-		th = m.get("thing", {})
-		mats = m.get("materials", {})
-	if th.is_empty():
-		return {"error": "%s is not on this table" % name}
-	var h := ThingLibrary.hash_of(th, mats)
-	var already := String(library.kept_by_hash().get(h, ""))
-	if not already.is_empty():
-		return {"name": already}
-	var err := library.keep(th, mats, "")
-	return {"error": err} if not err.is_empty() else {"name": String(library.kept_by_hash().get(h, name))}
 
 
 ## The thing row [param kind]:[param name] names as the table writes it ("thing" used, "aside" set aside), {} for none.
@@ -453,10 +438,11 @@ func prepare_pictures(keys: Array) -> void:
 
 func picture(key: String) -> Variant:
 	if key.begins_with("ornament:"):
-		var code := OrnamentLibrary.code_of(key.substr(9))
+		var e := OrnamentLibrary.find(key.substr(9))
+		var code := String(e.get("code", ""))
 		if code.is_empty():
 			return null
-		var sw := OrnamentLibrary.swatch(code)
+		var sw := OrnamentLibrary.swatch(code, String(e["kind"]))
 		return library.pictures.image(ThingLibrary.hash_of(sw["thing"], sw["materials"]))
 	return library.picture(key)
 

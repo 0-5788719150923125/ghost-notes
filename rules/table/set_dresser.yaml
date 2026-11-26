@@ -568,11 +568,18 @@ thing_language:
     say: "THE ORNAMENTS KEPT IN THE LIBRARY - a part wears one by its name as its ornament's `kind`:"
   - each: ornaments
     say: '- "{{name}}": {{words}}'
+  # ...and the textures (OrnamentLibrary.listing(TEXTURE)), each worn by a material by its name
+  - when: textures
+    say: "THE TEXTURES KEPT IN THE LIBRARY - a material wears one by its name as its `texture`:"
+  - each: textures
+    say: '- "{{name}}": {{words}}'
   - ""
   - >-
       DETAIL: the camera sees a thing 10 cm tall at about a sixth of the picture's height, so
-      anything under a few millimeters is lost - engraving, glaze, grain and pattern belong in the
-      material and its ornament, not in extra parts. Most things need 1 to 5 parts; none more than
+      anything under a few millimeters is lost - engraving, glaze, grain, grit, pits and pattern
+      belong in the material (its texture, its polish, its mottle) and its ornament, not in extra
+      parts. Raw stone, bone, unglazed clay, old wood and worn leather are dull and rough to the
+      touch: a low polish, a texture, some mottle. Most things need 1 to 5 parts; none more than
       {{max_parts}}.
   - >-
       SIZES are the real sizes of the real things.{{^cardless}} For scale, a card here is {{card_w}} x

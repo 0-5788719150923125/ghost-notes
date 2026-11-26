@@ -16,9 +16,10 @@ extends Node
 ##
 ## The stage is the frame: through the real main scene, a song note's stage (a note of the gate's own,
 ## with a Medium, opened from the list) is the frame's shape (16:9, or 9:16 in portrait), as large as the
-## window holds it, centered, black beside it; the filters are sized to the stage; the subtitles told the
+## room right of the open side panel holds it, touching the panel's edge, centered there, black beside it - and the whole window's
+## once the panel is hidden (the control); the filters are sized to the stage; the subtitles told the
 ## frame. Measured against the window as it is (headless Godot's window is 64x64, so its view is square
-## and the landscape stage sits between bars). How many pixels the stage has is the Graphics menu's
+## and the landscape stage sits between bars), the panel's edge read off the panel itself. How many pixels the stage has is the Graphics menu's
 ## Resolution: a pixel to a unit of the window's canvas at 1080p, twice the lines at 4K, and only the
 ## stage changes.
 ##
@@ -149,18 +150,30 @@ func _stage() -> void:
 		await get_tree().process_frame
 	var vis := get_viewport().get_visible_rect().size
 	var sv: Control = main._stage_view
-	var land := _fit(vis, Vector2(16, 9))
-	_ok(sv != null and _near(sv.get_rect(), land),
-		"landscape: the stage is 16:9, as large as the window holds it, centered (%s in %s, want %s)"
-			% [sv.get_rect() if sv != null else "none", vis, land])
-	if sv == null:
+	var side: Control = null
+	for n in get_tree().get_nodes_in_group(SidePanel.GROUP):
+		if (n as Control).is_visible_in_tree():
+			side = n
+	var left := side.get_global_rect().end.x if side != null else 0.0
+	var room := Rect2(left, 0.0, vis.x - left, vis.y)
+	var land := _fit(room, Vector2(16, 9))
+	_ok(side != null and sv != null and _near(sv.get_rect(), land),
+		"landscape: the stage is 16:9, as large as the room right of the open panel holds it, centered there (%s in %s, want %s)"
+			% [sv.get_rect() if sv != null else "none", room, land])
+	if sv == null or side == null:
 		return
+	side.visible = false
+	await get_tree().process_frame
+	_ok(_near(sv.get_rect(), _fit(Rect2(Vector2.ZERO, vis), Vector2(16, 9))),
+		"the panel hidden, the stage is as large as the whole window holds it, centered (%s; the control: open, %s)" % [sv.get_rect(), land])
+	side.visible = true
+	await get_tree().process_frame
 	var subs: Node = main._subtitles
 	_ok(subs != null and is_instance_valid(subs) and subs.frame_rect == sv.get_rect(),
 		"the subtitles come up told the frame (%s)" % (subs.frame_rect if subs != null else "no subtitles"))
 	Director.set_frame("portrait")
 	await get_tree().process_frame
-	var port := _fit(vis, Vector2(9, 16))
+	var port := _fit(room, Vector2(9, 16))
 	_ok(_near(sv.get_rect(), port), "portrait: the stage is 9:16, centered, black beside it (%s, want %s)" % [sv.get_rect(), port])
 	# How many pixels it has is the Graphics menu's: from 1080p, whatever the author chose, a pixel to a
 	# unit of the window's canvas. At another resolution the stage alone changes.
@@ -206,12 +219,13 @@ func _captioned_song() -> String:
 	return song
 
 
-## The largest rect of [param shape]'s proportions that [param vis] holds, centered; worked out here, not
-## asked of main, so the gate does not grade main's sums with main's sums.
-static func _fit(vis: Vector2, shape: Vector2) -> Rect2:
-	var wide := vis.x / vis.y > shape.x / shape.y      # the window is wider than the frame: bars beside it
+## The largest rect of [param shape]'s proportions that [param room] holds, centered in it; worked out here,
+## not asked of main, so the gate does not grade main's sums with main's sums.
+static func _fit(room: Rect2, shape: Vector2) -> Rect2:
+	var vis := room.size
+	var wide := vis.x / vis.y > shape.x / shape.y      # the room is wider than the frame: bars beside it
 	var size := Vector2(vis.y * shape.x / shape.y, vis.y) if wide else Vector2(vis.x, vis.x * shape.y / shape.x)
-	return Rect2((vis - size) * 0.5, size)
+	return Rect2(room.position + (vis - size) * 0.5, size)
 
 
 static func _near(a: Rect2, b: Rect2) -> bool:

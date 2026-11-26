@@ -208,6 +208,7 @@ func _air() -> void:
 		"each air element an effect Effects keeps, an unknown one none (%d)" % fx.size())
 	_ok(fx.all(func(e: Dictionary) -> bool: return String(e["where"]) in ["far", "near", "room"]), "over a region every host names")
 	_ok(String((fx[0] as Dictionary)["color"]).trim_prefix("#") == fog.to_html(false), "haze is fog in the light's color")
+	# (an element saved with an amount, a share of its kind's count, is read as the count it came to)
 	var twice := Surroundings.effects_of(Surroundings.sanitize({"elements": [{"kind": "pixies", "amount": 2.0}]}), fog)
 	_ok(int((twice[0] as Dictionary)["count"]) == 2 * int((fx[1] as Dictionary)["count"]),
 		"the control: at twice the amount, twice the motes (%d, %d)" % [int((twice[0] as Dictionary)["count"]), int((fx[1] as Dictionary)["count"])])
@@ -629,18 +630,18 @@ func _card(trashed: Array) -> void:
 		"the control: a light has no Test and makes no sound to hear")
 	sec.remove("el:%d" % ins)
 	# Roll, properties, Used, Remove: on the pixies (row 1)
-	_ok(sec.set_field("el:1", "amount", 2.0).is_empty() and is_equal_approx(float(card.capture()["elements"][1]["amount"]), 2.0),
+	_ok(sec.set_field("el:1", "count", 20).is_empty() and int(card.capture()["elements"][1]["count"]) == 20,
 		"a property set is pinned")
 	var seed := int(card.capture()["elements"][1]["seed"])
 	var drawn: Array = []
 	for i in 4:
 		sec.act("el:1", "roll")
 		drawn.append(Surroundings.values_of(card.capture()["elements"][1])["glow"])
-	_ok(int(card.capture()["elements"][1]["seed"]) != seed and is_equal_approx(float(card.capture()["elements"][1]["amount"]), 2.0)
+	_ok(int(card.capture()["elements"][1]["seed"]) != seed and int(card.capture()["elements"][1]["count"]) == 20
 		and drawn.any(func(g: float) -> bool: return not is_equal_approx(g, float(drawn[0]))),
 		"Roll draws another: a new number, what is set kept, what is not drawn again (%s)" % str(drawn))
-	sec.set_field("el:1", "amount", null)
-	_ok(not (card.capture()["elements"][1] as Dictionary).has("amount"), "unset, it is the number's again")
+	sec.set_field("el:1", "count", null)
+	_ok(not (card.capture()["elements"][1] as Dictionary).has("count"), "unset, it is the number's again")
 	sec.set_on("el:1", false)
 	_ok(Surroundings.effects_of(card.capture(), Color.BLACK).is_empty() and sec.rows()[1]["on"] == false, "Used unticked, it is set aside")
 	sec.set_on("el:1", true)

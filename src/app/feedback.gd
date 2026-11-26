@@ -59,6 +59,11 @@ func _ready() -> void:
 	add_to_group("feedback_console") # so the Assistant can hold a pending reload while this is open
 	_ensure_dir()
 	_build_ui()
+	# every window the app opens passes the toggle key on: a capture is taken while a prop's 3D view, the Dex or a Refine window has
+	# the keyboard, and shows it (the windows are drawn into the app's own)
+	get_tree().node_added.connect(_watch_window)
+	for w in get_tree().root.find_children("*", "Window", true, false):
+		_watch_window(w)
 
 
 # --- UI construction (in code; no .tscn to hand-edit) -----------------------
@@ -131,6 +136,26 @@ func _input(event: InputEvent) -> void:
 		_close()
 		get_viewport().set_input_as_handled()
 	# All other keys fall through to the LineEdit (typing) and the rest of the app.
+
+
+## Window [param n] watched for the toggle key, once.
+func _watch_window(n: Node) -> void:
+	if not (n is Window) or n == get_tree().root or n.has_meta(&"feedback_key"):
+		return
+	n.set_meta(&"feedback_key", true)
+	(n as Window).window_input.connect(func(e: InputEvent) -> void: _key_in(n as Window, e))
+
+
+## The toggle key pressed in window [param w]: taken from it, the app's own window given the keyboard (the console types there), and
+## the console opened or closed.
+func _key_in(w: Window, e: InputEvent) -> void:
+	if not (e is InputEventKey and (e as InputEventKey).pressed and not (e as InputEventKey).echo):
+		return
+	if (e as InputEventKey).keycode != TOGGLE_KEY:
+		return
+	w.set_input_as_handled()
+	get_tree().root.grab_focus()
+	_toggle()
 
 
 func _toggle() -> void:

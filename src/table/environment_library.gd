@@ -63,9 +63,9 @@ static func keep(el: Dictionary, name: String) -> String:
 
 ## The name element [param el] is kept as - the same kind, number and properties - or "" where it is not kept.
 static func kept_as(el: Dictionary, entries_now: Array) -> String:
-	var want := _what(el)
+	var want := what(el)
 	for e in entries_now:
-		if _what((e as Dictionary)["element"]) == want:
+		if what((e as Dictionary)["element"]) == want:
 			return String((e as Dictionary)["name"])
 	return ""
 
@@ -100,7 +100,7 @@ static func rename(name: String, new_name: String) -> String:
 
 
 ## What an element is, as one value to tell two apart by: its kind, number and properties, never its name or whether it is set aside.
-static func _what(el: Dictionary) -> String:
+static func what(el: Dictionary) -> String:
 	var safe := Surroundings.element(el)
 	safe.erase("name")
 	safe.erase("off")

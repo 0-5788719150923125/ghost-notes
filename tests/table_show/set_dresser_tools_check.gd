@@ -403,7 +403,8 @@ func _prompts() -> bool:
 			"the set dresser %s is not told what the table holds" % tag)
 		for k in Props.SHAPES:
 			if k in Props.SCENE_SHAPES:
-				_ok(not text.contains("- %s:" % k), "the set dresser %s is told %s, a shape only a scene fills" % [tag, k])
+				_ok(text.contains("- %s: %s" % [k, Props.FACE_WORDS]) and not text.contains(String(Props.SHAPES[k])),
+					"the set dresser %s is told %s as words on a thing, never as a scene fills it" % [tag, k])
 			else:
 				_ok(text.contains("- %s:" % k), "the set dresser %s is not told the shape %s" % [tag, k])
 		# Zones for the reply written blind; the blueprint for the one that sees

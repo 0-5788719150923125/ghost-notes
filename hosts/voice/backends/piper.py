@@ -310,6 +310,8 @@ TRAIL_JOIN = 0.002
 # The voice falls no further than its hiss: the fade's depth is the vowel's level over the hiss's, no
 # more than TRAIL_DB, so it never dips the vowel under the sound it runs into.
 _HISSES = frozenset("szʃʒfθ")
+# What a rest's cut must not split: the frication a word ends on or the next opens on (`_between`).
+_FRICATIVES = _HISSES | frozenset("vðh")
 TRAIL_HISS_ABOVE = 2000.0
 TRAIL_HISS_GAP = 0.12
 TRAIL_HISS_DROP = 0.015
@@ -1371,11 +1373,13 @@ def _gap_for(mark: str, params: dict) -> float:
 def _trough(audio, lo: int, hi: int, sr: int, quiet: float) -> int:
     """The sample in [lo, hi) to cut at: the quietest PLACE, refined to a zero crossing.
 
-    The envelope is a moving average of |x| (SPLICE_ENV_MS), so the search lands in the
-    dip between two sounds rather than on whichever zero crossing of a vowel happens to be
-    nearest. Where part of the window is silence (envelope under `quiet`) the cut goes in
-    the middle of its longest silent run, as far from both words as it can get. An empty
-    window returns `lo`.
+    The envelope is a moving average (SPLICE_ENV_MS) of |x| + |x[n] - x[n-1]|, so the search
+    lands in the dip between two sounds rather than on whichever zero crossing of a vowel
+    happens to be nearest. The difference term is a hiss's: a soft fricative (f, th, v, h)
+    is under `quiet` by |x| alone, and a rest cut in one splits the sound in two ("and f...
+    five"). It barely lifts a voiced sound and leaves the model's own silence under `quiet`. Where
+    part of the window is silence (envelope under `quiet`) the cut goes in the middle of its
+    longest silent run, as far from both words as it can get. An empty window returns `lo`.
     """
     import numpy as np
 
@@ -1386,7 +1390,9 @@ def _trough(audio, lo: int, hi: int, sr: int, quiet: float) -> int:
         return lo
     w = max(1, int(round(SPLICE_ENV_MS * sr / 1000.0)))
     a0, a1 = max(0, lo - w), min(n, hi + w)
-    c = np.concatenate(([0.0], np.cumsum(np.abs(audio[a0:a1]).astype(np.float64))))
+    seg = audio[a0:a1].astype(np.float64)
+    level = np.abs(seg) + np.abs(np.diff(seg, prepend=seg[0]))
+    c = np.concatenate(([0.0], np.cumsum(level)))
     pos = np.arange(lo, hi)
     s0 = np.clip(pos - w // 2, a0, a1) - a0
     s1 = np.clip(pos - w // 2 + w, a0, a1) - a0
@@ -1403,6 +1409,65 @@ def _trough(audio, lo: int, hi: int, sr: int, quiet: float) -> int:
     mag = np.abs(audio[zl:zh])
     cand = np.flatnonzero(mag <= float(mag.min()) + 1e-6) + zl
     return int(cand[np.argmin(np.abs(cand - center))])
+
+
+def _hiss_runs(audio, lo: int, hi: int, sr: int, peak: float) -> list:
+    """[(start, end)] in samples of the runs of hiss in [lo, hi), frame by frame (`_is_hiss` above
+    TRAIL_HISS_ABOVE). A run goes on over a dropout of up to TRAIL_HISS_DROP, and one no longer than
+    that is a stop's release or a click, not a hiss."""
+    w = max(8, int(round(LEAD_FRAME * sr)))
+    drop = int(round(TRAIL_HISS_DROP * sr))
+    runs: list = []
+    for k in range(int(lo), int(hi) - w + 1, w):
+        if not _is_hiss(audio[k : k + w], sr, peak, TRAIL_HISS_ABOVE):
+            continue
+        if runs and k - runs[-1][1] <= drop:
+            runs[-1][1] = k + w
+        else:
+            runs.append([k, k + w])
+    return [(a, b) for a, b in runs if b - a > drop]
+
+
+def _between(audio, lo: int, hi: int, sr: int, peak: float, ends: bool, opens: bool) -> tuple:
+    """[lo, hi) in samples narrowed so a rest cut in it splits neither word's frication: past the hiss
+    this word ends on (`ends`), short of the one the next word opens on (`opens`), as the waveform shows
+    them (`_hiss_runs`). Where one word runs straight into the next, the quietest place is often inside
+    the fricative (the tail of the f of "five" is quieter than the "a" before it).
+
+    This word's hiss is the window's first run and the next word's its last; one run where both are
+    asked for is the two run together, and the window stays as it is. A hiss the window opens inside
+    began earlier: it is walked back to its start, no further than TRAIL_EARLY, and the cut goes there.
+    """
+    if not (ends or opens) or hi - lo <= 1 or peak <= 0.0:
+        return lo, hi
+    runs = _hiss_runs(audio, lo, hi, sr, peak)
+    if not runs or (ends and opens and len(runs) < 2):
+        return lo, hi
+    a, b = lo, hi
+    if ends:
+        a = runs[0][1]
+    if opens:
+        b = runs[-1][0]
+        if b <= lo:
+            early = max(0, lo - int(round(TRAIL_EARLY * sr)))
+            b = _hiss_from(audio, early, b, sr, peak, TRAIL_HISS_ABOVE)
+            return b, b
+    return (a, b) if b > a else (a, a)
+
+
+def _word_sounds(said: list) -> dict:
+    """{word: (its first sound, its last)} of a group's phones (`_last_phones`), by their `w`."""
+    out: dict = {}
+    for ph in said:
+        w = int(ph["w"])
+        out[w] = (out[w][0] if w in out else ph["p"], ph["p"])
+    return out
+
+
+def _fricative_edges(sounds: dict, ti: int) -> tuple:
+    """(whether word `ti` ends on a fricative, whether word `ti` + 1 opens on one) - `_between`'s."""
+    here, nxt = sounds.get(ti), sounds.get(ti + 1)
+    return (here is not None and here[1] in _FRICATIVES, nxt is not None and nxt[0] in _FRICATIVES)
 
 
 def _edge_level(audio, at: int, before: bool, sr: int) -> float:
@@ -1807,6 +1872,10 @@ VOICES: dict[str, dict] = {
 # ({name, license, chain, actor}) in this folder under the voices' root. Listed beside the allowlist, never
 # fetched.
 TRAINED = "trained"
+# How this backend reads a request, said on every voice's row (`voices`): a row keys the takes kept in its voice
+# (TakeCache), so raising it has every sentence kept before said again. Raised when the same request comes out
+# another take - and kokoro.py's READS with it when the change is in what the two share (the splice, a rest's cut).
+READS = 1
 
 
 @register
@@ -1951,6 +2020,7 @@ class PiperBackend(Backend):
                     "installed": True,
                     "notes": str(meta.get("notes", "")),
                     "actor": str(meta.get("actor", "")),
+                    "reads": READS,
                 }
             )
         for vid, meta in VOICES.items():
@@ -1965,6 +2035,7 @@ class PiperBackend(Backend):
                     "speakers": meta["speakers"],
                     "installed": onnx.exists() and cfg.exists(),
                     "notes": meta.get("notes", ""),
+                    "reads": READS,
                 }
             )
         return out
@@ -2752,6 +2823,8 @@ class PiperBackend(Backend):
                 self._keep_rendered(rkey, audio, per_token, said, edges, frame)
             # mid-sentence marks: splice their silence into this group's audio
             points, unplaceable = [], []
+            sounds = _word_sounds(said)
+            peak = float(np.max(np.abs(audio))) if audio.size else 0.0
             for ti, tok in enumerate(group):
                 mark = str(tok.get("punct", ""))
                 if mark in SENTENCE_END or _pause_for(mark, params) <= 0.0:
@@ -2769,6 +2842,10 @@ class PiperBackend(Backend):
                         _dwell_for(mark) * share,
                     )
                     win = self._gap(edges, ti, frame)
+                    if win is not None:
+                        a, b = _between(audio, int(round(win[0] * sr)), int(round(win[1] * sr)), sr, peak,
+                                        *_fricative_edges(sounds, ti))
+                        win = (a / float(sr), b / float(sr))
                     points.append(point + win if win is not None else point)
                 else:
                     unplaceable.append(mark)
@@ -2781,13 +2858,15 @@ class PiperBackend(Backend):
             # floored rest (`REST_AFTER_FLOOR`) it is the middle of the silence already there, and where no
             # mark rests it is the caller's rest begun, said on the row as `rested`.
             rests, rested = {}, {}
-            quiet = SPLICE_QUIET * float(np.max(np.abs(audio))) if audio.size else 0.0
+            peak = float(np.max(np.abs(audio))) if audio.size else 0.0
+            quiet = SPLICE_QUIET * peak
             for ti in per_token:
                 win = self._gap(edges, ti, frame)
                 if win is None:
                     continue
                 lo = int(round(_shift(win[0], inserted, False) * sr))
                 hi = int(round(_shift(win[1], inserted, True) * sr))
+                lo, hi = _between(audio, lo, hi, sr, peak, *_fricative_edges(sounds, ti))
                 at = _trough(audio, lo, hi, sr, quiet)
                 rests[ti] = at / float(sr)
                 after = _rest_after(group[ti])

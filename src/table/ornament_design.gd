@@ -1,10 +1,10 @@
 extends RefCounted
 class_name OrnamentDesign
 
-## OrnamentDesign - one kept ornament being made and refined (next/surfaces.md): the code its designer works on through its tools
-## ([OrnamentTools]), the conversation it works in ([WriterChat], kept in the ornament's folder with
-## rules/table/ornament_designer.yaml), and what a turn leaves: code that changed, passes [method Ornaments.check] and compiles is a new
-## version of the ornament, used from then on ([method OrnamentLibrary.add_version]) - every prop wearing it by name draws it.
+## OrnamentDesign - one kept ornament or texture being made and refined (next/surfaces.md): the code its designer works on through
+## its tools ([OrnamentTools]), the conversation it works in ([WriterChat], kept in its folder with rules/table/ornament_designer.yaml,
+## told which of the two it writes), and what a turn leaves: code that changed, passes [method Ornaments.check] and compiles is a new
+## version, used from then on ([method OrnamentLibrary.add_version]) - every prop wearing it by name draws it.
 ##
 ## Made and refined in a Refine… window ([TextRefine], [method open]): its first turn is the author saying what the ornament is,
 ## which becomes its words. One design an ornament, held while the process runs and polled each frame by a node of its own
@@ -14,6 +14,8 @@ class_name OrnamentDesign
 signal changed
 
 var name := ""
+## What it is: [constant OrnamentLibrary.ORNAMENT] or [constant OrnamentLibrary.TEXTURE].
+var kind := OrnamentLibrary.ORNAMENT
 var chat: WriterChat
 ## The draft code.
 var draft := ""
@@ -53,6 +55,7 @@ static func forget(ornament: String) -> void:
 
 func _init(ornament: String) -> void:
 	name = ornament
+	kind = String(OrnamentLibrary.find(name).get("kind", OrnamentLibrary.ORNAMENT))
 	draft = OrnamentLibrary.code_of(name)
 	chat = WriterChat.at(OrnamentLibrary.folder(name))
 	chat.rules = "table/ornament_designer"
@@ -64,14 +67,16 @@ func _init(ornament: String) -> void:
 		var tools := OrnamentTools.new()
 		tools.text = t
 		tools.name = name
+		tools.kind = kind
 		return tools
 	_was_busy = chat.busy()
 
 
-## What the designer is told it works on: the system prompt's names (rules/table/ornament_designer.yaml).
+## What the designer is told it works on: the system prompt's names (rules/table/ornament_designer.yaml), `texture` where it writes one.
 func about() -> Dictionary:
-	return {"what": "the code of an ornament", "name": name, "words": String(OrnamentLibrary.find(name).get("words", "")),
-		"language": Ornaments.describe()}
+	var texture := kind == OrnamentLibrary.TEXTURE
+	return {"what": "the code of a texture" if texture else "the code of an ornament", "name": name,
+		"words": String(OrnamentLibrary.find(name).get("words", "")), "language": Ornaments.describe(kind), "texture": texture}
 
 
 func busy() -> bool:
@@ -81,7 +86,7 @@ func busy() -> bool:
 ## Its Refine… window opened, beside [param host] where there is one.
 func open(host: Window = null) -> void:
 	if window == null or not is_instance_valid(window):
-		window = TextRefine.new(chat, "the ornament \"%s\"" % name)
+		window = TextRefine.new(chat, "the %s \"%s\"" % [kind, name])
 		var tree := Engine.get_main_loop() as SceneTree
 		if tree == null or tree.root == null:
 			return
@@ -113,7 +118,7 @@ func poll() -> void:
 func keep_draft(said := "") -> int:
 	if draft.strip_edges().is_empty() or draft.strip_edges() == OrnamentLibrary.code_of(name).strip_edges():
 		return -1
-	var why := Ornaments.compile_errors(draft)
+	var why := Ornaments.compile_errors(draft, kind)
 	if not why.is_empty():
 		error = "the code the designer left does not compile: " + why
 		return -1

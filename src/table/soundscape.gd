@@ -102,6 +102,10 @@ const LIMIT_RELEASE := 1.2
 const FADE_IN := 0.05
 ## How far a part's own volume turns it down or up over how it is made (dB): a person's, on the Environment card.
 const VOLUME := Vector2(-30.0, 30.0)
+## A part's own tone, -1 to 1 ([constant Surroundings.TONE_FIELD]): every band, eddy, bubble and call formant it makes moved down or up
+## by as many octaves as this at either end. 0 is the part as it is made, sample for sample.
+const TONE := Vector2(-1.0, 1.0)
+const TONE_OCTAVES := 1.5
 
 ## The vocabulary: what each part of `sound` is, as an agent reads it.
 const LAYERS := {
@@ -314,10 +318,13 @@ static func sanitize(raw: Variant, notes: PackedStringArray = PackedStringArray(
 		notes.append("the creatures were not a list of objects {name, size, breath, calls, ...} - left out")
 	if out.is_empty():
 		return {}
-	# how loud each part is over how it is made (dB), where a person set it ([constant VOLUME])
+	# how loud each part is over how it is made (dB), and how dark or bright, where a person set it ([constant VOLUME], [constant TONE])
 	for part in out:
-		if out[part] is Dictionary and d.get(part) is Dictionary and typeof((d[part] as Dictionary).get("volume")) in [TYPE_INT, TYPE_FLOAT]:
-			(out[part] as Dictionary)["volume"] = clampf(float((d[part] as Dictionary)["volume"]), VOLUME.x, VOLUME.y)
+		if out[part] is Dictionary and d.get(part) is Dictionary:
+			if typeof((d[part] as Dictionary).get("volume")) in [TYPE_INT, TYPE_FLOAT]:
+				(out[part] as Dictionary)["volume"] = clampf(float((d[part] as Dictionary)["volume"]), VOLUME.x, VOLUME.y)
+			if typeof((d[part] as Dictionary).get("tone")) in [TYPE_INT, TYPE_FLOAT]:
+				(out[part] as Dictionary)["tone"] = clampf(float((d[part] as Dictionary)["tone"]), TONE.x, TONE.y)
 	out["why"] = Props._text(d.get("why", ""), 200)
 	return out
 
@@ -415,7 +422,8 @@ static func _creature(c: Dictionary, notes: PackedStringArray) -> Dictionary:
 		"count": int(Props._num(c.get("count"), 1.0, 1.0, float(MAX_BODIES))), "rate": Props._num(c.get("rate"), 6.0, 0.2, 40.0),
 		"side": Props._num(c.get("side"), 0.0, -1.0, 1.0), "near": Props._num(c.get("near"), 0.5, 0.0, 1.0),
 		"awake": awake, "over": Props._num(c.get("over"), 900.0, 30.0, 7200.0)}.merged(
-			{"volume": clampf(float(c["volume"]), VOLUME.x, VOLUME.y)} if typeof(c.get("volume")) in [TYPE_INT, TYPE_FLOAT] else {})
+			{"volume": clampf(float(c["volume"]), VOLUME.x, VOLUME.y)} if typeof(c.get("volume")) in [TYPE_INT, TYPE_FLOAT] else {}).merged(
+			{"tone": clampf(float(c["tone"]), TONE.x, TONE.y)} if typeof(c.get("tone")) in [TYPE_INT, TYPE_FLOAT] else {})
 
 
 ## How lively creature [param c] is at show time [param t], 0 asleep to 1 wide awake: from its `awake` at the start to its end over its
@@ -580,6 +588,7 @@ class Band:
 	var leak_in := BROWN_IN
 	var mode := 1          # 0 low-pass, 1 band-pass (unit peak), 2 high-pass, 3 band-pass (peak = q)
 	var fc := 1000.0
+	var tone := 1.0        # its part's tone: what its filter's center is moved by ([constant TONE])
 	var q := 0.7
 	var wide := false      # its own noise and filter for each ear
 	var gl := 0.0          # each ear's level this block (eased from the last)
@@ -629,6 +638,7 @@ class Eddy:
 	var drift := 0.0       # its course, smoothed noise of unit size
 	var place := 0.0       # where it wanders, -1 to 1
 	var fc := 600.0
+	var tone := 1.0        # the wind's tone ([constant TONE])
 	var gl := 0.0
 	var gr := 0.0
 	var gl0 := 0.0
@@ -739,6 +749,7 @@ var _ri := {}
 var _seed := 0                    # the place's seed, as made: the creatures' plan is drawn from it
 var _cr: Array = []               # the creatures heard: [{c, ci, bodies, next_k, queue}]
 var _gains := {}                  # each part's volume, linear (its `volume`, dB): what its bands, eddies, bubbles and calls are scaled by
+var _tones := {}                  # each part's tone, as a ratio (its `tone`): what its bands', eddies' and bubbles' frequencies are moved by
 var _making := ""                 # the part whose bands and bubbles are being made now
 var _calls: Array[Call] = []      # their calls sounding now
 var _crng := 1                    # the creatures' own dice: a creature added changes nothing else in a place
@@ -782,6 +793,11 @@ func _init(sound: Dictionary, wind: Dictionary, seed: int, sample_rate: int, t0 
 ## Whether there is anything to hear.
 func active() -> bool:
 	return not _bands.is_empty() or _in.has("crickets") or not _cr.is_empty()
+
+
+## A part's tone [param tone] ([constant TONE]) as the ratio its frequencies are moved by: 1 at 0, exactly.
+static func tone_ratio(tone: float) -> float:
+	return pow(2.0, clampf(tone, TONE.x, TONE.y) * TONE_OCTAVES)
 
 
 ## The dial's level at [param d], 0-1, in dB over the layers' own ([constant LEVEL_DB]).
@@ -940,6 +956,7 @@ func _band(src: int, mode: int, fc: float, q: float, wide: bool) -> Band:
 	b.q = q
 	b.wide = wide
 	b.part = _making
+	b.tone = float(_tones.get(_making, 1.0))
 	_bands.append(b)
 	return b
 
@@ -964,6 +981,7 @@ func _setup() -> void:
 	for part in LAYERS:
 		if _sound.get(part) is Dictionary:
 			_gains[part] = db_to_linear(float((_sound[part] as Dictionary).get("volume", 0.0)))
+			_tones[part] = tone_ratio(float((_sound[part] as Dictionary).get("tone", 0.0)))
 	_making = "wind"
 	if _sound.get("wind") is Dictionary and not _wind.is_empty():
 		var w: Dictionary = _sound["wind"]
@@ -981,6 +999,7 @@ func _setup() -> void:
 		for i in EDDIES.size():
 			var e := Eddy.new()
 			e.share = float(EDDIES[i])
+			e.tone = float(_tones.get("wind", 1.0))
 			e.tau = float(EDDY_DRIFT[i])
 			e.place = _rand() * 2.0 - 1.0
 			eddies.append(e)
@@ -1785,6 +1804,7 @@ func _insects_block(t: float, dt: float) -> void:
 ## over that time - a bubble closing (Minnaert). A chirp is one that does not rise.
 func _bubble(f: float, decay: float, rise: float, amp: float, ears: Vector2, attack := 0.0004) -> void:
 	amp *= float(_gains.get(_making, 1.0))
+	f *= float(_tones.get(_making, 1.0))
 	if f >= _sr * 0.45 or amp <= 0.0:
 		return
 	# The quietest voice is taken, never one still sounding: cut short mid-ring, a bubble clicks
@@ -1813,7 +1833,7 @@ func _run_eddy(e: Eddy) -> void:
 		e.gl0 = e.gl
 		e.gr0 = e.gr
 		return
-	var g := tan(PI * clampf(e.fc, 20.0, _sr * 0.45) / _sr)
+	var g := tan(PI * clampf(e.fc * e.tone, 20.0, _sr * 0.45) / _sr)
 	var k := 1.0 / 0.75           # a little resonance: hollow, never a whistle
 	var a1 := 1.0 / (1.0 + g * (g + k))
 	var a2 := g * a1
@@ -1988,7 +2008,7 @@ func _run(b: Band) -> void:
 		return
 	if steady > 0.0 and maxf(maxf(b.gl, b.gr), maxf(b._gl0, b._gr0)) < 1e-7 and e1 < 1e-6:
 		return
-	var g := tan(PI * clampf(b.fc, 20.0, _sr * 0.45) / _sr)
+	var g := tan(PI * clampf(b.fc * b.tone, 20.0, _sr * 0.45) / _sr)
 	var k := 1.0 / maxf(0.05, b.q)
 	var a1 := 1.0 / (1.0 + g * (g + k))
 	var a2 := g * a1
@@ -2257,6 +2277,9 @@ func _voice_of(c: Dictionary, body: Dictionary, e: Dictionary) -> Call:
 			v.g2 = 0.4
 			v.attack = 0.012
 			v.release = 0.06
+	var tn := tone_ratio(float(c.get("tone", 0.0)))
+	v.f1 *= tn
+	v.f2 *= tn
 	var near := float(c["near"])
 	var ears := _pan(float(body["side"]))
 	var g := lerpf(0.3, 1.0, near)

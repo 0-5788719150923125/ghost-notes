@@ -442,6 +442,17 @@ static func build(effects: Array, stage: Dictionary, seed: int) -> Air:
 				var m := _motes(fx, stage, salt, air.root, MAX_LIGHTS - lights)
 				lights += (m["lights"] as Array).size()
 				air.motes.append(m)
+				# MORE THAN THE CPU AFFORDS: motes that visit, ride the wind or carry a light are posed here, MAX_MOTES of them; the
+				# rest of their count drift round them on the GPU, as they would with nothing moving them - so how many a host asks
+				# for is how thick the air is, never a few dozen whatever it says
+				var look: Dictionary = MOTES[String(fx["look"])]
+				var rest := mini(int(fx["count"]) - MAX_MOTES, MAX_ADRIFT)
+				if not bool(m["drifting"]) and rest > 0 and drifts(look, false):
+					var more := fx.duplicate(true)
+					more["count"] = rest
+					more["light"] = false
+					more["away"] = 0.0
+					air.motes.append(_motes(more, stage, hash([salt, "more"]), air.root, 0, true))
 			"burst":
 				air.bursts.append(_burst(fx, salt, air.root))
 			"drift":
@@ -610,12 +621,12 @@ static func _sprites(count: int, shader: Shader, root: Node3D) -> Dictionary:
 
 ## A population of motes: each its own home in view inside its region, its own wander, visits and
 ## blinking, sampled once from [param salt]; up to [param lights_left] of them carry a light.
-static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, lights_left: int) -> Dictionary:
+static func _motes(fx: Dictionary, stage: Dictionary, salt: int, root: Node3D, lights_left: int, drift := false) -> Dictionary:
 	var look: Dictionary = MOTES[String(fx["look"])]
 	var box: AABB = _info(stage, String(fx["where"]))["motes"]
 	var stage_wind: Dictionary = stage.get("wind", {}) if stage.get("wind") is Dictionary else {}
 	# posed on the GPU where it only drifts: no light, no visits, no wind to ride; otherwise on the CPU, as many as it can afford
-	var adrift := drifts(look, bool(fx["light"])) and float(fx.get("away", 0.0)) <= 0.0 and not Winds.blows(stage_wind)
+	var adrift := drift or (drifts(look, bool(fx["light"])) and float(fx.get("away", 0.0)) <= 0.0 and not Winds.blows(stage_wind))
 	var n := int(fx["count"]) if adrift else mini(int(fx["count"]), MAX_MOTES)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = salt

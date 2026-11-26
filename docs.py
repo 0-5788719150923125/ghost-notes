@@ -1222,8 +1222,9 @@ def props_page(classes: Dict[str, Script]) -> str:
     props, makes = classes["Props"], classes["PropMakes"]
     shapes, materials = props.const("SHAPES", {}), props.const("MATERIALS", {})
     ornaments, plays, roles = props.const("ORNAMENTS", {}), props.const("PLAYS", {}), makes.const("ROLES", {})
+    textures = props.const("TEXTURES", {})
     for name, reg in (("Props.SHAPES", shapes), ("Props.MATERIALS", materials), ("Props.ORNAMENTS", ornaments),
-                      ("Props.PLAYS", plays), ("PropMakes.ROLES", roles)):
+                      ("Props.PLAYS", plays), ("Props.TEXTURES", textures), ("PropMakes.ROLES", roles)):
         if not reg:
             warn(f"could not parse {name}")
     shelves = []
@@ -1265,6 +1266,10 @@ def props_page(classes: Dict[str, Script]) -> str:
         table(["Ornament", "What it is"], ([f"`{k}`", md(text(r, "about"))] for k, r in ornaments.items())),
         f"### Plays of light ({len(plays)})", "What moves in a material as it turns (`Props.PLAYS`).",
         table(["Play", "What it is"], ([f"`{k}`", md(text(r, "about"))] for k, r in plays.items())),
+        f"### Textures ({len(textures)})", "What a material is like to the touch, worked all over it (`Props.TEXTURES`; a "
+        "material's `texture`, `bumps`, `texture_size` and `mottle`, or a texture kept in the library by its name).",
+        table(["Texture", "What it is", "Features (cm)"],
+              ([f"`{k}`", md(text(r, "about")), f"{float(r.get('size', 0)):g}"] for k, r in textures.items())),
     ]
     return page("Props and the library", [b for b in blocks if b])
 
@@ -1350,6 +1355,17 @@ def surroundings_page(card: Script, sur: Script) -> str:
     ]
     for part, fields in sounds.items():
         blocks += [f"### Heard: `{part}` (`SOUND_FIELDS`)", fields_table(fields)]
+    every = {"volume": sur.const("VOLUME_FIELD", {}), "tone": sur.const("TONE_FIELD", {})}
+    words = sur.const("HEARD_WORDS", {})
+    if not all(every.values()) or not words:
+        warn("could not parse Surroundings.VOLUME_FIELD, TONE_FIELD or HEARD_WORDS")
+    blocks += ["### Every sound (`VOLUME_FIELD`, `TONE_FIELD`)",
+               "Beside its own properties, every sound has these: never drawn, as it is made until set.",
+               fields_table(every),
+               "### A sound's own words (`HEARD_WORDS`)",
+               "What a sound keeps of its host's own words beside its properties (`Surroundings.OWN`), as its designer is told them "
+               "when it is refined (`EnvironmentSoundDesign`).",
+               table(["Word", "What it says"], ([f"`{k}` {text(r, 'label')}", md(text(r, "blurb"))] for k, r in words.items()))]
     return page("The Environment: what is round a scene", [b for b in blocks if b])
 
 

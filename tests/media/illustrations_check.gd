@@ -261,6 +261,12 @@ func _init() -> void:
 	_check(I.versions(k1).size() == rn + 1 and String(rv2.get("refined", "")) == ask, "a refine lands as a new version, its words kept")
 	_check(String(rv2.get("sig", "")) == String(rq["sig"]) and String(I.entry(k1)["prompt"]) == desc,
 		"...made under the look it came from, its description unchanged")
+	var ask2 := "the sky a shade darker"
+	var rq2: Dictionary = rq.duplicate()
+	rq2["refine"] = ask2
+	var again := String(I.job_of(rq2)["prompt"])
+	_check(again.contains(ask2) and not again.contains(ask) and again.contains(desc),
+		"refined again, the painter is told this ask alone, never the one before it (its words are the description's, unchanged)")
 	_check(I.refine_request({"key": k1, "prompt": desc, "clip": "a.webm"}, ask).has("error"), "a clip is not refined")
 	_check(I.refine_request({"key": k1, "prompt": desc, "url": "x.example"}, ask).has("error"), "a page is not refined")
 	_check(I.refine_request({"key": "nope", "prompt": desc}, ask).has("error"), "nothing painted is not refined")

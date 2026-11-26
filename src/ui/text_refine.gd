@@ -11,8 +11,9 @@ class_name TextRefine
 ## seen landing in the text as the writer makes it. Closed, the conversation goes on: its owner polls it ([method
 ## WriterChat.poll]) and this shows what it missed when opened again.
 
-## The writer picked last anywhere, so a new conversation starts where the last one left off.
-static var last_pick := {}
+## The kind of job the writer picked last is kept for between sessions ([method AgentPick.last_for]), so a new conversation starts
+## where the last one left off.
+const PICKED := "refine_text"
 ## Where the conversations of a text kept in no note are: a gate's own folder, never the author's.
 static var root := "user://refine"
 
@@ -93,10 +94,10 @@ func _init(conversation: WriterChat, what: String) -> void:
 	col.add_child(_line)
 
 	_pick = AgentPick.writer("Who you talk it over with. A conversation is the agent's own: another agent picked mid-way is told what was said and goes on from there.")
-	var start: Dictionary = chat.pick if not chat.pick.is_empty() else last_pick
+	var start: Dictionary = chat.pick if not chat.pick.is_empty() else AgentPick.last_for(PICKED)
 	if not start.is_empty():
 		_pick.set_choice(String(start.get("agent", "")), String(start.get("model", "")), String(start.get("effort", "")))
-	_pick.changed.connect(func() -> void: last_pick = _pick.choice())
+	_pick.changed.connect(func() -> void: AgentPick.keep_for(PICKED, _pick.choice()))
 	col.add_child(_pick)
 
 	_box = TextEdit.new()
@@ -173,7 +174,7 @@ func send() -> void:
 	if not why.is_empty():
 		_say(why.substr(0, 1).to_upper() + why.substr(1) + ".")
 		return
-	last_pick = _pick.choice()
+	AgentPick.keep_for(PICKED, _pick.choice())
 	_box.text = ""
 	_scroll_down()
 

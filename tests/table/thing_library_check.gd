@@ -10,7 +10,7 @@ extends SceneTree
 ##   why it was there or that it held the cards. The control: a material on the table its parts do not use is not kept.
 ## - Its hash is what it is: the same prop under another name, placed and turned elsewhere, hashes the same; the control, one
 ##   material's color changed, does not.
-## - Kept, it is read back, listed, found as kept by its hash, renamed (never over another prop's name) and removed to the trash
+## - Kept, it is read back, listed, found as kept by its hash, renamed (never over another prop's name; its former name still finds it, a name never had finds nothing) and removed to the trash
 ##   seam ([member Library.discard]), the author's trash never touched.
 ## - Put on a table it is named its own there and stands where it is told (null: placed by whoever sets the table); a material the
 ##   table holds the same is shared, one the table holds otherwise is renamed and the prop's parts follow the new name - the control,
@@ -107,13 +107,28 @@ func _shelf(trashed: Array) -> void:
 	_ok(not e.is_empty() and String(e["hash"]) == ThingLibrary.hash_of(_cup(), _mats()), "it is read back, its hash its own")
 	_ok(ThingLibrary.kept_as(ThingLibrary.hash_of(_cup("named otherwise"), _mats())) == "tin cup", "it is found as kept by what it is")
 	_ok(ThingLibrary.kept_as(ThingLibrary.hash_of(_cup(), _mats("#ff0000"))).is_empty(), "the control: another prop is not found as it")
+	var renamed := _cup()
+	ThingLibrary._rename_materials(renamed, {"tin": "tin (tin cup)"})
+	var rmats := {}
+	for m in _mats():
+		rmats["tin (tin cup)" if m == "tin" else m] = _mats()[m]
+	_ok(ThingLibrary.materials_used(renamed) != ThingLibrary.materials_used(_cup()) and ThingLibrary.kept_as(ThingLibrary.hash_of(renamed, rmats)) == "tin cup",
+		"its materials renamed, as a table renames one it has another of, it is still found as kept")
+	var stale := ThingLibrary.read("tin cup")
+	stale["hash"] = "0000000000000000"
+	ThingLibrary._write(stale)
+	_ok(String(ThingLibrary.read("tin cup")["hash"]) == ThingLibrary.hash_of(_cup(), _mats()), "a hash kept in its file is worked out again, never trusted")
 	_ok(ThingLibrary.keep({"name": "jug", "parts": [{"shape": "box", "size": [5, 5, 5], "material": "walnut"}]}, _mats()).is_empty(), "another is kept")
 	_ok(not ThingLibrary.rename("tin cup", "jug", "").is_empty(), "a prop is never renamed over another's name")
 	_ok(ThingLibrary.rename("tin cup", "Pewter Cup", "the host's cup").is_empty() and ThingLibrary.names() == ["jug", "Pewter Cup"],
 		"a prop is renamed (%s)" % str(ThingLibrary.names()))
 	var r := ThingLibrary.read("Pewter Cup")
-	_ok(String((r["thing"] as Dictionary)["name"]) == "Pewter Cup" and String(r["line"]) == "the host's cup" and ThingLibrary.read("tin cup").is_empty(),
+	_ok(String((r["thing"] as Dictionary)["name"]) == "Pewter Cup" and String(r["line"]) == "the host's cup"
+		and not FileAccess.file_exists(ThingLibrary.dir().path_join(Manuscript.slug("tin cup") + ".json")),
 		"renamed, its thing and line follow and the old file goes")
+	_ok(String(ThingLibrary.read("tin cup").get("name", "")) == "Pewter Cup" and (r["aka"] as Array) == ["tin cup"],
+		"its former name still finds it, kept among those it was known as")
+	_ok(ThingLibrary.read("no such cup").is_empty(), "the control: a name nobody ever had finds nothing")
 	_ok(ThingLibrary.remove("jug").is_empty() and ThingLibrary.names() == ["Pewter Cup"] and trashed.size() == 1 and String(trashed[0]).ends_with("jug.json"),
 		"a prop removed goes to the trash seam (%s)" % str(trashed))
 	_ok(not ThingLibrary.remove("jug").is_empty(), "removing one not kept says so")

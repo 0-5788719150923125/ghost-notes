@@ -8,9 +8,12 @@ class_name PropsCard
 ## whole, in 3D, to be turned ([PropViewer]). Shown only while some section has a row or something to add. Looked at again every
 ## second (what a section has follows what is shown and made), and drawn again only when that changed. The Environment card's list
 ## is one of these.
+##
+## A PROP AN AGENT IS REFINING SAYS SO ON ITS ROW ([PropRefining]): what the agent is doing, said again in place each look, then that a
+## new version is ready, or why not, until its 3D view has shown it - so the progress of every prop refined at once is read here.
 
 ## What the card is for, on its title bar and its chip ([member Card.blurb]).
-const BLURB := "What the scene uses: untick a prop to set it aside, Keep one to use it again, click a picture to turn it in 3D, and add props from your library."
+const BLURB := "What the scene uses: untick a prop to set it aside, click a picture to turn it in 3D - to refine it, or Keep it to use again - and add props from your library."
 const POLL := 60              # frames between looks
 ## How large a row's picture is drawn (pixels).
 const PICTURE := Vector2(88, 66)
@@ -23,6 +26,8 @@ var _viewer: PropViewer = null
 var _seen := 0
 var _textures := {}           # Image instance id -> its ImageTexture, so a picture is uploaded once
 var _open := {}               # "<section id>:<row key>" -> true: an entry opened
+var _entries := {}            # "<section id>:<row key>" -> its EntryCard, as last drawn
+var _refining := {}           # "<section id>:<row key>" -> [its line, what its refining says]: said again in place each look
 
 
 func _init(sections: Callable) -> void:
@@ -62,8 +67,11 @@ func sections() -> Array:
 func refresh(force := false) -> void:
 	var drawn: Array = []
 	var any := false
+	_refining.clear()
 	for sec in sections():
 		var rows: Array = (sec as PropSection).rows()
+		if PropRefining.any():
+			rows = rows.map(func(r: Dictionary) -> Dictionary: return _with_refining(sec, r))
 		var adds: Dictionary = (sec as PropSection).adds()
 		any = any or not rows.is_empty() or not adds.is_empty()
 		drawn.append([sec, (sec as PropSection).groups(), rows, adds])
@@ -71,10 +79,37 @@ func refresh(force := false) -> void:
 	if card != null:
 		card.visible = any
 	var h := hash(_signature(drawn))
-	if h == _seen and not force:
-		return
-	_seen = h
-	_lay_out(drawn)
+	if h != _seen or force:
+		_seen = h
+		_lay_out(drawn)
+	for id in _refining:
+		var e: EntryCard = _entries.get(id)
+		if e != null and is_instance_valid(e):
+			var said: Array = _refining[id]
+			e.line_label.text = String(said[1]) if String(said[0]).is_empty() else "%s - %s" % [said[0], said[1]]
+			e.line_label.visible = true
+
+
+## Row [param r] of [param sec] with how its prop's refining stands (`refining`: working, ready or failed, which draws it again as it
+## changes), what that says kept to be said in place ([member _refining]); the row as it is where nothing refines its prop.
+func _with_refining(sec: PropSection, r: Dictionary) -> Dictionary:
+	var pv := sec.versions_of()
+	var name := pv.name_of(sec.prop_of(String(r.get("key", "")))) if pv != null else ""
+	var w := PropRefining.of(name) if not name.is_empty() else {}
+	if w.is_empty():
+		return r
+	var out := r.duplicate()
+	out["refining"] = String(w["state"])
+	var said := ""
+	match String(w["state"]):
+		"working":
+			said = "an agent is refining it: %s" % String(w["line"])
+		"ready":
+			said = "a new version is ready: open it to see"
+		_:
+			said = "not refined: %s" % String(w["error"])
+	_refining["%d:%s" % [sec.get_instance_id(), String(r.get("key", ""))]] = [String(r.get("line", "")), said]
+	return out
 
 
 ## What is drawn, as one value to tell a change by: every row's fields, a picture by whether it is there.
@@ -95,6 +130,7 @@ func _lay_out(drawn: Array) -> void:
 		_box.remove_child(c)
 		c.queue_free()
 	var live := {}
+	_entries.clear()
 	for d in drawn:
 		var sec: PropSection = d[0]
 		var rows: Array = d[2]
@@ -129,6 +165,7 @@ func _row(sec: PropSection, r: Dictionary, live: Dictionary) -> Control:
 	var key := String(r["key"])
 	var id := "%d:%s" % [sec.get_instance_id(), key]
 	var e := EntryCard.new(String(r.get("name", key)), String(r.get("line", "")), String(r.get("tip", r.get("name", key))))
+	_entries[id] = e
 	if r.has("picture"):
 		var pic := TextureRect.new()
 		pic.custom_minimum_size = PICTURE
@@ -160,6 +197,9 @@ func _row(sec: PropSection, r: Dictionary, live: Dictionary) -> Control:
 		verbs.add_child(tick)
 	for v in (r.get("verbs", []) as Array):
 		var vd: Dictionary = v
+		if vd.get("choices") is Array:
+			verbs.add_child(_choice(sec, key, vd))
+			continue
 		var b := Button.new()
 		b.text = String(vd.get("label", vd.get("key", "")))
 		b.tooltip_text = String(vd.get("tip", ""))
@@ -193,6 +233,39 @@ func _row(sec: PropSection, r: Dictionary, live: Dictionary) -> Control:
 		else:
 			_open.erase(id))
 	return e
+
+
+## A verb that is a choice ([param vd]: `choices` `[{key, label}]`, `chosen` the key picked now): a picker beside the buttons, its
+## label before it, a pick done by the section as `<verb>:<choice>` ([method PropSection.act]). A choice keyed "" stands for how it
+## is now and picks nothing.
+func _choice(sec: PropSection, key: String, vd: Dictionary) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	var label := Label.new()
+	label.text = String(vd.get("label", vd.get("key", "")))
+	label.add_theme_font_size_override("font_size", 12)
+	label.tooltip_text = String(vd.get("tip", ""))
+	label.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.add_child(label)
+	var pick := OptionButton.new()
+	pick.fit_to_longest_item = false
+	pick.clip_text = true
+	pick.custom_minimum_size = Vector2(150, 0)
+	pick.focus_mode = Control.FOCUS_NONE
+	pick.tooltip_text = String(vd.get("tip", ""))
+	pick.add_theme_font_size_override("font_size", 12)
+	pick.disabled = bool(vd.get("off", false))
+	for c in (vd["choices"] as Array):
+		pick.add_item(String((c as Dictionary).get("label", "")))
+		pick.set_item_metadata(pick.item_count - 1, String((c as Dictionary).get("key", "")))
+		if String((c as Dictionary).get("key", "")) == String(vd.get("chosen", "")):
+			pick.select(pick.item_count - 1)
+	pick.item_selected.connect(func(i: int) -> void:
+		var c := String(pick.get_item_metadata(i))
+		if not c.is_empty():
+			_said(sec.act(key, "%s:%s" % [String(vd["key"]), c])))
+	row.add_child(pick)
+	return row
 
 
 func _texture(img: Variant, live: Dictionary) -> Texture2D:

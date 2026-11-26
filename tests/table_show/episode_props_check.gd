@@ -9,7 +9,7 @@ extends Node
 ##   the table stood from it stands it no more - the control, before, it does; ticked again it stands again. The card draws a row
 ##   for each.
 ## - An entry's × takes a thing off the table for good, from Used or Set aside (the control: one not there cannot be).
-## - The groups are Used and Set aside, and a game's land and figures (empty for a show with no game), and no row offers Always. Keep puts a thing in the library, and its row says Kept; only a used
+## - The groups are Used and Set aside, and a game's land and figures (empty for a show with no game), and no row offers Always. No row has Keep: its 3D view's Keep puts a thing in the library, and its row says so; only a used
 ##   thing offers Select. A row's prop whole is its table's thing and materials ([method EpisodeProps.prop_of]), built whole to be
 ##   turned ([method EpisodeProps.model_of]); the viewer holds it, a drag turns it and Set straight puts it back (the control: a
 ##   key with no prop builds nothing). With no table yet there is nothing to add to.
@@ -93,7 +93,7 @@ func _run() -> void:
 	_ok(card.row_count() == 2, "the card draws a row for each (%d)" % card.row_count())
 
 	# Used, Keep, Select
-	_ok(sec.groups().map(func(g: Dictionary) -> String: return String(g["label"])) == ["Used", "Set aside", "The land", "Figures", "Characters", "Sets", "Ornaments worn"],
+	_ok(sec.groups().map(func(g: Dictionary) -> String: return String(g["label"])) == ["Used", "Set aside", "The land", "Figures", "Characters", "Sets", "Surfaces worn"],
 		"the groups are Used and Set aside, a game's land and figures, and its sticker book's characters and sets")
 	_ok(sec.rows().filter(func(r: Dictionary) -> bool: return String(r["group"]) in ["board", "figures", "cast", "sets"]).is_empty(),
 		"a show with no game lists nothing under the land, figures, characters or sets")
@@ -101,10 +101,11 @@ func _run() -> void:
 		var row: Array = sec.rows().filter(func(r: Dictionary) -> bool: return String(r["key"]) == key)
 		return (row[0]["verbs"] as Array).map(func(v: Dictionary) -> String: return String(v["key"])) if not row.is_empty() else []
 	_ok(not verbs_of.call("thing:cup").has("always") and verbs_of.call("thing:cup").has("select"), "a used row offers Select, never Always")
-	_ok(sec.act("thing:cup", "keep").is_empty() and ThingLibrary.names() == ["cup"], "Keep puts it in the library (%s)" % str(ThingLibrary.names()))
+	_ok(not verbs_of.call("thing:cup").has("keep"), "a row has no Keep: a prop is kept from its 3D view")
+	_ok(sec.keep_prop("thing:cup").is_empty() and ThingLibrary.names() == ["cup"], "Keep in its 3D view puts it in the library (%s)" % str(ThingLibrary.names()))
 	sec.library.refresh()
 	var kept_row: Dictionary = sec.rows().filter(func(r: Dictionary) -> bool: return String(r["key"]) == "thing:cup")[0]
-	_ok(String((kept_row["verbs"] as Array)[0]["label"]) == "Kept" and bool((kept_row["verbs"] as Array)[0]["off"]), "and its row says Kept")
+	_ok(String(kept_row["line"]).contains("in your library"), "and its row says it is in your library (%s)" % String(kept_row["line"]))
 	sec.set_on("thing:candle", false)
 	_ok(not verbs_of.call("aside:candle").has("select"), "the control: a thing set aside offers no Select")
 	sec.set_on("aside:candle", true)

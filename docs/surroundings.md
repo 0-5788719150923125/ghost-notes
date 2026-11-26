@@ -11,7 +11,7 @@ Its block in a document is `environment:` (`Surroundings.KNOBS`). It hands the r
 
 Where a component's show makes what is round the scene (`ReadingPanel.environment`: a table show's episode at its table, `EpisodeEnvironment`), the list is that show's, in place of the note's own.
 
-Each element that is heard has a Test: it alone, at the level it has under the voice, following what is changed on it until pressed again (`test`, `SoundTest`).
+Each element that is heard has a Test: it alone, at the level it has under the voice, following what is changed on it until pressed again (`test`, `SoundTest`); and Refine…, a conversation with a designer who hears it and changes it, each change a version kept in the note's folder (`EnvironmentSoundDesign`, `ElementVersions`). A note's scene hears its sounds as a table with no wind of its own does (`heard`): a wind is planned for what is heard, or a wind element would be silent.
 
 Source: [src/table/environment_card.gd](../src/table/environment_card.gd)
 
@@ -184,7 +184,7 @@ Size, glow, speed and color default to each kind's own (the table's `Effects.MOT
 
 | Property | What it is | Type | Bounds | Rolled in |
 | --- | --- | --- | --- | --- |
-| `amount` Amount | How many: 1 as the kind is. | `float` | 0.25 to 2.5 | 0.7 to 1.5 |
+| `count` How many | How many of them there are: a few, to a cloud of them. | `int` | 1 to 600 | never: its default until set |
 | `size` Size | How big each is (mm). | `float` |  | never: its default until set |
 | `glow` Glow | How brightly each glows. | `float` | 0 to 1 | never: its default until set |
 | `speed` Speed | How fast they wander. | `float` | 0 to 1 | never: its default until set |
@@ -252,3 +252,27 @@ Size, glow, speed and color default to each kind's own (the table's `Effects.MOT
 | Property | What it is | Type | Bounds | Rolled in |
 | --- | --- | --- | --- | --- |
 | `level` Level | How loud the ride is. | `float` | 0 to 1 | 0.4 to 0.75 |
+
+### Every sound (`VOLUME_FIELD`, `TONE_FIELD`)
+
+Beside its own properties, every sound has these: never drawn, as it is made until set.
+
+| Property | What it is | Type | Bounds | Rolled in |
+| --- | --- | --- | --- | --- |
+| `volume` Volume | How loud it is, over how it is made (dB): 0 as it is, below quieter, above louder. | `float` | -30 to 30 | never: its default until set |
+| `tone` Tone | How dark or bright it is, over how it is made: below 0 duller and deeper, above 0 brighter and thinner. | `float` | -1 to 1 | never: its default until set |
+
+### A sound's own words (`HEARD_WORDS`)
+
+What a sound keeps of its host's own words beside its properties (`Surroundings.OWN`), as its designer is told them when it is refined (`EnvironmentSoundDesign`).
+
+| Word | What it says |
+| --- | --- |
+| `from` From | Where it is heard from: front, right, back left and the like, or degrees (0 ahead, 90 the right, 270 the left). Left out, a wind leans with the wind itself and the rest stand where their kind does. |
+| `strength` Its own wind | How strong a wind of its own blows, 0 a breath to 1 a gale: heard where nothing else plans the wind, as round a note's own scene. |
+| `gusts` Gusts | How gusty its own wind is, 0 steady to 1 wild. |
+| `every` Every | About how many seconds apart its own wind's gusts come, 4 to 600. |
+| `name` Name | What the creature is called, in a few words. |
+| `calls` Calls | The sounds the creature makes: a list of its calls, each one of those listed. |
+| `awake` Awake | How lively it is at the start and at the end, [start, end]: 0 fast asleep (snores and purrs) to 1 wide awake (chirps and squeaks). |
+| `over` Over | How many seconds it takes to go from how lively it starts to how lively it ends, 30 to 7200. |

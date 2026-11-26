@@ -1,20 +1,21 @@
 extends ShelfSection
 class_name OrnamentShelf
 
-## OrnamentShelf - the ornaments kept in the library on the Dex's shelves ([DexWindow], [OrnamentLibrary]; next/surfaces.md), under
-## Surfaces. A tile makes a new one: Make… opens its Refine… window ([OrnamentDesign]), where the author says what it is and a
-## designer writes it, renders it and shows it. Each kept ornament shows its swatch (a turned vase and a plaque wearing it,
-## [method OrnamentLibrary.swatch]), its words and which version is used; Refine… asks for a change, ‹ and › step through its versions
-## (the one shown is what every prop wearing it draws), its name is changed in place, Remove takes it to the trash. A prop wears one
-## by its name ([Props] `ornament`).
+## OrnamentShelf - the ornaments and textures kept in the library on the Dex's shelves ([DexWindow], [OrnamentLibrary];
+## next/surfaces.md), under Surfaces. A tile on each shelf makes a new one: Make… opens its Refine… window ([OrnamentDesign]), where
+## the author says what it is and a designer writes it, renders it and shows it. Each kept one shows its swatch ([method
+## OrnamentLibrary.swatch]), its words and which version is used; Refine… asks for a change, ‹ and › step through its versions (the one
+## shown is what every prop wearing it draws), its name is changed in place, Remove takes it to the trash. A prop wears an ornament
+## by its name ([Props] `ornament`), a material a texture ([Props] `texture`).
 
-const SHELVES := [{"key": "kept", "label": "Ornaments", "tip": "Ornament written by a designer, worn on any prop by its name: relief, and where a color is laid in it."}]
+const SHELVES := [{"key": "kept", "label": "Ornaments", "tip": "Ornament written by a designer, worn on any prop by its name: relief, and where a color is laid in it."},
+	{"key": "textures", "label": "Textures", "tip": "Texture written by a designer, worn by any material by its name: relief, roughness and its second color all over it."}]
 
 var pictures := PropPictures.new()
 
 
 func title() -> String:
-	return "Ornaments"
+	return "Ornaments and textures"
 
 
 func category() -> String:
@@ -33,7 +34,11 @@ func offers() -> Array:
 	var out: Array = [{"key": "new", "name": "A new ornament", "shelf": "kept",
 		"line": "Say what it is: a designer writes it, renders it and shows it to you.",
 		"tip": "Make an ornament from your words. Each version the designer makes is kept; the one shown is used.",
-		"verbs": [{"key": "make", "label": "Make…", "tip": "Open a conversation with a designer about a new ornament."}]}]
+		"verbs": [{"key": "make", "label": "Make…", "tip": "Open a conversation with a designer about a new ornament."}]},
+		{"key": "new_texture", "name": "A new texture", "shelf": "textures",
+		"line": "Say what it is like to the touch: a designer writes it, renders it on a bowl and a block and shows it to you.",
+		"tip": "Make a texture from your words - grain, pits, cracks, weave, scales. Each version the designer makes is kept; the one shown is used.",
+		"verbs": [{"key": "make", "label": "Make…", "tip": "Open a conversation with a designer about a new texture."}]}]
 	for e in OrnamentLibrary.entries():
 		var ed: Dictionary = e
 		var name := String(ed["name"])
@@ -44,18 +49,19 @@ func offers() -> Array:
 		line += ("  ·  " if not line.is_empty() else "") + ("version %d of %d" % [used + 1, n] if n > 0 else "nothing made yet")
 		if busy:
 			line += "  ·  the designer is at work"
-		out.append({"key": "kept:" + name, "name": name, "named": true, "shelf": "kept", "line": line, "tip": String(ed["words"]),
-			"picture": _picture(String(ed["code"])),
+		var texture := String(ed["kind"]) == OrnamentLibrary.TEXTURE
+		out.append({"key": "kept:" + name, "name": name, "named": true, "shelf": "textures" if texture else "kept", "line": line,
+			"tip": String(ed["words"]), "picture": _picture(String(ed["code"]), String(ed["kind"])),
 			"verbs": [{"key": "refine", "label": "Refine…", "tip": "Ask the designer for a change: a new version, kept beside the others."},
 				{"key": "older", "label": "‹", "tip": "Use the version before this one.", "off": used <= 0},
 				{"key": "newer", "label": "›", "tip": "Use the version after this one.", "off": used >= n - 1},
-				{"key": "forget", "label": "Remove", "tip": "Take it out of your library, to the trash. A prop wearing it by its name wears none."}]})
+				{"key": "forget", "label": "Remove", "tip": "Take it out of your library, to the trash. A prop wearing it by its name keeps the version it wore last." if texture else "Take it out of your library, to the trash. A prop wearing it by its name wears none."}]})
 	return out
 
 
 func act(key: String, verb: String) -> String:
-	if key == "new" and verb == "make":
-		var name := OrnamentLibrary.make()
+	if key in ["new", "new_texture"] and verb == "make":
+		var name := OrnamentLibrary.make("", "", OrnamentLibrary.TEXTURE if key == "new_texture" else OrnamentLibrary.ORNAMENT)
 		if name.is_empty():
 			return "this session cannot write the library"
 		OrnamentDesign.of(name).open()
@@ -84,7 +90,7 @@ func act(key: String, verb: String) -> String:
 
 func rename(key: String, new_name: String) -> String:
 	if not key.begins_with("kept:"):
-		return "only a kept ornament can be renamed"
+		return "only a kept ornament or texture can be renamed"
 	var name := key.substr(5)
 	if OrnamentDesign._open.has(name) and (OrnamentDesign._open[name] as OrnamentDesign).busy():
 		return "the designer is at work on it: rename it once it is done"
@@ -103,14 +109,15 @@ func prepare_pictures(keys: Array) -> void:
 func picture(key: String) -> Variant:
 	if not key.begins_with("kept:"):
 		return null
-	return _picture(OrnamentLibrary.code_of(key.substr(5)))
+	var e := OrnamentLibrary.find(key.substr(5))
+	return _picture(String(e.get("code", "")), String(e.get("kind", OrnamentLibrary.ORNAMENT)))
 
 
-## The swatch of [param code] once taken, null until then ([PropPictures]; asked for when it is wanted).
-func _picture(code: String) -> Variant:
+## The swatch of [param code] as a [param kind] once taken, null until then ([PropPictures]; asked for when it is wanted).
+func _picture(code: String, kind: String) -> Variant:
 	if code.is_empty():
 		return null
-	var sw := OrnamentLibrary.swatch(code)
+	var sw := OrnamentLibrary.swatch(code, kind)
 	return pictures.image(ThingLibrary.hash_of(sw["thing"], sw["materials"]))
 
 
@@ -120,9 +127,10 @@ func _asked(keys: Array) -> Array:
 	for k in keys:
 		if not String(k).begins_with("kept:"):
 			continue
-		var code := OrnamentLibrary.code_of(String(k).substr(5))
+		var e := OrnamentLibrary.find(String(k).substr(5))
+		var code := String(e.get("code", ""))
 		if code.is_empty():
 			continue
-		var sw := OrnamentLibrary.swatch(code)
+		var sw := OrnamentLibrary.swatch(code, String(e["kind"]))
 		out.append([ThingLibrary.hash_of(sw["thing"], sw["materials"]), sw["thing"], sw["materials"]])
 	return out

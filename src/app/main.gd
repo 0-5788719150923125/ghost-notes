@@ -817,17 +817,23 @@ func _sync_stage_size() -> void:
 ## portrait show - as large as the window holds it, centered, black beside it, so what is seen is what
 ## an export renders. In an export the window is the frame, and this is the whole of it.
 ##
-## What is docked under the show takes its room from it ([member Chrome.stage_bottom]): with the
-## storyboard's editor open the frame is fitted above it. Nothing claims any otherwise, and the fit is
-## the window's.
+## What is docked under the show, or stands open beside it, takes its room from it ([member
+## Chrome.stage_bottom], [member Chrome.stage_left]): with the timeline or the storyboard's editor open the
+## frame is fitted above it, and with a side panel open to the right of it - the whole window once the panel
+## is hidden. Nothing claims any otherwise, and the fit is the window's; an export's is always the window.
 func _frame_rect() -> Rect2:
 	var vis := get_viewport().get_visible_rect().size
-	if _chrome != null and is_instance_valid(_chrome) and _chrome.stage_bottom > 0.0:
-		vis.y = maxf(vis.y * 0.3, vis.y - _chrome.stage_bottom)
+	var left := 0.0
+	if _chrome != null and is_instance_valid(_chrome) and not _export_mode:
+		if _chrome.stage_bottom > 0.0:
+			vis.y = maxf(vis.y * 0.3, vis.y - _chrome.stage_bottom)
+		if _chrome.stage_left > 0.0:
+			left = minf(_chrome.stage_left, vis.x * 0.7)
+	var room := Vector2(vis.x - left, vis.y)
 	var fs := Vector2(Medium.FRAME_SIZES[Director.resolved_frame()])
-	var k := minf(vis.x / fs.x, vis.y / fs.y)
+	var k := minf(room.x / fs.x, room.y / fs.y)
 	var size := (fs * k).round()
-	return Rect2(((vis - size) * 0.5).round(), size)
+	return Rect2((Vector2(left, 0.0) + (room - size) * 0.5).round(), size)
 
 
 func _process(delta: float) -> void:

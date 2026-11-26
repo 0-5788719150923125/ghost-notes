@@ -20,10 +20,13 @@ class_name Props
 ## part), and wicks one wax part has.
 const MAX_PARTS := 48
 const MAX_POINTS := 40
-const MAX_COPIES := 24
+const MAX_COPIES := 96
 const MAX_DEPTH := 3
 const MAX_INSTANCES := 192
 const MAX_WICKS := 6
+## The most lumps a thing's heaps lay together: they settle as one pile ([method _strewn]'s `settled`), and settling grows fast with
+## how many there are.
+const HEAP_MOST := 96
 ## The most triangles a thing is built of: the parts past it, in the order written, are left out. What a thing costs is its
 ## triangles, never how many parts it is written in.
 const MAX_TRIANGLES := 400000
@@ -198,7 +201,7 @@ const MATERIALS := {
 	"wax": {"code": 2, "polish": 0.2, "wear": 0.0, "pattern": 0.0, "clarity": 0.5, "grain": 2.0, "density": 0.9, "strength": 0.6, "dissolves": 0.0,
 		"about": "candle wax - beeswax, paraffin, tallow; `clarity` how much the light glows through it"},
 	"glass": {"code": 3, "polish": 0.92, "wear": 0.0, "pattern": 0.0, "clarity": 0.85, "grain": 2.0, "density": 2.5, "strength": 0.0, "dissolves": 0.0,
-		"about": "see-through; `color` tints it, a low `clarity` frosts it, an ornament on glass is etched"},
+		"about": "see-through; its `color` is how deep it is - near white is clear, a light color a tint, and a DARK color (an amber medicine bottle #3a1c07, cobalt #0b1d5e, smoked glass) is hard to see through yet still translucent and its color; a low `clarity` frosts it; an ornament on glass is etched into it, but flutes and hammering are its shape, clear glass that catches the light"},
 	"crystal": {"code": 4, "polish": 0.85, "wear": 0.0, "pattern": 0.2, "clarity": 0.5, "grain": 1.2, "density": 2.6, "strength": 1.0, "dissolves": 0.0,
 		"about": "quartz, amethyst, citrine, obsidian, selenite, any mineral; `clarity` from milky 0 to water-clear 1, `pattern` banding in `color2` - curving round in rings with `rings` true (agate, malachite, onyx)"},
 	"ceramic": {"code": 5, "polish": 0.6, "wear": 0.0, "pattern": 0.15, "clarity": 0.5, "grain": 1.0, "density": 2.3, "strength": 1.6, "dissolves": 0.0,
@@ -218,7 +221,7 @@ const MATERIALS := {
 	"plant": {"code": 12, "polish": 0.2, "wear": 0.0, "pattern": 0.5, "clarity": 0.5, "grain": 1.0, "density": 0.35, "strength": 0.12, "dissolves": 0.0,
 		"about": "leaves, petals, stems, herbs; `wear` dries them toward `color2`"},
 	"liquid": {"code": 13, "polish": 0.95, "wear": 0.0, "pattern": 0.25, "clarity": 0.4, "grain": 1.0, "density": 1.0, "strength": 0.0, "dissolves": 0.0,
-		"about": "what is IN a vessel - a brew, ink, oil, wine, water, honey - wet and never quite still, `pattern` its foam in `color2`, `clarity` the light in its depth; a part of its own filling the vessel to its surface (see WORKING PARTS: it boils, fills, empties, changes color and glows)"},
+		"about": "what is IN a vessel - a brew, ink, oil, wine, water, honey - wet and never quite still, `pattern` its foam in `color2`; `clarity` how far you see into it, from murky or milky 0 to clear 1 - from 0.8 it is SEEN THROUGH, as clear water, tea or wine is, tinted by `color` (then without foam, ripples, boil or glow of its own), below that opaque with light in its depth; a part of its own filling the vessel to its surface (see WORKING PARTS: it boils, fills, empties, changes color and glows)"},
 	"powder": {"code": 14, "polish": 0.1, "wear": 0.0, "pattern": 0.3, "clarity": 0.3, "grain": 0.5, "density": 0.6, "strength": 0.0, "dissolves": 3.0,
 		"about": "loose fine stuff, and what is ground: snow, flour, ash, chalk, salt, sugar, pollen, ground spice, dust - matte and soft, `pattern` the sparkle of the grains that catch the light (snow, salt, sugar) in `color2`; its grains dissolve in a liquid in `dissolves` seconds (snow melts in 2, sugar in 6, salt in 10; 0 never - ash, sand)"},
 	"cream": {"code": 15, "polish": 0.45, "wear": 0.0, "pattern": 0.3, "clarity": 0.4, "grain": 1.0, "density": 1.0, "strength": 0.0, "dissolves": 0.0,
@@ -248,6 +251,47 @@ const ORNAMENTS := {
 ## The ornament of its own's shader code ([Ornaments]): written by an agent, or kept in the library by name ([OrnamentLibrary]).
 const ORN_OWN := 11
 
+## The reliefs a material's surface can be worked all over with (its `texture`, [method sanitize_material]): each its shader `code`,
+## its features' `size` (centimeters, the material's `texture_size` when it says none) and how `deep` its relief is at `bumps` 1, a
+## share of that size.
+const TEXTURES := {
+	"grit": {"code": 1, "size": 0.12, "deep": 0.5,
+		"about": "fine sandy grit all over - sandstone, chalk, unglazed clay, plaster, concrete, cast iron, a rough-sawn face"},
+	"pitted": {"code": 2, "size": 0.25, "deep": 0.4,
+		"about": "small pits scattered over it, a little of `color2` in them - pumice, travertine, lava rock, old concrete, weathered bone, orange peel"},
+	"cracked": {"code": 3, "size": 0.8, "deep": 0.25,
+		"about": "a web of fine cracks between plates, `color2` in the cracks - dried mud, crackle glaze, old paint, aged leather, weathered rock"},
+	"chipped": {"code": 4, "size": 0.9, "deep": 0.35,
+		"about": "the shell-shaped scallops of a stone broken by striking, each rippled in rings, sharp ridges where they meet - flint, obsidian, chert, knapped or chipped stone and glass"},
+	"fibers": {"code": 5, "size": 0.25, "deep": 0.4,
+		"about": "raised fibers running up the part (along its height) - rough-sawn or weathered wood, bark, driftwood, bone, coarse rope and cord, dried stems"},
+	"brushed": {"code": 6, "size": 0.06, "deep": 0.25,
+		"about": "fine parallel scratches running up the part - brushed or worn metal, sanded wood, combed plaster"},
+	"lumpy": {"code": 7, "size": 1.2, "deep": 0.3,
+		"about": "broad soft lumps and hollows - hand-formed clay, rough-cast plaster, weathered stone, a bread crust, beaten earth"},
+	"granular": {"code": 8, "size": 0.2, "deep": 0.4,
+		"about": "packed grains, each a tiny flat facet catching the light its own way, some of them `color2` - granite, coarse salt, sugar, sandstone, galena, a geode's rind"},
+	"pebbled": {"code": 9, "size": 0.25, "deep": 0.4,
+		"about": "rounded bumps packed close - pebbled leather, a lizard's or a toad's skin, an orange's peel, a basketball"},
+	"bricks": {"code": 10, "size": 4.0, "deep": 0.08,
+		"about": "bricks laid in courses, each course shifted half a brick, the mortar sunk between them in `color2`; `texture_size` a brick's length - a wall, a hearth, a chimney, an oven"},
+	"tiles": {"code": 11, "size": 2.5, "deep": 0.06,
+		"about": "square tiles with sunk joints in `color2`; `texture_size` a tile's width - a floor, a hearth, a tiled box or tray"},
+	"planks": {"code": 12, "size": 3.0, "deep": 0.05,
+		"about": "boards side by side with seams between, each board ended at a joint of its own; `texture_size` a board's width - a floor, a crate, a door, a chest, a tabletop"},
+	"rough": {"code": 13, "size": 1.0, "deep": 0.35,
+		"about": "HEAVY ROUGHNESS at every scale at once - bumps its size, smaller ones over them, finer and finer down to grit, as a rough surface is rough all the way down: raw rock, coal, a rough casting, unglazed earthenware, a broken loaf, weathered wood"},
+	"crumbled": {"code": 14, "size": 0.8, "deep": 0.3,
+		"about": "the same at every scale, but of sharp creases and ridges, as a thing broken and crumbled is - fractured coal, shale, slate's broken edge, broken rock, crumpled paper or foil, cracked bark"},
+}
+## A texture of its own's shader code ([Ornaments] `texture`): written by an agent, or kept in the library by name; the size its
+## features are drawn at (centimeters a unit of its `p`) and how deep its relief is, as a texture's `size` and `deep` are.
+const TEX_OWN := 15
+const TEX_OWN_SIZE := 0.5
+const TEX_OWN_DEEP := 0.3
+## The most and least a texture's features measure, centimeters.
+const TEXTURE_SIZE := Vector2(0.02, 30.0)
+
 ## The play of light a material can have - what moves in a stone, a shell or a metal as it turns, or as the flames catch it - with its
 ## shader code. Clear glass and crystal show only a rainbow.
 const PLAYS := {
@@ -261,8 +305,11 @@ const PLAYS := {
 
 ## A sheet's outlines: its half-width along its length, 0 at the base to 1 at the tip.
 const OUTLINES := ["leaf", "petal", "feather", "oval", "rect"]
-## The shapes a set dresser is never told ([method describe]): a face shows what a scene hands it, and a table hands it nothing.
+## The shapes told otherwise to a set dresser ([method describe]): a face shows what a scene hands it, and a table hands it nothing - but
+## the words written on it ([constant FACE_WORDS]).
 const SCENE_SHAPES := ["face"]
+## A face as a table's agents are told it: a label of words lying on a thing.
+const FACE_WORDS := "WORDS ON A THING, as a flat label: a book's title on its cover or its spine, a bottle's or a jar's label, a tag, a sign, a page's heading, a box's name. `size` [width, height], standing upright facing the thing's front (+z), placed by its middle - `turn` it to lie on the surface it goes on ([-90, 0, 0] face up, on a closed book's cover; [0, 90, 0] facing the thing's right, along a spine) and set it a hair (0.02 cm) proud of that surface, its size within that face; `outline` rect, round or rounded (`round` its corners). `text` the words, as large as fit (`hand` print, marker or type; `ink` their color, #rrggbb; a line break with \\n). Its own material is the ground under the words - a paper label, the cover's own leather or cloth so the words seem printed on it. Keep the words few: a title, a name, a word or two."
 ## A face's outlines; how a screen's glass shows the picture it is handed (each number's range: [constant SHAPES] `face`); the hands
 ## its printed words may be in, a font each ("" is Godot's own, plain capitals); how large its words are drawn (pixels a letter, before
 ## they are fitted to it) and how far off its face they stand (meters).
@@ -284,6 +331,14 @@ const _SHADER := preload("res://shaders/prop.gdshader")
 const PANE_FLAT := 0.85
 const PANE_SQUARE := 0.996
 const _GLASS := preload("res://shaders/prop_glass.gdshader")
+## How dark a glass's color is (1 less its brightness) from which it is deep ([method deep_glass]): about where prop_glass makes it more
+## covered than seen through.
+const DEEP_GLASS := 0.6
+## The draw order of what is seen through solid, before hollow glass (0) whatever their distances ([method material]).
+const LENS_FIRST := -1
+## How hard a clear liquid bends what is behind it, of a solid glass's bend ([method material]).
+const LIQUID_BEND := 0.25
+static var _deep_shader: Shader = null
 const _LENS := preload("res://shaders/prop_lens.gdshader")
 
 
@@ -302,12 +357,17 @@ static func describe(working := false) -> String:
 	lines.append("SHAPES (a part's `shape`):")
 	for k in SHAPES:
 		if k in SCENE_SHAPES and not working:
+			lines.append("- %s: %s" % [k, FACE_WORDS])
 			continue
 		lines.append("- %s: %s" % [k, SHAPES[k]])
 	lines.append("")
-	lines.append("MATERIALS: name each one used under `materials`, then give a part its name. A material is {\"kind\", \"color\", \"color2\", \"polish\", \"wear\", \"pattern\", \"clarity\", \"grain\", \"play\", \"rings\", \"density\", \"dissolves\"} - all but kind and color optional, numbers 0-1 except grain (centimeters), density (grams a cubic centimeter: below 1 a loose thing of it floats on a liquid - the kind's own when left out) and dissolves (seconds a grain of it takes to dissolve or melt in a liquid - snow 2, sugar 6, salt 10; 0 never). Kinds:")
+	lines.append("MATERIALS: name each one used under `materials`, then give a part its name. A material is {\"kind\", \"color\", \"color2\", \"polish\", \"wear\", \"pattern\", \"clarity\", \"grain\", \"play\", \"rings\", \"texture\", \"bumps\", \"texture_size\", \"mottle\", \"density\", \"dissolves\"} - all but kind and color optional, numbers 0-1 except grain (centimeters), texture_size (centimeters), density (grams a cubic centimeter: below 1 a loose thing of it floats on a liquid - the kind's own when left out) and dissolves (seconds a grain of it takes to dissolve or melt in a liquid - snow 2, sugar 6, salt 10; 0 never). `polish` is how smooth and shiny it is: 0 dull and matte, with no gloss at all (raw stone, chalk, bone, unfinished wood, bare clay), 1 a mirror's gloss - each kind's own when left out. Kinds:")
 	for k in MATERIALS:
 		lines.append("- %s: %s" % [k, String((MATERIALS[k] as Dictionary)["about"])])
+	lines.append("")
+	lines.append("SURFACE: what a material is like to the touch, worked all over it (on every kind but clear glass and crystal). `texture` names a relief from the list below, or a texture kept in the library by its name; `bumps` 0-1 how deep it is (0.5 when left out: 0.2 faint, 1 coarse); `texture_size` its features' size in centimeters (each texture's own when left out). Its hollows come out rougher and a little darker. `mottle` 0-1 is how unevenly it is polished: soft patches `grain` centimeters across, some duller and some glossier - few real surfaces shine evenly, so stone, wood, leather, bone and old metal want 0.2-0.5. To make a thing less shiny, lower its polish; to make it rough to the touch, give it a texture; for both, both. Textures:")
+	for k in TEXTURES:
+		lines.append("- %s: %s (features %s cm)" % [k, String((TEXTURES[k] as Dictionary)["about"]), str(float((TEXTURES[k] as Dictionary)["size"]))])
 	lines.append("")
 	lines.append("PLAY OF LIGHT: a material's `play` is the light that moves in it, most often a stone's, a shell's or a metal's (clear glass and crystal show only rainbow):")
 	for k in PLAYS:
@@ -320,11 +380,11 @@ static func describe(working := false) -> String:
 	lines.append("")
 	lines.append("LOOSE: a part written `loose`: true is not fixed to its thing - it lies where it is drawn, in a dish, a bowl, a jar or on the cloth, and when what holds it tips it slides, rolls and tumbles out under gravity, falls into what is below, sinks in a liquid (or floats, if it is light), and a pestle pressed into it and moved over it breaks it to pieces and to powder (metal, glass, wood and cloth never break). A loose part can also be picked up by the work like a free one, and falls from where it is let go. What lies in or on something to be poured out, tipped out or taken out is loose: crystals and stones in a dish, seeds in a pod, a coin in a bowl, a sprig on a plate. A heap's or a scatter's copies are loose unless written `loose`: false (a part that must stay put, a knob, a rivet, is never loose). For loose stuff poured in quantity - sand, salt, snow, powder - use the `grains` shape instead.")
 	lines.append("")
-	lines.append("COPIES: a part's `copies` repeats it - \"copies\": {\"ring\": {\"count\": 5, \"radius\": 4}} round the vertical axis (`arc` less than 360 makes it an arc, from `start` degrees: 0 the thing's right, 90 its front, 270 its back), {\"line\": {\"count\": 3, \"step\": [x, y, z]}}, {\"scatter\": {\"count\": 9, \"radius\": 6}} strewn about, never touching (stones set out on the cloth), or {\"heap\": {\"count\": 12, \"radius\": 3}} piled up, each resting on the ones under it (stones heaped in a dish or a shell, a pile of coins) - with `jitter` 0-1 so the copies differ a little; or {\"mirror\": {\"axis\": \"x\"}} (or `mirror` true on the part itself): the part and its mirror image across the middle of what it is in - x left and right, z front and back - so a pair of scrolls, handles, arms or feet is drawn once, its right side, and the left is made. A copied part's `material` can be a LIST of names, which its copies take in turn: a handful of stones of five kinds, books in three bindings. A copied candle's wax lights a flame on every copy.")
+	lines.append("COPIES: a part's `copies` repeats it - \"copies\": {\"ring\": {\"count\": 5, \"radius\": 4}} round the vertical axis (`arc` less than 360 makes it an arc, from `start` degrees: 0 the thing's right, 90 its front, 270 its back), {\"line\": {\"count\": 3, \"step\": [x, y, z]}}, {\"scatter\": {\"count\": 9, \"radius\": 6}} strewn within `radius` of where it stands, never touching - on the open cloth a handful too crowded for it spreads wider, but never past the wall of what it lies in, where copies that find no room are left out (stones set out on the cloth; leaves floating on a jar's water, inside the jar's wall), or {\"heap\": {\"count\": 12, \"radius\": 3}} piled up, each resting on the ones under it (stones heaped in a dish or a shell, a pile of coins) - a thing's heaps all settle together as one pile, so seeds of three sizes are three heaped parts, never passing through each other, %d lumps in all at most - with `jitter` 0-1 so the copies differ a little (in size too, by up to a sixth); a part makes at most %d copies; or {\"mirror\": {\"axis\": \"x\"}} (or `mirror` true on the part itself): the part and its mirror image across the middle of what it is in - x left and right, z front and back - so a pair of scrolls, handles, arms or feet is drawn once, its right side, and the left is made. A copied part's `material` can be a LIST of names, which its copies take in turn: a handful of stones of five kinds, books in three bindings. A copied candle's wax lights a flame on every copy." % [HEAP_MOST, MAX_COPIES])
 	lines.append("")
 	lines.append("GROUPS: a part can be a GROUP instead of a shape - {\"parts\": [...], \"at\", \"turn\", \"copies\"} - whose own parts are placed in its space as a thing's are in the thing's; repeat the group and all of it repeats. A candelabra's arm, its cup and its taper are one group copied round in a ring; a group can hold groups, %d deep. A list of materials on a part inside a copied group goes to the group's copies in turn. Every part in every group counts toward the %d a thing may have." % [MAX_DEPTH, MAX_PARTS])
 	lines.append("")
-	lines.append("WARP: any part, whatever its shape, can be reshaped whole by its `warp` - {\"scale\" [x, y, z] (stretched or squashed: an oval dish is a turned bowl with scale [1, 1, 0.7]), \"taper\" -1 to 0.95 (narrower toward its top; below 0, wider), \"twist\" (degrees it turns about its upright middle from bottom to top), \"lean\" [x, z] (its top moved that many centimeters, its base kept), \"bend\" (degrees: it bows along its height until its top has turned that far, toward \"bend_to\" - 0 its right, 90 its front, 180 its left, 270 its back), \"wobble\" 0-1 (the unevenness of a thing made by hand - a hand-thrown pot, a gnarled root, a misshapen fruit; 0.1-0.3 is plenty)}, applied in that order. A bend is a banana's curve, a candle slumped in the heat, a horn's sweep; a whole bent rod with kinks in it is a tube's path.")
+	lines.append("WARP: any part, whatever its shape, can be reshaped whole by its `warp` - {\"scale\" [x, y, z] (stretched or squashed: an oval dish is a turned bowl with scale [1, 1, 0.7]), \"taper\" -1 to 0.95 (narrower toward its top; below 0, wider), \"twist\" (degrees it turns about its upright middle from bottom to top), \"lean\" [x, z] (its top moved that many centimeters, its base kept), \"bend\" (degrees: it bows along its height until its top has turned that far, toward \"bend_to\" - 0 its right, 90 its front, 180 its left, 270 its back), \"wobble\" 0-1 (the unevenness of a thing made by hand - a hand-thrown pot, a gnarled root, a misshapen fruit; 0.1-0.3 is plenty), \"spout\" {\"toward\" degrees (0 its right, 90 its front, 180 its left, 270 its back), \"out\" centimeters, \"width\" degrees round the rim (60 a beaker's, 90 a jug's), \"depth\" centimeters down the wall it reaches, \"rise\" centimeters it lifts at the lip} - the rim pulled out at one side into a POURING LIP, the wall under it coming with it, so the vessel stays one piece: a beaker's, a jug's, a measuring cup's, a pitcher's, a gravy boat's lip. Never build a spout's lip as a separate part laid on the rim}, applied in that order. A bend is a banana's curve, a candle slumped in the heat, a horn's sweep; a whole bent rod with kinks in it is a tube's path.")
 	lines.append("")
 	lines.append("WHERE PARTS MEET: a spout, a handle, an arm, a stem or a branch grows OUT of what it joins - start it a little inside that part, so no gap or seam of light shows. A thing has as many parts as its form needs to read as itself up close - a rim, a foot, a handle, a lid and its knob each their own - every one joined well, never small ones floating side by side. A vessel's profile carries its character - foot, belly, shoulder, neck, lip - and most stand on a flat base. A spout leaves the body wide and low and narrows as it rises to a lip about level with the rim; a handle is a rod bent round, both ends sunk into the body; a lid is its own part, sitting in or on the rim, with a knob.")
 	lines.append("")
@@ -394,7 +454,35 @@ static func sanitize_material(m: Variant, fallback: String) -> Dictionary:
 	var play := String(d["play"]).strip_edges().to_lower() if d.get("play") is String else ""
 	if PLAYS.has(play):
 		out["play"] = play
+	# Its SURFACE: a relief worked all over it, how deep and how fine; and how unevenly it is polished. Written only where it has them
+	var tx := _sanitize_texture(d)
+	if not tx.is_empty():
+		out.merge(tx)
+		out["bumps"] = _num(d.get("bumps"), 0.5, 0.0, 1.0)
+		var row: Dictionary = TEXTURES.get(String(tx["texture"]), {})
+		out["texture_size"] = _num(d.get("texture_size"), float(row.get("size", TEX_OWN_SIZE)), TEXTURE_SIZE.x, TEXTURE_SIZE.y)
+	var mottle := _num(d.get("mottle"), 0.0, 0.0, 1.0)
+	if mottle > 0.0:
+		out["mottle"] = mottle
 	return out
+
+
+## A material's texture as written in [param d]: `{texture}`, one of [constant TEXTURES]; `{texture, texture_code}` for one kept in the
+## library by its name (drawn as its version used is, [method OrnamentLibrary.code_of]) or `texture_code` of its own ([method
+## Ornaments.check] its `texture`) - a kept one gone from the library drawn as it was last; {} for none.
+static func _sanitize_texture(d: Dictionary) -> Dictionary:
+	var written := word(d.get("texture"), "").strip_edges() if d.get("texture") is String else ""
+	var kind := written.to_lower()
+	if TEXTURES.has(kind):
+		return {"texture": kind}
+	if not written.is_empty() and kind != "own":
+		var kept := OrnamentLibrary.find(written, OrnamentLibrary.TEXTURE)
+		if not kept.is_empty() and not String(kept["code"]).is_empty():
+			return {"texture": String(kept["name"]), "texture_code": String(kept["code"])}
+	var code := String(d["texture_code"]).strip_edges() if d.get("texture_code") is String else ""
+	if not code.is_empty() and Ornaments.check(code, Ornaments.TEXTURE).is_empty():
+		return {"texture": written if not written.is_empty() else "own", "texture_code": code}
+	return {}
 
 
 static func _sanitize_thing(t: Dictionary, mats: Dictionary, pal: Array) -> Dictionary:
@@ -843,6 +931,14 @@ static func _sanitize_warp(w: Variant) -> Dictionary:
 		out["lean"] = lean[0]
 	if not out.has("bend"):
 		out.erase("bend_to")
+	# A SPOUT: its rim pulled out at one side into a pouring lip, the wall under it with it
+	if d.get("spout") is Dictionary:
+		var sd: Dictionary = d["spout"]
+		var reach := _num(sd.get("out"), 0.6, 0.0, 6.0)
+		if reach > 0.0:
+			out["spout"] = {"toward": _num(sd.get("toward"), 90.0, -360.0, 360.0), "out": reach,
+				"width": _num(sd.get("width"), 60.0, 15.0, 180.0), "depth": _num(sd.get("depth"), 1.2, 0.1, 12.0),
+				"rise": _num(sd.get("rise"), 0.15, -3.0, 3.0)}
 	return out
 
 
@@ -921,7 +1017,7 @@ static func _sanitize_ornament(o: Variant) -> Dictionary:
 	elif kind == "own" and d.get("code") is String and Ornaments.check(String(d["code"])).is_empty():
 		out = {"kind": "own", "code": String(d["code"]).strip_edges()}
 	else:
-		var kept := OrnamentLibrary.find(written)
+		var kept := OrnamentLibrary.find(written, OrnamentLibrary.ORNAMENT)
 		if kept.is_empty() or String(kept["code"]).is_empty():
 			return {}
 		out = {"kind": "own", "code": String(kept["code"]), "name": String(kept["name"])}
@@ -1517,13 +1613,15 @@ static func _assemble(parts: Array, seed: int, path: Array, gives := {}) -> Arra
 			out.append({"part": part, "geos": geos, "xforms": [], "salt": here})
 			continue
 		out.append({"part": part, "geos": geos, "xforms": _placements(part, rng, geos), "salt": here})
+	# a thing's heaps settle together, one pile ([constant HEAP_MOST])
+	var settled := {"mids": PackedVector3Array(), "wide": PackedFloat32Array(), "high": PackedFloat32Array()}
 	for h in heaps:
 		var leaf: Dictionary = out[h[0]]
 		var at: Vector3 = (leaf["part"] as Dictionary).get("at", Vector3.ZERO)
 		if String(((leaf["part"] as Dictionary)["copies"] as Dictionary)["kind"]) == "scatter":
-			leaf["xforms"] = _placements(leaf["part"], h[1], leaf["geos"], {}, _blocks(out, at.y * 0.01))
+			leaf["xforms"] = _placements(leaf["part"], h[1], leaf["geos"], _walls(out, h[0], at * 0.01), _blocks(out, at.y * 0.01))
 		else:
-			leaf["xforms"] = _placements(leaf["part"], h[1], leaf["geos"], _walls(out, h[0], at * 0.01))
+			leaf["xforms"] = _placements(leaf["part"], h[1], leaf["geos"], _walls(out, h[0], at * 0.01), [], settled)
 	# A moving part: each of its copies moves on its own, held where its move says in its own space - and a working one ([Motions]) is a
 	# node of its own outside that, its points where its `at` is, each copy's moved as the copy is from the first
 	for li in own:
@@ -1834,10 +1932,29 @@ static func _top_radius(g: Tris) -> float:
 	return maxf(r, 0.004)
 
 
+## Whether glass [param m] is DEEP - its color dark enough that little is seen through it (prop_glass's own measure, by how dark the color
+## is): drawn so its near wall hides what is behind it, its own far wall too ([method _glass_deep]).
+static func deep_glass(m: Dictionary) -> bool:
+	if not see_through(m) or not _is_color(m.get("color", "")):
+		return false
+	var c := Color.html(String(m["color"]))
+	return 1.0 - (c.r * 0.299 + c.g * 0.587 + c.b * 0.114) >= DEEP_GLASS
+
+
+## Hollow glass that writes depth: a deep glass's near wall, nearly opaque, hides its own far wall and what stands inside it - where
+## clear glass may not (a flame inside a jar would be hidden). The glass shader with that one change, made once.
+static func _glass_deep() -> Shader:
+	if _deep_shader == null:
+		var sh := Shader.new()
+		sh.code = _GLASS.code.replace("depth_draw_opaque", "depth_draw_always")
+		_deep_shader = sh
+	return _deep_shader
+
+
 ## Whether a material is drawn see-through: glass, and crystal clear enough to see through.
 static func see_through(m: Dictionary) -> bool:
 	var kind := String(m.get("kind", ""))
-	return kind == "glass" or (kind == "crystal" and float(m.get("clarity", 0.5)) >= CLEAR)
+	return kind == "glass" or (kind in ["crystal", "liquid"] and float(m.get("clarity", 0.5)) >= CLEAR)
 
 
 ## Whether a part is SOLID rather than a vessel: a ball, a crystal, a rod - or a turned part whose
@@ -1883,7 +2000,12 @@ static func material(m: Dictionary, orn: Variant, girth: float, height: float, s
 	var mat := ShaderMaterial.new()
 	# Clear crystal is seen through: an opaque shader would make a crystal ball a pearl
 	var clear := see_through(m)
-	mat.shader = (_LENS if solid else _GLASS) if clear else _SHADER
+	mat.shader = (_LENS if solid else (_glass_deep() if deep_glass(m) else _GLASS)) if clear else _SHADER
+	# what is seen through solid (a lens: the spirit in a lamp, a crystal ball) is drawn before any hollow glass, whatever the angle: it
+	# writes its depth, so what stands behind it stays hidden, and a vessel's glass round it blends over it - drawn in whichever order
+	# the distances gave, the lamp's etched band came and went as it turned
+	if clear and solid:
+		mat.render_priority = LENS_FIRST
 	if not clear:
 		mat.set_shader_parameter("kind", int((MATERIALS.get(kind, MATERIALS["painted"]) as Dictionary)["code"]))
 	mat.set_shader_parameter("color", Color.html(String(m.get("color", "#808080"))))
@@ -1892,18 +2014,32 @@ static func material(m: Dictionary, orn: Variant, girth: float, height: float, s
 		mat.set_shader_parameter(k, float(m.get(k, 0.5)))
 	if clear and solid:
 		mat.set_shader_parameter("bend_y", 1.0 if round_solid else 0.0)
-		mat.set_shader_parameter("bend", 0.0 if pane else 1.0)
+		# a liquid bends what is behind it far less than a ball of glass or crystal does (water's index is lower, and it stands in a vessel's
+		# thin wall): bent as hard, its flat floor seen from below shifts what it rests on past its edge, and opens a gap in it
+		mat.set_shader_parameter("bend", 0.0 if pane else (LIQUID_BEND if kind == "liquid" else 1.0))
 	mat.set_shader_parameter("seed", float(salt & 0xFFF) / 64.0)
 	mat.set_shader_parameter("dims", Vector2(maxf(girth, 0.5), maxf(height, 0.5)))
 	var play := String(m.get("play", ""))
 	mat.set_shader_parameter("play", int((PLAYS[play] as Dictionary)["code"]) if PLAYS.has(play) else 0)
 	mat.set_shader_parameter("rings", 1.0 if m.get("rings") == true else 0.0)
+	# its surface: a texture worked all over it ([constant TEXTURES], or its own code) and how unevenly it is polished
+	var tex := String(m.get("texture", ""))
+	var tex_code := String(m.get("texture_code", ""))
+	var row: Dictionary = TEXTURES.get(tex, {})
+	if not row.is_empty() or not tex_code.is_empty():
+		var size := float(m.get("texture_size", row.get("size", TEX_OWN_SIZE)))
+		var depth := float(m.get("bumps", 0.5))
+		mat.set_shader_parameter("tex", int(row["code"]) if not row.is_empty() else TEX_OWN)
+		mat.set_shader_parameter("tex_depth", depth)
+		mat.set_shader_parameter("tex_size", size)
+		mat.set_shader_parameter("tex_relief", depth * size * 0.01 * float(row.get("deep", TEX_OWN_DEEP)))
+	mat.set_shader_parameter("mottle", float(m.get("mottle", 0.0)))
 	var o: Dictionary = orn if orn is Dictionary else {}
+	var own := not o.is_empty() and String(o["kind"]) == "own"
+	# an ornament or a texture of its own is drawn by a variant of the shader, its body written in ([Ornaments])
+	if own or (row.is_empty() and not tex_code.is_empty()):
+		mat.shader = Ornaments.shader_for(mat.shader, String(o.get("code", "")) if own else "", tex_code if row.is_empty() else "")
 	if not o.is_empty():
-		var own := String(o["kind"]) == "own"
-		# an ornament of its own is drawn by a variant of the shader, its body written in ([Ornaments])
-		if own:
-			mat.shader = Ornaments.shader_for(mat.shader, String(o.get("code", "")))
 		mat.set_shader_parameter("orn", ORN_OWN if own else int((ORNAMENTS[String(o["kind"])] as Dictionary)["code"]))
 		mat.set_shader_parameter("orn_count", float(o.get("count", 8.0)))
 		mat.set_shader_parameter("orn_depth", float(o.get("depth", 0.5)))
@@ -1917,7 +2053,7 @@ static func material(m: Dictionary, orn: Variant, girth: float, height: float, s
 ## Where each copy of a part goes, in the thing's space: the part turned about its own origin,
 ## then laid out as its copies ask, then moved to its `at`. [param geos] are the part's geometry
 ## ([method _geometry]), which strewn copies need the size of.
-static func _placements(part: Dictionary, rng: RandomNumberGenerator, geos: Array, walls := {}, blocks := []) -> Array:
+static func _placements(part: Dictionary, rng: RandomNumberGenerator, geos: Array, walls := {}, blocks := [], settled := {}) -> Array:
 	var turn: Vector3 = part.get("turn", Vector3.ZERO)
 	var own := Transform3D(Basis.from_euler(Vector3(deg_to_rad(turn.x), deg_to_rad(turn.y), deg_to_rad(turn.z))), Vector3.ZERO)
 	var at: Vector3 = (part.get("at", Vector3.ZERO) as Vector3) * 0.01
@@ -1932,7 +2068,7 @@ static func _placements(part: Dictionary, rng: RandomNumberGenerator, geos: Arra
 		var placed := Transform3D(Basis(), at) * own
 		return [placed, Transform3D(Basis.from_scale(flip), Vector3.ZERO) * placed]
 	if String(c["kind"]) in ["scatter", "heap"]:
-		return _strewn(String(c["kind"]) == "heap", n, jit, float(c["radius"]) * 0.01, own, at, _bounds(geos, own), rng, walls, blocks)
+		return _strewn(String(c["kind"]) == "heap", n, jit, float(c["radius"]) * 0.01, own, at, _bounds(geos, own), rng, walls, blocks, settled)
 	# A copy's jitter turns it about its own middle: about the part's origin, a rod drawn away from it would swing across the thing, and a
 	# row of them splay like legs
 	var pivot := _pivot(geos, own)
@@ -1971,10 +2107,11 @@ static func _pivot(geos: Array, own: Transform3D) -> Vector3:
 
 
 ## Strewn copies. Scattered ones never touch: each takes a spot in the circle clear of the rest, and a handful too crowded for it spreads
-## wider rather than pass through itself. Heaped ones settle as a dropped handful does ([method _heaped]): on the floor while there is
+## wider on the open cloth - but never past the wall of what it lies in ([param walls]: a dish, a jar's water), where one that finds no
+## room is left out. Heaped ones settle as a dropped handful does ([method _heaped]): on the floor while there is
 ## room, then in the pockets of the heap, a little tipped where they lie on others - so the floor fills before the heap rises.
 static func _strewn(heap: bool, n: int, jit: float, radius: float, own: Transform3D, at: Vector3, bounds: Dictionary,
-		rng: RandomNumberGenerator, walls := {}, blocks := []) -> Array:
+		rng: RandomNumberGenerator, walls := {}, blocks := [], settled := {}) -> Array:
 	var reach := float(bounds["reach"])
 	var girth := float(bounds["girth"])
 	var low := float(bounds["low"])
@@ -1985,6 +2122,17 @@ static func _strewn(heap: bool, n: int, jit: float, radius: float, own: Transfor
 	var high_of := PackedFloat32Array()
 	var out: Array = []
 	var flat := heap and girth >= tall * 0.5 * FLAT
+	# THE THING'S OTHER HEAPS, settled already: this one comes to rest on them as on its own lumps, never through them - three heaps of
+	# seeds in one dish are one pile - and lays no more than the thing's heaps have left between them ([constant HEAP_MOST])
+	var pre := 0
+	if heap and not settled.is_empty():
+		var sm: PackedVector3Array = settled["mids"]
+		for k in sm.size():
+			mids.append(sm[k] - at)
+			wide_of.append((settled["wide"] as PackedFloat32Array)[k])
+			high_of.append((settled["high"] as PackedFloat32Array)[k])
+		pre = mids.size()
+		n = mini(n, maxi(0, HEAP_MOST - pre))
 	for i in n:
 		var s := 1.0 + rng.randf_range(-0.15, 0.15) * jit
 		var r := reach * s
@@ -2003,10 +2151,14 @@ static func _strewn(heap: bool, n: int, jit: float, radius: float, own: Transfor
 			spot = Vector2(p.x, p.z)
 			mid = p.y
 		else:
-			var wide := radius
+			var inside := INF if walls.is_empty() else float(walls["radius"]) - r
+			if inside <= 0.0:
+				continue
+			var wide := minf(radius, inside)
+			var found := false
 			for k in 240:
 				if k > 0 and k % 24 == 0:
-					wide = wide * 1.15 + r * 0.3
+					wide = minf(wide * 1.15 + r * 0.3, inside)
 				var q := Vector2.from_angle(rng.randf() * TAU) * wide * sqrt(rng.randf())
 				var clear := true
 				for e in laid:
@@ -2018,8 +2170,9 @@ static func _strewn(heap: bool, n: int, jit: float, radius: float, own: Transfor
 					clear = false
 				spot = q
 				if clear:
+					found = true
 					break
-			if not blocks.is_empty() and _blocked(Vector2(at.x, at.z) + spot, r, blocks):
+			if not found and (not walls.is_empty() or (not blocks.is_empty() and _blocked(Vector2(at.x, at.z) + spot, r, blocks))):
 				continue
 		laid.append([spot, r])
 		var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s, s))
@@ -2029,6 +2182,17 @@ static func _strewn(heap: bool, n: int, jit: float, radius: float, own: Transfor
 		# turned and tipped about its own middle, so a tipped lump stays in the pocket it was laid in
 		out.append(Transform3D(Basis(), at) * Transform3D(b, Vector3(spot.x, mid, spot.y))
 			* Transform3D(Basis(), Vector3(0.0, -(low + tall * 0.5), 0.0)) * own)
+	if heap and not settled.is_empty():
+		var sm: PackedVector3Array = settled["mids"]
+		var sw: PackedFloat32Array = settled["wide"]
+		var sh: PackedFloat32Array = settled["high"]
+		for k in range(pre, mids.size()):
+			sm.append(mids[k] + at)
+			sw.append(wide_of[k])
+			sh.append(high_of[k])
+		settled["mids"] = sm
+		settled["wide"] = sw
+		settled["high"] = sh
 	return out
 
 
@@ -2258,17 +2422,29 @@ static func _pockets(a: float, b: float, mids: PackedVector3Array, wide_of: Pack
 	for i in n:
 		reach.append((a + wide_of[i]) * NESTLE)
 		tall.append((b + high_of[i]) * NESTLE)
+	# the lumps near enough each to hold it together with it, later ones only and in order: three hold it only where each is near the
+	# other two, so a triple is looked for among one lump's near ones - the same pockets, in the same order, as every triple tried
+	var near: Array = []
+	for i in n:
+		var mine := PackedInt32Array()
+		for j in range(i + 1, n):
+			var d := mids[i] - mids[j]
+			if d.x * d.x + d.z * d.z < (reach[i] + reach[j]) * (reach[i] + reach[j]) and absf(d.y) < tall[i] + tall[j]:
+				mine.append(j)
+		near.append(mine)
 	for i in n:
 		if a >= b * FLAT:
 			var off := Vector2.from_angle(rng.randf() * TAU) * reach[i] * 0.35 * sqrt(rng.randf())
 			var top := mids[i] + Vector3(off.x, tall[i] * sqrt(1.0 - off.length_squared() / (reach[i] * reach[i])), off.y)
 			if top.y >= b and _free(top, a, b, mids, wide_of, high_of):
 				out.append(top)
-		for j in range(i + 1, n):
-			if not _both(i, j, mids, reach, tall):
-				continue
-			for k in range(j + 1, n):
-				if not (_both(i, k, mids, reach, tall) and _both(j, k, mids, reach, tall)):
+		var ni: PackedInt32Array = near[i]
+		for jj in ni.size():
+			var j := ni[jj]
+			var nj: PackedInt32Array = near[j]
+			for kk in range(jj + 1, ni.size()):
+				var k := ni[kk]
+				if not nj.has(k):
 					continue
 				var p: Variant = _pocket([mids[i], mids[j], mids[k]], [reach[i], reach[j], reach[k]], [tall[i], tall[j], tall[k]], b)
 				if p != null and _free(p, a, b, mids, wide_of, high_of):
@@ -2517,6 +2693,19 @@ static func _warped(q: Vector3, w: Dictionary, frame: Dictionary) -> Vector3:
 		p = Vector3(mid.x + r.x, p.y, mid.z + r.y)
 	var lean: Vector2 = w.get("lean", Vector2.ZERO)
 	p += Vector3(lean.x, 0.0, lean.y) * 0.01 * f
+	var spout: Dictionary = w.get("spout", {})
+	if not spout.is_empty():
+		# pulled toward `toward` near the top, most at the middle of its width and at the very top, none `depth` below it or past its
+		# width - every point there, inside and out, by as much, so the wall keeps its thickness and the lip is one piece with it
+		var toward := deg_to_rad(float(spout["toward"]))
+		var half := deg_to_rad(float(spout["width"])) * 0.5
+		var off := absf(wrapf(atan2(p.z - mid.z, p.x - mid.x) - toward, -PI, PI))
+		if off < half and Vector2(p.x - mid.x, p.z - mid.z).length() > 0.0005:
+			var across := pow(cos(off / half * PI * 0.5), 2.0)
+			var up := 1.0 - smoothstep(0.0, float(spout["depth"]) * 0.01, mid.y + h * sc.y - p.y)
+			var k := across * up
+			p += Vector3(cos(toward), 0.0, sin(toward)) * float(spout["out"]) * 0.01 * k
+			p.y += float(spout["rise"]) * 0.01 * k * up
 	var bend := deg_to_rad(float(w.get("bend", 0.0)))
 	if absf(bend) > 1e-4:
 		# toward bend_to: its own x there, bent round a center that far out, back again
@@ -2554,8 +2743,10 @@ static func _lathe(p: Dictionary, rng: RandomNumberGenerator) -> Tris:
 		pts = _pool(pts)
 	var twist := deg_to_rad(float(p.get("twist", 0.0)))
 	var drips := float(p.get("drips", 0.0))
-	if absf(twist) > 0.01 or drips > 0.0 or _fine(p):
-		pts = _subdivide(pts, 0.004)
+	# a spout pulls the top round: finer there, up and round, so the lip is a smooth curve
+	var spouted := (p.get("warp", {}) as Dictionary).has("spout") if p.get("warp") is Dictionary else false
+	if absf(twist) > 0.01 or drips > 0.0 or _fine(p) or spouted:
+		pts = _subdivide(pts, 0.002 if spouted else 0.004)
 	var y0 := INF
 	var y1 := -INF
 	var rmax := 0.0
@@ -2568,6 +2759,8 @@ static func _lathe(p: Dictionary, rng: RandomNumberGenerator) -> Tris:
 	var lobes := int(p.get("lobes", 0))
 	var depth := float(p.get("lobe_depth", 0.15))
 	var around := sides if sides >= 3 else clampi(roundi(rmax * 100.0 * 6.0 + 16.0), 24, 72)
+	if spouted and sides < 3:
+		around = mini(around * 2, 144)
 	if lobes > 0:
 		around = maxi(around, mini(lobes * 8, 160))
 	# the drips: where round the top each runs, how wide, how far down, how proud

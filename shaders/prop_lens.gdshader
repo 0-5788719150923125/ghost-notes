@@ -20,17 +20,29 @@ uniform float bend_y : hint_range(0.0, 1.0) = 1.0;
 // how much it bends at all: a pane (Props._pane - a spectacle lens, a compass's glass, a drink's skin) has
 // parallel flat faces, which turn no line of sight, so it reads the screen straight through (0)
 uniform float bend : hint_range(0.0, 1.0) = 1.0;
+// how deep (meters) what stands behind it must be for it to bend that all the way
+const float THROUGH_FULL = 0.03;
 #include "res://shaders/prop_common.gdshaderinc"
 
 void fragment() {
 	vec2 o = ornament(UV, UV2);
 	float facing = clamp(dot(NORMAL, VIEW), 0.0, 1.0);
 	float fr = pow(1.0 - facing, 3.0);
-	float frost = clamp(max(1.0 - clarity, o.y * orn_depth), 0.0, 1.0);
+	float frost = clamp(max(1.0 - clarity, etched(o) * orn_depth), 0.0, 1.0);
 	// Turned over: the line of sight is bent toward the middle and past it, so the edge of the
 	// thing shows what lies beyond its far side - the further away it stands, the smaller the bend
 	// is on the screen
 	float k = bend * (0.02 + 0.025 * facing) / max(-VERTEX.z, 0.15);
+	// ...as far as there is of it to look through: the bend grows with how deep it is to what stands behind it, none where it touches
+	// something (water's floor on the mud it lies on, a skin of it over a stone), all of it from THROUGH_FULL on - bent as hard where it
+	// is thin, it shifts what it rests on past its edge, and where its face and the other's meet they fight over the same depth
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+	vec3 ndc0 = vec3(SCREEN_UV, textureLod(depth, SCREEN_UV, 0.0).r) * 2.0 - 1.0;
+#else
+	vec3 ndc0 = vec3(SCREEN_UV * 2.0 - 1.0, textureLod(depth, SCREEN_UV, 0.0).r);
+#endif
+	vec4 behind = INV_PROJECTION_MATRIX * vec4(ndc0, 1.0);
+	k *= smoothstep(0.0, THROUGH_FULL, -behind.z / behind.w + VERTEX.z);
 	vec2 bent = clamp(SCREEN_UV + NORMAL.xy * vec2(-1.0, bend_y) * k, vec2(0.0), vec2(1.0));
 	// Only what is behind it: the screen holds what stands in front of the glass too, so a bent sample nearer the
 	// lens than this point of the glass is not seen through it; the line of sight goes straight through instead
@@ -44,7 +56,10 @@ void fragment() {
 		bent = SCREEN_UV;
 	}
 	vec3 seen = textureLod(screen, bent, frost * 4.0).rgb;
-	vec3 tint = mix(vec3(1.0), color, 0.55);
+	// its color is what it lets through: a clear one a hint of it, a deep one (by how dark it is) that color and little else
+	vec3 seen_as = pow(max(color, vec3(0.0)), vec3(1.0 / 2.2));
+	float deep = smoothstep(0.25, 0.95, 1.0 - dot(seen_as, vec3(0.299, 0.587, 0.114)));
+	vec3 tint = mix(vec3(1.0), color, 0.55 + 0.45 * deep);
 	// milky where it is not clear: some of its own color, lit
 	ALBEDO = color * 0.6 * frost;
 	EMISSION = seen * tint * (1.0 - fr * 0.55) * (1.0 - frost * 0.7);

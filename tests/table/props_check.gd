@@ -18,6 +18,19 @@ extends SceneTree
 ## - A wobble opens no seam, and the same seed wobbles the same (control: pushed out along its normals, it splits at its corners).
 ## - Whatever is written is buildable: junk sections, warps and roundings come out in range, and a word written as a list or a map
 ##   raises nothing (an outline written as its points is those points).
+## - A scatter never leaves what it lies in: crowded in a dish it lays fewer, every copy whole inside the wall, none touching (control:
+##   on the open cloth the same scatter lays every copy, spreading wider).
+## - A clear liquid is seen through, as glass is (control: a murky one is not).
+## - A glass's color is how deep it is: a dark one is deep and drawn by glass that writes depth, so its near wall hides its far wall
+##   (control: clear glass is not, and keeps the shader a flame inside a jar is seen through).
+## - What is seen through solid (a lamp's spirit) draws before hollow glass whatever the angle (control: hollow glass keeps the usual
+##   order), and a liquid bends what is behind it gently (control: a crystal ball bends it fully).
+## - A table's agents are told a face as words on a thing - a book's title, a label - and never of a scene's pictures (control: an agent
+##   building a prop a scene works is told the scene's face).
+## - A spout pulls a vessel's rim out at one side into a pouring lip, its wall with it in one piece: the rim reaches past its round there
+##   and nowhere else (control: with no spout the rim is as round that way as the other).
+## - A thing's heaps settle together: a second heap in the same dish rests on the first, never through it (control: settled apart, they
+##   pass through each other), and together they lay no more than Props.HEAP_MOST.
 ## - A strand rests on itself: where a coil or a tangle crosses itself the crossing rides over, never through, and it never lies
 ##   below the cloth or jumps up a step (two-sided: the same tangle laid flat passes through itself).
 ## - A strand draped over the table's edge hangs down past it as far as it ran past, to the floor at most, and never into the table
@@ -60,6 +73,10 @@ func _initialize() -> void:
 	_bones()
 	_sculpts()
 	_coins()
+	_scatter()
+	_heaps_together()
+	_spout()
+	_deep_glass()
 	_facets()
 	_bud()
 	_scrolls()
@@ -555,6 +572,99 @@ func _coins() -> void:
 			_ok((t as Transform3D).basis.y.normalized().dot(Vector3.UP) > 0.9999, "seed %d: a coin lies flat" % seed)
 	var same := [Transform3D(Basis(), Vector3(0, b, 0)), Transform3D(Basis(), Vector3(0.005, b, 0))]
 	_ok(_coins_touch(same, a, b), "the control: two coins on one spot are found overlapping")
+
+
+## Whether a lump of [param one] passes through a lump of [param two] (each a rounded lump [param a] wide and [param b] high, half sizes,
+## scaled as its transform is).
+func _lumps_cross(one: Array, two: Array, a: float, b: float) -> bool:
+	for t1 in one:
+		for t2 in two:
+			var s1 := (t1 as Transform3D).basis.get_scale().x
+			var s2 := (t2 as Transform3D).basis.get_scale().x
+			var d := (t1 as Transform3D).origin - (t2 as Transform3D).origin
+			# as near as a heap lets two lumps nestle (Props.NESTLE), a little nearer for rounding
+			var A := a * (s1 + s2) * Props.NESTLE * 0.97
+			var B := b * (s1 + s2) * Props.NESTLE * 0.97
+			if (d.x * d.x + d.z * d.z) / (A * A) + d.y * d.y / (B * B) < 1.0:
+				return true
+	return false
+
+
+func _deep_glass() -> void:
+	var amber := {"kind": "glass", "color": "#3a1c07", "clarity": 0.9}
+	var clear := {"kind": "glass", "color": "#eef4f5", "clarity": 0.95}
+	var deep := Props.material(amber, {}, 4.0, 6.0, 1, false)
+	var plain := Props.material(clear, {}, 4.0, 6.0, 1, false)
+	_ok(Props.deep_glass(amber) and deep.shader.code.contains("depth_draw_always") and not deep.shader.code.contains("depth_draw_opaque"),
+		"a dark glass is deep, drawn by glass that writes depth")
+	_ok(not Props.deep_glass(clear) and plain.shader == Props._GLASS, "the control: clear glass is not, and keeps its own shader")
+	var spirit := Props.material({"kind": "liquid", "color": "#e4e8f2", "clarity": 0.9}, {}, 4.0, 3.0, 1, true)
+	_ok(spirit.shader == Props._LENS and spirit.render_priority < plain.render_priority and plain.render_priority == 0,
+		"what is seen through solid draws before hollow glass; the control: hollow glass keeps the usual order")
+	var ball := Props.material({"kind": "crystal", "color": "#e8eef8", "clarity": 0.95}, {}, 4.0, 4.0, 1, true)
+	_ok(float(spirit.get_shader_parameter("bend")) == Props.LIQUID_BEND and float(ball.get_shader_parameter("bend")) == 1.0,
+		"a clear liquid bends what is behind it gently; the control: a crystal ball bends it as glass does")
+	var told := Props.describe()
+	var working := Props.describe(true)
+	_ok(told.contains("- face: " + Props.FACE_WORDS) and not told.contains("handed by the part's `name`") and working.contains("handed by the part's `name`"),
+		"a table's agents are told a face as words on a thing; the control: a scene's prop is told the scene's face")
+
+
+func _spout() -> void:
+	var beaker := {"shape": "lathe", "material": "glass", "profile": [[0, 0], [3.4, 0, 0.2], [3.4, 9.0, 0], [3.6, 9.5, 0], [3.2, 9.5, 0], [3.15, 0.25], [0, 0.25]]}
+	var spouted := beaker.duplicate(true)
+	spouted["warp"] = {"spout": {"toward": 90, "out": 0.7, "width": 60, "depth": 1.4}}
+	var reach := func(g: Props.Tris, way: Vector3) -> float:
+		var most := 0.0
+		for q in g.v:
+			if q.y > 0.09:
+				most = maxf(most, q.dot(way))
+		return most
+	var plain := _geo(beaker)
+	var lipped := _geo(spouted)
+	var front: float = reach.call(lipped, Vector3(0, 0, 1))
+	var back: float = reach.call(lipped, Vector3(0, 0, -1))
+	_ok(front > back + 0.005 and absf(back - float(reach.call(plain, Vector3(0, 0, -1)))) < 0.001 and _open_edges(lipped) == _open_edges(plain),
+		"a spout pulls the rim out at its side only, in one piece (front %.4f, back %.4f m)" % [front, back])
+	_ok(absf(float(reach.call(plain, Vector3(0, 0, 1))) - float(reach.call(plain, Vector3(0, 0, -1)))) < 0.001,
+		"the control: with no spout the rim reaches as far either way")
+
+
+func _heaps_together() -> void:
+	var a := 0.0028
+	var b := 0.0016
+	var bounds := {"reach": a, "girth": a, "low": -b, "high": b}
+	var walls := {"radius": 0.025, "top": 0.018}
+	var together := {"mids": PackedVector3Array(), "wide": PackedFloat32Array(), "high": PackedFloat32Array()}
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var first := Props._strewn(true, 30, 0.5, 0.02, Transform3D.IDENTITY, Vector3.ZERO, bounds, rng, walls, [], together)
+	var second := Props._strewn(true, 30, 0.5, 0.02, Transform3D.IDENTITY, Vector3.ZERO, bounds, rng, walls, [], together)
+	_ok(first.size() == 30 and second.size() == 30 and not _lumps_cross(first, second, a, b),
+		"a second heap in the same dish rests on the first, never through it")
+	rng.seed = 5
+	var alone_one := Props._strewn(true, 30, 0.5, 0.02, Transform3D.IDENTITY, Vector3.ZERO, bounds, rng, walls)
+	var alone_two := Props._strewn(true, 30, 0.5, 0.02, Transform3D.IDENTITY, Vector3.ZERO, bounds, rng, walls)
+	_ok(_lumps_cross(alone_one, alone_two, a, b), "the control: two heaps settled apart pass through each other")
+	var third := Props._strewn(true, 90, 0.5, 0.02, Transform3D.IDENTITY, Vector3.ZERO, bounds, rng, walls, [], together)
+	_ok(third.size() == Props.HEAP_MOST - 60, "together a thing's heaps lay no more than %d (%d more laid)" % [Props.HEAP_MOST, third.size()])
+
+
+func _scatter() -> void:
+	var r := 0.006
+	var bounds := {"reach": r, "girth": r, "low": -0.001, "high": 0.001}
+	for seed in 5:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed + 1
+		var crowded := Props._strewn(false, 36, 0.6, 0.04, Transform3D.IDENTITY, Vector3.ZERO, bounds, rng, {"radius": 0.04, "top": 0.01})
+		var past := crowded.filter(func(t: Transform3D) -> bool: return Vector2(t.origin.x, t.origin.z).length() + r * t.basis.get_scale().x > 0.04 + 1e-6)
+		_ok(crowded.size() < 36 and crowded.size() > 8 and past.is_empty(),
+			"seed %d: a scatter crowded in a dish lays fewer, every one inside its wall (%d laid, %d past it)" % [seed, crowded.size(), past.size()])
+		rng.seed = seed + 1
+		var open := Props._strewn(false, 36, 0.6, 0.04, Transform3D.IDENTITY, Vector3.ZERO, bounds, rng)
+		_ok(open.size() == 36, "seed %d: the control: on the open cloth it lays every copy, spreading wider (%d)" % [seed, open.size()])
+	_ok(Props.see_through({"kind": "liquid", "clarity": 0.95}) and not Props.see_through({"kind": "liquid", "clarity": 0.4}),
+		"a clear liquid is seen through, as glass is; the control: a murky one is not")
 
 
 ## How many triangles of [param g] show their front toward its middle (Godot draws clockwise fronts, so a

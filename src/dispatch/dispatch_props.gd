@@ -75,8 +75,9 @@ func rows() -> Array:
 			"tip": "Pick another to play this part, from your library or the desk's own. Whichever it is, the desk works it the same way."}]
 		if not choice.is_empty():
 			verbs.append({"key": "own", "label": "Desk's own", "tip": "Back to the desk's own."})
-		verbs.append({"key": "keep", "label": "Kept" if not as_kept.is_empty() else "Keep", "off": not as_kept.is_empty(),
-			"tip": ("In your library as %s." % as_kept) if not as_kept.is_empty() else "Keep it in your library, to use on any scene."})
+		# kept from its 3D view (the picture opens it): the row says where it is
+		if not as_kept.is_empty():
+			line.append("in your library as %s" % as_kept)
 		var row := {"key": "role:" + String(role), "name": PropMakes.name_of(String(role), choice), "line": " - ".join(line),
 			"tip": String((PropMakes.ROLES[role] as Dictionary)["blurb"]), "group": "desk",
 			"picture": library.pictures.of(h, sp[1], sp[2]) if not h.is_empty() else null, "verbs": verbs}
@@ -136,8 +137,7 @@ func offers() -> Array:
 		var sp := _spec(String(role), {}, _desk_seed())
 		out.append({"key": "role:" + String(role), "name": String((PropMakes.ROLES[role] as Dictionary)["label"]),
 			"line": library.pictures.size_of(String(sp[0])), "shelf": "dispatch", "tip": String((PropMakes.ROLES[role] as Dictionary)["blurb"]),
-			"picture": library.pictures.image(String(sp[0])),
-			"verbs": [{"key": "keep", "label": "Keep", "tip": "Keep it in your library, to use on any scene."}]})
+			"picture": library.pictures.image(String(sp[0]))})
 	return out
 
 
@@ -170,11 +170,6 @@ func act(key: String, verb: String) -> String:
 		var undone := _format.set_part(part_of, {})
 		return undone if not undone.is_empty() else _format.choose(role, {})
 	match verb:
-		"keep":
-			var p := prop_of(key)
-			if p.is_empty():
-				return "there is nothing to keep"
-			return library.keep(p["thing"], p["materials"], String((PropMakes.ROLES[role] as Dictionary)["blurb"]))
 		"own":
 			return _format.choose(role, {}) if _format != null else "nothing here takes it"
 	return "nothing here does that"
@@ -255,6 +250,12 @@ func lit() -> Array:
 ## The desk's things that make a sound of their own: the receiver, its hiss and storms ([DispatchSounds]).
 func heard() -> Array:
 	return [{"key": "receiver", "name": String((PropMakes.ROLES["receiver"] as Dictionary)["label"])}] if _format != null else []
+
+
+## A part's prop is said, kept, to be what the part is.
+func keep_line(key: String) -> String:
+	var role := _role_of(key)
+	return String((PropMakes.ROLES[role] as Dictionary)["blurb"]) if PropMakes.ROLES.has(role) else ""
 
 
 func versions_of() -> PropVersions:

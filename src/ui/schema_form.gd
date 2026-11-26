@@ -300,6 +300,9 @@ func _slider(key: String, field: Dictionary, value: Variant, has: bool) -> Contr
 		(r as Range).max_value = float(field["max"])
 		(r as Range).step = float(field.get("step", 1.0 if whole else 0.01))
 		(r as Range).set_value_no_signal(float(value if has and value != null else field.get("default", field["min"])))
+	# a field told `log` steps by ratio, not by amount: a few and hundreds both a short drag apart (its least above 0)
+	if bool(field.get("log", false)) and float(field.get("min", 0.0)) > 0.0:
+		slide.exp_edit = true
 	slide.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slide.custom_minimum_size = Vector2(90, 0)
 	slide.editable = not read_only

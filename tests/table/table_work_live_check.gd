@@ -18,6 +18,8 @@ extends Node
 ##   baked again, the new reading's clock where its first word was heard before, the pestle drawn where it was at that moment.
 ## - A skip ahead lands in the world the reading would have reached: a reading's first words heard, then started again past the
 ##   grind's word - the acts of the words skipped are placed before the landing, each at its written length, never all at once.
+## - Its air changed live (the Environment card) is drawn at once and nothing else is built again: the things stand as they stood, and
+##   no build is asked for; the control, a thing changed live, asks for the table built again - on a worker, never this thread.
 ## - A reading from the top again is no scrub: the table and its work stand, its clock starts over and its plan takes the new
 ##   intro; the control, the same reading named as a scrub to its first word, has its clock put on.
 ## - The control: the same table with no acts - nothing scheduled, no stream, no cue - and its clock still runs; its acts written
@@ -111,6 +113,7 @@ func _run() -> void:
 	_seek()
 	_skip()
 	_restarted()
+	_live_air()
 	_laid_rests()
 	_control()
 	print("table_work_live_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
@@ -397,6 +400,41 @@ func _skip() -> void:
 ## A reading started again from the top is no scrub ([method TableMedium._restart]): the table and its work stand, but its clock starts over
 ## and its plan takes the intro the show holds now - its first word estimated where the new intro ends, the grind its words' 3 s later. The
 ## control: the same reading named as a scrub to its first word puts its clock on where that word was heard before.
+## The table file written again with [param t], its change seen at the next look ([method TableMedium._poll_pictures]): the time it
+## notes a file by is whole seconds, so it is told the file is new.
+func _rewritten(t: Dictionary) -> void:
+	var f := FileAccess.open(DIR.path_join("table.json"), FileAccess.WRITE)
+	f.store_string(JSON.stringify(t))
+	f.close()
+	medium._table_mt = -2
+	medium._poll_pictures()
+
+
+func _live_air() -> void:
+	_build(null)
+	var stood: Array = medium._things_part.on_table.map(func(th: Dictionary) -> Variant: return th.get("node"))
+	var aired := _table()
+	aired["effects"] = [{"kind": "motes", "look": Effects.MOTES.keys()[0], "count": 12, "where": "over the cloth"}]
+	_rewritten(aired)
+	var still: Array = medium._things_part.on_table.map(func(th: Dictionary) -> Variant: return th.get("node"))
+	_ok(not medium._rebuild_wanted and medium._air != null and still == stood and not stood.is_empty(),
+		"its air changed live is drawn at once, the things standing as they stood, nothing built again")
+	# told at once by the card that changed it, in the same second as the last change: its air drawn with the new count all the same
+	var thicker := aired.duplicate(true)
+	((thicker["effects"] as Array)[0] as Dictionary)["count"] = 24
+	var f := FileAccess.open(DIR.path_join("table.json"), FileAccess.WRITE)
+	f.store_string(JSON.stringify(thicker))
+	f.close()
+	medium.table_changed()
+	var laid := int((((medium._built_spec.get("effects", []) as Array)[0]) as Dictionary).get("count", 0))
+	_ok(not medium._rebuild_wanted and laid == 24, "told at once, its air is drawn with the new count, nothing built again (%d)" % laid)
+	var moved := aired.duplicate(true)
+	((moved["things"] as Array)[0] as Dictionary)["at"] = [-20, -20]
+	_rewritten(moved)
+	_ok(medium._rebuild_wanted, "the control: a thing changed live asks for the table built again, on a worker")
+	medium._rebuild_wanted = false
+
+
 func _restarted() -> void:
 	_build(_acts())
 	var w = medium._work

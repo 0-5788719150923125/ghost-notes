@@ -149,7 +149,14 @@ func _motes() -> bool:
 		"drifting dust is posed on the GPU: all 300, its flicker its look's, only show time handed each frame")
 	_ok(not bool(cpu["drifting"]) and ((cpu["layer"] as Dictionary)["mm"] as MultiMesh).instance_count == Effects.MAX_MOTES,
 		"the control: dust on visits is posed on the CPU, no more of it than %d" % Effects.MAX_MOTES)
+	# ...and the rest of its count drifts round them on the GPU: how many it asks for is how thick the air is
+	var more: Dictionary = still.motes[2] if still.motes.size() > 2 else {}
+	_ok(not more.is_empty() and bool(more["drifting"]) and ((more["layer"] as Dictionary)["mm"] as MultiMesh).instance_count == 300 - Effects.MAX_MOTES,
+		"dust on visits asking for more than the CPU affords has the rest drifting on the GPU (%d)" % (((more["layer"] as Dictionary)["mm"] as MultiMesh).instance_count if not more.is_empty() else 0))
 	still.release()
+	var darting := Effects.build(_clean([{"kind": "motes", "look": "pixie", "where": "over the cloth", "count": 300, "away": 0.4}]), stage, 5)
+	_ok(darting.motes.size() == 1, "the control: motes that cannot only drift (pixies dart) keep to what the CPU affords, nothing more made")
+	darting.release()
 	var air := Effects.build(_clean([{"kind": "motes", "look": "pixie", "where": "beyond the table", "count": 12, "away": 0.5},
 		{"kind": "motes", "look": "firefly", "where": "over the cloth", "count": 6},
 		{"kind": "motes", "look": "ember", "where": "over the cloth", "count": 6}]), stage, 99)

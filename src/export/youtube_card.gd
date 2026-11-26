@@ -72,6 +72,8 @@ const TitleScreen := preload("res://src/export/title_screen.gd")
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "youtube"
+## The color family its toggles are drawn in: its component's ([constant Components.REGISTRY]).
+const FAMILY := &"publish"
 ## Where an export can go up, in the order the card offers them.
 const TARGETS := {"youtube": "YouTube", "tiktok": "TikTok"}
 ## A new card's block: nothing goes up until the box is ticked, and then privately, to YouTube. TikTok's rows keep their own
@@ -211,7 +213,7 @@ func _init() -> void:
 	var trow := HBoxContainer.new()
 	trow.add_theme_constant_override("separation", 6)
 	_to_yt = _target(TARGETS["youtube"], "Upload each export to the YouTube channel picked below.")
-	_to_yt.set_pressed_no_signal(true)
+	Card.put_toggle(_to_yt, true)
 	trow.add_child(_to_yt)
 	_to_tt = _target(TARGETS["tiktok"], ("Send each export to TikTok: posted, or as a draft you finish in the TikTok app. "
 		+ "The caption is the title, the description and the tags as hashtags."))
@@ -440,13 +442,12 @@ func _build_tags() -> void:
 	add_child(_tags_note)
 
 
-## A target's toggle on the Goes to row.
+## A target's toggle on the Goes to row, told on and off at a glance ([method Card.toggle_look]).
 func _target(text: String, tip: String) -> Button:
 	var b := Button.new()
-	b.text = text
 	b.toggle_mode = true
 	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_size_override("font_size", 12)
+	Card.toggle_look(b, FAMILY, text)
 	b.tooltip_text = tip
 	b.toggled.connect(func(_on: bool) -> void: refresh())
 	return b
@@ -518,8 +519,8 @@ func apply(block: Dictionary) -> void:
 	b.merge(block, true)
 	_upload.set_pressed_no_signal(bool(b["upload"]))
 	var to: Array = Array(b["targets"]) if b["targets"] is Array or b["targets"] is PackedStringArray else ["youtube"]
-	_to_yt.set_pressed_no_signal(to.has("youtube"))
-	_to_tt.set_pressed_no_signal(to.has("tiktok"))
+	Card.put_toggle(_to_yt, to.has("youtube"))
+	Card.put_toggle(_to_tt, to.has("tiktok"))
 	_tt.apply(block)
 	_write_tags.set_pressed_no_signal(bool(b["write_tags"]))
 	_tags_seen = []
@@ -1277,14 +1278,14 @@ func _fill_channels(all: Array) -> void:
 	_chips.move_child(_add, _chips.get_child_count() - 1)
 
 
+## A channel's toggle, told on and off at a glance ([method Card.toggle_look]); dimmed where it is not signed in here.
 func _chip(id: String, name: String, title: String, signed: bool) -> void:
 	var b := Button.new()
-	b.text = name
 	b.toggle_mode = true
 	b.button_group = _chip_group
 	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_size_override("font_size", 12)
 	b.set_pressed_no_signal(id == String(_chan["id"]))
+	Card.toggle_look(b, FAMILY, name)
 	b.modulate = Color(1, 1, 1, 1.0 if signed else 0.55)
 	b.tooltip_text = ("%s%s\nThis note's uploads go to the channel pressed." % [title if not title.is_empty() and title != name else name,
 		"" if signed else " - not signed in here"])

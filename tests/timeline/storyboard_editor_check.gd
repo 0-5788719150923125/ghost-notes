@@ -252,6 +252,22 @@ func _write_and_edit(song: String) -> void:
 	var first: GhostScene = Director._current
 	var opened := {"scene": first.scene_name, "seed": first.seed_value}
 	var whole := _main._frame_rect() as Rect2
+	var side: SidePanel = null
+	for n in get_tree().get_nodes_in_group(SidePanel.GROUP):
+		if (n as Control).is_visible_in_tree():
+			side = n
+	var vis0: Vector2 = get_viewport().get_visible_rect().size
+	_ok(side != null and absf(ch.stage_left - side.get_global_rect().end.x) <= 0.5 and absf(whole.position.x - side.get_global_rect().end.x) <= 1.0,
+		"an open side panel claims its width, and the frame is fitted to the right of it, touching its edge (%s, claimed %.0f)" % [str(whole), ch.stage_left])
+	if side != null:
+		side.visible = false
+		await _frames(2)
+		var full := _main._frame_rect() as Rect2
+		_ok(is_zero_approx(ch.stage_left) and is_equal_approx(full.get_center().x, vis0.x * 0.5) and full.size.x >= whole.size.x
+			and Director.frame_rect == full, "hidden, it gives the room back: the frame is the window's (%s; the control: open, %s)" % [str(full), str(whole)])
+		side.visible = true
+		await _frames(2)
+		_ok(ch.stage_left > 0.0 and (_main._frame_rect() as Rect2) == whole, "shown again, it claims it again")
 	card.open_editor()
 	await _frames(4)
 	var ed := card.editor()
@@ -264,7 +280,7 @@ func _write_and_edit(song: String) -> void:
 	# (a headless window is square, so the frame keeps its size and moves up; in a 16:9 window it shrinks)
 	_ok(fitted.end.y <= vis.y - ch.stage_bottom + 1.0 and fitted.get_center().y < whole.get_center().y,
 		"the frame is fitted above the dock (%s, in the whole window %s)" % [str(fitted), str(whole)])
-	_ok(is_equal_approx(whole.get_center().y, vis.y * 0.5), "...and before it opened, the frame was the window's")
+	_ok(absf(whole.get_center().y - vis.y * 0.5) <= 1.0, "...and before it opened, the frame was the window's (centered to the pixel)")
 	_ok(ed.ghost and not ed.read_only and ed._strip.rows.size() == NoteStoryboard.AHEAD,
 		"with nothing written it shows what the seed will play, grayed and open to change (%d entries)" % ed._strip.rows.size())
 	_ok(not FileAccess.file_exists(board_file), "...and nothing is kept for it yet")

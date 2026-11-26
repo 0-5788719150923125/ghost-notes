@@ -117,11 +117,19 @@ func _air() -> void:
 	_ok(JSON.stringify(_fx(back), "", true) == JSON.stringify(_fx(t), "", true),
 		"written back unchanged, the same effects in the same order:\n    %s\n    %s" % [JSON.stringify(_fx(back)), JSON.stringify(_fx(t))])
 	var more := els.duplicate(true)
-	(more[_index_of(more, "dust")] as Dictionary)["amount"] = 2.0
+	(more[_index_of(more, "dust")] as Dictionary)["count"] = 300
 	var counts := _fx(TableSurroundings.with_elements(t, more, 7, PALETTE)).filter(func(f: Dictionary) -> bool: return String(f.get("look", "")) == "dust")
-	_ok(counts.size() == 1 and int((counts[0] as Dictionary)["count"]) == 80, "Amount 2 is twice the motes as made (%s)" % str(counts))
+	_ok(counts.size() == 1 and int((counts[0] as Dictionary)["count"]) == 300, "How many set to 300 lays 300 motes (%s)" % str(counts))
+	var read_back := _els_of(TableSurroundings.with_elements(t, more, 7, PALETTE))
+	var dust_back: Dictionary = read_back[_index_of(read_back, "dust")]
+	_ok(int(Surroundings.values_of(dust_back)["count"]) == 300, "read back, How many is 300 as set - the dial stays where it was put (%s)" % str(dust_back))
+	var again := _fx(TableSurroundings.with_elements(t, read_back, 7, PALETTE)).filter(func(f: Dictionary) -> bool: return String(f.get("look", "")) == "dust")
+	_ok(int((again[0] as Dictionary)["count"]) == 300, "written again as read, it lays as many: it never multiplies itself (%s)" % str(again))
 	var as_made := _fx(back).filter(func(f: Dictionary) -> bool: return String(f.get("look", "")) == "dust")
-	_ok(int((as_made[0] as Dictionary)["count"]) == 40, "the control: Amount 1 is as many as made")
+	_ok(int((as_made[0] as Dictionary)["count"]) == 40, "the control: untouched, as many as made")
+	var dial: Dictionary = Surroundings.fields_of("dust")["count"]
+	_ok(bool(dial.get("log", false)) and int(dial["max"]) == Effects.MAX_ADRIFT and int(Surroundings.fields_of("pixies")["count"]["max"]) == Effects.MAX_MOTES,
+		"How many reaches as many as the kind can lay - hundreds of dust, a few dozen pixies - on a dial that steps by ratio")
 	var flies: Dictionary = _fx(back).filter(func(f: Dictionary) -> bool: return String(f.get("look", "")) == "fly")[0]
 	_ok((flies["colors"] as Array).size() == 2, "the first color kept keeps the list")
 	var recolor := els.duplicate(true)

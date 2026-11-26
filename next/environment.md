@@ -7,6 +7,15 @@ that throws light throws it. A component (`environment`, a family and hue of its
 
 ## Status
 
+- **A table's air changed live is drawn at once** (`TableMedium._poll_pictures`, `_bare`): an Environment change writes the episode's
+  `table.json`, and a change of its air and sound alone redraws the air with the things left standing; any other change while it plays
+  is built again on a worker (`_rebuild_wanted`, `_build_away`), never the app's thread - built there, the table held it half a minute.
+  Drifting motes are told HOW MANY outright (`count`, a dial stepping by ratio, `log` in SchemaForm; up to as many as the kind can
+  lay), so it reads back as set; an element saved with the old `amount` is read as the count it came to. Motes that visit, ride the
+  wind or carry a light are posed on the CPU, `Effects.MAX_MOTES` of them, and the rest of their count drift round them on the GPU
+  (`Effects.build`), so the count is how thick the air is. Open: homes are drawn in the camera's view as the show starts; a camera
+  that turns looks into air with none.
+
 Built:
 
 - **A list, as the Props card is** (`EnvironmentCard`, `EnvironmentSection` in `src/table/`, drawn by `PropsCard`): an entry an
@@ -94,14 +103,39 @@ Built:
   name and calls, where motes fly and fog lies at a table. Such an element is never drawn (an unset property is its default), so it
   goes back to the table unchanged, and kept it plays the same on any note; a place the note has not got is its kind's. New kinds for
   what a table makes: a creature, the ride (never offered on the Dex: only a moving table plays it) and flies.
+- **Every sound has a Tone** (`Surroundings.TONE_FIELD`, `Soundscape.TONE`, `TONE_OCTAVES`: -1 to 1, never drawn): every band, eddy,
+  bubble and call formant of its part moved down or up together, up to an octave and a half; at 0 the part is sample for sample as
+  it was made.
+- **A note's wind is heard**: the card's bed and Test hear what is round a note's scene as a table with no wind of its own does
+  (`EnvironmentCard.heard`, `Soundscape.of_table`) - a wind planned for the sound, its own or a breath. Made with no wind, a wind
+  element was silent.
+- **Refining a sound** (`EnvironmentSoundDesign`, `EnvironmentSoundTools`, rules/sound/environment.yaml): a heard element's
+  Refine… is a conversation with a designer (`TextRefine`, `WriterChat`: the CLI's session resumed turn after turn), who sees the
+  element's properties as JSON (every field of its kind as it is now, and its own words), changes them with the text's tools and
+  HEARS them: `hear` makes the draft as the scene makes it, alone at the level it has under the voice, on a worker, and tells it back
+  as numbers (`SoundMeasure`: loudness over time and its swing, brightness, low/middle/high shares, balance, sudden rises a second)
+  with any key it does not know, any value held to its bounds and what had to be made safe. Only what the designer changed lands
+  (`EnvironmentSoundDesign.landed`), over a hand's change meanwhile; a property it left alone stays drawn by the element's number.
+- **Versions** (`ElementVersions`): a turn that changes the sound keeps how it stood (where that was no version yet, so a hand's
+  change is never lost) and what it became, and puts it in place at once (its Test and the scene hear it). Once it has versions, the
+  entry's Version picker (a verb with `choices`, drawn by `PropsCard`) makes any of them the element again; an element changed by hand
+  since shows "As it is now". Kept, never deleted, with the conversation in a folder of the element's own: the note's
+  `refine/environment-<kind>-<n>/` (its kind and its count among its kind, so a sound keeps its history however the list round it
+  changes), an episode's in its folder - there a version made or picked is a hand's version of the table, kept as it reads back.
 
 Gate: `tests/table/environment_check.gd` (Roll, the block, every kind's fields, air, sound, shafts' geometry, the card, Keep, the
 Dex's list); `tests/table/table_surroundings_check.gd` (a table's sound and air as elements and back, unchanged, changed, set aside,
 from the Dex, kept and used elsewhere); `tests/table_show/episode_environment_check.gd` (the card on an episode, a hand's version,
-Keep, Add, Test, the bed at the desk). Look: `dispatch_look_probe.gd` and `letter_look_probe.gd` take `--light`, `--bright`, `--shafts k=v,...`, `--air`,
+Keep, Add, Test, the bed at the desk); `tests/table/environment_refine_check.gd` (the measure, Tone, a note's wind heard, versions,
+what lands from the designer's text, Refine… and the Version picker on the card, hear, what the designer is told). Look: `dispatch_look_probe.gd` and `letter_look_probe.gd` take `--light`, `--bright`, `--shafts k=v,...`, `--air`,
 `--heard` (`tests/table/environment_flags.gd`).
 
 For the user to judge:
+
+- Refine… on a sound (the note's own or an episode's): whether the designer's changes are heard as asked, whether its numbers are
+  enough for it to judge by (and how long it should listen: 20 s by default), the Version picker, and Tone by ear across the sounds.
+  What a designer can change is the sound's properties alone - where an ask needs more (a rain's drop size apart from its surface,
+  a fire's crackle rate, a stream's babble apart from its size), the next step is more properties, never a patch beside them.
 
 - A table show's Environment card: an episode's sounds and air listed, Test as the table hears it, a change kept as your version of
   the table, Keep, and a sound or what drifts added from the Dex.

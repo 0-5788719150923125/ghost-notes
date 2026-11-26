@@ -5,7 +5,8 @@ shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
 
 // Props.MATERIALS: 0 painted, 1 metal, 2 wax, 4 crystal, 5 ceramic, 6 stone, 7 wood, 8 paper,
-// 9 leather, 10 fabric, 11 bone, 12 plant, 13 liquid, 14 powder, 15 cream, 16 sponge
+// 9 leather, 10 fabric, 11 bone, 12 plant, 13 liquid, 14 powder, 15 cream, 16 sponge, 17 plastic. Over each, its surface's texture
+// and mottle (prop_common's `surface`).
 uniform int kind = 0;
 uniform vec3 color : source_color = vec3(0.7);
 uniform vec3 color2 : source_color = vec3(0.3);
@@ -99,7 +100,7 @@ void fragment() {
 		albedo *= 1.0 - craze * 0.45;
 		relief -= craze * 0.0001;
 		rough = mix(0.8, 0.07, polish);
-		coat = polish * 0.8;
+		coat = glazed(polish) * 0.8;
 		coat_rough = 0.08;
 	} else if (kind == 6) {
 		// STONE: veins (pattern) - running through it, or round in rings - and flecks (wear)
@@ -108,8 +109,9 @@ void fragment() {
 		albedo = mix(color * (0.88 + 0.24 * n2), color2, vein * pattern);
 		float fleck = step(0.86, vnoise(opos * 6.0)) * wear;
 		albedo = mix(albedo, color2 * 0.6, fleck);
-		rough = mix(0.85, 0.12, polish);
-		coat = polish * 0.4;
+		rough = mix(0.95, 0.12, polish);
+		spec = mix(0.12, 0.5, polish);
+		coat = glazed(polish) * 0.4;
 	} else if (kind == 7) {
 		// WOOD: rings about the part's axis, and the fibers along it
 		float d = length(opos.xz) * 0.9 + fbm(opos * vec3(0.35, 0.08, 0.35)) * 2.2 + opos.y * 0.04;
@@ -117,7 +119,7 @@ void fragment() {
 		float fiber = fbm(opos * vec3(2.5, 0.25, 2.5));
 		albedo = mix(color, color2, ring * pattern * 0.8) * (0.93 + 0.14 * fiber);
 		rough = mix(0.82, 0.22, polish);
-		coat = polish * 0.5;
+		coat = glazed(polish) * 0.5;
 	} else if (kind == 8) {
 		// PAPER: stained where it has been handled
 		albedo = color * (0.93 + 0.1 * n2);
@@ -201,7 +203,7 @@ void fragment() {
 		spec = 0.45;
 		sss = 0.2 + 0.25 * clarity;
 		back = color * 0.12 * clarity;
-		coat = polish * 0.3;
+		coat = glazed(polish) * 0.3;
 	} else if (kind == 16) {
 		// SPONGE: foam full of fine pores (pattern), soaked with paint where it has been used (wear, in color2)
 		vec3 c = cellsid(cpos * (8.0 / max(grain, 0.1)));
@@ -224,8 +226,11 @@ void fragment() {
 		// PAINTED or lacquered: a color, as glossy as its polish
 		albedo = color * (0.95 + 0.08 * n1);
 		rough = mix(0.85, 0.12, polish);
-		coat = polish * 0.6;
+		coat = glazed(polish) * 0.6;
 	}
+	// THE SURFACE (Props.TEXTURES): relief worked all over it, its hollows rougher, darker and dull; and how unevenly it is polished
+	float occl = 1.0;
+	albedo = surface(albedo, color2, rough, coat, relief, spec, occl);
 	// Light of its own (TableWork's `glow`): the color itself, lit from inside; a part's copies each get their own share,
 	// wandering on a slow clock of their own, never in step
 	float own = 1.0;
@@ -368,14 +373,14 @@ void fragment() {
 	// the hollow under an arch see less of the room
 	float cave = smoothstep(0.05, 0.75, UV2.y);
 	albedo *= 1.0 - 0.7 * cave;
-	AO = 1.0 - 0.9 * cave;
+	AO = (1.0 - 0.9 * cave) * occl;
 	AO_LIGHT_AFFECT = 0.8;
 	// few real surfaces reflect more than this much of the light (a white wax at its full value blows out beside a flame)
 	ALBEDO = albedo * 0.84;
 	METALLIC = metal;
 	ROUGHNESS = rough;
 	SPECULAR = spec;
-	nrm = bump(nrm, VERTEX, relief);
+	nrm = toward_eye(bump(nrm, VERTEX, relief), VIEW);
 	NORMAL = nrm;
 	// The frame the light reads fibers in: a silky stone's fibers spread its light across them - the flow turns the
 	// frame a quarter round, so the broad axis lies across the fibers (the meshes carry no tangents, so it is built here)

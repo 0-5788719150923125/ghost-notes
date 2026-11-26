@@ -346,7 +346,7 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		"card_h": snappedf(CardTable.card_size(CardTable.sanitize_look(look)).y * 100.0, 0.1),
 		"candles": candles, "one_candle": candles == 1, "lo": size.x, "hi": size.y, "zones": zones,
 		"most": CardTable.MAX_THINGS - candles, "stack": CardTable.STACK_MOST,
-		"max_parts": Props.MAX_PARTS, "check": Rules.say("table/set_dresser.check"), "ornaments": OrnamentLibrary.listing(),
+		"max_parts": Props.MAX_PARTS, "check": Rules.say("table/set_dresser.check"), "ornaments": OrnamentLibrary.listing(), "textures": OrnamentLibrary.listing(OrnamentLibrary.TEXTURE),
 		"tables": Tables.describe(), "props": Props.describe(), "air": Effects.describe(air_regions(), moments),
 		"lights": Lights.describe(), "sounds": Soundscape.describe(), "rides": Rides.describe(),
 		"title": title.strip_edges(), "byline": byline.strip_edges(),

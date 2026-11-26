@@ -62,11 +62,14 @@ var bottom_inset := 0.0
 var _bottom_claims := {}
 var _export_claims := {}
 ## The show's room: something docked along the bottom that a person works in while watching the show
-## (the storyboard's editor) claims the height it covers, and main fits the frame into what is left
-## above it ([signal stage_room_changed], [member stage_bottom]). Keyed, as every claim here is.
+## (the storyboard's editor) claims the height it covers, and something standing along the left (a side
+## panel, open) how far in it reaches; main fits the frame into what is left beside and above them
+## ([signal stage_room_changed], [member stage_bottom], [member stage_left]). Keyed, as every claim here is.
 signal stage_room_changed
 var stage_bottom := 0.0
+var stage_left := 0.0
 var _stage_claims := {}
+var _left_claims := {}
 
 ## The stage alone while it plays. [constant IDLE_AFTER] s into a show playing with no hand on the
 ## mouse or the keys, the furniture fades out and the pointer is hidden; the first move, click or key
@@ -135,13 +138,31 @@ func release_stage(who: StringName) -> void:
 		_apply_stage()
 
 
+## Claim the frame's room from the left edge in to [param px] as covered for [param who] (a side panel
+## open): the show is fitted to the right of it. Idempotent - call it again whenever the claiming surface
+## changes size.
+func claim_stage_left(who: StringName, px: float) -> void:
+	_left_claims[who] = maxf(px, 0.0)
+	_apply_stage()
+
+
+## Drop [param who]'s claim on the left of the show's room. Safe to call when there is none.
+func release_stage_left(who: StringName) -> void:
+	if _left_claims.erase(who):
+		_apply_stage()
+
+
 func _apply_stage() -> void:
 	var want := 0.0
 	for v in _stage_claims.values():
 		want = maxf(want, float(v))
-	if is_equal_approx(want, stage_bottom):
+	var left := 0.0
+	for v in _left_claims.values():
+		left = maxf(left, float(v))
+	if is_equal_approx(want, stage_bottom) and is_equal_approx(left, stage_left):
 		return
 	stage_bottom = want
+	stage_left = left
 	stage_room_changed.emit()
 
 func _apply_inset() -> void:

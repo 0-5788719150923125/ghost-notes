@@ -141,7 +141,7 @@ PAD_ID = 0
 # How this backend reads a request, said on every voice's row (`voices`): a row keys the takes kept in its voice
 # (TakeCache), so raising it has every sentence kept before said again. Raised when the same request comes out
 # another take.
-READS = 6
+READS = 7
 
 LICENSE = (
     "Apache-2.0 (hexgrad/Kokoro-82M). Its training data includes synthetic audio from closed "

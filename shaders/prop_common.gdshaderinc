@@ -18,11 +18,20 @@ uniform float seed = 0.0;
 uniform int play = 0;
 // a crystal's banding or a stone's veins curve round in rings (agate, malachite)
 uniform float rings = 0.0;
+// THE SURFACE (Props.TEXTURES): 0 none, 1 grit, 2 pitted, 3 cracked, 4 chipped, 5 fibers, 6 brushed, 7 lumpy, 8 granular,
+// 9 pebbled, 10 bricks, 11 tiles, 12 planks, 13 rough, 14 crumbled, 15 a texture of its own (own_texture, written by an agent) - how strong it is (0..1),
+// its features' size (centimeters) and its relief at the full (meters); and how unevenly the material is polished (0..1)
+uniform int tex = 0;
+uniform float tex_depth = 0.0;
+uniform float tex_size = 0.2;
+uniform float tex_relief = 0.0;
+uniform float mottle = 0.0;
 
 varying vec3 opos;          // the thing's own space, in pattern units
 varying vec3 cpos;          // ...in centimeters
 varying vec3 lpos;          // ...in centimeters from the middle of its own copy (Props.Tris.placed)
 varying flat float tag;     // the copy's own number, 0..1
+varying vec3 onrm;          // the surface's facing in the thing's own space
 
 // A BRUSH'S HAIRS (Bristles, a `tuft`): their root and the way they run (the mesh's own space), how long they are (meters,
 // 0: not hairs), and how they bend now - where their tips are pulled to (meters) and how far they splay - each vertex as far
@@ -123,6 +132,7 @@ float press_lands(float fs, float zf, float back, float sag) {
 
 void vertex() {
 	cpos = VERTEX * 100.0;
+	onrm = NORMAL;
 	opos = cpos / max(grain, 0.05) + vec3(seed * 17.31, seed * 3.7, seed * 9.13);
 	lpos = (VERTEX - CUSTOM0.xyz) * 100.0;
 	tag = CUSTOM0.w;
@@ -337,6 +347,34 @@ vec3 bump(vec3 n, vec3 pos, float h) {
 	return dot(b, b) > 1e-30 ? normalize(b) : n;
 }
 
+// The nearest of the texture's cells to p: its distance, the next nearest's, and its own number; `to` the way from p to its middle
+vec3 near_cell(vec3 p, out vec3 to) {
+	vec3 i = floor(p);
+	vec3 f = fract(p);
+	float d1 = 8.0;
+	float d2 = 8.0;
+	float id = 0.0;
+	to = vec3(0.0);
+	for (int x = -1; x <= 1; x++) {
+		for (int y = -1; y <= 1; y++) {
+			for (int z = -1; z <= 1; z++) {
+				vec3 g = vec3(float(x), float(y), float(z));
+				vec3 r = g + vec3(hash3(i + g), hash3(i + g + 17.1), hash3(i + g + 33.7)) - f;
+				float d = length(r);
+				if (d < d1) {
+					d2 = d1;
+					d1 = d;
+					id = hash3(i + g + 51.3);
+					to = r;
+				} else if (d < d2) {
+					d2 = d;
+				}
+			}
+		}
+	}
+	return vec3(d1, d2, id);
+}
+
 // THE DRAWING AN ORNAMENT OF ITS OWN MAY USE (Ornaments.HELPERS): distances in a cell's units, negative inside, and what turns them
 // into relief.
 float sd_circle(vec2 p, float r) {
@@ -385,6 +423,185 @@ float fill(float d) {
 // material wearing one is a variant of its shader with the agent's body written here (Ornaments.shader_for).
 vec2 own_ornament(vec2 p, vec2 cell, vec2 uv, float s) {
 	return vec2(0.0); // OWN ORNAMENT
+}
+
+// A TEXTURE OF ITS OWN (tex 13): its relief 0..1, how much rougher (above 0) or glossier (below) than its material it is there, -1..1,
+// and how much of the material's second color shows there, 0..1 - at `p`, where it is in the thing's own space in units of its
+// texture's size, `n` the way the surface faces there (the thing's space, unit length) and `s` the part's own number (0..1). This one
+// is plain: a material wearing one is a variant of its shader with the agent's body written here (Ornaments.shader_for).
+vec3 own_texture(vec3 p, vec3 n, float s) {
+	return vec3(0.5, 0.0, 0.0); // OWN TEXTURE
+}
+
+// A bumped normal kept facing the eye: tipped past edge-on (a steep pit's wall), it faces away, and the light it is shaded by comes back
+// as a white glint however rough the surface - so it is pulled back toward the eye just enough, as a game's bump mapping does
+vec3 toward_eye(vec3 n, vec3 v) {
+	float nv = dot(n, v);
+	return nv < 0.08 ? normalize(n + v * (0.08 - nv)) : n;
+}
+
+// How much of a clear coat a polish carries: none on what is dull (below 0.15), all of it from 0.45 on
+float glazed(float p) {
+	return p * smoothstep(0.15, 0.45, p);
+}
+
+// MASONRY AND BOARDS laid on a plane, at q in the texture's size: x 1 on a brick's, a tile's or a board's face and 0 in a joint, y
+// that one's own number. Bricks are 1 long and 0.45 tall, each course shifted half a brick; tiles are squares; boards are 1 wide and
+// run along x, each ended at a joint of its own 4 to 7 long
+vec2 laid(vec2 q, int which) {
+	if (which == 10) {
+		float row = floor(q.y / 0.45);
+		float x = q.x + 0.5 * mod(row, 2.0);
+		vec2 f = vec2(fract(x), fract(q.y / 0.45));
+		vec2 e = min(f, 1.0 - f) * vec2(1.0, 0.45);
+		return vec2(smoothstep(0.022, 0.045, min(e.x, e.y)), hash3(vec3(floor(x), row, 3.0)));
+	}
+	if (which == 11) {
+		vec2 f = fract(q);
+		vec2 e = min(f, 1.0 - f);
+		return vec2(smoothstep(0.018, 0.036, min(e.x, e.y)), hash3(vec3(floor(q), 5.0)));
+	}
+	float row = floor(q.y);
+	float len = 4.0 + 3.0 * hash3(vec3(row, 7.0, 1.0));
+	float x = q.x + hash3(vec3(row, 9.0, 2.0)) * len;
+	float fx = fract(x / len) * len;
+	float fy = fract(q.y);
+	float d = min(min(fy, 1.0 - fy), min(fx, len - fx));
+	return vec2(smoothstep(0.012, 0.03, d), hash3(vec3(row, floor(x / len), 11.0)));
+}
+
+// THE SURFACE at q (the thing's space in its texture's size) facing n, a pixel `px` of those units across: its relief 0..1, how much
+// rougher it is there (-1..1) and how much of `color2` shows there (0..1). Every texture but masonry is noise in three dimensions, so
+// nothing on it tiles or seams; masonry is laid on the plane each face is nearest to, blended where a face turns. A line is never
+// drawn thinner than a pixel, and detail finer than a few pixels is left out (it would only alias)
+vec3 texture_at(vec3 q, vec3 n, float px) {
+	if (tex == 1) {
+		// GRIT
+		return vec3(vnoise(q * 1.7) * 0.55 + vnoise(q * 4.1 + vec3(5.0)) * 0.45, 0.0, 0.0);
+	}
+	if (tex == 2) {
+		// PITTED: some cells sunk into pits, duller, a little of color2 in them
+		vec3 c = cellsid(q);
+		float pit = (1.0 - smoothstep(0.08, 0.38, c.x)) * step(0.45, c.z);
+		return vec3(1.0 - pit + (vnoise(q * 3.0) - 0.5) * 0.15, pit * 0.15, pit * 0.25);
+	}
+	if (tex == 3) {
+		// CRACKED: plates, each domed a little, color2 in the cracks between
+		vec3 c = cellsid(q);
+		float crack = (1.0 - smoothstep(0.0, max(0.07, px * 1.5), c.y - c.x)) * min(1.0, 0.07 / max(px * 1.5, 0.07) * 1.6);
+		return vec3((1.0 - c.x * 0.35) * (1.0 - crack), crack * 0.2, crack * 0.6);
+	}
+	if (tex == 4) {
+		// CHIPPED: each cell a shell-shaped hollow struck from the stone, rising to a sharp ridge where it meets the next, faintly
+		// rippled in arcs round the point at its edge where it was struck
+		vec3 to;
+		vec3 c = near_cell(q, to);
+		vec3 struck = normalize(vec3(hash3(vec3(c.z * 13.0)), hash3(vec3(c.z * 29.0)), hash3(vec3(c.z * 47.0))) - 0.5 + vec3(1e-4));
+		float arc = length(to + struck * 0.7);
+		float ripple = sin(arc * 17.0 + c.z * 6.0) * 0.03 * (1.0 - smoothstep(0.3, 0.9, c.x)) * (1.0 - smoothstep(0.05, 0.12, px));
+		return vec3(clamp(c.x * c.x * 1.3 + ripple, 0.0, 1.0), 0.0, 0.0);
+	}
+	if (tex == 5) {
+		// FIBERS, running up the part
+		return vec3(fbm(q * vec3(2.2, 0.1, 2.2)) * 0.7 + vnoise(q * vec3(6.0, 0.3, 6.0)) * 0.3, 0.0, 0.0);
+	}
+	if (tex == 6) {
+		// BRUSHED: fine scratches running up the part
+		return vec3(vnoise(q * vec3(9.0, 0.08, 9.0)) * 0.7 + vnoise(q * vec3(23.0, 0.2, 23.0)) * 0.3, 0.0, 0.0);
+	}
+	if (tex == 7) {
+		// LUMPY
+		return vec3(fbm(q * 0.6), 0.0, 0.0);
+	}
+	if (tex == 8) {
+		// GRANULAR: packed grains, each a flat facet tipped its own way and polished its own, a share of them color2
+		vec3 to;
+		vec3 c = near_cell(q, to);
+		vec3 tip = vec3(hash3(vec3(c.z * 31.0)), hash3(vec3(c.z * 57.0)), hash3(vec3(c.z * 91.0))) - 0.5;
+		float h = 0.55 + dot(-to, tip) * 1.1 - (1.0 - smoothstep(0.0, max(0.08, px * 1.5), c.y - c.x)) * 0.35;
+		return vec3(clamp(h, 0.0, 1.0), (c.z - 0.5) * 0.2, step(0.84, fract(c.z * 13.7)) * 0.85);
+	}
+	if (tex == 9) {
+		// PEBBLED
+		vec3 c = cellsid(q);
+		return vec3(clamp(1.0 - c.x * c.x * 1.4, 0.0, 1.0), 0.0, 0.0);
+	}
+	if (tex >= 10 && tex <= 12) {
+		// BRICKS, TILES, PLANKS: a little grit on each face, each its own a little; the joints sunk, rougher, and color2 in a
+		// brick's or a tile's
+		vec3 w = pow(abs(n), vec3(4.0));
+		w /= max(w.x + w.y + w.z, 1e-5);
+		vec2 a = laid(q.zy, tex);
+		vec2 b = laid(q.xz, tex);
+		vec2 c = laid(q.xy, tex);
+		float face = a.x * w.x + b.x * w.y + c.x * w.z;
+		float id = a.y * w.x + b.y * w.y + c.y * w.z;
+		float h = face * (0.82 + 0.12 * id + vnoise(q * 9.0) * 0.12);
+		return vec3(h, (1.0 - face) * 0.12 + (id - 0.5) * 0.1, tex == 12 ? 0.0 : 1.0 - face);
+	}
+	if (tex == 13 || tex == 14) {
+		// ROUGH: noise at its size and at every smaller size down to grit, each half as far apart and a little fainter, as a rough
+		// surface is rough at every scale; CRUMBLED: the same of sharp creases and ridges, as broken coal, shale or crumpled paper. An
+		// octave finer than a few pixels is left out, so it never sparkles
+		float h = 0.0;
+		float total = 0.0;
+		float amp = 1.0;
+		vec3 at = q;
+		float step_px = px;
+		for (int i = 0; i < 6; i++) {
+			float w = amp * (1.0 - smoothstep(0.25, 0.6, step_px));
+			float nz = vnoise(at);
+			if (tex == 14) {
+				nz = 1.0 - abs(nz * 2.0 - 1.0);
+				nz *= nz;
+			}
+			h += nz * w;
+			total += w;
+			at = at * 2.07 + vec3(1.7, 4.3, 2.9);
+			amp *= 0.58;
+			step_px *= 2.07;
+		}
+		h = total > 1e-4 ? h / total : 0.5;
+		return vec3(smoothstep(0.12, 0.88, h), 0.0, 0.0);
+	}
+	if (tex == 15) {
+		vec3 own = own_texture(q, n, fract(seed * 0.6180339));
+		return vec3(clamp(own.x, 0.0, 1.0), clamp(own.y, -1.0, 1.0), clamp(own.z, 0.0, 1.0));
+	}
+	return vec3(0.5, 0.0, 0.0);
+}
+
+// THE SURFACE laid on a material: its color [param albedo] as the texture changes it (a share of [param second], its second color,
+// where the texture says), and [param rough], [param coat], [param relief] (meters), [param spec] and [param occl] (what of the room's
+// light reaches it, 1 all) changed with it. The relief fades into roughness where its features come under a few pixels, as a normal
+// map's mipmaps do; its hollows are rougher and darker, and reflect nothing - a cavity occludes its own specular as a game's cavity map
+// does, or a pit's steep wall, seen at a glancing angle, would catch the light white however rough it is. The mottle is soft patches
+// `grain` across, some duller and some glossier. Called on every pixel, never in a branch (its derivatives)
+vec3 surface(vec3 albedo, vec3 second, inout float rough, inout float coat, inout float relief, inout float spec, inout float occl) {
+	float px = max(length(dFdx(cpos)), length(dFdy(cpos))) / max(tex_size, 0.01);
+	vec3 tx = texture_at(cpos / max(tex_size, 0.01) + vec3(seed * 7.1, seed * 3.3, seed * 5.9), normalize(onrm + vec3(1e-6)), px);
+	float sharp = 1.0 - smoothstep(0.3, 0.8, px);
+	float on = tex > 0 ? tex_depth : 0.0;
+	float seen = on * sharp;
+	float lost = on - seen;
+	relief += tex > 0 ? tx.x * tex_relief * sharp : 0.0;
+	rough = clamp(rough + (tx.y + (0.5 - tx.x) * 0.2) * on + lost * 0.25, 0.03, 1.0);
+	vec3 a = mix(albedo, second, tex > 0 ? tx.z : 0.0);
+	a *= 1.0 - (seen * (1.0 - tx.x) + lost * 0.5) * 0.3;
+	float hollow = seen * (1.0 - smoothstep(0.0, 0.6, tx.x)) + lost * 0.35;
+	spec *= 1.0 - hollow;
+	coat *= 1.0 - hollow;
+	occl *= 1.0 - hollow * 0.6;
+	float mt = fbm(opos * 0.45 + vec3(41.0));
+	rough = clamp(rough + (mt - 0.5) * 2.0 * mottle * 0.4, 0.03, 1.0);
+	coat *= 1.0 - mottle * mt;
+	return a;
+}
+
+// How much of ornament [param o] glass etches (frosts): a motif's place (stars, dots, a lattice); never an ornament that is only the
+// glass's shape - flutes and hammering stay clear glass that bends and catches the light, as real fluted glass does
+float etched(vec2 o) {
+	return (orn == 2 || orn == 10) ? 0.0 : o.y;
 }
 
 // THE ORNAMENT: x its relief 0..1, y where it is (paint and inlay go there). A motif is laid out

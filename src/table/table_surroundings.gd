@@ -110,6 +110,7 @@ static func effect_of(el: Dictionary) -> Dictionary:
 	var v := Surroundings.values_of(el)
 	var fx := {"name": String(own.get("name", "%s %d" % [kind, int(el.get("seed", 0))]))}
 	if String(base.get("kind", "")) == "motes":
+		# how many, as the card says it outright: it reads back as it was set
 		fx.merge({"kind": "motes", "look": String(base["look"]), "where": _where(own, base),
 			"count": Surroundings.mote_count(el, v), "colors": Surroundings.own_colors(own, String(v["color"])),
 			"size": v["size"], "glow": v["glow"], "speed": v["speed"]})
@@ -188,6 +189,7 @@ static func _air(table: Dictionary, seed: int, palette: Array) -> Array:
 			el["size"] = fx["size"]
 			el["glow"] = fx["glow"]
 			el["speed"] = fx["speed"]
+			el["count"] = int(fx["count"])
 			var colors: Array = fx.get("colors", [])
 			if not colors.is_empty():
 				el["color"] = colors[0]

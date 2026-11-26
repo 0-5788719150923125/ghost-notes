@@ -66,8 +66,20 @@ The user judges: the names (Props, Dex, Used), the 3D view, the Dex, kept voices
   picks (`AgentPick`: agent, model, effort) to change the version shown as they say, with three pictures of it as built
   (`PropStudio.views`) and `rules/table/prop_refiner.yaml` (the prop language shared with the set dresser, `thing_language`);
   the bar moves and the agent's activity line ticks until it lands. Its answer is a new version of the same kept prop
-  (`ThingLibrary.add_version`, `LibraryVersions.land`), stepped through with ‹ › and made the prop by Use this one
-  (`use_version`); a prop not kept yet is kept first, once. What uses it follows (`PropSection.refined`): a table's thing
+  (`ThingLibrary.add_version`, `LibraryVersions.land`), stepped through with ‹ ›, the one shown when the view is
+  left (closed, or opened on another prop) made the prop (`PropViewer.keep_shown`, `use_version`). A refinement that made it
+  something else names its version (the answer's `name` and `line`), and a person types over the name at the view's top to name
+  the version shown; the prop takes a version's name when that version is used, and keeps its former names (`aka`), so a desk or a
+  role that chose it by one still finds it (`ThingLibrary.read`, `known_as`); a prop not kept yet is held as a DRAFT (`draft` in its
+  file: its versions' home, on no shelf, in no agent's search) - refining keeps nothing, nor does choosing a seen prop for a desk's
+  part. WORDS ON A THING: the set dresser and the refiner are told a `face` as a label of words (`Props.FACE_WORDS`: a book's title on its
+  cover or spine, a bottle's label), never as a scene's picture. A turned vessel's POURING LIP is its warp's `spout` (the rim and the
+  wall under it pulled out at one side, one piece), never a part laid on the rim. A thing's heaps settle together, one pile, at most
+  `HEAP_MOST`; a part makes at most `MAX_COPIES`, both told to agents. REFINING RUNS IN THE BACKGROUND, any number of props at once, one at a time each (`LibraryVersions.start_refine`,
+  `PropRefining`): Refine closes its words' window, the view says what the agent is doing over the foot of the 3D view (never
+  taking room from it) with Stop, and may close or turn to another prop; a Props card row says it too, then that a new version is
+  ready until the view has shown it. Each refine is told its own ask alone, never the asks before it. KEEP IS THE 3D VIEW'S, never a card row's or a Dex tile's (`PropSection.keep_prop`, a section saying what the prop is by
+  `keep_line`): it keeps the prop with every version it has, and the row then says "in your library". What uses it follows (`PropSection.refined`): a table's thing
   takes the version used as a hand's version, a Dispatch part is played by the kept prop (where the version used keeps the faces
   the desk fills), a Letter desk's thing by the version used (`DeskRows.set_make`, the block's `makes`). An agent refining a prop
   a scene works is told its faces, lights and fed parts, and to keep them (`Props.describe_working`). The Dex shows one prop,

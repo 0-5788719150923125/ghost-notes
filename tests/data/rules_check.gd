@@ -219,9 +219,12 @@ func _prompts() -> bool:
 	# a prop refined (table/prop_refiner.yaml), the prop language shared with the set dresser
 	var refine_vars := {"name": "a cup", "line": "a clay cup", "spec": "{}", "direction": "taller", "props": Props.describe(),
 		"max_parts": Props.MAX_PARTS, "cardless": true, "tools": false, "pictured": true,
-		"ornaments": [{"name": "fine scrolls", "words": "a running border of thin scrolls"}]}
+		"ornaments": [{"name": "fine scrolls", "words": "a running border of thin scrolls"}],
+		"textures": [{"name": "knapped flint", "words": "the scallops of a struck flint"}]}
 	texts.append(Rules.say("table/prop_refiner.system", refine_vars) + "\n" + Rules.say("table/prop_refiner.prompt", refine_vars))
 	_ok(texts.back().contains("\"fine scrolls\": a running border of thin scrolls"), "the prop refiner is told the ornaments kept in the library")
+	_ok(texts.back().contains("\"knapped flint\": the scallops of a struck flint") and texts.back().contains("`mottle`")
+		and texts.back().contains("chipped:"), "...and the textures kept, the surface's fields and the built-in textures")
 	for step in ["intro", "1", "2", "close"]:
 		var upto := 0 if step == "intro" else (3 if step == "close" else int(step))
 		texts.append(TablePrompts.reader("Show", "a brief", plan, step, ["hello"], [card, card, card].slice(0, upto), 3, true, [], [], ["Moth"])["prompt"])

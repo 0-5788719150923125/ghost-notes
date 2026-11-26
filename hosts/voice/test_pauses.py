@@ -536,6 +536,89 @@ def test_the_cut_finds_the_dip():
 
 
 @check
+def test_a_rest_is_never_cut_in_a_hiss():
+    """A word read straight into one that opens on a soft fricative ("and five") has no silence between them,
+    and the fricative's hiss is under the quiet line by its level alone. The cut goes where the first word
+    has faded and the hiss has not begun, never inside the hiss; a real silence (the model's faint floor in
+    it) is still silence, and the cut goes in its middle."""
+    import numpy as np
+    from backends.piper import SPLICE_QUIET, _trough
+
+    rng = np.random.default_rng(7)
+    t = np.arange(int(0.45 * SR)) / SR
+    peak = 0.5
+
+    def word(start: float, end: float):
+        """A vowel from `start` to `end`, faded over 25 ms at each end."""
+        env = np.clip((t - start) / 0.025, 0.0, 1.0) * np.clip((end - t) / 0.025, 0.0, 1.0)
+        return peak * np.sin(2.0 * np.pi * 220.0 * t) * env
+
+    def hiss(start: float, end: float, rms: float):
+        env = np.clip((t - start) / 0.01, 0.0, 1.0) * np.clip((end - t) / 0.01, 0.0, 1.0)
+        return rms * rng.standard_normal(t.size) * env
+
+    quiet = SPLICE_QUIET * peak
+    # "and" fades out by 0.200, the f of "five" hisses from 0.200 to 0.300, its vowel from 0.300
+    audio = (word(0.0, 0.200) + hiss(0.200, 0.300, 0.009) + word(0.300, 0.45)).astype(np.float32)
+    f = audio[int(0.215 * SR) : int(0.285 * SR)]
+    ok(float(np.mean(np.abs(f))) < quiet, "control: the hiss is under the quiet line by its level alone")
+    at = _trough(audio, int(0.185 * SR), int(0.250 * SR), SR, quiet)
+    ok(0.185 <= at / SR <= 0.206, "the cut is before the hiss (%.4f s; it starts at 0.200)" % (at / SR))
+    # the same words with 40 ms of the model's own rest between them, a faint floor in it
+    floor = 0.002 * rng.standard_normal(t.size) * ((t >= 0.200) & (t < 0.240))
+    audio = (word(0.0, 0.200) + floor + hiss(0.240, 0.340, 0.009) + word(0.340, 0.45)).astype(np.float32)
+    at = _trough(audio, int(0.185 * SR), int(0.290 * SR), SR, quiet)
+    ok(abs(at / SR - 0.215) < 0.012, "a silence is still one: the cut is in its middle (%.4f s)" % (at / SR))
+
+
+@check
+def test_a_rest_goes_between_the_words_hisses():
+    """Where a vowel runs straight into the next word's fricative, and the fricative's tail is quieter than
+    where they meet ("a five"), the quietest place is inside the hiss: `_between` ends the search where the
+    next word's hiss begins, starts it where this word's ends, and leaves a hiss two words share alone."""
+    import numpy as np
+    from backends.piper import SPLICE_QUIET, _between, _trough
+
+    rng = np.random.default_rng(11)
+    t = np.arange(int(0.45 * SR)) / SR
+    peak = 0.5
+    quiet = SPLICE_QUIET * peak
+
+    def word(start: float, end: float):
+        env = np.clip((t - start) / 0.025, 0.0, 1.0) * np.clip((end - t) / 0.025, 0.0, 1.0)
+        return peak * np.sin(2.0 * np.pi * 220.0 * t) * env
+
+    def hiss(start: float, end: float, rms0: float, rms1: float):
+        """Noise from `start` to `end`, its level falling from `rms0` to `rms1`."""
+        inside = (t >= start) & (t < end)
+        level = rms0 + (rms1 - rms0) * np.clip((t - start) / (end - start), 0.0, 1.0)
+        return rng.standard_normal(t.size) * level * inside
+
+    def cut(audio, lo, hi, ends, opens):
+        a, b = _between(audio, int(lo * SR), int(hi * SR), SR, peak, ends, opens)
+        return _trough(audio, a, b, SR, quiet) / SR
+
+    # "a" fades out by 0.200 as the f begins at 0.195; the f falls away to a whisper by 0.300, the vowel after
+    audio = (word(0.0, 0.200) + hiss(0.195, 0.300, 0.03, 0.004) + word(0.300, 0.45)).astype(np.float32)
+    plain = cut(audio, 0.185, 0.320, False, False)
+    ok(0.215 < plain < 0.300, "control: the quietest place is in the hiss's tail (%.4f s)" % plain)
+    at = cut(audio, 0.185, 0.320, False, True)
+    ok(0.185 <= at <= 0.201, "opening on a hiss, the cut is before it (%.4f s; it comes in under the fade, 0.195-0.200)" % at)
+    # "us all": the word's own s, then the vowel
+    audio = (word(0.0, 0.120) + hiss(0.115, 0.215, 0.03, 0.006) + word(0.210, 0.45)).astype(np.float32)
+    at = cut(audio, 0.105, 0.260, True, False)
+    ok(0.205 <= at <= 0.260, "ending on a hiss, the cut is after it (%.4f s; it goes out under the vowel, 0.210-0.215)" % at)
+    # "us say": two hisses with a breath of silence between them, and the same run together
+    audio = (word(0.0, 0.100) + hiss(0.095, 0.180, 0.03, 0.02) + hiss(0.210, 0.300, 0.02, 0.03)
+             + word(0.300, 0.45)).astype(np.float32)
+    at = cut(audio, 0.090, 0.320, True, True)
+    ok(0.180 <= at <= 0.210, "between two hisses, the cut is in the gap (%.4f s)" % at)
+    audio = (word(0.0, 0.100) + hiss(0.095, 0.300, 0.03, 0.03) + word(0.300, 0.45)).astype(np.float32)
+    lo, hi = int(0.090 * SR), int(0.320 * SR)
+    eq(_between(audio, lo, hi, SR, peak, True, True), (lo, hi), "one hiss two words share leaves the window as it is")
+
+
+@check
 def test_a_long_rest_is_trimmed_to_the_target():
     """A rest longer than its target gives the excess back, from the middle of the silence.
 
@@ -791,9 +874,14 @@ def test_rest_points_for_holds():
             float(np.abs(audio[at - 5 : at + 5]).max()) == 0.0,
             "the rest %s is in silence" % why,
         )
+    # Between two words is `_gap_window`'s: from the word's last sound to a frame into the next word's first.
+    # The fake voice is one steady sine, so where in that the quietest place falls is the envelope's ripple.
+    last = max(p["t1"] for p in res["phones"] if p["w"] == 3)
+    first = min(p["t0"] for p in res["phones"] if p["w"] == 4)
     ok(
-        rows[3]["t0"] < rows[3]["rest"] <= rows[4]["t0"] + 0.02,
-        "an unmarked boundary's rest is between its words (%.4f)" % rows[3]["rest"],
+        last <= rows[3]["rest"] <= first + be.hop / float(SR) + 1e-4,
+        "an unmarked boundary's rest is between its words (%.4f in %.4f-%.4f)"
+        % (rows[3]["rest"], last, first + be.hop / float(SR)),
     )
 
 

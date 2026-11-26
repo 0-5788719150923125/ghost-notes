@@ -405,9 +405,11 @@ landscape and says so on its card.
 | book, notebook      | not yet           | the camera frames a spread; portrait means framing the page being read                                                                                                                                                                                |
 | table               | yes (a game)      | the lens is the frame's short side and each shot of a game keeps a landscape frame's top edge; pages are painted 2:3; the table is still dressed for 16:9, so a card reading's deck and spread can sit outside the view ([portrait.md](portrait.md)) |
 
-**The preview is the frame.** The stage is the frame, centered in the window - 16:9, or 608x1080 for
-portrait in a 1920x1080 window, black beside it. The side panel sits clear of a centered portrait frame,
-the Look filters follow the stage's rect, and the vignette is fitted to the frame.
+**The preview is the frame.** The stage is the frame, centered in the room it has - 16:9, or 608x1080 for
+portrait in a 1920x1080 window, black beside it. An open side panel claims its width (`Shell.claim_stage_left`)
+and a dock along the bottom its height (`claim_stage`): the frame is fitted to the right of the one and above
+the other, never under them, and has the whole window back once the panel is hidden ("‹", F2). An export's
+frame is always the window. The Look filters follow the stage's rect, and the vignette is fitted to the frame.
 
 **Subtitles lay out in the frame, inside a safe area.** At 1080x1920 a baseline in the window would sit
 under the buttons every platform draws over the bottom third and the right edge (Google's safe zones for

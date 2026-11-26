@@ -9,7 +9,8 @@ class_name PropSection
 ## an Image (null until it is taken), `on` whether the scene uses it (null for a row with no tick; `on_tip` its tick's words on hover),
 ## `remove_tip` what its × does where it can be taken off ([method remove]) or `remove_off` why it cannot, `verbs` the buttons it has, each
 ## `{key, label, tip}` with `pressed` (a toggle's state) and `off` (grayed, `tip` saying why) where they apply, done by [method
-## act] - or with `opens`, which opens the Dex on what may take the row's place ([method choices]). Rows are shown under their
+## act] - or with `opens`, which opens the Dex on what may take the row's place ([method choices]), or with `choices` (`[{key,
+## label}]`, `chosen` the key picked now), a picker whose pick is done by [method act] as `<verb>:<choice>`. Rows are shown under their
 ## group ([method groups]). A row's prop whole, to be looked at in 3D, is [method prop_of] and [method model_of]; a section whose
 ## props do not turn ([method ShelfSection.turns]) opens nothing, and a row with no `picture` key shows none.
 ##
@@ -68,6 +69,20 @@ func prop_of(_key: String) -> Dictionary:
 ## Where its props keep their versions and are refined ([PropVersions]), null where they have none.
 func versions_of() -> PropVersions:
 	return null
+
+
+## Row or offer [param key]'s prop kept in the library, as a person's Keep in the 3D view asks ([PropViewer]) - the only Keep a prop
+## has - said by [method keep_line]. One held as a draft is kept with its versions. "" done, else why not.
+func keep_prop(key: String) -> String:
+	var pv := versions_of()
+	if pv == null:
+		return "nothing here keeps props"
+	return pv.keep_in_library(prop_of(key), keep_line(key))
+
+
+## What row or offer [param key]'s prop is said to be, kept: "" says nothing.
+func keep_line(_key: String) -> String:
+	return ""
 
 
 ## Row or offer [param key] is now played by the prop kept as [param name] - kept so it could be refined, or another of its versions

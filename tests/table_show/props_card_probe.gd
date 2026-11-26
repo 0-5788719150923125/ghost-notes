@@ -62,7 +62,7 @@ func _run() -> void:
 	var t: Dictionary = card._episode.read_json("table")
 	var names: Array = (t.get("things", []) as Array).map(func(x: Dictionary) -> String: return String(x.get("name", "")))
 	for n in names.slice(0, 3):
-		sec.act("thing:" + n, "keep")
+		sec.keep_prop("thing:" + n)
 	sec.set_on("thing:" + String(names.back()), false)
 	var t0 := Time.get_ticks_msec()
 	var rows := sec.rows()

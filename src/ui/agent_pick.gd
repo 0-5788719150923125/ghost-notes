@@ -21,6 +21,9 @@ class_name AgentPick
 ## A person changed the agent, the model or the level.
 signal changed
 
+## The section of ghost.cfg the last pick for each kind of job is kept in ([method last_for]).
+const KEPT := "last_picked"
+
 ## "writer" ([TextGen]'s agents), "painter" ([ImageGen]'s) or "assistant" ([AssistantBackends]').
 var role := "writer"
 ## The first agent listed where the job can go undone ([method assistant]: "Off"): its agent is "", with no model and no
@@ -93,6 +96,28 @@ func set_choice(a: String, m: String, e: String) -> void:
 ## {agent, model, effort} as chosen now.
 func choice() -> Dictionary:
 	return {"agent": agent, "model": model, "effort": effort}
+
+
+## THE LAST PICKED FOR A KIND OF JOB, kept between sessions in ghost.cfg ([Settings], section [constant KEPT]): what a window that
+## asks for that job (each Refine window's, by [param job]) starts from where nothing of its own says. {} for none yet.
+static func last_for(job: String) -> Dictionary:
+	var st := _settings()
+	var v: Variant = st.call("read", KEPT, job, {}) if st != null else {}
+	return (v as Dictionary).duplicate() if v is Dictionary else {}
+
+
+## [param pick] (`{agent, model, effort}`) kept as the last picked for [param job] ([method last_for]).
+static func keep_for(job: String, pick: Dictionary) -> void:
+	var st := _settings()
+	if st == null or String(pick.get("agent", "")).is_empty():
+		return
+	st.call("write", KEPT, job, {"agent": String(pick["agent"]), "model": String(pick.get("model", "")), "effort": String(pick.get("effort", ""))})
+
+
+## The settings' owner, found by its node rather than named: this row compiles where no autoload is up (a gate's first lines).
+static func _settings() -> Node:
+	var tree := Engine.get_main_loop() as SceneTree
+	return tree.root.get_node_or_null("Settings") if tree != null and tree.root != null else null
 
 
 func _backend(k: String) -> GDScript:

@@ -3,14 +3,15 @@ class_name LibraryProps
 
 ## LibraryProps - the library's props on the Dex's shelves ([DexWindow]): the props kept ("Kept props", [ThingLibrary]) and every
 ## thing any episode's set dresser made, read where it stands ("Seen props", read on a worker, never copied until it is kept). A
-## kept prop is renamed in place, exported to a `.prop.json` to hand on, or removed to the trash; a seen one is kept; any is turned
-## whole in 3D ([method model_of]). A prop's picture is taken once and kept by its hash ([PropStudio], [PropPictures]): those near
+## kept prop is renamed in place, exported to a `.prop.json` to hand on, or removed to the trash; any is turned whole in 3D ([method
+## model_of]), where a seen one is kept (the view's Keep, [method PropSection.keep_prop]). A draft - a prop refined or chosen before it
+## was kept - is on no shelf and says nothing is kept ([method kept_by_hash]); kept, it is the same prop with its versions. A prop's picture is taken once and kept by its hash ([PropStudio], [PropPictures]): those near
 ## the view first, then every other on the shelf shown. Opened on its own it adds nothing; a presentation's section adds what it
 ## offers ([EpisodeProps]).
 
 const SHELVES := [
 	{"key": "kept", "label": "Kept props", "tip": "The props in your library, kept from any show."},
-	{"key": "seen", "label": "Seen props", "tip": "Every prop a set dresser has made for any episode, as it stands there. Keep one to have it in your library."},
+	{"key": "seen", "label": "Seen props", "tip": "Every prop a set dresser has made for any episode, as it stands there. Open one and Keep it to have it in your library."},
 ]
 ## How long what was read is trusted before it is read again (seconds): the library, and every episode's table.
 const LIBRARY_FRESH := 3.0
@@ -20,6 +21,8 @@ const SEEN_FRESH := 60.0
 var pictures := PropPictures.new()
 var _library: Array = []          # ThingLibrary.entries(), as last read
 var _library_t := -INF
+var _kept_by := {}                # what kept_by_hash and held_by_hash answer, worked out once a read
+var _held_by := {}
 var _seen: Array = []             # every thing every episode stands: {key, name, line, tip, thing, materials, hash}
 var _seen_t := -INF
 var _seen_task := -1
@@ -35,6 +38,8 @@ func offers() -> Array:
 	var out: Array = []
 	for e in entries():
 		var ed: Dictionary = e
+		if bool(ed["draft"]):
+			continue
 		var h := String(ed["hash"])
 		var line := pictures.size_of(h)
 		if not String(ed["line"]).is_empty():
@@ -46,10 +51,11 @@ func offers() -> Array:
 	for s in seen_list():
 		var sd: Dictionary = s
 		var as_kept := String(kept.get(String(sd["hash"]), ""))
-		out.append({"key": String(sd["key"]), "name": String(sd["name"]), "line": String(sd["line"]), "shelf": "seen",
-			"tip": String(sd["tip"]), "picture": pictures.image(String(sd["hash"])),
-			"verbs": [{"key": "keep_seen", "label": "Kept" if not as_kept.is_empty() else "Keep", "off": not as_kept.is_empty(),
-				"tip": ("In your library as %s." % as_kept) if not as_kept.is_empty() else "Keep it in your library."}]})
+		var line := String(sd["line"])
+		if not as_kept.is_empty():
+			line = ("in your library" if as_kept == String(sd["name"]) else "in your library as %s" % as_kept) + (" - " + line if not line.is_empty() else "")
+		out.append({"key": String(sd["key"]), "name": String(sd["name"]), "line": line, "shelf": "seen",
+			"tip": String(sd["tip"]), "picture": pictures.image(String(sd["hash"]))})
 	return out
 
 
@@ -63,11 +69,6 @@ func act(key: String, verb: String) -> String:
 			var err := ThingLibrary.remove(key.substr(5))
 			refresh()
 			return err
-		"keep_seen":
-			var s := seen_of(key)
-			if s.is_empty():
-				return "that prop is gone"
-			return keep(s["thing"], s["materials"], "")
 	return "nothing here does that"
 
 
@@ -148,10 +149,16 @@ func import_from(path: String) -> String:
 # --- the library -------------------------------------------------------------------------------------
 
 ## Thing [param thing] built of [param mats] kept in the library under its own name (or the next free one, "cup 2"), its picture
-## asked for. "" done, else why not.
-func keep(thing: Dictionary, mats: Dictionary, line: String) -> String:
+## asked for - or held as a draft where [param draft] (its versions' home, kept by no one yet). One held as a draft already is kept
+## (a person's Keep), one kept already left as it is. "" done, else why not.
+func keep(thing: Dictionary, mats: Dictionary, line: String, draft := false) -> String:
 	if not Library.writable():
 		return "this session is read-only"
+	var held := String(held_by_hash().get(ThingLibrary.hash_of(thing, mats), ""))
+	if not held.is_empty():
+		var err := "" if draft else ThingLibrary.mark_kept(held, line)
+		refresh()
+		return err
 	var t := thing.duplicate(true)
 	var base := String(t.get("name", "a prop")).strip_edges()
 	var name := base
@@ -161,7 +168,7 @@ func keep(thing: Dictionary, mats: Dictionary, line: String) -> String:
 		name = "%s %d" % [base, n]
 		n += 1
 	t["name"] = name
-	var err := ThingLibrary.keep(t, mats, line)
+	var err := ThingLibrary.keep(t, mats, line, draft)
 	refresh()
 	if err.is_empty():
 		var e := ThingLibrary.read(name)
@@ -180,6 +187,13 @@ func entries() -> Array:
 	if Time.get_ticks_msec() * 0.001 - _library_t > LIBRARY_FRESH:
 		_library = ThingLibrary.entries()
 		_library_t = Time.get_ticks_msec() * 0.001
+		_kept_by = {}
+		_held_by = {}
+		for e in _library:
+			for h in ThingLibrary.hashes_of(e):
+				_held_by[String(h)] = String((e as Dictionary)["name"])
+				if not bool((e as Dictionary)["draft"]):
+					_kept_by[String(h)] = String((e as Dictionary)["name"])
 	return _library
 
 
@@ -192,13 +206,16 @@ func entry(name: String) -> Dictionary:
 
 
 ## Each prop kept, by the hash of every one of its versions ([method ThingLibrary.hashes_of]): hash -> its name. A prop refined
-## is found by the hash it was kept with, so the one it was kept from says Kept.
+## is found by the hash it was kept with, so the one it was kept from says Kept. Never a draft.
 func kept_by_hash() -> Dictionary:
-	var out := {}
-	for e in entries():
-		for h in ThingLibrary.hashes_of(e):
-			out[String(h)] = String((e as Dictionary)["name"])
-	return out
+	entries()
+	return _kept_by
+
+
+## Each prop kept or held as a draft, by the hash of every one of its versions: hash -> its name. Where its versions are found.
+func held_by_hash() -> Dictionary:
+	entries()
+	return _held_by
 
 
 ## Every thing any episode stands, once each by what it is: read on a worker, and what was read so far meanwhile.

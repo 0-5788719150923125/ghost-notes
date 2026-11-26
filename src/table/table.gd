@@ -392,6 +392,8 @@ var _box_part := TableBox.new()
 ## by themselves - a clock's hands, steam off a brew - and the puppeteer's acts, run when the reading cues them.
 var _work := TableWork.new()
 var _sounds: WorkSounds = null        # the work heard ([method advance])
+var _built_spec := {}                 # the table as it was last built from ([method _build_table]), to tell a change of its air alone
+var _rebuild_wanted := false          # what it stands on changed live: built again on a worker, never on this thread ([method advance])
 var _acts_mt := -2                    # the acts file's time when the work was last built (-1: none)
 var _ink_mt := -2                     # ...and TeX's layout of what it writes ([TableInk]), likewise
 var _skin_mt := -2                    # ...and the designs painted on it ([TablePaint], `skin.json`)
@@ -689,6 +691,16 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	if _poll_t <= 0.0:
 		_poll_t = 1.0
 		_poll_pictures()
+		# what it stands on changed while it plays (a hand's edit, the set dresser landing): the episode made again on a worker, the
+		# show held as for any build - built here, a table of twenty things held this thread half a minute while the sound played on
+		if _rebuild_wanted:
+			_rebuild_wanted = false
+			if not aside and is_inside_tree() and _subs != null and is_instance_valid(_subs) \
+					and (away_in_tests or not TablePhysics.render_waits()):
+				_build_away(_subs.document, _plan.pay, _source, feed.intro_hold)
+				return
+			_build_table()
+			_plan_moves()
 	if not _plan.parse.is_empty() and _subs != null and is_instance_valid(_subs):
 		_follow.extend(_subs.words)
 		_now = _subs.now() + _follow.offset
@@ -1334,10 +1346,11 @@ func _poll_pictures(force := false) -> void:
 		_reflect()
 	# The table, set while a reading can already be playing (live, the set dresser works beside the painter): built
 	# again when it lands, and the shuffle's chain with it - a wash goes round whatever stands
+	# A change of its air alone (the Environment card: what drifts and what is heard) is drawn at once, the things left standing; the
+	# reading hears its sound again itself
 	var tpath := dir.path_join("table.json")
 	if (FileAccess.get_modified_time(tpath) if FileAccess.file_exists(tpath) else -1) != _table_mt:
-		_build_table()
-		_plan_moves()
+		table_changed()
 	# ...and the work, blocked while it can already be playing: built again over the table as it stands
 	var apath := dir.path_join("acts.json")
 	var spath := dir.path_join("skin.json")
@@ -1345,8 +1358,10 @@ func _poll_pictures(force := false) -> void:
 	if (FileAccess.get_modified_time(apath) if FileAccess.file_exists(apath) else -1) != _acts_mt \
 			or (FileAccess.get_modified_time(spath) if FileAccess.file_exists(spath) else -1) != _skin_mt \
 			or (FileAccess.get_modified_time(ipath) if FileAccess.file_exists(ipath) else -1) != _ink_mt:
-		_build_table()
-		_plan_moves()
+		_acts_mt = FileAccess.get_modified_time(apath) if FileAccess.file_exists(apath) else -1
+		_skin_mt = FileAccess.get_modified_time(spath) if FileAccess.file_exists(spath) else -1
+		_ink_mt = FileAccess.get_modified_time(ipath) if FileAccess.file_exists(ipath) else -1
+		_rebuild_wanted = true
 	var room := _picture(dir.path_join("backdrop.png"), force)
 	# ...a game's table stands in the dark, seen from every side ([member TablePlan.dark_room]): no room picture behind it
 	_backdrop.visible = not _plan.dark_room
@@ -1595,11 +1610,35 @@ static func _face_up() -> Basis:
 ## [method CardTable.sanitize_table]), or the look's candles alone until it has - each built ([Props]), stood where
 ## [method TableThings.place] finds it room, its wicks lit - on the table itself, built first ([Tables]): its top and
 ## the layers laid on it, the painting on whatever takes it. [param spec]: the table made safe, when it was just read.
+## The episode's table read again as it stands now - told at once by what changed it (the Environment card), or seen at the next look
+## ([method _poll_pictures]; a file's time is whole seconds, so a change a moment after another may wait for a later one): a change of its
+## air and sound alone drawn at once, the things standing; any other built again on a worker ([member _rebuild_wanted]).
+func table_changed() -> void:
+	if _plan == null or _build_task >= 0 or String(_plan.pay.get("dir", "")).is_empty():
+		return
+	var now_spec := _table_spec()
+	if not _built_spec.is_empty() and _bare(now_spec) == _bare(_built_spec):
+		_build_air(now_spec)
+		_built_spec = now_spec
+	else:
+		_rebuild_wanted = true
+
+
+## Table [param spec] without its air and what is heard (`effects`, `sound`, what of the environment is set aside), as text: two tables
+## the same but for those are one table to build ([method _poll_pictures]).
+static func _bare(spec: Dictionary) -> String:
+	var t := spec.duplicate(true)
+	for k in ["effects", "sound", TableSurroundings.ASIDE]:
+		t.erase(k)
+	return JSON.stringify(t, "", true)
+
+
 func _build_table(spec: Dictionary = {}) -> void:
 	for c in _props.get_children():
 		c.queue_free()
 	if spec.is_empty():
 		spec = _table_spec()
+	_built_spec = spec
 	if not _furniture.is_empty():
 		(_furniture["node"] as Node).queue_free()
 	_furniture = Tables.build({"top": spec["top"], "layers": spec["layers"]}, _plan.seed_value)

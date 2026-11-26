@@ -201,8 +201,8 @@ const SHAFT_FIELDS := {
 ## What drifting motes can be told; a kind's own size (its effect's, else its look's), glow, speed and color are its defaults, drawn
 ## near them ([method fields_of]).
 const MOTE_FIELDS := {
-	"amount": {"label": "Amount", "blurb": "How many: 1 as the kind is.", "type": "float", "min": 0.25, "max": 2.5, "step": 0.05, "default": 1.0,
-		"roll": [0.7, 1.5]},
+	"count": {"label": "How many", "blurb": "How many of them there are: a few, to a cloud of them.", "type": "int", "min": 1, "max": 600,
+		"step": 1, "default": 16, "log": true},
 	"size": {"label": "Size", "blurb": "How big each is (mm).", "type": "float", "step": 0.1},
 	"glow": {"label": "Glow", "blurb": "How brightly each glows.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05},
 	"speed": {"label": "Speed", "blurb": "How fast they wander.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05},
@@ -316,6 +316,21 @@ const SOUND_FIELDS := {
 ## How loud a sound is over how it is made (dB), every sound's: never drawn, 0 until set ([constant Soundscape.VOLUME]).
 const VOLUME_FIELD := {"label": "Volume", "blurb": "How loud it is, over how it is made (dB): 0 as it is, below quieter, above louder.",
 	"type": "float", "min": -30.0, "max": 30.0, "step": 1.0, "default": 0.0}
+## How dark or bright a sound is over how it is made, every sound's: every filter, ring and resonance of it moved down or up together
+## ([constant Soundscape.TONE_OCTAVES] at either end); never drawn, 0 until set.
+const TONE_FIELD := {"label": "Tone", "blurb": "How dark or bright it is, over how it is made: below 0 duller and deeper, above 0 brighter and thinner.",
+	"type": "float", "min": -1.0, "max": 1.0, "step": 0.05, "default": 0.0}
+## What a sound's own words beside its properties say ([constant OWN]), as its designer is told them ([EnvironmentSoundDesign]).
+const HEARD_WORDS := {
+	"from": {"label": "From", "blurb": "Where it is heard from: front, right, back left and the like, or degrees (0 ahead, 90 the right, 270 the left). Left out, a wind leans with the wind itself and the rest stand where their kind does."},
+	"strength": {"label": "Its own wind", "blurb": "How strong a wind of its own blows, 0 a breath to 1 a gale: heard where nothing else plans the wind, as round a note's own scene."},
+	"gusts": {"label": "Gusts", "blurb": "How gusty its own wind is, 0 steady to 1 wild."},
+	"every": {"label": "Every", "blurb": "About how many seconds apart its own wind's gusts come, 4 to 600."},
+	"name": {"label": "Name", "blurb": "What the creature is called, in a few words."},
+	"calls": {"label": "Calls", "blurb": "The sounds the creature makes: a list of its calls, each one of those listed."},
+	"awake": {"label": "Awake", "blurb": "How lively it is at the start and at the end, [start, end]: 0 fast asleep (snores and purrs) to 1 wide awake (chirps and squeaks)."},
+	"over": {"label": "Over", "blurb": "How many seconds it takes to go from how lively it starts to how lively it ends, 30 to 7200."},
+}
 ## The block's keys and what each is when it says nothing.
 const KNOBS := {"elements": [], "lights": {}, "heard": {}}
 ## The most elements a scene has, and the keys of an element that are no property of it.
@@ -369,7 +384,14 @@ static func element(raw: Variant) -> Dictionary:
 		out["off"] = true
 	if d.get("own") is Dictionary:
 		out["own"] = _own(kind, d["own"])
-	out.merge(Roll.clean(fields_of(kind), d))
+	# drifting motes once told an amount (a share of their kind's count, or their host's) are told the count it came to
+	var fields := fields_of(kind)
+	if fields.has("count") and not d.has("count") and typeof(d.get("amount")) in [TYPE_INT, TYPE_FLOAT]:
+		var own: Dictionary = out.get("own", {})
+		var was := float(own["count"]) if typeof(own.get("count")) in [TYPE_INT, TYPE_FLOAT] else float((fields["count"] as Dictionary)["default"])
+		d = d.duplicate()
+		d["count"] = maxi(1, roundi(was * float(d["amount"])))
+	out.merge(Roll.clean(fields, d))
 	return out
 
 
@@ -450,6 +472,12 @@ static func fields_of(kind: String, color := "") -> Dictionary:
 			return HAZE_FIELDS.duplicate(true)
 		var base: Dictionary = Effects.MOTES[String(fx["look"])]
 		var out := MOTE_FIELDS.duplicate(true)
+		# how many: the kind's own, up to as many as it can lay (one that only drifts is posed on the GPU, hundreds; one that lights
+		# or visits is the CPU's, a few dozen)
+		var many := int(fx.get("count", 16))
+		var most := Effects.MAX_ADRIFT if Effects.drifts(base, bool(base["light"])) else Effects.MAX_MOTES
+		out["count"].merge({"default": mini(many, most), "max": most,
+			"roll": [maxi(1, roundi(many * 0.7)), mini(most, roundi(many * 1.5))]}, true)
 		var sizes: Vector2 = base["sizes"]
 		var size := float(fx.get("size", base["size"]))
 		out["size"].merge({"min": sizes.x, "max": sizes.y, "default": size,
@@ -463,17 +491,40 @@ static func fields_of(kind: String, color := "") -> Dictionary:
 		var part := String(row["part"])
 		var out: Dictionary = (SOUND_FIELDS.get(part, {}) as Dictionary).duplicate(true)
 		out["volume"] = VOLUME_FIELD.duplicate()
+		out["tone"] = TONE_FIELD.duplicate()
 		var spec: Dictionary = row["spec"]
-		var tables := {"on": Soundscape.RAINS, "through": Soundscape.THROUGH, "sort": Soundscape.INSECTS if part == "insects" else Soundscape.WATERS}
 		for k in out:
 			var f: Dictionary = out[k]
 			var fallback: Variant = f.get("min", 0.0)
 			if String(f["type"]) == "enum":
-				f["options"] = (tables[k] as Dictionary).keys()
+				f["options"] = _heard_table(part, k).keys()
 				fallback = (f["options"] as Array)[0]
 			f["default"] = spec.get(_heard_key(k), f.get("default", fallback))
 		return out
 	return {}
+
+
+## The [Soundscape] table a sound part [param part]'s choice [param field] picks from: rain's `on`, the wind's `through`, the insects'
+## or the water's `sort`; {} for a field that is no choice.
+static func _heard_table(part: String, field: String) -> Dictionary:
+	match field:
+		"on":
+			return Soundscape.RAINS
+		"through":
+			return Soundscape.THROUGH
+		"sort":
+			return Soundscape.INSECTS if part == "insects" else Soundscape.WATERS
+	return {}
+
+
+## What each option of sound kind [param kind]'s choice [param field] is, in words: option -> what it sounds like ({} for a field
+## that is no choice).
+static func heard_choices(kind: String, field: String) -> Dictionary:
+	var out := {}
+	var table := _heard_table(String((KINDS.get(kind, {}) as Dictionary).get("part", "")), field)
+	for k in table:
+		out[k] = String((table[k] as Dictionary).get("about", "")) if table[k] is Dictionary else String(table[k])
+	return out
 
 
 ## Every property of element [param el]: what it sets, the rest drawn by its number ([method Roll.values]) - or, for a host's as written
@@ -497,10 +548,11 @@ static func shown_of(el: Dictionary, color := "") -> Dictionary:
 ## How many motes element [param el] (a kind that drifts) is at its Amount ([param v], its values): its kind's own count, or its host's
 ## as written (`own`'s `count`), times its Amount.
 static func mote_count(el: Dictionary, v: Dictionary) -> int:
-	var fx: Dictionary = (KINDS.get(String(el.get("kind", "")), {}) as Dictionary).get("effect", {})
+	if typeof(v.get("count")) in [TYPE_INT, TYPE_FLOAT]:
+		return maxi(1, int(v["count"]))
 	var own: Dictionary = el.get("own", {})
-	var base := float(own["count"]) if typeof(own.get("count")) in [TYPE_INT, TYPE_FLOAT] else float(fx.get("count", 1))
-	return maxi(1, roundi(base * float(v.get("amount", 1.0))))
+	var fx: Dictionary = (KINDS.get(String(el.get("kind", "")), {}) as Dictionary).get("effect", {})
+	return maxi(1, int(own["count"]) if typeof(own.get("count")) in [TYPE_INT, TYPE_FLOAT] else int(fx.get("count", 1)))
 
 
 ## The elements of [param spec] in use (none set aside), of group [param group] ("" every group).
@@ -676,7 +728,8 @@ static func own_colors(own: Dictionary, color: String) -> Array:
 
 ## What is heard ([param spec]'s sound elements) as a [Soundscape]'s `sound`, made safe; {} for silence. A creature each is one of its
 ## `creatures`; a host's as written (its `own`) is its words with what it sets over them, its host's own default where it sets nothing.
-static func sound_of(spec: Dictionary) -> Dictionary:
+## What had to change to make it safe is said in [param notes] ([method Soundscape.sanitize]).
+static func sound_of(spec: Dictionary, notes: PackedStringArray = PackedStringArray()) -> Dictionary:
 	var raw := {}
 	for e in in_use(spec, "sound"):
 		var el: Dictionary = e
@@ -692,7 +745,7 @@ static func sound_of(spec: Dictionary) -> Dictionary:
 			(raw["creatures"] as Array).append(part)
 		else:
 			raw[String(row["part"])] = part
-	return Soundscape.sanitize(raw) if not raw.is_empty() else {}
+	return Soundscape.sanitize(raw, notes) if not raw.is_empty() else {}
 
 
 ## A sound's field [param k] as [Soundscape] names it: its `sort` is the soundscape's `kind` (an element's own `kind` is what it is).
@@ -809,13 +862,13 @@ static func line_of(el: Dictionary) -> String:
 		var line := "%s, %s, %s, %s a minute %s" % ["one" if n == 1 else "%d of them" % n, " and ".join(PackedStringArray(calls)),
 			"close by" if near > 0.66 else ("some way off" if near > 0.33 else "far off"), str(snappedf(float(v["rate"]), 0.1)),
 			"each" if n > 1 else "or so"]
-		var vol := float(v.get("volume", 0.0))
-		return line + (", %+d dB" % roundi(vol) if absf(vol) >= 0.5 else "")
+		var turned := _turned(v)
+		return line + (", " + turned if not turned.is_empty() else "")
 	var kind_row: Dictionary = KINDS.get(String(el.get("kind", "")), {})
 	if kind_row.has("effect"):
 		if String((kind_row["effect"] as Dictionary)["kind"]) == "fog":
 			return "%s%% thick" % str(roundi(float(v["density"]) * 100.0))
-		return "%d%% as many, %s mm" % [roundi(float(v["amount"]) * 100.0), str(snappedf(float(v["size"]), 0.1))]
+		return "%d of them, %s mm" % [mote_count(el, v), str(snappedf(float(v["size"]), 0.1))]
 	return _heard_line(String(el.get("kind", "")), v)
 
 
@@ -847,9 +900,22 @@ static func _heard_line(kind: String, v: Dictionary) -> String:
 			parts.append(how.call(float(v.get("amount", 0.25)), ["a lone one", "a few", "many", "a field of them"]))
 		"ride":
 			parts.append(how.call(float(v.get("level", 0.6)), ["faint", "soft", "steady", "loud"]))
+	var turned := _turned(v)
+	if not turned.is_empty():
+		parts.append(turned)
+	return ", ".join(parts)
+
+
+## How a sound of values [param v] is turned from how it is made, in a few words: its volume and its tone where they are moved ("" for
+## neither).
+static func _turned(v: Dictionary) -> String:
+	var parts := PackedStringArray()
 	var vol := float(v.get("volume", 0.0))
 	if absf(vol) >= 0.5:
 		parts.append("%+d dB" % roundi(vol))
+	var tone := float(v.get("tone", 0.0))
+	if absf(tone) >= 0.05:
+		parts.append(("brighter" if tone > 0.0 else "darker") if absf(tone) < 0.5 else ("much brighter" if tone > 0.0 else "much darker"))
 	return ", ".join(parts)
 
 

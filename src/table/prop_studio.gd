@@ -52,7 +52,7 @@ var _held: Node3D
 static var _shared: PropStudio = null
 static var _busy := false
 static var _flame_mat: ShaderMaterial = null
-static var _build_task := -1     # the worker building a thing to picture, -1 for none ([method settle])
+static var _build_tasks := {}    # every worker building a thing to picture or turn, each waited for once ([method settle])
 
 
 ## Whether this process can take a picture at all.
@@ -284,22 +284,22 @@ static func _built(thing: Dictionary, materials: Dictionary, h: String) -> Dicti
 	var built := [{}]
 	var task := WorkerThreadPool.add_task(func() -> void:
 		built[0] = Props.build(t, safe["materials"], hash(h)))
-	_build_task = task
-	while not WorkerThreadPool.is_task_completed(task):
+	_build_tasks[task] = true
+	# (waited for already, and forgotten, where [method settle] took it: a task waited for is gone and may not be asked after)
+	while _build_tasks.has(task) and not WorkerThreadPool.is_task_completed(task):
 		await tree().process_frame
-	# (waited for already where [method settle] took it)
-	if _build_task == task:
+	if _build_tasks.has(task):
 		WorkerThreadPool.wait_for_task_completion(task)
-		_build_task = -1
+		_build_tasks.erase(task)
 	return {"built": built[0], "scale": float(t.get("scale", 1.0))}
 
 
 ## The thing being built to be pictured waited for, if one is: before the process quits (a worker still running as it does
 ## brings it down).
 static func settle() -> void:
-	if _build_task >= 0:
-		WorkerThreadPool.wait_for_task_completion(_build_task)
-		_build_task = -1
+	for task in _build_tasks.keys():
+		WorkerThreadPool.wait_for_task_completion(int(task))
+	_build_tasks.clear()
 
 
 ## Thing [param thing] built of [param materials] photographed from three sides for an agent to look at ([constant VIEWS]: from a

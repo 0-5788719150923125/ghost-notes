@@ -752,9 +752,18 @@ func _card() -> bool:
 		"a block that names no channel takes the first one kept (%s)" % card.capture()["channel"])
 	card._seen = []
 	card._refresh_account()
-	_ok(_chips(card).map(func(b: Button) -> String: return b.text) == ["@the-arc", "@the-ink"] and _pressed(card) == "@the-arc"
+	_ok(_chips(card).map(func(b: Button) -> String: return Card.toggle_words(b)) == ["@the-arc", "@the-ink"] and _pressed(card) == "@the-arc"
 		and card._chips.get_child(card._chips.get_child_count() - 1) == card._add,
 		"a toggle per channel, named as YouTube names it, the note's pressed, + last")
+	var arc_b: Button = _chips(card)[0]
+	var ink_b: Button = _chips(card)[1]
+	_ok(arc_b.text == "✓ @the-arc" and ink_b.text == "@the-ink"
+		and arc_b.get_theme_stylebox("pressed") != ink_b.get_theme_stylebox("normal"),
+		"the pressed channel is told at a glance - filled, with a ✓ - the other an outline (the control: no ✓ on it)")
+	var tt_was: bool = card._to_tt.button_pressed
+	Card.put_toggle(card._to_tt, true)
+	_ok(card._to_tt.text == "✓ TikTok" and card._to_tt.button_pressed, "a target set without a signal shows its ✓")
+	Card.put_toggle(card._to_tt, tt_was)
 	_ok(card._client.text == "Import another…" and card._account.text.contains("through ghost-check") and card._account.text.contains("@the-arc") and card._account.text.contains("uploads only")
 		and card._remove.visible and not card._sign.visible, "signed in, it says where uploads go and what the sign-in may do (%s)" % card._account.text)
 	var ink: Button = _chips(card)[1]
@@ -820,7 +829,7 @@ func _card() -> bool:
 	card._seen = []
 	card._refresh_account()
 	var gone: Button = _chips(card).back() if not _chips(card).is_empty() else null
-	_ok(gone != null and gone.text == "@gone" and gone.button_pressed and gone.modulate.a < 1.0 and _chips(card).size() == 3
+	_ok(gone != null and Card.toggle_words(gone) == "@gone" and gone.button_pressed and gone.modulate.a < 1.0 and _chips(card).size() == 3
 		and card.capture()["channel"] == "UC-gone" and card.capture()["channel_name"] == "@gone",
 		"the block's channel, not signed in here, shows dimmed and pressed, its name kept")
 	_ok(card._sign.visible and card._sign.text == "Sign in" and not card._remove.visible and card._account.text.contains("not signed in here"),
@@ -1028,11 +1037,11 @@ func _chips(card: Node) -> Array:
 	return card._chips.get_children().filter(func(c: Node) -> bool: return c != card._add)
 
 
-## The pressed toggle's text, "" for none.
+## The pressed toggle's words, "" for none.
 func _pressed(card: Node) -> String:
 	for b in _chips(card):
 		if (b as Button).button_pressed:
-			return (b as Button).text
+			return Card.toggle_words(b as Button)
 	return ""
 
 
@@ -1728,6 +1737,8 @@ func _refined(step: Variant, card: Variant, feed: Variant, dir: String, img: Ima
 	_ok(String(step.refine_job(feed, 1, "  ", pick).get("error", "")).contains("say what")
 		and String(step.refine_job(feed, 5, "x", pick).get("error", "")).contains("no such"),
 		"the control: no ask, or no such version, is refused and says why")
+	var later: String = Thumb.refining({"picture": "A lantern.", "words": "", "refined": "Make the moon green.", "refined_from": 1}, "Bigger.", false)
+	_ok(later.contains("Bigger.") and not later.contains("moon green"), "refined again, the painter is told this ask alone, never the one before it")
 	var worded: String = Thumb.refining({"picture": "A lantern.", "words": "THE LAST CARD", "lettering": "Cut from paper."}, "Bigger.", false)
 	_ok(worded.contains("\"THE LAST CARD\"") and worded.contains("Cut from paper.") and worded.contains("Keep them exactly")
 		and worded.contains("LANDSCAPE 16:9") and not worded.contains("{{") and Rules.missing.is_empty(),

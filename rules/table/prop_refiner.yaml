@@ -4,11 +4,12 @@
 # replaces one by itself.
 #
 # THE AUTHOR'S ASK IS KEPT AND NOTHING ELSE CHANGES: every part, size, color and material the direction does not touch stays
-# exactly as written, so two versions differ only where they were asked to.
+# exactly as written, so two versions differ only where they were asked to. Its name too, unless the change made it something
+# else: then the agent names the version (`name`, `line`), and the prop takes the name when that version is used.
 #
 # The code gives: {{name}} (the prop's name), {{line}} (what it is, maybe empty), {{spec}} (the prop as written: its parts and
 # materials as JSON), {{direction}} (as the author wrote it), {{props}}, {{max_parts}} (the prop language, with the parts a scene
-# plays where the prop has any), `ornaments` (the ornaments kept in the library, {name, words}), and the flags `pictured` (pictures of it as built come with the prompt) and `working` (a scene
+# plays where the prop has any), `ornaments` and `textures` (the ornaments and textures kept in the library, {name, words}), and the flags `pictured` (pictures of it as built come with the prompt) and `working` (a scene
 # works it: faces it shows pictures on, lights, parts that follow what it feeds them - next/working_props.md).
 system: >-
   You revise one prop of a 3D scene, written as parts and materials. Answer with the revised prop as one JSON object and nothing
@@ -41,6 +42,12 @@ prompt:
       mirrored), parts copied round or in a row, lobes, flutes and twists on what is turned, beads and finials, an ornament worked
       into a surface - one kept in the library where one fits. Where the author asks for more of it, add it where it belongs on
       the prop and keep the prop's own form.
+  - >-
+      What a surface is like - how shiny, how rough to the touch - is its material's: `polish` for its shine (0 dull and matte,
+      no gloss at all), a `texture` with its `bumps` and `texture_size` for its relief (grit, pits, cracks, the scallops of a
+      broken stone, fibers, grains - or one kept in the library), and `mottle` for shine that is uneven, duller here and glossier
+      there. Where the author asks for a surface less shiny, rougher, smoother or more worn, change those on its material, as far
+      as the ask goes; a part that should differ from the rest of its material gets a material of its own.
   - when: working
     say: >-
       A scene works this prop: it shows pictures on its faces, lights its lights and moves its named parts by what it feeds them.
@@ -52,5 +59,10 @@ prompt:
   - ""
   - >-
       Answer with the whole prop, changed and unchanged parts alike: {"thing": {"parts": [...]}, "materials": {...}} - every
-      material its parts use, under the names its parts give. Keep `scale` where it is written. Write no name, no `at` for the
-      prop itself, and nothing outside the JSON.
+      material its parts use, under the names its parts give. Keep `scale` where it is written. Write no `at` for the prop
+      itself, and nothing outside the JSON.
+  - >-
+      Where the change makes it something else, or "{{name}}" no longer says what it is, give it a new name beside the thing -
+      {"name": "...", "line": "...", "thing": ..., "materials": ...}: a few plain words for what it is, written as its name is
+      (never a person's, a character's or a place's - it may stand in any scene), and `line` a sentence saying what it is now.
+      Otherwise leave both out, and it keeps its own.
