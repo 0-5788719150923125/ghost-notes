@@ -2006,7 +2006,9 @@ static func material(m: Dictionary, orn: Variant, girth: float, height: float, s
 	# the distances gave, the lamp's etched band came and went as it turned
 	if clear and solid:
 		mat.render_priority = LENS_FIRST
-	if not clear:
+	# `kind` is what the work and the physics know a material by (a liquid it rinses, pours and drinks from): a clear liquid keeps it,
+	# drawn through a lens or not
+	if not clear or kind == "liquid":
 		mat.set_shader_parameter("kind", int((MATERIALS.get(kind, MATERIALS["painted"]) as Dictionary)["code"]))
 	mat.set_shader_parameter("color", Color.html(String(m.get("color", "#808080"))))
 	mat.set_shader_parameter("color2", Color.html(String(m.get("color2", "#404040"))))

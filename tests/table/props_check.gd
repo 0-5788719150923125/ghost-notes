@@ -20,7 +20,8 @@ extends SceneTree
 ##   raises nothing (an outline written as its points is those points).
 ## - A scatter never leaves what it lies in: crowded in a dish it lays fewer, every copy whole inside the wall, none touching (control:
 ##   on the open cloth the same scatter lays every copy, spreading wider).
-## - A clear liquid is seen through, as glass is (control: a murky one is not).
+## - A clear liquid is seen through, as glass is (control: a murky one is not), and still known as a liquid by its `kind` (control:
+##   clear crystal carries none).
 ## - A glass's color is how deep it is: a dark one is deep and drawn by glass that writes depth, so its near wall hides its far wall
 ##   (control: clear glass is not, and keeps the shader a flame inside a jar is seen through).
 ## - What is seen through solid (a lamp's spirit) draws before hollow glass whatever the angle (control: hollow glass keeps the usual
@@ -665,6 +666,11 @@ func _scatter() -> void:
 		_ok(open.size() == 36, "seed %d: the control: on the open cloth it lays every copy, spreading wider (%d)" % [seed, open.size()])
 	_ok(Props.see_through({"kind": "liquid", "clarity": 0.95}) and not Props.see_through({"kind": "liquid", "clarity": 0.4}),
 		"a clear liquid is seen through, as glass is; the control: a murky one is not")
+	var water := Props.material({"kind": "liquid", "color": "#c9d8dc", "clarity": 0.8}, {}, 6.0, 5.0, 1, true)
+	var gem := Props.material({"kind": "crystal", "color": "#e8eef8", "clarity": 0.95}, {}, 4.0, 4.0, 1, true)
+	_ok(water.get_shader_parameter("kind") != null and int(water.get_shader_parameter("kind")) == int((Props.MATERIALS["liquid"] as Dictionary)["code"])
+		and gem.get_shader_parameter("kind") == null,
+		"seen through, a clear liquid is still known as a liquid (a brush is rinsed in it, it is poured and drunk); the control: clear crystal carries no kind")
 
 
 ## How many triangles of [param g] show their front toward its middle (Godot draws clockwise fronts, so a

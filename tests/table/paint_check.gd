@@ -2684,7 +2684,7 @@ func _details() -> bool:
 	for k in 10:
 		tenth = TablePaint.clouded(tenth, red, ml_sponge / water_ml)
 	var by_liner := TablePaint.clouded(clean, red, ml_liner / water_ml)
-	_ok(water_ml > 50.0 and water_ml < 400.0, "the cup holds %.0f ml of water" % water_ml)
+	_ok(not cloud_tr.is_empty() and water_ml > 50.0 and water_ml < 400.0, "the cup holds %.0f ml of water (its cloud track found: %s)" % [water_ml, not cloud_tr.is_empty()])
 	_ok(once.a > 0.8 and once.a < 0.97 and tenth.a < 0.5 and by_liner.a > 0.99,
 		"one sponge's rinse leaves the water %.2f clear, ten %.2f, a liner's %.4f" % [once.a, tenth.a, by_liner.a])
 	var moved := func(c: Color) -> float: return Vector3(c.r - clean.r, c.g - clean.g, c.b - clean.b).length()
