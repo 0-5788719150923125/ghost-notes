@@ -177,6 +177,10 @@ uniform float pulse = 0.5;                         // the slow breath, 0..1
 uniform float glint = -1.0;                        // the sweep's place along the diagonal
 uniform float lift = 0.14;                         // a little self-light, so the art reads
 uniform float dim = 1.0;                           // the bookend
+// THE LIGHT FROM BEHIND THE LENS on a card held up to it (TableLight.held_fill): soft and diffuse alone, so it lays no glint
+// on the gloss or the foil; it stands a little above and behind the camera (its place in the camera's space)
+instance uniform float fill = 0.0;
+const vec3 FILL_AT = vec3(0.0, 0.12, 0.35);
 void fragment() {
 	// A face is a viewport's texture and has no mip chain, so a card seen smaller than its 560 x 960
 	// (always, and more so at a grazing angle) was sampled with plain bilinear taps that skip texels:
@@ -211,9 +215,10 @@ void fragment() {
 	ROUGHNESS = mix(0.66, 0.2, key);
 	METALLIC = key * 0.6;
 	SPECULAR = mix(0.4, 0.8, key);
+	float facing = max(dot(NORMAL, normalize(FILL_AT - VERTEX)), 0.0);
 	// bright enough to cross the bloom's threshold, breathing between a glow and a blaze; a
 	// foil that only ever reached the threshold was measured to change the picture by a level or two
-	EMISSION = c.rgb * dim * (lift + key * (1.3 + 2.2 * pulse) + key * band * 5.0);
+	EMISSION = c.rgb * dim * (lift + fill * facing * (1.0 - key * 0.6) + key * (1.3 + 2.2 * pulse) + key * band * 5.0);
 }
 """
 
@@ -1631,9 +1636,9 @@ func _build_table(spec: Dictionary = {}) -> void:
 		if Props.draped(things[i]):
 			# Laid across the table itself: built in its space, over the edge of this top
 			things[i] = _things_part.grounded(things[i])
-			built.append(Props.build(things[i], spec["materials"], hash([_plan.seed_value, i, "thing"]), true))
+			built.append(Props.build(things[i], spec["materials"], hash([_plan.seed_value, i, "thing"]), true, true))
 		else:
-			built.append(Props.build(things[i], spec["materials"], hash([_plan.seed_value, i, "thing"])))
+			built.append(Props.build(things[i], spec["materials"], hash([_plan.seed_value, i, "thing"]), false, true))
 	# The box the cards are kept in stands first, where the deck would be: the rest go round it
 	_box_part.build(things, built)
 	_things_part.place(things, built, rng)
@@ -1685,13 +1690,17 @@ func hide_idle(spec: Dictionary) -> void:
 	for t in (spec.get("things", []) if spec.get("things") is Array else []):
 		if t is Dictionary:
 			by_name[String((t as Dictionary).get("name", ""))] = t
+	# what something rests on stays: hidden, it would leave what is on it standing on nothing
+	var holds := {}
+	for th in _things_part.on_table:
+		holds[String((th as Dictionary).get("on", ""))] = true
 	for th in _things_part.on_table:
 		var d: Dictionary = th
 		var node := d.get("node") as Node3D
 		if node == null or not (d.get("rect") is Rect2) or not (d.get("box") is AABB) or ShotReach.shown(d["rect"]) >= ShotReach.OUT:
 			continue
 		var name := String(d.get("name", ""))
-		if ShotReach.named_in(_acts_raw, name):
+		if ShotReach.named_in(_acts_raw, name) or holds.has(name):
 			continue
 		var lit := not (d.get("lights", []) as Array).is_empty()
 		if not ShotReach.gives(by_name.get(name, {}), Transform3D.IDENTITY, d["box"], lit, _root3, _plan.cam_base, _cam.fov).is_empty():
@@ -2497,6 +2506,11 @@ func _pose(t: float) -> void:
 		m.transform = pose["xf"]
 		if _box_part.stood.has("lid") and float(tm["opening"]) < INF and t < float(tm["opening"]) + 2.7:
 			m.transform = (_box_part.stood["node"] as Node3D).transform * (_box_part.stood["rest"] as Transform3D).affine_inverse() * m.transform
+		# near the lens, its face is given what it lacks of the table's light, from behind the camera
+		var fill := snappedf(_light_part.held_fill(m.transform), 0.001)
+		if not is_equal_approx(fill, float(m.get_meta("fill", 0.0))):
+			m.set_meta("fill", fill)
+			m.set_instance_shader_parameter("fill", fill)
 		if float(pose["page"]) > 0.0:
 			showing = k
 			page_in = float(pose["page"])

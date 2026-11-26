@@ -18,12 +18,15 @@ class_name Props
 ## The most parts a thing has (every part in every group counted), points a profile or path has,
 ## copies a part makes, groups deep a part may sit, parts a thing makes in all (every copy of every
 ## part), and wicks one wax part has.
-const MAX_PARTS := 16
+const MAX_PARTS := 48
 const MAX_POINTS := 40
 const MAX_COPIES := 24
 const MAX_DEPTH := 3
-const MAX_INSTANCES := 96
+const MAX_INSTANCES := 192
 const MAX_WICKS := 6
+## The most triangles a thing is built of: the parts past it, in the order written, are left out. What a thing costs is its
+## triangles, never how many parts it is written in.
+const MAX_TRIANGLES := 400000
 ## The most cross-sections a loft has.
 const MAX_SECTIONS := 12
 ## How far apart a warped part's points may be, meters: a warp moves the points a shape has, so a long wall drawn top and bottom only
@@ -52,6 +55,7 @@ const SHAPES := {
 	"tube": "a round rod along a path: handles, stems, incense sticks, wands, branches, wire, a feather's quill, a pipe. `path` [[x,y,z], ...] in the thing's own space, `radius` (or `radii`, one per point, to taper or swell it). It curves through its points (`smooth` false: joined straight, every bend a crisp elbow, like a bent wire); a point written [x, y, z, r] bends round r centimeters there (a pipe's elbow), and [x, y, z, 0] is a crisp kink in a smooth path. `wall` (centimeters) makes it hollow and open at both ends: a pipe, a straw, a spout.",
 	"loft": "a form swept along a path through CROSS-SECTIONS that change as it goes - what a lathe, a tube or an extrude cannot make: a spout wide at the body and narrow at its lip, a blade of a snake plant or an aloe, a cactus pad, a horn, a spoon's handle, a shell's whorl, a curling leaf with real thickness. `path` [[x,y,z], ...] as a tube's (with its corners), or none: it rises straight up `height`. `sections` [{`at` 0-1 along the path, `outline` (as an extrude's, or `points` [[x, z], ...]), `size` [width, thickness] or one number, `sides`, `scale`, `turn` (degrees about the path), `shift` [x, z]}, ...]: the form blends smoothly from each section to the next (`smooth` false: straight); a section of `size` 0 closes to a point. Width runs across the path and thickness the other way - the thing's x and z while the path runs up. An outline, size or sides written on the part itself is every section's unless it says otherwise. `wall` makes it hollow and open at both ends.",
 	"coil": "a band wound round the vertical axis: an incense coil, a spring, a coiled cord, a curling tendril, a spiral of wire. `turns`, `radius` (where it starts) and `radius2` (where it ends: larger for a flat spiral), `height` (how far it climbs over all its turns; 0 lies flat), `thickness` (the band's, as a ring's).",
+	"scroll": "AN ORNAMENTAL SCROLL: a band that curls into a spiral, standing upright in the thing's x-y plane and facing its front (+z), placed by its middle - what scrollwork, filigree, wrought iron, a clock's crest and feet, a mirror's frame and a bracket are made of. `kind`: volute (a tail curling into one spiral, as a fiddlehead or a column's capital; it stands, its tail below and its curl above), c (a band with a curl at each end, both curling the same way) or s (a curl at each end, curling opposite ways) - a c and an s lie along x, eye to eye. `size` (centimeters along its longest side), `curl` (how far each curl winds in, in turns: 0.5 a hook, 1.25 a scroll, 3 a tight coil), `tightness` 0-1 (how fast it closes: 0 its rings evenly spaced, 1 closing hard to a small eye, as a shell), `width` (how wide the band looks from the front, at its widest), `depth` (how deep it is front to back; as wide as it looks unless given), `taper` 0-0.95 (how much thinner it grows into each curl: 0.6 an iron scroll, 0.9 a tendril), `section` round (a wire, a cane, a tendril) or square (a bar of iron, a ribbon, a carved band), `bud` (centimeters: a ball at the eye of each curl, 0 none), `bend` (degrees the middle arches between the curls, or the tail bends before its curl; below 0 the other way) and `flip` true (winds the other way, as a mirror would). Its curls never cross themselves. Pairs of them make most ornament: copy one with `mirror` (COPIES), turn it with `turn`, and gather them in a GROUP.",
 	"sheet": "a thin flat piece lying on the cloth unless turned, placed by its middle: a leaf, a petal, a feather, a page, a scrap of cloth. `outline` (leaf, petal, feather, oval or rect - or `points` [[x,z], ...] for any outline), `size` [width, length] (its length runs front to back), `bend` -1..1 (the tip curls up), `fold` 0-1 (the sides lift).",
 	"bloom": "a flower head, petals in rings round a small middle: `petals`, `layers` 1-4, `radius`, `cup` 0 (open flat) to 1 (a closed bud), `width` (a petal's width over its length).",
 	"strand": "something long and limp laid down: a rope, a cord, a wire, a vine, a string of beads, a chain. `kind` (rope, cord, wire, vine, beads or chain), `length` (centimeters along it), `thickness` (how wide it is), and how it lies, `lay`: \"coil\" (coiled down, loop piled on loop, as a rope is - `radius` the loops'), \"flemish\" (wound flat in a spiral from the middle out), \"heap\" (dropped in a loose tangle, crossing over itself - within `radius`), \"path\" (laid along `path` [[x, z], ...], centimeters from the thing's middle, its length the path's) or \"drape\" (laid across the table itself and over its edge - DRAPED, below). `loose` 0-1: how unkempt it lies, 0 laid neatly, 1 thrown down. A vine carries leaves - `leaf` their length (centimeters) and `leaves` their material, if not the stem's. It rests on the cloth, and on itself wherever it crosses itself.",
@@ -173,6 +177,12 @@ static var _sculpted_lock := Mutex.new()
 
 ## AN EXTRUDE's (and a loft section's) named outlines.
 const EXTRUDE_OUTLINES := ["polygon", "star", "circle", "rect", "heart", "lens", "drop"]
+## A SCROLL's kinds ([method _scroll]); how many times sharper a curl turns at its eye than where it begins, at tightness 0 and 1; and
+## the most a scroll's spine turns between two of its points (degrees) and the longest step along it (a share of its length).
+const SCROLL_KINDS := ["volute", "c", "s"]
+const SCROLL_CLOSE := Vector2(1.8, 6.0)
+const SCROLL_TURN_STEP := 6.0
+const SCROLL_STEP := 0.02
 
 ## A WARP's numbers and their ranges (`scale` and `lean` are vectors, made safe on their own).
 const WARPS := {"taper": Vector2(-1.0, 0.95), "twist": Vector2(-1080.0, 1080.0), "bend": Vector2(-270.0, 270.0),
@@ -234,6 +244,9 @@ const ORNAMENTS := {
 	"lattice": {"code": 9, "about": "a diamond lattice, `count` diamonds round"},
 	"hammered": {"code": 10, "about": "the dimpled face of hand-hammered metal, all over"},
 }
+
+## The ornament of its own's shader code ([Ornaments]): written by an agent, or kept in the library by name ([OrnamentLibrary]).
+const ORN_OWN := 11
 
 ## The play of light a material can have - what moves in a stone, a shell or a metal as it turns, or as the flames catch it - with its
 ## shader code. Clear glass and crystal show only a rainbow.
@@ -303,10 +316,11 @@ static func describe(working := false) -> String:
 	lines.append("ORNAMENT: a part's surface can carry one: {\"kind\", \"count\", \"depth\" 0-1 (relief), \"color\" (paint or inlay; leave it out for relief alone), \"from\" and \"to\" (the band of the part's height it covers, 0 the bottom, 1 the top)}. Kinds:")
 	for k in ORNAMENTS:
 		lines.append("- %s: %s" % [k, String((ORNAMENTS[k] as Dictionary)["about"])])
+	lines.append("- or the NAME of an ornament kept in the library (made by an ornament designer, and finer than any above): it is drawn as it is kept.")
 	lines.append("")
 	lines.append("LOOSE: a part written `loose`: true is not fixed to its thing - it lies where it is drawn, in a dish, a bowl, a jar or on the cloth, and when what holds it tips it slides, rolls and tumbles out under gravity, falls into what is below, sinks in a liquid (or floats, if it is light), and a pestle pressed into it and moved over it breaks it to pieces and to powder (metal, glass, wood and cloth never break). A loose part can also be picked up by the work like a free one, and falls from where it is let go. What lies in or on something to be poured out, tipped out or taken out is loose: crystals and stones in a dish, seeds in a pod, a coin in a bowl, a sprig on a plate. A heap's or a scatter's copies are loose unless written `loose`: false (a part that must stay put, a knob, a rivet, is never loose). For loose stuff poured in quantity - sand, salt, snow, powder - use the `grains` shape instead.")
 	lines.append("")
-	lines.append("COPIES: a part's `copies` repeats it - \"copies\": {\"ring\": {\"count\": 5, \"radius\": 4}} round the vertical axis (`arc` less than 360 makes it an arc, from `start` degrees: 0 the thing's right, 90 its front, 270 its back), {\"line\": {\"count\": 3, \"step\": [x, y, z]}}, {\"scatter\": {\"count\": 9, \"radius\": 6}} strewn about, never touching (stones set out on the cloth), or {\"heap\": {\"count\": 12, \"radius\": 3}} piled up, each resting on the ones under it (stones heaped in a dish or a shell, a pile of coins) - with `jitter` 0-1 so the copies differ a little. A copied part's `material` can be a LIST of names, which its copies take in turn: a handful of stones of five kinds, books in three bindings. A copied candle's wax lights a flame on every copy.")
+	lines.append("COPIES: a part's `copies` repeats it - \"copies\": {\"ring\": {\"count\": 5, \"radius\": 4}} round the vertical axis (`arc` less than 360 makes it an arc, from `start` degrees: 0 the thing's right, 90 its front, 270 its back), {\"line\": {\"count\": 3, \"step\": [x, y, z]}}, {\"scatter\": {\"count\": 9, \"radius\": 6}} strewn about, never touching (stones set out on the cloth), or {\"heap\": {\"count\": 12, \"radius\": 3}} piled up, each resting on the ones under it (stones heaped in a dish or a shell, a pile of coins) - with `jitter` 0-1 so the copies differ a little; or {\"mirror\": {\"axis\": \"x\"}} (or `mirror` true on the part itself): the part and its mirror image across the middle of what it is in - x left and right, z front and back - so a pair of scrolls, handles, arms or feet is drawn once, its right side, and the left is made. A copied part's `material` can be a LIST of names, which its copies take in turn: a handful of stones of five kinds, books in three bindings. A copied candle's wax lights a flame on every copy.")
 	lines.append("")
 	lines.append("GROUPS: a part can be a GROUP instead of a shape - {\"parts\": [...], \"at\", \"turn\", \"copies\"} - whose own parts are placed in its space as a thing's are in the thing's; repeat the group and all of it repeats. A candelabra's arm, its cup and its taper are one group copied round in a ring; a group can hold groups, %d deep. A list of materials on a part inside a copied group goes to the group's copies in turn. Every part in every group counts toward the %d a thing may have." % [MAX_DEPTH, MAX_PARTS])
 	lines.append("")
@@ -417,6 +431,9 @@ static func _sanitize_parts(raw: Variant, mats: Dictionary, pal: Array, depth: i
 				var gw := {} if _burns(kids) else Motions.sanitize_work(d)
 				if not gw.is_empty():
 					group["work"] = gw
+				# a mirror image is fixed where it is made ([method _moves])
+				if String((group["copies"] as Dictionary).get("kind", "")) == "mirror" and _moves([group]):
+					group["copies"] = {}
 				out.append(group)
 			continue
 		var part := _sanitize_part(d, mats, pal)
@@ -553,6 +570,20 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			out["turns"] = _num(p.get("turns"), 3.0, 0.25, 20.0)
 			out["height"] = _num(p.get("height"), 0.0, 0.0, MAX_SIZE)
 			out["thickness"] = _num(p.get("thickness"), 0.3, 0.03, 5.0)
+		"scroll":
+			var sk := word(p.get("kind"), "c").strip_edges().to_lower()
+			out["kind"] = sk if SCROLL_KINDS.has(sk) else "c"
+			out["size"] = _num(p.get("size"), 4.0, 0.3, MAX_SIZE)
+			out["curl"] = _num(p.get("curl"), 1.25, 0.25, 4.0)
+			out["tightness"] = _num(p.get("tightness"), 0.5, 0.0, 1.0)
+			out["width"] = _num(p.get("width"), float(out["size"]) * 0.07, 0.02, 5.0)
+			out["depth"] = _num(p.get("depth"), float(out["width"]), 0.02, 10.0)
+			out["taper"] = _num(p.get("taper"), 0.6, 0.0, 0.95)
+			var sec := word(p.get("section"), "round").strip_edges().to_lower()
+			out["section"] = sec if sec in ["round", "square"] else "round"
+			out["bud"] = _num(p.get("bud"), 0.0, 0.0, 5.0)
+			out["bend"] = _num(p.get("bend"), 50.0 if String(out["kind"]) != "volute" else 20.0, -180.0, 180.0)
+			out["flip"] = _flag(p.get("flip"), false)
 		"sheet":
 			var outline := word(p.get("outline"), "leaf").strip_edges().to_lower()
 			out["outline"] = outline if OUTLINES.has(outline) else "leaf"
@@ -665,7 +696,21 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			work["edge"] = true
 	if not work.is_empty():
 		out["work"] = work
+	# a mirror image is fixed where it is made: nothing that moves, tumbles or is picked up is mirrored
+	if String((out["copies"] as Dictionary).get("kind", "")) == "mirror" and _moves([out]):
+		out["copies"] = {}
 	return out
+
+
+## Whether any of [param parts] (or a part in their groups) moves at the table: jointed, loose, or picked up.
+static func _moves(parts: Array) -> bool:
+	for q in parts:
+		var w: Dictionary = (q as Dictionary).get("work", {})
+		if w.has("joint") or w.has("loose") or w.has("points"):
+			return true
+		if (q as Dictionary).get("parts") is Array and _moves((q as Dictionary)["parts"]):
+			return true
+	return false
 
 
 ## A part's light as written ([method describe_working]): `{kind, color, strength, reach, angle, aim, at, falloff, shadows, soft,
@@ -811,6 +856,9 @@ static func _copies_of(p: Dictionary) -> Dictionary:
 	for kind in ["ring", "line", "scatter", "heap"]:
 		if p.get(kind) is Dictionary:
 			loose[kind] = p[kind]
+	# a mirror written beside the part, on anything but a sculpt, whose own `mirror` makes it one surface the same on both sides
+	if String(p.get("shape", "")) != "sculpt" and (p.get("mirror") is Dictionary or p.get("mirror") == true):
+		loose["mirror"] = p["mirror"]
 	if loose.is_empty():
 		return {}
 	if p.has("jitter"):
@@ -858,16 +906,28 @@ static func _material_key(m: Variant, mats: Dictionary, pal: Array) -> String:
 	return "painted"
 
 
+## An ornament made safe: one of [constant ORNAMENTS]; `own` with its `code` ([method Ornaments.check]); or the name of one kept in
+## the library, drawn as its version used is ([method OrnamentLibrary.code_of]) - each `{kind: "own", code, name}` with the band and
+## relief any ornament has. {} for none.
 static func _sanitize_ornament(o: Variant) -> Dictionary:
 	if not (o is Dictionary):
 		return {}
 	var d: Dictionary = o
-	var kind := word(d.get("kind"), "").strip_edges().to_lower()
-	if not ORNAMENTS.has(kind):
-		return {}
-	var out := {"kind": kind, "count": _num(d.get("count"), 8.0, 1.0, 64.0),
+	var written := word(d.get("kind"), "").strip_edges()
+	var kind := written.to_lower()
+	var out := {}
+	if ORNAMENTS.has(kind):
+		out["kind"] = kind
+	elif kind == "own" and d.get("code") is String and Ornaments.check(String(d["code"])).is_empty():
+		out = {"kind": "own", "code": String(d["code"]).strip_edges()}
+	else:
+		var kept := OrnamentLibrary.find(written)
+		if kept.is_empty() or String(kept["code"]).is_empty():
+			return {}
+		out = {"kind": "own", "code": String(kept["code"]), "name": String(kept["name"])}
+	out.merge({"count": _num(d.get("count"), 8.0, 1.0, 64.0),
 		"depth": _num(d.get("depth"), 0.5, 0.0, 1.0), "from": _num(d.get("from"), 0.0, 0.0, 1.0),
-		"to": _num(d.get("to"), 1.0, 0.0, 1.0)}
+		"to": _num(d.get("to"), 1.0, 0.0, 1.0)})
 	if _is_color(d.get("color", "")):
 		out["color"] = String(d["color"]).strip_edges()
 	return out
@@ -878,6 +938,11 @@ static func _sanitize_copies(c: Variant) -> Dictionary:
 		return {}
 	var d: Dictionary = c
 	var jitter := _num(d.get("jitter"), 0.0, 0.0, 1.0)
+	# a mirror: the part and its mirror image across the middle of what it is in, along x (left and right) or z (front and back)
+	if d.get("mirror") is Dictionary or d.get("mirror") == true:
+		var mk: Dictionary = d["mirror"] if d.get("mirror") is Dictionary else {}
+		var axis := word(mk.get("axis"), "x").strip_edges().to_lower()
+		return {"kind": "mirror", "count": 2, "jitter": 0.0, "axis": axis if axis in ["x", "z"] else "x"}
 	for kind in ["ring", "line", "scatter", "heap"]:
 		if not (d.get(kind) is Dictionary):
 			continue
@@ -1036,7 +1101,7 @@ const SHELTER := Vector2(0.05, 0.1)
 ## facing +z, its size in its `size` meta) and `lights` (`{name, node, energy}`). [param materials] are the sanitized materials; [param seed] varies drips, scatter, lumps and the patterns' noise.
 ## [param keep]: built where it was written, neither moved to stand on the origin nor made smaller - a strand draped across the table is
 ## laid in the table's own space ([method TableThings._drape]).
-static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := false) -> Dictionary:
+static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := false, merge := false) -> Dictionary:
 	var inner := Node3D.new()
 	var all := PackedVector3Array()
 	var wicks: Array = []
@@ -1051,11 +1116,24 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 			gives[String(nm)] = true
 	var leaves := _assemble(thing.get("parts", []), seed, [], gives)
 	var budget := MAX_INSTANCES
+	var tris_left := MAX_TRIANGLES
+	var over := 0
 	for leaf in leaves:
 		var xs: Array = leaf["xforms"]
 		leaf["xforms"] = xs.slice(0, maxi(budget, 0))
 		leaf["chains"] = (leaf.get("chains", []) as Array).slice(0, maxi(budget, 0))
 		budget -= xs.size()
+		# ...and no more triangles than a thing may be built of: a part past them is left out whole
+		var each := 0
+		for e in leaf["geos"]:
+			each += ((e as Dictionary)["geo"] as Tris).v.size() / 3
+		var cost := each * (leaf["xforms"] as Array).size()
+		if cost > tris_left:
+			leaf["xforms"] = []
+			leaf["chains"] = []
+			over += 1
+		else:
+			tris_left -= cost
 	# What moves ([Rides]): a node of its own for each moving copy, inside whatever moves it in turn, at rest where it was built
 	# ([method _holder])
 	var movers: Array = []
@@ -1158,6 +1236,10 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 				mi.material_override = mat
 				if see_through(m):
 					mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				# plain: a fixed part with no work, skin, face, light, glow, flame or ornament, of a material that holds still
+				# ([method _merge_plain])
+				if merge and _plain(part, m, (takers[tk] as Dictionary)["holder"] == inner):
+					mi.set_meta("plain", merged)
 				((takers[tk] as Dictionary)["holder"] as Node3D).add_child(mi)
 				meshes.append(mi)
 				all.append_array(merged.v)
@@ -1203,7 +1285,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	if all.is_empty():
 		return {"node": root, "size": AABB(), "foot": PackedVector2Array(), "outline": PackedVector2Array(),
 			"wicks": [], "glows": [], "meshes": [], "movers": [], "works": works, "solids": solids, "grains": grains, "inner": inner, "skins": skins,
-			"faces": faces, "lights": lights}
+			"faces": faces, "lights": lights, "triangles": 0, "over": over}
 	var box := AABB(all[0], Vector3.ZERO)
 	for p in all:
 		box = box.expand(p)
@@ -1219,9 +1301,71 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	for i in wicks.size():
 		wicks[i] = ((wicks[i] as Vector3) + shift) * k
 	var size := AABB((box.position + shift) * k, box.size * k)
+	if merge and wicks.is_empty():
+		_merge_plain(meshes, solids)
 	return {"node": root, "size": size, "foot": _foot(placed, FOOT_H), "outline": _hull(placed, INF),
 		"wicks": wicks, "glows": glows, "meshes": meshes, "movers": movers, "works": works, "sized": k, "solids": solids, "grains": grains,
-		"inner": inner, "skins": skins, "faces": faces, "lights": lights}
+		"inner": inner, "skins": skins, "faces": faces, "lights": lights, "triangles": MAX_TRIANGLES - tris_left, "over": over}
+
+
+## Whether [param part] (of material [param m], hanging in the thing's own node when [param fixed]) may share a mesh with others of
+## its material ([method _merge_plain]): fixed, with no work, skin, face, tuft, light, glow, flame or ornament, of a material that is
+## not seen through and holds still (no liquid that fills, no foam that gives). Its copies come with it: what tells them apart is a
+## glow's, and it has none.
+static func _plain(part: Dictionary, m: Dictionary, fixed: bool) -> bool:
+	if not fixed or part.has("work") or part.get("skin") == true or part.has("light") or part.has("lit") or part.get("wick") == true:
+		return false
+	if String(part.get("shape", "")) in ["face", "tuft", "grains"] or not (part.get("ornament", {}) as Dictionary).is_empty():
+		return false
+	return not see_through(m) and not String(m.get("kind", "")) in ["liquid", "sponge"]
+
+
+## The plain meshes of a thing ([method _plain], each holding its placed geometry as `plain` until now) of one material made one mesh: what a thing costs to draw is then its materials, never
+## how many parts it is written in. The first keeps its material (its noise seeded as that part's); the rest go, and [param meshes]
+## and every solid's list ([param solids]) name the one left in their place. A table asks for it ([method build] `merge`); a scene
+## that reads a part's own mesh (a cable's tube, a part's frame) does not.
+static func _merge_plain(meshes: Array, solids: Array) -> void:
+	var by := {}
+	for mi in meshes:
+		var mesh := mi as MeshInstance3D
+		if mesh == null or not mesh.has_meta("plain") or mesh.mesh == null or mesh.mesh.get_surface_count() != 1:
+			continue
+		var key := String(mesh.get_meta("material", ""))
+		if not by.has(key):
+			by[key] = []
+		(by[key] as Array).append(mesh)
+	var into := {}
+	for key in by:
+		var group: Array = by[key]
+		if group.size() < 2:
+			continue
+		var keep: MeshInstance3D = group[0]
+		var joined := Tris.new()
+		for i in group.size():
+			joined.append((group[i] as MeshInstance3D).get_meta("plain") as Tris)
+			if i > 0:
+				into[group[i]] = keep
+		keep.mesh = joined.mesh()
+		keep.remove_meta("xform")
+		keep.set_meta("shape", "merged")
+	for mi in meshes:
+		(mi as Node).remove_meta("plain")
+	if into.is_empty():
+		return
+	for gone in into:
+		(gone as Node).get_parent().remove_child(gone)
+		(gone as Node).queue_free()
+	var kept: Array = meshes.filter(func(x: Variant) -> bool: return not into.has(x))
+	meshes.clear()
+	meshes.append_array(kept)
+	for sd in solids:
+		var list: Array = (sd as Dictionary).get("meshes", [])
+		var named: Array = []
+		for x in list:
+			var y: Variant = into.get(x, x)
+			if not named.has(y):
+				named.append(y)
+		(sd as Dictionary)["meshes"] = named
 
 
 ## Light [param l] ([method _sanitize_light]) at a part standing at [param xf] (meters, in the node it hangs in): dark until a rig
@@ -1702,7 +1846,7 @@ static func _solid(part: Dictionary) -> bool:
 	if String(part.get("shape", "")) in ["extrude", "tube", "loft"]:
 		return float(part.get("wall", 0.0)) <= 0.0
 	if String(part.get("shape", "")) != "lathe":
-		return String(part.get("shape", "")) in ["ball", "point", "cluster", "geode", "ring", "coil"]
+		return String(part.get("shape", "")) in ["ball", "point", "cluster", "geode", "ring", "coil", "scroll"]
 	var prof: Array = part.get("profile", [])
 	var top := -INF
 	for q in prof:
@@ -1756,7 +1900,11 @@ static func material(m: Dictionary, orn: Variant, girth: float, height: float, s
 	mat.set_shader_parameter("rings", 1.0 if m.get("rings") == true else 0.0)
 	var o: Dictionary = orn if orn is Dictionary else {}
 	if not o.is_empty():
-		mat.set_shader_parameter("orn", int((ORNAMENTS[String(o["kind"])] as Dictionary)["code"]))
+		var own := String(o["kind"]) == "own"
+		# an ornament of its own is drawn by a variant of the shader, its body written in ([Ornaments])
+		if own:
+			mat.shader = Ornaments.shader_for(mat.shader, String(o.get("code", "")))
+		mat.set_shader_parameter("orn", ORN_OWN if own else int((ORNAMENTS[String(o["kind"])] as Dictionary)["code"]))
 		mat.set_shader_parameter("orn_count", float(o.get("count", 8.0)))
 		mat.set_shader_parameter("orn_depth", float(o.get("depth", 0.5)))
 		mat.set_shader_parameter("orn_zone", Vector2(float(o.get("from", 0.0)), float(o.get("to", 1.0))))
@@ -1779,6 +1927,10 @@ static func _placements(part: Dictionary, rng: RandomNumberGenerator, geos: Arra
 		return [Transform3D(Basis(), at) * own]
 	var n := int(c["count"])
 	var jit := float(c.get("jitter", 0.0))
+	if String(c["kind"]) == "mirror":
+		var flip := Vector3(-1.0, 1.0, 1.0) if String(c.get("axis", "x")) == "x" else Vector3(1.0, 1.0, -1.0)
+		var placed := Transform3D(Basis(), at) * own
+		return [placed, Transform3D(Basis.from_scale(flip), Vector3.ZERO) * placed]
 	if String(c["kind"]) in ["scatter", "heap"]:
 		return _strewn(String(c["kind"]) == "heap", n, jit, float(c["radius"]) * 0.01, own, at, _bounds(geos, own), rng, walls, blocks)
 	# A copy's jitter turns it about its own middle: about the part's origin, a rod drawn away from it would swing across the thing, and a
@@ -2279,6 +2431,8 @@ static func _shaped(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 			return [{"geo": _loft(p)}]
 		"coil":
 			return [{"geo": _coil(p)}]
+		"scroll":
+			return [{"geo": _scroll(p)}]
 		"strand":
 			return _strand(p, rng)
 		"bone":
@@ -3357,6 +3511,146 @@ static func _coil(p: Dictionary) -> Tris:
 	return _sweep(spine, none, rings, sharp, hollow)
 
 
+## A SCROLL ([constant SHAPES] `scroll`): a band whose spine is grown as a curve turning ever more sharply into each curl - its turning
+## rising geometrically from where a curl begins to its eye, [constant SCROLL_CLOSE] times sharper there - so it winds in and never
+## crosses itself: a volute (a tail bent by `bend`, then one curl), a c (a curl at each end, turning the same way, the middle arched by
+## `bend`) or an s (curling opposite ways, the middle running from one curl's turn to the other's). Laid the same way whatever its numbers
+## (a c or an s eye to eye along x, a volute standing with its tail below its curl), scaled to its `size` along its longest side, centered
+## on its middle in the x-y plane, `flip` mirroring it; its outline round or square, `width` across the front and `depth` through it,
+## thinning by `taper` into each curl; a ball at each eye where it has a `bud`.
+static func _scroll(p: Dictionary) -> Tris:
+	var kind := String(p["kind"])
+	var close := lerpf(SCROLL_CLOSE.x, SCROLL_CLOSE.y, float(p["tightness"]))
+	var bend := deg_to_rad(float(p["bend"]))
+	# the pieces, each [length (a share of the whole), "curl" winding in / "out" winding out of an eye / "run", its sign]
+	var pieces: Array = []
+	match kind:
+		"volute":
+			pieces = [[0.3, "run", 1.0], [0.7, "curl", 1.0]]
+		"s":
+			pieces = [[0.32, "out", -1.0], [0.36, "run", 1.0], [0.32, "curl", 1.0]]
+		_:
+			pieces = [[0.32, "out", 1.0], [0.36, "run", 1.0], [0.32, "curl", 1.0]]
+	# a curl turning TAU * curl in all over its length L, from k0 to k0 * close: k0 * L * (close - 1) / ln(close) = TAU * curl
+	var curl_len := 0.0
+	for pc in pieces:
+		if String(pc[1]) != "run":
+			curl_len = float(pc[0])
+	var k0 := TAU * float(p["curl"]) * log(close) / (curl_len * (close - 1.0))
+	var fine := 4000
+	var du := 1.0 / float(fine)
+	var heading := PI * 0.5 if kind == "volute" else 0.0
+	var at := Vector2.ZERO
+	var pts := PackedVector2Array([at])
+	var into := PackedFloat32Array([0.0])
+	var turned := 0.0
+	var walked := 0.0
+	var start := 0.0
+	var pi_ := 0
+	for i in fine:
+		var u := (float(i) + 0.5) * du
+		while pi_ < pieces.size() - 1 and u > start + float(pieces[pi_][0]):
+			start += float(pieces[pi_][0])
+			pi_ += 1
+		var pc: Array = pieces[pi_]
+		var v := clampf((u - start) / float(pc[0]), 0.0, 1.0)
+		var k := 0.0
+		var c := 0.0
+		match String(pc[1]):
+			"curl":
+				k = k0 * pow(close, v)
+				c = v
+			"out":
+				k = k0 * pow(close, 1.0 - v)
+				c = 1.0 - v
+			_:
+				# a c's middle arches; an s's runs from the first curl's turn to the last's, through none
+				k = bend / float(pc[0]) + (lerpf(-k0, k0, v) if kind == "s" else 0.0)
+		k *= float(pc[2])
+		heading += k * du
+		at += Vector2(cos(heading), sin(heading)) * du
+		turned += absf(k * du)
+		walked += du
+		if rad_to_deg(turned) >= SCROLL_TURN_STEP or walked >= SCROLL_STEP or i == fine - 1:
+			pts.append(at)
+			into.append(c)
+			turned = 0.0
+			walked = 0.0
+	# laid the same way whatever it is told - a c or an s eye to eye along x, a volute standing, its tail below its curl - then scaled
+	# to its size along its longest side and centered on its middle
+	var reach := pts[pts.size() - 1] - pts[0]
+	var lay := (PI * 0.5 if kind == "volute" else 0.0) - reach.angle()
+	for i in pts.size():
+		pts[i] = pts[i].rotated(lay)
+	var lo := pts[0]
+	var hi := pts[0]
+	for q in pts:
+		lo = Vector2(minf(lo.x, q.x), minf(lo.y, q.y))
+		hi = Vector2(maxf(hi.x, q.x), maxf(hi.y, q.y))
+	var k_size := float(p["size"]) * 0.01 / maxf(maxf(hi.x - lo.x, hi.y - lo.y), 1e-6)
+	var mid := (lo + hi) * 0.5
+	var spine: Array = []
+	for q in pts:
+		var w := (q - mid) * k_size
+		spine.append(Vector3(-w.x if bool(p["flip"]) else w.x, w.y, 0.0))
+	# its outline at each point: across the front and through it, thinning into a curl; which of the sweep's two axes lies in the
+	# picture's plane is the one its frame starts with ([method _sweep]: the thing's x, or its z for a path that starts along x)
+	var t0 := ((spine[1] as Vector3) - (spine[0] as Vector3)).normalized()
+	var flat_first := absf(t0.dot(Vector3.RIGHT)) < 0.9
+	var square := String(p["section"]) == "square"
+	var m := 4 if square else 12
+	var rings: Array = []
+	for i in spine.size():
+		var thin := 1.0 - float(p["taper"]) * smoothstep(0.0, 1.0, into[i])
+		var across := float(p["width"]) * 0.005 * thin
+		var through := float(p["depth"]) * 0.005 * thin
+		var ring: Array = []
+		for j in m:
+			var a := TAU * (float(j) + (0.5 if square else 0.0)) / float(m)
+			var q := Vector2(cos(a), sin(a))
+			if square:
+				q = Vector2(signf(q.x), signf(q.y))
+			ring.append(Vector2(q.x * across, q.y * through) if flat_first else Vector2(q.x * through, q.y * across))
+		rings.append(ring)
+	var none := PackedByteArray()
+	none.resize(spine.size())
+	var sharp := PackedByteArray()
+	sharp.resize(m)
+	if square:
+		sharp.fill(1)
+	var hollow := PackedFloat32Array()
+	hollow.resize(spine.size())
+	var g := _sweep(spine, none, rings, sharp, hollow)
+	# a bud at each eye
+	var r := float(p["bud"]) * 0.005
+	if r > 0.0:
+		var eyes: Array = [spine[spine.size() - 1]]
+		if kind != "volute":
+			eyes.append(spine[0])
+		for e in eyes:
+			_bud(g, e, r)
+	return g
+
+
+## A ball of radius [param r] (meters) at [param at], onto [param g].
+static func _bud(g: Tris, at: Vector3, r: float) -> void:
+	var rows := 8
+	var segs := 14
+	var on := func(i: int, j: int) -> Vector3:
+		var th := PI * float(i) / float(rows)
+		var ph := TAU * float(j) / float(segs)
+		return Vector3(sin(th) * cos(ph), cos(th), sin(th) * sin(ph))
+	for i in rows:
+		for j in segs:
+			var a: Vector3 = on.call(i, j)
+			var b: Vector3 = on.call(i + 1, j)
+			var c: Vector3 = on.call(i + 1, j + 1)
+			var d: Vector3 = on.call(i, j + 1)
+			var f := float(i) / float(rows)
+			g.quad(at + a * r, at + b * r, at + c * r, at + d * r, a, b, c, d, Vector2(0.5, f), Vector2(0.5, f), Vector2(0.5, f),
+				Vector2(0.5, f), f, f, f, f)
+
+
 # --- bones --------------------------------------------------------------------------------------
 
 ## A bone lying on its side along x, resting on its knobs: a shaft swept along a slight bow, flaring at its
@@ -4389,11 +4683,13 @@ static func _at_length(spine: Array, along: PackedFloat32Array, s: float) -> Arr
 ## placing gives them).
 static func _xf_append(dst: Tris, src: Tris, xf: Transform3D) -> void:
 	var nb := xf.basis.inverse().transposed()
+	var flip := xf.basis.determinant() < 0.0
 	for i in src.v.size():
-		dst.v.append(xf * src.v[i])
-		dst.n.append((nb * src.n[i]).normalized())
-	dst.uv.append_array(src.uv)
-	dst.uv2.append_array(src.uv2)
+		var j := Tris._unwound(i) if flip else i
+		dst.v.append(xf * src.v[j])
+		dst.n.append((nb * src.n[j]).normalized())
+		dst.uv.append(src.uv[j])
+		dst.uv2.append(src.uv2[j])
 
 
 ## A SWEEP: an outline carried along [param spine] (meters). [param rings] holds each spine point's
@@ -5136,11 +5432,20 @@ class Tris:
 		for k in xforms.size():
 			var t: Transform3D = xforms[k]
 			var nb := t.basis.inverse().transposed()
-			for i in v.size():
-				out.v.append(t * v[i])
-				out.n.append((nb * n[i]).normalized())
-			out.uv.append_array(uv)
-			out.uv2.append_array(uv2)
+			# a mirrored copy keeps its faces turned out: each triangle wound the other way
+			if t.basis.determinant() < 0.0:
+				for i in v.size():
+					var j := _unwound(i)
+					out.v.append(t * v[j])
+					out.n.append((nb * n[j]).normalized())
+					out.uv.append(uv[j])
+					out.uv2.append(uv2[j])
+			else:
+				for i in v.size():
+					out.v.append(t * v[i])
+					out.n.append((nb * n[i]).normalized())
+				out.uv.append_array(uv)
+				out.uv2.append_array(uv2)
 			var c := t * mid
 			var block := PackedFloat32Array([c.x, c.y, c.z, fposmod(float(ids[k] if k < ids.size() else k) * 0.618034 + 0.137, 1.0)])
 			while block.size() < v.size() * 4:
@@ -5148,6 +5453,11 @@ class Tris:
 			block.resize(v.size() * 4)
 			out.copy.append_array(block)
 		return out
+
+	## Vertex [param i]'s place in its triangle wound the other way: the first stays, the other two trade.
+	static func _unwound(i: int) -> int:
+		var r := i % 3
+		return i if r == 0 else i - r + 3 - r
 
 	func mesh() -> ArrayMesh:
 		var arrays := []

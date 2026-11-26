@@ -135,7 +135,7 @@ static func prompt(name: String, line: String, thing: Dictionary, materials: Dic
 	var working := Props.played(thing.get("parts", []) if thing.get("parts") is Array else [])
 	var vars := {"name": name, "line": line, "spec": JSON.stringify({"thing": t, "materials": materials}, "  "), "direction": direction.strip_edges(),
 		"props": Props.describe(working), "max_parts": Props.MAX_PARTS, "cardless": true, "tools": false, "pictured": pictured,
-		"working": working}
+		"working": working, "ornaments": OrnamentLibrary.listing()}
 	return {"system": Rules.say("table/prop_refiner.system", vars), "prompt": Rules.say("table/prop_refiner.prompt", vars)}
 
 

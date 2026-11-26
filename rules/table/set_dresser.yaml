@@ -103,15 +103,30 @@ prompt:
       on a pricket, an oil lamp, a candelabra with a taper in each cup. Make this table's its own,
       not always a pillar.
   - >-
-      Compose it as a reader does: a few groups and a few things alone, never a row of things evenly
+      Compose it as a reader does: groups and a few things alone, never a row of things evenly
       spaced. Heights vary within a group, and odd numbers sit well. {{^cardless}}The middle of the cloth stays
       bare: the deck is shuffled there, and the cards drawn and laid.{{/cardless}}{{#cardless}}The middle
-      of the cloth is the work's: what is worked stands there, in the camera's full view.{{/cardless}} A full table is full the way a
-      real one is: things pushed out to the sides and the back, standing close, a short thing in front
-      of a taller one, {{^work}}some cut by the frame's sides{{/work}}{{#work}}what only dresses the table cut by the frame's sides
+      of the cloth is the work's: what is worked stands there, in the camera's full view.{{/cardless}} A full table is PACKED the
+      way a real one is: things pushed out to the sides and the back and standing close - a finger's width
+      apart, or touching - small things tucked into the gaps between bigger ones and along their feet, a
+      short thing in front of a taller one so the groups overlap in depth, the table rising in tiers from
+      the front to the back, {{^work}}some cut by the frame's sides{{/work}}{{#work}}what only dresses the table cut by the frame's sides
       where it must, what the work uses whole in the picture{{/work}} - never one hidden whole behind another.
+      Bare cloth is {{^cardless}}the cards' room{{/cardless}}{{#cardless}}the work's room{{/cardless}} and the reader's hands;
+      anywhere else a wide bare stretch is a gap still to fill.
       Nothing stands wholly out of the shot unless the work fetches it or it gives the picture something: a
       flame's light, a shadow thrown across the table, steam or smoke rising into view.
+  # ONE THING ON ANOTHER (TableThings.rest_on): a thing's `on` names what it rests on or in
+  - >-
+      THINGS REST ON AND IN EACH OTHER, as they do on a lived-in table: flat things piled, a small
+      thing set on top of a flat-topped one, small things gathered inside an open container, things
+      carried on a tray or a stand. Make each its own thing and give the one above `on`: the name of
+      the thing it rests on or in. It rests on the top of that thing - or, where that thing is open, on
+      the floor inside it (a shut lid keeps everything out) - {{#tools}}over it where its `at` places it, or
+      over its middle without one{{/tools}}{{^tools}}over its middle{{/tools}}. Stack only what would really
+      bear what is put on it, each foot wholly over what is under it, at most {{stack}} things high.
+      Layers of height make a table deep: use them wherever this reader would.{{#work}} What the work picks
+      up or moves stands on the table or on top of a pile, never under another thing.{{/work}}
   - >-
       Every thing is a real object, set out in earnest. Nothing on the table carries words, letters,
       numbers or labels.
@@ -193,11 +208,12 @@ prompt:
     say: >-
           Things that share a `group` (any word) stand together, the tallest behind; a thing with no
           group stands on its own. `turn` (degrees) turns a thing about its middle; at 0 its front faces
-          the reader.
+          the reader. `on` sets a thing on or in another, over its middle.
   - when: tools
     say: >-
           `turn` (degrees) turns a thing about its middle; at 0 its front faces the reader. `scale`
-          stands it larger or smaller than you built it (1 as built). A `group` (any word) only names
+          stands it larger or smaller than you built it (1 as built). `on` names the thing it rests on
+          or in, and its `at` is then where it sits over that thing. A `group` (any word) only names
           things that belong together, for you; where each stands is its own `at`.
   - ""
   - include: thing_language
@@ -365,9 +381,11 @@ prompt:
   # THE LIBRARY (ThingLibrary): props kept from earlier tables, found by what is needed, never listed whole
   - when: tools
     say: >-
-          THE LIBRARY holds props kept from earlier tables, each built and proven. When this table needs a thing, ask `library` for
-          it in a few words first; put a kept one with {"kept": its name} only where it is what this table needs, and make the
-          thing yourself where nothing kept fits.
+          THE LIBRARY holds props kept from earlier tables, each built and proven, and costs no look to put. A full table is
+          quickest dressed from it: ask `library` for each kind of thing this table needs, in a few words, before you make one;
+          put a kept one with {"kept": its name} wherever it belongs in this table's world - a kept prop may stand on or hold
+          another, as any thing can - and make the thing yourself where nothing kept fits. Choose this table's own from it, never
+          the same few every time.
   # A SURFACE PAINTED (next/painted_surface.md): the paints are things on the table, each taken up from where it stands
   - when: painted
     say: >-
@@ -452,7 +470,7 @@ with_tools:
       effects), lights it (`light`), gives it its sound (`sound`) and, if it moves, its ride (`ride`), and answers with what was built - each thing's real
       size, anything the builder could not make as written, what moves, where the sun falls - and a picture of
       the things on a centimeter grid, each numbered; `blueprint` places things by name - each one's
-      `at`, `turn` and `scale` - and draws the plan with every placed thing on it, saying for each
+      `at`, `turn`, `scale` and what it rests `on` - and draws the plan with every placed thing on it, saying for each
       where it stands, its foot and its height against what its spot shows, and anything that moved
       it; `look` shows one thing close up from four sides; `overhead`
       shows the whole table from straight above - its top, its cloths as laid, the things{{^cardless}} and
@@ -468,9 +486,9 @@ with_tools:
   - >-
       Build the table first - its top and its layers - and look at it from above. Then make the
       things with `put`, a few at a time: their form, not yet their place. Then PLAN THE TABLE ON THE
-      BLUEPRINT: place every thing with `blueprint` and look at the drawing - the groups, what stands
-      at the back and what nearer, which spots show a tall thing whole, what the frame's sides
-      cut{{^cardless}}, the cards' room bare{{/cardless}}. Then light the table (`put` its `light`), set it, and watch what moves in
+      BLUEPRINT: place every thing with `blueprint` and look at the drawing - the groups packed close,
+      what rests on what, what stands at the back and what nearer, which spots show a tall thing whole,
+      what the frame's sides cut{{^cardless}}, the cards' room bare{{/cardless}}. Then light the table (`put` its `light`), set it, and watch what moves in
       its light; then give it the sound of its place (`put` its `sound`) - and, aboard something that
       moves, its `ride`.
   - >-
@@ -478,7 +496,7 @@ with_tools:
       floating or sunk, a proportion off, a material that reads as another, anything that reads as a
       body. Place things on the blueprint and fix the plan there: a thing the table had to move, one
       standing in the reader's hands, one taller than its spot shows (its number red), a table that
-      reads as scattered rather than set. When the plan is right, set the table and look at the frame:
+      reads as scattered or sparse rather than set and full. When the plan is right, set the table and look at the frame:
       fix what the camera shows - a thing too small to read, a group hidden behind another, a light
       that should lead and does not - by placing again on the blueprint, and set it again after a
       fix. When set says the table is set, it is. Then choose the title's color and look at the
@@ -545,6 +563,11 @@ thing_language:
   - ""
   # the shapes, materials and their ornament: Props.describe()
   - insert: props
+  # the ornaments kept in the library (OrnamentLibrary.listing), each worn by its name
+  - when: ornaments
+    say: "THE ORNAMENTS KEPT IN THE LIBRARY - a part wears one by its name as its ornament's `kind`:"
+  - each: ornaments
+    say: '- "{{name}}": {{words}}'
   - ""
   - >-
       DETAIL: the camera sees a thing 10 cm tall at about a sixth of the picture's height, so

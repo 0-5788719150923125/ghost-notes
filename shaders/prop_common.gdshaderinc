@@ -4,7 +4,7 @@
 // prop_glass.gdshader and prop_lens.gdshader.
 
 // Props.ORNAMENTS: 0 none, 1 bands, 2 flutes, 3 dots, 4 stars, 5 moons, 6 zigzag, 7 scales,
-// 8 spiral, 9 lattice, 10 hammered
+// 8 spiral, 9 lattice, 10 hammered, 11 an ornament of its own (own_ornament, written by an agent)
 uniform int orn = 0;
 uniform float orn_count = 8.0;
 uniform float orn_depth = 0.5;
@@ -337,6 +337,56 @@ vec3 bump(vec3 n, vec3 pos, float h) {
 	return dot(b, b) > 1e-30 ? normalize(b) : n;
 }
 
+// THE DRAWING AN ORNAMENT OF ITS OWN MAY USE (Ornaments.HELPERS): distances in a cell's units, negative inside, and what turns them
+// into relief.
+float sd_circle(vec2 p, float r) {
+	return length(p) - r;
+}
+float sd_box(vec2 p, vec2 half_size) {
+	vec2 d = abs(p) - half_size;
+	return length(max(d, vec2(0.0))) + min(max(d.x, d.y), 0.0);
+}
+float sd_segment(vec2 p, vec2 a, vec2 b) {
+	vec2 pa = p - a;
+	vec2 ba = b - a;
+	float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-8), 0.0, 1.0);
+	return length(pa - ba * h);
+}
+// the distance to a spiral winding out from the middle, its arms `gap` apart, `turns` round at most (beyond, none)
+float sd_spiral(vec2 p, float gap, float turns) {
+	float r = length(p);
+	float a = atan(p.y, p.x) / 6.2831853;
+	float k = floor(r / gap - a);
+	float d = 1e3;
+	for (int i = 0; i < 2; i++) {
+		float arm = (k + float(i) + a) * gap;
+		if (arm >= 0.0 && arm <= turns * gap) {
+			d = min(d, abs(r - arm));
+		}
+	}
+	return d;
+}
+vec2 rot(vec2 p, float a) {
+	float c = cos(a);
+	float s = sin(a);
+	return vec2(c * p.x - s * p.y, s * p.x + c * p.y);
+}
+// a line of width w along a distance d, soft at its edge; and a shape's inside
+float stroke(float d, float w) {
+	return 1.0 - smoothstep(w * 0.55, w, abs(d));
+}
+float fill(float d) {
+	return 1.0 - smoothstep(-0.015, 0.015, d);
+}
+
+// AN ORNAMENT OF ITS OWN (orn 11): its relief 0..1 and where paint or inlay goes 0..1, at `p` in its cell (x and y from -0.5 to 0.5,
+// a cell as wide round the part as it is tall), `cell` which cell it is (its column round the part and its row up it, whole numbers),
+// `uv` where it is round the part and up its band (0..1 each), and `s` the part's own number (0..1). This one draws nothing: a
+// material wearing one is a variant of its shader with the agent's body written here (Ornaments.shader_for).
+vec2 own_ornament(vec2 p, vec2 cell, vec2 uv, float s) {
+	return vec2(0.0); // OWN ORNAMENT
+}
+
 // THE ORNAMENT: x its relief 0..1, y where it is (paint and inlay go there). A motif is laid out
 // in cells as wide around the part as they are tall, so a star is a star on a tall vase and on a
 // squat bowl alike.
@@ -364,6 +414,9 @@ vec2 ornament(vec2 uv, vec2 uv2) {
 	float rows = max(1.0, floor(zh / cw + 0.5));
 	vec2 cell = vec2(u * n, v * rows);
 	vec2 p = vec2(fract(cell.x) - 0.5, (fract(cell.y) - 0.5) * (zh / rows) / cw);
+	if (orn == 11) {
+		return clamp(own_ornament(p, floor(cell), vec2(u, v), fract(seed * 0.6180339)), 0.0, 1.0) * inzone;
+	}
 	float h = 0.0;
 	if (orn == 1) {
 		float t = fract(v * n);

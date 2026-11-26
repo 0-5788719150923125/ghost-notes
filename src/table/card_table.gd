@@ -102,7 +102,10 @@ const MAX_FLAMES := 12
 
 ## The things on the table are modeled, not painted (see [Props]): the set dresser describes each in parts and materials and names where
 ## it stands; the table builds and places it. A painted cut-out could neither take the candlelight nor cast a shadow. At most this many.
-const MAX_THINGS := 32
+const MAX_THINGS := 60
+## A thing may rest on or in another (its `on`, [method rests]): a stone on a book, books on books, a ring in a dish - at most this
+## many things high.
+const STACK_MOST := 4
 ## A thing written where it stands ([method TableThings.stand_at]): its `at`, [x, z] centimeters from the middle of the reading
 ## ([constant Tables.ORIGIN], as a layer's `at`), kept within AT_MOST; and its `scale`, how much larger or smaller than built it stands.
 const AT_MOST := 200.0
@@ -723,6 +726,7 @@ static func sanitize_table(spec: Dictionary, look: Dictionary) -> Dictionary:
 		if flames > 0:
 			lit += 1
 		things.append(thing)
+	rests(things)
 	out["things"] = things
 	# The table itself - its top and the layers laid on it ([Tables]): the table every episode had
 	# before when the set dresser wrote neither
@@ -747,6 +751,56 @@ static func sanitize_table(spec: Dictionary, look: Dictionary) -> Dictionary:
 	if _is_color(String(title.get("color", "")) if title.get("color") is String else ""):
 		out["title"] = {"color": String(title["color"]).strip_edges(), "why": Props._text(title.get("why", ""), 200)}
 	return out
+
+
+## Each thing's `on` across [param things] (each made safe already) made safe: the name of another thing on this table it rests on or
+## in, as that thing is named there (matched in any case) - never itself, a strand laid along its path, the cards' box, or a thing in a
+## circle of things resting on each other, and no more than [constant STACK_MOST] high. Any other `on` is dropped, and the thing
+## stands on the table: a support set aside or taken off lets what was on it stand where it is written.
+static func rests(things: Array) -> void:
+	var names := {}
+	for t in things:
+		var nm := String((t as Dictionary).get("name", ""))
+		if not nm.is_empty() and not names.has(nm.to_lower()):
+			names[nm.to_lower()] = nm
+	var bases := {}
+	for t in things:
+		var d: Dictionary = t
+		var want := String(d["on"]).strip_edges() if d.get("on") is String else ""
+		var nm := String(names.get(want.to_lower(), ""))
+		d.erase("on")
+		if nm.is_empty() or nm == String(d.get("name", "")) or Props.draped(d) or d.get("holds_cards") == true:
+			continue
+		for o in things:
+			if String((o as Dictionary).get("name", "")) == nm and not Props.draped(o) and (o as Dictionary).get("holds_cards") != true:
+				d["on"] = nm
+				break
+		if d.has("on"):
+			bases[String(d.get("name", ""))] = nm
+	# a circle: the first thing found in it stands on the table
+	for t in things:
+		var d: Dictionary = t
+		var me := String(d.get("name", ""))
+		var seen := {}
+		var cur := String(d.get("on", ""))
+		while not cur.is_empty() and not seen.has(cur):
+			if cur == me:
+				d.erase("on")
+				bases.erase(me)
+				break
+			seen[cur] = true
+			cur = String(bases.get(cur, ""))
+	# ...and a stack too high: what would stand past the most stands on the table
+	for t in things:
+		var d: Dictionary = t
+		var high := 1
+		var cur := String(d.get("on", ""))
+		while not cur.is_empty() and high <= STACK_MOST:
+			high += 1
+			cur = String(bases.get(cur, ""))
+		if high > STACK_MOST:
+			d.erase("on")
+			bases.erase(String(d.get("name", "")))
 
 
 ## The table before the set dresser has set one: the look's candles alone, plain pillars of wax a

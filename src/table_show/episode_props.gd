@@ -17,6 +17,9 @@ class_name EpisodeProps
 ##   The land   each place on the board (`diorama.json`)
 ##   Figures    each figure modeled for the night (`minis.json`)
 ##
+## The kept ornaments its things wear ([OrnamentLibrary], next/surfaces.md) stand under Ornaments worn, each with Refine… and its
+## versions ([OrnamentDesign]): every prop wearing one follows the version used.
+##
 ## A game told in sticker pages (next/sticker_book.md) adds two more, Keep alone on each, so a night's drawings are drawn the same on
 ## the next ([StickerLibrary]):
 ##
@@ -33,6 +36,7 @@ const GROUPS := [
 	{"key": "figures", "label": "Figures", "tip": "The figures modeled for this game. Keep one to find it again on another night."},
 	{"key": "cast", "label": "Characters", "tip": "Who and what this episode's pictures drew, each painted once and stuck on every page they are in. Keep one to draw it the same on another night."},
 	{"key": "sets", "label": "Sets", "tip": "The places this episode's pictures stand in, each painted once. Keep one to use it again on another night."},
+	{"key": "ornaments", "label": "Ornaments worn", "tip": "The ornaments from your library this episode's things wear. Refine one, or step through its versions: every prop wearing it follows."},
 ]
 ## What a row's tick says on hover.
 const ON_TIP := "Ticked, this episode's table uses it; unticked, it is set aside and kept here."
@@ -100,7 +104,50 @@ func rows() -> Array:
 					"tip": ("In your library as %s." % as_kept) if not as_kept.is_empty() else "Keep it in your library, to use again on another night."}],
 				"remove_off": "Model it again from its row on the Episode card."})
 	out.append_array(_sticker_rows())
+	out.append_array(_ornament_rows(t))
 	return out
+
+
+## The kept ornaments the table's things wear by name, once each.
+func _ornament_rows(t: Dictionary) -> Array:
+	var names := {}
+	for th in (t.get("things", []) if t.get("things") is Array else []):
+		if th is Dictionary:
+			_worn((th as Dictionary).get("parts", []), names)
+	var out: Array = []
+	for nm in names:
+		var e := OrnamentLibrary.find(String(nm))
+		if e.is_empty():
+			continue
+		var n := (e["versions"] as Array).size()
+		var used := int(e["used"])
+		out.append({"key": "ornament:" + String(e["name"]), "name": String(e["name"]), "group": "ornaments",
+			"line": "%s  ·  version %d of %d" % [String(e["words"]).left(60), used + 1, n], "tip": String(e["words"]),
+			"picture": _swatch(String(e["code"])),
+			"remove_off": "Take it off a thing by refining that thing; remove it from your library on the Dex.",
+			"verbs": [{"key": "refine", "label": "Refine…", "tip": "Ask its designer for a change: a new version, which every prop wearing it shows."},
+				{"key": "older", "label": "‹", "tip": "Use the version before this one.", "off": used <= 0},
+				{"key": "newer", "label": "›", "tip": "Use the version after this one.", "off": used >= n - 1}]})
+	return out
+
+
+## The names a list of parts (and their groups' parts) wear as their ornament's kind, gathered in [param into].
+static func _worn(parts: Variant, into: Dictionary) -> void:
+	for p in (parts if parts is Array else []):
+		if not (p is Dictionary):
+			continue
+		var o: Variant = (p as Dictionary).get("ornament")
+		if o is Dictionary and (o as Dictionary).get("kind") is String:
+			into[String((o as Dictionary)["kind"]).strip_edges().to_lower()] = true
+		_worn((p as Dictionary).get("parts", []), into)
+
+
+## The swatch of an ornament's code once taken ([method OrnamentLibrary.swatch]), asked for if not; null until then.
+func _swatch(code: String) -> Variant:
+	if code.is_empty():
+		return null
+	var sw := OrnamentLibrary.swatch(code)
+	return library.pictures.of(ThingLibrary.hash_of(sw["thing"], sw["materials"]), sw["thing"], sw["materials"])
 
 
 ## A sticker book's characters, things and sets, each made ([StickerLibrary] says which are kept).
@@ -250,6 +297,8 @@ func move_thing(name: String, from: String, to: String) -> String:
 func act(key: String, verb: String) -> String:
 	var kind := key.get_slice(":", 0)
 	var name := key.substr(kind.length() + 1)
+	if kind == "ornament":
+		return _act_ornament(name, verb)
 	match verb:
 		"keep":
 			if kind in ["char", "stick", "set"]:
@@ -263,6 +312,20 @@ func act(key: String, verb: String) -> String:
 				dock.inspect({"thing": name})
 			return ""
 	return library.act(key, verb)
+
+
+## Verb [param verb] of the kept ornament [param name]: Refine… opens its designer's window, ‹ and › step through its versions.
+func _act_ornament(name: String, verb: String) -> String:
+	var e := OrnamentLibrary.find(name)
+	if e.is_empty():
+		return "%s is not in the library" % name
+	match verb:
+		"refine":
+			OrnamentDesign.of(name).open()
+			return ""
+		"older", "newer":
+			return OrnamentLibrary.use_version(name, int(e["used"]) + (-1 if verb == "older" else 1))
+	return "nothing here does that"
 
 
 ## The thing a row names kept in the library, its picture taken: `{name}` (what it is kept as), or `{error}`. One kept already is
@@ -389,6 +452,12 @@ func prepare_pictures(keys: Array) -> void:
 
 
 func picture(key: String) -> Variant:
+	if key.begins_with("ornament:"):
+		var code := OrnamentLibrary.code_of(key.substr(9))
+		if code.is_empty():
+			return null
+		var sw := OrnamentLibrary.swatch(code)
+		return library.pictures.image(ThingLibrary.hash_of(sw["thing"], sw["materials"]))
 	return library.picture(key)
 
 

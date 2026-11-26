@@ -77,12 +77,29 @@ Built:
   (`PropRig.set_light_scale`).
 - The old flat block (`light`, `brightness`, `rays`, `ray_strength`, `air`, `air_amount`, `sound`, `sound_level`) is no longer read;
   the two notes that had one in ~/repos/rift were moved to `elements`.
+- **A table show's environment** (`TableSurroundings` in `src/table/`, `EpisodeEnvironment` in `src/table_show/`): Table brings the
+  Environment card, and while an episode is at its table the card lists what its table is heard with and what lasts in its air - each
+  part of the set dresser's `sound` an element (the wind, the sea, rain, a fire, a stream, insects, the ride, a creature each) and each
+  fog and kind of motes of its `effects` one (a fog a haze, motes the kind their look is; a burst and what the wind carries stay its
+  staging). Test (as the table hears it, its wind and ride planned as the table's), Keep, Used, × and its properties; a change is a
+  hand's version of the table step, and what is set aside is the table's `environment_aside`. "+ Add" puts a Dex element on the table
+  (no light: the table's light is the set dresser's). At the desk, where the episode has no table, the card is the note's own and the
+  reading hears its sound (`ReadingBed.under`).
+- **An element keeps its host's own words** (`own`, `Surroundings.OWN`): where a sound is heard from, a wind's own gusts, a creature's
+  name and calls, where motes fly and fog lies at a table. Such an element is never drawn (an unset property is its default), so it
+  goes back to the table unchanged, and kept it plays the same on any note; a place the note has not got is its kind's. New kinds for
+  what a table makes: a creature, the ride (never offered on the Dex: only a moving table plays it) and flies.
 
 Gate: `tests/table/environment_check.gd` (Roll, the block, every kind's fields, air, sound, shafts' geometry, the card, Keep, the
-Dex's list). Look: `dispatch_look_probe.gd` and `letter_look_probe.gd` take `--light`, `--bright`, `--shafts k=v,...`, `--air`,
+Dex's list); `tests/table/table_surroundings_check.gd` (a table's sound and air as elements and back, unchanged, changed, set aside,
+from the Dex, kept and used elsewhere); `tests/table_show/episode_environment_check.gd` (the card on an episode, a hand's version,
+Keep, Add, Test, the bed at the desk). Look: `dispatch_look_probe.gd` and `letter_look_probe.gd` take `--light`, `--bright`, `--shafts k=v,...`, `--air`,
 `--heard` (`tests/table/environment_flags.gd`).
 
 For the user to judge:
+
+- A table show's Environment card: an episode's sounds and air listed, Test as the table hears it, a change kept as your version of
+  the table, Keep, and a sound or what drifts added from the Dex.
 
 - The fog on the Dispatch desk and a desk: the Ground fog look first (low, a gentle wind, swaying); each activation; how
   strong Chaos should be at its default; whether Sway reads as waves or as the whole fog sliding; Glow at night, where no light
@@ -104,10 +121,12 @@ For the user to judge:
   carrying `fields` as the Environment's do. The lit and heard shares belong there in the end, as a lamp's or a receiver's
   properties, once a prop's properties have a home in its note.
 - **A roll constrained by the person**: a property set to a range (`0.3..0.6`, SchemaForm's `num`) drawn inside it by the number.
-- **A table show's set** reads none of it yet: its light is the set dresser's (`Lights`), its air the episode's `effects`, its
-  sound the table's. The table format would read the elements as a person's choice over the set dresser's.
+- **A table show's light** stays the set dresser's (`Lights`: the sky, the sun, lamps, the wind), and a table hosts no shafts or
+  colored beams yet; a burst and what the wind carries are its staging, not elements.
+- **Seen on the Dex**: every element an episode's table has, across every show, read once each, as the Seen props are - kept from
+  there as well as from the card.
 - **The seeded show** (the storyboard's scenes) reads none of it: a scene's look is its own.
-- An agent cannot choose an environment yet: a plan's `environment` the producer writes from the brief, the card's a person's
-  change over it.
+- An agent cannot choose an environment yet beyond the set dresser's sound and air: a plan's `environment` the producer writes from
+  the brief, the card's a person's change over it; nor reach the kept elements, as the set dresser's `library` reaches kept props.
 - Export and Import of a kept element (`.env.json`), as a prop and a voice are handed on.
 - Sounds a scene makes on its own (the Dispatch desk's) play beside the Environment's, never instead of them.

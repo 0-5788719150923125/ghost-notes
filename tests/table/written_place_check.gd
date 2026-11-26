@@ -14,6 +14,10 @@ extends Node
 ##     blueprint's `unstood` with where it was written and why;
 ##   - a thing with no `at` still finds a spot in its zone, clear of every written thing;
 ##   - a crowded table - 28 small things written in rows round the back and sides - stands nearly whole;
+##   - what rests on another (`on`, [method TableThings.rest_on]) stands on it: a book on a book on its cover, a stone on that one
+##     higher again, a bead with no `at` over the middle of an open dish on its floor and under its rim (controls: each foot lies over
+##     what it rests on, where on the table it could not stand); a thing on one left off stands where it is written, on the table; one
+##     whose foot runs off what it rests on is left off, its reason saying so; the blueprint marks what rests;
 ##   - the blueprint ([method TableThings.blueprint]) holds every stood thing, its written spot and move, the spread's cards, where
 ##     nothing may stand, the camera; and the drawing ([method TableBlueprint.view]) fits every thing.
 ##
@@ -74,7 +78,8 @@ func _run() -> void:
 
 	var n := {"exact": 0, "exact_clear": 0, "written": 0, "moved": 0, "moved_real": 0, "jitter": 0, "edge_out": 0, "edge_ok": 0, "edge_far": 0,
 		"edge_hit": 0, "edge_cards": 0, "on_ok": 0, "on_hit": 0, "on_named": 0, "flame_ok": 0, "flame_front": 0, "deep_off": 0, "deep_hit": 0,
-		"zone_ok": 0, "crowd": 0, "crowd_of": 0, "print_ok": 0, "touching": 0}
+		"zone_ok": 0, "crowd": 0, "crowd_of": 0, "print_ok": 0, "touching": 0, "rest_book": 0, "rest_stone": 0, "rest_over": 0,
+		"rest_dish": 0, "rest_fallen": 0, "rest_off": 0, "rest_marked": 0}
 	for s in range(1, SEEDS + 1):
 		# a first build, to learn where this seed's cards go
 		_build(s, {"materials": MATERIALS, "things": []})
@@ -189,6 +194,43 @@ func _run() -> void:
 			for j in range(i + 1, medium._things_part.on_table.size()):
 				if Geo.within((medium._things_part.on_table[i] as Dictionary)["outline"], (medium._things_part.on_table[j] as Dictionary)["outline"], 0.0):
 					n["touching"] += 1
+		# One thing resting on another
+		var thin := _box("a thin book", [12, 2, 9], [-40.0, -24.0], 10.0)
+		thin["on"] = "a thick book"
+		var flat := _box("a flat stone", [4, 1.5, 4], [-41.0, -24.0])
+		flat["on"] = "a thin book"
+		var bead := _box("a bead", [1.5, 1.5, 1.5])
+		bead["on"] = "a shallow dish"
+		var crate := _box("a crate", [10, 5, 10], cm.call(room.get_center()))
+		var pebble := _box("a pebble", [2, 1, 2], [46.0, -14.0])
+		pebble["on"] = "a crate"
+		var rod := _box("a long rod", [30, 1, 2])
+		rod["on"] = "a flat stone"
+		_build(s, {"materials": MATERIALS, "things": [_box("a thick book", [14, 4, 10], [-40.0, -24.0]), thin, flat,
+			{"name": "a shallow dish", "at": [40.0, -24.0], "parts": [{"shape": "lathe", "material": "wood",
+				"profile": [[0, 0], [5, 0], [5.5, 2.5], [5, 2.5], [4.4, 0.5], [0, 0.5]]}]}, bead, crate, pebble, rod]})
+		var rest := {}
+		for th in medium._things_part.on_table:
+			rest[String((th as Dictionary)["name"])] = th
+		var y_of := func(nm: String) -> float: return (rest[nm]["node"] as Node3D).position.y if rest.has(nm) else -1.0
+		if rest.has("a thin book") and rest.has("a thick book"):
+			n["rest_book"] += 1 if absf(float(y_of.call("a thin book")) - 0.04) < 0.0015 and String(rest["a thin book"]["on"]) == "a thick book" else 0
+			n["rest_over"] += 1 if Geo.within(rest["a thin book"]["outline"], rest["a thick book"]["outline"], 0.0) else 0
+		if rest.has("a flat stone"):
+			n["rest_stone"] += 1 if absf(float(y_of.call("a flat stone")) - 0.06) < 0.002 else 0
+		if rest.has("a bead") and rest.has("a shallow dish"):
+			var dish_at := Vector2((rest["a shallow dish"]["node"] as Node3D).position.x, (rest["a shallow dish"]["node"] as Node3D).position.z)
+			var bead_at := Vector2((rest["a bead"]["node"] as Node3D).position.x, (rest["a bead"]["node"] as Node3D).position.z)
+			n["rest_dish"] += 1 if float(y_of.call("a bead")) > 0.002 and float(y_of.call("a bead")) < 0.012 and bead_at.distance_to(dish_at) < 0.01 else 0
+		if rest.has("a pebble") and not rest.has("a crate"):
+			var pat := Vector2((rest["a pebble"]["node"] as Node3D).position.x, (rest["a pebble"]["node"] as Node3D).position.z)
+			n["rest_fallen"] += 1 if float(y_of.call("a pebble")) == 0.0 and pat.distance_to(Tables.ORIGIN + Vector2(0.46, -0.14)) < 0.001 else 0
+		for u in medium._things_part.unstood:
+			if String((u as Dictionary)["name"]) == "a long rod" and String((u as Dictionary)["why"]).contains("runs off a flat stone"):
+				n["rest_off"] += 1 if not rest.has("a long rod") else 0
+		for t in medium._things_part.blueprint()["things"]:
+			if String((t as Dictionary)["name"]) == "a flat stone" and String((t as Dictionary).get("on", "")) == "a thin book":
+				n["rest_marked"] += 1
 	print(n)
 	_ok(n["written"] >= SEEDS * 6 and n["exact"] >= n["written"] - SEEDS * 3, "a clear written spot is where a thing stands (%d of %d exactly where written)" % [n["exact"], n["written"]])
 	_ok(n["exact_clear"] == n["exact"], "control: every thing that stood where written stood clear (%d of %d)" % [n["exact_clear"], n["exact"]])
@@ -205,6 +247,13 @@ func _run() -> void:
 	_ok(n["print_ok"] == SEEDS, "the blueprint holds every stood thing, and the drawing fits it (%d)" % n["print_ok"])
 	_ok(n["crowd"] >= int(n["crowd_of"] * 0.9) and n["touching"] == 0, "a crowded table stands nearly whole, nothing in anything (%d of %d, %d touching)"
 		% [n["crowd"], n["crowd_of"], n["touching"]])
+	_ok(n["rest_book"] == SEEDS and n["rest_stone"] == SEEDS, "a book on a book rests on its cover, a stone on that one higher again (%d, %d)"
+		% [n["rest_book"], n["rest_stone"]])
+	_ok(n["rest_over"] == SEEDS, "control: the book on top lies over the one under it, where it could not stand on the table (%d)" % n["rest_over"])
+	_ok(n["rest_dish"] == SEEDS, "a bead with no `at` rests over the middle of an open dish, on its floor and under its rim (%d)" % n["rest_dish"])
+	_ok(n["rest_fallen"] == SEEDS, "a thing on one left off stands where it is written, on the table (%d)" % n["rest_fallen"])
+	_ok(n["rest_off"] == SEEDS, "a thing whose foot runs off what it rests on is left off, its reason saying so (%d)" % n["rest_off"])
+	_ok(n["rest_marked"] == SEEDS, "the blueprint marks what rests on what (%d)" % n["rest_marked"])
 	Director.hold(false)
 	Director.detach()
 	_clear()

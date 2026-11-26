@@ -9,8 +9,12 @@ class_name EnvironmentCard
 ##
 ## Its block in a document is `environment:` ([constant Surroundings.KNOBS]). It hands the reading its part of the document a
 ## medium is drawn from ([member ReadingPanel.document_parts]: `environment`), and the sound it chose as the bed under the voice
-## where no other card hands one ([member ReadingPanel.bed]). Changed while the note plays, the playing scene takes it at once (the
-## live document's `environment`). A scene that hosts no environment reads none of it.
+## where no other card hands one, or where the one handed has no place of its own ([member ReadingPanel.bed], [member
+## ReadingBed.under]). Changed while the note plays, the playing scene takes it at once (the live document's `environment`). A
+## scene that hosts no environment reads none of it.
+##
+## Where a component's show makes what is round the scene ([member ReadingPanel.environment]: a table show's episode at its table,
+## [EpisodeEnvironment]), the list is that show's, in place of the note's own.
 ##
 ## Each element that is heard has a Test: it alone, at the level it has under the voice, following what is changed on it until
 ## pressed again ([method test], [SoundTest]).
@@ -37,15 +41,23 @@ static func for_note(ctx: Dictionary) -> EnvironmentCard:
 		card._panel.document_parts[KEY] = func() -> Dictionary: return {KEY: card.capture()}
 		if card._panel.bed.get_script() == ReadingBed:
 			card._panel.bed = Bed.new(card)
+		else:
+			card._panel.bed.under = Bed.new(card)
 	return card
 
 
 func _init() -> void:
 	add_theme_constant_override("separation", 8)
 	section = EnvironmentSection.new(self)
-	list = PropsCard.new(func() -> Array: return [section])
+	list = PropsCard.new(sections)
 	add_child(list)
 	add_child(tester)
+
+
+## What the list shows: the show's own where a component's show makes what is round the scene, else the note's.
+func sections() -> Array:
+	var shown: PropSection = _panel.environment.call() if _panel != null and is_instance_valid(_panel) else null
+	return [shown if shown != null else section]
 
 
 # --- the block ---------------------------------------------------------------------------------------------------------

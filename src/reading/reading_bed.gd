@@ -8,6 +8,10 @@ class_name ReadingBed
 ## of these, and the panel asks it, live and for the export take. This one is no place: a chapter read on its own
 ## is heard over silence. The table show hands the episode's table, heard.
 
+## The bed this one gives way to where it has no place of its own ([method of] `{}`): the Environment card's, under a table show's
+## episode shown at the desk, whose table is a pad and a pen. Handed by whichever of the two cards comes second.
+var under: ReadingBed = null
+
 
 ## Where the reading is now: `{make, key}` (`{key}` alone while it has none yet) - `make` is
 ## `(sample_rate: int, t0: float) -> SoundBed`, the bed from show time [code]t0[/code], and `key`

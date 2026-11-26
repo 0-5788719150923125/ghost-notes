@@ -30,9 +30,9 @@ static func shelf(name: String) -> String:
 	return ProjectSettings.globalize_path(root.path_join(name))
 
 
-## The file at [param path] (absolute) taken off its shelf: to the system trash, or the gate's [member discard]. An error, OK
+## The file or folder at [param path] (absolute) taken off its shelf: to the system trash, or the gate's [member discard]. An error, OK
 ## for done.
 static func trash(path: String) -> int:
-	if not FileAccess.file_exists(path):
+	if not FileAccess.file_exists(path) and not DirAccess.dir_exists_absolute(path):
 		return ERR_FILE_NOT_FOUND
 	return int(discard.call(path)) if discard.is_valid() else OS.move_to_trash(path)

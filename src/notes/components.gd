@@ -160,10 +160,11 @@ const REGISTRY := {
 	# Its card is the episode: the show's knobs, its agents and every step they make. It hands the reading what is read
 	# (the episode's script), where it is heard (the table's sound) and how it goes out (the episode's title and upload
 	# notes). It brings a Medium, whose formats are Table's (the table, the desk - an episode keeps the one it was made
-	# for). `heading` is the card's title where it is not the label; the tips are what the bookends hold at a table.
+	# for), and the Environment, which lists what the episode's table is heard with and what lasts in its air. `heading`
+	# is the card's title where it is not the label; the tips are what the bookends hold at a table.
 	"table": {"label": "Table", "family": &"producer",
 		"blurb": "Agents plan, build, paint and write a show at a table, one beat at a time, and a voice reads it. The note's words are the brief they all work from.",
-		"needs": ["text"], "provides": ["text", "picture", "moments", "episode"], "requires": ["voice", "medium"],
+		"needs": ["text"], "provides": ["text", "picture", "moments", "episode"], "requires": ["voice", "medium", "environment"],
 		"slots": [], "workspace": "table", "starter": "res://rules/table/starter.md",
 		"capabilities": ["forward_plus", "subprocess", "agent:writer", "agent:painter"], "marks": [],
 		"block": "table", "card": "episode", "heading": "Episode",

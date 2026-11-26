@@ -133,6 +133,12 @@ the table reads:
   held up alone and turned over long enough to read, `TableMedium._looks`); or `front` (art, name, facts and
   text printed together on the front, `CardFaces.Face.details`, the printing's shared artwork on the back).
   The painter leaves a back's middle plain only for `back` staging.
+- A card held up is given light from behind the lens (`TableLight.held_fill`, the foil shader's `fill`): what its face, turned to
+  the camera, lacks of 75% of the light on a card lying at the middle of the table, estimated from every light on the table as it
+  is (`TableLight.light_on`), laid on as soft diffuse light from just above and behind the camera - never a glint on the gloss or
+  foil - and only near the lens. A face the table's own light already reaches is given nothing. Gate: held_light_check; look:
+  `table_look_probe.gd --marks 1` (`--fill 0` to see it without). Shadows are not counted: a card held in a thing's shade is
+  lit as if it were not.
 - `look.series`: the printings a box mixes, each a name and what it prints otherwise (style, back, palette,
   frame); a card's `series` (or its group's name) picks one (`CardTable.look_of`). Each printing in the full
   collection is painted its own back (`image:back:<key>`, `back_<key>.png`), even if none of its cards is
@@ -326,6 +332,18 @@ THE BLUEPRINT. A thing is written where it stands:
   (15 cm), the move and its reason kept; else left off, in `_unstood`. What the camera makes of it (cut by
   the frame, one thing before another) is the set dresser's to judge. A thing with no `at` (an old table,
   the one-reply writer) is hunted for room by zone, after the written.
+- `on`: the thing it rests on or in (`CardTable.rests` keeps it only where it names another thing on the
+  table - never itself, a strand, the cards' box or a link of a circle - at most `CardTable.STACK_MOST` (4)
+  high). `TableThings.rest_on` stands it last, supports first (`resting_order`): at its `at` over the support
+  (over the support's middle without one), on the highest face of the support under its foot
+  (`faces_of`, flatter than `REST_FLAT`, either way up, never a liquid; `rest_height` over the foot's
+  corners drawn in by `REST_IN`) - one rule for a cover, a lid and the floor of an open box or dish. Its foot
+  stays over the support and clear of everything not under it, nudged as `stand_at` nudges; else left off
+  with why. It casts its foot shadow at its height, presses no shade into the cloth and leaves the cards'
+  way to its support's foot; a support is never hidden out of the shot while something rests on it. What
+  it rests on left off or set aside, it stands where it is written. A worked support carries nothing: what
+  rests on a thing the work moves stays where it was (the rules keep the work's things off the bottom of a
+  pile).
 - The drawing (`TableBlueprint`, `src/table_show/table_blueprint.gd`, from `TableMedium.blueprint()`):
   black on white, ruled in cm from the middle of the reading; the top, the line a foot stays inside, the
   cloths dashed and named; gray where the camera does not see; the cards' room hatched, the spread's cards,
@@ -333,21 +351,25 @@ THE BLUEPRINT. A thing is written where it stands:
   because the frame's top is a plane through the lens: `CardTable.headroom_at`, closed form, held to the
   step-by-step `headroom`); each thing's foot, numbered as `put` numbers it, a tick to its front, lit ones
   warm, the number red when it is taller than its spot shows, its written spot dashed red when it had to
-  move. Names and sizes go in words.
-- The tools: `put` makes things (a thing put again keeps its place); `blueprint` places them by name (only
-  what changes) and answers with the drawing and, per thing, its spot, foot, height against what the spot
+  move; a resting thing dashed over its support, its number in a double ring. Names and sizes go in words,
+  with what rests on what and how high.
+- The tools: `put` makes things (a thing put again keeps its place and what it rests on); `blueprint`
+  places them by name (only what changes; `on` names a support, "" stands it on the table) and answers with the drawing and, per thing, its spot, foot, height against what the spot
   shows, and every move, refusal or cut; a thing not yet placed waits off the table in every picture and is
   asked about once at submit; `set` says each thing at its spot (`numbers: true` tags them in the picture),
   and moved, taller than its spot, or wholly out of the shot are faults. 60 looks. With tools, the set
   dresser plans the whole table on the blueprint, then verifies through the camera; zones serve the blind
   reply only.
-- How full (`TablePrompts.FILLS`): a habit drawn per episode, 3-6, 6-10, 10-16 or 16-24 things besides the
-  lit ones; a place crowded by nature may go up to `CardTable.MAX_THINGS` (32). The cost is the agent's
-  geometry and looks; building is cheap.
+- How full (`TablePrompts.FILLS`): a habit drawn per episode, 8-14, 14-22, 22-34 or 32-48 things besides the
+  lit ones; a place crowded by nature may go up to `CardTable.MAX_THINGS` (60). The rules ask for a packed
+  table: things close or touching, small ones in the gaps, groups overlapping in depth, tiers of height,
+  things resting on and in each other, and kept props from the library wherever they fit (they cost no
+  look). The cost is the agent's geometry and looks; building is cheap.
 Gates `tests/table/written_place_check.gd` (boot probe), `tests/table_show/set_dresser_tools_check.gd`; look
 with `set_dresser_look_probe` (an old table is written where its hunt stood it, then drawn and set,
-numbered). Open: things stacked on things (a candle on a book) are still one thing's parts; a real run with
-an agent.
+numbered); `tests/table/rest_on_check.gd` holds the resting geometry and `on` made safe. Open for the user's
+eye: a packed, stacked table from a real run; whether 60 looks carry a table of 40 things; a pile that moves
+with the work.
 
 THE AIR. The set dresser writes `effects` beside its things; `Effects` builds them:
 - Fog is Godot's own volumetric fog, a FogVolume per fog in one of `CardTable.AIR`'s regions ("beyond the
@@ -950,6 +972,14 @@ record). The export menu has no YouTube items.
   any thing is (`put` answers with a picture, `look` shows four sides) and `put` warns of a stroke finer
   than its sculpt is cut. A person's skull takes about 4 s to build the first time (89k triangles), a
   crow's about 2 s.
+- Scrolls (`Props` shape `scroll`): the piece ornament is made of - a volute, a c or an s - its spine grown by a turning that sharpens
+  geometrically into each curl (`SCROLL_CLOSE`), so a curl winds in to an eye and never crosses itself; laid the same way whatever its
+  numbers (a c or an s eye to eye along x, a volute standing, tail below curl), its size along its longest side; round or square in
+  section, thinning into its curls, a bud at each eye. A part or a group copied with `mirror` is drawn once and made on the other
+  side of x (or z), each mirrored triangle wound the other way; nothing that moves is mirrored. An ornate mantel clock fits in fourteen
+  parts with them (crest, arms and feet each a scroll drawn once and mirrored); the prop refiner is told that ornament is made of
+  these pieces. Open: a refined prop is still held to `MAX_PARTS` (16); surface ornaments are geometric (bands, flutes,
+  lattice) - there is no engraved scrollwork on a surface.
 - Bursts mark moments the table can show: a burst on the pirouette makes the table twirl one card
   (`SPIN_ROOM`), the set dresser is offered the jumper's moment only when a card jumps, and `which` (every,
   first, last, [n]) picks the times a moment is marked.

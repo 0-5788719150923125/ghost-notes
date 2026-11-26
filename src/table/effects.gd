@@ -133,10 +133,10 @@ const BURSTS := {
 ## The sprite shapes, as the sprite shader numbers them.
 const SHAPES := {"orb": 0, "streak": 1, "flame": 2, "puff": 3, "star": 4, "flake": 5, "speck": 6}
 
-## The most of each: effects in all, fogs, motes in one population and in all, lit motes (each a
-## light), and particles a burst makes over all its moments. Motes that only drift ([method drifts]) are posed on the GPU and cost no
-## frame: up to [constant MAX_ADRIFT] in one population, none of them counted in [constant MAX_MOTES_ALL].
-const MAX_EFFECTS := 8
+## The most of each: effects in all (as many as an environment holds, [constant Surroundings.MOST]), fogs, motes in one population
+## and in all, lit motes (each a light), and particles a burst makes over all its moments. Motes that only drift ([method drifts]) are
+## posed on the GPU and cost no frame: up to [constant MAX_ADRIFT] in one population, none of them counted in [constant MAX_MOTES_ALL].
+const MAX_EFFECTS := 12
 const MAX_ADRIFT := 600
 ## A mote's home where the camera turns round the scene (stage `around`): never nearer the lens than this (m).
 const AROUND_CLEAR := 0.45

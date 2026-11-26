@@ -8,7 +8,9 @@ class_name TableThings
 ## [method CardTable.sanitize_table]), or the look's candles alone until it has, each built ([Props]) by
 ## the medium, then stood here: the draped laid where they were written, the written where the set
 ## dresser put them on the blueprint ([method stand_at]), and the rest found room in the zone they name
-## ([method stand]), a group together. Where nothing may stand is a function of the plan and the box
+## ([method stand]), a group together, and last what rests on or in another thing (its `on`, [method rest_on]) - on the
+## highest face of that thing under its foot, so on a book's cover, a box's lid or the floor of an open box or dish alike
+## ([method faces_of], [method rest_height]). Where nothing may stand is a function of the plan and the box
 ## ([method off_limits]); what stood is kept ([member on_table], [member standing]) for the light, the
 ## wash and the blueprint to read.
 ##
@@ -59,13 +61,18 @@ const NUDGE_STEP := 0.005
 const WRITTEN_GAP := 0.003
 ## How far a card sliding across the cloth keeps from a thing's foot (meters).
 const FOOT_MARGIN := 0.004
+## What a thing set on another rests on ([method faces_of]): its faces that lie flatter than this (the share of their normal that is
+## up or down - 0.5 is a 60 degree slope), and how far in toward its middle a foot is sampled ([method rest_points]), so the rim of an
+## open thing beside the foot is not taken for what is under it.
+const REST_FLAT := 0.5
+const REST_IN := 0.85
 
 var standing: Array = []             # what stands on the table: convex feet (x by z), for a wash to go round
 var standing_c := PackedVector2Array()   # ...their middles
 var standing_r := PackedFloat32Array()   # ...and how far they reach from them
 var _habit := {}                     # how this episode's reader sets out their things (_habit_of)
 var _layer_os: Array = []             # the layers' outlines (Tables.layer_outline), for a foot across a hem
-var on_table: Array = []               # what stood: [{name, group, place, node, outline, bb, rect, foot, lit, flames, meshes, written, moved, why}]
+var on_table: Array = []               # what stood: [{name, group, place, node, outline, bb, rect, foot, lit, flames, meshes, written, moved, why, on, base}]
 var unstood: Array = []              # things written where they stand that found no room near it: [{name, written, why}]
 
 
@@ -100,7 +107,7 @@ func place(things: Array, built: Array, rng: RandomNumberGenerator) -> void:
 			_drape(things[i], built[i], keep_out)
 	# ...then the written, each where the set dresser put it on the blueprint
 	for i in things.size():
-		if Props.draped(things[i]) or not (things[i] as Dictionary).has("at"):
+		if Props.draped(things[i]) or not (things[i] as Dictionary).has("at") or (things[i] as Dictionary).has("on"):
 			continue
 		var g := String((things[i] as Dictionary).get("group", ""))
 		if not stand_at(things[i], built[i], g if not g.is_empty() else "#%d" % i, keep_out):
@@ -108,7 +115,7 @@ func place(things: Array, built: Array, rng: RandomNumberGenerator) -> void:
 			((built[i] as Dictionary)["node"] as Node).free()
 	var groups := {}
 	for i in things.size():
-		if Props.draped(things[i]) or (things[i] as Dictionary).has("at"):
+		if Props.draped(things[i]) or (things[i] as Dictionary).has("at") or (things[i] as Dictionary).has("on"):
 			continue
 		var g := String((things[i] as Dictionary).get("group", ""))
 		var key := g if not g.is_empty() else "#%d" % i
@@ -135,6 +142,54 @@ func place(things: Array, built: Array, rng: RandomNumberGenerator) -> void:
 				((built[i] as Dictionary)["node"] as Node).free()
 			elif anchor.is_empty():
 				anchor = stood
+	# ...and last what rests on or in another, each after what it rests on
+	for i in resting_order(things):
+		var t: Dictionary = things[i]
+		var g := String(t.get("group", ""))
+		var sup := _stood(String(t["on"]))
+		var ok := false
+		if not sup.is_empty():
+			ok = rest_on(t, built[i], sup, g if not g.is_empty() else "#%d" % i, keep_out)
+		elif t.has("at"):
+			# what it rests on is not on the table: it stands where it is written
+			ok = stand_at(t, built[i], g if not g.is_empty() else "#%d" % i, keep_out)
+		else:
+			ok = not stand(t, built[i], g if not g.is_empty() else "#%d" % i, {}, keep_out, rng).is_empty()
+		if not ok:
+			print("ghost: card table - no room for %s on %s" % [String(t.get("name", "a thing")), String(t["on"])])
+			((built[i] as Dictionary)["node"] as Node).free()
+
+
+## The things of [param things] that rest on another ([method CardTable.rests] made their `on` safe), by their places in it: each
+## after what it rests on, so a stack is built from the bottom.
+static func resting_order(things: Array) -> Array:
+	var by_name := {}
+	for t in things:
+		by_name[String((t as Dictionary).get("name", ""))] = t
+	var high := func(t: Dictionary) -> int:
+		var n := 0
+		var cur: Variant = t
+		while cur is Dictionary and (cur as Dictionary).has("on") and n <= CardTable.STACK_MOST:
+			n += 1
+			cur = by_name.get(String((cur as Dictionary)["on"]))
+		return n
+	var out: Array = []
+	for i in things.size():
+		if (things[i] as Dictionary).has("on") and not Props.draped(things[i]):
+			out.append(i)
+	out.sort_custom(func(a: int, b: int) -> bool:
+		var ha: int = high.call(things[a])
+		var hb: int = high.call(things[b])
+		return ha < hb or (ha == hb and a < b))
+	return out
+
+
+## What stood under the name [param name] ([member on_table]), {} where nothing did.
+func _stood(name: String) -> Dictionary:
+	for i in range(on_table.size() - 1, -1, -1):
+		if String((on_table[i] as Dictionary)["name"]) == name:
+			return on_table[i]
+	return {}
 
 
 ## This episode's habit ([constant AIM_WANDER]), from its own die so no other draw moves: `push` - how
@@ -297,7 +352,7 @@ func blueprint() -> Dictionary:
 		things.append({"name": String(d["name"]), "foot": d["outline"], "bb": d["bb"], "at": Vector2(node.position.x, node.position.z),
 			"front": Vector2(front.x, front.z).normalized(), "height": (d["box"] as AABB).end.y, "lit": int(d["lit"]),
 			"written": d.get("written"), "moved": float(d.get("moved", 0.0)), "why": String(d.get("why", "")),
-			"rect": d["rect"], "box": String(d["group"]) == "#the box"})
+			"rect": d["rect"], "box": String(d["group"]) == "#the box", "on": String(d.get("on", ""))})
 	var out := {"top": medium._top_o, "layers": layers, "cards": cards, "card": CardTable.card_size(medium._plan.look),
 		"keep_out": off_limits(), "shuffle": shuffle_rect(),
 		"workspace": Rect2(medium._plan.mid.x - WORKSPACE_HALF, medium._plan.mid.z + WORKSPACE_FROM, WORKSPACE_HALF * 2.0, 1.0),
@@ -522,12 +577,181 @@ func _spot_trouble(placed: PackedVector2Array, lit: bool, at: Vector2, keep_out:
 	return ""
 
 
+## Thing [param t] (built as [param b]) set on or in [param sup] (what stood under its `on`, [member on_table]): at its `at` where it
+## is written, else over the middle of [param sup], turned by its `turn` and sized by its `scale`, resting on the highest face of
+## [param sup] under its foot ([method rest_height]). A spot where it may not rest ([method _rest_trouble]) moves it to the nearest
+## where it may, as [method stand_at] moves a thing; false, and kept in [member unstood], when none is within reach.
+func rest_on(t: Dictionary, b: Dictionary, sup: Dictionary, group: String, keep_out: Array) -> bool:
+	var box: AABB = b["size"]
+	var lit := not (b["wicks"] as Array).is_empty()
+	var k := float(t.get("scale", 1.0))
+	var basis := Basis(Vector3.UP, deg_to_rad(float(t.get("turn", 0.0)))).scaled(Vector3(k, k, k))
+	var written := t.get("at") is Array
+	var want := Geo.centroid(sup["outline"])
+	if written:
+		want = Tables.ORIGIN + Vector2(float(t["at"][0]), float(t["at"][1])) * 0.01
+	var sup_node: Node3D = sup["node"]
+	var faces := faces_of(sup_node, sup_node.transform, sup["meshes"])
+	var below := {}
+	var cur := sup
+	while not cur.is_empty() and not below.has(String(cur["name"])):
+		below[String(cur["name"])] = true
+		cur = _stood(String(cur.get("on", "")))
+	var shape := Geo.turned(b["outline"], basis)
+	var foot := Geo.turned(b["foot"], basis)
+	if foot.size() < 3:
+		foot = shape
+	var pts := rest_points(foot)
+	var why := ""
+	var spot := Vector2(INF, INF)
+	var base := 0.0
+	var r := 0.0
+	while r <= NUDGE_MOST + 1e-6 and spot.x == INF:
+		var n := 1 if r == 0.0 else maxi(8, ceili(TAU * r / NUDGE_STEP))
+		for i in n:
+			medium._breathe()
+			var at := want + Vector2(cos(TAU * i / n), sin(TAU * i / n)) * r
+			var got := _rest_trouble(Geo.moved(shape, at), Geo.moved(pts, at), lit, at, sup, below, faces, keep_out)
+			if String(got["why"]).is_empty():
+				spot = at
+				base = float(got["base"])
+				break
+			if r == 0.0:
+				why = String(got["why"])
+		r += NUDGE_STEP
+	if spot.x == INF:
+		unstood.append({"name": String(t.get("name", "")), "written": want, "why": why})
+		return false
+	var corners := PackedVector3Array()
+	for cx in [box.position.x, box.end.x]:
+		for cy in [box.position.y, box.end.y]:
+			for cz in [box.position.z, box.end.z]:
+				corners.append(basis * Vector3(cx, cy, cz))
+	var lens := CardTable.lens(medium._cam.fov)
+	var placed := Geo.moved(shape, spot)
+	if not written:
+		want = spot
+	put(t, b, {"at": spot, "outline": placed, "bb": Geo.bounds(placed), "base": base, "on": String(sup["name"]),
+		"rect": CardTable.screen_rect(corners, Vector3(spot.x, base, spot.y), medium._plan.cam_base.affine_inverse(), lens),
+		"written": want, "moved": spot.distance_to(want), "why": why}, basis, group)
+	return true
+
+
+## Why a thing may not rest at [param at] on [param sup], `{why, base}` - `why` "" where it may, `base` the height it rests at: its
+## foot ([param pts], [method rest_points]) not wholly over [param sup], nothing of [param sup] under it ([param faces]), a flame in
+## front of the middle, over where the cards go, or in a thing it does not rest on ([param below]: the names under it).
+func _rest_trouble(placed: PackedVector2Array, pts: PackedVector2Array, lit: bool, at: Vector2, sup: Dictionary, below: Dictionary,
+		faces: PackedVector3Array, keep_out: Array) -> Dictionary:
+	var name := String(sup["name"])
+	if lit and at.y > medium._plan.mid.z:
+		return {"why": "a flame in front of the middle of the table blows out the card held up to the lens", "base": 0.0}
+	var over: PackedVector2Array = sup["outline"]
+	for q in pts:
+		if not Geometry2D.is_point_in_polygon(q, over):
+			return {"why": "its foot runs off %s" % name, "base": 0.0}
+	var bb := Geo.bounds(placed)
+	for r in keep_out:
+		if (r as Rect2).intersects(bb) and Geo.within(placed, Geo.of_rect(r as Rect2), 0.0):
+			return {"why": "it stood over where the cards go", "base": 0.0}
+	for th in on_table:
+		if below.has(String((th as Dictionary)["name"])):
+			continue
+		if ((th as Dictionary)["bb"] as Rect2).grow(WRITTEN_GAP).intersects(bb) \
+				and Geo.within(placed, (th as Dictionary)["outline"], WRITTEN_GAP):
+			return {"why": "it stood in %s" % String((th as Dictionary)["name"]), "base": 0.0}
+	var h := rest_height(faces, pts)
+	if is_inf(h):
+		return {"why": "nothing of %s is under it there" % name, "base": 0.0}
+	return {"why": "", "base": maxf(h, 0.0)}
+
+
+## The faces of [param meshes] (each a MeshInstance3D at or under [param root], which stands at [param xf] in the table's space) that
+## something set on it can rest on: those flatter than [constant REST_FLAT], either way up (a mesh may be built either way round, and
+## the highest face over a point is always what is on top), as triangles in the table's space. A liquid's surface is never one.
+static func faces_of(root: Node3D, xf: Transform3D, meshes: Array) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for m in meshes:
+		var mi := m as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var mat := mi.material_override as ShaderMaterial
+		var kd: Variant = mat.get_shader_parameter("kind") if mat != null else null
+		if kd != null and int(kd) == 13:
+			continue
+		var local := Transform3D.IDENTITY
+		var n: Node = mi
+		while n != null and n != root:
+			if n is Node3D:
+				local = (n as Node3D).transform * local
+			n = n.get_parent()
+		var to := xf * local
+		var tri := mi.mesh.get_faces()
+		for i in range(0, tri.size() - 2, 3):
+			var a := to * tri[i]
+			var b := to * tri[i + 1]
+			var c := to * tri[i + 2]
+			var nrm := (b - a).cross(c - a)
+			var len := nrm.length()
+			if len < 1e-12 or absf(nrm.y) / len < REST_FLAT:
+				continue
+			out.append(a)
+			out.append(b)
+			out.append(c)
+	return out
+
+
+## Where a foot [param foot] (convex, x by z) is looked under: its corners drawn in toward its middle by [constant REST_IN], and its
+## middle.
+static func rest_points(foot: PackedVector2Array) -> PackedVector2Array:
+	var c := Geo.centroid(foot) if foot.size() >= 3 else Vector2.ZERO
+	var out := PackedVector2Array([c])
+	for q in foot:
+		out.append(c + (q - c) * REST_IN)
+	return out
+
+
+## The height of the highest of [param faces] (triangles in the table's space, [method faces_of]) over any of [param points] (x, z in
+## the table's space): what a foot over those points rests on. -INF where none is over any of them.
+static func rest_height(faces: PackedVector3Array, points: PackedVector2Array) -> float:
+	var top := -INF
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for q in points:
+		lo = lo.min(q)
+		hi = hi.max(q)
+	for i in range(0, faces.size() - 2, 3):
+		var a := faces[i]
+		var b := faces[i + 1]
+		var c := faces[i + 2]
+		if minf(a.x, minf(b.x, c.x)) > hi.x or maxf(a.x, maxf(b.x, c.x)) < lo.x \
+				or minf(a.z, minf(b.z, c.z)) > hi.y or maxf(a.z, maxf(b.z, c.z)) < lo.y:
+			continue
+		var a2 := Vector2(a.x, a.z)
+		var e1 := Vector2(b.x, b.z) - a2
+		var e2 := Vector2(c.x, c.z) - a2
+		var den := e1.cross(e2)
+		if absf(den) < 1e-14:
+			continue
+		for q in points:
+			var d := q - a2
+			var u := d.cross(e2) / den
+			var v := e1.cross(d) / den
+			if u < -1e-6 or v < -1e-6 or u + v > 1.0 + 1e-6:
+				continue
+			top = maxf(top, a.y + (b.y - a.y) * u + (c.y - a.y) * v)
+	return top
+
+
 ## Thing [param t] stood at the chosen spot: in the scene, its wicks lit, a soft shade where it meets
-## the cloth, its foot kept for the cards to go round (see [method _card_clear]).
+## the cloth, its foot kept for the cards to go round (see [method _card_clear]). One resting on another (the spot's `base`, the
+## height it rests at, and `on`) stands at that height, its shade under it on what it rests on, and leaves the cards' way to its
+## support's foot.
 func put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: String) -> void:
 	var at: Vector2 = spot["at"]
+	var base := float(spot.get("base", 0.0))
+	var rests := not String(spot.get("on", "")).is_empty()
 	var node: Node3D = b["node"]
-	node.transform = Transform3D(basis, Vector3(at.x, 0.0, at.y))
+	node.transform = Transform3D(basis, Vector3(at.x, base, at.y))
 	medium._props.add_child(node)
 	var wicks: Array = b["wicks"]
 	# The wax and holder immediately under a flame cannot shadow themselves (they print a hard disc at
@@ -553,10 +777,13 @@ func put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: St
 		# A moving shoebox gets its own moving soft shade. A fixed decal projects onto
 		# its walls as it passes, and a fixed shadow slab leaves a ghost at its destination.
 		if not (group == "#the box" and String(medium._plan.staging.get("box_style", "open")) == "shoebox"):
-			shades.append(medium._light_part.contact_shadow(foot))
-			var slab := medium._light_part.foot_shadow(foot, own)
+			# the soft shade is the cloth's alone (its decal falls on the cloth's layer): nothing resting on a thing presses into it
+			if not rests:
+				shades.append(medium._light_part.contact_shadow(foot))
+			var slab := medium._light_part.foot_shadow(foot, own, base)
 			if slab != null:
 				shades.append(slab)
+	if foot.size() >= 3 and not rests:
 		var grown := Geo.grown(foot, FOOT_MARGIN)
 		standing.append(grown)
 		var c := Vector2.ZERO
@@ -574,4 +801,4 @@ func put(t: Dictionary, b: Dictionary, spot: Dictionary, basis: Basis, group: St
 		"node": node, "outline": spot["outline"], "bb": spot["bb"], "rect": spot["rect"], "foot": foot,
 		"box": node.transform * (b["size"] as AABB), "lit": wicks.size(), "lights": range(first, medium._lights.size()),
 		"meshes": b["meshes"], "written": spot.get("written"), "moved": float(spot.get("moved", 0.0)),
-		"why": String(spot.get("why", ""))})
+		"why": String(spot.get("why", "")), "on": String(spot.get("on", "")), "base": base})

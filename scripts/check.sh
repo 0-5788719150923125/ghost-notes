@@ -32,7 +32,8 @@
 # tests/run_scene_smoke.sh documents. A gate that printed its own passing verdict
 # (`<name>: ALL OK` or `<name>: PASS`) and no FAIL line is counted as a pass and marked
 # `ok*`; one that died before saying anything is a failure, and so is one that printed a
-# `SCRIPT ERROR` its header does not declare (`## script errors: N`). Exit codes are never trusted
+# `SCRIPT ERROR` its header does not declare (`## script errors: N`) or a `SHADER ERROR` past what it compiles broken on
+# purpose (`## shader errors: N`). Exit codes are never trusted
 # alone, and neither is silence.
 #
 # THE TIMEOUT is the one in the gate's own run line (`run_boot_probe.sh tests/<folder>/<name>.gd 120`,
@@ -95,7 +96,7 @@ GPU=(clown_anchor_check clown_coat_check clown_controls_check clown_coverage_che
 	strata_band_check tunnel_face_check tunnel_smooth_check vapor_check portrait_render_check
 	light_screen_check table_thread_check card_veil_check warp_check likeness_determinism_check
 	splat_head_check table_shadow_check table_lens_check puppeteer_tools_check sheet_light_check
-	dispatch_redact_check)
+	dispatch_redact_check ornament_compile_check)
 
 gpu=0
 keep=0
@@ -465,9 +466,14 @@ settle() {
 	rm -f "$OUT/.res.$g"
 	work=$((work + dt))
 	if [ "$dt" -gt "$longest" ]; then longest=$dt; longest_g=$g; fi
-	# a shader compile check reports through its output, not its exit code
+	# a shader compile check reports through its output, not its exit code - beyond the broken shaders a gate compiles on
+	# purpose (a control), which its header counts: `## shader errors: N`
 	if [ "$rc" -eq 0 ] && grep -q 'SHADER ERROR' "$log"; then
-		rc=98
+		local shaders_ok
+		shaders_ok=$(grep -m1 -oE '^## shader errors: [0-9]+' "${path_of[$g]:-/dev/null}" 2>/dev/null | grep -oE '[0-9]+$')
+		if [ "$(grep -c 'SHADER ERROR' "$log")" -gt "${shaders_ok:-0}" ]; then
+			rc=98
+		fi
 	fi
 	# A runtime error behind a pass is a failure. A GDScript error prints and carries on, so the
 	# check that hit one ended early and the gate went on to print its verdict over everything it

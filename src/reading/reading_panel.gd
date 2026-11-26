@@ -193,6 +193,10 @@ var publish: ReadingPublish = ReadingPublish.new()
 ## their rows, and none when none has any ([PropsCard]).
 var prop_sections: Array = []
 
+## What is round the scene where a component's show makes it (`() -> PropSection`, null where it makes none): a table show hands its
+## episode's sound and air, which the Environment card lists in place of the note's own while the episode is shown at its table.
+var environment := func() -> PropSection: return null
+
 ## The author changed the script by hand (never a document arriving): for a component that keeps count of what
 ## an edit changes (a table show's brief changes the next episode, not this one).
 signal source_edited

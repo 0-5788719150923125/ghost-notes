@@ -996,6 +996,10 @@ func _placed(spec: Dictionary) -> Dictionary:
 		var entry := {"name": name, "place": String(th["place"]),
 			"at": Vector2((node.position.x - Tables.ORIGIN.x) * 100.0, (node.position.z - Tables.ORIGIN.y) * 100.0),
 			"k": node.transform.basis.get_scale().x, "tall": rect.size.y}
+		# resting on another: what, and how high its foot is
+		if not String(th.get("on", "")).is_empty():
+			entry["on"] = String(th["on"])
+			entry["base"] = float(th.get("base", 0.0)) * 100.0
 		# Written where it stands: where, how far it had to move and why, its foot and height against what
 		# its spot shows, and how much of it the frame keeps
 		var written: Variant = th.get("written")

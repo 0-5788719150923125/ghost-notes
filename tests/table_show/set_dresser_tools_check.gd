@@ -49,13 +49,16 @@ extends SceneTree
 ##   draped strand, or not a number; the cards' box can be placed too. A thing put again keeps its place unless given one; a thing never placed waits off the table in
 ##   every picture (control: the draft keeps it) and is asked about once at submit; with no renderer the plan is said in words and no
 ##   picture taken. A thing written where it stands is said at its spot - moved from it, or taller than its spot shows, a fault; cut
-##   by the frame's side, not - and never "made smaller to fit".
+##   by the frame's side, not - and never "made smaller to fit". A thing given `on` rests on another: placed with no `at` while what
+##   it rests on is placed (control: before that, it waits), said as resting on it, kept through a put; an `on` naming nothing or
+##   the thing itself is refused with a reason; what it rests on taken off, it waits again.
 ## - The drawing ([TableBlueprint]), without a renderer: the closed-form headroom agrees with the frame walked up step by step
 ##   ([method CardTable.headroom]) - control: a lens 10 degrees wider does not; each height's line holds that height at its ends, a
 ##   thing that tall seen whole nearer the reader and cut behind; an outline drawn round a top is the top's size; the frame on the
 ##   table meets the frame's edge; the plan fits every card and thing in the drawing.
-## - How full a table is (TablePrompts.FILLS): drawn per episode from a few things to a crowded table, some seeds asking for more than
-##   the usual most (6) and some for under it.
+## - How full a table is (TablePrompts.FILLS): drawn per episode, every habit a full table and the fullest packed - some seeds asking
+##   for more than an earlier habit's most (24) and most for under it - and the set dresser told of stacking (`on`, at most
+##   CardTable.STACK_MOST high).
 ## - Out of the shot ([method ShotReach.gives], [method SetDresserTools.idle]): a thing beside the frame between a candle
 ##   and it throws its shadow in (control: the candle's reach short of it, none); one below the frame's foot that steams sends it up
 ##   into view (control: the same thing without `emits`, nothing); a thing carrying a flame gives light. Out of the shot and giving
@@ -215,8 +218,8 @@ func _put_reports() -> bool:
 	_ok(text.contains("a tall jug (not yet placed)") and text.count("the frame shows only") == 1,
 		"control: a thing not yet placed was judged by a spot it has none of:\n%s" % text)
 	var many: Array = []
-	for i in 20:
-		many.append({"shape": "ball", "radius": 1, "at": [i * 2, 0, 0], "material": "beeswax"})
+	for i in Props.MAX_PARTS + 4:
+		many.append({"shape": "ball", "radius": 1, "at": [(i % 20) * 2, 0, (i / 20) * 2], "material": "beeswax"})
 	var deep := {"parts": [{"parts": [{"parts": [{"parts": [{"shape": "ball", "radius": 1}]}]}]}]}
 	r = await t.call_tool("put", {"things": [{"name": "beads", "parts": many}, {"name": "nest", "parts": [deep, {"shape": "ball", "radius": 2}]}]})
 	text = String(r["text"])
@@ -413,6 +416,8 @@ func _prompts() -> bool:
 		_ok(text.contains("\"at\": [-31, -24]") == (looks > 0) and text.contains("\"place\": \"back left\"") == (looks == 0),
 			"the set dresser %s is shown a thing placed the other way" % tag)
 		_ok(text.contains("can hold more, up to %d" % (CardTable.MAX_THINGS - 2)), "the set dresser %s is not told how full a table may be" % tag)
+		_ok(text.contains("THINGS REST ON AND IN EACH OTHER") and text.contains("at most %d things high" % CardTable.STACK_MOST),
+			"the set dresser %s is not told things rest on each other" % tag)
 		_ok(text.contains("THE AIR:"), "the set dresser %s is not told about the air" % tag)
 		_ok(text.contains("THE LIGHT:") and text.contains(Rules.say("table/set_dresser.light_example")), "the set dresser %s is not told about the light, or shown its format" % tag)
 		for k in Lights.SCREENS.keys() + Lights.BIRDS.keys() + Lights.LAMPS.keys() + Lights.SUNS.keys() + Lights.CASTER_SHAPES.keys() + Lights.CASTER_MOVES.keys():
@@ -812,6 +817,22 @@ func _blueprint() -> bool:
 	await t.call_tool("blueprint", {"things": [{"name": "the card chest", "at": [38, -55]}]})
 	_ok(t.draft()["things"][3].get("at") == [38.0, -55.0] and t._unplaced().is_empty(),
 		"the blueprint refused a written position for the card chest")
+	# One thing resting on another
+	await t.call_tool("put", {"things": [{"name": "a slab", "parts": [{"shape": "box", "size": [10, 2, 8], "material": "beeswax"}]},
+		{"name": "a pebble", "on": "a slab", "parts": [{"shape": "ball", "size": [2, 1.5, 2], "material": "beeswax"}]}]})
+	_ok(t._unplaced().has("a slab") and t._unplaced().has("a pebble"), "control: a thing resting on one not yet placed is not waiting: %s" % str(t._unplaced()))
+	r = await t.call_tool("blueprint", {"things": [{"name": "a slab", "at": [-20, -30]}, {"name": "a pillar", "on": "a nothing"},
+		{"name": "a bowl", "on": "a bowl"}]})
+	text = String(r["text"])
+	_ok(t._unplaced().is_empty() and (t._on_table()["things"] as Array).any(func(x: Dictionary) -> bool: return String(x["name"]) == "a pebble"),
+		"a thing resting on a placed one waits off the table: %s" % str(t._unplaced()))
+	_ok(text.contains("a pebble: on a slab, over its middle") and text.contains("\"a pillar\": nothing called \"a nothing\" has been put for it to rest on")
+		and text.contains("\"a bowl\" cannot rest on itself") and not t.draft()["things"][0].has("on") and not t.draft()["things"][1].has("on"),
+		"the blueprint did not say what rests on what, or kept a refused `on`:\n%s" % text)
+	await t.call_tool("put", {"things": [{"name": "a pebble", "parts": [{"shape": "ball", "size": [2, 1, 2], "material": "beeswax"}]}]})
+	_ok(String((t.draft()["things"][5] as Dictionary).get("on", "")) == "a slab", "a thing put again lost what it rests on: %s" % str(t.draft()["things"][5]))
+	await t.call_tool("remove", {"names": ["a slab"]})
+	_ok(t._unplaced().has("a pebble"), "a thing whose support is taken off is not waiting again: %s" % str(t._unplaced()))
 	# The table made safe keeps a written place, and drops one that is not two numbers
 	var safe := CardTable.sanitize_table({"things": [{"name": "a", "at": [12, -400], "scale": 9, "parts": [{"shape": "ball", "size": [2, 2, 2]}]},
 		{"name": "b", "at": [1], "parts": [{"shape": "ball", "size": [2, 2, 2]}]},
@@ -901,10 +922,10 @@ func _fills() -> bool:
 		var size := TablePrompts.table_size(seed)
 		most = maxi(most, size.y)
 		least = mini(least, size.x)
-		over += 1 if size.y > 6 else 0
-		_ok(size.x >= 3 and size.y > size.x and size.y + CardTable.MAX_CANDLES <= CardTable.MAX_THINGS, "#%d asks for %s things" % [seed, str(size)])
-	_ok(least == 3 and most >= 20 and over > n * 0.5 and over < n * 0.95,
-		"the tables run from %d to %d things, %d of %d past the old most (6)" % [least, most, over, n])
+		over += 1 if size.y > 24 else 0
+		_ok(size.x >= 8 and size.y > size.x and size.y + CardTable.MAX_CANDLES <= CardTable.MAX_THINGS, "#%d asks for %s things" % [seed, str(size)])
+	_ok(least == 8 and most >= 40 and over > n * 0.3 and over < n * 0.6,
+		"the tables run from %d to %d things, %d of %d past an earlier habit's most (24)" % [least, most, over, n])
 	return true
 
 

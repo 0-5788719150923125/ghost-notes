@@ -30,7 +30,7 @@ const TagField := preload("res://src/ui/tag_field.gd")
 const KEY := "table"
 ## The knobs a show keeps beside its voice. Also the schema: a stored value of the wrong shape falls back to these. There is no
 ## draw knob: the brief says what its episodes draw and the producer plans that many, or none ([method TableProducer._land_plan]).
-const KNOBS := {"show": "", "seed": 1, "environment": 0.5,
+const KNOBS := {"show": "", "seed": 1,
 	"writer": "claude", "writer_model": "", "writer_effort": "", "painter": "codex", "painter_model": "",
 	"painter_effort": ""}
 ## Who makes each kind of step (a step's name up to its first ":"), as a row's status names them.
@@ -119,7 +119,6 @@ var _new_btn: Button
 var _del_btn: Button
 var _writer: AgentPick
 var _painter: AgentPick
-var _environment_dial: HSlider
 var _row_t := 0.0
 ## What it hands the note's pipeline card ([method pipeline]).
 var _section: Section = null
@@ -162,6 +161,7 @@ var _doc: DocSource          # the reading's document: the show's brief, and its
 var _text: TextEdit          # the brief as its box holds it
 var _syncing := false        # writing the controls from the knobs must not write them back
 var _youtube: YouTubeCard    # the note's YouTube card, once the reading has built it
+var _environment: EpisodeEnvironment   # the episode's sound and air, on the Environment card while it is at its table
 
 
 ## A card for the panel in [param ctx] (`workspace`, the [ReadingPanel] it is built on).
@@ -183,9 +183,14 @@ func serve(panel: ReadingPanel) -> void:
 	_text = reading.source_box()
 	reading.walk = EpisodeWalk.new(func() -> TableEpisode: return _episode)
 	(reading.walk as EpisodeWalk).renamed = _on_renamed
+	var was := reading.bed
 	reading.bed = Bed.new(self)
+	if was.get_script() != ReadingBed:
+		reading.bed.under = was
 	reading.publish = Publish.new(self)
 	reading.prop_sections.append(EpisodeProps.new(self))
+	_environment = EpisodeEnvironment.new(self)
+	reading.environment = func() -> PropSection: return _environment if _environment.owns() else null
 	_doc.opened.connect(_on_show_opened)
 	_doc.mode_changed.connect(_on_doc_mode)
 	reading.source_edited.connect(func() -> void: _brief_changed = true)
@@ -297,20 +302,25 @@ func _live_episode_dir() -> String:
 # --- what it hands the reading -------------------------------------------------------------------
 
 ## Where the reading is: the episode's table (`table.json`), heard - its `sound` and its light's wind,
-## on the episode's seed as the table plans it ([method Soundscape.of_table]). An export's is the
-## episode pinned for it.
+## on the episode's seed as the table plans it ([method Soundscape.of_table]) - at the level the
+## Environment card hears any note's place at, each of its sounds tuned there ([EpisodeEnvironment]).
+## An export's is the episode pinned for it. An episode with no table (one shown at the desk) gives
+## way to the bed under it ([member ReadingBed.under]: the Environment card's).
 class Bed extends ReadingBed:
 	var card: EpisodeCard
+	var _gave_way := false
 
 	func _init(c: EpisodeCard) -> void:
 		card = c
 
 	func of(export := false) -> Dictionary:
-		return card.bed_of(export)
+		var own := card.bed_of(export)
+		_gave_way = own.is_empty() and under != null
+		return under.of(export) if _gave_way else own
 
-	## The Environment dial on the card.
+	## The Environment's level, or the level of the bed it gave way to.
 	func level() -> float:
-		return float(card._knobs["environment"])
+		return under.level() if _gave_way else Surroundings.BED_LEVEL
 
 
 ## What the episode is paced by (its Pacing rows, [EpisodePacing]): the numbers that pace the laws its acts use ([method
@@ -856,20 +866,6 @@ func _build() -> void:
 
 		# no draw, reversals or jumpers knobs: the producer chooses them from the brief - how many cards in the plan's spread, the rest in its
 		# staging ([constant CardTable.REVERSALS], `jumpers`)
-	# The place, heard: what the set dresser wrote as the table's `sound`, and its wind ([Soundscape])
-	_environment_dial = Card.slider_row(box, "Place", 0.0, 1.0, 0.05, float(_knobs["environment"]),
-		("The place the reading is in, heard under the voice: the wind, the sea, rain, a fire - whatever "
-		+ "the set dresser gave the episode's table, and its wind whenever the table has one, every gust "
-		+ "heard as it moves the leaves, the shadows and the petals. 0 is off. Low is far and steady, a "
-		+ "bed behind the reader; higher is closer and more vivid - louder, brighter, the gusts and the "
-		+ "breakers and the crackles hitting harder. It steps back a little whenever the reader speaks. "
-		+ "In the exported take too; while a reading plays, a change is heard after the few seconds "
-		+ "already queued."),
-		func(v: float) -> void:
-			if _syncing:
-				return
-			_knobs["environment"] = v
-			_touch())
 	# What the show's hands are paced by at the table: only the numbers its acts use, and nothing while it has none
 	box.add_child(EpisodePacing.new(pacing_rows, func() -> Dictionary: return _tune.duplicate(), set_tune))
 
@@ -944,10 +940,9 @@ func _agents_chosen(pick: AgentPick, knob: String) -> void:
 
 
 func _show_knobs() -> void:
-	if _environment_dial == null:
+	if _writer == null:
 		return
 	_syncing = true
-	_environment_dial.value = float(_knobs["environment"])
 	_writer.set_choice(String(_knobs["writer"]), String(_knobs["writer_model"]), String(_knobs["writer_effort"]))
 	_painter.set_choice(String(_knobs["painter"]), String(_knobs["painter_model"]), String(_knobs["painter_effort"]))
 	_syncing = false

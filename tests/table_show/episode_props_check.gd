@@ -93,7 +93,7 @@ func _run() -> void:
 	_ok(card.row_count() == 2, "the card draws a row for each (%d)" % card.row_count())
 
 	# Used, Keep, Select
-	_ok(sec.groups().map(func(g: Dictionary) -> String: return String(g["label"])) == ["Used", "Set aside", "The land", "Figures", "Characters", "Sets"],
+	_ok(sec.groups().map(func(g: Dictionary) -> String: return String(g["label"])) == ["Used", "Set aside", "The land", "Figures", "Characters", "Sets", "Ornaments worn"],
 		"the groups are Used and Set aside, a game's land and figures, and its sticker book's characters and sets")
 	_ok(sec.rows().filter(func(r: Dictionary) -> bool: return String(r["group"]) in ["board", "figures", "cast", "sets"]).is_empty(),
 		"a show with no game lists nothing under the land, figures, characters or sets")

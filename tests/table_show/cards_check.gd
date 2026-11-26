@@ -1964,8 +1964,8 @@ func _candles() -> bool:
 	for k in 5:
 		nest = {"parts": [{"shape": "ball", "radius": 1}, nest]}
 	var many: Array = []
-	for k in 20:
-		many.append({"shape": "ball", "radius": 1, "at": [k, 0, 0]})
+	for k in Props.MAX_PARTS + 4:
+		many.append({"shape": "ball", "radius": 1, "at": [k % 30, 0, k / 30]})
 	var deep := Props.sanitize({"things": [{"name": "nested", "parts": [nest]}, {"name": "crowded", "parts": [{"parts": many}]},
 		{"name": "repeated", "parts": [{"parts": [{"shape": "ball", "radius": 0.5, "copies": {"line": {"count": 24, "step": [1, 0, 0]}}}],
 			"copies": {"ring": {"count": 24, "radius": 20}}}]}]}, ["#112233"])

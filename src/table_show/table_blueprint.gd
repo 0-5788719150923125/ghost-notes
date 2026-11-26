@@ -14,7 +14,8 @@ class_name TableBlueprint
 ##     dotted; the line the flames stand behind;
 ##   - each thing as it stands: its foot, its number (as put lists them), a tick toward its front, lit
 ##     ones warm; where it was written, dashed red, when it had to move, crossed out when it found no
-##     room; its number red when it is taller than its spot shows.
+##     room; its number red when it is taller than its spot shows. A thing resting on another is drawn
+##     over it, its foot dashed and its number in a double ring.
 ##
 ## The names, sizes and troubles go in words beside it ([SetDresserTools]): a drawing of dozens of
 ## things with every name on it could not be read. Drawn in a SubViewport of its own ([method
@@ -156,8 +157,9 @@ func _things(v: Dictionary, font: Font, room_poly: PackedVector2Array, cam: Tran
 			var was := _px(v, Geo.moved(d["foot"], (written as Vector2) - at))
 			_line(was, TROUBLE, 1.5, room_poly, 6.0, true)
 			_line(PackedVector2Array([_to_px(v, written), _to_px(v, at)]), TROUBLE, 1.0, room_poly, 0.0, false)
+		var rests := not String(d.get("on", "")).is_empty()
 		draw_colored_polygon(foot, LIT if int(d.get("lit", 0)) > 0 else FOOT)
-		_line(foot, INK, 2.0, room_poly, 0.0, true)
+		_line(foot, INK, 2.0, room_poly, 5.0 if rests else 0.0, true)
 		var c := _to_px(v, at)
 		var reach := 0.0
 		for q in foot:
@@ -169,7 +171,7 @@ func _things(v: Dictionary, font: Font, room_poly: PackedVector2Array, cam: Tran
 		draw_line(tip, tip - front.rotated(-0.5) * 6.0, INK, 2.0, true)
 		var tall := float(d.get("height", 0.0)) > CardTable.headroom_at(cam, fov, at) + 0.005
 		var label := "box" if bool(d.get("box", false)) else str(numbers.get(String(d["name"]), "?"))
-		_badge(font, c, label, tall)
+		_badge(font, c, label, tall, rests)
 	for u in data.get("unstood", []):
 		var w := _to_px(v, (u as Dictionary)["written"])
 		draw_line(w + Vector2(-8, -8), w + Vector2(8, 8), TROUBLE, 3.0, true)
@@ -177,11 +179,14 @@ func _things(v: Dictionary, font: Font, room_poly: PackedVector2Array, cam: Tran
 		_label(font, w + Vector2(0.0, 22.0), str(numbers.get(String((u as Dictionary)["name"]), "?")), SMALL, TROUBLE, PAPER)
 
 
-## A thing's number in a ring, red when the thing is taller than its spot shows.
-func _badge(font: Font, at: Vector2, text: String, trouble: bool) -> void:
+## A thing's number in a ring, red when the thing is taller than its spot shows; a double ring where it rests on another
+## ([param rests]).
+func _badge(font: Font, at: Vector2, text: String, trouble: bool, rests := false) -> void:
 	var w := maxf(font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL).x * 0.5 + 4.0, 9.0)
-	draw_circle(at, w, Color("#f6d5d0") if trouble else PAPER)
+	draw_circle(at, w + (3.0 if rests else 0.0), Color("#f6d5d0") if trouble else PAPER)
 	draw_arc(at, w, 0.0, TAU, 32, TROUBLE if trouble else INK, 1.5, true)
+	if rests:
+		draw_arc(at, w + 3.0, 0.0, TAU, 32, TROUBLE if trouble else INK, 1.0, true)
 	_label(font, at + Vector2(0.0, 4.5), text, SMALL, TROUBLE if trouble else INK, Color(0, 0, 0, 0))
 
 
@@ -239,7 +244,7 @@ func _rulers(v: Dictionary, font: Font) -> void:
 		"THE TABLE FROM ABOVE - centimeters from the middle of the reading (+): x to the reader's right, z toward the reader.",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, INK)
 	draw_string(font, Vector2(room.position.x, 42.0),
-		"A thing's number is the one put gives it; its tick points to its front. The room, beyond the table, is at the top.",
+		"A thing's number is the one put gives it; its tick points to its front; one resting on another is dashed, its number in a double ring. The room is at the top.",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL, FAINT)
 	_label(font, Vector2(room.get_center().x, room.end.y + 18.0), "THE READER", FONT_SIZE, INK, PAPER)
 

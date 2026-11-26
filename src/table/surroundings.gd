@@ -7,8 +7,8 @@ class_name Surroundings
 ## inside its field's bounds ([Roll]), so a new number is another variant of the same thing. The Dex offers every kind, each light
 ## preset and a few looks of shafts, beams and fog ([method offers]), and what a person keeps ([EnvironmentLibrary]).
 ##
-## The note's `environment:` block: `elements` (each `{kind, seed, name, off, <its fields>}` - `name` where it was kept under one,
-## `off` while it is set aside), `lights` (how strongly each thing in the scene that throws light throws it, by the name its scene
+## The note's `environment:` block: `elements` (each `{kind, seed, name, off, own, <its fields>}` - `name` where it was kept under one,
+## `off` while it is set aside, `own` the words of the host it came from, a table's [TableSurroundings]), `lights` (how strongly each thing in the scene that throws light throws it, by the name its scene
 ## gives it: a share) and `heard` (how loud each thing that makes a sound of its own is). [method sanitize] makes it safe; a host reads
 ## it through [method light_of], [method brightness], [method rays], [method effects_of], [method sound_of] and [method fog_for]. A
 ## scene with no element of a kind keeps its own (its own light, its own shaft, no air, silence).
@@ -56,7 +56,30 @@ const KINDS := {
 		"part": "stream", "spec": {"size": 0.35, "distance": 0.6}},
 	"sea": {"label": "Sea", "blurb": "Waves on a shore some way off, against a hull, round a dock.", "group": "sound", "one": true,
 		"part": "water", "spec": {"kind": "shore", "size": 0.35, "distance": 0.6}},
+	"creature": {"label": "A creature", "blurb": "An animal heard and never seen, made of numbers rather than a kind: how big, how breathy, the calls it makes, how many and how lively.",
+		"group": "sound", "one": false, "part": "creatures", "spec": {"calls": ["chirp"], "awake": [0.5, 0.5]}},
+	"ride": {"label": "The ride", "blurb": "What the scene is aboard, heard - a train's rumble and its wheels knocking, a cart jolting: heard only where the scene moves.",
+		"group": "sound", "one": true, "part": "ride", "spec": {"level": 0.6}},
+	"flies": {"label": "Flies", "blurb": "Dark specks that zip about in zig-zags, hover a moment and fly off - flies, gnats.",
+		"group": "air", "one": false, "effect": {"kind": "motes", "look": "fly", "where": "near", "count": 6, "glow": 0.9, "speed": 1.0}},
 }
+## What of a host's own words an element keeps beside its properties, by kind (its `own`): where a sound is heard from, a wind's own
+## gusts, a creature's name and calls, where motes fly and fog lies at a table and what else its effect said. An element with `own`
+## is a host's as written: a property it does not set is its host's own default, never drawn ([method values_of]), so Roll leaves
+## it as it is.
+const OWN := {
+	"wind": ["from", "strength", "gusts", "every"],
+	"sea": ["from"],
+	"fire": ["from"],
+	"stream": ["from"],
+	"creature": ["name", "calls", "awake", "over"],
+	"haze": ["name", "where", "height", "grain", "glow", "color", "shape", "settle", "patches", "patch", "chaos", "wind", "turn", "gusts",
+		"stretch", "sway", "pace", "breathe", "sight"],
+	"motes": ["name", "where", "count", "colors", "away", "light"],
+}
+## The most an element's `own` holds of a list, and of a word.
+const OWN_LIST := 8
+const OWN_TEXT := 80
 ## The Dex's shelves for what is offered built in, by an element's `group`.
 const GROUPS := {
 	"light": {"label": "Light", "blurb": "The light a scene is in, and shafts of light through its haze."},
@@ -275,12 +298,26 @@ const SOUND_FIELDS := {
 	"water": {"size": {"label": "Size", "blurb": "How big the waves are.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "roll": [0.25, 0.5]},
 		"distance": {"label": "Distance", "blurb": "How far off the water is.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05, "roll": [0.4, 0.8]},
 		"sort": {"label": "Kind", "blurb": "What the water is.", "type": "enum", "roll": ["shore", "dock"]}},
+	"creatures": {"size": {"label": "Size", "blurb": "From small, quick and high to large, slow and deep.", "type": "float", "min": 0.0, "max": 1.0,
+			"step": 0.05, "default": 0.3, "roll": [0.1, 0.7]},
+		"breath": {"label": "Breath", "blurb": "From a clear voice to a breathy one.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05,
+			"default": 0.4, "roll": [0.2, 0.7]},
+		"count": {"label": "How many", "blurb": "How many of them there are, each a voice of its own.", "type": "int", "min": 1,
+			"max": Soundscape.MAX_BODIES, "step": 1, "default": 1, "roll": [1, 3]},
+		"rate": {"label": "Calls", "blurb": "About how many calls a minute when lively, fewer when drowsy.", "type": "float", "min": 0.2,
+			"max": 40.0, "step": 0.2, "default": 6.0, "roll": [2.0, 10.0]},
+		"side": {"label": "Side", "blurb": "Where they are: the far left to the far right.", "type": "float", "min": -1.0, "max": 1.0,
+			"step": 0.05, "default": 0.0, "roll": [-0.7, 0.7]},
+		"near": {"label": "Near", "blurb": "How close: far off, quieter and duller, to close by.", "type": "float", "min": 0.0, "max": 1.0,
+			"step": 0.05, "default": 0.5, "roll": [0.3, 0.7]}},
+	"ride": {"level": {"label": "Level", "blurb": "How loud the ride is.", "type": "float", "min": 0.0, "max": 1.0, "step": 0.05,
+		"default": 0.6, "roll": [0.4, 0.75]}},
 }
 ## The block's keys and what each is when it says nothing.
 const KNOBS := {"elements": [], "lights": {}, "heard": {}}
 ## The most elements a scene has, and the keys of an element that are no property of it.
 const MOST := 12
-const OWN_KEYS := ["kind", "seed", "name", "off"]
+const OWN_KEYS := ["kind", "seed", "name", "off", "own"]
 ## How strongly a thing throws its light, and how loud it is, over how it is made.
 const LIGHT_SHARE := Vector2(0.0, 3.0)
 const HEARD_SHARE := Vector2(0.0, 2.0)
@@ -327,8 +364,40 @@ static func element(raw: Variant) -> Dictionary:
 		out["name"] = name
 	if d.get("off") == true:
 		out["off"] = true
+	if d.get("own") is Dictionary:
+		out["own"] = _own(kind, d["own"])
 	out.merge(Roll.clean(fields_of(kind), d))
 	return out
+
+
+## What of [param raw] a [param kind] keeps as its host's own words ([constant OWN]): plain numbers, words, flags and short lists of
+## them, each bounded; its host makes them safe as it reads them.
+static func _own(kind: String, raw: Dictionary) -> Dictionary:
+	var out := {}
+	for k in own_keys(kind):
+		var v: Variant = raw.get(k)
+		match typeof(v):
+			TYPE_INT, TYPE_FLOAT, TYPE_BOOL:
+				out[k] = v
+			TYPE_STRING:
+				out[k] = String(v).left(OWN_TEXT)
+			TYPE_ARRAY:
+				var list: Array = []
+				for x in (v as Array).slice(0, OWN_LIST):
+					if typeof(x) in [TYPE_INT, TYPE_FLOAT, TYPE_BOOL]:
+						list.append(x)
+					elif x is String:
+						list.append(String(x).left(OWN_TEXT))
+				out[k] = list
+	return out
+
+
+## The keys of a host's own words a kind keeps ([constant OWN]): motes of any look keep the motes' own.
+static func own_keys(kind: String) -> Array:
+	if OWN.has(kind):
+		return OWN[kind]
+	var fx: Dictionary = (KINDS.get(kind, {}) as Dictionary).get("effect", {})
+	return OWN["motes"] if String(fx.get("kind", "")) == "motes" else []
 
 
 ## What element [param el] sets of its fields: the element without its kind, number, name and whether it is set aside.
@@ -394,17 +463,40 @@ static func fields_of(kind: String, color := "") -> Dictionary:
 		var tables := {"on": Soundscape.RAINS, "through": Soundscape.THROUGH, "sort": Soundscape.INSECTS if part == "insects" else Soundscape.WATERS}
 		for k in out:
 			var f: Dictionary = out[k]
+			var fallback: Variant = f.get("min", 0.0)
 			if String(f["type"]) == "enum":
 				f["options"] = (tables[k] as Dictionary).keys()
-			f["default"] = spec.get(_heard_key(k), f.get("default", f.get("min", 0.0) if String(f["type"]) == "float" else (f["options"] as Array)[0]))
+				fallback = (f["options"] as Array)[0]
+			f["default"] = spec.get(_heard_key(k), f.get("default", fallback))
 		return out
 	return {}
 
 
-## Every property of element [param el]: what it sets, the rest drawn by its number ([method Roll.values]). A shaft's color unset is
-## "" (the scene's).
+## Every property of element [param el]: what it sets, the rest drawn by its number ([method Roll.values]) - or, for a host's as written
+## (its `own`), the rest its field's default ([method Roll.own_or_drawn]). A shaft's color unset is "" (the scene's).
 static func values_of(el: Dictionary) -> Dictionary:
-	return Roll.values(fields_of(String(el.get("kind", ""))), set_of(el), int(el.get("seed", 0)))
+	var fields := fields_of(String(el.get("kind", "")))
+	if el.has("own"):
+		return Roll.own_or_drawn(fields, set_of(el))
+	return Roll.values(fields, set_of(el), int(el.get("seed", 0)))
+
+
+## The fields of element [param el] as its entry shows them ([method Roll.shown], [method Roll.shown_for] for a host's as written),
+## a shaft's or a fog's color unset [param color].
+static func shown_of(el: Dictionary, color := "") -> Dictionary:
+	var fields := fields_of(String(el.get("kind", "")), color)
+	if el.has("own"):
+		return Roll.shown_for(fields, set_of(el))
+	return Roll.shown(fields, set_of(el), int(el.get("seed", 0)))
+
+
+## How many motes element [param el] (a kind that drifts) is at its Amount ([param v], its values): its kind's own count, or its host's
+## as written (`own`'s `count`), times its Amount.
+static func mote_count(el: Dictionary, v: Dictionary) -> int:
+	var fx: Dictionary = (KINDS.get(String(el.get("kind", "")), {}) as Dictionary).get("effect", {})
+	var own: Dictionary = el.get("own", {})
+	var base := float(own["count"]) if typeof(own.get("count")) in [TYPE_INT, TYPE_FLOAT] else float(fx.get("count", 1))
+	return maxi(1, roundi(base * float(v.get("amount", 1.0))))
 
 
 ## The elements of [param spec] in use (none set aside), of group [param group] ("" every group).
@@ -537,14 +629,21 @@ static func effects_of(spec: Dictionary, fog: Color, near := 1.0) -> Array:
 		var el: Dictionary = e
 		var v := values_of(el)
 		var fx: Dictionary = (KINDS[String(el["kind"])] as Dictionary)["effect"].duplicate(true)
+		# a host's own words first (a table's), then its properties over them; where it is, only where this host has that place
+		var own: Dictionary = el.get("own", {})
+		for k in own:
+			if k != "where" and k != "name":
+				fx[k] = own[k]
+		if String(own.get("where", "")) in ["far", "near", "room"]:
+			fx["where"] = String(own["where"])
 		fx["name"] = "%s %d" % [String(el["kind"]), int(el["seed"])]
 		if String(fx["kind"]) == "motes":
-			fx["count"] = maxi(1, roundi(float(fx["count"]) * float(v["amount"]) * (near if String(fx.get("where", "")) == "near" else 1.0)))
+			fx["count"] = maxi(1, roundi(float(mote_count(el, v)) * (near if String(fx.get("where", "")) == "near" else 1.0)))
 			fx["size"] = v["size"]
 			fx["glow"] = v["glow"]
 			fx["speed"] = v["speed"]
-			fx["color"] = v["color"]
-			fx["away"] = 0.0
+			fx["colors"] = own_colors(own, String(v["color"]))
+			fx["away"] = float(own.get("away", 0.0))
 		elif String(el["kind"]) == "fog":
 			for k in ["density", "rolls", "height", "grain", "settle", "patches", "patch", "chaos", "wind", "turn", "gusts", "stretch",
 					"sway", "pace", "breathe", "glow"]:
@@ -556,21 +655,39 @@ static func effects_of(spec: Dictionary, fog: Color, near := 1.0) -> Array:
 			fx["density"] = v["density"]
 			fx["rolls"] = v["rolls"]
 			fx["drift"] = v["drift"]
-			fx["color"] = "#" + fog.to_html(false)
+			if not Color.html_is_valid(String(own.get("color", ""))):
+				fx["color"] = "#" + fog.to_html(false)
 		raw.append(fx)
 	return Effects.sanitize(raw, ["#" + fog.to_html(false)], ["far", "near", "room"], [])
 
 
-## What is heard ([param spec]'s sound elements) as a [Soundscape]'s `sound`, made safe; {} for silence.
+## The colors motes of color [param color] take, given their host's own words [param own]: its own list where it led with that color
+## (each mote takes one), else that color alone.
+static func own_colors(own: Dictionary, color: String) -> Array:
+	var had: Array = own.get("colors", []) if own.get("colors") is Array else []
+	if not had.is_empty() and Color.html_is_valid(String(had[0])) and Color.html(String(had[0])).is_equal_approx(Color.html(color)):
+		return had.duplicate()
+	return [color]
+
+
+## What is heard ([param spec]'s sound elements) as a [Soundscape]'s `sound`, made safe; {} for silence. A creature each is one of its
+## `creatures`; a host's as written (its `own`) is its words with what it sets over them, its host's own default where it sets nothing.
 static func sound_of(spec: Dictionary) -> Dictionary:
 	var raw := {}
 	for e in in_use(spec, "sound"):
-		var row: Dictionary = KINDS[String((e as Dictionary)["kind"])]
+		var el: Dictionary = e
+		var row: Dictionary = KINDS[String(el["kind"])]
 		var part: Dictionary = (row["spec"] as Dictionary).duplicate(true)
-		var v := values_of(e)
+		part.merge(el.get("own", {}), true)
+		var v := set_of(el) if el.has("own") else values_of(el)
 		for k in v:
 			part[_heard_key(String(k))] = v[k]
-		raw[String(row["part"])] = part
+		if String(row["part"]) == "creatures":
+			if not raw.has("creatures"):
+				raw["creatures"] = []
+			(raw["creatures"] as Array).append(part)
+		else:
+			raw[String(row["part"])] = part
 	return Soundscape.sanitize(raw) if not raw.is_empty() else {}
 
 
@@ -627,13 +744,14 @@ static func toward(from: float, height: float) -> Vector3:
 ## Every element offered built in, by its key on the Dex: each light preset (`preset:<key>`), light shafts, colored beams and fog as
 ## they roll (`kind:shafts`, `kind:beams`, `kind:fog`) and in each of their looks (`look:<key>`, on their kind's shelf), and every other
 ## kind (`kind:<key>`) - each `{label, blurb, group, element}`, its element with a fixed number (a new one is drawn when it is added).
+## The ride is never offered: it is heard only from a moving table's own plan.
 static func offers() -> Dictionary:
 	var out := {}
 	for k in LIGHTS:
 		out["preset:" + k] = {"label": Registry.label(LIGHTS, k), "blurb": Registry.blurb(LIGHTS, k), "group": "light",
 			"element": {"kind": "light", "seed": absi(hash(k)) % 1000000, "preset": k}}
 	for k in KINDS:
-		if k == "light":
+		if k == "light" or k == "ride":
 			continue
 		out["kind:" + k] = {"label": Registry.label(KINDS, k), "blurb": Registry.blurb(KINDS, k), "group": String((KINDS[k] as Dictionary)["group"]),
 			"element": {"kind": k, "seed": absi(hash(k)) % 1000000}}
@@ -680,6 +798,10 @@ static func line_of(el: Dictionary) -> String:
 			if float(v["sway"]) >= 0.1:
 				parts.append("swaying")
 			return ", ".join(parts)
+	if String(el.get("kind", "")) == "creature":
+		var calls: Array = (el.get("own", {}) as Dictionary).get("calls", (KINDS["creature"] as Dictionary)["spec"]["calls"])
+		var n := int(v["count"])
+		return "%s, %s" % ["one" if n == 1 else "%d of them" % n, ", ".join(PackedStringArray(calls))]
 	var kind_row: Dictionary = KINDS.get(String(el.get("kind", "")), {})
 	if kind_row.has("effect"):
 		if String((kind_row["effect"] as Dictionary)["kind"]) == "fog":
@@ -723,7 +845,7 @@ static func picture(el: Dictionary, spec: Dictionary, size := PICTURE) -> Image:
 					img.fill_rect(Rect2i(0, y, size.x, 1), dark.lerp(fog, clampf(a, 0.0, 1.0)))
 			else:
 				var c := Color.html(String(v["color"]))
-				var n := maxi(1, roundi(float(fx["count"]) * float(v["amount"])))
+				var n := mini(mote_count(el, v), 400)
 				var px := clampi(roundi(float(v["size"]) * 1.2), 1, 7)
 				for i in n:
 					var at := Vector2i(r.randi_range(2, size.x - px - 2), r.randi_range(2, size.y - px - 2))
@@ -847,7 +969,8 @@ static func _band(light: PackedFloat32Array, mid: float, rad: float, bright: flo
 
 ## A sound's picture: bars in its shape - rain many and quick, wind a slow swell, fire crackling, insects in pulses, water in waves.
 static func _sound_shape(img: Image, kind: String, v: Dictionary, r: RandomNumberGenerator) -> void:
-	var colors := {"rain": "#8fa8c8", "wind": "#c8d0d8", "fire": "#ff9a4a", "insects": "#a8d878", "stream": "#78c8c0", "sea": "#6898d8"}
+	var colors := {"rain": "#8fa8c8", "wind": "#c8d0d8", "fire": "#ff9a4a", "insects": "#a8d878", "stream": "#78c8c0", "sea": "#6898d8",
+		"creature": "#d8b888", "ride": "#a89888"}
 	var c := Color.html(String(colors.get(kind, "#cccccc")))
 	var w := img.get_width()
 	var h := img.get_height()
@@ -866,6 +989,10 @@ static func _sound_shape(img: Image, kind: String, v: Dictionary, r: RandomNumbe
 				a = 0.3 + (0.7 if r.randf() < 0.18 else 0.2 * r.randf())
 			"insects":
 				a = 0.9 if (i % 6) < 2 else 0.1
+			"creature":
+				a = 0.8 if r.randf() < 0.12 else 0.06
+			"ride":
+				a = 0.45 + (0.5 if i % 11 == 0 else 0.05 * r.randf())
 			_:
 				a = 0.4 + 0.6 * (0.5 + 0.5 * sin(x * TAU * 2.2)) * r.randf_range(0.7, 1.0)
 		var bh := maxi(2, roundi(a * loud * float(h) * 0.8))

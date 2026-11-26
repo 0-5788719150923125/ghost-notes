@@ -38,6 +38,12 @@ var _contact_tex: Texture2D = null
 var _lit_cloth: Texture2D = null      # the painting the table was last lit for
 var _rig = null                     # the set dresser's light, built (Lights.Rig), or null: the lamp and the room's candles
 var _seen := PackedVector3Array()   # the table the camera sees, sampled (for the light), this build
+## THE LIGHT ON A CARD HELD UP ([method held_fill]): a held face is brought up to this share of the light on a card lying at the
+## middle of the table, never past it; the whole of it nearer the lens than the first distance (meters), none past the second, so
+## it comes and goes as the card comes up and goes down.
+const FILL_SHARE := 0.75
+const FILL_NEAR := Vector2(0.27, 0.33)
+var _card_lights = null             # what lights the cards, as [method light_on] reads it ([method _lights_on_cards]), gathered once a build
 
 # --- the flames and the light they cast --------------------------------------------------------
 
@@ -139,8 +145,9 @@ static func candle_shadow(light: OmniLight3D) -> void:
 
 ## A shadow-only slab under [param foot]: the tabletop's shadow biases are larger than the gap under a bowl's sloping
 ## wall, so a ring of the lamp leaks in beside its base. The slab stands a few millimeters over the cloth, draws nothing
-## and shades what the thing already covers. It is on [param layer], so a candle's own flames still leave it out.
-func foot_shadow(foot: PackedVector2Array, layer: int) -> MeshInstance3D:
+## and shades what the thing already covers. It is on [param layer], so a candle's own flames still leave it out; it stands
+## [param base] over the cloth, where the thing rests on another.
+func foot_shadow(foot: PackedVector2Array, layer: int, base := 0.0) -> MeshInstance3D:
 	var tris := Geometry2D.triangulate_polygon(foot)
 	if tris.is_empty():
 		return null
@@ -159,6 +166,7 @@ func foot_shadow(foot: PackedVector2Array, layer: int) -> MeshInstance3D:
 	mi.mesh = st.commit()
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 	mi.layers = layer
+	mi.position.y = base
 	medium._props.add_child(mi)
 	return mi
 
@@ -220,6 +228,7 @@ func _in_shot(at: Vector3) -> bool:
 ## The light: the set dresser's (its table's `light`, [Lights]) - a sky, a sun and what it falls through, clouds, birds,
 ## lamps out of the shot - in place of the lamp and the room's out-of-shot candles; a table that wrote none has those.
 func build(spec: Dictionary) -> void:
+	_card_lights = null
 	if _rig != null:
 		_rig.release()
 		_rig = null
@@ -307,6 +316,8 @@ func lead_name(by_light: Dictionary = {}) -> String:
 ## white through the bloom). A candle the cloth cannot let burn at [constant KEY_MIN] is never the key - with none
 ## that can, the lamp is.
 func light_the_table() -> void:
+	# its things' flames are lit by now: the lights on the cards are gathered again
+	_card_lights = null
 	# A light of the table's own ([Lights]) is fitted to how pale the table is; where its sun or a lamp leads, every
 	# candle burns as a fill
 	var leads := false
@@ -551,3 +562,108 @@ func tick_props(t: float) -> void:
 		light.position = ((l as Dictionary)["light_base"] as Vector3) + (leans / n if blows or riding else Vector3.ZERO)
 	for g in _glows:
 		(g["light"] as OmniLight3D).light_energy = float(g["energy"]) * _flame_at(g["flicker"], t).x
+
+
+# --- the light on a card held up ---------------------------------------------------------------
+
+## How much light from behind the lens a card posed at [param xf] (the table's space) is given ([constant FILL_SHARE]): what its
+## face, turned to the lens, lacks of that share of the light a card lying at the middle of the table has - estimated from every
+## light on the table as it is now ([method light_on]) - and none for a card far from the lens. The card's shader lays it on as a
+## soft diffuse light from just above and behind the camera (`fill`, [constant TableMedium.FOIL_SHADER]), never a glint: a held
+## card lit from the front by the table's own light is given nothing, one with its light behind it is made legible.
+func held_fill(xf: Transform3D) -> float:
+	var cam: Vector3 = medium._plan.cam_base.origin
+	var near := 1.0 - smoothstep(FILL_NEAR.x, FILL_NEAR.y, xf.origin.distance_to(cam))
+	if near <= 0.0:
+		return 0.0
+	var n := xf.basis.y.normalized()
+	if n.dot(cam - xf.origin) < 0.0:
+		n = -n
+	var lights := _lights_on_cards()
+	var ambient := _ambient()
+	var lying := light_on(Vector3(medium._plan.mid.x, 0.0, medium._plan.mid.z), Vector3.UP, lights, ambient)
+	return fill_for(light_on(xf.origin, n, lights, ambient), lying) * near
+
+
+## The fill a face lit [param face] is given beside a card lying lit [param lying] (both as [method light_on] gives them): what it
+## lacks of [constant FILL_SHARE] of the lying card's, never more than that.
+static func fill_for(face: float, lying: float) -> float:
+	return clampf(FILL_SHARE * lying - face, 0.0, FILL_SHARE * lying)
+
+
+## The light falling on a face at [param p] turned to [param n] (unit; the table's space) from [param lights] ([method
+## light_of] each) and [param ambient], as the renderer lights a matte surface: each light's energy times its color's
+## luminance, as squarely as it faces it, its range's falloff and decay for a lamp or a candle and a spotlight's cone as
+## Godot draws them. No shadow is counted.
+static func light_on(p: Vector3, n: Vector3, lights: Array, ambient: float) -> float:
+	var sum := ambient
+	for l in lights:
+		var d: Dictionary = l
+		var e := float(d["energy"])
+		var xf: Transform3D = d["xf"]
+		match String(d["kind"]):
+			"sun":
+				sum += e * maxf(n.dot(xf.basis.z.normalized()), 0.0)
+			_:
+				var rel := xf.origin - p
+				var dist := maxf(rel.length(), 0.0001)
+				var to := rel / dist
+				var nd := pow(dist / maxf(float(d["range"]), 0.0001), 4.0)
+				var att := pow(maxf(1.0 - nd, 0.0), 2.0) * pow(dist, -float(d["decay"]))
+				if String(d["kind"]) == "spot":
+					var cutoff := cos(deg_to_rad(float(d["angle"])))
+					var scos := maxf(to.dot(xf.basis.z.normalized()), cutoff)
+					var rim := maxf(0.0001, (1.0 - scos) / maxf(1.0 - cutoff, 0.0001))
+					att *= 1.0 - pow(rim, float(d["cone"]))
+				sum += e * att * maxf(n.dot(to), 0.0)
+	return sum
+
+
+## Light [param l] as [method light_on] reads it, posed at [param xf]: `{kind ("sun", "omni", "spot"), xf, energy, range, decay,
+## angle, cone}`; {} for one it does not read.
+static func light_of(l: Light3D, xf: Transform3D) -> Dictionary:
+	var c := l.light_color
+	var e := l.light_energy * (c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722) * (-1.0 if l.light_negative else 1.0)
+	if l is DirectionalLight3D:
+		return {"kind": "sun", "xf": xf, "energy": e}
+	if l is OmniLight3D:
+		return {"kind": "omni", "xf": xf, "energy": e, "range": (l as OmniLight3D).omni_range, "decay": (l as OmniLight3D).omni_attenuation}
+	if l is SpotLight3D:
+		var s := l as SpotLight3D
+		return {"kind": "spot", "xf": xf, "energy": e, "range": s.spot_range, "decay": s.spot_attenuation, "angle": s.spot_angle,
+			"cone": s.spot_angle_attenuation}
+	return {}
+
+
+## Every light on the table that reaches the cards (shown, and lighting their layer), each as [method light_of] reads it now:
+## its energy and place as this moment has them, the nodes gathered once a build.
+func _lights_on_cards() -> Array:
+	if _card_lights == null:
+		_card_lights = medium._root3.find_children("*", "Light3D", true, false)
+	var out: Array = []
+	for n in _card_lights:
+		var l := n as Light3D
+		if l == null or not is_instance_valid(l) or (l.light_cull_mask & 1) == 0:
+			continue
+		var xf := l.transform
+		var shown := l.visible
+		var up := l.get_parent()
+		while shown and up != null and up != medium._root3:
+			if up is Node3D:
+				shown = (up as Node3D).visible
+				xf = (up as Node3D).transform * xf
+			up = up.get_parent()
+		if shown:
+			var d := light_of(l, xf)
+			if not d.is_empty():
+				out.append(d)
+	return out
+
+
+## The room's own light on anything: the environment's ambient, as luminance.
+func _ambient() -> float:
+	var env: Environment = medium._env
+	if env == null or env.ambient_light_source != Environment.AMBIENT_SOURCE_COLOR:
+		return 0.0
+	var c := env.ambient_light_color
+	return env.ambient_light_energy * (c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722)

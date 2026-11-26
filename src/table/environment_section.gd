@@ -78,10 +78,10 @@ func rows() -> Array:
 			"verbs": ([{"key": "test", "label": "Test ■" if card.testing(i) else "Test",
 					"tip": "Hear it alone, as it sounds under the voice; it follows what you change. Press again to stop."}]
 					if String((Surroundings.KINDS.get(kind, {}) as Dictionary).get("group", "")) == "sound" else [])
-				+ [{"key": "roll", "label": "Roll", "tip": "Another of it: every property you have not set drawn again, inside its bounds."},
-				{"key": "keep", "label": "Kept" if not as_kept.is_empty() else "Keep", "off": not as_kept.is_empty(),
+				+ ([] if el.has("own") else [{"key": "roll", "label": "Roll", "tip": "Another of it: every property you have not set drawn again, inside its bounds."}])
+				+ [{"key": "keep", "label": "Kept" if not as_kept.is_empty() else "Keep", "off": not as_kept.is_empty(),
 					"tip": ("In your library as %s." % as_kept) if not as_kept.is_empty() else "Keep it in your library, to use on any note."}],
-			"fields": Roll.shown(Surroundings.fields_of(kind, key_color), set, int(el["seed"])), "values": set})
+			"fields": Surroundings.shown_of(el, key_color), "values": set})
 	for t in card.things("lit"):
 		var name := String((t as Dictionary)["key"])
 		out.append(_share_row("lit:" + name, String((t as Dictionary)["name"]), "Its light",
@@ -150,11 +150,14 @@ func _index(key: String) -> int:
 	return i if i >= 0 and i < (card.capture()["elements"] as Array).size() else -1
 
 
-## What element [param el] is called: the name it was kept as, a light by its preset, else its kind.
+## What element [param el] is called: the name it was kept as, a light by its preset, a creature by its own name, else its kind.
 static func name_of(el: Dictionary) -> String:
 	if el.has("name"):
 		return String(el["name"])
 	var kind := String(el.get("kind", ""))
+	var own_name := String((el.get("own", {}) as Dictionary).get("name", "")) if kind == "creature" else ""
+	if not own_name.is_empty():
+		return own_name.left(1).to_upper() + own_name.substr(1)
 	if kind == "light":
 		var p := String(Surroundings.values_of(el)["preset"])
 		return Registry.label(Surroundings.LIGHTS, p) if Surroundings.LIGHTS.has(p) else "The scene's own light"

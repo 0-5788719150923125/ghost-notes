@@ -12,6 +12,8 @@ extends Node
 ## `--name N --byline B` set the title screen's name and byline; `--ink #rrggbb` prints the name in that color.
 ## `--root user://somewhere` reads the episode from another root than the author's (a copy restaged to look at).
 ## `--looks 1` prints when each held card looks at its back, and which looks are pirouettes - to aim a `--clip` at one.
+## `--fill 0` gives a held card no light from behind the lens ([method TableLight.held_fill]), to see it without; each photograph
+## says the fill each card near the lens was given.
 ## `--size 2880x1600` renders at that resolution. To try a shadow without rebuilding the table: `--candle light_size=0,shadow_blur=1.5`
 ## sets those properties on every candle's light (`--sun shadow_normal_bias=1.0` on every sun's), `--atlas 8192` the stage's shadow atlas, `--quality 4` the soft shadow filter's
 ## quality (RenderingServer.ShadowQuality). Each photograph's line says what the stage's last frame took on the GPU; `--timing N`
@@ -57,6 +59,7 @@ var _quality := -1      # --quality Q: the positional soft shadow filter's quali
 var _timing := 0        # --timing N: N frames played on past the last photograph, their median GPU time
 var _graphics := ""     # --graphics live|export|k=v,...: the stage drawn as Graphics has it
 var _env := {}          # --env k=v,...: properties set on the table's Environment
+var _fill := true       # --fill 0: no light from behind the lens on a held card
 
 
 func _ready() -> void:
@@ -89,6 +92,7 @@ func _run() -> void:
 					_dark.append(int(x))
 			"--wash": _wash = int(args[i + 1])
 			"--looks": _looks = args[i + 1] == "1"
+			"--fill": _fill = args[i + 1] != "0"
 			"--events": _events = args[i + 1] == "1"
 			"--name": _name = args[i + 1]
 			"--byline": _byline = args[i + 1]
@@ -229,6 +233,8 @@ func _run() -> void:
 			Spectrum.virtual_clock = t
 			Spectrum.current.time = t
 			subs._process(DT)
+			if not _fill:
+				(medium as TableMedium)._light_part._card_lights = []
 			medium.advance(Spectrum.current, DT, 1.0)
 			if not _ink.is_empty():
 				(medium as TableMedium)._title.ink = Color.html(_ink)
@@ -294,6 +300,10 @@ func _run() -> void:
 			print("table_look_probe: camera is the table's: %s; env glow %s threshold %.2f; foil %.2f" % [
 				str(cur == tmed._cam), str(tmed._cam.environment.glow_enabled if tmed._cam.environment else false),
 				tmed._env.glow_hdr_threshold, tmed._plan.foil])
+		for ci in (medium as TableMedium)._cards.size():
+			var cm: MeshInstance3D = (medium as TableMedium)._cards[ci]
+			if cm.visible and float(cm.get_meta("fill", 0.0)) > 0.0:
+				print("table_look_probe: t=%.1f card %d near the lens, fill %.3f" % [want, ci, float(cm.get_meta("fill", 0.0))])
 		var path := "%s_t%05.1f.png" % [_out, float(want)]
 		if _clip.y > _clip.x:
 			path = "%s_c%04d.png" % [_out, frame]

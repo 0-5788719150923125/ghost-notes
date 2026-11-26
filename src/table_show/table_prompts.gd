@@ -64,13 +64,14 @@ const REMARKS := Vector2(0.15, 0.4)
 ## every card is the tic the next passage meets.
 const LINKS := Vector2(0.35, 0.65)
 ## How full a reader keeps the table, besides its lit things, drawn per episode ([method table_size]): each row a habit (`things`,
-## fewest and most) and its share of episodes. A real reader's table is often crowded, so not every episode asks for the same
-## small range. A place crowded by nature may go past its habit, up to [constant CardTable.MAX_THINGS].
+## fewest and most) and its share of episodes. A real reader's table is crowded - things packed close, small ones in the gaps, some
+## resting on others - so every habit is a full table and the fullest are packed. A place crowded by nature may go past its habit,
+## up to [constant CardTable.MAX_THINGS].
 const FILLS := [
-	{"things": Vector2i(3, 6), "share": 0.2},
-	{"things": Vector2i(6, 10), "share": 0.35},
-	{"things": Vector2i(10, 16), "share": 0.3},
-	{"things": Vector2i(16, 24), "share": 0.15},
+	{"things": Vector2i(8, 14), "share": 0.2},
+	{"things": Vector2i(14, 22), "share": 0.35},
+	{"things": Vector2i(22, 34), "share": 0.3},
+	{"things": Vector2i(32, 48), "share": 0.15},
 ]
 
 ## What the producer is told about the show's own deck: its cards by name (their meanings reach a
@@ -344,8 +345,8 @@ static func set_dresser(title: String, brief: String, plan: Dictionary, seed: in
 		"card_w": snappedf(CardTable.card_size(CardTable.sanitize_look(look)).x * 100.0, 0.1),
 		"card_h": snappedf(CardTable.card_size(CardTable.sanitize_look(look)).y * 100.0, 0.1),
 		"candles": candles, "one_candle": candles == 1, "lo": size.x, "hi": size.y, "zones": zones,
-		"most": CardTable.MAX_THINGS - candles,
-		"max_parts": Props.MAX_PARTS, "check": Rules.say("table/set_dresser.check"),
+		"most": CardTable.MAX_THINGS - candles, "stack": CardTable.STACK_MOST,
+		"max_parts": Props.MAX_PARTS, "check": Rules.say("table/set_dresser.check"), "ornaments": OrnamentLibrary.listing(),
 		"tables": Tables.describe(), "props": Props.describe(), "air": Effects.describe(air_regions(), moments),
 		"lights": Lights.describe(), "sounds": Soundscape.describe(), "rides": Rides.describe(),
 		"title": title.strip_edges(), "byline": byline.strip_edges(),
@@ -833,7 +834,7 @@ static func table_size(seed: int) -> Vector2i:
 			var r: Vector2i = (f as Dictionary)["things"]
 			var lo := rng.randi_range(r.x, r.y - 2)
 			return Vector2i(lo, mini(r.y, lo + maxi(2, floori((r.y - r.x) * 0.5))))
-	return Vector2i(3, 5)
+	return Vector2i(8, 12)
 
 
 ## The box the cards are kept in, for the set dresser of an episode whose cards come out of one: one of

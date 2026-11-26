@@ -7,7 +7,9 @@ What is round the scene a note is shown in, a list of elements on its Environmen
 
 EnvironmentCard - the Environment: what is round the scene a note is shown in, as a list (next/environment.md; `Surroundings`). Each element is a row of the card's list (`EnvironmentSection`, drawn as the Props card draws props, `PropsCard`): the light, shafts of light, what drifts in the air, what is heard - each with its properties, Roll for another of it, Keep, Remove, and Used to set it aside. "+ Add to the environment" opens the Dex on what can be round a scene. Below them, a row for each thing on the Props card that throws light or makes a sound of its own (`PropSection.lit`, `PropSection.heard`), its share tuned.
 
-Its block in a document is `environment:` (`Surroundings.KNOBS`). It hands the reading its part of the document a medium is drawn from (`ReadingPanel.document_parts`: `environment`), and the sound it chose as the bed under the voice where no other card hands one (`ReadingPanel.bed`). Changed while the note plays, the playing scene takes it at once (the live document's `environment`). A scene that hosts no environment reads none of it.
+Its block in a document is `environment:` (`Surroundings.KNOBS`). It hands the reading its part of the document a medium is drawn from (`ReadingPanel.document_parts`: `environment`), and the sound it chose as the bed under the voice where no other card hands one, or where the one handed has no place of its own (`ReadingPanel.bed`, `ReadingBed.under`). Changed while the note plays, the playing scene takes it at once (the live document's `environment`). A scene that hosts no environment reads none of it.
+
+Where a component's show makes what is round the scene (`ReadingPanel.environment`: a table show's episode at its table, `EpisodeEnvironment`), the list is that show's, in place of the note's own.
 
 Each element that is heard has a Test: it alone, at the level it has under the voice, following what is changed on it until pressed again (`test`, `SoundTest`).
 
@@ -17,13 +19,13 @@ Source: [src/table/environment_card.gd](../src/table/environment_card.gd)
 
 Surroundings - what is round a scene (next/environment.md; `EnvironmentCard`): a list of elements, each a kind of thing (`KINDS`) - the light the scene is in, shafts of light through its haze, something drifting in its air, something heard round it, fog lying low or filling the air - with a number of its own and the properties a person set on it. A property never set is drawn from the element's number inside its field's bounds (`Roll`), so a new number is another variant of the same thing. The Dex offers every kind, each light preset and a few looks of shafts, beams and fog (`offers`), and what a person keeps (`EnvironmentLibrary`).
 
-The note's `environment:` block: `elements` (each `{kind, seed, name, off, <its fields>}` - `name` where it was kept under one, `off` while it is set aside), `lights` (how strongly each thing in the scene that throws light throws it, by the name its scene gives it: a share) and `heard` (how loud each thing that makes a sound of its own is). `sanitize` makes it safe; a host reads it through `light_of`, `brightness`, `rays`, `effects_of`, `sound_of` and `fog_for`. A scene with no element of a kind keeps its own (its own light, its own shaft, no air, silence).
+The note's `environment:` block: `elements` (each `{kind, seed, name, off, own, <its fields>}` - `name` where it was kept under one, `off` while it is set aside, `own` the words of the host it came from, a table's `TableSurroundings`), `lights` (how strongly each thing in the scene that throws light throws it, by the name its scene gives it: a share) and `heard` (how loud each thing that makes a sound of its own is). `sanitize` makes it safe; a host reads it through `light_of`, `brightness`, `rays`, `effects_of`, `sound_of` and `fog_for`. A scene with no element of a kind keeps its own (its own light, its own shaft, no air, silence).
 
 Every light preset is a row of numbers each host reads as it can: a desk its lamp, candles and the room's light through a window (`DeskLook`); the Dispatch desk its hollow's ambient, the shaft that falls through its ceiling and its lamp (`DispatchMedium`). A row with no `weight` is only ever chosen: a desk drawing its own light from its number never draws it.
 
 Source: [src/table/surroundings.gd](../src/table/surroundings.gd)
 
-### Kinds (17)
+### Kinds (20)
 
 Each kind of element (`Surroundings.KINDS`): the Dex's shelf it stands on, and whether a scene has at most one.
 
@@ -46,6 +48,9 @@ Each kind of element (`Surroundings.KINDS`): the Dex's shelf it stands on, and w
 | `insects` Insects | `sound` | yes | Crickets in the grass, chirp after chirp, or cicadas swelling in the trees. |
 | `stream` Stream | `sound` | yes | Running water - a brook, a fountain, a gutter after rain. |
 | `sea` Sea | `sound` | yes | Waves on a shore some way off, against a hull, round a dock. |
+| `creature` A creature | `sound` |  | An animal heard and never seen, made of numbers rather than a kind: how big, how breathy, the calls it makes, how many and how lively. |
+| `ride` The ride | `sound` | yes | What the scene is aboard, heard - a train's rumble and its wheels knocking, a cart jolting: heard only where the scene moves. |
+| `flies` Flies | `air` |  | Dark specks that zip about in zig-zags, hover a moment and fly off - flies, gnats. |
 
 ### Light presets (6)
 
@@ -230,3 +235,20 @@ Size, glow, speed and color default to each kind's own (the table's `Effects.MOT
 | `size` Size | How big the waves are. | `float` | 0 to 1 | 0.25 to 0.5 |
 | `distance` Distance | How far off the water is. | `float` | 0 to 1 | 0.4 to 0.8 |
 | `sort` Kind | What the water is. | `enum` |  | `shore`, `dock` |
+
+### Heard: `creatures` (`SOUND_FIELDS`)
+
+| Property | What it is | Type | Bounds | Rolled in |
+| --- | --- | --- | --- | --- |
+| `size` Size | From small, quick and high to large, slow and deep. | `float` | 0 to 1 | 0.1 to 0.7 |
+| `breath` Breath | From a clear voice to a breathy one. | `float` | 0 to 1 | 0.2 to 0.7 |
+| `count` How many | How many of them there are, each a voice of its own. | `int` | 1 to `Soundscape.MAX_BODIES` | 1 to 3 |
+| `rate` Calls | About how many calls a minute when lively, fewer when drowsy. | `float` | 0.2 to 40 | 2 to 10 |
+| `side` Side | Where they are: the far left to the far right. | `float` | -1 to 1 | -0.7 to 0.7 |
+| `near` Near | How close: far off, quieter and duller, to close by. | `float` | 0 to 1 | 0.3 to 0.7 |
+
+### Heard: `ride` (`SOUND_FIELDS`)
+
+| Property | What it is | Type | Bounds | Rolled in |
+| --- | --- | --- | --- | --- |
+| `level` Level | How loud the ride is. | `float` | 0 to 1 | 0.4 to 0.75 |

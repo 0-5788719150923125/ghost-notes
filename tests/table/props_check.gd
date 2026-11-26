@@ -28,6 +28,14 @@ extends SceneTree
 ## - A faceted stone has no holes: every triangle of a faceted ball shows its front outward (two-sided: wound the other way, found).
 ## - A heap of coins never shares space: fourteen coins on seven seeds lie flat and no two discs overlap (two-sided: two coins on
 ##   the same spot are found).
+## - A scroll is closed and faces out; it is its size along its longest side (control: a standing volute is narrower than that across);
+##   a c and an s lie along x and a volute stands; it is as deep as told, no deeper, thinning into its curls; a bud is a ball at each eye.
+## - A mirror copies a part across the middle of what it is in, its faces still out (two-sided: the same mirror with its triangles
+##   wound as they were faces in); nothing that moves is mirrored (control: the same part fixed keeps its mirror).
+## - A table's thing merges its plain parts, one mesh a material, the same triangles (control: unmerged, a mesh a part); a lit thing, a
+##   working part and an ornamented one keep their own meshes.
+## - A thing is held to its triangles: the parts past them are left out and counted (control: under them, none is); and to its parts,
+##   now 48 (control: 60 written, 48 kept).
 ## - A cotton swab's tip is a tuft: short and rounded, wider in the middle than at its root, and barely bends - a fifth as far aside
 ##   as a round brush's of the same length (control: the round brush bends the whole way).
 ## - The set dresser is told all of it.
@@ -54,6 +62,10 @@ func _initialize() -> void:
 	_coins()
 	_facets()
 	_bud()
+	_scrolls()
+	_mirror()
+	_merged()
+	_budgets()
 	_told()
 	if _fails.is_empty():
 		print("props_check: ALL OK")
@@ -596,5 +608,134 @@ func _mean(a: Array) -> float:
 
 func _told() -> void:
 	var words := Props.describe()
-	for k in ["- strand:", "- bone:", "- skull:", "- sculpt:", "`carve`", "`mirror`", "DRAPED:", "- loft:", "- coil:", "WARP:", "\"bend\"", "\"wobble\"", "[x, y, z, r]", "[radius, height, 0]", "WHERE PARTS MEET:", "lens", "drop"]:
+	for k in ["- strand:", "- bone:", "- skull:", "- sculpt:", "- scroll:", "\"mirror\": {", "`carve`", "`mirror`", "DRAPED:", "- loft:", "- coil:", "WARP:", "\"bend\"", "\"wobble\"", "[x, y, z, r]", "[radius, height, 0]", "WHERE PARTS MEET:", "lens", "drop"]:
 		_ok(words.contains(k), "the set dresser is not told %s" % k)
+
+
+## How many triangles of [param g] face against their own normals - wound inward.
+func _against(g: Props.Tris) -> int:
+	var n := 0
+	for t in range(0, g.v.size(), 3):
+		var front := -(g.v[t + 1] - g.v[t]).cross(g.v[t + 2] - g.v[t])
+		if front.dot(g.n[t] + g.n[t + 1] + g.n[t + 2]) < 0.0:
+			n += 1
+	return n
+
+
+func _box(g: Props.Tris) -> AABB:
+	var box := AABB(g.v[0], Vector3.ZERO)
+	for q in g.v:
+		box = box.expand(q)
+	return box
+
+
+func _scrolls() -> void:
+	for kind in ["volute", "c", "s"]:
+		for sec in ["round", "square"]:
+			var g := _geo({"shape": "scroll", "kind": kind, "size": 6, "width": 0.4, "depth": 0.5, "section": sec, "bud": 0.5, "material": "brass"})
+			_ok(g.v.size() > 0 and _open_edges(g) == 0, "a %s scroll, %s, is closed (%d open edges)" % [kind, sec, _open_edges(g) if g.v.size() > 0 else -1])
+			_ok(_against(g) == 0, "a %s scroll, %s, faces out (%d triangles in)" % [kind, sec, _against(g)])
+			var b := _box(g)
+			var longest := maxf(b.size.x, b.size.y)
+			_ok(absf(longest - 0.06) < 0.006, "a %s scroll is its size along its longest side: %.4f m" % [kind, longest])
+			_ok(b.size.z <= 0.0051 and b.size.z > 0.0049 * 0.3, "a %s scroll is as deep as told and no deeper: %.4f m" % [kind, b.size.z])
+			if kind == "volute":
+				_ok(b.size.y > b.size.x, "a volute stands, taller than it is wide: %.4f by %.4f" % [b.size.x, b.size.y])
+				_ok(b.size.x < 0.054, "the control: a standing volute is narrower than its size across (%.4f)" % b.size.x)
+			else:
+				_ok(b.size.x > b.size.y, "a %s scroll lies along x, wider than it is tall: %.4f by %.4f" % [kind, b.size.x, b.size.y])
+	# a bud is a ball at each eye: more to it than the band alone
+	var bare := _geo({"shape": "scroll", "kind": "c", "size": 6, "width": 0.4, "material": "brass"})
+	var budded := _geo({"shape": "scroll", "kind": "c", "size": 6, "width": 0.4, "bud": 0.6, "material": "brass"})
+	_ok(budded.v.size() - bare.v.size() == 2 * 8 * 14 * 6, "a c scroll's buds are a ball at each eye (%d more corners)" % (budded.v.size() - bare.v.size()))
+	# thinning into its curls: a tapered band is thinner through than an untapered one at its eye, as deep at its widest
+	var even := _geo({"shape": "scroll", "kind": "volute", "size": 6, "width": 0.4, "taper": 0.0, "material": "brass"})
+	var thin := _geo({"shape": "scroll", "kind": "volute", "size": 6, "width": 0.4, "taper": 0.9, "material": "brass"})
+	_ok(_box(thin).size.z > 0.0039 and _box(even).size.z > 0.0039, "a tapered scroll is as deep as told at its widest")
+	_ok(_volume(thin) < _volume(even) * 0.8, "a tapered scroll thins into its curl: %s against %s" % [str(_volume(thin)), str(_volume(even))])
+
+
+## The volume a closed mesh holds (the divergence sum of its triangles).
+func _volume(g: Props.Tris) -> float:
+	var v := 0.0
+	for t in range(0, g.v.size(), 3):
+		v += g.v[t].dot(g.v[t + 1].cross(g.v[t + 2])) / 6.0
+	return absf(v)
+
+
+func _mirror() -> void:
+	var part := _part({"shape": "box", "size": [2, 2, 1], "at": [4, 1, 0], "material": "brass", "copies": {"mirror": {"axis": "x"}}})
+	_ok(String((part.get("copies", {}) as Dictionary).get("kind", "")) == "mirror", "a mirror is kept on a fixed part")
+	var rng := RandomNumberGenerator.new()
+	var geos := Props._geometry(part, rng)
+	var xforms := Props._placements(part, rng, geos)
+	var g: Props.Tris = ((geos[0] as Dictionary)["geo"] as Props.Tris).placed(xforms)
+	var b := _box(g)
+	_ok(xforms.size() == 2 and absf(b.position.x + 0.05) < 1e-4 and absf(b.end.x - 0.05) < 1e-4,
+		"a mirror copies a part across the middle: from %.3f to %.3f m" % [b.position.x, b.end.x])
+	_ok(_against(g) == 0, "a mirrored copy still faces out (%d triangles in)" % _against(g))
+	# the control: the mirrored copy with its triangles wound as they were faces in
+	var src: Props.Tris = (geos[0] as Dictionary)["geo"]
+	var raw := Props.Tris.new()
+	var t: Transform3D = xforms[1]
+	var nb := t.basis.inverse().transposed()
+	for i in src.v.size():
+		raw.v.append(t * src.v[i])
+		raw.n.append((nb * src.n[i]).normalized())
+	_ok(_against(raw) == raw.v.size() / 3, "the control: unwound, every mirrored triangle faces in (%d of %d)" % [_against(raw), raw.v.size() / 3])
+	var lone := _part({"shape": "box", "size": [2, 2, 1], "at": [4, 1, 0], "material": "brass", "mirror": true})
+	_ok(String((lone.get("copies", {}) as Dictionary).get("kind", "")) == "mirror", "`mirror` true on a part is a mirror")
+	var moving := _part({"shape": "box", "size": [2, 2, 1], "at": [4, 1, 0], "material": "brass", "loose": true, "mirror": true})
+	_ok((moving.get("copies", {}) as Dictionary).is_empty(), "a loose part is never mirrored")
+	var sculpt := _part({"shape": "sculpt", "strokes": [{"points": [[1, 1, 0, 0.5]]}], "mirror": true, "material": "bone"})
+	_ok((sculpt.get("copies", {}) as Dictionary).is_empty(), "a sculpt's `mirror` stays its own (one surface, the same both sides)")
+
+
+## A thing written as [param parts] with materials brass and wood, built ([param merge] or not): `[meshes, triangles, over]`.
+func _built(parts: Array, merge: bool) -> Array:
+	var safe := Props.sanitize({"things": [{"name": "t", "parts": parts}], "materials": {"brass": {"kind": "metal", "color": "#c9a24a"},
+		"wood": {"kind": "wood", "color": "#5a3a20"}, "wax": {"kind": "wax", "color": "#eeeeee"}}}, PAL)
+	var b := Props.build((safe["things"] as Array)[0], safe["materials"], 3, false, merge)
+	var tris := 0
+	for m in b["meshes"]:
+		tris += ((m as MeshInstance3D).mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() / 3
+	var out := [(b["meshes"] as Array).size(), tris, int(b.get("over", 0))]
+	(b["node"] as Node).free()
+	return out
+
+
+func _merged() -> void:
+	var plain := [{"shape": "box", "size": [2, 1, 2], "at": [0, 0, 0], "material": "wood"},
+		{"shape": "box", "size": [1, 3, 1], "at": [3, 0, 0], "material": "wood"},
+		{"shape": "ball", "size": [1, 1, 1], "at": [-3, 0, 0], "material": "brass"},
+		{"shape": "scroll", "kind": "c", "size": 3, "at": [0, 3, 0], "material": "brass", "mirror": true},
+		{"shape": "lathe", "profile": [[0, 0], [1, 0], [1, 2], [0, 2]], "at": [0, 0, 3], "material": "wood"}]
+	var apart := _built(plain, false)
+	var joined := _built(plain, true)
+	_ok(int(joined[0]) == 2 and int(joined[1]) == int(apart[1]), "a table's plain parts merge, one mesh a material, the same triangles: %d meshes, %d against %d triangles" % [joined[0], joined[1], apart[1]])
+	_ok(int(apart[0]) == 5, "the control: unmerged, a mesh a part (%d)" % apart[0])
+	var lit := plain.duplicate(true)
+	lit.append({"shape": "lathe", "profile": [[0, 0], [1, 0], [1, 4], [0, 4]], "at": [5, 0, 0], "material": "wax", "wick": true})
+	_ok(int(_built(lit, true)[0]) == 6, "a lit thing keeps a mesh a part, as its flames' shadows ask (%d)" % _built(lit, true)[0])
+	var worked := plain.duplicate(true)
+	worked[0]["name"] = "lid"
+	worked[0]["joint"] = {"kind": "hinge"}
+	var ornamented := plain.duplicate(true)
+	ornamented[1]["ornament"] = {"kind": "bands", "count": 3}
+	_ok(int(_built(worked, true)[0]) == 3, "a working part keeps its own mesh (%d)" % _built(worked, true)[0])
+	_ok(int(_built(ornamented, true)[0]) == 3, "an ornamented part keeps its own mesh (%d)" % _built(ornamented, true)[0])
+
+
+func _budgets() -> void:
+	# a dense coil copied round: about 370 thousand triangles; a second one is past the budget
+	var heavy := {"shape": "coil", "turns": 20, "radius": 3, "radius2": 1, "height": 4, "thickness": 0.2, "material": "brass",
+		"copies": {"ring": {"count": 24, "radius": 8}}}
+	var one := _built([heavy], false)
+	var two := _built([heavy, heavy.duplicate(true)], false)
+	_ok(int(one[2]) == 0 and int(one[1]) > 200000, "the control: under its triangles, nothing is left out (%d triangles)" % one[1])
+	_ok(int(two[2]) == 1 and int(two[1]) <= Props.MAX_TRIANGLES, "past its triangles, the last part is left out and counted (%d left out, %d triangles)" % [two[2], two[1]])
+	var many: Array = []
+	for i in 60:
+		many.append({"shape": "ball", "size": [1, 1, 1], "at": [float(i % 8), 0.0, float(i / 8)], "material": "brass"})
+	var kept: Array = ((Props.sanitize({"things": [{"name": "t", "parts": many}]}, PAL)["things"] as Array)[0] as Dictionary)["parts"]
+	_ok(Props.MAX_PARTS == 48 and kept.size() == 48, "a thing keeps up to %d parts: 60 written, %d kept" % [Props.MAX_PARTS, kept.size()])

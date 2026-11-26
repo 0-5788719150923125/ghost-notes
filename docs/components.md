@@ -55,7 +55,7 @@ By family - the color a component's card, chip and marks are drawn in.
 ### Producer
 
 - **Table** (`table`) - Agents plan, build, paint and write a show at a table, one beat at a time, and a voice reads it. The note's words are the brief they all work from.
-  - needs text; gives text, picture, moments, episode; brings Voice, Medium; asks for `forward_plus`, `subprocess`, `agent:writer`, `agent:painter`; kept in `table:`
+  - needs text; gives text, picture, moments, episode; brings Voice, Medium, Environment; asks for `forward_plus`, `subprocess`, `agent:writer`, `agent:painter`; kept in `table:`
 - **Cartoon** (`cartoon`) - A cartoon made from drawings: each character a puppet rigged from its maker's drawing, each set painted in their style, and the shots written by a director agent - played silent, mouths moving as they talk.
   - gives picture, moments, audio; takes the clock; asks for `forward_plus`, `subprocess`, `python:puppet`, `agent:writer`, `agent:painter`; kept in `cartoon:`
 

@@ -29,9 +29,10 @@ class_name Soundscape
 ## samples from the same closed-form plan the leaves, the swinging shadows and the drifting petals read, so a gust is heard as it is seen.
 ## The fire roars and the rain thickens in a gust too; the sea slaps harder.
 ##
-## One dial ([method set_level], Environment): how present the place is. Low is far and steady - a bed behind the voice, its gusts and
-## breakers flattened and dulled; high is close and vivid - louder, brighter, every gust and crash and crackle hitting harder. It ducks a
-## little under speech ([constant DUCK]).
+## Its level ([method set_level], the Environment's [constant Surroundings.BED_LEVEL] for every note and table): how present the place
+## is. Low is far and steady - a bed behind the voice, its gusts and breakers flattened and dulled; high is close and vivid - louder,
+## brighter, every gust and crash and crackle hitting harder. Each sound in it is tuned on its own (its level, strength or size on the
+## Environment card). It ducks a little under speech ([constant DUCK]).
 ##
 ## Rendered in whole blocks of [constant CR] samples from the moment it starts, so the samples are the same however the caller slices its
 ## calls - live, a buffer at a time; in an export, the whole take.

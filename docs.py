@@ -1284,11 +1284,14 @@ def surroundings_page(card: Script, sur: Script) -> str:
                        ", ".join(f"`{a}` {b:g}" if type(b) in (int, float) else f"`{a}` {b}" for a, b in pairs(r, "set").items())]
                       for k, r in rows.items()))
 
+    def bound(x: Any) -> str:
+        return f"`{x}`" if isinstance(x, Expr) else f"{x:g}"
+
     def bounds(f: Dict[str, Any]) -> str:
         if "options" in f and isinstance(f["options"], list):
             return ", ".join(f"`{o}`" for o in f["options"])
         if "min" in f and "max" in f:
-            return f"{f['min']:g} to {f['max']:g}"
+            return f"{bound(f['min'])} to {bound(f['max'])}"
         return ""
 
     def roll(f: Dict[str, Any]) -> str:
