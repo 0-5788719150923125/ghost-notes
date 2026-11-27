@@ -108,6 +108,16 @@ const REGISTRY := {
 			"lens": {"label": "Lens (°)", "type": "float", "min": 12.0, "max": 90.0, "step": 1.0, "default": 46.0,
 				"blurb": "How much it takes in, up the frame."},
 		}},
+	"creator": {"format": "studio", "label": "The creator's head", "kept": "The studio is seen through the creator's eyes.",
+		"blurb": "The creator's own eyes: the head moves as a person's does, phrase by phrase, and the voice is heard from where the mouth is - the same performance. How far, how much it turns and how often are the rows below.",
+		"fields": {
+			"reach": {"label": "Reach", "type": "float", "min": 0.0, "max": 1.5, "step": 0.05, "default": 1.0,
+				"blurb": "How far each move goes round the microphone: 0 sat still at home, 1 the show's own. The voice goes with it, from ear to ear and near or far."},
+			"turns": {"label": "Turns", "type": "float", "min": 0.0, "max": 1.5, "step": 0.05, "default": 1.0,
+				"blurb": "How far the head turns, tips and leans: 0 always facing the microphone, 1 the show's own. A turning eye is the hardest to watch."},
+			"pace": {"label": "Pace", "type": "float", "min": 0.25, "max": 1.5, "step": 0.05, "default": 1.0,
+				"blurb": "How often it moves: 1 the show's own; 0.5 each move twice as long, and half as many."},
+		}},
 }
 ## How long a cut between two cameras takes (seconds): every change of camera is a move, never a jump.
 const EASE := 1.8

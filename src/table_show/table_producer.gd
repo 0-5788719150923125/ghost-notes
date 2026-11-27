@@ -124,6 +124,8 @@ var _cut_owed := {}    # a sticker step whose painting landed and waits to be cu
 var _from := {}        # step -> what it was made from as its making began ([method TableEpisode.made_from])
 ## One layer laid again ([method lay_layer]; next/editing.md step 4): its index from 0, -1 for the whole painting.
 var skin_layer := -1
+## A passage whose last try was handed back for what it wrote (too short, its marks wrong): step -> why, told on its next try
+var _sent_back := {}
 ## Steps asked again with a note (next/editing.md step 9): step -> the author's note, appended to that step's prompt alone
 ## ([method _asked]) until it lands.
 var asked := {}
@@ -192,6 +194,7 @@ func start(steps: Array = [], remake := false, note := "", layer := -1, follow :
 			for step in _errors.keys():
 				_errors.erase(step)
 				_tries.erase(step)
+				_sent_back.erase(step)
 		elif not only.is_empty():
 			for step in steps:
 				if not only.has(step):
@@ -201,6 +204,7 @@ func start(steps: Array = [], remake := false, note := "", layer := -1, follow :
 				continue
 			_errors.erase(step)
 			_tries.erase(step)
+			_sent_back.erase(step)
 			if remake and not again.has(step):
 				again.append(step)
 			if not note.strip_edges().is_empty():
@@ -724,9 +728,10 @@ func _make(step: String) -> void:
 		"skin":
 			_make_skin()
 		"table":
-			# ...a desk's is its pad and its pen, landed as a set dresser's table is ([DeskTable])
-			if episode.at_desk():
-				_finish("table", _land_table(JSON.stringify(DeskTable.spec())))
+			# ...one a format sets itself is its own (a desk's pad and pen, the studio's things), landed as a set dresser's table is
+			if episode.own_set():
+				var own: Variant = _format_answer("own_table")
+				_finish("table", _land_table(JSON.stringify(own)) if own is Dictionary else "the format has no table of its own")
 			else:
 				_make_table()
 		"acts":
@@ -2416,7 +2421,28 @@ func say_prompt(who: String) -> Dictionary:
 		_plan(), who, said, drawn, beats, not images.is_empty(), TableEpisode.archive(episode.show, episode.seed), names,
 		_voices(), remark, link, misses, _acts_of(_beat_of("say:" + who, episode.cardless())), _said_word())
 	p["images"] = images
+	# ...and what the format the episode is shown in lets its reader write in a passage (the studio's acts), where it says - with
+	# the passage's planned work, where the reader writes the work itself
+	var told: Variant = _format_answer("reader_rules", [_own_work_of(who, p["words"])])
+	if told is String and not (told as String).is_empty():
+		p["prompt"] = String(p["prompt"]) + "\n\n" + String(told)
+	# ...told why, where its last try was handed back
+	var why := String(_sent_back.get("say:" + who, ""))
+	if not why.is_empty():
+		p["prompt"] = String(p["prompt"]) + "\n\n" + Rules.say("table/show.sent_back", {"why": why if why.ends_with(".") else why + "."})
 	return p
+
+
+## What a passage's reader is told of its work where it writes the work itself ([method TableEpisode.own_work]): `work` (its beat's,
+## in the producer's words; "" for none), `beat` ("intro", "close" or its number), `words` (the words it is asked for), `said_word`
+## (seconds a word), `quiet` (the share of the episode with no words, [method TablePrompts.quiet_of]) and `show` (the show it is of).
+## Empty where it does not.
+func _own_work_of(who: String, words: Vector2i) -> Dictionary:
+	if not episode.own_work():
+		return {}
+	var plan := _plan()
+	return {"work": String(TableEpisode.work_of(plan).get(who, "")), "beat": who, "words": words, "said_word": _said_word(),
+		"quiet": TablePrompts.quiet_of(plan), "show": episode.show}
 
 
 ## A generated passage's word count, excluding voice and stage marks. A small tolerance allows for differing word counters.
@@ -2457,7 +2483,7 @@ static func _beat_of(step: String, bare := false) -> String:
 ## The acts of [param beat], as the puppeteer blocked them (`acts.json`, made safe) - none for a beat with no
 ## work, or before they are blocked. A reader is handed its own beat's alone: no cheating holds for the work.
 func _acts_of(beat: String) -> Array:
-	if beat.is_empty() or not episode.has("acts"):
+	if beat.is_empty() or not episode.has("acts") or episode.own_work():
 		return []
 	var acts: Array = Motions.of_beat(Motions.sanitize_acts(episode.read_json("acts"), episode.beat_count())["acts"], beat)
 	# ...what is painted takes what its strokes take ([Skins]): a reader is told it, and its words leave room for it
@@ -2819,21 +2845,30 @@ func _land(step: String, res: Dictionary) -> void:
 				# ...keeping the act cues its own beat's acts may be started by ([CardReading], `<!-- act: name -->`)
 				var beat_acts := _acts_of(_beat_of(step, episode.cardless()))
 				var cues: Array = beat_acts.map(func(a: Dictionary) -> String: return String(a["name"]))
-				var t := own_voices(clean_spoken(String(res.get("text", "")), cues), _voices(), _reader_name())
+				var t := own_voices(clean_spoken(String(res.get("text", "")), cues, _format_marks()), _voices(), _reader_name())
 				t = fit_silence(t, beat_acts, _said_word())
 								# no notation in what is said: a voice handed TeX reads its marks
 				var notation := notation_in(t)
 				var short := short_passage(t, say_prompt(step.trim_prefix("say:"))["words"]) if _plan().has("minutes") else ""
+				# ...and what the episode's format finds wrong with the marks it lets its reader write, once (told why when asked again)
+				var who := step.trim_prefix("say:")
+				var marked: Variant = _format_answer("reader_check", [t, _own_work_of(who, say_prompt(who)["words"])])
+				var mark_fault := String(marked) if marked is String and int(_tries.get(step, 0)) <= RETRIES else ""
 				if t.split(" ", false).size() < (1 if step.split(":")[1].is_valid_int() else 20):
 					err = "the reader wrote nothing speakable"
 				elif not short.is_empty():
 					err = short
+					_sent_back[step] = short
+				elif not mark_fault.is_empty():
+					err = mark_fault
+					_sent_back[step] = mark_fault
 				elif not notation.is_empty() and int(_tries.get(step, 0)) <= RETRIES:
 					err = "its words carry notation the voice cannot say (%d line%s): %s" % [notation.size(), "" if notation.size() == 1 else "s", notation[0]]
 				else:
 					if not notation.is_empty():
 						push_warning("ghost: table %s - kept with notation in its words: %s" % [step, notation[0]])
 					err = episode.write_text(step, t)
+					_sent_back.erase(step)
 			"image":
 				# ...a sticker's painting lands beside the episode, and is cut into the step's own file ([method _start_cut])
 				if step.get_slice(":", 1) in TableEpisode.STICKERS and step.get_slice(":", 2).is_valid_int():
@@ -3449,6 +3484,21 @@ func _land_table(text: String) -> String:
 	return episode.write_json("table", d)
 
 
+## What the script of the format the episode is shown in answers to [param what], called with [param args] - its Medium row's `script`, asked by path, as
+## [EpisodeWalk] asks for `voiced` (a desk's table, the studio's marks and what its reader is told of them) - null where it
+## answers nothing.
+func _format_answer(what: String, args: Array = []) -> Variant:
+	var path := String(Registry.field(Medium.REGISTRY, episode.medium(), "script", ""))
+	var script: GDScript = load(path) as GDScript if not path.is_empty() else null
+	return script.callv(what, args) if script != null and script.has_method(what) else null
+
+
+## The marks the episode's format lets its reader write in a passage (a pattern, [method _format_answer] `reader_marks`), "" for none.
+func _format_marks() -> String:
+	var m: Variant = _format_answer("reader_marks")
+	return String(m) if m is String else ""
+
+
 ## A title is never shouted: one written with no small letter at all is set in sentence case - its first letter a capital, the rest
 ## small, "I" itself. Never a capital on every word: title case's small words want a list of words, and the writer is asked for
 ## title case itself. One with any small letter is the writer's own casing, kept: an acronym in a title as written stays.
@@ -3535,9 +3585,12 @@ func _reader_name() -> String:
 ## [param acts]: the names of the acts this passage may start at a word (`<!-- act: name -->`, [CardReading]); a cue naming any
 ## other is dropped as any mark is. A chapter the reader names (`<!-- chapter: name -->`) stays, its name one line: the export
 ## times it from the take ([method CardReading.chapters]).
-static func voice_marks_only(text: String, acts: Array = []) -> String:
+static func voice_marks_only(text: String, acts: Array = [], marks := "") -> String:
 	var keep := [Manuscript._rx(Manuscript.DELIVERY), Manuscript._rx(Manuscript.DELIVERY_END), Manuscript._rx(Manuscript.HESITATION),
 		Manuscript._rx(Manuscript.SPEAKER), Manuscript._rx(CardReading.QUIET_MARK)]
+	# ...and the marks the episode's format lets its reader write ([method _format_marks]: the studio's acts)
+	if not marks.is_empty():
+		keep.append(Manuscript._rx(marks))
 	var cue := Manuscript._rx(CardReading.ACT_MARK)
 	var chapter := Manuscript._rx(CardReading.CHAPTER_MARK)
 	var out := ""
@@ -3616,9 +3669,9 @@ static func own_voices(text: String, voices: Array, reader := "") -> String:
 	return out + text.substr(at)
 
 
-static func clean_spoken(text: String, acts: Array = []) -> String:
+static func clean_spoken(text: String, acts: Array = [], marks := "") -> String:
 	# words said a way (`[words]{terms}`) are a delivery round them before any bracket is taken as a direction
-	var t := voice_marks_only(Manuscript.delivered_as_marks(text.strip_edges()), acts)
+	var t := voice_marks_only(Manuscript.delivered_as_marks(text.strip_edges()), acts, marks)
 	if t.length() >= 2 and t.begins_with("\"") and t.ends_with("\""):
 		t = t.substr(1, t.length() - 2)
 	var keep := PackedStringArray()

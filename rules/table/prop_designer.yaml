@@ -1,0 +1,50 @@
+# THE PROP DESIGNER - a role's make designed from words (RoleDesign; PropMakes `designed`; next/studio.md "The studio's things"). A
+# scene works a role's prop the same way whatever make plays it - it shows pictures on its faces, lights its lights, touches and moves
+# it by its named parts and points - so a make has each of those where the scene says, and is otherwise the designer's to imagine.
+# What it makes is kept in the library and may stand in any show: its name is generic.
+#
+# The code gives: {{role}} (what the part is called), {{blurb}} (what the scene does with it), {{needs}} (what the scene works on it, a
+# line each), {{tall_lo}} and {{tall_hi}} (how tall it stands, cm), {{show}} (the show it stands in), `others` (the scene's other
+# things already designed, {name, line}), `another` with {{was_name}} and {{was_line}} (the make it replaces), `wrong` with {{lacks}}
+# (what the last answer lacked), and what the thing language takes: {{props}}, {{max_parts}}, `ornaments`, `textures`.
+system: >-
+  You design one prop for a 3D scene, written as parts and materials. Answer with the prop as one JSON object and nothing else.
+prompt:
+  - "THE PART IT PLAYS: {{role}} - {{blurb}}"
+  - ""
+  - "THE SHOW IT STANDS IN: {{show}}"
+  - ""
+  - when: has_others
+    say: "Already in the scene, for it to belong with:"
+  - each: others
+    say: "  - {{name}}: {{line}}"
+  - when: has_others
+    say: ""
+  # what the scene works on any make: its faces, named parts and points, each by its exact name
+  - "WHAT THE SCENE WORKS ON IT - each named exactly so, or the scene cannot work it:"
+  - insert: needs
+  - ""
+  - >-
+    A POINT is written on any part as `points`: {"name": [x, y, z]}, in centimeters in the thing's own space (as `at` is, not the
+    part's), whatever part or group it is written on. A PART is named by its `name`. A FACE is a part of `shape` face with its `name`. FUR is a part's `fur`: {"length"
+    (centimeters, 0.2-6), "density" (strands a centimeter across, 2-40), "curl" (0-1), "droop" (0-1: how far long strands hang
+    under their weight), "color" (at the root), "tip" (at the tip)} - drawn as strands over the part, pressed and swept where a
+    hand touches it.
+  - >-
+    It stands {{tall_lo}} to {{tall_hi}} centimeters tall, its foot on the ground at y = 0, centered, its front toward +z: the way
+    the scene looks at it from. Make a real one, built as such a thing is built - its proportions, its materials, the small parts
+    that make it read as itself up close (seams, buttons, screws, joints, a strap, wear) - with as many parts as that takes.
+  - when: another
+    say: >-
+      It replaces {{was_name}} ({{was_line}}): make another kind of it, not a copy - another design, another make, another way
+      of being the same thing.
+  - when: wrong
+    say: "THE LAST ANSWER LACKED {{lacks}}: this one has each of them, named exactly as asked."
+  - ""
+  - include: "table/set_dresser.thing_language"
+  - ""
+  - >-
+    Answer with {"name": "...", "line": "...", "thing": {"parts": [...]}, "materials": {...}}: its name a few plain words for what
+    it is (never a person's, a character's, a brand's or a place's: it may stand in any show), `line` a sentence saying what it is,
+    and every material its parts use under the names its parts give. Write no `at` for the thing itself, and nothing outside the
+    JSON.

@@ -95,7 +95,7 @@ Source: [src/ui/prop_viewer.gd](../src/ui/prop_viewer.gd)
 
 PropMakes - the parts a scene gives a prop to play (a role: the desk's mug, its terminal, a phone), and the make chosen to play one, built (next/working_props.md). What a role does is the scene's - a mug is lifted to the mouth, a terminal shows its program on its screen - and any make of it is built in the role's frame so that holds: its foot on y = 0, centered, its front toward +z, its height within the role's (`made`). A scene works a make through its rig (`PropRig`: its faces, lights and named parts), never by its shapes.
 
-A role's own make is a recipe drawn from the scene's number (`recipe`, `DeskLook.spec_of`) or a prop shipped with the app (`own`, a `.prop.json` as Export writes one). A choice is `{}` (the role's own), `{recipe, seed}` (its recipe drawn from another number), `{kept}` (a prop kept in the library by that name, `ThingLibrary`) or `{aside: true}` (taken off: a scene that lets the role go sets nothing out for it, and its picture is its own make's). A make missing a face the scene fills (`faces`) cannot play the role: the role's own plays it. The Dex offers makes (`MakeShelf`); the scene keeps the choice in its note.
+A role's own make is a recipe drawn from the scene's number (`recipe`, `DeskLook.spec_of`), a prop shipped with the app (`own`, a `.prop.json` as Export writes one), or none (`designed`: an agent designs each make, `RoleDesign`). A choice is `{}` (the role's own), `{recipe, seed}` (its recipe drawn from another number), `{kept}` (a prop kept in the library by that name, `ThingLibrary`) or `{aside: true}` (taken off: a scene that lets the role go sets nothing out for it, and its picture is its own make's). A make missing what the scene works (`faces`, `needs`: `missing`) cannot play the role: the role's own plays it. The Dex offers makes (`MakeShelf`); the scene keeps the choice in its note.
 
 Source: [src/desk/prop_makes.gd](../src/desk/prop_makes.gd)
 
@@ -124,6 +124,13 @@ Source: [src/desk/prop_makes.gd](../src/desk/prop_makes.gd)
 | `chart` The chart | The chart of the council's hours, taped down. | `data/props/chart.prop.json` | `chart` |  | 0.05 - 2 |
 | `clock` The flip clock | The clock whose cards turn over to the hour the script tells. | `data/props/clock.prop.json` | `cards` |  | 4 - 15 |
 | `tablet` The tablet | The tablet picked up and read, its pages on its screen. | `data/props/tablet.prop.json` | `screen` |  | 0.5 - 3 |
+| `camera` The camera | A camera looking back at the viewer, its flip screen turned toward them showing what it sees; tapped, it sways. | `` | `screen` |  | 6 - 30 |
+| `tripod` The tripod | The floor tripod the camera stands on. | `` |  |  | 90 - 180 |
+| `ring_light` The ring light | A ring of light behind the camera, lighting what it sees. | `` |  |  | 100 - 200 |
+| `microphone` The microphone | A big microphone in a fluffy windscreen, its fur pressed, rubbed and brushed, its body tapped. | `` |  |  | 20 - 60 |
+| `block` The wooden block | One of two blocks of hardwood, scraped and knocked together. | `` |  |  | 1 - 10 |
+| `brush` The powder brush | A big, soft brush swept over the windscreen and the lens. | `` |  |  | 10 - 35 |
+| `backdrop` The green screen | A green cloth backdrop on its stands behind the viewer's chair: the camera's flip screen shows it behind nobody. | `` |  |  | 180 - 300 |
 
 ## Refining a prop
 
@@ -169,7 +176,7 @@ A part is one of these (`Props.SHAPES`), as the set dresser reads them.
 - **`point`** - one crystal: a prism with a pointed end, standing up from its base - a tower, a single point. `radius`, `length` (the prism), `tip` (the point), `sides` (6 for quartz).
 - **`cluster`** - a crystal cluster: points growing out of one rough rock. `count` 3-24, `radius` (the rock), `length` [shortest, longest], `spread` (degrees the outer points lean out), `thickness` (a point's width over its length, 0.1-0.3), `base` (the rock's material, if not the crystal's).
 - **`geode`** - a geode broken open: a rough round rock, hollow, the hollow lined with crystal points growing in toward its middle. It lies open side up; `turn` [30, 0, 0] tips the opening toward the reader. `radius` (the rock's), `rind` (the thickness of its shell), `length` (the crystals'), `base` (the rock's material; plain gray rock if not given). The part's own material is the crystals'.
-- **`ring`** - a ring lying flat round the vertical axis, resting on whatever is under it: rims, rings, bangles, a coiled rope. `radius` (to the middle of the band), `thickness` (the band's), `arc` (degrees, less than 360 for an open ring).
+- **`ring`** - a ring lying flat round the vertical axis, resting on whatever is under it: rims, rings, bangles, a coiled rope. `radius` (to the middle of the band), `thickness` (the band's), `arc` (degrees, less than 360 for an open ring). A ring with a `width` (how wide its band is, across, centimeters) is FLAT - a band with square edges, as a washer, a bezel or a ring light's face is - and its `thickness` is then how deep it is along the axis; turned [90, 0, 0] it stands upright, facing the thing's front.
 - **`tube`** - a round rod along a path: handles, stems, incense sticks, wands, branches, wire, a feather's quill, a pipe. `path` [[x,y,z], ...] in the thing's own space, `radius` (or `radii`, one per point, to taper or swell it). It curves through its points (`smooth` false: joined straight, every bend a crisp elbow, like a bent wire); a point written [x, y, z, r] bends round r centimeters there (a pipe's elbow), and [x, y, z, 0] is a crisp kink in a smooth path. `wall` (centimeters) makes it hollow and open at both ends: a pipe, a straw, a spout.
 - **`loft`** - a form swept along a path through CROSS-SECTIONS that change as it goes - what a lathe, a tube or an extrude cannot make: a spout wide at the body and narrow at its lip, a blade of a snake plant or an aloe, a cactus pad, a horn, a spoon's handle, a shell's whorl, a curling leaf with real thickness. `path` [[x,y,z], ...] as a tube's (with its corners), or none: it rises straight up `height`. `sections` [{`at` 0-1 along the path, `outline` (as an extrude's, or `points` [[x, z], ...]), `size` [width, thickness] or one number, `sides`, `scale`, `turn` (degrees about the path), `shift` [x, z]}, ...]: the form blends smoothly from each section to the next (`smooth` false: straight); a section of `size` 0 closes to a point. Width runs across the path and thickness the other way - the thing's x and z while the path runs up. An outline, size or sides written on the part itself is every section's unless it says otherwise. `wall` makes it hollow and open at both ends.
 - **`coil`** - a band wound round the vertical axis: an incense coil, a spring, a coiled cord, a curling tendril, a spiral of wire. `turns`, `radius` (where it starts) and `radius2` (where it ends: larger for a flat spiral), `height` (how far it climbs over all its turns; 0 lies flat), `thickness` (the band's, as a ring's).
@@ -228,7 +235,7 @@ Worked into a part's surface (`Props.ORNAMENTS`).
 | `lattice` | a diamond lattice, `count` diamonds round |
 | `hammered` | the dimpled face of hand-hammered metal, all over |
 
-### Plays of light (6)
+### Plays of light (7)
 
 What moves in a material as it turns (`Props.PLAYS`).
 
@@ -238,8 +245,9 @@ What moves in a material as it turns (`Props.PLAYS`).
 | `flash` | broad patches that flash `color2` and the colors beside it where they catch the light, dark elsewhere - labradorite, spectrolite |
 | `fire` | small patches of every color, changing as it turns - opal |
 | `glitter` | tiny flakes of `color2` that sparkle in the flames - goldstone, sunstone, aventurine, the pyrite in lapis |
-| `rainbow` | an oily rainbow film over the surface - aura quartz, rainbow obsidian, bismuth, paua, abalone, mother of pearl |
+| `rainbow` | an oily rainbow film over the surface, in patches of every hue - aura quartz, rainbow obsidian, bismuth, paua, abalone, mother of pearl; never a lens's coating (`coated`) |
 | `glow` | a soft light of `color2` floating under the surface - moonstone |
+| `coated` | an even coating that takes the glare off glass - a camera's or a projector's lens, binoculars, glasses: what it reflects faint and tinted by the angle alone, green seen straight on turning violet at its edge (`color2`, where it is a color, its hue straight on) |
 
 ### Textures (14)
 

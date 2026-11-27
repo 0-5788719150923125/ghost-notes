@@ -111,7 +111,7 @@ static func summary_of(path: String) -> Dictionary:
 	var res := FrontMatter.read_block(raw)
 	var attached := Components.attached_of(res.data if res.ok and res.data is Dictionary else {})
 	var body := plain_of(String(FrontMatter.split(raw)["body"]))
-	var names := " ".join(attached.map(func(k: String) -> String: return Registry.label(Components.REGISTRY, k)))
+	var names := " ".join(attached.map(func(k: String) -> String: return Components.title_of(k)))
 	# ...and the format the Medium names ("letter", "dispatch", "tablet"), so a search for one finds it
 	var medium: Variant = (res.data as Dictionary).get("medium") if res.ok and res.data is Dictionary else null
 	if medium is Dictionary:

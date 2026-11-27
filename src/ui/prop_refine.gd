@@ -1,7 +1,9 @@
-extends Window
+extends PanelContainer
 class_name PropRefine
 
-## PropRefine - the 3D view's Refine ([PropViewer], [PropVersions]): what to change in the prop shown, in words, and who changes it -
+## PropRefine - the 3D view's Refine ([PropViewer], [PropVersions]), docked into the window it is opened from ([RefineDock]: the window
+## widens to hold it, or the side panel holding the card does; its Refine button opens and folds it): what to change in the prop
+## shown, in words, and who changes it -
 ## the agent, its model and how hard it thinks ([AgentPick]) - then the agent at work: a bar that keeps moving and the line it
 ## reports (what it is doing, for how long, and how long since it last said anything) until its version lands or it is stopped. It
 ## stays open, its words kept, for the next change. The agent picked is every refine's of its kind from then on, kept between
@@ -16,7 +18,6 @@ signal asked(direction: String, pick: Dictionary)
 ## The refining under way given up.
 signal stopped
 
-const SIZE := Vector2i(580, 400)
 
 ## What the window says for each kind of thing it refines: the line over the words, the words' placeholder, who refines it, and
 ## the Refine button's tip.
@@ -36,6 +37,7 @@ const WORDS := {
 const PICKED := {"prop": "refine_prop", "picture": "refine_picture", "table": "refine_prop"}
 
 var _what := "prop"
+var _head: Label                  # what it refines, over the words
 
 var _text: TextEdit
 var _pick: AgentPick
@@ -52,22 +54,19 @@ func _init(what := "prop", start := {}) -> void:
 	_what = what if WORDS.has(what) else "prop"
 	var words: Dictionary = WORDS[_what]
 	visible = false
-	title = "Refine"
-	min_size = Vector2i(420, 300)
-	close_requested.connect(hide)
-	window_input.connect(func(e: InputEvent) -> void:
-		if e is InputEventKey and (e as InputEventKey).pressed and (e as InputEventKey).keycode == KEY_ESCAPE:
-			hide())
-	var bg := PanelContainer.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+	custom_minimum_size = Vector2(0, 300)
 	var pad := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
 		pad.add_theme_constant_override("margin_" + side, 10)
-	bg.add_child(pad)
+	add_child(pad)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
 	pad.add_child(col)
+	_head = Label.new()
+	_head.text = "Refine"
+	_head.add_theme_font_size_override("font_size", 14)
+	_head.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	col.add_child(_head)
 	var say := Label.new()
 	say.text = String(words["say"])
 	say.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -117,24 +116,30 @@ func _init(what := "prop", start := {}) -> void:
 	row.add_child(_go)
 
 
-## Opened for the thing called [param name] over [param host] - a picture's beside it, so the picture stays in view
-## ([method TextRefine.beside]).
-func open_for(name: String, host: Window) -> void:
-	title = "Refine - %s" % name
+## Opened for the thing called [param name], docked where [param from] is (the window it is shown in, or the card the Refine button
+## is on: [method RefineDock.host_of]), whatever it was.
+func open_for(name: String, from: Node) -> void:
+	_head.text = "Refine - %s" % name
+	RefineDock.open(RefineDock.host_of(from), self)
 	_pick.mark_available()
-	if _what == "picture":
-		var r := TextRefine.beside(self, host, SIZE.x)
-		r.size.y = mini(r.size.y, SIZE.y)
-		if not visible:
-			popup(r)
-		position = r.position
-		size = r.size
-	elif not visible:
-		popup()
-		size = SIZE
-		if host != null:
-			position = host.position + (host.size - size) / 2
 	_text.grab_focus()
+
+
+## The Refine button's toggle: opened for the thing called [param name] docked where [param from] is, or folded away where it stands
+## open; [param button] shown pressed while it is open. Whether it is open now.
+func toggle_for(name: String, from: Node, button: BaseButton = null) -> bool:
+	if RefineDock.is_open(self):
+		RefineDock.close(self)
+		RefineDock.show_on(button, self)
+		return false
+	open_for(name, from)
+	RefineDock.show_on(button, self)
+	return true
+
+
+## Folded away ([method RefineDock.close]).
+func fold() -> void:
+	RefineDock.close(self)
 
 
 ## Whether the agent is at work: the bar moves and Stop shows, and the words wait.

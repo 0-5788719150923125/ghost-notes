@@ -110,6 +110,17 @@ func heard() -> Array:
 	return []
 
 
+## The scene row [param key]'s prop stands in, for a refine that may place it there as well as change it ([PropViewer], [PropVersions]):
+## `{role, now, fields, roles, needs, lacks, place, place_role, look}` - `role` its name in the scene, `now` where it is placed (`fields`
+## what a place is written as), `roles` every thing the scene can place (`{role, label, now}`), `needs` what the scene works on it (a
+## text) and `lacks` (`(thing) -> PackedStringArray`) what a version of it lacks of that, `place` (`(place: Dictionary) -> String`, "" done) puts
+## it there and `place_role` (`(role, place) -> String`) another of them - neither a version of a prop - and `look` (`(dir: String) ->
+## {report, views}`, awaited) the scene as it stands: a report in numbers and the paths of pictures. {} where the prop stands in no
+## scene a refine can place it in.
+func scene_of(_key: String) -> Dictionary:
+	return {}
+
+
 ## What may take row [param key]'s place, offered on the Dex (a choice of mugs for the mug), whose Use puts the one picked there;
 ## null where nothing can.
 func choices(_key: String) -> PropSection:

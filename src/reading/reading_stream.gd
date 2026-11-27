@@ -123,6 +123,11 @@ var _sub_phones: Array = []    # ...and the phones, the same way (Subtitles.phon
 ## ([method _fx_admit] consumes them) - where each chunk starts and where the outro mark's fade does. A fresh one
 ## for every reading.
 var _join := ReadingJoin.new()
+var _head_body := ""           # the words read, where the show's head is performed ([HeadMarks]); "" where it is not
+var _head_bank: Array = []     # the show's head phrases ([HeadBank])
+var _head_feel := {}           # how gently the head is performed ([method ReadingPanel.head_feel])
+var _head_plan := {}           # the head's plan as the words joined so far time its marks
+var _head_words := -1          # how many joined words it was made from
 
 # The live chain: the voice's room, run here rather than in the host
 var fx := VoiceFX.new()
@@ -277,6 +282,11 @@ func plan(body: String) -> void:
 		_pending.resize(int(_lead_in * float(panel._sr)))
 		_join.frames = _pending.size()
 	var made := panel._plan_of(body)
+	_head_bank = panel.head_bank()
+	_head_feel = panel.head_feel()
+	_head_body = body if not _head_bank.is_empty() else ""
+	_head_plan = {}
+	_head_words = -1
 	chunks = made["chunks"]
 	for c in chunks:
 		var who := String((c as Dictionary).get("speaker", ""))
@@ -1037,6 +1047,12 @@ func _pump_fx() -> void:
 		return
 	var chain := fx
 	chain.side = _join.side_between(_through, _through + n, panel._cast.pan_of)
+	# the voice where the head has it, performed on the words joined so far (a word is joined before its frames come)
+	if not _head_body.is_empty():
+		if _join.words.size() != _head_words:
+			_head_words = _join.words.size()
+			_head_plan = HeadMarks.plan(_head_body, _join.words, _head_bank, {}, _head_feel)
+		chain.place = HeadMarks.lane(_head_plan, _through, _through + n, panel._sr)
 	var piece := _pending.slice(_read, _read + n)
 	_read += n
 	_through += n

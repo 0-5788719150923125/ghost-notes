@@ -106,6 +106,14 @@ const REGISTRY := {
 		"modes": ["generative"],
 		"pattern": "(?m)^[ \\t]*<!--\\s*heard\\s*:\\s*[A-Za-z_]+\\s*-->[ \\t]*$",
 	},
+	"head": {
+		"label": "Head",
+		"group": "voices",
+		"blurb": "One of the show's head phrases, by name, performed from the word after it - never the same way twice (its habits are the show's own, designed by an agent: the Pipeline card's head row). The head moves on its own between, so call one only where it means something. The voice is heard from where the mouth is - close at the left is warm in the left ear, turned away muffled - and a show whose camera is the head (the Studio) is seen from there.",
+		"before": "<!-- head: ", "fill": "lean in close", "after": " -->", "line": "",
+		"modes": ["generative", "table"],
+		"pattern": "<!--\\s*head\\s*:[^>]*-->",
+	},
 	"hesitation": {
 		"label": "Hesitation",
 		"group": "timing",

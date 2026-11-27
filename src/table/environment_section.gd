@@ -231,7 +231,9 @@ func refining_line(els: Array, i: int, line: String) -> String:
 ## Element [param i]'s Refine… and, once it has versions, its Version picker (each version, and the element as it is now where a
 ## hand changed it since).
 func refine_verbs(els: Array, i: int) -> Array:
+	var refining: TextRefine = _refines.get(sound_folder(els, i))
 	var out: Array = [{"key": "refine", "label": "Refine…",
+		"pressed": refining != null and is_instance_valid(refining) and RefineDock.is_open(refining),
 		"tip": "Talk the sound over with a designer who hears it: say what to change (softer, further off, less hiss, slower), and each change is a version you can go back from."}]
 	var dir := sound_folder(els, i)
 	var n := ElementVersions.versions(dir).size()
@@ -282,7 +284,8 @@ func refine_act(i: int, verb: String) -> String:
 		w = TextRefine.new(d.chat, name_of(el))
 		host.add_child(w)
 		_refines[dir] = w
-	w.open_beside(null)
+	# a toggle, docked beside the card in its panel
+	w.toggle(host)
 	return ""
 
 

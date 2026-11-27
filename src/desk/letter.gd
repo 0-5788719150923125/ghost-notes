@@ -187,7 +187,7 @@ func _ensure_doc() -> void:
 	var d: Dictionary = _subs.document
 	set_environment(Surroundings.sanitize(d.get("environment")))
 	_title.channel = String(d.get("title", ""))
-	_title.byline = String(d.get("byline", d.get("author", "")))
+	_title.byline = String(d.get("byline", ""))
 	var src := String(d.get("source", ""))
 	var letter: Dictionary = d.get("letter", {}) if d.get("letter") is Dictionary else {}
 	var start: PackedStringArray = d.get("start_words", PackedStringArray()) \

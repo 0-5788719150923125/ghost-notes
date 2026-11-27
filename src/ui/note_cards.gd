@@ -37,9 +37,9 @@ static func build(panel: SidePanel, attached: Array, ctx := {}) -> Dictionary:
 			continue
 		var card := make(key, ctx)
 		var row: Dictionary = Components.REGISTRY[key]
-		# the card's id is its row's `card`, its title
-		# the row's `heading` where it has one; a part that only comes with another has no × of its own
-		var body := panel.add_card(String(row.get("card", card.KEY)), String(row.get("heading", row["label"])),
+		# the card's id is its row's `card`, its title what the component is called ([method Components.title_of]); a part that only
+		# comes with another has no × of its own
+		var body := panel.add_card(String(row.get("card", card.KEY)), Components.title_of(key),
 			row["family"], key if not Components.attach_blocks(key).is_empty() and not (ctx.get("brought", []) as Array).has(key) else "")
 		var why := Components.needs_note(key, attached)
 		if not why.is_empty():

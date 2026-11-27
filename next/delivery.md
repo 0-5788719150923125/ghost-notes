@@ -32,6 +32,14 @@
   and a drawn word held on one note were the two faults, both fixed (below).
 - **Tuning a delivery** (the section below): the Voice card lists every delivery and act the script says, plus any added
   from the Dex, and each opens in a Lab where it is heard, shaped, refined and kept.
+- **Whisper** (`whisper`): Kokoro's decoder told no pitch over a word whispered `UNVOICED` (0.5) or more, its harmonic
+  source given back the training noise the export dropped (kokoro_sung.py `breath`; without it the silent source buzzes at
+  160 Hz); then `_whisper` breathes what is left voiced: the tract read through pre-emphasis, one stream of velvet noise
+  through it (fresh noise a frame, forced to its level, is heard as static; band-by-band low-noise noise rings as a chord),
+  nothing under 300 Hz, rolled off above 1 and 4 kHz, the unvoiced consonants kept softer, `WHISPER_UNDER` (8) dB under the
+  voice BY THE EAR - by RMS a whisper is louder than its voice. A word whispered less is blended. The rows that lower their
+  volume were moved so each is as loud by the ear as before. Heard (samples in `dist/whisper_samples/`): the best yet, "still
+  not perfect"; to come back to.
 
 **Not built:** the points (`{sigh}`, `{breath}`, `{um}`); the Jefferson colons (`a::nd`); the `energy`, `creak` and
 `smile` axes (to be measured as `breath` and `push` were); on Piper, the axes that need Kokoro's inputs (rate, pitch,
@@ -142,11 +150,12 @@ Kokoro, as this host patches it, takes far more than any mark asks of it
 | `dur_scale` (a multiplier on each sound's frames, before the round) | per phoneme | any, 25 ms frames | italic/bold stretch, the trail's hold, inflection's `slow` |
 | `rest_floor` (frames at least) | per phoneme | any | off on Kokoro: the model holds the word through floored frames instead of resting |
 | `speed` | per call (a sentence) | 0.4-1.6 Pace, the discourse plan's rate, the delivery lean | Pace, delivery `quicker`/`slower` |
-| `f0_keep`/`f0_set` (the pitch curve into the decoder) | every 12.5 ms | multiplier / absolute | inflection's rules (a question's rise, an italic's accent), `inflect` |
+| `f0_keep`/`f0_set` (the pitch curve into the decoder) | every 12.5 ms | multiplier / absolute | inflection's rules (a question's rise, an italic's accent), `inflect`; 0 over a whispered word |
 | `n_keep`/`n_set` (the energy curve into the decoder) | every 12.5 ms | multiplier / absolute | only to voice a whispered vowel; singing |
 | style per token (`[T, 256]`: 128 timbre, 128 prosody) | per token, smoothed over 125 ms | the 28 readers' space; `breath` (CPP) and `push` (alpha ratio, about 15 dB over 2 sigma) lanes | a voice's blend curves only |
 | `_effort` (a shelf near 1.2 kHz and a gain) | per sentence | dial, contour, lean | Effort dial, delivery `louder`/`softer` |
 | `_emphasize` (a gain with 30 ms ramps) | per word | +2.5 / +5 dB | italic / bold |
+| `breath` (the harmonic source's training noise, kokoro_sung.py) | per call | 0 or 1 | a whispered word's call |
 | `_whisper`, `_muffle` | per voice | 0-1 | the Tone |
 | resample pitch | per sentence | +-1.5 st (Arc, lean), formants restored | Arc, delivery `brighter`/`graver` |
 | splice (a silence) | per word boundary | 0-30 s | hesitation, the Pauses, the marks' rests |
@@ -416,7 +425,7 @@ A blank is no change.
 | sarcastic | 0.75 | 1.1 | -1 | 0.75 | +1 | | 0.2 | drawn key word, rise-fall on it | key phrase 2.8 vs 3.9 syll/s, lower F0, rougher (Cheang & Pell 2008) |
 | mocking | 1 | | +2 | 1.8 | | | | sing-song, drawn | - |
 | suspicious | 0.9 | 1.2 | -1 | 1.1 | -1 | | | scoops, drawn | - |
-| conspiratorial | 1.05 | 0.9 | -1 | 0.8 | -8 | | 0.6 | whisper 0.3 | - |
+| conspiratorial | 1.05 | 0.9 | -1 | 0.8 | -6.5 | | 0.6 | whisper 0.3 | - |
 | polite | 0.95 | 1.05 | +0.5 | 0.9 | -1 | | | crisp | - |
 | casual | 1.1 | 0.9 | -0.5 | 0.8 | -1 | -0.2 | | thrown away endings | - |
 | defiant | 1 | | | 1.2 | +3 | 0.5 | | spaced, falls | - |
@@ -429,8 +438,8 @@ follows the measured rule of about +0.5 st of pitch per dB of effort, a flatter 
 
 | Expression | rate | pauses | pitch | range | volume | push | breath | Also | Anchors |
 |---|---|---|---|---|---|---|---|---|---|
-| whispering | 0.9 | | | 0.7 | -10 | | | whisper 1 | Polly: slow whispers up to 10% |
-| hushed | 0.92 | 1.1 | -1 | 0.7 | -8 | | 0.6 | whisper 0.4 | today's `hushed` |
+| whispering | 0.9 | | | 0.7 | -1 | | | whisper 1 | Polly: slow whispers up to 10% |
+| hushed | 0.92 | 1.1 | -1 | 0.7 | -6 | | 0.6 | whisper 0.4 | today's `hushed` |
 | soft | 0.95 | | -0.5 | 0.9 | -4 | -0.3 | 0.3 | effort -0.4 | relaxed, 54 dB(A) |
 | raised | | | +3 | | +3 | 0.3 | | effort +0.3 | 66 dB(A) |
 | loud | 0.97 | | +5 | 0.9 | +5 | 0.6 | | effort +0.6, vowels x1.1 | 72-78 dB(A) |
@@ -509,7 +518,7 @@ and the first of the next agree.
 | energy | `n_keep` |
 | effort | `_effort` made a curve: the shelved and the plain audio crossfaded by the effort at each sample |
 | push, breath, creak, smile | style rows per token, lanes added to the voice's own blend |
-| whisper | `_whisper`'s mix made a curve |
+| whisper | Kokoro told no pitch over a word whispered `UNVOICED` or more, its source fed its breath; then `_whisper` (breath through the tract, `WHISPER_UNDER` dB under by the ear) mixed by a curve |
 | `drawn` | `dur_scale` on the rime's continuants, `n_set` held at the vowel's peak (singing's sustain), pitch level; overlap-add (the hum's hold) where the model's held vowel thins |
 | `cut off`, `clipped` | the take cut at the phone's end with a short close; no trail |
 

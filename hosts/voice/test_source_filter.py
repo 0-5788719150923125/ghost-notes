@@ -22,7 +22,10 @@ The three claims:
      resample moved it. Both halves matter: formants restored AND pitch still
      shifted, or it has simply undone the arc.
   3. `_whisper` takes the voice out and leaves the words in - harmonicity to the
-     floor, formants where they were, level unchanged.
+     floor, formants where they were, nothing under its low cut (a voice's buzz
+     turned to noise is a rumble), WHISPER_UNDER dB under the voice BY THE EAR
+     (A-weighted; by RMS a whisper is louder than the voice it came from), and a
+     blend between the two.
 
 Real synthesis is then run through the same measurements if a checkpoint happens
 to be on this machine, and skipped with a note if not. The synthetic case is the
@@ -44,6 +47,9 @@ for p in (str(HERE), str(GHOST)):
         sys.path.insert(0, p)
 
 from backends.piper import (  # noqa: E402
+    WHISPER_LOW,
+    WHISPER_UNDER,
+    _heard_level,
     _muffle,
     _resample,
     _restore_formants,
@@ -279,11 +285,22 @@ def check_whisper(v: np.ndarray) -> None:
         "the vocal tract is still there - the words survive",
         "F1..F3 " + " ".join("%.1f%%" % d for d in drift),
     )
-    lvl = 20.0 * math.log10(
-        max(1e-9, float(np.sqrt(np.mean(w**2))))
-        / max(1e-9, float(np.sqrt(np.mean(v.astype(np.float64) ** 2))))
+    def low_share(x):
+        spec = np.abs(np.fft.rfft(np.asarray(x, dtype=np.float64))) ** 2
+        f = np.fft.rfftfreq(x.size, 1.0 / SR)
+        return float(spec[f < WHISPER_LOW * 0.5].sum() / spec.sum())
+
+    ok(
+        low_share(w) < 0.01 and low_share(w) < 0.2 * low_share(v),
+        "nothing rumbles under the low cut",
+        "%.2f%% of it under %.0f Hz, against %.2f%% of the voice" % (100 * low_share(w), WHISPER_LOW * 0.5, 100 * low_share(v)),
     )
-    ok(abs(lvl) < 2.0, "the level is held", "%+.2f dB" % lvl)
+
+    def heard_db(x):
+        return 20.0 * math.log10(max(_heard_level(x, SR), 1e-12) / max(_heard_level(v, SR), 1e-12))
+
+    lvl = heard_db(w)
+    ok(abs(lvl + WHISPER_UNDER) < 1.0, "it sits WHISPER_UNDER under the voice by the ear", "%+.2f dB" % lvl)
     half = _whisper(v, SR, 0.5)
     mid = harmonicity(half)
     ok(
@@ -291,25 +308,14 @@ def check_whisper(v: np.ndarray) -> None:
         "half way is half way - a stage whisper, not a switch",
         "harmonicity %.2f, between %.2f and %.2f" % (mid, after, before),
     )
-    # ...And it does not duck on the way through. The two halves of this blend are
-    # uncorrelated - noise through the tract against the periodic voice under it - so they
-    # add in power, and a plain `a*wet + (1-a)*dry` sits at sqrt(a^2+(1-a)^2) of the level:
-    # nothing at either end and -3 dB in the middle, which is exactly where Hushed lives.
-    # Reported as "with hushed specifically, it is too quiet", and invisible to every check
-    # here because both ends measured fine.
-    ref = float(np.sqrt(np.mean(v.astype(np.float64) ** 2)))
-    worst = 0.0
-    for a in (0.1, 0.25, 0.45, 0.5, 0.6, 0.75, 0.9):
-        blend = _whisper(v, SR, a)
-        db = 20.0 * math.log10(
-            max(1e-9, float(np.sqrt(np.mean(blend.astype(np.float64) ** 2))))
-            / max(ref, 1e-9)
-        )
-        worst = max(worst, abs(db))
+    # ...and every blend between the voice and its whisper by the ear, falling as it whispers more: the two halves are
+    # uncorrelated (noise through the tract against the periodic voice) and add in power
+    levels = [heard_db(_whisper(v, SR, a)) for a in (0.1, 0.25, 0.45, 0.5, 0.6, 0.75, 0.9, 1.0)]
+    falls = all(b <= a + 0.3 for a, b in zip(levels, levels[1:]))
     ok(
-        worst < 0.5,
-        "no blend amount ducks the level",
-        "worst %.2f dB over the range" % worst,
+        falls and max(levels) < 0.5 and min(levels) > -WHISPER_UNDER - 1.0,
+        "every blend lies between the voice and its whisper, falling as it whispers more",
+        " ".join("%+.1f" % x for x in levels),
     )
     ok(
         np.array_equal(_whisper(v, SR, 1.0), w),
@@ -422,11 +428,20 @@ def check_real_voice() -> None:
         "and keeps its timing, so the subtitles still fit",
         "%d samples" % wet.size,
     )
-    lvl = 20.0 * math.log10(
+    heard = 20.0 * math.log10(max(_heard_level(wet, sr), 1e-12) / max(_heard_level(dry, sr), 1e-12))
+    raw = 20.0 * math.log10(
         max(1e-9, float(np.sqrt(np.mean(wet**2))))
         / max(1e-9, float(np.sqrt(np.mean(dry**2))))
     )
-    ok(abs(lvl) < 2.0, "at the level it was rendered at", "%+.2f dB" % lvl)
+    ok(abs(heard + WHISPER_UNDER) < 1.0, "WHISPER_UNDER under the voice it was rendered in, by the ear",
+       "%+.2f dB by the ear (%+.2f dB by RMS)" % (heard, raw))
+    spec_d = np.abs(np.fft.rfft(dry)) ** 2
+    spec_w = np.abs(np.fft.rfft(wet)) ** 2
+    fq = np.fft.rfftfreq(dry.size, 1.0 / sr)
+    low_d = float(spec_d[fq < WHISPER_LOW * 0.5].sum() / spec_d.sum())
+    low_w = float(spec_w[fq < WHISPER_LOW * 0.5].sum() / spec_w.sum())
+    ok(low_w < 0.03 and low_w < 0.25 * low_d and low_d > 0.05, "its voice's low buzz does not come back as a rumble",
+       "%.2f%% under %.0f Hz, against %.1f%% of the voice" % (100 * low_w, WHISPER_LOW * 0.5, 100 * low_d))
 
     # The paragraph arc must not tilt the pace. The arc buys its pitch move by rendering at
     # a different length scale and playing back to compensate, and the two do not cancel by

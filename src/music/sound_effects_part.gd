@@ -172,7 +172,12 @@ func _fill(e: EntryCard, key: String, words: String) -> void:
 	var test := _button("■ Stop" if _playing == key else "▶ Test", "Hear the sound alone, as it is made now.", func() -> void: _test(key))
 	test.disabled = wav.is_empty() and _playing != key
 	row.add_child(test)
-	row.add_child(_button("Refine…", "Talk the sound over with its designer: say what to change (a longer, slower fade; more weight; further away), and each change is a new version.", func() -> void: _refine(key, words)))
+	var refine := _button("Refine…", "Talk the sound over with its designer: say what to change (a longer, slower fade; more weight; further away), and each change is a new version.", func() -> void: pass)
+	refine.toggle_mode = true
+	var open: TextRefine = _refines.get(key)
+	refine.set_pressed_no_signal(open != null and is_instance_valid(open) and RefineDock.is_open(open))
+	refine.pressed.connect(func() -> void: _refine(key, words, refine))
+	row.add_child(refine)
 	var again := _button("Make again", "Make the version picked into sound again.", func() -> void: _design(key, words).make())
 	again.disabled = SoundEffects.versions(key).is_empty()
 	row.add_child(again)
@@ -241,13 +246,15 @@ func _test(key: String) -> void:
 	_draw_list()
 
 
-func _refine(key: String, words: String) -> void:
+## Its Refine… as a toggle: the conversation docked beside the card in its panel ([RefineDock]), or folded away where it stands open;
+## [param button] pressed while it is open.
+func _refine(key: String, words: String, button: BaseButton = null) -> void:
 	var r: TextRefine = _refines.get(key)
 	if r == null or not is_instance_valid(r):
 		r = TextRefine.new(_design(key, words).chat, "the sound \"%s\"" % SoundLibrary.name_for(words))
 		add_child(r)
 		_refines[key] = r
-	r.open_beside(null)
+	r.toggle(self, button)
 
 
 func _keep(key: String, words: String) -> void:

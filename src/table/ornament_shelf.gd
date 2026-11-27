@@ -52,7 +52,8 @@ func offers() -> Array:
 		var texture := String(ed["kind"]) == OrnamentLibrary.TEXTURE
 		out.append({"key": "kept:" + name, "name": name, "named": true, "shelf": "textures" if texture else "kept", "line": line,
 			"tip": String(ed["words"]), "picture": _picture(String(ed["code"]), String(ed["kind"])),
-			"verbs": [{"key": "refine", "label": "Refine…", "tip": "Ask the designer for a change: a new version, kept beside the others."},
+			"verbs": [{"key": "refine", "label": "Refine…", "tip": "Ask the designer for a change: a new version, kept beside the others.",
+				"pressed": OrnamentDesign.open_now(name)},
 				{"key": "older", "label": "‹", "tip": "Use the version before this one.", "off": used <= 0},
 				{"key": "newer", "label": "›", "tip": "Use the version after this one.", "off": used >= n - 1},
 				{"key": "forget", "label": "Remove", "tip": "Take it out of your library, to the trash. A prop wearing it by its name keeps the version it wore last." if texture else "Take it out of your library, to the trash. A prop wearing it by its name wears none."}]})
@@ -74,7 +75,7 @@ func act(key: String, verb: String) -> String:
 		return "%s is not in the library" % name
 	match verb:
 		"refine":
-			OrnamentDesign.of(name).open()
+			OrnamentDesign.of(name).toggle()
 			return ""
 		"older", "newer":
 			var i := int(e["used"]) + (-1 if verb == "older" else 1)

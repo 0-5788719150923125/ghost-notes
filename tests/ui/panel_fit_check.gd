@@ -11,7 +11,10 @@ extends Node
 ## - a panel that fits is unchanged: it does not stretch to fill the window;
 ## - it keeps its declared width: checked on every panel, the Cards one holding real long titles;
 ## - nothing on a card scrolls of its own ([TextField]): what would take the wheel from the panel, found
-##   by walking what is on the cards (a window is a place of its own).
+##   by walking what is on the cards (a window is a place of its own);
+## - a Refine opened from one of its cards docks beside the cards, inside the panel ([RefineDock]): the panel widens by it and
+##   stands the window's height, and folded it narrows back to its own width and its short height (control: a three-row panel
+##   with none docked is short).
 ##
 ## Controls that must fail: a bare PanelContainer holding the same VBox must overflow at a height where
 ## the SidePanel does not; the Cards panel's episode list sized to its items again must blow the width
@@ -86,6 +89,7 @@ func _run() -> void:
 	await _check_episode_entry_follows()
 	await _check_rows_named()
 	await _check_short_panel_is_not_stretched()
+	await _check_refine_docks()
 	await _check_the_old_arrangement_overflows()
 	await _check_wheel_skips_sliders(_ed._panel)
 	for pair in [["Generative", _ed._panel], ["Cards", _cards._panel],
@@ -236,6 +240,32 @@ func _check_short_panel_is_not_stretched() -> void:
 	_ok(panel.size.y >= SidePanel_.MIN_HEIGHT - 1.0,
 		"a three-row panel collapsed to %.0f px, below the %.0f floor"
 		% [panel.size.y, SidePanel_.MIN_HEIGHT])
+	panel.queue_free()
+
+
+func _check_refine_docks() -> void:
+	get_tree().root.size = Vector2i(1280, 1920)
+	await _settle()
+	var panel: SidePanel_ = SidePanel_.new(380.0)
+	add_child(panel)
+	var row := Button.new()
+	row.text = "Refine…"
+	panel.body.add_child(row)
+	await _settle()
+	var short := panel.size
+	var refine := TextRefine.new(WriterChat.at(TextRefine.folder_for("", "panel_fit_dock")), "a sound")
+	panel.body.add_child(refine)
+	_ok(refine.toggle(row, row), "a Refine on one of the panel's cards opens docked")
+	await _settle()
+	var vp := get_viewport().get_visible_rect().size
+	_ok(refine.get_parent() != panel.body and panel.is_ancestor_of(refine) and refine.global_position.x >= panel.body.global_position.x + panel.body.size.x - 1.0,
+		"it stands beside the cards, inside the panel (refine at %s, cards end at %.0f)" % [refine.global_position, panel.body.global_position.x + panel.body.size.x])
+	_ok(absf(panel.size.x - (short.x + RefineDock.WIDTH + 10.0)) < 2.0 and panel.size.y > vp.y * 0.8,
+		"the panel widens by it and stands the window's height (%s, was %s)" % [panel.size, short])
+	_ok(not refine.toggle(row, row), "pressed again it folds away")
+	await _settle()
+	_ok(absf(panel.size.x - short.x) < 1.0 and panel.size.y < vp.y * 0.5,
+		"folded, the panel is its own width and short again (%s, was %s)" % [panel.size, short])
 	panel.queue_free()
 
 

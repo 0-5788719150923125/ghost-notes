@@ -518,8 +518,8 @@ THE LIGHT. The set dresser writes `light` beside its things (`Lights`, `src/tabl
 - Shadows out of the shot (`shadows`, at most 4): things the camera never sees, built of silhouettes in
   centimeters up to six meters (`Lights.CASTER_SHAPES`: box, cylinder, ball, ring, tube along a path, sheet,
   grille; grouped two deep and copied round the upright or along a step), shadow-only on
-  `Lights.CASTER_LAYER`, which every light that casts casts with. Not [Props]: those clamp to 60 cm and are
-  surfaces. Aimed by where the middle of the shadow falls (`shadow`, at `height`) and set up the ray of the
+  `Lights.CASTER_LAYER`, which every light that casts casts with. Not [Props]: those are surfaces, drawn and
+  lit. Aimed by where the middle of the shadow falls (`shadow`, at `height`) and set up the ray of the
   light that throws it (the sun, or a lamp that casts, `by`), then raised along that same ray, the shadow
   staying put, until it is clear of the table and out of the shot (`Lights.caster_place`). Round a lamp
   (`around`) its own origin is the lamp's flame: what hangs below it throws its shadow down. It is still, or

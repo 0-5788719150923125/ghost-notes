@@ -124,6 +124,11 @@ HELD = float("inf")
 # Every time the plan says (a word, its edges, a rest, a phone) is told that much earlier, so what is placed
 # by them (the cut of a rest, the trail, subtitles, a mouth) lands on the sound.
 PLAN_LEAD = 0.05
+# A word whispered at least this much (the request's `whisper` and its delivery's) is read told no pitch, the decoder
+# breathing it; one whispered less keeps the voice's own and is blended with its breath after (piper `_whisper`).
+UNVOICED = 0.5
+# s: a voiced sliver this short between whispered sounds (a word-space's frames) is told no pitch too
+UNVOICED_BRIDGE = 0.04
 GAP_REACH = 0.05  # how far past the (corrected) word boundary a rest's cut is looked for
 # ...and how far before it: reaching GAP_REACH back into a word finds the silence of its stop's closure, and
 # the release goes over the rest. A word's last sound ends by its corrected end, give or take this much.
@@ -151,7 +156,7 @@ PAD_ID = 0
 # How this backend reads a request, said on every voice's row (`voices`): a row keys the takes kept in its voice
 # (TakeCache), so raising it has every sentence kept before said again. Raised when the same request comes out
 # another take.
-READS = 11
+READS = 12
 
 LICENSE = (
     "Apache-2.0 (hexgrad/Kokoro-82M). Its training data includes synthetic audio from closed "
@@ -903,7 +908,18 @@ class KokoroBackend(PiperBackend):
             if not plan.exists() or plan.stat().st_mtime < sung.stat().st_mtime:
                 kokoro_sung.curves(sung, plan)
             opts = self._options()
-            self._sung[key] = (open_session(sung, opts), open_session(plan, opts) if plan.exists() else None)
+            sung_sess = open_session(sung, opts)
+            # one made before the source had its breath (kokoro_sung.VERSION) is made again, once
+            if sung_sess.get_modelmeta().custom_metadata_map.get("ghost_sung") != kokoro_sung.VERSION:
+                print("ghost/voice: making the Kokoro graph that sings%s again, once" % (" a moving voice" if moving else ""),
+                      file=sys.stderr)
+                del sung_sess
+                if not kokoro_sung.make(stock, sung):
+                    self._sung[key] = None
+                    return None
+                kokoro_sung.curves(sung, plan)
+                sung_sess = open_session(sung, opts)
+            self._sung[key] = (sung_sess, open_session(plan, opts) if plan.exists() else None)
         return self._sung[key]
 
     def sing(self, voice: str, words: list, out_path: str, params: dict, style: dict) -> dict:
@@ -1094,6 +1110,7 @@ class KokoroBackend(PiperBackend):
         opening: float = 0.0,
         hold: dict | None = None,
         inflect: dict | None = None,
+        whisper: dict | None = None,
     ):
         """(symbol, source) pairs -> audio, plus a time span per source - Piper's contract
         (`PiperBackend._render_symbols`), on Kokoro's ids: one id a symbol, a pad at each end, no
@@ -1117,6 +1134,10 @@ class KokoroBackend(PiperBackend):
         plan (`inflection.curve`) - Kokoro's own pitch moved, the decoder making it, and a vowel it would whisper told
         its pitch outright where a mark voices it (`inflection.voiced`). A voice that moves reads by the
         graph it moves in made so (`_sung_graphs(moving=True)`).
+
+        `whisper` ({source: how much}) whispers the words: one whispered UNVOICED or more is read by the sung graph told
+        no pitch where it is heard and its source fed its breath (kokoro_sung's `breath`) - the decoder breathing the
+        word; `_whisper` breathes what it leaves voiced, and blends a word whispered less.
         """
         import numpy as np
 
@@ -1300,14 +1321,63 @@ class KokoroBackend(PiperBackend):
                 feeds[DUR_SCALE_INPUT] = np.array(scales, dtype=np.float32)
             return feeds
 
-        # the sung graph, where a mark moves the pitch: the stock graph's, or the one a style a token is read in's
+        # the words whispered enough to be told no pitch
+        hushed = {src for src, w in (whisper or {}).items() if float(w) >= UNVOICED}
+        # the sung graph, where a mark moves the pitch or a word is whispered: the stock graph's, or the one a style a
+        # token is read in's
+        pitches = bool(inflect) and any(m.pitched() for m in inflect.values())
         pitched = contours = None
-        if inflect and any(m.pitched() for m in inflect.values()) and kk.get("family"):
+        if (pitches or hushed) and kk.get("family"):
             family = kk["family"]
             if sess is self._models.get(family):
                 pitched, contours = self._sung_graphs(family) or (None, None)
             elif sess is self._moving.get(family):
                 pitched, contours = self._sung_graphs(family, moving=True) or (None, None)
+        breathes = False
+        if pitched is not None and hushed:
+            import kokoro_sung
+
+            fed = {i.name for i in pitched.get_inputs()} | {i.name for i in pitched.get_overridable_initializers()}
+            breathes = kokoro_sung.BREATH in fed
+
+        def unvoiced(a: int, b: int, more: list, lead, feeds: dict, into: dict):
+            """`into` (a call's feeds, its pitch maybe laid already) told no pitch where a whispered word is heard
+            (PLAN_LEAD early, a voiced sliver between two bridged) and its source fed its breath - None where the call
+            holds no whispered word or its plan does not fit."""
+            if not any(owner[k] in hushed for k in range(a, b)):
+                return None
+            plan = np.asarray(self._planner(sess).run(None, feeds)[-1]).reshape(-1)
+            front = (len(lead) + 1) if lead else 0
+            back = (len(more) + 1) if more else 0
+            owners = [-1] * (1 + front) + owner[a:b] + [-1] * (back + 1)
+            if len(owners) != plan.size:
+                return None
+            # two pitch steps a frame, as the plan lays them (`inflection.curve`)
+            starts = np.concatenate(([0.0], np.cumsum(plan.astype(np.float64))))
+            steps = int(round(starts[-1])) * 2
+            mask = np.zeros(steps, dtype=bool)
+            for j, w in enumerate(owners):
+                if w in hushed:
+                    mask[int(round(starts[j] * 2)):min(steps, int(round(starts[j + 1] * 2)))] = True
+            lead_steps = min(steps, int(round(PLAN_LEAD / (frame_s / 2.0))))
+            mask = np.concatenate([mask[lead_steps:], np.zeros(lead_steps, dtype=bool)])
+            bridge = int(round(UNVOICED_BRIDGE / (frame_s / 2.0)))
+            on = np.nonzero(mask)[0]
+            for i, j in zip(on[:-1], on[1:]):
+                if 1 < j - i <= bridge + 1:
+                    mask[i:j] = True
+            keep = (~mask).astype(np.float32)
+            out = dict(into)
+            k0 = np.asarray(out.get("f0_keep", np.ones(1, np.float32)), np.float32).reshape(-1)
+            if k0.size not in (1, keep.size):
+                return None
+            out["f0_keep"] = (k0 * keep).reshape(1, -1)
+            s0 = np.asarray(out.get("f0_set", np.zeros(1, np.float32)), np.float32).reshape(-1)
+            if s0.size == keep.size:
+                out["f0_set"] = (s0 * keep).reshape(1, -1)
+            if breathes:
+                out["breath"] = np.ones(1, np.float32)
+            return out
 
         def inflected(a: int, b: int, more: list, told, lead, feeds: dict):
             """`feeds` with the pitch the marks ask for laid on the call's own plan (`f0_keep`), None where it moves
@@ -1370,7 +1440,9 @@ class KokoroBackend(PiperBackend):
             """ids[a:b] in one call, `lead` said before them and `more` after: (audio, the plan's frames an id, a pad
             at each end)."""
             feeds = feeds_of(a, b, more, told, lead)
-            sung = inflected(a, b, more, told, lead, feeds) if pitched is not None else None
+            sung = inflected(a, b, more, told, lead, feeds) if pitched is not None and pitches else None
+            if pitched is not None and hushed:
+                sung = unvoiced(a, b, more, lead, feeds, sung if sung is not None else feeds) or sung
             out = pitched.run(None, sung) if sung is not None else sess.run(None, feeds)
             planned = np.asarray(out[1]).reshape(-1).astype(np.float64)
             # an unpatched graph hands back the plan before its Round and Clip: done here as there

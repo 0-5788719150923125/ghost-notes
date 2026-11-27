@@ -31,6 +31,10 @@ void fragment() {
 		albedo = mix(albedo, film(NORMAL, VIEW, color), 0.8);
 		alpha = max(alpha, 0.35);
 		metal = 0.5;
+	} else if (play == 7) {
+		// COATED: the glare taken off, what it reflects faint and tinted by the angle
+		albedo = mix(albedo, coating(NORMAL, VIEW, color2) * 0.15, 0.7);
+		metal = 0.8;
 	}
 	if (orn_paint > 0.0) {
 		albedo = mix(albedo, orn_color, o.y * orn_paint);

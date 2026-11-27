@@ -124,15 +124,15 @@ func _run() -> void:
 		pic.sync_medium()
 	# A table show's Medium ([MediumCard] handed `provides` an episode): Table's formats alone, a pick its block and never the
 	# remembered medium; a block naming another format kept as it was until one of Table's is picked. The control: a reading's
-	# card offers neither of Table's.
+	# card offers none of Table's.
 	var reading_keys := Medium.offered(["audio", "reading"])
-	if Medium.offered(["audio", "reading", "episode"]) != ["table", "desk"] or reading_keys.has("table") or reading_keys.has("desk"):
+	if Medium.offered(["audio", "reading", "episode"]) != ["table", "desk", "studio"] or reading_keys.has("table") or reading_keys.has("desk") or reading_keys.has("studio"):
 		print("vpick: FAILED - a table show is offered %s, a reading %s" % [str(Medium.offered(["audio", "reading", "episode"])), str(reading_keys)])
 		fails += 1
 	var remembered := Director.medium
 	var at_table := MediumCard.new({"reading": true, "provides": ["text", "audio", "reading", "episode"], "blocks": {}})
 	at_table._pick(at_table._keys.find("desk"))
-	if at_table._keys != ["table", "desk"] or String(at_table.capture().get("format", "")) != "desk" or Director.medium != remembered:
+	if at_table._keys != ["table", "desk", "studio"] or String(at_table.capture().get("format", "")) != "desk" or Director.medium != remembered:
 		print("vpick: FAILED - a table show's pick: keys %s, block %s, remembered '%s' (was '%s')"
 			% [str(at_table._keys), str(at_table.capture()), Director.medium, remembered])
 		fails += 1

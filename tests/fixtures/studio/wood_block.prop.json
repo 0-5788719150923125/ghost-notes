@@ -1,0 +1,46 @@
+{
+	"name": "the wooden block",
+	"line": "A smooth block of pale hardwood, about a hand long, its grain running along it.",
+	"thing": {
+		"name": "the wooden block",
+		"parts": [
+			{
+				"shape": "box",
+				"size": [
+					15.0,
+					2.0,
+					5.0
+				],
+				"round": 0.25,
+				"at": [
+					0,
+					0,
+					0
+				],
+				"material": "maple",
+				"points": {
+					"middle": [
+						0,
+						1.0,
+						0
+					],
+					"face": [
+						0,
+						2.0,
+						0
+					]
+				},
+				"name": "block"
+			}
+		]
+	},
+	"materials": {
+		"maple": {
+			"kind": "wood",
+			"color": "#d9b98c",
+			"color2": "#b08a5a",
+			"polish": 0.35,
+			"pattern": 0.5
+		}
+	}
+}

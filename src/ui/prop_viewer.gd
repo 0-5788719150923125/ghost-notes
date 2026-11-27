@@ -146,7 +146,8 @@ func _init() -> void:
 	_ver.mouse_filter = Control.MOUSE_FILTER_STOP
 	bar.add_child(_ver)
 	_next = _bar_button(bar, "›", "The version after. The one shown when you close this is the prop.", func() -> void: step(1))
-	_refine_btn = _bar_button(bar, "Refine…", "Have an agent change what you say about the version shown - a part's shape, a size, a color - and keep the rest. It makes a new version beside the others.", open_refine)
+	_refine_btn = _bar_button(bar, "Refine…", "Have an agent change what you say about the version shown - a part's shape, a size, a color - and keep the rest. It makes a new version beside the others.", toggle_refine)
+	_refine_btn.toggle_mode = true
 	_stop_btn = _bar_button(bar, "Stop", "Give up the refining under way: nothing is added.", stop_refining)
 	_stop_btn.visible = false
 	_keep_btn = _bar_button(bar, "Keep", "Keep it in your library, to use on any scene.", keep_prop)
@@ -297,7 +298,8 @@ func _close() -> void:
 	_asked += 1
 	_drop()
 	if _refine != null and is_instance_valid(_refine):
-		_refine.hide()
+		_refine.fold()
+		RefineDock.show_on(_refine_btn, _refine)
 	hide()
 
 
@@ -418,6 +420,17 @@ func open_refine() -> void:
 		add_child(_refine)
 		_refine.asked.connect(_refine_asked)
 	_refine.open_for(_name, self)
+	RefineDock.show_on(_refine_btn, _refine)
+
+
+## The Refine button's toggle: the words docked into this view ([method open_refine]), or folded away.
+func toggle_refine() -> void:
+	if _refine != null and is_instance_valid(_refine) and RefineDock.is_open(_refine):
+		_refine.fold()
+		RefineDock.show_on(_refine_btn, _refine)
+		return
+	open_refine()
+	RefineDock.show_on(_refine_btn, _refine)
 
 
 ## Refining asked for: the prop held as a draft where it is not kept, the version shown handed to an agent, and the words' window
@@ -437,13 +450,15 @@ func _refine_asked(direction: String, pick: Dictionary) -> void:
 		_shown = _pv.used(_kept)
 		_show_versions()
 	var from := _shown if _shown >= 0 else _pv.used(_kept)
-	var err := _pv.start_refine(_kept, from, direction, pick)
+	# ...and the scene it stands in, where a refine may place it there ([method PropSection.scene_of]): a place makes no version
+	var err := _pv.start_refine(_kept, from, direction, pick, (_sec as PropSection).scene_of(_key))
 	if not err.is_empty():
 		_refine.say("Not refined: %s." % err)
 		return
 	_refine.set_direction("")
 	_refine.say("")
-	_refine.hide()
+	_refine.fold()
+	RefineDock.show_on(_refine_btn, _refine)
 	_watch()
 
 
@@ -466,8 +481,12 @@ func _watch() -> void:
 			var i := int(w["index"])
 			var called := String(w.get("name", ""))
 			var renamed := "" if called.is_empty() or called == _kept else " It calls it %s, a name the prop takes with it." % called
-			_say("Version %d is new: compare it with ‹ and ›. The one shown when you close this is the prop.%s" % [i + 1, renamed])
+			var also := " It placed things in the scene too - %s." % _moved_text(w.get("moved", {})) if not (w.get("moved", {}) as Dictionary).is_empty() else ""
+			_say("Version %d is new: compare it with ‹ and ›. The one shown when you close this is the prop.%s%s" % [i + 1, renamed, also])
 			show_version(i)
+		"placed":
+			PropRefining.seen(_kept)
+			_say("Placed in the scene, no new version - %s. Each thing's entry moves it by hand." % _moved_text(w.get("moved", {})))
 		"failed":
 			PropRefining.seen(_kept)
 			_say("Not refined: %s." % String(w["error"]))
@@ -476,6 +495,24 @@ func _watch() -> void:
 func _process(_delta: float) -> void:
 	if visible:
 		_watch()
+
+
+## What a refine placed, as a person reads it: each thing by its name and how it moved.
+static func _moved_text(moved: Variant) -> String:
+	var out := PackedStringArray()
+	for k in (moved as Dictionary if moved is Dictionary else {}):
+		out.append("the %s %s" % [String(k).replace("_", " "), _place_text((moved as Dictionary)[k])])
+	return "; ".join(out) if not out.is_empty() else "nothing moved"
+
+
+## A place as a person reads it: what moved and how far.
+static func _place_text(place: Variant) -> String:
+	var said := {"x": "across %s cm", "y": "up %s cm", "z": "toward you %s cm", "turn": "turned %s°", "tilt": "tipped %s°", "roll": "leaned %s°", "scale": "sized %s×"}
+	var out := PackedStringArray()
+	for k in (place as Dictionary if place is Dictionary else {}):
+		if said.has(k):
+			out.append(String(said[k]) % str(snappedf(float(place[k]), 0.1)))
+	return ", ".join(out) if not out.is_empty() else "where the scene stands it"
 
 
 ## The refining of the prop shown given up: nothing is added.

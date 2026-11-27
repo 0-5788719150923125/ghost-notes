@@ -14,7 +14,7 @@ extends Node
 ## - its Lab opens in the tree on the script's own line, offering lines made to hear it on after the script's; one the script never
 ##   says opens on its family's line, said with it (plain, without); a curve drawn there is the note's version at once and reaches the words the script says it on
 ##   (and no others); a run of hand moves is one version; an act's pitch drawn there rides to its word; As said asks the host with
-##   the delivery on the words, Plain without;
+##   the delivery on the words, Plain without; each a toggle as Test is, pressed again to stop;
 ## - a designer's version is a version of its own, and picking the first again says it so; Keep puts it in the library (moved
 ##   aside) and the note follows the library; As it comes says it as kept; removed from the Dex, as the bank says it;
 ## - a new delivery from the Dex is the note's own, renamed and said what it is in its Lab, and an agent is told it;
@@ -199,7 +199,13 @@ func _run() -> void:
 	for a in _host.asked:
 		said_tokens.append_array(((a as Dictionary)["params"] as Dictionary).get("tokens", []))
 	_ok(said_tokens.any(func(t: Dictionary) -> bool: return t.has("acts")), "As said does not ask the host with the delivery on its words")
-	_ed.stop_testing()
+	lab._process(0.0)
+	_ok(_ed.testing() and lab._said_b.text == "As said ■" and lab._plain_b.text == "Plain", "As said does not say it is playing")
+	var asked_said := _host.asked.size()
+	lab._play("said")
+	lab._process(0.0)
+	_ok(not _ed.testing() and lab._said_b.text == "As said" and _host.asked.size() == asked_said,
+		"As said pressed again does not stop it")
 	_host.asked.clear()
 	lab._play("plain")
 	var plain_tokens: Array = []

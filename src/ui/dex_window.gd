@@ -369,8 +369,13 @@ func _tile(sec: ShelfSection, o: Dictionary) -> Control:
 				kind, func(path: String) -> void: _answer(sec.export_to(key, path), false))))
 	for v in (o.get("verbs", []) as Array):
 		var vd: Dictionary = v
-		row.add_child(_button(String(vd.get("label", vd.get("key", ""))), String(vd.get("tip", "")), bool(vd.get("off", false)),
-			func() -> void: _answer(sec.act(key, String(vd["key"])), true)))
+		var vb := _button(String(vd.get("label", vd.get("key", ""))), String(vd.get("tip", "")), bool(vd.get("off", false)),
+			func() -> void: _answer(sec.act(key, String(vd["key"])), true))
+		# a verb that opens and folds something (a Refine) is drawn as the toggle it is
+		if vd.has("pressed"):
+			vb.toggle_mode = true
+			vb.set_pressed_no_signal(bool(vd["pressed"]))
+		row.add_child(vb)
 	return box
 
 

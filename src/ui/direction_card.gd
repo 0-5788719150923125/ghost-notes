@@ -51,7 +51,8 @@ func _init() -> void:
 	_refine_btn.text = "Refine…"
 	_refine_btn.tooltip_text = ("Talk the direction over with a writer: it reads the note and what you wrote here - a line is "
 		+ "enough - and changes the direction as you ask, where you see it, in the note's own terms. The note itself is left as it is.")
-	_refine_btn.pressed.connect(open_refine)
+	_refine_btn.toggle_mode = true
+	_refine_btn.pressed.connect(func() -> void: toggle_refine(_refine_btn))
 	_field.add_action(_refine_btn)
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -101,12 +102,27 @@ func about() -> Dictionary:
 	return {"what": "the note's Direction", "title": _note_title(), "direction": true, "parts": TextRefine.parts_of(_attached), "marks": []}
 
 
-## Refine…: the conversation, beside the direction's window.
+## Refine…: the conversation, docked into the direction's window where it is open, else beside this card in its panel
+## ([RefineDock]).
 func open_refine() -> void:
+	_made_refine().open_beside(_refine_from())
+
+
+## The Refine button's toggle: the conversation opened, or folded away ([param button] pressed while open).
+func toggle_refine(button: BaseButton = null) -> void:
+	_made_refine().toggle(_refine_from(), button)
+
+
+func _refine_from() -> Node:
+	var w := _field.window()
+	return w if w != null and w.visible else self
+
+
+func _made_refine() -> TextRefine:
 	if _refine == null or not is_instance_valid(_refine):
 		_refine = TextRefine.new(chat(), "Direction")
 		add_child(_refine)
-	_refine.open_beside(_field.window())
+	return _refine
 
 
 func capture() -> Dictionary:

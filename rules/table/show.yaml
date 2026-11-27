@@ -55,6 +55,10 @@ direction: >-
 # so NO CHEATING holds: a reader asked again is still shown only what came before its beat.
 #
 # The code gives: {{note}}.
+# A passage handed back is told why: what the format found wrong with its marks (TableProducer, a format's `reader_check`)
+sent_back: >-
+  YOUR LAST TRY AT THIS WAS HANDED BACK: {{why}} Write it again, keeping what was right and putting that right.
+
 asked: >-
   THE AUTHOR HAS SEEN WHAT WAS MADE FOR THIS BEFORE AND ASKS FOR IT AGAIN, with this note:
 

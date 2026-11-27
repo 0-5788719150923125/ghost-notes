@@ -83,9 +83,17 @@ static func end_fade(t: float, follower: ReadingFollower, total: int, outro: flo
 	var last := follower.known_last()
 	if total == 0 or last < total - 1:
 		return 1.0
+	return fade_out(t, follower.st1[last], outro)
+
+
+## The outro from show time [param from], when the last thing is said or heard: 1 until a beat after it, then down to black exactly
+## as [param outro] runs out. INF holds it at 1 (the end not known yet).
+static func fade_out(t: float, from: float, outro: float) -> float:
+	if from == INF:
+		return 1.0
 	var o := maxf(outro, 0.0)
 	var beat := minf(0.8, o * 0.15)
-	return 1.0 - _ease((t - (follower.st1[last] + beat)) / maxf(o - beat, 0.05))
+	return 1.0 - _ease((t - (from + beat)) / maxf(o - beat, 0.05))
 
 
 static func _ease(x: float) -> float:

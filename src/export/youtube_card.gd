@@ -428,7 +428,8 @@ func _build_thumbnail() -> void:
 	_thumb_on = _thumb_button("›", "Show the thumbnail painted after this one: it goes up instead.")
 	_thumb_on.pressed.connect(func() -> void: _choose_thumb(1))
 	_thumb_refine = _thumb_button("Refine…", REFINE_TIP)
-	_thumb_refine.pressed.connect(open_refine)
+	_thumb_refine.toggle_mode = true
+	_thumb_refine.pressed.connect(func() -> void: toggle_refine(_thumb_refine))
 	_thumb_del = _armed_delete("✕", _delete_thumb)
 	_thumb_steps.add_child(_thumb_del)
 
@@ -1112,7 +1113,9 @@ func _fill_thumb_window() -> void:
 	refine.text = "Refine…"
 	refine.tooltip_text = REFINE_TIP
 	refine.focus_mode = Control.FOCUS_NONE
-	refine.pressed.connect(open_refine)
+	refine.toggle_mode = true
+	refine.set_pressed_no_signal(_refine != null and is_instance_valid(_refine) and RefineDock.is_open(_refine))
+	refine.pressed.connect(func() -> void: toggle_refine(refine))
 	_thumb_window.fill("Thumbnail  ·  %s" % (feed.episode_title() if not feed.episode_title().is_empty() else "this episode"),
 		_thumb.image(feed), ("Its words: \"%s\"\n\n" % words if not words.is_empty() else "No words on it.\n\n")
 		+ String(v.get("picture", ""))
@@ -1126,7 +1129,18 @@ const REFINE_TIP := ("Have a painter change only what you say in the thumbnail s
 	+ "rest. It makes a new version, which goes up; the one it was made from stays a version before it.")
 
 
-## Refine…: the thumbnail shown at full size, and the Refine window ([PropRefine]) beside it, its painter starting as the card's.
+## The Refine button's toggle: the thumbnail shown at full size with its Refine docked into its window ([method open_refine]), or
+## the Refine folded away where it stands open; [param button] pressed while open.
+func toggle_refine(button: BaseButton = null) -> void:
+	if _refine != null and is_instance_valid(_refine) and RefineDock.is_open(_refine):
+		_refine.fold()
+	else:
+		open_refine()
+	RefineDock.show_on(button, _refine)
+	RefineDock.show_on(_thumb_refine, _refine)
+
+
+## Refine…: the thumbnail shown at full size, its Refine ([PropRefine]) docked into its window, its painter starting as the card's.
 func open_refine() -> void:
 	var feed := _thumb_feed()
 	if feed == null or _thumb.versions(feed).is_empty() or not is_inside_tree():

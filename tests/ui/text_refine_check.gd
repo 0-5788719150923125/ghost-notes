@@ -12,7 +12,10 @@ extends SceneTree
 ##   cost with what came from the cache.
 ## - The window draws each turn, the last again as it grows, and starts again on a new conversation pressed twice (control:
 ##   pressed once it is kept). Enter sends, and a refused send keeps the words and says why (control: Shift+Enter sends nothing).
-## - Opened beside a window too wide to leave room, that window moves aside and the two stand side by side on the screen.
+## - Docked into the window it is opened from ([RefineDock]), never a window of its own: that window widens by the refine, its
+##   own content keeping its width at the left and the refine standing at its right, as tall as it; the Refine button is a toggle,
+##   pressed while it is open, and pressed again it folds away and the window narrows back to what it was (control: folded, the
+##   content has its whole width back). On a window too wide to widen, it widens to the screen and moves onto it.
 ## - The Body's editor has Refine… before Done, and its writer is told what the words are for and the marks its palette offers:
 ##   a show's brief and its own marks (control: a reading's words are a script, with a speaker cue among its marks). A card
 ##   built again (the panel rebuilt mid-turn) takes up the conversation live for its words (control: one with none reads nothing).
@@ -132,16 +135,35 @@ func _beside() -> bool:
 	host.min_size = Vector2i(560, 320)
 	root.add_child(host)
 	var screen := Vector2i(root.get_visible_rect().size)
-	host.popup(Rect2i(int(screen.x * 0.09), int(screen.y * 0.09), int(screen.x * 0.82), int(screen.y * 0.82)))
-	host.size = Vector2i(int(screen.x * 0.82), int(screen.y * 0.82))
+	host.popup(Rect2i(int(screen.x * 0.1), int(screen.y * 0.09), int(screen.x * 0.5), int(screen.y * 0.82)))
+	host.size = Vector2i(int(screen.x * 0.5), int(screen.y * 0.82))
+	var content := VBoxContainer.new()
+	content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	host.add_child(content)
+	var was := host.size
+	await process_frame
+	var content_w := content.size.x
+	var button := Button.new()
 	var w := TextRefine.new(WriterChat.at(TextRefine.folder_for("", "beside")), "Body")
 	root.add_child(w)
-	w.open_beside(host)
+	_ok(w.toggle(host, button), "the Refine button opens it")
 	await process_frame
-	var host_right := host.position.x + host.size.x
-	_ok(host_right <= w.position.x and w.position.x + w.size.x <= screen.x and host.position.x >= 0,
-		"the window moved aside, the two side by side on the screen (host %s+%s, refine %s+%s, screen %s)" % [host.position, host.size, w.position, w.size, screen])
-	_ok(w.size.y == host.size.y and w.position.y == host.position.y, "as tall as the window it stands beside")
+	_ok(w.get_parent() == host and host.size.x == was.x + RefineDock.WIDTH and host.size.y == was.y,
+		"docked into its window, which widens by it (host %s, was %s)" % [host.size, was])
+	_ok(absf(content.size.x - content_w) < 1.0 and absf(w.position.x - content_w) < 1.0 and absf(w.size.y - float(host.size.y)) < 1.0,
+		"its own content keeps its width at the left, the refine at its right as tall as the window (content %.0f, refine %s+%s)" % [content.size.x, w.position, w.size])
+	_ok(button.toggle_mode and button.button_pressed, "the button shows it open")
+	_ok(not w.toggle(host, button), "pressed again it folds away")
+	await process_frame
+	_ok(not w.visible and host.size == was and absf(content.size.x - float(was.x)) < 1.0 and not button.button_pressed,
+		"the window narrows back to what it was, the content its whole width again (host %s, content %.0f)" % [host.size, content.size.x])
+	host.size = Vector2i(int(screen.x * 0.9), host.size.y)
+	host.position = Vector2i(int(screen.x * 0.05), host.position.y)
+	w.toggle(host, button)
+	await process_frame
+	_ok(host.position.x >= 0 and host.position.x + host.size.x <= screen.x,
+		"on a window too wide to widen, it widens to the screen and stays on it (host %s+%s, screen %s)" % [host.position, host.size, screen])
+	w.fold()
 	w.queue_free()
 	host.queue_free()
 	return true

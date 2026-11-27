@@ -1058,8 +1058,8 @@ func _panel_fields() -> bool:
 	var pop: PopupMenu = ed._panel.plus.get_popup()
 	# "+" lists what a note can have; on a show of cards the clock and the presentation are taken,
 	# so what takes neither is all it can be given - YouTube, Voice training (its reader can be
-	# taught someone's voice), a Direction (where to take the next episode) and a Camera - and the rest is
-	# grayed with its reason. The Environment is the show's own (Table brings it), so it is never offered.
+	# taught someone's voice) and a Direction (where to take the next episode) - and the rest is
+	# grayed with its reason. The Environment and the Camera are the show's own (Table brings them), so they are never offered.
 	var at := -1
 	var lit: Array = []
 	for i in pop.item_count:
@@ -1068,8 +1068,8 @@ func _panel_fields() -> bool:
 			at = i
 		if not key.is_empty() and not pop.is_item_disabled(i):
 			lit.append(key)
-	_ok(at >= 0 and lit == ["direction", "voice_training", "camera", "youtube"],
-		"its \"+\" offers YouTube, Voice training, a Direction and a Camera, and nothing that takes the show's clock or presentation (%s)" % str(lit))
+	_ok(at >= 0 and lit == ["direction", "voice_training", "youtube"],
+		"its \"+\" offers YouTube, Voice training and a Direction, and nothing that takes the show's clock or presentation (%s)" % str(lit))
 	_ok(ed._block_cards.has("environment"), "the Environment is on the show already, brought by Table")
 	if at >= 0:
 		pop.id_pressed.emit(pop.get_item_id(at))
@@ -1083,7 +1083,7 @@ func _panel_fields() -> bool:
 		twice = twice or key == "youtube"
 		if not key.is_empty() and not pop.is_item_disabled(i):
 			left.append(key)
-	_ok(not twice and left == ["direction", "voice_training", "camera"], "and \"+\" does not offer it twice - Voice training, a Direction and a Camera are all it can be given now (%s)" % str(left))
+	_ok(not twice and left == ["direction", "voice_training"], "and \"+\" does not offer it twice - Voice training and a Direction are all it can be given now (%s)" % str(left))
 	ed._youtube._upload.set_pressed_no_signal(true)
 	# not the author's show: a panel comes up synced to whatever document the person running this has open, and
 	# DocSource.set_field writes a synced document at once

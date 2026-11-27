@@ -34,6 +34,9 @@ const EVERY := 0.25
 const EVERY_IDLE := 1.0
 ## The [Settings] section its groups' folds are kept in: the viewer's, never the note's.
 const FOLDS := "folds"
+## How many times Generate asks one section again within a round, and how many rounds it goes again for what is still missing.
+const AGAIN_MOST := 3
+const ROUNDS_MOST := 3
 
 ## The [Card] it is on, once [method put_on] a panel.
 var card: Card = null
@@ -44,6 +47,10 @@ var _sections: Array = []        # [PipelineSection], top to bottom
 var _queue: Array = []           # the sections Generate has still to walk
 var _begun := false              # ...and whether the first of them was started
 var _carried := false            # ...and whether the walk came from the panel before ([method carry_on])
+var _again := {}                 # a section -> how many times the walk asked it again ([constant AGAIN_MOST])
+var _moved := {}                 # a section -> whether its last ask started work
+var _rounds := 0                 # how many times the walk went round again ([constant ROUNDS_MOST])
+var _started := false            # whether this round started anything
 var _t := 0.0
 
 var _bar: HBoxContainer          # the tally, Generate and Stop: on the card's title bar
@@ -188,14 +195,24 @@ func missing() -> bool:
 
 
 ## Generate: every section's missing work, top to bottom, each started once the one before it is done
-## ([method _walk]), asked at its turn, so a step made from the words answers once they are written.
+## ([method _walk]), asked at its turn, so a step made from the words answers once they are written - and asked again while it
+## still misses work its last ask opened, the walk going round again while a round starts anything: Generate runs the whole of it.
 func generate() -> void:
 	for s in sections():
 		(s as PipelineSection).told = ""
 	_queue = sections()
 	_begun = false
 	_carried = false
+	_fresh_walk()
 	refresh()
+
+
+## The walk's counts begun again.
+func _fresh_walk() -> void:
+	_again = {}
+	_moved = {}
+	_rounds = 0
+	_started = false
 
 
 ## Generate's walk taken up by the panel built anew over the same note: a section still making what Generate asked of it
@@ -205,10 +222,14 @@ func carry_on() -> void:
 	_queue = sections()
 	_begun = false
 	_carried = true
+	_fresh_walk()
 
 
-## Walks as far as it can: a section is started once, and the walk waits while it is busy. One that
-## fails is passed; what comes after it is made regardless, and says so if it needs what failed.
+## Walks as far as it can: a section is started, and the walk waits while it is busy. Done and still missing something, it is
+## asked again where its last ask started work - what it made may open the rest (a thing designed before the sounds made on it),
+## at most [constant AGAIN_MOST] times. One that fails is passed; what comes after it is made regardless, and says so if it needs
+## what failed. At the end, a round again for every section still missing, while the last round started anything (a section made
+## from one below it: the studio's sounds from the script the episode writes), at most [constant ROUNDS_MOST].
 func _walk() -> void:
 	while not _queue.is_empty():
 		var s: PipelineSection = _queue[0]
@@ -220,10 +241,31 @@ func _walk() -> void:
 			_begun = true
 			if s.shown() and s.missing() and not (_carried and s.busy()):
 				s.make()
+				_moved[s] = s.busy()
+				_started = _started or s.busy()
+			elif _carried and s.busy():
+				_moved[s] = true
 		if s.busy():
 			return
+		if s.alive() and s.shown() and s.missing() and bool(_moved.get(s, false)) and int(_again.get(s, 0)) < AGAIN_MOST:
+			_again[s] = int(_again.get(s, 0)) + 1
+			s.make()
+			_moved[s] = s.busy()
+			if s.busy():
+				_started = true
+				return
 		_queue.pop_front()
 		_begun = false
+	if _started and _rounds < ROUNDS_MOST:
+		var still: Array = sections().filter(func(x: PipelineSection) -> bool: return x.alive() and x.shown() and x.missing())
+		if not still.is_empty():
+			_rounds += 1
+			_started = false
+			_moved = {}
+			_queue = still
+			_begun = false
+			_walk()
+			return
 	_carried = false
 
 
@@ -232,6 +274,7 @@ func stop() -> void:
 	_queue = []
 	_begun = false
 	_carried = false
+	_fresh_walk()
 	for s in sections():
 		(s as PipelineSection).stop()
 	refresh()
@@ -421,7 +464,8 @@ func _group_of(section: PipelineSection, group: String) -> Dictionary:
 	var g := {"section": section, "group": group, "head": head, "redo": redo, "rows": []}
 	_groups[at] = g
 	if not _folds.has(at):
-		_folds[at] = bool(Settings.read(FOLDS, _fold_key(group), false))
+		var st := _settings()
+		_folds[at] = bool(st.call("read", FOLDS, _fold_key(group), false)) if st != null else false
 	return g
 
 
@@ -703,8 +747,17 @@ func _toggle(at: String) -> void:
 	_folds[at] = folded
 	var g: Dictionary = _groups.get(at, {})
 	if not g.is_empty():
-		Settings.write(FOLDS, _fold_key(String(g["group"])), folded)
+		var st := _settings()
+		if st != null:
+			st.call("write", FOLDS, _fold_key(String(g["group"])), folded)
 	_apply_folds()
+
+
+## The settings the folds are kept in, asked by path ([Settings] named as a class would compile the app into every gate that builds
+## this card); null where there are none.
+static func _settings() -> Node:
+	var tree := Engine.get_main_loop() as SceneTree
+	return tree.root.get_node_or_null("Settings") if tree != null and tree.root != null else null
 
 
 ## A group's fold's key: "<panel>.pipeline.<group>".

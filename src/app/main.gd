@@ -685,6 +685,11 @@ func _stage_host() -> Node:
 	_stage.transparent_bg = false
 	_stage.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(_stage)
+	# a paused show looked over: a drag turns its eye, the wheel draws it in or out ([StageLook]); never in a render
+	if Engine.get_write_movie_path().is_empty() and get_node_or_null("StageLook") == null:
+		var look := StageLook.new()
+		look.name = "StageLook"
+		add_child(look)
 	#How finely it is drawn (see graphics.gd), the live viewer's choice or an export's - set before a
 	#medium is mounted, since a light takes its shadow's width from the filter's quality
 	Graphics.bind_stage(_stage, _sync_stage_size)

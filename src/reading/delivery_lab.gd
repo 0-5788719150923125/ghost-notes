@@ -46,6 +46,7 @@ var _hearing: DeliveryHearing
 var _last_wav := ""               # the last take heard as said: what Keep puts beside it
 var _playing := ""                # "said" or "plain" while a test of this Lab's plays
 var _refine: TextRefine
+var _refine_btn: Button = null    # its Refine button, a toggle
 
 
 func _init(owner: DeliverySection, name_: String) -> void:
@@ -110,9 +111,9 @@ func _init(owner: DeliverySection, name_: String) -> void:
 	_voice.custom_minimum_size = Vector2(140, 0)
 	_voice.tooltip_text = "Which of the note's voices says it: a delivery can suit one voice and not another."
 	trow.add_child(_voice)
-	_said_b = _button("▶ As said", "The words said with the delivery as it stands here, in the voice picked. Press again to stop.", func() -> void: _play("said"))
+	_said_b = _button("As said", "The words said with the delivery as it stands here, in the voice picked. Press again to stop.", func() -> void: _play("said"))
 	trow.add_child(_said_b)
-	_plain_b = _button("▶ Plain", "The same words with no delivery: what it is heard against. Press again to stop.", func() -> void: _play("plain"))
+	_plain_b = _button("Plain", "The same words with no delivery: what it is heard against. Press again to stop.", func() -> void: _play("plain"))
 	trow.add_child(_plain_b)
 	_hear_b = _button("Measure", "Say both and measure them: how much longer or shorter, higher or lower, wider or flatter, louder or softer it is than plain, and pitch and level across it. Its designer hears these numbers.", _measure)
 	trow.add_child(_hear_b)
@@ -218,7 +219,9 @@ func _init(owner: DeliverySection, name_: String) -> void:
 	_version.tooltip_text = "Which of its versions the note says: each made here by hand or by its designer."
 	_version.item_selected.connect(_version_picked)
 	bar.add_child(_version)
-	bar.add_child(_button("Refine…", "Ask a designer for a change in your words: it changes the numbers, hears the words said with them against plain, and leaves a new version.", _open_refine))
+	_refine_btn = _button("Refine…", "Ask a designer for a change in your words: it changes the numbers, hears the words said with them against plain, and leaves a new version.", func() -> void: _open_refine())
+	_refine_btn.toggle_mode = true
+	bar.add_child(_refine_btn)
 	bar.add_child(_button("Keep", "Keep it in your library as it stands here: under a bank name it is said this way in every note that says it; under a name of its own it is a word every script may say.", _keep))
 	bar.add_child(_button("As it comes", "Said as your library or the bank says it again: this note's tuning set by (its versions stay, to pick again).", _as_it_comes))
 	outer.add_child(bar)
@@ -283,8 +286,8 @@ func _process(_delta: float) -> void:
 		return
 	if _playing != "" and not section.cast.panel.testing():
 		_playing = ""
-	_said_b.text = "■ Stop" if _playing == "said" else "▶ As said"
-	_plain_b.text = "■ Stop" if _playing == "plain" else "▶ Plain"
+	_said_b.text = "As said ■" if _playing == "said" else "As said"
+	_plain_b.text = "Plain ■" if _playing == "plain" else "Plain"
 
 
 func _fill_voices() -> void:
@@ -638,7 +641,7 @@ func _open_refine() -> void:
 	if _refine == null or not is_instance_valid(_refine):
 		_refine = TextRefine.new(d.chat, "the delivery \"%s\"" % delivery)
 		add_child(_refine)
-	_refine.open_beside(self)
+	_refine.toggle(self, _refine_btn)
 
 
 func _say(t: String) -> void:

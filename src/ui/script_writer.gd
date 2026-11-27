@@ -38,8 +38,8 @@ class_name ScriptWriter
 const FIELDS := {
 	"title": {"label": "Title", "modes": ["generative", "table", "note", "song"],
 		"tip": "The chapter's title. Read aloud first, by the voice that opens the chapter, and set at the head of the chapter in the Novel and Notebook. For a card show or a Proof note, the channel's name: on the title screen while the intro holds. The %title% of the YouTube title."},
-	"byline": {"label": "Byline", "modes": ["table"],
-		"tip": "A line under the channel's name on the title screen while the intro holds - \"with Pen & Ink\", or \"%episode%\". It takes the YouTube title's macros, filled for each episode: %title%, %episode%, %seed%, %author%, %book%, %date%. Empty, the name stands alone."},
+	"byline": {"label": "Byline", "modes": ["generative", "table"],
+		"tip": "A line under the title on the title screen while the intro holds (a show's, under the channel's name) - \"with Pen & Ink\", or \"%episode%\". It takes the YouTube title's macros: %title%, %episode%, %seed%, %author%, %book%, %date%, a show's filled for each episode. Empty, a note's Author stands there, else the title alone."},
 	"episode": {"label": "Episode", "modes": ["table"],
 		"wait": "named with the episode",
 		"tip": "What this video is called: the %episode% of the YouTube title and the Byline. A card show's or a Proof note's is the picked episode's - its writer names it as it plans the episode, an edit here is written into the episode, and it names the export; an episode needs one. A note read as it is written names its own here."},
@@ -400,12 +400,21 @@ func about() -> Dictionary:
 		"marks": TextRefine.marks_of(_mode)}
 
 
-## Refine…: the conversation, beside the editor.
+## Refine…: the conversation, docked into the editor's window ([RefineDock]).
 func open_refine() -> void:
+	_made_refine().open_beside(_window)
+
+
+## The Refine button's toggle: the conversation opened in the editor's window, or folded away ([param button] pressed while open).
+func toggle_refine(button: BaseButton = null) -> void:
+	_made_refine().toggle(_window, button)
+
+
+func _made_refine() -> TextRefine:
 	if _refine == null or not is_instance_valid(_refine):
 		_refine = TextRefine.new(chat(), _wording("window", "Body"))
 		add_child(_refine)
-	_refine.open_beside(_window)
+	return _refine
 
 
 ## A conversation already live for these words (the panel built again mid-turn) is taken up at once, so its turn goes on.
@@ -494,7 +503,8 @@ func _build_window(section: String, blocks: PackedStringArray) -> void:
 	refine.tooltip_text = ("Talk the words over with a writer: say what to change, and it changes them here as you watch, knowing "
 		+ "what they are for, what the note is made of and every mark listed beside them. Each change is a step Ctrl+Z takes back, "
 		+ "and the conversation is kept with the note.")
-	refine.pressed.connect(open_refine)
+	refine.toggle_mode = true
+	refine.pressed.connect(func() -> void: toggle_refine(refine))
 	foot.add_child(_find.button())
 	foot.add_child(refine)
 	var close := Button.new()

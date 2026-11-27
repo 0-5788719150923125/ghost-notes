@@ -1,0 +1,33 @@
+{
+	"phrases": [
+		{"name": "weave", "line": "Weaves from ear to ear and back, leaning in, the voice crossing on the stressed words.",
+			"moves": [
+				{"side": [-80, -60], "distance": [0.17, 0.24], "rise": [0.0, 0.04], "turn": [5, 20], "tilt": [-8, 4], "roll": [-10, -2], "take": [0.8, 1.2], "hold": [0.0, 0.2], "land": "stress"},
+				{"side": [60, 85], "distance": [0.17, 0.24], "rise": [0.0, 0.04], "turn": [-20, -5], "tilt": [-8, 4], "roll": [2, 10], "take": [0.8, 1.2], "hold": [0.0, 0.2], "land": "stress"}
+			],
+			"repeat": [2, 3], "length": [3.0, 5.0], "weight": 1.2, "calm": false},
+		{"name": "lean in left", "line": "Comes in close at the left and holds there, the voice warm in the left ear.",
+			"moves": [
+				{"side": [-85, -65], "distance": [0.14, 0.18], "rise": [0.02, 0.06], "turn": [0, 18], "tilt": [-12, 0], "roll": [-12, -4], "take": [1.0, 1.4], "hold": [0.4, 0.7], "land": "end"}
+			],
+			"repeat": [1, 1], "length": [3.0, 6.0], "weight": 1.0, "calm": false},
+		{"name": "turn away", "line": "Turns the head away from the microphone at one side, the voice dulling, then back.",
+			"moves": [
+				{"side": [55, 80], "distance": [0.2, 0.3], "rise": [0.0, 0.05], "turn": [70, 100], "tilt": [-5, 8], "roll": [0, 8], "take": [1.0, 1.4], "hold": [0.3, 0.5], "land": "free"},
+				{"side": [40, 70], "distance": [0.22, 0.32], "rise": [0.0, 0.05], "turn": [-5, 10], "tilt": [-5, 5], "roll": [-4, 4], "take": [0.8, 1.2], "hold": [0.1, 0.3], "land": "free"}
+			],
+			"repeat": [1, 1], "length": [3.0, 5.0], "weight": 0.8, "calm": false},
+		{"name": "check the screen", "line": "Glances at the flip screen to check the frame, then back to the microphone.",
+			"moves": [
+				{"side": [-15, 15], "distance": [0.4, 0.55], "rise": [0.06, 0.12], "turn": [-5, 5], "tilt": [2, 10], "roll": [-3, 3], "look": "screen", "take": [1, 1], "hold": [0.4, 0.6], "land": "free"},
+				{"side": [-20, 20], "distance": [0.45, 0.6], "rise": [0.04, 0.1], "turn": [-5, 5], "tilt": [-4, 4], "roll": [-3, 3], "take": [1, 1], "hold": [0.2, 0.4], "land": "free"}
+			],
+			"repeat": [1, 1], "length": [2.5, 4.0], "weight": 0.5, "calm": false},
+		{"name": "sit back", "line": "Sits back, facing the microphone, only drifting.",
+			"moves": [
+				{"side": [-12, 12], "distance": [0.52, 0.62], "rise": [0.06, 0.1], "turn": [-6, 6], "tilt": [-4, 4], "roll": [-4, 4], "take": [1, 1], "hold": [0.5, 0.8], "land": "free"}
+			],
+			"repeat": [1, 1], "length": [4.0, 8.0], "weight": 0.7, "calm": true}
+	],
+	"line": "a test bank"
+}

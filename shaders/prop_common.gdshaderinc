@@ -14,7 +14,7 @@ uniform vec2 orn_zone = vec2(0.0, 1.0);
 uniform vec2 dims = vec2(20.0, 10.0);      // the part's girth and height, centimeters
 uniform float grain = 1.0;                 // the material's pattern size, centimeters
 uniform float seed = 0.0;
-// Props.PLAYS: 0 none, 1 silk, 2 flash, 3 fire, 4 glitter, 5 rainbow, 6 glow
+// Props.PLAYS: 0 none, 1 silk, 2 flash, 3 fire, 4 glitter, 5 rainbow, 6 glow, 7 coated
 uniform int play = 0;
 // a crystal's banding or a stone's veins curve round in rings (agate, malachite)
 uniform float rings = 0.0;
@@ -308,6 +308,15 @@ vec3 film(vec3 n, vec3 v, vec3 body) {
 	float h = fract(own.x + (fract(thick) - 0.5) * spread);
 	float sat = mix(0.85, 0.35, clamp(dot(body, vec3(0.299, 0.587, 0.114)), 0.0, 1.0));
 	return hsv2rgb(vec3(h, sat, 1.0));
+}
+
+// AN ANTI-REFLECTION COATING's tint - an even film, as on a lens: its hue set by the angle alone, never
+// patches; [param own]'s hue straight on where it is a color, else green, turning toward violet at the rim
+vec3 coating(vec3 n, vec3 v, vec3 own) {
+	vec3 c = rgb2hsv(own);
+	float head = c.y > 0.2 ? c.x : 0.36;
+	float edge = 1.0 - clamp(dot(n, v), 0.0, 1.0);
+	return hsv2rgb(vec3(fract(head + edge * 0.42), 0.75, 1.0));
 }
 
 // a small mirror's facing, its own for each [param id]: a nudge to the surface's normal, in the

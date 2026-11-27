@@ -1,0 +1,332 @@
+{
+	"name": "the ring light",
+	"line": "A small ring light on a floor stand, its round diffuser glowing a soft daylight white.",
+	"thing": {
+		"name": "the ring light",
+		"parts": [
+			{
+				"shape": "tube",
+				"path": [
+					[
+						0.0,
+						40.0,
+						3.0
+					],
+					[
+						0.0,
+						0.6,
+						30.0
+					]
+				],
+				"smooth": false,
+				"radii": [
+					0.9,
+					0.7200000000000001
+				],
+				"material": "stand"
+			},
+			{
+				"shape": "ball",
+				"size": [
+					2.3400000000000003,
+					1.4400000000000002,
+					2.3400000000000003
+				],
+				"at": [
+					1.83697019872103e-15,
+					0.0,
+					30.0
+				],
+				"material": "rubber"
+			},
+			{
+				"shape": "tube",
+				"path": [
+					[
+						-2.598,
+						40.0,
+						-1.5
+					],
+					[
+						-25.981,
+						0.6,
+						-15.0
+					]
+				],
+				"smooth": false,
+				"radii": [
+					0.9,
+					0.7200000000000001
+				],
+				"material": "stand"
+			},
+			{
+				"shape": "ball",
+				"size": [
+					2.3400000000000003,
+					1.4400000000000002,
+					2.3400000000000003
+				],
+				"at": [
+					-25.980762113533157,
+					0.0,
+					-15.000000000000004
+				],
+				"material": "rubber"
+			},
+			{
+				"shape": "tube",
+				"path": [
+					[
+						2.598,
+						40.0,
+						-1.5
+					],
+					[
+						25.981,
+						0.6,
+						-15.0
+					]
+				],
+				"smooth": false,
+				"radii": [
+					0.9,
+					0.7200000000000001
+				],
+				"material": "stand"
+			},
+			{
+				"shape": "ball",
+				"size": [
+					2.3400000000000003,
+					1.4400000000000002,
+					2.3400000000000003
+				],
+				"at": [
+					25.980762113533153,
+					0.0,
+					-15.000000000000014
+				],
+				"material": "rubber"
+			},
+			{
+				"shape": "lathe",
+				"profile": [
+					[
+						0,
+						0
+					],
+					[
+						2.4,
+						0,
+						0.4
+					],
+					[
+						2.4,
+						4.0
+					],
+					[
+						1.4,
+						5.0
+					],
+					[
+						0,
+						5.0
+					]
+				],
+				"at": [
+					0,
+					37.0,
+					0
+				],
+				"material": "stand"
+			},
+			{
+				"shape": "lathe",
+				"profile": [
+					[
+						0,
+						0
+					],
+					[
+						1.1,
+						0
+					],
+					[
+						1.1,
+						73.0
+					],
+					[
+						0,
+						73.0
+					]
+				],
+				"at": [
+					0,
+					40.0,
+					0
+				],
+				"material": "stand"
+			},
+			{
+				"shape": "lathe",
+				"profile": [
+					[
+						0,
+						0
+					],
+					[
+						1.6,
+						0,
+						0.3
+					],
+					[
+						1.6,
+						2.4
+					],
+					[
+						0,
+						2.4
+					]
+				],
+				"at": [
+					0,
+					111.0,
+					0
+				],
+				"material": "stand"
+			},
+			{
+				"shape": "lathe",
+				"profile": [
+					[
+						0,
+						0
+					],
+					[
+						0.8,
+						0
+					],
+					[
+						0.8,
+						4.0
+					],
+					[
+						0,
+						4.0
+					]
+				],
+				"at": [
+					0,
+					113.0,
+					0
+				],
+				"material": "stand"
+			},
+			{
+				"shape": "box",
+				"size": [
+					2.4,
+					3.0,
+					2.4
+				],
+				"round": 0.4,
+				"at": [
+					0,
+					114.0,
+					0
+				],
+				"material": "stand"
+			},
+			{
+				"shape": "ring",
+				"radius": 14.0,
+				"thickness": 2.0,
+				"at": [
+					0,
+					130.0,
+					0
+				],
+				"turn": [
+					90,
+					0,
+					0
+				],
+				"material": "rim",
+				"name": "rim",
+				"points": {
+					"middle": [
+						0,
+						130.0,
+						0
+					]
+				},
+				"width": 3.0
+			},
+			{
+				"shape": "ring",
+				"radius": 14.0,
+				"thickness": 0.6,
+				"at": [
+					0,
+					130.0,
+					2.1
+				],
+				"turn": [
+					90,
+					0,
+					0
+				],
+				"material": "diffuser",
+				"name": "ring",
+				"start": {
+					"glow": 1.0
+				},
+				"light": {
+					"kind": "spot",
+					"color": "#f2f4ff",
+					"strength": 3.0,
+					"reach": 320.0,
+					"angle": 70.0,
+					"falloff": 1.1,
+					"aim": [
+						0,
+						0,
+						1
+					],
+					"at": [
+						0,
+						0,
+						3.0
+					],
+					"shadows": true,
+					"soft": 16.0,
+					"shade": 0.5
+				},
+				"width": 2.4
+			}
+		]
+	},
+	"materials": {
+		"stand": {
+			"kind": "metal",
+			"color": "#121316",
+			"polish": 0.4
+		},
+		"rim": {
+			"kind": "plastic",
+			"color": "#0e0e10",
+			"polish": 0.4
+		},
+		"diffuser": {
+			"kind": "plastic",
+			"color": "#f6f7ff",
+			"polish": 0.3
+		},
+		"rubber": {
+			"kind": "plastic",
+			"color": "#0c0c0d",
+			"polish": 0.1
+		}
+	}
+}

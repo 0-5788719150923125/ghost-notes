@@ -192,6 +192,12 @@ FOLDERS: List[Tuple[str, str, str]] = [
      "phones, a radar, a shortwave receiver, a printer, small screens), the roots grown over and across it, every sound "
      "synthesized, the medium that turns its camera to whatever is active - one of the Medium card's formats - and its "
      "own rows there. Design: next/dispatch.md."),
+    ("studio", "Studio",
+     "A note played as raw footage from a creator's chair, one of the Medium card's formats: a camera looking back at the "
+     "viewer, its flip screen showing what it sees, a giant fluffy microphone, and the things invisible hands work - the act "
+     "marks read into acts and the voice's rests, each act's motion (from motion/'s gestures) and the contact lanes its sound "
+     "is made from by the music host, the set built from props, and the medium that plays it all as a function of show "
+     "time. Design: next/studio.md."),
     ("likeness", "Likeness",
      "An actor played from their own footage: the library of actors, each built from their videos (a folder, or links "
      "fetched) - surveyed, grouped into sets by camera and look, the agent that audits them, a still of each set and a "

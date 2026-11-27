@@ -88,7 +88,7 @@ func card_text() -> String:
 	return String(_knobs["card_text"])
 
 
-## The props kept in the library that play the desk's things, `{kind: {kept: name}}` ([method set_make]).
+## The props kept in the library that play the desk's things, `{kind: {kept: name, v}}` ([method set_make], [method PropMakes.chosen]).
 func desk_makes() -> Dictionary:
 	return (_knobs.get("makes", {}) as Dictionary).duplicate(true)
 
@@ -206,7 +206,7 @@ func set_make(kind: String, choice: Dictionary) -> void:
 		return
 	var makes := desk_makes()
 	if choice.get("kept") is String and not String(choice["kept"]).strip_edges().is_empty():
-		makes[kind] = {"kept": String(choice["kept"])}
+		makes[kind] = PropMakes.chosen({"kept": String(choice["kept"])})
 	else:
 		makes.erase(kind)
 	if makes.is_empty():

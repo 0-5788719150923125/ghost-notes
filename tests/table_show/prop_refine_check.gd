@@ -42,7 +42,7 @@ class Stand extends LibraryVersions:
 	var answer := TALLER
 	var asked := 0
 
-	func refine(name: String, from: int, direction: String, pick: Dictionary, told: Callable) -> Dictionary:
+	func refine(name: String, from: int, direction: String, pick: Dictionary, told: Callable, _scene := {}) -> Dictionary:
 		asked += 1
 		told.call("thinking")
 		return land(name, answer, direction, by_of(pick), ThingLibrary.versions(name)[from]["thing"])
@@ -52,7 +52,7 @@ class Stand extends LibraryVersions:
 class Slow extends LibraryVersions:
 	static var release := {}
 
-	func refine(name: String, from: int, direction: String, pick: Dictionary, told: Callable) -> Dictionary:
+	func refine(name: String, from: int, direction: String, pick: Dictionary, told: Callable, _scene := {}) -> Dictionary:
 		_jobs[name] = ""
 		told.call("drawing it")
 		while not release.has(name):
@@ -419,10 +419,10 @@ func _scenes() -> void:
 	var fmt := DispatchFormat.for_note({})
 	var dp := DispatchProps.new(fmt)
 	var dk := dp.versions_of().keep(dp.prop_of("role:mug"))
-	_ok(dp.refined("role:mug", String(dk.get("name", ""))).is_empty() and fmt.things().get("mug") == {"kept": String(dk.get("name", ""))},
+	_ok(dp.refined("role:mug", String(dk.get("name", ""))).is_empty() and fmt.things().get("mug") == PropMakes.chosen({"kept": String(dk.get("name", ""))}),
 		"a desk's part refined is played by the prop kept from it (%s)" % str(fmt.things()))
 	var tk := String(dp.versions_of().keep(dp.prop_of("role:terminal")).get("name", ""))
-	_ok(not tk.is_empty() and dp.refined("role:terminal", tk).is_empty() and fmt.things().get("terminal") == {"kept": tk},
+	_ok(not tk.is_empty() and dp.refined("role:terminal", tk).is_empty() and fmt.things().get("terminal") == PropMakes.chosen({"kept": tk}),
 		"the desk's terminal refined is played by the prop kept from it (%s)" % str(fmt.things()))
 	var blind: Dictionary = (ThingLibrary.read(tk)["thing"] as Dictionary).duplicate(true)
 	blind["parts"] = (blind["parts"] as Array).slice(0, 7)
@@ -443,7 +443,7 @@ func _scenes() -> void:
 		(blue[m] as Dictionary)["color"] = "#2244aa"
 	ThingLibrary.add_version(ck, ThingLibrary.read(ck)["thing"], blue, "blue cards", "claude")
 	ThingLibrary.use_version(ck, 1)
-	_ok(dsec.refined("cards", ck).is_empty() and rows.desk_makes() == {"cards": {"kept": ck}}
+	_ok(dsec.refined("cards", ck).is_empty() and rows.desk_makes() == {"cards": PropMakes.chosen({"kept": ck})}
 		and String(dsec.prop_of("cards").get("name", "")) == ck, "a desk's thing refined is played by the prop kept from it (%s)" % str(rows.desk_makes()))
 	var on_desk := _desk_thing(rows, "cards")
 	_ok(String((on_desk.get("materials", {}) as Dictionary).values()[0]["color"]) == "#2244aa" and String(on_desk.get("kind", "")) == "cards"

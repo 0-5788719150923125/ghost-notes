@@ -116,7 +116,7 @@ func _followed(name: String, h: String) -> void:
 		_jobs.erase(name)
 
 
-func start_refine(name: String, from: int, direction: String, pick: Dictionary) -> String:
+func start_refine(name: String, from: int, direction: String, pick: Dictionary, scene := {}) -> String:
 	if direction.strip_edges().is_empty():
 		return "say what to change first"
 	if not Library.writable():
@@ -125,18 +125,18 @@ func start_refine(name: String, from: int, direction: String, pick: Dictionary) 
 	if not err.is_empty():
 		return err
 	_held[name] = self
-	_refine_and_land(name, from, direction, pick)
+	_refine_and_land(name, from, direction, pick, scene)
 	return ""
 
 
 ## [method refine] run to its end whoever is looking, what it says and what came of it told to [PropRefining].
-func _refine_and_land(name: String, from: int, direction: String, pick: Dictionary) -> void:
-	var got: Dictionary = await refine(name, from, direction, pick, func(line: String) -> void: PropRefining.say(name, line))
+func _refine_and_land(name: String, from: int, direction: String, pick: Dictionary, scene := {}) -> void:
+	var got: Dictionary = await refine(name, from, direction, pick, func(line: String) -> void: PropRefining.say(name, line), scene)
 	PropRefining.finish(name, got)
 	_held.erase(name)
 
 
-func refine(name: String, from: int, direction: String, pick: Dictionary, told: Callable) -> Dictionary:
+func refine(name: String, from: int, direction: String, pick: Dictionary, told: Callable, scene := {}) -> Dictionary:
 	if _jobs.has(name):
 		return {"error": "it is being refined already"}
 	if direction.strip_edges().is_empty():
@@ -153,13 +153,17 @@ func refine(name: String, from: int, direction: String, pick: Dictionary, told: 
 	if told.is_valid():
 		told.call("looking at it from three sides")
 	var pics: Array = await PropStudio.views(v["thing"], v["materials"], String(v["hash"]), dir)
-	var p := prompt(name, String(e.get("line", "")), v["thing"], v["materials"], direction, not pics.is_empty())
+	# ...and the scene it stands in, where it may be placed there: measured and pictured
+	var seen := {}
+	if not scene.is_empty() and (scene.get("look") as Callable).is_valid():
+		if told.is_valid():
+			told.call("looking at the scene it stands in")
+		seen = await (scene["look"] as Callable).call(dir)
+	var p := prompt(name, String(e.get("line", "")), v["thing"], v["materials"], direction, not pics.is_empty(), scene, seen)
 	var spec := {"kind": "text", "backend": String(pick.get("agent", "claude")), "tier": "best", "dir": dir, "system": String(p["system"]),
 		"prompt": String(p["prompt"]), "label": "prop refine", "model": String(pick.get("model", "")), "effort": String(pick.get("effort", ""))}
-	if not pics.is_empty():
-		var said := {"front": "From a little above its front:", "side": "From its right side:", "above": "From above:"}
-		spec["images"] = pics.map(func(path: String) -> Dictionary:
-			return {"path": path, "label": String(said.get(path.get_file().get_basename().trim_prefix("prop_"), "The prop:"))})
+	if not pics.is_empty() or not (seen.get("views", []) as Array).is_empty():
+		spec["images"] = _labeled(pics, seen)
 	if not _jobs.has(name):
 		return {"error": "stopped"}
 	var job := AgentJobs.submit(spec)
@@ -179,9 +183,124 @@ func refine(name: String, from: int, direction: String, pick: Dictionary, told: 
 	_jobs.erase(_jobs.find_key(job) if _jobs.find_key(job) != null else name)
 	if not bool(res.get("ok", false)):
 		return {"error": String(res.get("error", "")) if not String(res.get("error", "")).is_empty() else "the agent gave no answer"}
-	var out := land(name, String(res.get("text", "")), direction, by_of(pick), v["thing"], from)
+	var text := String(res.get("text", ""))
+	var out := {}
+	# places, where it answered any: the prop - and whatever else in its scene it moved - put there, no version; then looked at again
+	# and put right once
+	var applied := apply_places(text, scene) if not scene.is_empty() else {}
+	if applied.has("error"):
+		return {"error": String(applied["error"])}
+	if not (applied.get("moved", {}) as Dictionary).is_empty():
+		out["placed"] = applied.get("place", {})
+		out["moved"] = applied["moved"]
+		if told.is_valid():
+			told.call("placed; looking at the scene again")
+		var again: Dictionary = await (scene["look"] as Callable).call(dir.path_join("again"))
+		var p2 := prompt(name, String(e.get("line", "")), v["thing"], v["materials"], direction, false, scene, again, applied["moved"])
+		var job2 := AgentJobs.submit(spec.merged({"system": String(p2["system"]), "prompt": String(p2["prompt"]), "images": _labeled([], again),
+			"dir": dir.path_join("again")}, true))
+		if not job2.is_empty():
+			_jobs[name] = job2
+			while true:
+				var st2 := AgentJobs.state(job2)
+				if st2 != "queued" and st2 != "running":
+					break
+				if told.is_valid():
+					told.call(AgentJobs.activity(job2))
+				await PropStudio.tree().process_frame
+			var res2 := AgentJobs.result(job2)
+			AgentJobs.forget(job2)
+			_jobs.erase(name)
+			var fixed := apply_places(String(res2.get("text", "")), scene) if bool(res2.get("ok", false)) else {}
+			if not (fixed.get("moved", {}) as Dictionary).is_empty():
+				(out["moved"] as Dictionary).merge(fixed["moved"], true)
+				if fixed.has("place"):
+					out["placed"] = fixed["place"]
+	# a changed prop, where it answered one: a new version - and, where its scene works something on it that the version lacks, put
+	# right once, told what
+	if not (thing_in(text)).is_empty():
+		var landed := land(name, text, direction, by_of(pick), v["thing"], from)
+		if landed.has("error") and out.has("moved"):
+			library.refresh()
+			return out
+		out.merge(landed, true)
+		var lacks: PackedStringArray = (scene["lacks"] as Callable).call(thing_in(text)) if scene.get("lacks") is Callable else PackedStringArray()
+		if not lacks.is_empty() and int(landed.get("index", -1)) >= 0 and not bool(scene.get("fixing", false)):
+			if told.is_valid():
+				told.call("its version lacks %s; asking it to put that right" % ", ".join(lacks))
+			_jobs.erase(name)
+			var again_scene := scene.duplicate()
+			again_scene["fixing"] = true
+			var fixed := await refine(name, int(landed["index"]), "The version you made lacks what the scene works on it: %s. Put exactly that right (see WHAT THE SCENE WORKS ON IT) and change nothing else." % ", ".join(lacks), pick, told, again_scene)
+			if int(fixed.get("index", -1)) >= 0:
+				out["index"] = fixed["index"]
+				out["name"] = fixed.get("name", out.get("name", ""))
+	elif not out.has("moved"):
+		out = {"error": "the agent's answer is neither a prop nor a place"}
 	library.refresh()
 	return out
+
+
+## The pictures a refine is shown, each labeled: the prop's own (from the front, the side, above) and the scene's ([param seen]
+## `views`: from the viewer's eye, the side of the thing, above it).
+static func _labeled(pics: Array, seen: Dictionary) -> Array:
+	var said := {"prop_front": "The prop, from a little above its front:", "prop_side": "The prop, from its right side:", "prop_above": "The prop, from above:",
+		"scene_eye": "The scene, from the viewer's eye (what the show records):", "scene_side": "The scene, from the right of the prop:",
+		"scene_above": "The scene, from above the prop:", "scene_lens": "The scene through the camera's lens (its flip screen's picture):"}
+	var out: Array = []
+	for path in pics + (seen.get("views", []) as Array):
+		out.append({"path": String(path), "label": String(said.get(String(path).get_file().get_basename(), "A picture:"))})
+	return out
+
+
+## The places an agent's answer [param text] gives put in [param scene] ([method PropSection.scene_of]): its own (`place`) and those of
+## the scene's other things it moved (`places`: a thing's name -> its place). `{place, moved}` - `moved` every thing placed, by its name
+## (its own under the scene's `role`) - or `{error}` where one could not be (a name the scene has not). {} where it gives none.
+static func apply_places(text: String, scene: Dictionary) -> Dictionary:
+	var got: Variant = TextGen.extract_json(text)
+	if not (got is Dictionary) or scene.is_empty():
+		return {}
+	var d: Dictionary = got
+	var own := String(scene.get("role", ""))
+	var names: Array = (scene.get("roles", []) as Array).map(func(r: Dictionary) -> String: return String(r["role"]))
+	var out := {"moved": {}}
+	var others: Dictionary = d["places"] if d.get("places") is Dictionary else {}
+	for k in others:
+		var nm := String(k)
+		if not (others[k] is Dictionary):
+			continue
+		if not names.has(nm):
+			return {"error": "the scene has no %s to place" % nm}
+		var err := String((scene["place"] as Callable).call(others[k])) if nm == own else String((scene["place_role"] as Callable).call(nm, others[k]))
+		if not err.is_empty():
+			return {"error": err}
+		out["moved"][nm] = others[k]
+		if nm == own:
+			out["place"] = others[k]
+	if d.get("place") is Dictionary:
+		var err2 := String((scene["place"] as Callable).call(d["place"]))
+		if not err2.is_empty():
+			return {"error": err2}
+		out["place"] = d["place"]
+		out["moved"][own if not own.is_empty() else "it"] = d["place"]
+	return out if not (out["moved"] as Dictionary).is_empty() else {}
+
+
+## The place an agent's answer [param text] gives (`{"place": {...}}`), {} where it gives none.
+static func place_in(text: String) -> Dictionary:
+	var got: Variant = TextGen.extract_json(text)
+	return (got as Dictionary)["place"] if got is Dictionary and (got as Dictionary).get("place") is Dictionary else {}
+
+
+## The prop an agent's answer [param text] gives (its `thing`, or the answer itself where it has parts), {} where it gives none.
+static func thing_in(text: String) -> Dictionary:
+	var got: Variant = TextGen.extract_json(text)
+	if not (got is Dictionary):
+		return {}
+	var d: Dictionary = got
+	if d.get("thing") is Dictionary:
+		return d["thing"]
+	return d if d.get("parts") is Array else {}
 
 
 func stop(name: String) -> void:
@@ -202,17 +321,30 @@ func busy(name: String) -> bool:
 
 
 ## What refining [param name] (said by [param line]) asks: its version written as [param thing] and [param materials], changed as
-## [param direction] says, with pictures of it where [param pictured]: `{system, prompt}`. A prop a scene works (a face, a light, a
+## [param direction] says, with pictures of it where [param pictured] - and, standing in [param scene] ([method PropSection.scene_of]),
+## the scene as [param seen] has it (`report`, `views`), the refiner free to place it there and to move the scene's other things with
+## it; asked again once [param placed] (every thing placed, by its name), whether they stand right: `{system, prompt}`. A prop a scene works (a face, a light, a
 ## part that follows what it is fed: [method Props.played]) is told the parts a scene plays, and to keep them (`working`).
-static func prompt(name: String, line: String, thing: Dictionary, materials: Dictionary, direction: String, pictured: bool) -> Dictionary:
+static func prompt(name: String, line: String, thing: Dictionary, materials: Dictionary, direction: String, pictured: bool, scene := {},
+		seen := {}, placed := {}) -> Dictionary:
 	var t := thing.duplicate(true)
 	t.erase("name")
 	var working := Props.played(thing.get("parts", []) if thing.get("parts") is Array else [])
+	var fields := PackedStringArray()
+	for k in (scene.get("fields", {}) as Dictionary):
+		fields.append("- \"%s\": %s (from %s to %s)" % [k, String(scene["fields"][k]["blurb"]), str(scene["fields"][k]["min"]), str(scene["fields"][k]["max"])])
 	var vars := {"name": name, "line": line, "spec": JSON.stringify({"thing": t, "materials": materials}, "  "), "direction": direction.strip_edges(),
 		"props": Props.describe(working), "max_parts": Props.MAX_PARTS, "cardless": true, "tools": false, "pictured": pictured,
 		"working": working, "ornaments": OrnamentLibrary.listing(),
-		"textures": OrnamentLibrary.listing(OrnamentLibrary.TEXTURE)}
-	return {"system": Rules.say("table/prop_refiner.system", vars), "prompt": Rules.say("table/prop_refiner.prompt", vars)}
+		"textures": OrnamentLibrary.listing(OrnamentLibrary.TEXTURE),
+		"in_scene": not scene.is_empty(), "scene_report": String(seen.get("report", "")), "scene_pictured": not (seen.get("views", []) as Array).is_empty(),
+		"place_now": JSON.stringify(scene.get("now", {})), "place_fields": "\n".join(fields), "again": not placed.is_empty(),
+		"placed": JSON.stringify(placed), "scene_needs": String(scene.get("needs", "")), "has_needs": not String(scene.get("needs", "")).is_empty(),
+		"place_roles": "\n".join(PackedStringArray((scene.get("roles", []) as Array).map(func(r: Dictionary) -> String:
+			return "- \"%s\": %s%s, placed now at %s" % [String(r["role"]), String(r["label"]), " (this prop)" if String(r["role"]) == String(scene.get("role", "")) else "",
+				JSON.stringify(r.get("now", {}))])))}
+	return {"system": Rules.say("table/prop_refiner.system", vars),
+		"prompt": Rules.say("table/prop_refiner.again" if not placed.is_empty() else "table/prop_refiner.prompt", vars)}
 
 
 ## The agent's answer [param text] added to [param name] as a new version, made by [param by] as [param direction] directed from

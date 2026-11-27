@@ -46,6 +46,7 @@ func _run() -> void:
 	_one_redo()
 	_resume_action()
 	_one_generate()
+	_staged()
 	_carried_on()
 	_widened()
 	_locks()
@@ -249,10 +250,13 @@ func _one_generate() -> void:
 	_ok(not (card.row("b")["redo"] as Button).disabled and ran == ["b"] and card.walking() and first.is_busy,
 		"an owner accepting queued requests keeps its row available during Generate, without interrupting the walk")
 	second.has_missing = true          # the first has written its words
+	first.has_missing = false          # ...which was all it was missing
 	first.is_busy = false
 	card.refresh()
 	_ok(second.made == 1 and third.made == 0, "the first done, the second is started: asked at its turn, it has something to make now")
 	second.is_busy = false
+	second.has_missing = false         # all it was missing is made
+	first.has_missing = false
 	card.refresh()
 	_ok(third.made == 0 and not card.walking(), "a section with nothing missing is passed by, and the walk is over")
 	card.refresh()
@@ -274,6 +278,55 @@ func _one_generate() -> void:
 	_ok(second.made == 1 and first.made == 0, "the ▶ on a heading makes that section alone (the control: the other is not started)")
 	second.is_busy = false
 	card.free()
+
+
+## Generate runs the whole of it: a section done but still missing what its last ask opened is asked again; one whose work
+## opens only once a section below it is made is asked in a round again. Control: one still missing whose ask starts nothing is
+## asked no more, and the walk ends.
+func _staged() -> void:
+	var card = _Card.new()
+	var things = Stub.new("Things")     # its sounds can be made only once its things are
+	var words = Stub.new("Words")       # what the sounds are made from
+	things.listed = [_row("t", "missing")]
+	words.listed = [_row("w", "missing")]
+	things.has_missing = true
+	words.has_missing = true
+	card.add(things)
+	card.add(words)
+	card.refresh()
+	card.generate()
+	_ok(things.made == 1 and words.made == 0, "Generate starts the first")
+	things.is_busy = false             # its things made: its sounds still missing
+	card.refresh()
+	_ok(things.made == 2 and things.is_busy and words.made == 0, "done but still missing what it opened, it is asked again")
+	things.is_busy = false
+	things.has_missing = false         # nothing it can make now: the sounds wait for the words
+	card.refresh()
+	_ok(words.made == 1, "...then the next is started")
+	things.has_missing = true          # the words written: its sounds can be made
+	words.is_busy = false
+	words.has_missing = false
+	card.refresh()
+	_ok(things.made == 3 and card.walking(), "what a section below opened is made in a round again")
+	things.is_busy = false
+	things.has_missing = false
+	card.refresh()
+	_ok(not card.walking(), "and the walk ends once nothing is missing")
+	# the control: missing, but its ask starts nothing
+	var stuck = Stub.new("Stuck")
+	stuck.listed = [_row("s", "missing")]
+	var card2 = _Card.new()
+	card2.add(stuck)
+	card2.refresh()
+	card2.generate()
+	stuck.is_busy = false
+	for i in 12:
+		card2.refresh()
+		stuck.is_busy = false
+	_ok(stuck.made <= 1 + PipelineCard.AGAIN_MOST * (1 + PipelineCard.ROUNDS_MOST) and not card2.walking(),
+		"control: a section whose asks start nothing is not asked forever (%d asks)" % stuck.made)
+	card.free()
+	card2.free()
 
 
 ## Generate's walk carried into the panel built anew over the same note ([method PipelineCard.carry_on]): the section still

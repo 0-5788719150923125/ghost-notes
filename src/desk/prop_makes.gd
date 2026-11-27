@@ -7,16 +7,18 @@ class_name PropMakes
 ## height within the role's ([method made]). A scene works a make through its rig ([PropRig]: its faces, lights and named parts),
 ## never by its shapes.
 ##
-## A role's own make is a recipe drawn from the scene's number (`recipe`, [method DeskLook.spec_of]) or a prop shipped with the app
-## (`own`, a `.prop.json` as Export writes one). A choice is `{}` (the role's own), `{recipe, seed}` (its recipe drawn from another
-## number), `{kept}` (a prop kept in the library by that name, [ThingLibrary]) or `{aside: true}` (taken off: a scene that lets the
-## role go sets nothing out for it, and its picture is its own make's). A make missing a face the scene fills (`faces`) cannot
-## play the role: the role's own plays it. The Dex offers makes ([MakeShelf]); the scene keeps the choice in its note.
+## A role's own make is a recipe drawn from the scene's number (`recipe`, [method DeskLook.spec_of]), a prop shipped with the app
+## (`own`, a `.prop.json` as Export writes one), or none (`designed`: an agent designs each make, [RoleDesign]). A choice is `{}` (the
+## role's own), `{recipe, seed}` (its recipe drawn from another number), `{kept}` (a prop kept in the library by that name,
+## [ThingLibrary]) or `{aside: true}` (taken off: a scene that lets the role go sets nothing out for it, and its picture is its own
+## make's). A make missing what the scene works (`faces`, `needs`: [method missing]) cannot play the role: the role's own plays it.
+## The Dex offers makes ([MakeShelf]); the scene keeps the choice in its note.
 
-## The roles: `recipe` the [constant DeskLook.THINGS] kind that draws one, or `own` the prop it is shipped as; `find` the words the
-## Dex is first filtered by when one is chosen; `tall` its height (cm, least and most) - a make outside it is scaled into it, so what
-## the scene does with it still fits; `faces` what the scene shows on it, by name; `feeds` what the scene feeds it, by name, its
-## parts following each as their `runs` say ([Motions] `follow`).
+## The roles: `recipe` the [constant DeskLook.THINGS] kind that draws one, `own` the prop it is shipped as, or `designed` (none: each
+## make an agent's); `find` the words the Dex is first filtered by when one is chosen; `tall` its height (cm, least and most) - a make
+## outside it is scaled into it, so what the scene does with it still fits; `faces` what the scene shows on it, by name; `feeds` what
+## the scene feeds it, by name, its parts following each as their `runs` say ([Motions] `follow`); `needs` what else the scene works on
+## a make, each `face NAME`, `part NAME` or `point NAME` -> what it is (a designer is told it, [RoleDesign]).
 const ROLES := {
 	"mug": {"label": "The mug", "blurb": "A mug drunk from: lifted to the mouth and set down again in its ring of old coffee.",
 		"recipe": "mug", "find": "mug", "tall": [7.0, 13.0], "faces": [], "feeds": {}},
@@ -70,6 +72,31 @@ const ROLES := {
 		"own": "res://data/props/clock.prop.json", "find": "clock", "tall": [4.0, 15.0], "faces": ["cards"], "feeds": {}},
 	"tablet": {"label": "The tablet", "blurb": "The tablet picked up and read, its pages on its screen.",
 		"own": "res://data/props/tablet.prop.json", "find": "tablet", "tall": [0.5, 3.0], "faces": ["screen"], "feeds": {}},
+	"camera": {"label": "The camera", "blurb": "A camera looking back at the viewer, its flip screen turned toward them showing what it sees; tapped, it sways.",
+		"designed": true, "find": "camera", "tall": [6.0, 30.0], "faces": ["screen"], "feeds": {},
+		"needs": {"face screen": "its flip screen, out at its side and turned to face its front (+z) as a selfie screen is",
+			"point lens": "the middle of the front of its lens, which faces its front (+z)",
+			"point body": "the top of its body, where a fingertip taps it"}},
+	"tripod": {"label": "The tripod", "blurb": "The floor tripod the camera stands on.",
+		"designed": true, "find": "tripod", "tall": [90.0, 180.0], "faces": [], "feeds": {},
+		"needs": {"point top": "the middle of the plate on its head, where the camera stands"}},
+	"ring_light": {"label": "The ring light", "blurb": "A ring of light behind the camera, lighting what it sees.",
+		"designed": true, "find": "light", "tall": [100.0, 200.0], "faces": [], "feeds": {},
+		"needs": {"point middle": "the middle of the ring, where the camera's lens looks through it",
+			"part ring": "the ring's face, glowing: a flat ring (a `ring` with a `width`) upright and facing its front (+z), its diffuser white and lit (`lit` 1, never hidden inside another part), with a `light` that shines toward its front"}},
+	"microphone": {"label": "The microphone", "blurb": "A big microphone in a fluffy windscreen, its fur pressed, rubbed and brushed, its body tapped.",
+		"designed": true, "find": "microphone", "tall": [20.0, 60.0], "faces": [], "feeds": {},
+		"needs": {"part windscreen": "a fluffy windscreen as big as a head over its whole head: one round part carrying `fur`",
+			"point capsule": "the top of the windscreen, over the capsule inside it", "point body": "the front of its metal body, where it is tapped"}},
+	"block": {"label": "The wooden block", "blurb": "One of two blocks of hardwood, scraped and knocked together.",
+		"designed": true, "find": "block", "tall": [1.0, 10.0], "faces": [], "feeds": {},
+		"needs": {"point face": "the middle of its top face, the face scraped against the other block"}},
+	"brush": {"label": "The powder brush", "blurb": "A big, soft brush swept over the windscreen and the lens.",
+		"designed": true, "find": "brush", "tall": [10.0, 35.0], "faces": [], "feeds": {},
+		"needs": {"point tip": "the tip of its bristles, straight up its length", "point grip": "where a hand holds its handle"}},
+	"backdrop": {"label": "The green screen", "blurb": "A green cloth backdrop on its stands behind the viewer's chair: the camera's flip screen shows it behind nobody.",
+		"designed": true, "find": "backdrop", "tall": [180.0, 300.0], "faces": [], "feeds": {},
+		"needs": {"part cloth": "the cloth, chroma-key green and matte, hung wide (at least two meters across) and flat enough to key, facing its front (+z)"}},
 }
 ## How many of a role's recipe the Dex draws to choose from.
 const DRAWS := 24
@@ -137,7 +164,9 @@ static func spec(role: String, choice: Dictionary, seed: int) -> Dictionary:
 	if row.has("own"):
 		var o := own_of(role)
 		return {"thing": o["thing"], "materials": o["materials"]} if not o.is_empty() else {}
-	var recipe := String(row.get("recipe", role))
+	if not row.has("recipe"):
+		return {}
+	var recipe := String(row["recipe"])
 	var sp := DeskLook.spec_of(recipe, int(choice.get("seed", seed)) if choice.has("recipe") else seed)
 	var things: Array = sp.get("things", []) if sp.get("things") is Array else []
 	if things.is_empty():
@@ -160,13 +189,93 @@ static func own_of(role: String) -> Dictionary:
 	return e
 
 
-## Whether [param thing] (as written) can play role [param role]: it has every face the scene shows something on.
+## Whether [param thing] (as written) can play role [param role]: it has every face the scene shows something on, and all else the
+## role `needs` ([method missing]).
 static func fits(role: String, thing: Dictionary) -> bool:
 	var has := faces_of(thing.get("parts", []) if thing.get("parts") is Array else [])
 	for f in (ROLES.get(role, {}) as Dictionary).get("faces", []):
 		if not has.has(String(f)):
 			return false
-	return true
+	return missing(role, thing).is_empty()
+
+
+## What role [param role] `needs` that [param thing] (as written) lacks, each as the row names it (`point lens`); a `part` that must
+## carry fur (its words say `fur`) without it counts as missing - and, [param strict] (a make designed or refined for the role), one
+## whose words name a `light` with none in it, or say it glows with nothing in it lit.
+static func missing(role: String, thing: Dictionary, strict := false) -> PackedStringArray:
+	var out := PackedStringArray()
+	var parts: Array = thing.get("parts", []) if thing.get("parts") is Array else []
+	var needs: Dictionary = (ROLES.get(role, {}) as Dictionary).get("needs", {})
+	for k in needs:
+		var kind := String(k).get_slice(" ", 0)
+		var nm := String(k).get_slice(" ", 1)
+		var found := false
+		match kind:
+			"face":
+				found = faces_of(parts).has(nm)
+			"point":
+				found = _has_point(parts, nm)
+			"part":
+				var part := _part_named(parts, nm)
+				var words := String(needs[k])
+				found = not part.is_empty() and (not words.contains("`fur`") or part.get("fur") is Dictionary)
+				if found and strict and words.contains("`light`") and not _carries(part, "light"):
+					out.append(String(k) + "'s light")
+				if found and strict and words.contains("glowing") and not _glows(part):
+					out.append(String(k) + " lit")
+		if not found:
+			out.append(String(k))
+	return out
+
+
+## Whether [param part] or a part in it carries [param key].
+static func _carries(part: Dictionary, key: String) -> bool:
+	if part.has(key):
+		return true
+	for q in (part.get("parts", []) if part.get("parts") is Array else []):
+		if q is Dictionary and _carries(q, key):
+			return true
+	return false
+
+
+## Whether [param part] or a part in it glows: lit, or starting lit.
+static func _glows(part: Dictionary) -> bool:
+	var lit: Variant = part.get("lit")
+	if (lit is float or lit is int) and float(lit) > 0.0:
+		return true
+	var start: Variant = part.get("start")
+	if start is Dictionary and float((start as Dictionary).get("glow", 0.0)) > 0.0:
+		return true
+	for q in (part.get("parts", []) if part.get("parts") is Array else []):
+		if q is Dictionary and _glows(q):
+			return true
+	return false
+
+
+## Whether one of [param parts] (or their groups') names point [param nm].
+static func _has_point(parts: Array, nm: String) -> bool:
+	for p in parts:
+		if not (p is Dictionary):
+			continue
+		if (p as Dictionary).get("points") is Dictionary and ((p as Dictionary)["points"] as Dictionary).has(nm):
+			return true
+		if (p as Dictionary).get("parts") is Array and _has_point((p as Dictionary)["parts"], nm):
+			return true
+	return false
+
+
+## The part of [param parts] (or their groups') named [param nm], {} for none.
+static func _part_named(parts: Array, nm: String) -> Dictionary:
+	for p in parts:
+		if not (p is Dictionary):
+			continue
+		if String((p as Dictionary).get("name", "")) == nm:
+			return p
+		if (p as Dictionary).get("parts") is Array:
+			var d := _part_named((p as Dictionary)["parts"], nm)
+			if not d.is_empty():
+				return d
+	return {}
 
 
 ## The names of the faces among [param parts] and their groups, as written.
@@ -191,6 +300,8 @@ static func name_of(role: String, choice: Dictionary) -> String:
 		return String(choice["kept"])
 	if choice.has("recipe"):
 		return "%s no. %d" % [noun, int(choice.get("seed", 0))]
+	if bool(row.get("designed", false)):
+		return "%s not designed yet" % noun
 	return ("%s drawn for this scene" % noun) if row.has("recipe") else String(row.get("label", role))
 
 
@@ -202,6 +313,16 @@ static func drawn(role: String) -> bool:
 ## Whether [param choice] is one role [param role] can be handed ([method valid]): a draw only of a role with a recipe.
 static func valid_for(role: String, choice: Variant) -> bool:
 	return ROLES.has(role) and valid(choice) and (not (choice as Dictionary).has("recipe") or drawn(role))
+
+
+## [param choice] as a scene keeps it: a kept prop with its version used now (`v`, that version's hash), so another version used is
+## another choice and the scene stands again with it; any other as it is.
+static func chosen(choice: Dictionary) -> Dictionary:
+	var c := choice.duplicate(true)
+	if c.get("kept") is String:
+		var e := ThingLibrary.read(String(c["kept"]))
+		c["v"] = String(e.get("hash", "")) if not e.is_empty() else ""
+	return c
 
 
 ## Whether [param choice] is one a role can be handed: none, a draw of its recipe, a kept prop by name, or taken off.

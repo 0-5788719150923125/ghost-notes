@@ -29,6 +29,9 @@ class_name SoundCard
 ## ⤓ is the card's (`sound_export`, where the shared one is off screen), and writes the mix where the author picks, as
 ## WAV, FLAC, MP3 or OGG; a note with a Medium exports its video, the song in it.
 
+## Under the sound effects, THE SOUNDS A SHOW MAKES ON ITS OWN ([MadeSounds]: a studio's acts, each heard from its motion), handed
+## through the context's `show_sounds` ([ShowSounds]) so the card names no show; a show that makes them brings the card.
+##
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "sound"
 const SOURCES := {
@@ -110,6 +113,8 @@ var _back: Button
 var _saving_as := ""           # the file the mix is being exported to
 var _clock_by := ""            # what else times the note (a Voice reading it): its label, "" for nothing - the song is not played
 var _effects: SoundEffectsPart = null
+var _show_made: MadeSounds = null   # the sounds a show made on its own ([ShowSounds])
+var _show_sounds := Callable()   # () -> Array of ShowSounds: the context's `show_sounds`
 var _brought := false          # made with no block, by the note's sound marks: it writes none until a setting changes
 
 
@@ -129,6 +134,7 @@ static func for_note(ctx: Dictionary) -> SoundCard:
 	card._live = bool(ctx.get("live", false))
 	card._begin_stream = ctx.get("begin_stream", Callable())
 	card._end_stream = ctx.get("end_stream", Callable())
+	card._show_sounds = ctx.get("show_sounds", Callable())
 	card._show_save()
 	return card
 
@@ -475,6 +481,9 @@ func _build() -> void:
 		_changed(false)
 	_effects.noted.connect(_say)
 	add_child(_effects)
+	_show_made = MadeSounds.new()
+	_show_made.follow(func() -> Array: return _show_sounds.call() if _show_sounds.is_valid() else [])
+	add_child(_show_made)
 	_status_label = _small("")
 	_status_label.add_theme_color_override("font_color", Color(0.55, 0.95, 0.75, 0.85))
 	add_child(_status_label)

@@ -349,6 +349,19 @@ func at_desk() -> bool:
 	return medium() == "desk" and cardless()
 
 
+## Does the format the episode is shown in set it itself ([constant Medium.REGISTRY] `own_set`: the desk, the studio)? Then it draws no
+## cards, nothing is painted for its surface or room and no set dresser builds its table: the format's own is landed.
+func own_set() -> bool:
+	return cardless() and bool(Registry.field(Medium.REGISTRY, medium(), "own_set", false))
+
+
+## Does its reader write the work among its words, as the format's marks ([constant Medium.REGISTRY] `own_work`: the studio's
+## hands)? Then no puppeteer blocks it ([method work_plan] is empty, and there is no `acts` step): each passage's reader is told
+## its beat's planned work ([method work_of]) to write.
+func own_work() -> bool:
+	return own_set() and bool(Registry.field(Medium.REGISTRY, medium(), "own_work", false))
+
+
 ## What one beat of the episode is called on its rows: the producer's word for one in its plan (`beat_word`: an Ingredient, a
 ## Coat), else a Card where cards are drawn and a Beat where none are.
 func beat_word() -> String:
@@ -383,9 +396,12 @@ func steps() -> Array:
 	if wants_solve():
 		out.append("solve")
 	if cardless():
-		# ...at the desk ([method at_desk]), only what its acts are blocked on: no cloth, no room, no depth to paint
-		if at_desk():
-			out.append("table")
+		# ...in a format that sets it itself ([method own_set]: the desk, the studio), only what its acts are blocked on: no cloth, no
+		# room, no depth to paint - and none at all where its reader writes the work itself ([method own_work]: the studio sets out its
+		# own things)
+		if own_set():
+			if not own_work():
+				out.append("table")
 		else:
 			out.append_array(["image:surface", "image:backdrop", "table"])
 			if wants_height():
@@ -600,10 +616,11 @@ func events_before(say: String) -> Array:
 	return out
 
 
-## What the plan has done at the table (next/table_work.md): beat ("intro", "close", or a card's place) -> the work, in the producer's words; empty for a plan with none.
+## What the plan has done at the table (next/table_work.md): beat ("intro", "close", or a card's place) -> the work, in the producer's words; empty for a plan with none,
+## and where its reader writes the work itself ([method own_work]).
 func work_plan() -> Dictionary:
 	var p: Variant = read_json("plan")
-	if not (p is Dictionary):
+	if not (p is Dictionary) or own_work():
 		return {}
 	return work_of(p as Dictionary)
 
@@ -735,8 +752,9 @@ func needs(step: String) -> Array:
 			return out
 		"table":
 			# the table is set from the plan, looking at the cloth it stands on - and at the room, which
-			# its light must agree with (where the windows are, which side the sun comes from); a desk's from the plan alone
-			if at_desk():
+			# its light must agree with (where the windows are, which side the sun comes from); one a format sets itself from the
+			# plan alone
+			if own_set():
 				return ["plan"]
 			return ["plan", "image:surface"] + ([] if wants_game() else ["image:backdrop"]) + (["model"] if wants_model() else [])
 		"acts":
@@ -867,6 +885,12 @@ func stale(step: String) -> bool:
 		var from: Variant = record(step).get("from")
 		if from is Dictionary and (from as Dictionary).has("page"):
 			return String((from as Dictionary)["page"]) != sticker_key(step)
+	# ...and one made from the puppeteer's work where the format's reader writes the work itself ([method own_work]): it was written
+	# to the table's act marks, never the format's
+	if has(step):
+		var made: Variant = record(step).get("from")
+		if made is Dictionary and (made as Dictionary).has("acts") and own_work():
+			return true
 	return super(step)
 
 

@@ -5,8 +5,9 @@ class_name PropRefining
 ## any number of props together, each running on whether or not its 3D view is open ([PropVersions], [PropViewer]). Keyed by the name
 ## the prop is kept or held as a draft by; a prop renamed meanwhile is followed ([method renamed]).
 ##
-## Each is `{state, line, index, name, error}`: `working` while the agent is at it (`line` what it is doing, as it says), then `ready`
-## (`index` the version it made, `name` what that version is called) or `failed` (`error` why) until it is seen ([method seen]) - the
+## Each is `{state, line, index, name, error, moved}`: `working` while the agent is at it (`line` what it is doing, as it says), then
+## `ready` (`index` the version it made, `name` what that version is called, `moved` what it also placed, by name), `placed` (it placed
+## the prop or its scene's things and made no version) or `failed` (`error` why) until it is seen ([method seen]) - the
 ## 3D view on the prop shows the version made, or why not. Its row on the Props card says each meanwhile ([PropsCard]).
 
 static var _on := {}              # name -> {state, line, index, name, error}
@@ -29,13 +30,17 @@ static func say(name: String, line: String) -> void:
 		w["line"] = line.strip_edges()
 
 
-## The refining of [param name] ended with [param got] (`{index, name}` a version made, or `{error}`).
+## The refining of [param name] ended with [param got] (`{index, name}` a version made, `{moved}` the prop and its scene's things placed
+## there by name - no version - or both, or `{error}`).
 static func finish(name: String, got: Dictionary) -> void:
 	var at := _now(name)
-	if got.has("error") or int(got.get("index", -1)) < 0:
-		_on[at] = {"state": "failed", "line": "", "index": -1, "name": "", "error": String(got.get("error", "nothing came of it"))}
+	var moved: Dictionary = got.get("moved", {}) if got.get("moved") is Dictionary else {}
+	if int(got.get("index", -1)) >= 0:
+		_on[at] = {"state": "ready", "line": "", "index": int(got["index"]), "name": String(got.get("name", "")), "error": "", "moved": moved}
+	elif not moved.is_empty():
+		_on[at] = {"state": "placed", "line": "", "index": -1, "name": "", "error": "", "moved": moved}
 	else:
-		_on[at] = {"state": "ready", "line": "", "index": int(got["index"]), "name": String(got.get("name", "")), "error": ""}
+		_on[at] = {"state": "failed", "line": "", "index": -1, "name": "", "error": String(got.get("error", "nothing came of it"))}
 
 
 ## How the refining of [param name] stands, {} for none.

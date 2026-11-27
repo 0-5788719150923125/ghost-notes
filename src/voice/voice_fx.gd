@@ -223,6 +223,16 @@ const KEY_HEARD := 36
 ## The near ear's share of the voice at the deepest lean: 70/30 and never further, so the far ear
 ## always hears the reader (about 7.4 dB apart at the limit).
 const LEAN_SHARE := 0.7
+## The near ear's share of the voice with the head's mouth fully to one side of the microphone ([member place]): a binaural head
+## hears a mouth at one ear far more in it than a reader leaning on a stage (about 19 dB apart at the limit).
+const PLACE_SHARE := 0.9
+## How many frames apart a [member place] lane's points are.
+const PLACE_STEP := 256
+## A mouth turned away from the microphone: its direct voice dulled above this (Hz), by this share of it at the most, and quieter by
+## this share (speech beams forward: off its axis the highs fall first).
+const MUFFLE_HZ := 1500.0
+const MUFFLE_DEPTH := 0.85
+const MUFFLE_LEVEL := 0.35
 const LEAN_DEPTH_MIN := 0.55            # a lean goes at least this far toward the limit
 ## How much of a voice over this one reaches the room as this one's does; the rest goes straight to the ears.
 const SIDE_ROOM := 0.35
@@ -303,6 +313,11 @@ var pad_seed := 0              # same text, same music
 var pad_level := 0.022
 var pad_duck := PAD_DUCK       # how far the bed steps back under speech
 var lean := 0.0                # 0..1 how often the reader leans to one side (see LEAN_SHARE)
+## Where the voice is heard from over the next buffer, in place of the lean's walk and the near plan's targets: `(pan, near, muffle)`
+## every [constant PLACE_STEP] frames from its start (pan -1 the left ear to 1 the right, near -1 backed off to 1 fully in, muffle 0
+## the mouth facing the microphone to 1 turned away: its highs and some of its level gone), eased between. Handed for one buffer and
+## used once, as [member side] is; empty, the lean and the near are the dials' own. The head's ([HeadMarks]).
+var place := PackedVector3Array()
 ## Where this voice sits: -1 the left ear to 1 the right ([method Delivery.pan_of_seat]). A lean moves from here. Heard only in the direct voice, as a lean is.
 var seat := 0.0
 ## The voices over this one, for the buffer about to be run ([method ReadingJoin.side_between]): left and right, already where they sit. Taken once.
@@ -384,6 +399,7 @@ var _near_vg := 1.0                     # the vocal level, into the whole chain
 var _near_dg := 1.0                     # the distance, on the direct voice
 var _near_bg := 1.0                     # ...and its low band, on top of that
 var _near_lp := 0.0                     # the direct voice's low band
+var _muf_lp := 0.0                      # the direct voice under the muffle's corner, for a mouth turned away
 # Heard through a phone: the two biquads' coefficients (b0 b1 b2 a1 a2 each, resolved when [member heard] changes) and
 # their states (x1 x2 y1 y2 each), the soft clip and the level.
 var _hd_for := "?"
@@ -611,6 +627,11 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 	var over := side
 	side = PackedVector2Array()
 	var has_over := not over.is_empty()
+	var placed := place
+	place = PackedVector3Array()
+	var has_place := not placed.is_empty()
+	var pl := Vector3.ZERO
+	var muf_a := 1.0 - exp(-TAU * MUFFLE_HZ / sample_rate)
 	_resolve_echo()
 	# as _resolve_echo: the dial is live, so the room's settings are resolved once here, not per sample
 	room.prepare()
@@ -628,13 +649,22 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 	res_step.resize(TONES)
 	var heard_on := _resolve_heard()
 	for i in n:
+		# --- the head's place, where it is handed: eased between its points, it is where the voice is ---
+		if has_place:
+			var j := float(i) / float(PLACE_STEP)
+			var k0 := mini(int(j), placed.size() - 1)
+			pl = placed[k0].lerp(placed[mini(k0 + 1, placed.size() - 1)], j - float(int(j)))
 		# --- near: the reader's distance, eased; the vocal level feeds everything ---
 		# Off entirely once home and settled, so a reading with Near at 0 is the chain it was.
-		var near_on := _near_to != 0.0 or _hush_to != 0.0 or _near_b != Vector2.ZERO
+		var near_on := has_place or _near_to != 0.0 or _hush_to != 0.0 or _near_b != Vector2.ZERO
 		if near_on:
-			var want := Vector2(_near_to, _hush_to)
+			var want := Vector2(pl.y if has_place else _near_to, _hush_to)
 			_near_a += (want - _near_a) * near_k
 			_near_b += (_near_a - _near_b) * near_k
+			if has_place:
+				# (the head's own motion is the easing: the distance follows it, only the hush eased)
+				_near_a.x = pl.y
+				_near_b.x = pl.y
 			if want == Vector2.ZERO and _near_b.length() < 1e-4:
 				_near_a = Vector2.ZERO
 				_near_b = Vector2.ZERO
@@ -775,18 +805,27 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 			wet += shaped - direct
 			direct = shaped
 
+		# --- muffle: the mouth turned away, its highs and some of its level gone from the direct voice ---
+		if has_place:
+			_muf_lp += muf_a * (direct - _muf_lp)
+			if pl.z > 0.0:
+				var dulled := lerpf(direct, _muf_lp, pl.z * MUFFLE_DEPTH) * (1.0 - MUFFLE_LEVEL * pl.z)
+				wet += dulled - direct
+				direct = dulled
+
 		buf[i] = clampf(wet + (sv.x + sv.y) * 0.5 * (1.0 - SIDE_ROOM), -1.0, 1.0)
 
 		# --- lean: the direct voice, moved between the ears ---
 		if stereo:
-			var p := _tick_lean()
+			var p := pl.x if has_place else _tick_lean()
 			if p == 0.0 and seat == 0.0:
 				out[i] = Vector2(clampf(wet + sv.x * (1.0 - SIDE_ROOM), -1.0, 1.0), clampf(wet + sv.y * (1.0 - SIDE_ROOM), -1.0, 1.0))
 			else:
 				var c := _near_b.x
-				var reach := lerpf(LEAN_REACH_HOME, 1.0, c) if c >= 0.0 \
-					else lerpf(LEAN_REACH_HOME, LEAN_REACH_BACK, -c)
-				var g := lean_gains(clampf(seat + p * reach, -1.0, 1.0))
+				# (the head's pan is the mouth's own angle round the microphone: all of it)
+				var reach := 1.0 if has_place else (lerpf(LEAN_REACH_HOME, 1.0, c) if c >= 0.0 \
+					else lerpf(LEAN_REACH_HOME, LEAN_REACH_BACK, -c))
+				var g := lean_gains(clampf(seat + p * reach, -1.0, 1.0), PLACE_SHARE if has_place else LEAN_SHARE)
 				out[i] = Vector2(clampf(wet + direct * (g.x - 1.0) + sv.x * (1.0 - SIDE_ROOM), -1.0, 1.0),
 					clampf(wet + direct * (g.y - 1.0) + sv.y * (1.0 - SIDE_ROOM), -1.0, 1.0))
 	return [buf, out]
@@ -1021,10 +1060,11 @@ static func near_plan(ks: PackedFloat32Array, who: PackedStringArray, seed: int)
 
 
 ## The voice's gain in each ear at lean position [param p] (-1 left .. 1 right): the near ear's share
-## runs from a half to [constant LEAN_SHARE], and the pair keeps constant power, so a lean moves the
+## runs from a half to [param share] ([constant LEAN_SHARE] for a lean, [constant PLACE_SHARE] for the head's place), and the pair
+## keeps constant power, so a lean moves the
 ## voice without making it louder or quieter overall.
-static func lean_gains(p: float) -> Vector2:
-	var r := 0.5 + (LEAN_SHARE - 0.5) * clampf(p, -1.0, 1.0)
+static func lean_gains(p: float, share := LEAN_SHARE) -> Vector2:
+	var r := 0.5 + (share - 0.5) * clampf(p, -1.0, 1.0)
 	var l := 1.0 - r
 	var norm := sqrt((l * l + r * r) * 0.5)
 	return Vector2(l / norm, r / norm)

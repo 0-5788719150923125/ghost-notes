@@ -64,15 +64,17 @@ func use(_name: String, _i: int) -> String:
 
 
 ## Version [param from] of [param name] refined by an agent as [param direction] says, by who [param pick] chooses, begun and left to
-## run whoever is looking: what it says and what comes of it are [PropRefining]'s. "" begun, else why not (one at work on it already).
-func start_refine(_name: String, _from: int, _direction: String, _pick: Dictionary) -> String:
+## run whoever is looking: what it says and what comes of it are [PropRefining]'s. [param scene] the scene it stands in where a refine may
+## place it there too ([method PropSection.scene_of]). "" begun, else why not (one at work on it already).
+func start_refine(_name: String, _from: int, _direction: String, _pick: Dictionary, _scene := {}) -> String:
 	return "nothing here can be refined"
 
 
 ## Version [param from] of [param name] refined by an agent as [param direction] says, by who [param pick] chooses (`{agent, model,
 ## effort}`, [AgentPick]): a new version added after the rest, not yet used. [param told] hears what the agent is doing as it works
-## (`(line: String) -> void`). Waits for it: `{index, name}`, the new version's and what it is called, or `{error}`.
-func refine(_name: String, _from: int, _direction: String, _pick: Dictionary, _told: Callable) -> Dictionary:
+## (`(line: String) -> void`). Waits for it: `{index, name}`, the new version's and what it is called, `{placed}` where it placed the
+## prop in [param scene] (no version; both where it did both), or `{error}`.
+func refine(_name: String, _from: int, _direction: String, _pick: Dictionary, _told: Callable, _scene := {}) -> Dictionary:
 	return {"error": "nothing here can be refined"}
 
 

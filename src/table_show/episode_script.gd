@@ -82,7 +82,8 @@ func _init() -> void:
 	refine.tooltip_text = ("Talk the script over with a writer: say what to change, and it changes it here as you watch - the words, "
 		+ "and what each picture shows, and where pictures fall - never what was thrown. Each change is a step Ctrl+Z takes back; Save "
 		+ "keeps them.")
-	refine.pressed.connect(_open_refine)
+	refine.toggle_mode = true
+	refine.pressed.connect(func() -> void: _open_refine(refine))
 	foot.add_child(refine)
 	var save := Button.new()
 	save.text = "Save"
@@ -149,13 +150,15 @@ func _chat_of() -> WriterChat:
 	return _chat
 
 
-func _open_refine() -> void:
+## The Refine button's toggle: the conversation docked into this window, or folded away ([param button] pressed while open).
+func _open_refine(button: BaseButton = null) -> void:
 	if episode == null:
+		RefineDock.show_on(button, _refine)
 		return
 	if _refine == null or not is_instance_valid(_refine):
 		_refine = TextRefine.new(_chat_of(), "Script")
 		add_child(_refine)
-	_refine.open_beside(self)
+	_refine.toggle(self, button)
 
 
 func _exit_tree() -> void:

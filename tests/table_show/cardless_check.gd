@@ -18,6 +18,10 @@ extends SceneTree
 ##   never a count of the code's; a beat's reader is told its beat and handed its own acts, and no card; the set dresser keeps no
 ##   room for cards; the puppeteer's beats are the plan's. Every prompt renders whole.
 ## - its work is kept: acts on every beat survive [method Motions.sanitize_acts] at the episode's beat count.
+## - a format whose reader writes the work ([constant Medium.REGISTRY] `own_work`, the studio) has no puppeteer step and no passage
+##   waits for one; acts on disk are never handed to its reader, who is told its beat's planned work and no act or quiet mark of the
+##   table's; a passage written from a puppeteer's acts before is stale. The control: the desk, which sets itself too, keeps its
+##   puppeteer, and its passage made from its acts is fresh.
 
 const FixtureDeck := preload("res://tests/fixture_deck.gd")
 const ROOT := "user://cardless_check"
@@ -38,7 +42,7 @@ func _ok(cond: bool, what: String) -> void:
 func _run() -> void:
 	await process_frame
 	Rules.clear()
-	for check in [_steps, _lands, _script, _prompts, _work]:
+	for check in [_steps, _lands, _script, _prompts, _work, _own_work]:
 		var done: Variant = (check as Callable).call()
 		_ok(done == true, "%s ran to its end (a script error stops it - see above)" % (check as Callable).get_method())
 	_ok(Rules.missing.is_empty(), "every prompt rendered whole: %s" % ", ".join(Rules.missing))
@@ -199,6 +203,37 @@ func _work() -> bool:
 	var acts := {"acts": [{"name": "a", "beat": 3, "about": "x", "length": 2, "tracks": [{"thing": "t", "law": "to", "state": "glow", "value": 1}]}]}
 	_ok((Motions.sanitize_acts(acts, 3)["acts"] as Array).size() == 1, "an act on the last beat is kept at the episode's beat count")
 	_ok((Motions.sanitize_acts(acts, 0)["acts"] as Array).is_empty(), "the control: counted by cards (none), it is left out")
+	return true
+
+
+func _own_work() -> bool:
+	var plan := _plan()
+	plan["medium"] = "studio"
+	var studio := _episode(17)
+	studio.write_json("plan", plan)
+	_ok(studio.own_set() and studio.own_work() and not studio.steps().has("acts") and not studio.steps().has("table") and studio.needs("say:1") == ["say:intro"]
+		and studio.needs("say:3") == ["say:2"] and studio.needs("say:intro") == ["draw"],
+		"a format whose reader writes the work has no puppeteer and no table, and no passage waits for one: %s" % str(studio.steps()))
+	plan["medium"] = "desk"
+	var desk := _episode(18)
+	desk.write_json("plan", plan)
+	_ok(desk.own_set() and not desk.own_work() and desk.steps().has("acts") and desk.needs("say:1") == ["say:intro", "acts"],
+		"the control: the desk, which sets itself too, keeps its puppeteer: %s" % str(desk.steps()))
+	studio.write_json("draw", {"seed": studio.seed, "cards": [], "left": [], "deck_n": 0})
+	studio.write_json("acts", {"acts": [{"name": "base", "beat": 1, "about": "ABOUT-ONE the base is stippled on", "length": 9,
+		"tracks": [{"thing": "a", "part": "b", "law": "to", "state": "grow", "value": 0}]}]})
+	studio.write_text("say:intro", "Hello.")
+	studio.note_made("say:intro", "reader", {"acts": studio.digest("acts")})
+	desk.write_json("draw", {"seed": desk.seed, "cards": [], "left": [], "deck_n": 0})
+	desk.write_json("acts", {"acts": []})
+	desk.write_text("say:intro", "Hello.")
+	desk.note_made("say:intro", "reader", desk.made_from("say:intro"))
+	_ok(studio.stale("say:intro") and not desk.stale("say:intro"),
+		"a passage written from a puppeteer's acts is stale where the reader writes the work itself (control: the desk's is fresh)")
+	var one := String(TableProducer.new(studio, {"title": "Show", "brief": "A brief.", "deck": []}).say_prompt("1")["prompt"])
+	_ok(not one.contains("ABOUT-ONE") and not one.contains("<!-- act:") and not one.contains("<!-- quiet:")
+		and one.contains("THE HANDS IN THIS PASSAGE") and one.contains("the base is laid on"),
+		"its reader is told its beat's planned work, never acts on disk, and no act or quiet mark of the table's")
 	return true
 
 

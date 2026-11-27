@@ -195,6 +195,21 @@ var publish: ReadingPublish = ReadingPublish.new()
 ## What the note's presentation sets down ([PropSection]): each component that stands props hands one; the Props card shows
 ## their rows, and none when none has any ([PropsCard]).
 var prop_sections: Array = []
+var sound_sections: Array = []   # the sounds each show makes on its own ([ShowSounds]), listed on the Sound card
+## The phrases the show's head performs ([HeadBank]: its Table block's `show`, else its file), [] for a show with none.
+func head_bank() -> Array:
+	return HeadBank.read(HeadBank.key_of(_blocks, note_path))
+
+
+## How gently the show's head is performed: the Camera card's head camera ([method HeadPlan.feel_of], the note's `camera` block).
+func head_feel() -> Dictionary:
+	var cam: Dictionary = _blocks.get("camera", {}) if _blocks.get("camera") is Dictionary else {}
+	return HeadPlan.feel_of(cam.get("cameras", []) if cam.get("cameras") is Array else [])
+
+
+## Whether the show's head is performed ([HeadBank], [HeadMarks]): its voice is heard from where the mouth is, never by the Lean and
+## Near dials.
+var _head_placed := false
 
 ## What is round the scene where a component's show makes it (`() -> PropSection`, null where it makes none): a table show hands its
 ## episode's sound and air, which the Environment card lists in place of the note's own while the episode is shown at its table.
@@ -399,7 +414,7 @@ func _note_cards(producers: bool) -> void:
 	var have := _voiced()
 	var with := {"reading": true, "workspace": self, "cast": _cast, "blocks": _blocks, "reshape": _reshape,
 		"provides": Components.provided(have), "path": note_path, "folder": NoteUpload.folder_of(note_path),
-		"brought": Components.brought_by(_note_words())}
+		"brought": Components.brought_by(_note_words()), "show_sounds": func() -> Array: return sound_sections}
 	var fmt: Variant = _blocks.get("medium")
 	var rows: Array = []
 	for key in have:
@@ -992,8 +1007,9 @@ func _script_text_changed(body: String) -> void:
 
 
 ## What [method export_take] hands the book medium, and what main gives a live one: the chapter as the author
-## wrote it, so pages can be typeset from the same words being read. The title, the book's name and its author are
-## carried separately because in sync mode the body arrives without its frontmatter; `night` is the date its words were
+## wrote it, so pages can be typeset from the same words being read. The title, the book's name, its author and its byline
+## (the title screen's second line, [method _byline_of]) are carried separately because in sync mode the body arrives without
+## its frontmatter; `night` is the date its words were
 ## filled for ([method Macros.tonight]), which a take's sidecar carries to the export's render.
 func book_document(body := "") -> Dictionary:
 	var src := body if not body.is_empty() else _reading_body()
@@ -1005,11 +1021,24 @@ func book_document(body := "") -> Dictionary:
 		if not v.is_empty():
 			inks[who] = v
 	var d := publish.book({"source": src, "title": _doc_field(src, "title"), "book": _doc_field(src, "book"),
-		"author": _doc_field(src, "author"), "inks": inks, "night": Macros.written(Macros.tonight()), "start_words": _stream.start_words(),
+		"author": _doc_field(src, "author"), "byline": _byline_of(src), "inks": inks, "night": Macros.written(Macros.tonight()), "start_words": _stream.start_words(),
 		"start_index": _stream.start_index(), "start_time": _stream.start_time()}, body)
+	# the head's phrases, where the show performs one ([HeadBank]): a medium whose camera is the head moves by them
+	var bank := head_bank()
+	if not bank.is_empty():
+		d["head"] = bank
 	for k in document_parts:
 		d.merge((document_parts[k] as Callable).call(), true)
 	return d
+
+
+## The line under the title on the title screen: the note's Byline, its macros filled from its own names ([method Macros.line]),
+## else its Author. A show hands its own ([method ReadingPublish.book]).
+func _byline_of(src: String) -> String:
+	var names := {"title": _doc_field(src, "title"), "episode": _doc_field(src, "episode"), "author": _doc_field(src, "author"),
+		"book": _doc_field(src, "book")}
+	var line := Macros.line(_doc_field(src, "byline"), names)
+	return line if not line.is_empty() else String(names["author"])
 
 
 ## A top-level frontmatter field (`title:`, `book:`): what the source says (the synced file,
@@ -1040,6 +1069,7 @@ func _plan_ask(body := "") -> Dictionary:
 ## chapter off its screen, [method _reading_of]). What the plan noticed goes on the line that reports it
 ## ([member _plan_note]).
 func _plan_of(body: String) -> Dictionary:
+	_head_placed = not head_bank().is_empty()
 	var plan := _plan_made(_plan_asked(body))
 	_plan_note = ""
 	if not String(plan["note"]).is_empty():
@@ -1125,7 +1155,9 @@ func _split_speakers(body: String) -> Array:
 ## Where the reader is, sentence by sentence, in [param chunks] from [param from] on
 ## ([method ReadingPlan.near]), from each voice's Near dial as it is now.
 func _plan_near(chunks: Array, from: int, voice := "") -> void:
-	ReadingPlan.near(chunks, from, func(name: String) -> float: return float(_cast.cfg_of(name)["near"]), voice)
+	# (a show whose head is performed places the voice: no approach of the dial's own, [HeadMarks])
+	var placed := _head_placed
+	ReadingPlan.near(chunks, from, func(name: String) -> float: return 0.0 if placed else float(_cast.cfg_of(name)["near"]), voice)
 
 
 ## [method Delivery.request_args] for slot [param s], with the reader this install's voice holds - and how the host
@@ -1410,7 +1442,7 @@ func _kept_copy(kept: String, body: String) -> String:
 
 ## What a take of [param body] (the words to read, by default) is said from, as a digest: the words, every voice's
 ## settings and the record of the voice each is said in, the bookend and the place under it - everything
-## [method _render_take] reads. Written in every take's sidecar (`sig`): a take kept whose `sig` is this one is the
+## [method _render_take] reads, the note's own `say:` marks among them. Written in every take's sidecar (`sig`): a take kept whose `sig` is this one is the
 ## reading as it would be said now. A voice read by name counts as what it says (the kept voice's fields, [method
 ## ReadingCast.follow_library]), never by its name: a kept voice changed changes it, one renamed or made a note's own
 ## does not.
@@ -1428,8 +1460,24 @@ func take_sig(body := "") -> String:
 			if String((v as Dictionary).get("id", "")) == id:
 				records[id] = v
 	var place := bed.of(true)
-	return JSON.stringify([b, cast, records, Director.intro_hold, Director.outro_hold, String(place.get("key", "")),
-		bed.level()]).sha256_text()
+	var parts := [b, cast, records, Director.intro_hold, Director.outro_hold, String(place.get("key", "")), bed.level()]
+	# ...and how the note says its words where the words read do not say them (an episode's script is read with its brief's `say:`
+	# marks, [method _plan_ask]): a mark added to the brief says the take again
+	var told := ReadingPlan.said_in(_text.text if _text != null else "")
+	var own := ReadingPlan.said_in(b)
+	for w in told.keys():
+		if own.has(w) and JSON.stringify(own[w]) == JSON.stringify(told[w]):
+			told.erase(w)
+	if not told.is_empty():
+		parts.append(told)
+	# ...and the head's phrases it is placed by ([HeadBank])
+	var bank := HeadBank.hash_of(head_bank())
+	if not bank.is_empty():
+		parts.append(bank)
+		# ...as gently as the Camera card's head camera has it performed
+		if head_feel() != HeadPlan.FEEL:
+			parts.append(head_feel())
+	return JSON.stringify(parts).sha256_text()
 
 
 ## The take kept for [param body]: the episode's ([method EpisodeFeed.take]) where it was said from these words in
@@ -1538,7 +1586,7 @@ func _render_take(stop: Dictionary = {}) -> String:
 		return _take_stopped(parts)
 	var box := {"at": 0, "mixing": false}
 	var job := {"chunks": chunks, "parts": parts, "cfgs": cfgs, "turn": turn, "head": head, "intro": intro, "outro": outro,
-		"fade": fade_len, "seed": hash(body), "env": env, "path": take_dir + "/take_%d.wav" % stamp, "sr": _sr}
+		"fade": fade_len, "seed": hash(body), "env": env, "path": take_dir + "/take_%d.wav" % stamp, "sr": _sr, "body": body, "bank": head_bank(), "feel": head_feel()}
 		# ...on a thread of its own, never the pool's: minutes of work in one of the pool's few low-priority places leave what the
 		# table and the reading queue there, and whatever waits on it, waiting as long
 	var thread := Thread.new()
@@ -1661,8 +1709,10 @@ static func _join_take(job: Dictionary, box: Dictionary) -> void:
 		# One chain, re-dialed per passage, never one per voice: the effects are stateful, so a second chain would start
 		# each speaker in a dead room and cut the previous tail off. The first voice's mark is at 0: it owns the intro.
 	var marks: Array = join.marks
+	# where the show's head is performed, the voice is heard from where the mouth is ([HeadMarks]): on the take's own words
+	var head_plan := HeadMarks.plan(String(job.get("body", "")), join.words, job.get("bank", []) as Array, {}, job.get("feel", {}) as Dictionary)
 		# Stereo only when somebody leans: a take where nobody moves is the same mono file, at half the size.
-	var leans := false
+	var leans := not head_plan.is_empty()
 	var wet := PackedVector2Array()
 	var cfg: Dictionary = cfg_of.call(String((marks[0] as Dictionary)["speaker"]))
 	for k in marks.size():
@@ -1682,6 +1732,7 @@ static func _join_take(job: Dictionary, box: Dictionary) -> void:
 			# ...the voices over this line, each where it sits ([ReadingJoin])
 			fx.side = join.side_between(a, b, pan_of)
 			leans = leans or not fx.side.is_empty()
+			fx.place = HeadMarks.lane(head_plan, a, b, int(job["sr"]))
 			wet.append_array(fx.process_stereo(pcm.slice(a, b)))
 	var env: SoundBed = job["env"]
 	if env != null:

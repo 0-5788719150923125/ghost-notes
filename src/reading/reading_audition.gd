@@ -98,6 +98,7 @@ var _hold := PackedVector2Array()   # wet frames not yet pushed
 var _read := 0                 # cursor into _hold: what has been pushed
 var _pushed := 0
 var _cap := 0                  # the generator's ring, measured empty
+var _on := false               # from the press until it is stopped or has played out: what [method busy] says
 
 
 func _init(owner: ReadingPanel) -> void:
@@ -115,6 +116,7 @@ func start(passage: String, name: String) -> void:
 ## delivery's Lab hears its words so, their deliveries laid on.
 func start_chunks(plan: Array, name: String) -> void:
 	stop()
+	_on = true
 	voice = name
 	chunks = plan
 	for c in chunks:
@@ -177,9 +179,10 @@ func _ask_again() -> void:
 	_ask_ahead()
 
 
-## Whether an audition is being made or heard.
+## Whether an audition is being made or heard: from its start until it is stopped or has played out, the moments
+## between included (a kept take decoding, the room's first piece, before the player starts), so a press then stops it.
 func busy() -> bool:
-	return not _req.is_empty() or (_player != null and _player.playing)
+	return _on
 
 
 ## Where the passage is now being heard across its paragraph ([method place_at] the moment playing, the ring and the
@@ -254,6 +257,7 @@ func stop() -> void:
 	_hold = PackedVector2Array()
 	_read = 0
 	_pushed = 0
+	_on = false
 	if _player != null:
 		_player.stop()
 
@@ -322,6 +326,7 @@ func tick() -> void:
 		return
 	if _req.is_empty() and _next >= chunks.size() and _dry.is_empty() and _fx_task.is_empty() \
 			and pb.get_frames_available() >= _cap - 64:
+		_on = false
 		_player.stop()
 		panel._show_testing(false)
 		panel._set_status("Tested %s - %.1fs." % [voice, float(_pushed) / float(_sr)])

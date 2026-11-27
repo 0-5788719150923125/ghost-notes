@@ -143,7 +143,7 @@ func versions_of() -> PropVersions:
 func refined(key: String, name: String) -> String:
 	if not DeskLook.THINGS.has(key):
 		return ""
-	if desk.desk_makes().get(key, {}) == {"kept": name}:
+	if desk.desk_makes().get(key, {}) == PropMakes.chosen({"kept": name}):
 		return ""
 	desk.set_make(key, {"kept": name})
 	return ""

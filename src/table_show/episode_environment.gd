@@ -38,7 +38,7 @@ func _init(c: EpisodeCard) -> void:
 ## would never be heard there).
 func owns() -> bool:
 	var ep := episode._episode
-	return ep != null and not ep.at_desk()
+	return ep != null and not ep.own_set()
 
 
 ## Whether the open episode's table is set, to be added to.

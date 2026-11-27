@@ -72,6 +72,11 @@ void fragment() {
 		ALBEDO = mix(ALBEDO, film(NORMAL, VIEW, color), 0.85);
 		METALLIC = 0.6;
 		EMISSION *= 0.6;
+	} else if (play == 7) {
+		// COATED: the glare taken off - what it reflects faint and tinted by the angle, what is behind it seen as it is
+		ALBEDO = coating(NORMAL, VIEW, color2) * 0.12;
+		METALLIC = 1.0;
+		ROUGHNESS = min(ROUGHNESS, 0.08);
 	}
 	if (orn_paint > 0.0) {
 		ALBEDO = mix(ALBEDO, orn_color, o.y * orn_paint);

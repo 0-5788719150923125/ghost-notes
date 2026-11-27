@@ -20,6 +20,7 @@ var _now := {}                   # "<work index>:<channel>" -> its value as last
 var _light_scale := 1.0          # how strongly its lights throw their light, over what its parts say ([method set_light_scale])
 var _power := 1.0                # how much of its power it has: its lights and its glowing parts at that share ([method set_power])
 var _glows := {}                 # a glowing material no part works -> its glow as built, found the first time the power changes
+var _furs: Array = []            # every fur's strands' material ([method Props._fur]), what a touch is told
 
 
 ## The rig of thing [param b], as [method Props.build] (or [method PropMakes.made]) handed it back.
@@ -43,7 +44,7 @@ func _init(b: Dictionary) -> void:
 				mine.append(l)
 				lit_by[l] = true
 		_works.append({"name": String(w.get("name", "")), "node": wn, "w": w, "kind": String((w.get("joint", {}) as Dictionary).get("kind", "")),
-			"mats": mats, "lights": mine})
+			"mats": mats, "lights": mine, "rest": _in_node(wn)})
 	for f in (b.get("faces", []) if b.get("faces") is Array else []):
 		var nm := String((f as Dictionary).get("name", ""))
 		if not nm.is_empty() and not _faces.has(nm):
@@ -57,6 +58,10 @@ func _init(b: Dictionary) -> void:
 	for l in _lights:
 		if not lit_by.has(l):
 			((l as Dictionary)["node"] as Light3D).visible = true
+	if node != null:
+		for fur in node.find_children("*", "MultiMeshInstance3D", true, false):
+			if (fur as GeometryInstance3D).has_meta("fur") and (fur as GeometryInstance3D).material_override != null:
+				_furs.append((fur as GeometryInstance3D).material_override)
 
 
 ## Every part at show time [param T], fed [param feeds] (what the scene hands it, by name: a signal's level, a knob's setting, how
@@ -120,6 +125,22 @@ func set_power(k: float) -> void:
 		if _now.has("%d:glow" % wi):
 			_apply(wi, "glow", float(_now["%d:glow" % wi]))
 	set_light_scale(_light_scale)
+
+
+## Whether this make has fur ([constant Props.FUR]) a touch can press.
+func furred() -> bool:
+	return not _furs.is_empty()
+
+
+## Its fur touched: touch [param slot] (0 or 1: two hands) at [param at] (a world point), pressed [param depth] meters into the fur
+## and swept by [param push] (world, meters) - the strands there pressed flat and laid over, round it parted. A depth of 0 lets go.
+func touch(slot: int, at: Vector3, depth: float, push := Vector3.ZERO) -> void:
+	var t := "touch1" if slot == 1 else "touch0"
+	var p := "push1" if slot == 1 else "push0"
+	var v := Vector4(at.x, at.y, at.z, maxf(depth, 0.0))
+	for m in _furs:
+		(m as ShaderMaterial).set_shader_parameter(t, v)
+		(m as ShaderMaterial).set_shader_parameter(p, push)
 
 
 ## The names of the faces this make has.
@@ -199,12 +220,27 @@ func value(name: String, ch: String) -> float:
 
 
 ## Point [param name] of any working part (its `points`), where it is now in the thing's node (meters); null where there is none.
+## Read in its part's node's frame, as the table's work reads it ([TableWork]) and the shipped makes are written (a part standing off
+## the origin carries its points with it); a make written in the thing's own space is read by [method point_in_thing].
 func point(name: String) -> Variant:
 	for wk in _works:
 		var pts: Dictionary = ((wk as Dictionary)["w"] as Dictionary).get("points", {})
 		if pts.has(name):
 			var wn: Node3D = (wk as Dictionary)["node"]
 			return _in_node(wn) * (pts[name] as Vector3)
+	return null
+
+
+## Point [param name] as the prop language writes it ([method Motions.describe_parts]): in the thing's own space whatever part it is
+## on - as built it is where it is written, and it moves as its part has moved since. Where it is now in the thing's node (meters);
+## null where there is none. What an agent designs for a role is read so ([RoleDesign]).
+func point_in_thing(name: String) -> Variant:
+	for wk in _works:
+		var pts: Dictionary = ((wk as Dictionary)["w"] as Dictionary).get("points", {})
+		if pts.has(name):
+			var wn: Node3D = (wk as Dictionary)["node"]
+			var rest: Transform3D = (wk as Dictionary).get("rest", Transform3D.IDENTITY)
+			return _in_node(wn) * (rest.affine_inverse() * (pts[name] as Vector3))
 	return null
 
 
@@ -224,6 +260,10 @@ func copy() -> PropRig:
 	for mi in dup.find_children("*", "MeshInstance3D", true, false):
 		if (mi as MeshInstance3D).material_override != null:
 			(mi as MeshInstance3D).material_override = (mi as MeshInstance3D).material_override.duplicate()
+	# each copy's fur its own to press (its strands and their roots shared)
+	for fur in dup.find_children("*", "MultiMeshInstance3D", true, false):
+		if (fur as GeometryInstance3D).has_meta("fur") and (fur as GeometryInstance3D).material_override != null:
+			(fur as GeometryInstance3D).material_override = (fur as GeometryInstance3D).material_override.duplicate()
 	var b := built.duplicate()
 	b["node"] = dup
 	b["works"] = (built.get("works", []) as Array).map(func(w: Dictionary) -> Dictionary:

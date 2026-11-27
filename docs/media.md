@@ -15,7 +15,7 @@ host_for(incoming)   - the node an arriving scene is added to. `full` returns th
 
 A medium is a Node2D mounted inside the stage SubViewport, so the stage governor stops the medium and every panel viewport under it together.
 
-Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (11 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
+Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (12 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
 
 ## `auto` - Auto
 
@@ -174,6 +174,18 @@ When each is done is the desk's (`DeskMedium._build_plan`): a write begins at it
 The desk is the Letter's (`DeskLook`), dressed as the note's Medium card says (`DeskFormat`; the document's `medium`: its number `seed`, `things`, `mood`, `card_text`), each left out drawn from the episode's own number; chosen while it plays, the desk is dressed again and nothing written changes. Its camera is the old desk's, a little closer (`EPISODE_LOCAL`, `EPISODE_WIDE`): on the line being written, the whole pad as a page turns. The desk is seen whole for `DESK_SEEN` after the title has gone before the pen is picked up (`_first_floor`), whenever its first words come.
 
 Source: [src/desk/episode_desk.gd](../src/desk/episode_desk.gd)
+
+## `studio` - Studio
+
+_A table show's episode as raw ASMR footage from a creator's chair: a camera in the middle of the frame looks back at you, its flip screen showing what it sees - nobody, only the things the hands work - with a giant fluffy microphone between; every sound a thing makes (fur rubbed, a brush swept, blocks scraped and knocked, taps) made by the motion that makes it, heard from where it happens round the microphone._
+
+StudioMedium - a table show's episode played as raw footage from a creator's chair (next/studio.md): the camera in the middle of the frame looks back at the viewer from inside its ring light, its flip screen turned toward them showing what it sees - nobody, only the things the hands work, from the other side; a giant fluffy microphone between, low in the frame; the things moved by hands nobody sees. THE SOUND IS THE SHOW: every sound a thing makes is made by the motion that makes it, heard from where it happens round the microphone (`StudioActs`, `StudioSounds`).
+
+One of Table's formats (`Medium.REGISTRY` `mode`): Table's agents make each episode from the note's brief, the reader writing the hands' acts among its words (`reader_marks`, `reader_rules`) and the voice resting for each act (`voiced`); the studio sets itself, its things the note's makes (`StudioProps`). Draws from the reading's document: its `source`, the episode's script with its act marks (`StudioScript`), and its `medium`, the Medium block (`takes`: each act made again, `StudioScript.with_takes`; `makes`: the make playing each thing - a kept make with the version used, so another version used stands at once - and `places`: where each is moved from where the studio stands it, `StudioProps`) and its `environment`, the Environment card's (each lit thing's share of its light). The set (`StudioSet`, stood again when a make changes) and the acts' motions (`StudioActs.make`) are made on workers; each act is placed in the rest the voice leaves for it (`ReadingFollower.place`; one said `under` begins as the words after it do) and, once begun, kept where it began. Then everything is a pure function of show time (`_pose`): the things' places, the windscreen pressed where a hand touches it, the camera and the microphone swaying from a tap, the flip screen's picture and its meters, and the sound - so a render draws and hears what the live reading did, and a scrub lands where the reading is.
+
+The viewer's eye is the creator's head, performed from the show's phrases (`HeadBank`, `HeadMarks`, next/head.md) - leaning in at an ear, turning away, looking along the windscreen - from the same performance the voice is heard from, so a voice at the left ear is seen from there; a show with no phrases sits in the chair. Either way it sways as the Camera card's chair has it (`Cameras.REGISTRY` `creator`, its Sway: `Cameras.swayed`). The subtitles caption the speech.
+
+Source: [src/studio/studio.gd](../src/studio/studio.gd)
 
 ## `likeness` - Likeness
 

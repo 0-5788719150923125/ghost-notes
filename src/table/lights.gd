@@ -30,7 +30,7 @@ class_name Lights
 ## grilles, grouped and copied round or along), shadow-only on [constant CASTER_LAYER], which every light that casts casts with. It is
 ## aimed by where its shadow falls and placed up its light's ray to throw it there ([method caster_place]), out of the shot and clear of
 ## the table. It stands still, swings (a pendulum pushed by gusts: [method swing_at]), spins, or ripples (shaders/light_caster.gdshader).
-## Not [Props]: those are a thing's surfaces at most 60 cm across; these are silhouettes that run to meters.
+## Not [Props]: those are a thing's surfaces, drawn and lit; these are silhouettes that run to meters, never seen.
 
 const SCREEN_SHADER := preload("res://shaders/light_screen.gdshader")
 const BIRD_SHADER := preload("res://shaders/light_bird.gdshader")

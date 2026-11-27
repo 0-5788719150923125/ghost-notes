@@ -268,8 +268,8 @@ static func _played(things: Array, makes: Dictionary) -> Array:
 	return out
 
 
-## The props kept that play a document's desk things ([param cfg]'s `makes`), each a [constant THINGS] kind played by `{kept: name}`;
-## any other dropped.
+## The props kept that play a document's desk things ([param cfg]'s `makes`), each a [constant THINGS] kind played by `{kept: name}`
+## with the version it was chosen at (`v`, [method PropMakes.chosen]); any other dropped.
 static func makes_of(cfg: Dictionary) -> Dictionary:
 	var out := {}
 	var m: Dictionary = cfg["makes"] if cfg.get("makes") is Dictionary else {}
@@ -277,6 +277,8 @@ static func makes_of(cfg: Dictionary) -> Dictionary:
 		var c: Variant = m[k]
 		if THINGS.has(String(k)) and c is Dictionary and (c as Dictionary).get("kept") is String and not String(c["kept"]).strip_edges().is_empty():
 			out[String(k)] = {"kept": String(c["kept"])}
+			if (c as Dictionary).get("v") is String:
+				out[String(k)]["v"] = String(c["v"])
 	return out
 
 

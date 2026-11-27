@@ -57,9 +57,18 @@ class_name Medium
 ##   intro_tip, outro_tip  optional: what the Intro & outro card's holds say under this format.
 ##   follow  optional: how its camera follows what it turns to, as its own ([CameraFollow] settings; the Camera card's are
 ##           laid over them, [method camera_follow]). A format without one flies no follow.
-##   mode    optional: the component it belongs to, which shows its readings in it (the table and the desk are
+##   mode    optional: the component it belongs to, which shows its readings in it (the table, the desk and the studio are
 ##           Table's, drawn from an episode Table produced). Never remembered as the setting ([method pickable]);
-##           its component pins it for the session (see [member Director.medium_override]).
+##           its component pins it for the session (see [member Director.medium_override]). Its script may answer, for the
+##           agents who make an episode for it (asked by path, [TableProducer]): `voiced(text, doc)` (the voice's rests for its own
+##           work, [EpisodeWalk]), `own_table()` (the table its episodes are blocked on, where it sets its own), `reader_marks()`
+##           (a pattern of the marks a reader may write in its passages, kept there) and `reader_rules(told)` (what the reader is
+##           told of them; [param told] its passage's planned work, where the format has it written, `own_work`).
+##   own_set optional: an episode shown in it is set by the format itself - no surface or room painted, nothing for a set dresser
+##           to build; its table is the script's `own_table()` ([method TableEpisode.own_set]).
+##   own_work optional (with own_set): its reader writes the work among its words, as the format's marks - no puppeteer blocks it
+##           and no table is set for it (the format sets out its own things), and each passage's reader is told its planned work to
+##           write ([method TableEpisode.own_work]).
 ##   bare    optional: it takes no settings - the Medium card shows nothing under the picker and picking
 ##           it resets the Director's dials to their defaults (see [AutoMedium]).
 ##   blurb   one line, for the picker's tooltip and docs/media.md - one string literal, not a `+`
@@ -103,11 +112,17 @@ const REGISTRY := {
 		"uses": ["opening"], "frames": ["landscape", "standard", "portrait"], "mode": "table", "needs": ["episode"],
 		"blurb": "A show at a table the agents built, seen from the chair: its things, its light and its room, the cards drawn and read, the work done with the table's things - every move from the episode the agents produced."},
 	"desk": {"label": "Desk", "script": "res://src/desk/episode_desk.gd",
-		"uses": ["opening"], "frames": ["landscape", "standard"], "mode": "table", "needs": ["episode"],
+		"uses": ["opening"], "frames": ["landscape", "standard"], "mode": "table", "needs": ["episode"], "own_set": true,
 		"card": "res://src/desk/desk_format.gd", "follow": {"settle": 1.6},
 		"intro_tip": "Seconds the desk holds before the first line is written, the episode's title over it.",
 		"outro_tip": "Seconds held after the pen's last stroke, the page on the desk, fading picture and sound out together.",
 		"blurb": "A lesson at a desk, seen close from the chair: a legal pad under a lamp or candles, and a pen writing what the episode's work writes - formulas, drawings, words in a hand - stroke by stroke as the words are said, pointing at what is talked about, turning a page over the binding when it is full. The desk is the Letter's."},
+	"studio": {"label": "Studio", "script": "res://src/studio/studio.gd",
+		"uses": ["opening"], "frames": ["landscape", "standard"], "mode": "table", "needs": ["episode"], "own_set": true,
+		"own_work": true, "card": "res://src/studio/studio_format.gd", "capabilities": ["subprocess", "python:music"],
+		"intro_tip": "Seconds the studio holds, its title over it, before the first word.",
+		"outro_tip": "Seconds held after the last word, fading picture and sound out together.",
+		"blurb": "A table show's episode as raw ASMR footage from a creator's chair: a camera in the middle of the frame looks back at you, its flip screen showing what it sees - nobody, only the things the hands work - with a giant fluffy microphone between; every sound a thing makes (fur rubbed, a brush swept, blocks scraped and knocked, taps) made by the motion that makes it, heard from where it happens round the microphone."},
 	"likeness": {"label": "Likeness", "script": "res://src/likeness/likeness.gd",
 		"uses": [], "frames": ["landscape"], "needs": ["reading"], "mode": "likeness",
 		"blurb": "An actor reading the note in their own room, from their own footage: their real takes, joined where two frames nearly match, the mouth drawn from their own mouths to the voice's sounds through one mesh over the frame, their gestures on the words a director placed them. The Likeness component's own medium."},

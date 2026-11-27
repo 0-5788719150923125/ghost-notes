@@ -55,6 +55,7 @@ func _run() -> void:
 	_registry()
 	_composition()
 	_slots()
+	_hosted()
 	_detach()
 	_desktop()
 	_android()
@@ -67,6 +68,14 @@ func _run() -> void:
 	for f in _fails:
 		print("   ", f)
 	quit(1)
+
+
+## A Table note takes a Sound card (its sound effects beside the voice reading its episodes); the control: a card the Table panel
+## shows none of (an Actor) is still refused, saying why.
+func _hosted() -> void:
+	var table := ["text", "table", "voice", "medium"]
+	_ok(Components.host_note("sound", table).is_empty(), "a Table note can take a Sound card: %s" % Components.host_note("sound", table))
+	_ok(not Components.host_note("actor", table).is_empty(), "control: one the Table panel shows none of is refused, saying why")
 
 
 func _ok(cond: bool, msg: String) -> void:
@@ -251,7 +260,8 @@ func _detach() -> void:
 	_adopted()
 	_ok(not Components.detach_blocker("text", ["text"]).is_empty(), "the text cannot be detached: it is the note")
 	var why := Components.detach_blocker("voice", ["text", "table", "voice"])
-	_ok(why.contains("Table"), "a Voice stays while the Table that brings it does (%s)" % why)
+	_ok(why.contains(Components.title_of("table")) and Components.title_of("table") == "Episode",
+		"a Voice stays while the Episode that brings it does, named as its card is (%s)" % why)
 	_ok(Components.detach_blocker("table", ["text", "table", "voice"]).is_empty(), "...and Cards itself comes off")
 	_ok(Components.detach_blocker("medium", ["text", "sound", "medium", "look"]).is_empty(),
 		"a Medium a Look depends on still comes off: the Look then says what it is waiting for")

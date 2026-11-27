@@ -168,5 +168,25 @@ func _run() -> void:
 		"an agent refining a prop a scene works is told them")
 	_ok(Motions.describe_laws().find("Follow") < 0 and Motions.describe_laws().find("follow") < 0, "the puppeteer is never told follow")
 	(b["node"] as Node).free()
+	_points_in_thing()
 	print("prop_rig_check: %s (%d failure%s)" % ["ALL OK" if _fails == 0 else "FAILED", _fails, "" if _fails == 1 else "s"])
 	quit(1 if _fails > 0 else 0)
+
+
+## A point read in the thing's own space (as an agent designing a role is told) stands where it is written, on a part standing off the
+## origin or in a raised, turned group (control: one on a plain part at the origin, likewise).
+func _points_in_thing() -> void:
+	var spec := {"things": [{"name": "a raised thing", "parts": [
+		{"shape": "box", "size": [4, 2, 4], "material": "m", "points": {"plain": [1.0, 2.0, 0.0]}},
+		{"shape": "box", "size": [3, 1, 3], "at": [0, 10, 2], "material": "m", "name": "plate", "points": {"top": [0.0, 11.0, 2.0]}},
+		{"name": "head", "at": [0, 10, 0], "turn": [0, 30, 0], "points": {"lens": [0.0, 12.0, 3.0]}, "parts": [
+			{"shape": "box", "size": [3, 3, 3], "material": "m"}]}]}], "materials": {"m": {"kind": "plastic", "color": "#808080"}}}
+	var safe := Props.sanitize(spec, [])
+	var rig := PropRig.new(Props.build((safe["things"] as Array)[0], safe["materials"], 3))
+	var top: Variant = rig.point_in_thing("top")
+	var lens: Variant = rig.point_in_thing("lens")
+	var plain: Variant = rig.point_in_thing("plain")
+	_ok(top is Vector3 and (top as Vector3).is_equal_approx(Vector3(0.0, 0.11, 0.02)) and lens is Vector3 and (lens as Vector3).is_equal_approx(Vector3(0.0, 0.12, 0.03))
+		and plain is Vector3 and (plain as Vector3).is_equal_approx(Vector3(0.01, 0.02, 0.0)),
+		"read in the thing's space, a point stands where it is written, on a part off the origin (%s) or in a raised group (%s); control %s" % [str(top), str(lens), str(plain)])
+	rig.node.free()

@@ -8,7 +8,10 @@
 # else: then the agent names the version (`name`, `line`), and the prop takes the name when that version is used.
 #
 # The code gives: {{name}} (the prop's name), {{line}} (what it is, maybe empty), {{spec}} (the prop as written: its parts and
-# materials as JSON), {{direction}} (as the author wrote it), {{props}}, {{max_parts}} (the prop language, with the parts a scene
+# materials as JSON), {{direction}} (as the author wrote it), `in_scene` with {{scene_report}}, `scene_pictured`, {{place_now}} and
+# {{place_fields}} and `has_needs` with {{scene_needs}} (the scene it stands in, and what it works on the prop, where a refine may place it there: measured, pictured, where it is placed now and what a
+# place is written as), {{place_roles}} (the scene's things it may move too, by name, each where it is placed now), `again` with
+# {{placed}} (asked again once placed: every thing placed, by name), {{props}}, {{max_parts}} (the prop language, with the parts a scene
 # plays where the prop has any), `ornaments` and `textures` (the ornaments and textures kept in the library, {name, words}), and the flags `pictured` (pictures of it as built come with the prompt) and `working` (a scene
 # works it: faces it shows pictures on, lights, parts that follow what it feeds them - next/working_props.md).
 system: >-
@@ -61,8 +64,78 @@ prompt:
       Answer with the whole prop, changed and unchanged parts alike: {"thing": {"parts": [...]}, "materials": {...}} - every
       material its parts use, under the names its parts give. Keep `scale` where it is written. Write no `at` for the prop
       itself, and nothing outside the JSON.
+  # IN A SCENE: where it stands is the scene's, never the prop's - so a move, a turn or a size there is a place, which makes no version,
+  # and the refiner sees the scene measured and pictured to put it right among the rest
+  - when: in_scene
+    say: ""
+  - when: in_scene
+    say: >-
+      THIS PROP STANDS IN A SCENE, and where it stands there is the scene's, not the prop's. Where the author asks to move it, turn it,
+      tip it, make it bigger or smaller there, or set it on, against or beside something else, PLACE it - answer {"place": {...}} with
+      the fields below, each measured from where the scene stands it by itself - which changes nothing of the prop and makes no new
+      version. Change the prop itself (its parts, materials, points) only where the ask is about what it is. Where the ask is both,
+      answer both: {"place": {...}, "thing": ..., "materials": ...}. It is placed now at {{place_now}} ({} is where the scene stands it).
+  # what goes together is moved together: the refiner may place the scene's other things too, each by its name
+  - when: in_scene
+    say: >-
+      The scene's other things can be placed too, where the ask moves them with this one or because of it - the tripod with the
+      camera, a thing set on another - answer `places` beside it: {"places": {"NAME": {...}, ...}}, each a place as above, measured
+      from where the scene stands that thing, under the names below. A thing the ask does not touch is left out.
+  - when: in_scene
+    say: "The scene's things, by the names a place is written under:"
+  - when: in_scene
+    say: "{{place_roles}}"
+  # what the scene works on this prop, whatever make or version plays it: a version that loses one is a prop the scene cannot work
+  - when: [in_scene, has_needs]
+    say: "WHAT THE SCENE WORKS ON IT - every version keeps each, named exactly so, or the scene cannot work it:"
+  - when: [in_scene, has_needs]
+    say: "{{scene_needs}}"
+  - when: in_scene
+    say: "The place's fields:"
+  - when: in_scene
+    say: "{{place_fields}}"
+  - when: [in_scene, scene_pictured]
+    say: >-
+      The pictures after the prop's own show the scene as it stands: from the viewer's eye, from the prop's right, from above it, and
+      through the camera's lens.
+  - when: in_scene
+    say: "THE SCENE AS IT STANDS, measured:"
+  - when: in_scene
+    say: "{{scene_report}}"
+  - when: in_scene
+    say: >-
+      Place it from these numbers, FOR THE CAMERAS THAT RECORD IT: the report says where the show is seen from and where each thing
+      falls in each frame. Line a thing up for the viewer's eye - centered or set to a side as the ask says, as big in the frame as
+      it should read - and keep what must be seen in frame; to set one thing on another, put its foot on the other's top (the gap 0,
+      nothing passing into it).
   - >-
       Where the change makes it something else, or "{{name}}" no longer says what it is, give it a new name beside the thing -
       {"name": "...", "line": "...", "thing": ..., "materials": ...}: a few plain words for what it is, written as its name is
       (never a person's, a character's or a place's - it may stand in any scene), and `line` a sentence saying what it is now.
       Otherwise leave both out, and it keeps its own.
+# ASKED AGAIN, ONCE IT WAS PLACED: the scene looked at again, the place put right if it is not - never the prop changed here
+again:
+  - "THE PROP, \"{{name}}\", was placed as the author asked:"
+  - ""
+  - "<direction>"
+  - "{{direction}}"
+  - "</direction>"
+  - ""
+  - "You placed, by name: {{placed}}. THE SCENE NOW, measured:"
+  - ""
+  - "{{scene_report}}"
+  - when: scene_pictured
+    say: ""
+  - when: scene_pictured
+    say: "The pictures show the scene now: from the viewer's eye, from the prop's right and from above it."
+  - ""
+  - "The place's fields:"
+  - "{{place_fields}}"
+  - ""
+  - "The scene's things, by name:"
+  - "{{place_roles}}"
+  - ""
+  - >-
+      If everything now stands as the author asked - resting on what it should rest on, nothing passing into it, where the viewer
+      should see it - answer {}. If not, answer the places put right: {"place": {...}} for this prop, {"places": {"NAME": {...}}} for
+      the others, each the whole place again. Nothing else, and nothing outside the JSON.

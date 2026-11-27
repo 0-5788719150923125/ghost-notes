@@ -58,6 +58,12 @@ var _ways := {}
 var _picks := {}
 
 
+## The table an episode at the desk is blocked on: its pad and its pen ([DeskTable]) - what the producer lands for it
+## ([constant Medium.REGISTRY] `own_set`).
+static func own_table() -> Dictionary:
+	return DeskTable.spec()
+
+
 func _ensure_doc() -> void:
 	if _subs == null or not is_instance_valid(_subs):
 		return

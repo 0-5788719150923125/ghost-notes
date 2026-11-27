@@ -44,6 +44,12 @@ static func of(ornament: String) -> OrnamentDesign:
 
 
 ## The design of [param ornament] let go, where it was renamed or removed: its window closed, its conversation's turn left as it is.
+## Whether the Refine… of the ornament named [param ornament] stands open: only looked at, nothing made (a list draws its button so).
+static func open_now(ornament: String) -> bool:
+	var d: OrnamentDesign = _open.get(ornament)
+	return d != null and d.is_open()
+
+
 static func forget(ornament: String) -> void:
 	var d: OrnamentDesign = _open.get(ornament)
 	if d == null:
@@ -84,14 +90,33 @@ func busy() -> bool:
 
 
 ## Its Refine… window opened, beside [param host] where there is one.
-func open(host: Window = null) -> void:
+func open(from: Node = null) -> void:
+	if not _made():
+		return
+	window.open_beside(from)
+
+
+## Its Refine… as a toggle: opened docked where [param from] is - or, with none, in the window that has focus ([method
+## RefineDock.host_of]: the Dex, or the side panel) - or folded away where it stands open.
+func toggle(from: Node = null) -> void:
+	if not _made():
+		return
+	window.toggle(from)
+
+
+## Whether its Refine… stands open.
+func is_open() -> bool:
+	return window != null and is_instance_valid(window) and RefineDock.is_open(window)
+
+
+func _made() -> bool:
 	if window == null or not is_instance_valid(window):
 		window = TextRefine.new(chat, "the %s \"%s\"" % [kind, name])
 		var tree := Engine.get_main_loop() as SceneTree
 		if tree == null or tree.root == null:
-			return
+			return false
 		tree.root.add_child(window)
-	window.open_beside(host)
+	return true
 
 
 ## A frame's look: the turn under way polled, and once it ends, what it left kept.

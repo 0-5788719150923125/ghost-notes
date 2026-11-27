@@ -1220,6 +1220,70 @@ def test_a_request_reads_in_its_blend():
 
 
 @check
+def test_a_whispered_word_is_told_no_pitch():
+    """A word whispered UNVOICED or more is read by the graph that sings, told no pitch where it is heard (its sounds,
+    PLAN_LEAD early) and its source fed its breath; the rest of the sentence keeps its pitch. THE CONTROLS: a word
+    whispered less, and a sentence whispering nothing, read by the stock graph; a graph that sings without the breath
+    input is still told no pitch, and fed no breath."""
+    import types
+
+    import numpy as np
+    from backends.kokoro import PLAN_LEAD, UNVOICED
+
+    class _Sung(_Session):
+        def __init__(self, breath=True, **kw):
+            super().__init__(**kw)
+            self.names = ["f0_keep", "f0_set", "n_keep", "n_set"] + (["breath"] if breath else [])
+            self.sung: list = []
+
+        def get_inputs(self):
+            return []
+
+        def get_overridable_initializers(self):
+            return [types.SimpleNamespace(name=n) for n in (*self.takes, *self.names)]
+
+        def run(self, outputs, feeds):
+            self.sung.append({k: np.asarray(feeds[k]).ravel() for k in ("f0_keep", "f0_set", "breath") if k in feeds})
+            return super().run(outputs, feeds)
+
+    def read(whisper, breath=True):
+        k, cfg = _backend()
+        cfg["kokoro"]["family"] = "kokoro"
+        sess, sung = _Session(), _Sung(breath)
+        k._models = {"kokoro": sess}
+        k._sung_graphs = lambda family, moving=False: (sung, None)
+        toks = [dict(t) for t in SENTENCE]
+        if whisper:
+            toks[2]["x"] = {"whisper": whisper}
+        with tempfile.TemporaryDirectory() as td:
+            k._synth_tokens(toks, "kokoro", str(Path(td) / "a.wav"),
+                            {"phonemizer": "ghost", "pause_scale": 0.0, "trail": 0.0, "after": 0}, cfg, sess)
+        return sess, sung
+
+    sess, sung = read(1.0)
+    ok(len(sung.sung) == 1 and "f0_keep" in sung.sung[0], "a whispered word's sentence is read by the graph that sings")
+    keep, call = sung.sung[0]["f0_keep"], sung.fed[0]
+    body = "".join(VOCAB[i] for i in call["ids"])
+    at = body.index("nˈɛvəɹ")
+    starts = np.concatenate(([0], np.cumsum(call["frames"]))) * 2
+    lead = int(round(PLAN_LEAD / (600 / 24000 / 2)))
+    zero = np.nonzero(keep == 0.0)[0]
+    first, last = int(starts[at]) - lead, int(starts[at + len("nˈɛvəɹ")]) - lead
+    ok(keep.size == int(starts[-1]) and zero.size and np.all(np.diff(zero) == 1)
+       and zero[0] == first and last <= zero[-1] + 1 <= int(starts[at + len("nˈɛvəɹ") + 1]) - lead,
+       "told no pitch over the word's own sounds, PLAN_LEAD early", "steps %d-%d, the word %d-%d" % (zero[0], zero[-1] + 1, first, last))
+    ok(float(keep[:first].min()) == 1.0 and float(keep[zero[-1] + 1:].min()) == 1.0, "...and the words round it keep theirs")
+    eq(sung.sung[0].get("breath", np.zeros(1)).tolist(), [1.0], "its source fed its breath")
+    sess, sung = read(UNVOICED * 0.6)
+    ok(not sung.sung and sess.fed, "CONTROL: a word whispered less is read by the stock graph")
+    sess, sung = read(0.0)
+    ok(not sung.sung and sess.fed, "CONTROL: a sentence whispering nothing is read by the stock graph")
+    sess, sung = read(1.0, breath=False)
+    ok(sung.sung and float(sung.sung[0]["f0_keep"].min()) == 0.0 and "breath" not in sung.sung[0],
+       "CONTROL: a graph that sings without breath is still told no pitch, and fed none")
+
+
+@check
 def test_a_sentence_is_followed_in_its_call():
     """A sentence ending on a full stop is planned alone, then sent with a word-space and its own first word after
     it, in the style of its own count and told that plan up to its last sound: every id before it its frames, the

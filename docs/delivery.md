@@ -226,7 +226,7 @@ An attitude to what is said or who hears it.
 | `sarcastic` | `rate 0.75, pauses 1.1, pitch -1st, range 0.75, volume +1dB, breath 0.2` | Slow, low and flat, a little rough. | ironic |
 | `mocking` | `pitch +2st, range 1.8` | Up and swinging too far. | taunting, sing-song |
 | `suspicious` | `rate 0.9, pauses 1.2, pitch -1st, range 1.1, volume -1dB` | Slow and low. | skeptical, wary |
-| `conspiratorial` | `rate 1.05, pauses 0.9, pitch -1st, range 0.8, volume -8dB, breath 0.6, whisper 0.3` | Quick and hushed. | secretive |
+| `conspiratorial` | `rate 1.05, pauses 0.9, pitch -1st, range 0.8, volume -6.5dB, breath 0.6, whisper 0.3` | Quick and hushed. | secretive |
 | `polite` | `rate 0.95, pauses 1.05, pitch +0.5st, range 0.9, volume -1dB, precision 0.3` | A little up, even and crisp. | formal, courteous |
 | `casual` | `rate 1.1, pauses 0.9, pitch -0.5st, range 0.8, volume -1dB, push -0.2, precision -0.2` | Quick, easy and slurred a little. | offhand, nonchalant |
 | `defiant` | `range 1.2, volume +3dB, push 0.5` | Loud and pressed. | determined, resolute |
@@ -241,8 +241,8 @@ Vocal effort, a whisper to a scream: loudness carried by quality more than level
 
 | Delivery | Terms | What it is | Also |
 | --- | --- | --- | --- |
-| `whispering` | `rate 0.9, range 0.7, volume -10dB, whisper 1` | A whisper: all breath. | whisper |
-| `hushed` | `rate 0.92, pauses 1.1, pitch -1st, range 0.7, volume -8dB, breath 0.6, whisper 0.4` | Under the breath: half whispered. | murmuring, under the breath, sotto voce |
+| `whispering` | `rate 0.9, range 0.7, volume -1dB, whisper 1` | A whisper: all breath. | whisper |
+| `hushed` | `rate 0.92, pauses 1.1, pitch -1st, range 0.7, volume -6dB, breath 0.6, whisper 0.4` | Under the breath: half whispered. | murmuring, under the breath, sotto voce |
 | `soft` | `rate 0.95, pitch -0.5st, range 0.9, volume -4dB, push -0.3, breath 0.3, effort -0.4` | A relaxed, quiet voice. | softly, quiet |
 | `raised` | `pitch +3st, volume +3dB, push 0.3, effort 0.3` | A voice raised a step. | raised voice, projecting |
 | `loud` | `rate 0.97, pitch +5st, range 0.9, volume +5dB, push 0.6, effort 0.6` | A loud voice: higher, pressed. |  |

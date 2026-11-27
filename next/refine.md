@@ -3,9 +3,12 @@
 ## Status
 
 **Built, not yet tried by the author.** Refine… stands in the window a text is written in - the Body card's editor (beside
-Done) and the Direction card's box - and opens a chat window beside it (`TextRefine`, `src/ui/text_refine.gd`), the way the
-3D view's Refine… opens on a prop. The writer row (agent, model, effort: `AgentPick`) is in that window, not on the card; the
-Direction card lost its row and its "Prompt" heading, so the two cards read alike.
+Done) and the Direction card's box - and is a toggle: pressed, the chat (`TextRefine`, `src/ui/text_refine.gd`) docks INTO that
+window, which widens to hold it at its right, never a window of its own (`RefineDock`, `src/ui/refine_dock.gd`); pressed again it
+folds away and the window narrows back. Every Refine works so - the 3D view's (`PropRefine`), a picture's, the thumbnail's, the
+Delivery Lab's, an episode's script - and one on a side-panel card (a sound, an environment element, a table, an ornament) docks
+beside the cards inside the side panel, which widens (`SidePanel.dock`). The writer row (agent, model, effort: `AgentPick`) is in the
+chat, not on the card; the Direction card lost its row and its "Prompt" heading, so the two cards read alike.
 
 - **A conversation, kept** (`WriterChat`, `src/agents/writer_chat.gd`): turn after turn, scrolled back through, kept in the note's
   folder (`<note folder>/refine/body/chat.json`, `.../direction/`; each turn's run in `turns/<id>/`), so it moves with the note and
@@ -25,13 +28,13 @@ Direction card lost its row and its "Prompt" heading, so the two cards read alik
 - **It survives the panel**: a note opened again (a card attached, a format picked) hands the live conversation to the new card,
   turn under way and all; leaving the note stops a turn a moment later.
 - **Gates**: `tests/agents/writer_chat_check.gd` (tools, prompts, landing, the session flags), `tests/ui/text_refine_check.gd`
-  (the window, a change landing, the Body's editor), `tests/ui/direction_card_check.gd` (the card).
+  (the chat, a change landing, docked into its window and folded back, the Body's editor), `tests/ui/panel_fit_check.gd` (docked in
+  the side panel), `tests/ui/direction_card_check.gd` (the card).
 
 **Open - for the author to judge:**
 
 - How much progress to show. Now: the writer's words between calls, each change as a diff, the status line (thinking, calling
   edit, tokens, time) and the cost. Thinking itself is not shown, nor tool calls other than changes (a `read` is silent).
-- Whether the chat should be docked inside the editor instead of a window beside it.
 - Whether an old conversation should be summarized and trimmed when it grows long, rather than New conversation by hand.
 - The Body's frontmatter fields (Title, Episode) are not the writer's to change.
 

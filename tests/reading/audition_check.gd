@@ -20,6 +20,8 @@ extends Node
 ##
 ## - A sentence already said in the voice as it is now ([TakeCache]) lands at once and is never asked of the host (control: one
 ##   not kept is asked); a dial of the room moved mid-test asks nothing again (control: a pace changed does, above).
+## - A test is one from its press until it is stopped or has played out: of kept sentences alone, nothing asked and nothing yet
+##   heard, Test pressed stops it (as a delivery's Lab reads it, [method ReadingPanel.testing]).
 ##
 ## Controls: a reply held back leaves nothing joined until the one ahead arrives; a Stop after every
 ## sentence has arrived cancels nothing; a Test with the show paused pauses nothing; a take before the first let go
@@ -181,6 +183,22 @@ func _run() -> void:
 	_ed._cast._slots[0]["room"] = 0.0
 	_ed._stop_test()
 	_host.cancelled = []
+	# A test of kept sentences alone asks the host nothing and is a test from its press, its takes still decoding and
+	# nothing yet heard: Test pressed then stops it, never starts it again
+	var line := "The lamps were lit by four."
+	var kept_plan: Array = ReadingPlan.make(line, "", _ed._plan_ask(line))["chunks"]
+	_ed.audition_chunks(kept_plan, Manuscript.NARRATOR)
+	_ed._stop_test()
+	for c in kept_plan:
+		TakeCache.put(_ed.take_key(cfg, _ed._request_args(cfg, c)), _wav(200, int(SR * 0.4)), {"sample_rate": SR, "tokens": []})
+	var kept_from := _host.asked.size()
+	_ed.audition_chunks(kept_plan, Manuscript.NARRATOR)
+	_ok(_host.asked.size() == kept_from and a._req.is_empty() and not a._player.playing,
+		"the test's ground: a test of kept sentences asked the host, or was heard at once")
+	_ok(a.busy() and _ed._cast._test.text == "Test ■", "a test of kept sentences is no test until it is heard")
+	_ed._on_test()
+	_ok(not a.busy() and _ed._cast._test.text == "Test" and _host.asked.size() == kept_from,
+		"Test pressed while kept sentences decoded did not stop the test")
 	# Test has the host: what the reading on the stream has in line is let go and asked again from its first once Test
 	# is done, a later take already in goes, and the stream asks nothing while Test plays
 	var st := _ed._stream

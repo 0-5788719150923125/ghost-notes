@@ -783,6 +783,15 @@ def _word_curve(edges: dict, group: list, key: str, n: int, sr: int, scale: floa
     return np.interp(np.arange(n) / float(sr), xs[order], np.array([p[1] for p in pts])[order])
 
 
+def _whisper_of(tok: dict, params: dict) -> float:
+    """How much word `tok` is whispered, 0 to 1: its delivery's `whisper` and the request's together."""
+    x = tok.get("x") or {}
+    try:
+        return min(1.0, max(0.0, float(params.get("whisper", 0.0) or 0.0) + float(x.get("whisper", 0.0) or 0.0)))
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _pauses_of(tok: dict) -> float:
     """How much longer than the voice's own the rest at a mark inside a sentence after a word is, by its delivery: its `pauses`
     times its `commas` (delivery_bank.gd RESTS), 1 where it says neither."""
@@ -1178,12 +1187,11 @@ def _read_at(src, pos, table):
 
 _LPC_FRAME = 0.032  # s: long enough for two pitch periods of a low male voice
 _LPC_HOP = 0.008  # s: 75% overlap, where a Hann window's square sums flat
-# The whisper's noise is fixed so a re-render is the same performance (as the duration-predictor
+# The whisper's breath is fixed so a re-render is the same performance (as the duration-predictor
 # jitter alternates by sentence index instead of sampling; see `_discourse_plan`).
 _WHISPER_SEED = 0x5EED
-# How much smoother than the data the whisper's envelope is asked to be (see `_lpc_envelopes`): 0.98 is
-# where the fundamental leaves without the vowel. The formant lock does not use it: it wants the
-# sharpest envelope.
+# How much smoother than the data the whisper's tract is asked to be (see `_lpc_envelopes`). The formant
+# lock does not use it: it wants the sharpest envelope.
 _WHISPER_GAMMA = 0.98
 
 
@@ -1289,54 +1297,151 @@ def _rms_match(frames, target_frames):
     return frames * (want / np.maximum(have, 1e-9))[:, None]
 
 
+# --- the whisper ---
+#
+# A whisper is breath through the vocal tract: the resonances that carry the words kept, the buzz that carries the
+# pitch gone, and quieter than the voice by the ear. `_whisper` makes one from any take, frame by frame:
+# - THE TRACT is read through pre-emphasis (WHISPER_PRE: the glottal pulse's falling tilt and its fundamental are not
+#   the tract's), held across what is not voiced and smoothed over WHISPER_SMOOTH (more blurs the words), nothing under
+#   WHISPER_LOW, rolled off above WHISPER_TILT and WHISPER_TOP (a soft whisper, not a hiss).
+# - THE BREATH is one stream of velvet noise, never a fresh draw a frame forced to the frame's level (that grain is heard
+#   as static); its level is the voiced energy, up in WHISPER_ATTACK and down at WHISPER_RELEASE dB a second (slower
+#   fills the closure before a p, t or k, and the word is lost).
+# - WHAT IS NOT VOICED (an s, a t) is the take's own, WHISPER_KEPT_DB softer, eased above WHISPER_KEPT_TOP.
+# - THE WHOLE sits WHISPER_UNDER dB under the take BY THE EAR (A-weighted), never by its RMS: a voice's energy is mostly
+#   its fundamental, where the ear is dull, and a whisper's is where the ear is keenest - matched by RMS it is louder.
+# Kokoro whispers first (its decoder told no pitch, kokoro.py UNVOICED); what it leaves voiced is breathed here.
+WHISPER_PRE = 0.9
+WHISPER_ORDER = 20
+WHISPER_SMOOTH = 0.012  # s
+WHISPER_LOW = 300.0  # Hz
+WHISPER_TILT = 1000.0  # Hz: -6 dB an octave above it
+WHISPER_TOP = 4000.0  # Hz: -12 dB an octave above it
+WHISPER_DENSITY = 2000.0  # the velvet noise's impulses a second
+WHISPER_ATTACK = 0.015  # s
+WHISPER_RELEASE = 150.0  # dB a second
+WHISPER_KEPT_DB = -4.0
+WHISPER_KEPT_TOP = 6000.0  # Hz
+WHISPER_UNDER = 8.0  # dB, at a whole whisper
+# a frame's normalized autocorrelation peak (70-500 Hz) where it counts as not voiced, and as wholly voiced
+WHISPER_VOICED = (0.12, 0.4)
+
+
+def _velvet(n: int, density: float, sr: int, rng):
+    """Velvet noise, `n` samples: one impulse of random sign at a random place in every 1/`density` s, unit power."""
+    import numpy as np
+
+    period = sr / float(density)
+    count = int(n / period) + 1
+    at = ((np.arange(count) + rng.uniform(0.0, 1.0, count)) * period).astype(np.int64)
+    at = at[at < n]
+    x = np.zeros(n)
+    x[at] = rng.choice([-1.0, 1.0], at.size)
+    return x / max(float(np.sqrt(np.mean(x * x))), 1e-12)
+
+
+def _heard_level(x, sr: int) -> float:
+    """`x`'s A-weighted RMS: its level as the ear weighs it."""
+    import numpy as np
+
+    n = 1
+    while n < x.size:
+        n *= 2
+    f2 = np.maximum(np.fft.rfftfreq(n, 1.0 / sr), 1.0) ** 2
+    ra = (12194.0**2 * f2**2) / ((f2 + 20.6**2) * np.sqrt((f2 + 107.7**2) * (f2 + 737.9**2)) * (f2 + 12194.0**2))
+    spec = np.fft.rfft(np.asarray(x, dtype=np.float64), n) * (ra / 0.7943)
+    return float(np.sqrt(np.sum(np.abs(spec) ** 2) * 2.0 / (n * max(x.size, 1))))
+
+
+def _high_cut(x, sr: int, hz: float, order: int = 2):
+    """`x` rolled off above `hz`, `order` times 6 dB an octave."""
+    import numpy as np
+
+    n = 1
+    while n < x.size:
+        n *= 2
+    f = np.fft.rfftfreq(n, 1.0 / sr)
+    return np.fft.irfft(np.fft.rfft(x, n) / np.sqrt(1.0 + (f / hz) ** (2 * order)), n)[: x.size]
+
+
+def _voicing(frames, sr: int):
+    """Each frame's voicing, 0 to 1: its normalized autocorrelation peak at 70-500 Hz across WHISPER_VOICED."""
+    import numpy as np
+
+    f = frames - frames.mean(axis=1, keepdims=True)
+    n = f.shape[1]
+    size = 1
+    while size < 2 * n:
+        size *= 2
+    sp = np.fft.rfft(f, size, axis=1)
+    r = np.fft.irfft(sp * np.conj(sp), size, axis=1)[:, :n]
+    lo, hi = int(sr / 500), min(n - 1, int(sr / 70))
+    peak = r[:, lo:hi].max(axis=1) / np.maximum(r[:, 0], 1e-12)
+    a, b = WHISPER_VOICED
+    return np.clip((peak - a) / (b - a), 0.0, 1.0)
+
+
+def _breathed(a, sr: int):
+    """Take `a` wholly whispered (the section's header)."""
+    import numpy as np
+
+    a64 = a.astype(np.float64)
+    win, hop, nfft, window = _lpc_windows(sr)
+    hop_s = hop / float(sr)
+    raw = _framed(a64, win, hop)
+    emph = np.concatenate(([a64[0]], a64[1:] - WHISPER_PRE * a64[:-1]))
+    frames = _framed(emph, win, hop) * window
+    v = _voicing(raw, sr)
+    fr = np.fft.rfftfreq(nfft, 1.0 / sr)
+    low = np.clip((fr - WHISPER_LOW * 0.5) / (WHISPER_LOW * 0.5), 0.0, 1.0) ** 2
+    shape = _lpc_envelopes(frames, WHISPER_ORDER, nfft, _WHISPER_GAMMA)
+    shape = shape * (low / np.sqrt(1.0 + (fr / WHISPER_TOP) ** 4) / np.sqrt(1.0 + (fr / WHISPER_TILT) ** 2))[None, :]
+    # held across what is not voiced, and smoothed, in the log
+    logs = np.log(np.maximum(shape, 1e-12))
+    for i in range(1, logs.shape[0]):
+        logs[i] = v[i] * logs[i] + (1.0 - v[i]) * logs[i - 1]
+    k = max(1, int(round(WHISPER_SMOOTH / hop_s)))
+    ker = np.ones(2 * k + 1) / (2 * k + 1)
+    logs = np.apply_along_axis(lambda c: np.convolve(np.pad(c, (k, k), mode="edge"), ker, "valid"), 0, logs)
+    shape = np.exp(logs)
+    shape /= np.sqrt(np.mean(shape * shape, axis=1, keepdims=True))
+    # the breath's level: the voiced energy, up in WHISPER_ATTACK, down by WHISPER_RELEASE dB a second
+    target = 20.0 * np.log10(np.maximum(np.sqrt(np.mean(frames * frames, axis=1)) * v, 1e-7))
+    up = 1.0 - math.exp(-hop_s / WHISPER_ATTACK)
+    fall = WHISPER_RELEASE * hop_s
+    lvl = target.copy()
+    for i in range(1, lvl.size):
+        lvl[i] = lvl[i - 1] + (target[i] - lvl[i - 1]) * up if target[i] > lvl[i - 1] else max(target[i], lvl[i - 1] - fall)
+    rng = np.random.default_rng(_WHISPER_SEED)
+    noise = _framed(_velvet(a.size + win, WHISPER_DENSITY, sr, rng), win, hop)[: shape.shape[0]] * window
+    built = np.fft.irfft(np.fft.rfft(noise, nfft, axis=1) * shape * (10.0 ** (lvl / 20.0))[:, None], nfft, axis=1)[:, :win]
+    breath = _overlap_add(built, hop, a.size, window).astype(np.float64)
+    w = np.interp(np.arange(a.size), np.arange(v.size) * hop + win // 2, v)
+    kept = _high_cut(a64 * np.sqrt(np.clip(1.0 - w, 0.0, 1.0)), sr, WHISPER_KEPT_TOP) * 10.0 ** (WHISPER_KEPT_DB / 20.0)
+    out = breath + kept
+    return out * (_heard_level(a64, sr) / max(_heard_level(out, sr), 1e-12) * 10.0 ** (-WHISPER_UNDER / 20.0))
+
+
 def _whisper(a, sr: int, amount: float, curve=None):
-    """Keep the vocal tract, replace the voice in it with breath.
-
-    A whisper has no fundamental and no harmonics, and the words survive in the resonances. No inference
-    parameter produces one (a VITS checkpoint trained on modal speech has none to sample), but a filter
-    can: rebuild each frame as noise shaped by that frame's own spectral envelope.
-
-    `amount` blends against the original: half way is a stage whisper, a voice that has not quite left.
-    """
+    """Take `a` whispered by `amount`, or a sample at a time by `amount` plus `curve` (a script's delivery, word by word:
+    `_word_curve`): the take and its whisper (`_breathed`) blended in power, half way a stage whisper. The same take
+    whispers the same way twice."""
     import numpy as np
 
     amount = min(1.0, max(0.0, float(amount)))
-    # `curve`, where a script's delivery whispers word by word (`_word_curve`): the amount a sample at a time
     mix = None
     if curve is not None and a.size >= 4:
         mix = np.clip(amount + np.asarray(curve, dtype=np.float64)[: a.size], 0.0, 1.0)
         if float(np.max(mix)) <= 1e-3:
-            mix = None
-            if amount <= 1e-3:
-                return a
+            return a
     elif amount <= 1e-3 or a.size < 4:
         return a
-    win, hop, nfft, window = _lpc_windows(sr)
-    frames = _framed(a, win, hop) * window
-    env = _lpc_envelopes(frames, _lpc_order(sr), nfft, _WHISPER_GAMMA)
-    # A fresh draw per frame, not one continuous noise - see `_overlap_add`.
-    rng = np.random.default_rng(_WHISPER_SEED)
-    noise = rng.standard_normal(frames.shape)
-    spec = np.fft.rfft(noise * window, nfft, axis=1) * env
-    built = np.fft.irfft(spec, nfft, axis=1)[:, :win]
-    built = _rms_match(built, frames)
-    wet = _overlap_add(built, hop, a.size, window, incoherent=True)
-    # ...and the level trimmed once at the end: the per-frame match and the incoherent normalizer still
-    # land about a decibel low.
-    dry = a.astype(np.float64)
-    have = float(np.sqrt(np.mean(wet.astype(np.float64) ** 2)))
-    want = float(np.sqrt(np.mean(dry * dry)))
-    if have > 1e-9:
-        wet = wet * (want / have)
-    # Power-preserving: the whisper (noise) and the voice under it are uncorrelated, so they add in
-    # power and a straight `a*wet + (1-a)*dry` lands at sqrt(a^2 + (1-a)^2) of the level (-2.95 dB at
-    # 0.45, nothing at either end). Matches the prediction to 0.02 dB.
-    if mix is not None:
-        norm = np.sqrt(mix * mix + (1.0 - mix) ** 2)
-        out = (mix * wet + (1.0 - mix) * dry) / np.maximum(norm, 1e-9)
-        return np.clip(out, -1.0, 1.0).astype(np.float32)
-    norm = math.sqrt(amount * amount + (1.0 - amount) ** 2)
-    out = (amount * wet + (1.0 - amount) * dry) / max(norm, 1e-9)
+    win = _lpc_windows(sr)[0]
+    if a.size < win:
+        return a
+    wet = _breathed(a, sr)
+    m = mix if mix is not None else amount
+    out = np.sqrt(m) * wet + np.sqrt(1.0 - m) * a.astype(np.float64)
     return np.clip(out, -1.0, 1.0).astype(np.float32)
 
 
@@ -2046,7 +2151,7 @@ TRAINED = "trained"
 # How this backend reads a request, said on every voice's row (`voices`): a row keys the takes kept in its voice
 # (TakeCache), so raising it has every sentence kept before said again. Raised when the same request comes out
 # another take - and kokoro.py's READS with it when the change is in what the two share (the splice, a rest's cut).
-READS = 4
+READS = 5
 
 
 @register
@@ -3232,9 +3337,11 @@ class PiperBackend(Backend):
             w = _trail_weight(str(t.get("punct", "")), params, _rest_after(t), _tail_share(group, ti))
             if w > 0.0 and not (ti in marks and marks[ti].clip):  # a clipped word is never held
                 held[ti] = 1.0 + TRAIL_STRETCH * w
+        # how much each word is whispered (its delivery's and the request's): a graph that takes a pitch breathes it
+        hushed = {ti: w for ti, t in enumerate(group) if (w := _whisper_of(t, params)) > 0.0}
         return self._render_symbols(
             symbols, cfg, sess, params, floors, stretch, opening=OPENING_VOWEL, hold=held,
-            **({"inflect": marks} if marks else {}),
+            **({"inflect": marks} if marks else {}), **({"whisper": hushed} if hushed else {}),
         )
 
     def _render_symbols(
@@ -3248,6 +3355,7 @@ class PiperBackend(Backend):
         opening: float = 0.0,
         hold: dict | None = None,
         inflect: dict | None = None,
+        whisper: dict | None = None,
     ):
         """(symbol, source) pairs -> audio, plus a time span per source.
 
@@ -3261,8 +3369,9 @@ class PiperBackend(Backend):
         below (`OPENING_VOWEL`) at the request's length scale, and `hold` {source: multiplier} on that
         source's final rime (`TRAIL_STRETCH`), multiplied with the stress where the two meet. All act on the
         duration plan through the graph's inputs; a graph without them renders as before. The vowel probe
-        passes none: it must get the model's own vowels. `inflect` (inflection.py's marks) are read only where the graph
-        takes a pitch (Kokoro's); a VITS graph has no input for one.
+        passes none: it must get the model's own vowels. `inflect` (inflection.py's marks) and `whisper` ({source: how much
+        it is whispered}) are read only where the graph takes a pitch (Kokoro's); a VITS graph has no input for one, and
+        its whisper is `_whisper`'s alone.
         """
         import numpy as np
 

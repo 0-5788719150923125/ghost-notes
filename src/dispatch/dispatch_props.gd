@@ -271,7 +271,7 @@ func refined(key: String, name: String) -> String:
 	var e := ThingLibrary.read(name)
 	if not e.is_empty() and not PropMakes.fits(role, e["thing"]):
 		return "the version used has no %s, so the desk's own plays it" % ", ".join(PackedStringArray((PropMakes.ROLES[role] as Dictionary)["faces"]))
-	if _choice(role) == {"kept": name}:
+	if _choice(role) == PropMakes.chosen({"kept": name}):
 		return ""
 	return _format.choose(role, {"kept": name})
 

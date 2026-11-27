@@ -1,0 +1,129 @@
+extends VBoxContainer
+class_name MadeSounds
+
+## MadeSounds - the sounds a show made for the note on its own, on the Sound card under its sound effects: each a show says it makes
+## ([ShowSounds]) an entry ([EntryCard]) - what it is, what it is now, and opened, Test (heard alone). Its × stands grayed: a show's
+## sound is there because the show makes it, and making it again is its row's on the Pipeline card. Read again each second while it
+## is shown, and rebuilt only when what it lists changed.
+
+## How often what it lists is read again (s).
+const EVERY := 1.0
+
+var _sources := Callable()      # () -> Array of ShowSounds
+var _stamp := "-"               # what is listed, by key and line: rebuilt only when that changes
+var _since := EVERY
+var _list: VBoxContainer
+var _player: AudioStreamPlayer
+var _playing := ""               # the key heard now
+var _open := {}                  # keys of the entries open
+var _paths := {}                 # key -> its sound file, as listed
+
+
+func _init() -> void:
+	add_theme_constant_override("separation", 6)
+	_list = VBoxContainer.new()
+	_list.add_theme_constant_override("separation", 4)
+	add_child(_list)
+	_player = AudioStreamPlayer.new()
+	_player.finished.connect(func() -> void:
+		_playing = ""
+		_stamp = "-")
+	add_child(_player)
+	visible = false
+
+
+## Where its sounds come from: [param sources] () -> an Array of [ShowSounds].
+func follow(sources: Callable) -> void:
+	_sources = sources
+	refresh()
+
+
+func _process(delta: float) -> void:
+	_since += delta
+	if _since >= EVERY:
+		refresh()
+
+
+## What the shows make now, read again: rebuilt only when it changed. Whether there is any.
+func refresh() -> bool:
+	_since = 0.0
+	var groups: Array = []
+	var parts := PackedStringArray([_playing])
+	for s in (_sources.call() if _sources.is_valid() else []):
+		if not (s is ShowSounds):
+			continue
+		var list: Array = (s as ShowSounds).sounds()
+		if list.is_empty():
+			continue
+		groups.append({"heading": (s as ShowSounds).heading(), "sounds": list})
+		for r in list:
+			parts.append("%s=%s=%s" % [String((r as Dictionary)["key"]), String((r as Dictionary).get("line", "")), String((r as Dictionary).get("path", ""))])
+	var stamp := "|".join(parts)
+	if stamp != _stamp:
+		_stamp = stamp
+		_build(groups)
+	visible = not groups.is_empty()
+	return visible
+
+
+## The keys listed now, in order.
+func listed() -> PackedStringArray:
+	return PackedStringArray(_paths.keys())
+
+
+func _build(groups: Array) -> void:
+	for c in _list.get_children():
+		_list.remove_child(c)
+		c.queue_free()
+	_paths = {}
+	for g in groups:
+		var head := Label.new()
+		head.text = String((g as Dictionary)["heading"])
+		head.add_theme_font_size_override("font_size", 12)
+		head.modulate = Color(1, 1, 1, 0.7)
+		_list.add_child(head)
+		for r in (g as Dictionary)["sounds"]:
+			var key := String((r as Dictionary)["key"])
+			var path := String((r as Dictionary).get("path", ""))
+			_paths[key] = path
+			var e := EntryCard.new(String((r as Dictionary)["name"]), String((r as Dictionary).get("line", "")), String((r as Dictionary).get("tip", "")))
+			e.set_remove(Callable(), "", "Made by the show, and kept. To make it again, use its row on the Pipeline card.")
+			e.open = _open.has(key)
+			e.toggled.connect(func(o: bool) -> void:
+				if o:
+					_open[key] = true
+				else:
+					_open.erase(key))
+			var test := Button.new()
+			test.text = "■ Stop" if _playing == key else "▶ Test"
+			test.tooltip_text = "Hear it alone, as it is made now." if not path.is_empty() else "It is not made yet: Generate on the Pipeline card makes it."
+			test.disabled = path.is_empty() and _playing != key
+			test.focus_mode = Control.FOCUS_NONE
+			test.pressed.connect(test_sound.bind(key))
+			e.options.add_child(test)
+			_list.add_child(e)
+
+
+## Sound [param key] heard alone, or stopped where it is the one heard.
+func test_sound(key: String) -> void:
+	if _playing == key:
+		_player.stop()
+		_playing = ""
+		_stamp = "-"
+		refresh()
+		return
+	var path := String(_paths.get(key, ""))
+	var stream := AudioStreamWAV.load_from_file(path) if not path.is_empty() and FileAccess.file_exists(path) else null
+	if stream == null:
+		return
+	_player.stream = stream
+	_player.play()
+	_playing = key
+	_stamp = "-"
+	refresh()
+
+
+## Whatever is heard stopped.
+func stop() -> void:
+	_player.stop()
+	_playing = ""

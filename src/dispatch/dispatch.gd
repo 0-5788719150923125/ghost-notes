@@ -949,7 +949,7 @@ func _ensure_doc() -> void:
 		_surround = env
 		_dress_environment()
 	_title.channel = String(d.get("title", ""))
-	_title.byline = String(d.get("byline", d.get("author", "")))
+	_title.byline = String(d.get("byline", ""))
 	var src := String(d.get("source", ""))
 	var dispatch: Dictionary = d.get("dispatch", {}) if d.get("dispatch") is Dictionary else {}
 	var start: PackedStringArray = d.get("start_words", PackedStringArray()) \

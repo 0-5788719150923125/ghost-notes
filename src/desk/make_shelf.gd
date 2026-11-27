@@ -62,8 +62,9 @@ func offers() -> Array:
 		var shelf := String(od["shelf"])
 		if shelf != "kept" and shelf != "seen":
 			continue
-		# a make the scene could not show its pictures on is never offered
-		if not ((PropMakes.ROLES.get(role, {}) as Dictionary).get("faces", []) as Array).is_empty() \
+		# a make the scene could not work - its faces, its named parts and points - is never offered
+		var row: Dictionary = PropMakes.ROLES.get(role, {})
+		if not ((row.get("faces", []) as Array).is_empty() and (row.get("needs", {}) as Dictionary).is_empty()) \
 				and not PropMakes.fits(role, library.prop_of(String(od["key"])).get("thing", {})):
 			continue
 		var as_kept := String(od["key"]).substr(5) if shelf == "kept" else String(held.get(String(library.prop_of(String(od["key"])).get("hash", "")), ""))
@@ -152,7 +153,8 @@ static func key_of(choice: Dictionary) -> String:
 
 
 func _draw_keys() -> Array:
-	var out: Array = ["own"]
+	# (a role whose makes are all designed has no own to offer)
+	var out: Array = [] if bool((PropMakes.ROLES.get(role, {}) as Dictionary).get("designed", false)) and PropMakes.own_of(role).is_empty() else ["own"]
 	if PropMakes.drawn(role):
 		for n in PropMakes.DRAWS:
 			out.append("draw:%d" % (n + 1))

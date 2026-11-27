@@ -195,7 +195,7 @@ func _label(text: String, size_px: int, c: Color) -> Label:
 
 func _chip(key: String) -> Label:
 	var fc := Card.family_color(StringName(Components.REGISTRY[key]["family"]))
-	var l := _label(Registry.label(Components.REGISTRY, key), 11, fc.lightened(0.35))
+	var l := _label(Components.title_of(key), 11, fc.lightened(0.35))
 	var box := StyleBoxFlat.new()
 	box.bg_color = Color(fc, 0.12)
 	box.border_color = Color(fc, 0.85)

@@ -69,7 +69,7 @@ const WORKSPACES := {
 	"table": {"label": "Table", "section": "cards", "mode": "table",
 		"blurb": "A show at a table: the episodes agents make from the note's brief, and the voice that reads them.",
 		# (the Pictures card comes with a show at a table, so it is left out here)
-		"hosts": ["table", "direction", "voice", "voice_training", "medium", "camera", "environment", "illustrations", "look", "bookends"],
+		"hosts": ["table", "direction", "voice", "voice_training", "sound", "medium", "camera", "environment", "illustrations", "look", "bookends"],
 		"classic": ["text", "table", "voice", "look", "bookends"]},
 	"clip": {"label": "Masking", "section": "",
 		"blurb": "A clip's editor: its markers, tracks, effects and timeline."},
@@ -160,12 +160,12 @@ const REGISTRY := {
 	# Its card is the episode: the show's knobs, its agents and every step they make. It hands the reading what is read
 	# (the episode's script), where it is heard (the table's sound) and how it goes out (the episode's title and upload
 	# notes). It brings a Medium, whose formats are Table's (the table, the desk - an episode keeps the one it was made
-	# for), the Environment, which lists what the episode's table is heard with and what lasts in its air, and the Camera,
-	# which lists the cameras the table sees through. `heading` is the card's title where it is not the label; the tips are
+	# for), the Environment, which lists what the episode's table is heard with and what lasts in its air, the Camera,
+	# which lists the cameras the table sees through, and the Sound, which lists the sounds the show makes (a studio's acts). `heading` is the card's title where it is not the label; the tips are
 	# what the bookends hold at a table.
 	"table": {"label": "Table", "family": &"producer",
-		"blurb": "Agents plan, build, paint and write a show at a table, one beat at a time, and a voice reads it. The note's words are the brief they all work from.",
-		"needs": ["text"], "provides": ["text", "picture", "moments", "episode"], "requires": ["voice", "medium", "environment", "camera"],
+		"blurb": "Agents plan, build, paint and write a show's episodes, one beat at a time, and a voice reads them - at a table, a desk or the studio. The note's words are the brief they all work from.",
+		"needs": ["text"], "provides": ["text", "picture", "moments", "episode"], "requires": ["voice", "medium", "environment", "camera", "sound"],
 		"slots": [], "workspace": "table", "starter": "res://rules/table/starter.md",
 		"capabilities": ["forward_plus", "subprocess", "agent:writer", "agent:painter"], "marks": [],
 		"block": "table", "card": "episode", "heading": "Episode",
@@ -304,13 +304,21 @@ static func blocks_of(key: String) -> Array:
 ## and a component another one brings stays while that one does.
 static func detach_blocker(key: String, attached: Array) -> String:
 	if attach_blocks(key).is_empty():
-		return "%s is not attached by itself." % String((REGISTRY.get(key, {"label": key}) as Dictionary)["label"])
+		return "%s is not attached by itself." % title_of(key)
 	for other in attached:
 		if other != key and REGISTRY.has(other) and not attach_blocks(other).is_empty() \
 				and ((REGISTRY[other] as Dictionary)["requires"] as Array).has(key):
-			var label := String((REGISTRY[other] as Dictionary)["label"])
+			var label := title_of(other)
 			return "%s brings it - detach %s first." % [label, label]
 	return ""
+
+
+## What a person sees component [param key] called: its card's title - a row's `heading` where its card is titled otherwise (Table's
+## card is its Episode), else its `label` - on its card, on the note's tile on the home screen, in "+" and in every sentence about it.
+## The key stays the code's name.
+static func title_of(key: String) -> String:
+	var row: Dictionary = REGISTRY.get(key, {})
+	return String(row.get("heading", row.get("label", key)))
 
 
 ## Which components a note has, read off its blocks: the text always, and each component whose block it carries. A
@@ -471,7 +479,7 @@ static func slot_note(key: String, attached: Array) -> String:
 			var held := holder(String(slot), attached)
 			if not held.is_empty():
 				return "This note's %s is its %s - detach that first." % [
-					String((SLOTS[slot] as Dictionary)["label"]), String((REGISTRY[held] as Dictionary)["label"])]
+					String((SLOTS[slot] as Dictionary)["label"]), title_of(held)]
 	return ""
 
 
@@ -513,7 +521,7 @@ static func host_note(key: String, attached: Array) -> String:
 	if not (hosts is Array) or (hosts as Array).has(key):
 		return ""
 	return "The %s panel shows no %s - it goes on a note of its own, or with what brings it." % [
-		String((WORKSPACES[ws] as Dictionary)["label"]), String(row.get("label", key))]
+		String((WORKSPACES[ws] as Dictionary)["label"]), title_of(key)]
 
 
 ## The "+" menu: every component [method offered] a note with [param attached], what can be attached now first and,
@@ -537,7 +545,7 @@ static func attach_menu(menu: PopupMenu, attached: Array) -> void:
 
 static func _menu_item(menu: PopupMenu, k: String, attached: Array) -> void:
 	var row: Dictionary = REGISTRY[k]
-	menu.add_item(String(row["label"]))
+	menu.add_item(title_of(k))
 	var i := menu.item_count - 1
 	menu.set_item_metadata(i, k)
 	var why := cannot_attach(k, attached)

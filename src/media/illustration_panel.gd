@@ -491,11 +491,25 @@ func _refine_button(im: Dictionary, has_one: bool) -> Button:
 	if not has_one:
 		b.tooltip_text = "Nothing painted yet, so nothing to refine."
 	b.disabled = not has_one or Illustrations.read_only()
-	b.pressed.connect(func() -> void: _open_refine(im))
+	b.toggle_mode = true
+	b.set_pressed_no_signal(_refine != null and is_instance_valid(_refine) and RefineDock.is_open(_refine)
+		and String(_refine_im.get("key", "")) == String(im["key"]))
+	b.pressed.connect(func() -> void: _toggle_refine(im, b))
 	return b
 
 
-## The Refine window ([PropRefine]) opened on [param im], beside its picture at full size; its painter starts as the note's.
+## The Refine button's toggle: the words docked into the picture's window for [param im] ([method _open_refine]), or folded away
+## where they stand open on it; [param b] pressed while open.
+func _toggle_refine(im: Dictionary, b: BaseButton) -> void:
+	if _refine != null and is_instance_valid(_refine) and RefineDock.is_open(_refine) and String(_refine_im.get("key", "")) == String(im["key"]):
+		_refine.fold()
+	else:
+		_open_refine(im)
+	RefineDock.show_on(b, _refine)
+
+
+## The Refine ([PropRefine]) opened on [param im], docked into the window its picture is shown whole in; its painter starts as the
+## note's.
 func _open_refine(im: Dictionary) -> void:
 	if _refine == null or not is_instance_valid(_refine):
 		_refine = PropRefine.new("picture", {"agent": Illustrations.backend(), "model": Illustrations.painter_model(),

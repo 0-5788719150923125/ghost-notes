@@ -296,6 +296,11 @@ void fragment() {
 		albedo = mix(albedo, film(NORMAL, VIEW, color) * mix(0.6, 1.0, dot(color, vec3(0.333))), mix(0.8, 0.45, pale));
 		metal = max(metal, mix(0.85, 0.3, pale));
 		rough = clamp(rough, 0.12, 0.3);
+	} else if (play == 7) {
+		// COATED: an even coating that takes the glare off, what it reflects faint and tinted by the angle
+		albedo = mix(albedo, coating(NORMAL, VIEW, color2) * 0.15, 0.7);
+		metal = max(metal, 0.9);
+		rough = min(rough, 0.1);
 	} else if (play == 6) {
 		// GLOW: a soft light of `color2` under the surface, strongest where it is seen straight on -
 		// so it floats as it turns

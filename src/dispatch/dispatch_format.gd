@@ -203,7 +203,7 @@ func choose(role: String, choice: Dictionary) -> String:
 	if choice.is_empty():
 		(_knobs["things"] as Dictionary).erase(role)
 	else:
-		_knobs["things"][role] = choice.duplicate(true)
+		_knobs["things"][role] = PropMakes.chosen(choice)
 	_touch()
 	_redress_live()
 	return ""

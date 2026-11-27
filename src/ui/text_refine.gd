@@ -1,4 +1,4 @@
-extends Window
+extends PanelContainer
 class_name TextRefine
 
 ## TextRefine - Refine… for a note's text, opened from the window the text is written in (the Body's editor, the Direction's
@@ -7,9 +7,9 @@ class_name TextRefine
 ## back through, kept with the note. Below it the writer picked ([AgentPick]: the agent, its model and how hard it thinks), a
 ## bar and the line the writer reports while it works, and the box the author writes in.
 ##
-## It stands beside the window it was opened from ([method open_beside]), which moves aside to make room, so each change is
-## seen landing in the text as the writer makes it. Closed, the conversation goes on: its owner polls it ([method
-## WriterChat.poll]) and this shows what it missed when opened again.
+## It is docked INTO the window it was opened from ([RefineDock]: that window widens to hold it at its right, or the side panel
+## holding the card does), so each change is seen landing in the text as the writer makes it; its Refine button opens and folds it.
+## Folded, the conversation goes on: its owner polls it ([method WriterChat.poll]) and this shows what it missed when opened again.
 
 ## The kind of job the writer picked last is kept for between sessions ([method AgentPick.last_for]), so a new conversation starts
 ## where the last one left off.
@@ -17,7 +17,6 @@ const PICKED := "refine_text"
 ## Where the conversations of a text kept in no note are: a gate's own folder, never the author's.
 static var root := "user://refine"
 
-const GAP := 16
 const COL_YOU := Color(0.62, 0.72, 0.88)
 const COL_WRITER := Color(0.78, 0.72, 0.94)
 const COL_GONE := Color(0.92, 0.52, 0.5)
@@ -28,6 +27,7 @@ const COL_ERROR := Color(1.0, 0.68, 0.42)
 const DIFF_LINES := 8
 
 var chat: WriterChat
+var _head: Label                  # what it refines, over the conversation
 
 var _scroll: ScrollContainer
 var _list: VBoxContainer
@@ -44,27 +44,23 @@ var _forget_armed := -INF
 var _shown_busy := false
 
 
-## A window on [param conversation], called "Refine - [param what]".
+## A refine of [param conversation], headed "Refine - [param what]", folded until it is opened ([method open_beside]).
 func _init(conversation: WriterChat, what: String) -> void:
 	chat = conversation
 	visible = false
-	transient = true
-	title = "Refine - %s" % what
-	min_size = Vector2i(420, 420)
-	close_requested.connect(hide)
-	window_input.connect(func(e: InputEvent) -> void:
-		if e is InputEventKey and (e as InputEventKey).pressed and (e as InputEventKey).keycode == KEY_ESCAPE:
-			hide())
-	var bg := PanelContainer.new()
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+	custom_minimum_size = Vector2(0, 420)
 	var pad := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
 		pad.add_theme_constant_override("margin_" + side, 10)
-	bg.add_child(pad)
+	add_child(pad)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 8)
 	pad.add_child(col)
+	_head = Label.new()
+	_head.text = "Refine - %s" % what
+	_head.add_theme_font_size_override("font_size", 14)
+	_head.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	col.add_child(_head)
 
 	_scroll = ScrollContainer.new()
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -136,34 +132,29 @@ func _init(conversation: WriterChat, what: String) -> void:
 	_redraw()
 
 
-## Where [param win] stands beside [param host]: to its right where there is room, else with [param host] moved left and narrowed
-## as far as its own least width to make it; as tall as [param host], and a third of the screen wide, at most [param widest].
-static func beside(win: Window, host: Window, widest: int) -> Rect2i:
-	var screen := Vector2i(win.get_tree().root.get_visible_rect().size) if win.is_inside_tree() else Vector2i(1600, 900)
-	var w := clampi(int(screen.x * 0.3), win.min_size.x, widest)
-	var h := screen.y - 2 * GAP
-	var y := GAP
-	var x := screen.x - w - GAP
-	if host != null and host.visible:
-		h = maxi(win.min_size.y, host.size.y)
-		y = host.position.y
-		if host.position.x + host.size.x + GAP + w > screen.x - GAP:
-			var host_w := maxi(host.min_size.x, mini(host.size.x, screen.x - w - 3 * GAP))
-			host.position = Vector2i(GAP, host.position.y)
-			host.size = Vector2i(host_w, host.size.y)
-		x = mini(host.position.x + host.size.x + GAP, screen.x - w - GAP)
-	return Rect2i(x, y, w, h)
+## Opened docked where [param from] is (the window the text is written in, or the card the Refine button is on: [method
+## RefineDock.host_of]), or folded away where it stands open - the Refine button's toggle, [param button] shown pressed while it is
+## open. Whether it is open now.
+func toggle(from: Node, button: BaseButton = null) -> bool:
+	var open := RefineDock.toggle(from, self, button)
+	if open:
+		_opened()
+	return open
 
 
-## Shown beside [param host] (the window the text is written in): to its right where there is room, else with [param host]
-## moved left, narrowed as far as its own least width, to make it.
-func open_beside(host: Window) -> void:
+## Opened docked where [param from] is, whatever it was ([method RefineDock.open]).
+func open_beside(from: Node) -> void:
+	RefineDock.open(RefineDock.host_of(from), self)
+	_opened()
+
+
+## Folded away ([method RefineDock.close]).
+func fold() -> void:
+	RefineDock.close(self)
+
+
+func _opened() -> void:
 	_pick.mark_available()
-	var r := beside(self, host, 640)
-	if not visible:
-		popup(r)
-	position = r.position
-	size = r.size
 	_scroll_down()
 	_box.grab_focus()
 
@@ -296,7 +287,7 @@ static func parts_of(attached: Array) -> Array:
 	var out: Array = []
 	for k in attached:
 		if Components.REGISTRY.has(k):
-			out.append({"label": Registry.label(Components.REGISTRY, k), "blurb": Registry.blurb(Components.REGISTRY, k)})
+			out.append({"label": Components.title_of(k), "blurb": Registry.blurb(Components.REGISTRY, k)})
 	return out
 
 

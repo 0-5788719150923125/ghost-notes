@@ -15,8 +15,16 @@ With the host's own patch (`dur_scale`, `rest_floor`), the durations are set too
 frames each token holds. `curves` cuts the sung graph to its planned curves alone (no decoder: a fraction of a call)
 for the pass that reads what Kokoro would do with those durations before the pass that sings.
 
+THE SOURCE IS GIVEN BACK ITS BREATH (`breath`, an overridable initializer of 0): Kokoro's harmonic source is StyleTTS2's
+SineGen, trained as `sin * uv + noise` with noise of NOISE_VOICED where voiced and a third of the sine's amplitude where not,
+and the export dropped the noise. Told no pitch with none (a whisper, the host's `whisper`), the source is silent - a state
+the decoder never met - and it buzzes at twice its 80 Hz frame rate; fed `breath` 1 it has the noise it was trained with.
+Unfed, nothing is added.
+
 THE SITES ARE FOUND BY NAME AND SHAPE: the predictor's `F0_proj` and `N_proj` convolutions, each read by one Squeeze
-whose output is the curve. A graph without them is not made, and the voice cannot sing. The graph a voice moves in
+whose output is the curve. A graph without them is not made, and the voice cannot sing. The source is the input of
+`m_source/l_linear`'s MatMul, made by a Mul of the sine and the voicing (a Cast); where it is not found the graph sings
+without breath. The graph a voice moves in
 (kokoro_moving.py, a style row a token) is made so too: its pitch is what an inflected reading of a moving voice moves.
 """
 
@@ -27,6 +35,11 @@ from pathlib import Path
 
 INPUTS = (("f0_keep", 1.0), ("f0_set", 0.0), ("n_keep", 1.0), ("n_set", 0.0))
 PLANNED = ("f0_planned", "n_planned")
+BREATH = "breath"
+# SineGen's noise where voiced (`noise_std`); where not it is the sine's amplitude over three, read off the graph
+NOISE_VOICED = 0.003
+# what a graph made here says it is (its metadata `ghost_sung`): one made before the breath is made again
+VERSION = "2"
 
 
 def make(src: Path, dst: Path) -> bool:
@@ -80,6 +93,9 @@ def make(src: Path, dst: Path) -> bool:
     for name, value in INPUTS:
         g.initializer.append(numpy_helper.from_array(np.full(1, value, np.float32), name))
         g.input.append(helper.make_tensor_value_info(name, TensorProto.FLOAT, None))
+    if not _breathe(g):
+        print("ghost/voice: Kokoro's harmonic source was not found - it sings without breath", file=sys.stderr)
+    model.metadata_props.add(key="ghost_sung", value=VERSION)
     tmp = dst.with_name(dst.name + ".making")
     onnx.save(model, str(tmp))
     if not check(src, tmp):
@@ -98,7 +114,7 @@ def curves(sung: Path, dst: Path) -> bool:
         return False
     try:
         model = onnx.load(str(sung))
-        told = {k for k, _v in INPUTS}  # downstream of the curves: a cut that listed them would need them fed
+        told = {k for k, _v in INPUTS} | {BREATH}  # downstream of the curves: a cut that listed them would need them fed
         cut = onnx.utils.Extractor(model).extract_model([i.name for i in model.graph.input if i.name not in told],
                                                          list(PLANNED))
         tmp = dst.with_name(dst.name + ".making")
@@ -108,6 +124,60 @@ def curves(sung: Path, dst: Path) -> bool:
     except Exception as exc:  # noqa: BLE001 - the whole graph plans instead
         print(f"ghost/voice: no curve graph for {sung.name} ({exc})", file=sys.stderr)
         return False
+
+
+def _breathe(g) -> bool:
+    """Graph `g`'s harmonic source given SineGen's noise back, times the input `breath` (0 unfed) - False, `g` untouched,
+    where the source is not the shape this knows."""
+    import numpy as np
+    from onnx import TensorProto, helper, numpy_helper
+
+    made = {o: n for n in g.node for o in n.output}
+    inits = {i.name: i for i in g.initializer}
+    linear = [n for n in g.node if n.op_type == "MatMul" and "m_source/l_linear" in n.name]
+    if len(linear) != 1:
+        return False
+    src = linear[0].input[0]
+    mul = made.get(src)
+    if mul is None or mul.op_type != "Mul" or len(mul.input) != 2:
+        return False
+    casts = [i for i in mul.input if i in made and made[i].op_type == "Cast"]
+    if len(casts) != 1:
+        return False
+    uv = casts[0]
+    sine = made.get(next(i for i in mul.input if i != uv))
+    amp = 0.1
+    if sine is not None and sine.op_type == "Mul":
+        for i in sine.input:
+            if i in inits and int(np.prod(inits[i].dims or [1])) == 1:
+                amp = float(numpy_helper.to_array(inits[i]).reshape(-1)[0])
+    for name, value in (("ghost_breath_voiced", NOISE_VOICED), ("ghost_breath_unvoiced", amp / 3.0), ("ghost_breath_one", 1.0)):
+        g.initializer.append(numpy_helper.from_array(np.array(value, np.float32), name))
+    g.initializer.append(numpy_helper.from_array(np.zeros(1, np.float32), BREATH))
+    g.input.append(helper.make_tensor_value_info(BREATH, TensorProto.FLOAT, None))
+    out = "ghost_breath_source"
+    added = [
+        helper.make_node("RandomNormalLike", [src], ["ghost_breath_n"], name="ghost_breath_noise", dtype=TensorProto.FLOAT,
+                         mean=0.0, scale=1.0, seed=5.0),
+        helper.make_node("Sub", ["ghost_breath_one", uv], ["ghost_breath_off"], name="ghost_breath_off"),
+        helper.make_node("Mul", [uv, "ghost_breath_voiced"], ["ghost_breath_on_amp"], name="ghost_breath_on_amp"),
+        helper.make_node("Mul", ["ghost_breath_off", "ghost_breath_unvoiced"], ["ghost_breath_off_amp"], name="ghost_breath_off_amp"),
+        helper.make_node("Add", ["ghost_breath_on_amp", "ghost_breath_off_amp"], ["ghost_breath_amp"], name="ghost_breath_amp"),
+        helper.make_node("Mul", ["ghost_breath_amp", BREATH], ["ghost_breath_fed"], name="ghost_breath_fed"),
+        helper.make_node("Mul", ["ghost_breath_n", "ghost_breath_fed"], ["ghost_breath_term"], name="ghost_breath_term"),
+        helper.make_node("Add", [src, "ghost_breath_term"], [out], name="ghost_breath_add"),
+    ]
+    nodes = list(g.node)
+    for n in nodes:
+        if n is not mul:
+            for j, i in enumerate(n.input):
+                if i == src:
+                    n.input[j] = out
+    at = nodes.index(mul)
+    nodes[at + 1:at + 1] = added
+    del g.node[:]
+    g.node.extend(nodes)
+    return True
 
 
 def check(stock: Path, sung: Path) -> bool:

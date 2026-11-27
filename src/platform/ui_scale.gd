@@ -38,7 +38,8 @@ static var _window: WeakRef = null
 ## Size [param win]'s interface for its screen now and whenever it is resized - for a person's session alone (see the
 ## class doc). True when it is watched.
 static func watch(win: Window) -> bool:
-	if win == null or DisplayServer.get_name() == "headless" or Settings.is_read_only():
+	var st := _settings()
+	if win == null or DisplayServer.get_name() == "headless" or st == null or bool(st.call("is_read_only")):
 		return false
 	_window = weakref(win)
 	if not win.size_changed.is_connected(refit):
@@ -97,9 +98,17 @@ static func most(px: Vector2) -> float:
 	return maxf(1.0, minf(canvas.x / LEAST.x, canvas.y / LEAST.y))
 
 
+## The settings the zoom is kept in ([Settings]), asked by path: named as a class, the autoload would be compiled into every
+## script that sizes a window, and a gate with none could not load them. Null where there are none.
+static func _settings() -> Node:
+	var tree := Engine.get_main_loop() as SceneTree
+	return tree.root.get_node_or_null("Settings") if tree != null and tree.root != null else null
+
+
 ## The person's zoom, one of [constant ZOOMS].
 static func zoom() -> float:
-	var z := float(Settings.read(SECTION, KEY, 1.0))
+	var st := _settings()
+	var z := float(st.call("read", SECTION, KEY, 1.0)) if st != null else 1.0
 	return z if z > 0.0 else 1.0
 
 
@@ -117,7 +126,9 @@ static func step(by: int) -> String:
 			if absf(float(ZOOMS[i]) - now) < absf(float(ZOOMS[at]) - now):
 				at = i
 		z = float(ZOOMS[clampi(at + signi(by), 0, ZOOMS.size() - 1)])
-	Settings.write(SECTION, KEY, z)
+	var st := _settings()
+	if st != null:
+		st.call("write", SECTION, KEY, z)
 	refit()
 	return describe()
 

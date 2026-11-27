@@ -38,8 +38,9 @@ const WARP_STEP := 0.005
 ## ...and a block of a material that gives (a sponge's foam) has its flat faces cut this far apart (meters): enough to show it bend over a
 ## pot's mouth, few enough to stay quick.
 const GIVE_STEP := 0.008
-## The largest anything may be, centimeters: a thing past it is scaled down whole.
-const MAX_SIZE := 60.0
+## The largest anything may be, centimeters: a room's height - a floor lamp, a tripod, a door. A thing past it is scaled down
+## whole: a number that big is a mistake in units, not a thing.
+const MAX_SIZE := 300.0
 ## How high above the cloth a thing's FOOT is measured (meters): what a card sliding across the
 ## cloth would run into. A chalice's bowl is above it; its foot and stem are not.
 const FOOT_H := 0.02
@@ -54,7 +55,7 @@ const SHAPES := {
 	"point": "one crystal: a prism with a pointed end, standing up from its base - a tower, a single point. `radius`, `length` (the prism), `tip` (the point), `sides` (6 for quartz).",
 	"cluster": "a crystal cluster: points growing out of one rough rock. `count` 3-24, `radius` (the rock), `length` [shortest, longest], `spread` (degrees the outer points lean out), `thickness` (a point's width over its length, 0.1-0.3), `base` (the rock's material, if not the crystal's).",
 	"geode": "a geode broken open: a rough round rock, hollow, the hollow lined with crystal points growing in toward its middle. It lies open side up; `turn` [30, 0, 0] tips the opening toward the reader. `radius` (the rock's), `rind` (the thickness of its shell), `length` (the crystals'), `base` (the rock's material; plain gray rock if not given). The part's own material is the crystals'.",
-	"ring": "a ring lying flat round the vertical axis, resting on whatever is under it: rims, rings, bangles, a coiled rope. `radius` (to the middle of the band), `thickness` (the band's), `arc` (degrees, less than 360 for an open ring).",
+	"ring": "a ring lying flat round the vertical axis, resting on whatever is under it: rims, rings, bangles, a coiled rope. `radius` (to the middle of the band), `thickness` (the band's), `arc` (degrees, less than 360 for an open ring). A ring with a `width` (how wide its band is, across, centimeters) is FLAT - a band with square edges, as a washer, a bezel or a ring light's face is - and its `thickness` is then how deep it is along the axis; turned [90, 0, 0] it stands upright, facing the thing's front.",
 	"tube": "a round rod along a path: handles, stems, incense sticks, wands, branches, wire, a feather's quill, a pipe. `path` [[x,y,z], ...] in the thing's own space, `radius` (or `radii`, one per point, to taper or swell it). It curves through its points (`smooth` false: joined straight, every bend a crisp elbow, like a bent wire); a point written [x, y, z, r] bends round r centimeters there (a pipe's elbow), and [x, y, z, 0] is a crisp kink in a smooth path. `wall` (centimeters) makes it hollow and open at both ends: a pipe, a straw, a spout.",
 	"loft": "a form swept along a path through CROSS-SECTIONS that change as it goes - what a lathe, a tube or an extrude cannot make: a spout wide at the body and narrow at its lip, a blade of a snake plant or an aloe, a cactus pad, a horn, a spoon's handle, a shell's whorl, a curling leaf with real thickness. `path` [[x,y,z], ...] as a tube's (with its corners), or none: it rises straight up `height`. `sections` [{`at` 0-1 along the path, `outline` (as an extrude's, or `points` [[x, z], ...]), `size` [width, thickness] or one number, `sides`, `scale`, `turn` (degrees about the path), `shift` [x, z]}, ...]: the form blends smoothly from each section to the next (`smooth` false: straight); a section of `size` 0 closes to a point. Width runs across the path and thickness the other way - the thing's x and z while the path runs up. An outline, size or sides written on the part itself is every section's unless it says otherwise. `wall` makes it hollow and open at both ends.",
 	"coil": "a band wound round the vertical axis: an incense coil, a spring, a coiled cord, a curling tendril, a spiral of wire. `turns`, `radius` (where it starts) and `radius2` (where it ends: larger for a flat spiral), `height` (how far it climbs over all its turns; 0 lies flat), `thickness` (the band's, as a ring's).",
@@ -299,8 +300,9 @@ const PLAYS := {
 	"flash": {"code": 2, "about": "broad patches that flash `color2` and the colors beside it where they catch the light, dark elsewhere - labradorite, spectrolite"},
 	"fire": {"code": 3, "about": "small patches of every color, changing as it turns - opal"},
 	"glitter": {"code": 4, "about": "tiny flakes of `color2` that sparkle in the flames - goldstone, sunstone, aventurine, the pyrite in lapis"},
-	"rainbow": {"code": 5, "about": "an oily rainbow film over the surface - aura quartz, rainbow obsidian, bismuth, paua, abalone, mother of pearl"},
+	"rainbow": {"code": 5, "about": "an oily rainbow film over the surface, in patches of every hue - aura quartz, rainbow obsidian, bismuth, paua, abalone, mother of pearl; never a lens's coating (`coated`)"},
 	"glow": {"code": 6, "about": "a soft light of `color2` floating under the surface - moonstone"},
+	"coated": {"code": 7, "about": "an even coating that takes the glare off glass - a camera's or a projector's lens, binoculars, glasses: what it reflects faint and tinted by the angle alone, green seen straight on turning violet at its edge (`color2`, where it is a color, its hue straight on)"},
 }
 
 ## A sheet's outlines: its half-width along its length, 0 at the base to 1 at the tip.
@@ -316,6 +318,13 @@ const FACE_WORDS := "WORDS ON A THING, as a flat label: a book's title on its co
 const FACE_OUTLINES := ["rect", "round", "rounded"]
 const GLASS := {"curve": Vector2(0.0, 0.3), "lines": Vector2(0.0, 1.0), "line_count": Vector2(60.0, 600.0), "bloom": Vector2(0.0, 2.0),
 	"mono": Vector2(0.0, 1.0), "snow": Vector2(0.0, 1.0), "brightness": Vector2(0.2, 3.0)}
+## A part's fur (`fur`, [method _sanitize_fur]): strands rooted over its mesh ([FurStrands], drawn by [constant FUR_SHADER];
+## next/studio.md "Fur (props)") - its `length` (cm, scaled with the thing), `density` (strands a centimeter across, at most
+## [constant FurStrands.MOST] strands a part, apart from the thing's triangles), `curl` and `droop` (0-1), its `color` at the root
+## and its `tip`. A furred part is pressed through its rig ([method PropRig.touch]).
+const FUR := {"length": Vector2(0.2, 6.0), "density": Vector2(2.0, 40.0), "curl": Vector2(0.0, 1.0), "droop": Vector2(0.0, 1.0)}
+const FUR_DEFAULTS := {"length": 1.8, "density": 9.0, "curl": 0.3, "droop": 0.25}
+const FUR_SHADER := "res://shaders/prop_fur.gdshader"
 const FACE_HANDS := {"print": "", "marker": "res://fonts/hands/PatrickHand-Regular.ttf", "type": "res://fonts/cards/CourierPrime-Bold.ttf"}
 const WORDS_PX := 64
 const WORDS_LIFT := 0.0003
@@ -630,6 +639,7 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			out["radius"] = _num(p.get("radius"), 3.0, 0.2, MAX_SIZE * 0.5)
 			out["thickness"] = _num(p.get("thickness"), 0.4, 0.05, 10.0)
 			out["arc"] = _num(p.get("arc"), 360.0, 10.0, 360.0)
+			out["width"] = _num(p.get("width"), 0.0, 0.0, float(out["radius"]) * 2.0)
 		"tube":
 			var path := _points3(p.get("path"), MAX_SIZE)
 			if path.size() < 2:
@@ -691,7 +701,7 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 			out["loose"] = _num(p.get("loose"), 0.3, 0.0, 1.0)
 			# none given: the lay chooses one from the length ([method _strand_flat])
 			out["radius"] = _num(p["radius"], 6.0, 0.5, MAX_SIZE * 0.5) if (p.get("radius") is float or p.get("radius") is int) else -1.0
-			var far := DRAPE_REACH if out["lay"] == "drape" else MAX_SIZE
+			var far := maxf(DRAPE_REACH, MAX_SIZE) if out["lay"] == "drape" else MAX_SIZE
 			out["path"] = _points2(p.get("path"), Vector2(-far, -far), Vector2(far, far)).slice(0, MAX_POINTS)
 			if out["lay"] in ["path", "drape"] and (out["path"] as Array).size() < 2:
 				out["lay"] = "heap"
@@ -756,6 +766,9 @@ static func _sanitize_part(p: Dictionary, mats: Dictionary, pal: Array) -> Dicti
 	if p.get("skin") == true and not shape in ["grains", "strand", "tuft"]:
 		out["skin"] = true
 	out["warp"] = _sanitize_warp(p.get("warp"))
+	# Fur over it, drawn as strands (never a strand's, grains' or a face's)
+	if p.get("fur") is Dictionary and not shape in ["grains", "strand", "tuft", "face"]:
+		out["fur"] = _sanitize_fur(p["fur"])
 	# A light at it ([method _sanitize_light]): never a flame's (a candle's light is its flame's)
 	var lt := _sanitize_light(p.get("light"))
 	if not lt.is_empty() and not bool(out["wick"]):
@@ -1330,6 +1343,8 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 					mat.set_shader_parameter("bristle_len", tuft["len"])
 					mat.set_meta("tuft", tuft)
 				mi.material_override = mat
+				if part.get("fur") is Dictionary:
+					_fur(mi, merged, part["fur"])
 				if see_through(m):
 					mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 				# plain: a fixed part with no work, skin, face, light, glow, flame or ornament, of a material that holds still
@@ -1386,7 +1401,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	for p in all:
 		box = box.expand(p)
 	_rest_free(inner, meshes, works, box.position.y)
-	# Too big is scaled down whole: a 2-meter vase is a mistake in units, not a vase
+	# Too big is scaled down whole: a thing past a room's height is a mistake in units
 	var k := minf(1.0, MAX_SIZE * 0.01 / maxf(box.size.x, maxf(box.size.y, box.size.z))) if not keep else 1.0
 	var shift := Vector3(-box.get_center().x, -box.position.y, -box.get_center().z) if not keep else Vector3.ZERO
 	inner.scale = Vector3(k, k, k)
@@ -1409,11 +1424,60 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 ## not seen through and holds still (no liquid that fills, no foam that gives). Its copies come with it: what tells them apart is a
 ## glow's, and it has none.
 static func _plain(part: Dictionary, m: Dictionary, fixed: bool) -> bool:
-	if not fixed or part.has("work") or part.get("skin") == true or part.has("light") or part.has("lit") or part.get("wick") == true:
+	if not fixed or part.has("work") or part.get("skin") == true or part.has("light") or part.has("lit") or part.get("wick") == true \
+			or part.has("fur"):
 		return false
 	if String(part.get("shape", "")) in ["face", "tuft", "grains"] or not (part.get("ornament", {}) as Dictionary).is_empty():
 		return false
 	return not see_through(m) and not String(m.get("kind", "")) in ["liquid", "sponge"]
+
+
+## Fur as written, bounded ([constant FUR]): a field left out takes [constant FUR_DEFAULTS]'s.
+static func _sanitize_fur(d: Dictionary) -> Dictionary:
+	var out := {}
+	for k in FUR:
+		out[k] = _num(d.get(k), float(FUR_DEFAULTS[k]), (FUR[k] as Vector2).x, (FUR[k] as Vector2).y)
+	out["color"] = _color(d.get("color", ""), "#2a2622")
+	out["tip"] = _color(d.get("tip", ""), "#b8aea2")
+	return out
+
+
+## Mesh [param mi]'s fur, rooted over its triangles [param g] (as placed in [param mi]'s space, meters as the thing is built): its
+## strands ([method FurStrands.made]) a child of it, over its own material, which is the undercoat. They hang in a one-instance
+## MultiMesh, so what reads every MeshInstance3D's triangles never meets the placeholder strip. Marked `fur` for its rig; they cast
+## no shadow (the part under them casts its own).
+static func _fur(mi: MeshInstance3D, g: Tris, f: Dictionary) -> void:
+	var shader := load(FUR_SHADER) as Shader
+	var made := FurStrands.made(g.v, g.n, f)
+	if shader == null or made.is_empty():
+		return
+	# where it parts: the top of the part, middle of its width (in its mesh's own space)
+	var box := mi.mesh.get_aabb()
+	var crown := Vector3(box.get_center().x, box.end.y, box.get_center().z)
+	var sm := ShaderMaterial.new()
+	sm.shader = shader
+	sm.set_shader_parameter("roots", made["texture"])
+	sm.set_shader_parameter("row", FurStrands.ROW)
+	sm.set_shader_parameter("segments", FurStrands.SEGMENTS)
+	sm.set_shader_parameter("width", float(made["width"]))
+	sm.set_shader_parameter("fur_len", float(f.get("length", 1.8)) * 0.01)
+	sm.set_shader_parameter("curl", float(f.get("curl", 0.3)))
+	sm.set_shader_parameter("droop", float(f.get("droop", 0.25)))
+	sm.set_shader_parameter("root_color", Color(String(f.get("color", "#2a2622"))))
+	sm.set_shader_parameter("tip_color", Color(String(f.get("tip", "#b8aea2"))))
+	sm.set_shader_parameter("crown", crown)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = made["mesh"]
+	mm.instance_count = 1
+	mm.set_instance_transform(0, Transform3D.IDENTITY)
+	var hair := MultiMeshInstance3D.new()
+	hair.name = "Fur"
+	hair.multimesh = mm
+	hair.material_override = sm
+	hair.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	hair.set_meta("fur", true)
+	mi.add_child(hair)
 
 
 ## The plain meshes of a thing ([method _plain], each holding its placed geometry as `plain` until now) of one material made one mesh: what a thing costs to draw is then its materials, never
@@ -2591,6 +2655,8 @@ static func _shaped(p: Dictionary, rng: RandomNumberGenerator) -> Array:
 		"geode":
 			return _geode(p, rng)
 		"ring":
+			if float(p.get("width", 0.0)) > 0.0:
+				return [{"geo": _flat_ring(float(p["radius"]) * 0.01, float(p["width"]) * 0.01, float(p["thickness"]) * 0.01, float(p["arc"]))}]
 			return [{"geo": _ring(float(p["radius"]) * 0.01, float(p["thickness"]) * 0.01, float(p["arc"]))}]
 		"tube":
 			return [{"geo": _tube(p)}]
@@ -3412,6 +3478,37 @@ static func _ring(radius: float, thick: float, arc_deg: float, fine := 1.0) -> T
 	g.girth = arc * radius * 100.0
 	g.height = thick * 200.0
 	g.top = Vector3(0.0, thick * 2.0, 0.0)
+	return g
+
+
+## A FLAT RING lying round the vertical axis, resting on y = 0: a band [param width] across (round the middle at [param radius])
+## and [param depth] deep, its faces and edges square - a washer, a bezel, a ring light's face - or part of one ([param arc_deg]).
+static func _flat_ring(radius: float, width: float, depth: float, arc_deg: float) -> Tris:
+	var g := Tris.new()
+	var segs := clampi(roundi(arc_deg / 360.0 * 64.0), 8, 64)
+	var arc := deg_to_rad(arc_deg)
+	var r0 := maxf(radius - width * 0.5, 0.0)
+	var r1 := radius + width * 0.5
+	for i in segs:
+		var a0 := arc * float(i) / float(segs)
+		var a1 := arc * float(i + 1) / float(segs)
+		var c0 := Vector3(cos(a0), 0.0, sin(a0))
+		var c1 := Vector3(cos(a1), 0.0, sin(a1))
+		var u0 := float(i) / float(segs)
+		var u1 := float(i + 1) / float(segs)
+		var up := Vector3(0.0, depth, 0.0)
+		# its top, its bottom, its outer edge and its inner edge
+		g.quad(c0 * r0 + up, c0 * r1 + up, c1 * r1 + up, c1 * r0 + up, Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP,
+			Vector2(u0, 0.0), Vector2(u0, 1.0), Vector2(u1, 1.0), Vector2(u1, 0.0), 1.0, 1.0, 1.0, 1.0)
+		g.quad(c1 * r0, c1 * r1, c0 * r1, c0 * r0, Vector3.DOWN, Vector3.DOWN, Vector3.DOWN, Vector3.DOWN,
+			Vector2(u1, 0.0), Vector2(u1, 1.0), Vector2(u0, 1.0), Vector2(u0, 0.0), 0.0, 0.0, 0.0, 0.0)
+		g.quad(c0 * r1, c0 * r1 + up, c1 * r1 + up, c1 * r1, c0, c0, c1, c1,
+			Vector2(u0, 0.0), Vector2(u0, 1.0), Vector2(u1, 1.0), Vector2(u1, 0.0), 0.0, 1.0, 1.0, 0.0)
+		g.quad(c1 * r0, c1 * r0 + up, c0 * r0 + up, c0 * r0, -c1, -c1, -c0, -c0,
+			Vector2(u1, 0.0), Vector2(u1, 1.0), Vector2(u0, 1.0), Vector2(u0, 0.0), 0.0, 1.0, 1.0, 0.0)
+	g.girth = arc * radius * 100.0
+	g.height = depth * 100.0
+	g.top = Vector3(0.0, depth, 0.0)
 	return g
 
 

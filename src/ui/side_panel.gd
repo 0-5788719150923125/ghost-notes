@@ -21,6 +21,9 @@ class_name SidePanel
 ##
 ## Open, it takes its width from the show ([method Shell.claim_stage_left]): the frame is fitted to its
 ## right, never under it, and has the whole window back once the panel is hidden ("‹", F2).
+##
+## A Refine opened from one of its cards stands beside the cards, inside the panel ([method dock], [RefineDock]): the panel widens
+## by it and stands the window's height, the show fitted beside it; folded, the panel narrows back.
 
 ## Distance from the window's edge, and the gap left at the bottom. The panel is placed here, so "how
 ## much room is there" has one answer.
@@ -66,14 +69,25 @@ var _deck: PanelDeck                # the title bars of the body's cards
 ## Controls already named for making the panel too wide (see [method _check_width]).
 var _warned := {}
 var _claimed: WeakRef = null        # the shell it claimed the show's room from, while it holds a claim
+var _row: HBoxContainer             # the cards' column, and beside it...
+var _dock: VBoxContainer            # ...a Refine opened from one of them ([method dock]), hidden while none is
+var _width := 380.0                 # its own width, without a Refine
 
 
 func _init(width := 380.0) -> void:
 	position = Vector2(MARGIN, MARGIN)
+	_width = width
 	custom_minimum_size = Vector2(width, 0)
+	_row = HBoxContainer.new()
+	_row.add_theme_constant_override("separation", 10)
+	add_child(_row)
 	_col = VBoxContainer.new()
 	_col.add_theme_constant_override("separation", 6)
-	add_child(_col)
+	_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_row.add_child(_col)
+	_dock = VBoxContainer.new()
+	_dock.visible = false
+	_row.add_child(_dock)
 	_scroll = ScrollContainer.new()
 	# Horizontal scrolling off: with it on, the scroll view's minimum width collapses and the panel
 	# narrows to nothing rather than staying as wide as its widest row.
@@ -196,7 +210,7 @@ func _add_detach(card: Card, component: String) -> void:
 	snug.content_margin_right = 4
 	for st in ["normal", "hover", "pressed", "disabled", "focus"]:
 		x.add_theme_stylebox_override(st, snug)
-	var label := String((Components.REGISTRY.get(component, {"label": card.title}) as Dictionary)["label"])
+	var label := Components.title_of(component) if Components.REGISTRY.has(component) else card.title
 	var tip := "Detach %s from this note. Its settings here are removed with it." % label
 	x.tooltip_text = tip
 	x.pressed.connect(func() -> void:
@@ -417,9 +431,46 @@ func _apply() -> void:
 	var want: float = _pad.get_combined_minimum_size().y
 	# `want` when it fits, the room when it does not, never below the floor: a short panel stays short.
 	_scroll.custom_minimum_size.y = maxf(minf(want, room()), MIN_HEIGHT)
+	# ...and a Refine docked beside the cards stands the window's whole height, the panel with it
+	_dock.custom_minimum_size.y = get_viewport().get_visible_rect().size.y - position.y - MARGIN if _dock.visible else 0.0
 	# Then shrink the panel itself onto that: a Control outside a container keeps the size it was last given.
 	size = get_combined_minimum_size()
 	_check_width()
+
+
+## [param panel] (a Refine, [RefineDock]) docked beside the cards and shown: the panel widens by [param width], stands the window's
+## height, and the show is fitted beside it.
+func dock(panel: Control, width: int) -> void:
+	if panel.get_parent() != _dock:
+		if panel.get_parent() != null:
+			panel.get_parent().remove_child(panel)
+		_dock.add_child(panel)
+	for c in _dock.get_children():
+		(c as Control).visible = c == panel
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	if not _dock.visible:
+		_width = custom_minimum_size.x
+	_dock.custom_minimum_size.x = width
+	_dock.show()
+	custom_minimum_size.x = _width + float(width) + float(_row.get_theme_constant("separation"))
+	_fit()
+
+
+## [param panel] folded away: the panel back to its own width once no Refine stands beside its cards.
+func undock(panel: Control) -> void:
+	panel.hide()
+	for c in _dock.get_children():
+		if (c as Control).visible:
+			return
+	_dock.hide()
+	custom_minimum_size.x = _width
+	_fit()
+
+
+## Whether [param panel] stands docked beside the cards.
+func docked(panel: Control) -> bool:
+	return panel.get_parent() == _dock and panel.visible and _dock.visible
 
 
 ## The width is declared, not enforced: the panel is as wide as its widest row (horizontal scrolling is

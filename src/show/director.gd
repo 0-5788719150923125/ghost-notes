@@ -669,6 +669,19 @@ func shown_medium() -> Medium:
 	return _medium if _medium != null and is_instance_valid(_medium) else null
 
 
+## Whether the medium showing the note can be looked over while the show is paused ([StageLook], [method paused]): it answers
+## `look_by`.
+func can_look() -> bool:
+	return _medium != null and is_instance_valid(_medium) and _medium.has_method("look_by")
+
+
+## The show's eye turned [param yaw] and tipped [param pitch] radians, drawn to [param reach] times as far, as a person looks the
+## paused show over ([StageLook]): handed to the medium, which eases back once the show plays ([FreeLook]).
+func look_by(yaw: float, pitch: float, reach := 1.0) -> void:
+	if can_look():
+		_medium.call("look_by", yaw, pitch, reach)
+
+
 ## What is at [param at] on the frame (window pixels), as what shows it says (its own `pick`: a table names its
 ## thing and part, a stage its actor); {} for nothing there, a click off the frame, or nothing that picks (next/editing.md).
 ## The point is followed through the Look's fisheye ([method Filters.lens]), so what is picked is what is seen there.

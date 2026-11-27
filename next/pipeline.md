@@ -50,7 +50,10 @@ and at a row each four times a second it would cost a playing show).
 
 **One Generate.** Top to bottom, every section's missing work in turn, each waiting for the one before: an episode's words
 first, then what is made from them. A section's own ▶ on its heading makes only that section, so "paint the missing
-pictures, not the tags" is one click. While Generate walks, rows whose owners accept queued requests stay available;
+pictures, not the tags" is one click. GENERATE RUNS THE WHOLE OF IT: a section done but still missing what its last ask
+opened is asked again (the studio's things designed, then the sounds made on them), and at the end the walk goes round again
+for every section still missing while the last round started anything (the studio's sounds, from the script the episode writes
+below it) - bounded (`AGAIN_MOST`, `ROUNDS_MOST`), so a section whose asks start nothing is asked no more. While Generate walks, rows whose owners accept queued requests stay available;
 other ⟳ buttons wait. Stop stops it all. What Generate was asked
 goes on with the settings it was pressed with: a note opened again while it walks (a format picked, a card attached or
 taken off) builds its panel anew, whose cards take up what is being made (`TableProducer.of`) and whose Generate walks on

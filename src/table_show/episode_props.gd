@@ -138,7 +138,8 @@ func _ornament_rows(t: Dictionary) -> Array:
 			"line": "%s  ·  version %d of %d" % [String(e["words"]).left(60), used + 1, n], "tip": String(e["words"]),
 			"picture": _swatch(String(e["code"]), String(e["kind"])),
 			"remove_off": "Take it off a thing by refining that thing; remove it from your library on the Dex.",
-			"verbs": [{"key": "refine", "label": "Refine…", "tip": "Ask its designer for a change: a new version, which every prop wearing it shows."},
+			"verbs": [{"key": "refine", "label": "Refine…", "tip": "Ask its designer for a change: a new version, which every prop wearing it shows.",
+				"pressed": OrnamentDesign.open_now(String(e["name"]))},
 				{"key": "older", "label": "‹", "tip": "Use the version before this one.", "off": used <= 0},
 				{"key": "newer", "label": "›", "tip": "Use the version after this one.", "off": used >= n - 1}]})
 	return out
@@ -280,6 +281,7 @@ func _furniture_rows() -> Array:
 	var paint := ep.file_of("image:surface") if ep.has("image:surface") else ""
 	var h := TableProp.hash_of(spec, ep.seed, ep.digest("image:surface") if not paint.is_empty() else "")
 	var verbs: Array = [{"key": "refine", "label": "Refine…", "off": TableRefine.busy(ep.dir),
+		"pressed": _refine != null and is_instance_valid(_refine) and RefineDock.is_open(_refine),
 		"tip": "Have an agent change the table as you say - its top, what holds it up, the cloths on it. It runs while you work on; the table before is kept a version back." \
 			if not TableRefine.busy(ep.dir) else "An agent is refining it now."}]
 	if not _dressers_made().is_empty() and not TableProp.same(_dressers_made(), _made):
@@ -399,8 +401,12 @@ func _take_cloth(i: int) -> String:
 	return err
 
 
-## The table's Refine window opened: what is asked of it handed to an agent ([TableRefine]), which works on whether or not it stays.
+## The table's Refine docked beside the Props card in its panel ([RefineDock]), or folded away where it stands open (its verb is a
+## toggle): what is asked of it handed to an agent ([TableRefine]), which works on whether or not it stays open.
 func _open_refine() -> String:
+	if _refine != null and is_instance_valid(_refine) and RefineDock.is_open(_refine):
+		_refine.fold()
+		return ""
 	var ep := card._episode
 	if ep == null or not ep.has("table"):
 		return "this episode has no table yet"
@@ -426,9 +432,7 @@ func _open_refine() -> String:
 	if not busy and String(PropRefining.of(TableRefine.name_of(ep.dir)).get("state", "")) == "failed":
 		_refine.say("Not refined: %s." % String(PropRefining.of(TableRefine.name_of(ep.dir))["error"]))
 		PropRefining.seen(TableRefine.name_of(ep.dir))
-	_refine.open_for("The table", card.get_window())
-	# ...beside the side panel, never under it
-	Shell.center_beside(_refine, card)
+	_refine.open_for("The table", card)
 	return ""
 
 
@@ -539,7 +543,7 @@ func _act_ornament(name: String, verb: String) -> String:
 		return "%s is not in the library" % name
 	match verb:
 		"refine":
-			OrnamentDesign.of(name).open()
+			OrnamentDesign.of(name).toggle(card)
 			return ""
 		"older", "newer":
 			return OrnamentLibrary.use_version(name, int(e["used"]) + (-1 if verb == "older" else 1))
@@ -712,7 +716,8 @@ func add(key: String) -> String:
 ## The open episode's table as written, read again only when its file changed; {} for none.
 func _read_table() -> Dictionary:
 	var ep := card._episode
-	if ep == null or not ep.has("table"):
+	# (a table the episode no longer has - its format sets out its own things, [method TableEpisode.own_work] - is not listed)
+	if ep == null or not ep.has("table") or ep.own_work():
 		_table_key = ""
 		_table = {}
 		return _table

@@ -1,0 +1,54 @@
+# THE HEAD'S DESIGNER - a show's head phrases (HeadDesign; HeadPlan, HeadBank; next/head.md). The viewer sees through the creator's
+# eyes and hears the voice from where the mouth is, so the head's habits are what the picture and the voice do between and under the
+# words. A phrase is a short choreography written in ranges, drawn afresh every time it is performed, so it is never the same twice;
+# the designer writes the habits, never one performance. It is shown what its phrases really do - measured - and asked once to put
+# right any that does not do what its own line says.
+#
+# The code gives: {{show}} (the show), {{fields}} (what a phrase is written as, field by field), {{least}} and {{most}} (how many
+# phrases), and, asked again, {{measured}} (each phrase's numbers) and {{answer}} (its last answer).
+system: >-
+  You design how a person's head moves while they make ASMR at a microphone: a bank of short motion phrases, written as JSON. Answer
+  with the JSON and nothing else.
+prompt:
+  - "THE SHOW: {{show}}"
+  - ""
+  - >-
+    The viewer sees through the creator's eyes: the picture is what the head sees, and the voice is heard from where the mouth is,
+    relative to the microphone - at its left the voice is in the left ear, close it is warm and the room falls away, sat back it is
+    roomy, and with the mouth turned away from the microphone it is muffled. So the head's habits are half of what the viewer hears.
+    Real creators move all the time, and oddly: weaving from ear to ear and back several times in one sentence, holding at one side
+    and pulling away there, turning the head so the voice dulls and brightens, tipping and leaning as they go, checking the frame on
+    the flip screen, coming in close for a secret, sitting back between.
+  - >-
+    Write {{least}} to {{most}} PHRASES, each a habit of this creator's: some restless, some slow, some that carry the voice across the
+    ears, some that bring it close or dull it by turning away, and two or three calm ones that keep near home (sat back, facing the
+    microphone, only drifting) for the opening and the close. A phrase's moves change its turn, tip and lean as they go, not only its
+    place. Everything is a range, drawn afresh each time: give each the spread a person's repetitions really have, wide where they
+    vary and narrow where they do not.
+  - ""
+  - "A PHRASE is written as:"
+  - insert: fields
+  - ""
+  - >-
+    Answer with {"phrases": [{"name": ..., "line": ..., "moves": [{"side": [lo, hi], "distance": [lo, hi], "rise": [lo, hi], "turn":
+    [lo, hi], "tilt": [lo, hi], "roll": [lo, hi], "take": [lo, hi], "hold": [lo, hi], "land": "stress"}, ...], "repeat": [lo, hi],
+    "length": [lo, hi], "weight": 1, "calm": false}, ...]}. Names are a few plain words, each its own. Nothing outside the JSON.
+  # asked again: what its phrases did, measured, and its answer
+  - when: measured
+    say: ""
+  - when: measured
+    say: >-
+      YOUR PHRASES, PERFORMED AND MEASURED (each over three performances: how many times the voice crosses from ear to ear, its pan
+      from the left ear -1 to the right 1, its nearest and farthest from the capsule in meters, how muffled it gets 0 to 1, how long
+      it lasts, and how far apart two performances are in meters):
+  - when: measured
+    say: "{{measured}}"
+  - when: measured
+    say: ""
+  - when: measured
+    say: >-
+      Where a phrase does not do what its line says - a weave that never crosses, a lean-in that never comes close, a turn away that
+      never muffles, two performances nearly alike - change it until it would; keep every phrase that does. Answer with the whole bank
+      again, in the same form. Your last answer was:
+  - when: measured
+    say: "{{answer}}"
