@@ -4614,7 +4614,8 @@ func boiling(t: float) -> Array:
 ## in turn from its point and rising - in closed form, the k-th puff born at k over its rate - and as
 ## thick as the part's `emit` says (so how hard it smokes can change and stay a function of time). A
 ## trail, never tufts: puffs are born at least half a puff's size apart as they rise, and a plume asked
-## for fewer is fainter, never broken.
+## for fewer is fainter, never broken. Each plume draws its puffs from its own `salt` and is born on its own
+## `phase` of its rate, so plumes side by side rise apart; only the table's wind is shared.
 func _plume(wi: int, e: Dictionary) -> Dictionary:
 	var look: Dictionary = Motions.EMITS[String(e["kind"])]
 	var trail := float(look["rise"]) / (float(look["size"]) * 0.001 * 0.5)
@@ -4644,7 +4645,9 @@ func _plume(wi: int, e: Dictionary) -> Dictionary:
 		mm.set_instance_custom_data(i, Color(-1.0e6, 0.01, 0.0, 0.0))
 	var at := String(e.get("at", ""))
 	var box_w: AABB = (works[wi] as Dictionary)["w"]["box"]
+	var salt := hash(["plume", wi, String((works[wi] as Dictionary).get("name", ""))])
 	return {"wi": wi, "e": e, "look": look, "layer": layer, "rate": rate, "thick": thick, "life": life, "n": n, "slots": slots, "lives": lives,
+		"salt": salt, "phase": _hash01(0, 1, salt),
 		"across": maxf(box_w.size.x, box_w.size.z), "kin": _works_of_thing_with(wi),
 		"point": _point_local(wi, at) if not at.is_empty() else Vector3(((works[wi] as Dictionary)["w"]["box"] as AABB).get_center().x,
 			((works[wi] as Dictionary)["w"]["box"] as AABB).end.y, ((works[wi] as Dictionary)["w"]["box"] as AABB).get_center().z),
@@ -4692,8 +4695,10 @@ func _tick_plume(p: Dictionary, t: float) -> void:
 	if medium._plan.cam_base.origin != Vector3.ZERO:
 		strength *= smoothstep(PLUME_LENS.y, PLUME_LENS.x, from.distance_to(medium._plan.cam_base.origin))
 	p["strength"] = strength
-	var k_hi := int(floor(t * rate))
-	var k_lo := maxi(int(ceil((t - life * 1.2) * rate)), k_hi - n + 1)
+	var phase := float(p["phase"])
+	var salt := int(p["salt"])
+	var k_hi := int(floor(t * rate - phase))
+	var k_lo := maxi(int(ceil((t - life * 1.2) * rate - phase)), k_hi - n + 1)
 	var look: Dictionary = p["look"]
 	for k in range(k_lo, k_hi + 1):
 		var slot := posmod(k, n)
@@ -4704,23 +4709,24 @@ func _tick_plume(p: Dictionary, t: float) -> void:
 			mm.set_instance_custom_data(slot, Color(-1.0e6, 0.01, 0.0, 0.0))
 			lives[slot] = Vector2(-1.0e6, 0.01)
 			continue
-		var born := float(k) / rate
-		var side := Vector3(_hash01(k, 2) - 0.5, 0.0, _hash01(k, 3) - 0.5) * 0.02
-		var vel := Vector3(side.x, float(look["rise"]) * lerpf(0.7, 1.25, _hash01(k, 4)) * lerpf(STEAM_COOL_RISE, 1.0, heat), side.z)
-		var particle := {"born": born, "pos": from + Vector3(_hash01(k, 5) - 0.5, 0.0, _hash01(k, 6) - 0.5) * 0.01, "vel": vel}
+		var born := (float(k) + phase) / rate
+		var side := Vector3(_hash01(k, 2, salt) - 0.5, 0.0, _hash01(k, 3, salt) - 0.5) * 0.02
+		var vel := Vector3(side.x, float(look["rise"]) * lerpf(0.7, 1.25, _hash01(k, 4, salt)) * lerpf(STEAM_COOL_RISE, 1.0, heat), side.z)
+		var particle := {"born": born, "pos": from + Vector3(_hash01(k, 5, salt) - 0.5, 0.0, _hash01(k, 6, salt) - 0.5) * 0.01, "vel": vel}
 		mm.set_instance_transform(slot, Effects.particle_xform(particle, wind))
 		# as thick as it smokes when it is born: the sprite fades by its color's alpha
 		var c: Color = p["color"]
 		mm.set_instance_color(slot, Color(c.r, c.g, c.b, clampf(strength, 0.0, 1.0) * float(p["thick"])))
-		lives[slot] = Vector2(born, life * lerpf(0.75, 1.2, _hash01(k, 7)) * lerpf(STEAM_COOL_LIFE, 1.0, heat))
-		mm.set_instance_custom_data(slot, Color(lives[slot].x, lives[slot].y, _hash01(k, 8),
-			float(look["size"]) * 0.001 * lerpf(0.7, 1.3, _hash01(k, 9)) * lerpf(STEAM_COOL_SIZE, 1.0, heat)))
+		lives[slot] = Vector2(born, life * lerpf(0.75, 1.2, _hash01(k, 7, salt)) * lerpf(STEAM_COOL_LIFE, 1.0, heat))
+		mm.set_instance_custom_data(slot, Color(lives[slot].x, lives[slot].y, _hash01(k, 8, salt),
+			float(look["size"]) * 0.001 * lerpf(0.7, 1.3, _hash01(k, 9, salt)) * lerpf(STEAM_COOL_SIZE, 1.0, heat)))
 	p["slots"] = slots
 	p["lives"] = lives
 
 
-static func _hash01(k: int, salt: int) -> float:
-	var h := hash([k, salt, "puff"])
+## A draw in [0, 1) for puff [param k] of the plume [param plume], by [param salt] (which of its numbers).
+static func _hash01(k: int, salt: int, plume: int) -> float:
+	var h := hash([k, salt, plume, "puff"])
 	return float(h & 0xFFFFFF) / float(0x1000000)
 
 

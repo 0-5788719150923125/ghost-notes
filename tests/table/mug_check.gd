@@ -6,7 +6,8 @@ extends SceneTree
 ##   is whole when hot, gone by the time it stops - within 15 to 25 minutes. Controls: what is kept hot, and smoke, which is not heat,
 ##   go on as they are.
 ## - The plume says so: a real mug's plume is whole at the start, thin and short-lived at ten minutes, and at twenty-five nothing is
-##   born. Controls: the same mug `kept_hot`, and one that boils, steam at two hours.
+##   born. Controls: the same mug `kept_hot`, and one that boils, steam at two hours. Two plumes side by side rise apart, each its
+##   own draw and birth phase; control: given one salt and phase they rise alike.
 ## - A drink: at the mouth every corner of the mug is out of the frame by its foot; it comes back to within a hair of where it stood;
 ##   the liquid has lost what the sip says and nothing else, none of it spilled; a second drink takes its share of what is left. Its
 ##   steam does not cross the picture. Controls: at rest it is in the frame, and a carry takes nothing from it; a thing with no liquid
@@ -138,7 +139,34 @@ func _plume() -> void:
 	for nm in ["kept", "boiling", "smoke"]:
 		var other := _plume_at(m, int(by[nm]), 7200.0)
 		_ok(is_equal_approx(float(other[0]), 1.0) and int(other[1]) > 0, "the control: at two hours the %s one still rises, %.2f" % [nm, float(other[0])])
+	# Two plumes of one kind, side by side and as hot, rise apart: their puffs born at other moments and drawn apart
+	var kept: Dictionary = m._work._plumes[int(by["kept"])]
+	var boil: Dictionary = m._work._plumes[int(by["boiling"])]
+	m._work.tick(60.0)
+	var kept_air := _in_air(kept, 60.0)
+	var boil_air := _in_air(boil, 60.0)
+	_ok(not kept_air.is_empty() and kept_air != boil_air, "two plumes side by side rise apart: first puffs in the air born at %s s and %s s" % [
+		kept_air.slice(0, 1), boil_air.slice(0, 1)])
+	# ...control: the same plume given the other's salt and phase rises as it does
+	kept["salt"] = boil["salt"]
+	kept["phase"] = boil["phase"]
+	var unborn := PackedInt64Array()
+	unborn.resize(int(kept["n"]))
+	unborn.fill(-1)
+	kept["slots"] = unborn
+	m._work.tick(60.0)
+	_ok(_in_air(kept, 60.0) == boil_air, "control: given one salt and phase, two plumes rise alike")
 	m._root3.free()
+
+
+## The puffs of plume [param p] in the air at [param t], each `[born, life]`, by when they were born.
+static func _in_air(p: Dictionary, t: float) -> Array:
+	var out: Array = []
+	for life in (p["lives"] as PackedVector2Array):
+		if life.x <= t and t - life.x <= life.y:
+			out.append([snappedf(life.x, 0.0001), snappedf(life.y, 0.0001)])
+	out.sort()
+	return out
 
 
 ## Whether any corner of what [param box] gives, at [param x], is in the frame.
