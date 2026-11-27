@@ -9,12 +9,25 @@ class_name Cameras
 ##
 ## What a camera wants a moment for and how it frames it is the format's to work out from what it is handed ([TableGame] reads a
 ## game's turns, throws, marches and long narration; the Dispatch desk sees from its chair, and puts what stands behind it on a
-## screen). Each entry is `{sort, ...fields}`; a field unset stands at its row's default ([method value]).
+## screen). Each entry is `{sort, ...fields}`; a field unset stands at its row's default ([method value]). A CAMERA IS LISTED ONLY
+## WHERE IT IS USED ([method seen]): a sort a format always sees through (`kept`), or one the show registers ([method
+## ShowFeed.see_cameras]: a game at the table registers its dice, marching, seat and drifting cameras; a reading registers none).
+##
+## A camera with a Sway is held by a hand, not a tripod: its aim wanders off what it looks at by three slow waves that never line
+## up ([method sway_at]), a function of show time, so a render sways as the live show did.
 ##
 ## Gate: tests/motion/cameras_check.gd.
 
 ## Every sort of camera. `fields` are its settings, as [SchemaForm] draws them.
 const REGISTRY := {
+	"table": {"format": "table", "label": "At the table", "kept": "The table is seen from here whenever no other camera wants the moment.",
+		"blurb": "Looks down at the table from where it is read or played from, and holds there whenever no other camera wants the moment. Its sway is every camera's at this table.",
+		"fields": {
+			"sway": {"label": "Sway", "type": "float", "min": 0.0, "max": 3.0, "step": 0.05, "default": 0.0,
+				"blurb": "How unsteady it is, as a camera held by someone sitting still and breathing: 0 a tripod, never moving; 1 as the Dispatch desk's chair has it; more is restless."},
+			"sway_speed": {"label": "Sway speed", "type": "float", "min": 0.25, "max": 4.0, "step": 0.05, "default": 1.0,
+				"blurb": "How quickly it wanders: 1 a slow breath, about nine seconds a sway."},
+		}},
 	"dice": {"format": "table", "label": "Dice", "blurb": "Eases in on the dice as they land, from over the shoulder of whoever threw them, and back out once the words go on.",
 		"fields": {
 			"far": {"label": "Distance (cm)", "type": "float", "min": 15.0, "max": 120.0, "step": 1.0, "default": 48.0,
@@ -77,7 +90,12 @@ const REGISTRY := {
 		}},
 	"chair": {"format": "dispatch", "label": "From the chair", "kept": "The desk is seen from the chair.",
 		"blurb": "Sits in the chair and turns to what is active: a phone ringing, the terminal, the radar, the tablet. How it turns is the rows above.",
-		"fields": {}},
+		"fields": {
+			"sway": {"label": "Sway", "type": "float", "min": 0.0, "max": 3.0, "step": 0.05, "default": 1.0,
+				"blurb": "How unsteady it is, as someone sitting in the chair and breathing: 0 a tripod, never moving; 1 the desk's own; more is restless."},
+			"sway_speed": {"label": "Sway speed", "type": "float", "min": 0.25, "max": 4.0, "step": 0.05, "default": 1.0,
+				"blurb": "How quickly it wanders: 1 a slow breath, about nine seconds a sway."},
+		}},
 	"behind": {"format": "dispatch", "label": "Behind the chair", "kept": "What a `live` mark puts on a screen is this camera's picture.",
 		"blurb": "Stands back behind the chair and looks over it at the desk, never moving: its picture is what a `live` mark puts on a screen.",
 		"fields": {
@@ -96,6 +114,11 @@ const EASE := 1.8
 ## The fastest a cut moves the eye in a straight line, at its quickest (meters a second): a longer move takes longer than
 ## [constant EASE]. Going round the table rather than across it, the eye travels a share more.
 const SPEED := 0.65
+## How far a camera's aim wanders at Sway 1 (meters, at what it looks at, each axis) and how often (cycles a second at Sway speed 1).
+## SWAY_REACH is how far the aim is for it (meters): the Dispatch desk's chair from its whole desk.
+const SWAY := Vector3(0.010, 0.006, 0.006)
+const SWAY_RATE := 0.11
+const SWAY_REACH := 1.0
 
 
 ## The sorts of format [param fmt], in the registry's order: the list a note with none of its own has.
@@ -139,6 +162,38 @@ static func sanitize(raw: Variant, fill := false, fmt := "") -> Array:
 		if not kept(s).is_empty() and rank(out, s) < 0:
 			out.append({"sort": s})
 	return out
+
+
+## [param sorts] (a format's: entries or their sorts) the show up uses: those it always sees through, and those it registered
+## ([param registered]). Nothing registered, its kept ones alone.
+static func seen(sorts: Array, registered: PackedStringArray) -> Array:
+	return sorts.filter(func(e: Variant) -> bool:
+		var sort := String((e as Dictionary).get("sort", "")) if e is Dictionary else String(e)
+		return not kept(sort).is_empty() or registered.has(sort))
+
+
+## Where [param entry]'s aim has wandered to at show time [param t] (meters, off what it looks at): its Sway over [constant SWAY], on
+## three waves at [constant SWAY_RATE] times its Sway speed. Zero for a camera of a sort with no Sway, or one set at 0.
+static func sway_at(t: float, entry: Dictionary) -> Vector3:
+	var fields: Dictionary = Registry.field(REGISTRY, String(entry.get("sort", "")), "fields", {})
+	if not fields.has("sway"):
+		return Vector3.ZERO
+	var k := value(entry, "sway")
+	if k <= 0.0:
+		return Vector3.ZERO
+	var r := SWAY_RATE * value(entry, "sway_speed") * TAU
+	return Vector3(sin(t * r + 1.3) * SWAY.x, sin(t * r * 0.77) * SWAY.y, sin(t * r * 0.53 + 2.1) * SWAY.z) * k
+
+
+## Camera [param xf] turned as [param entry]'s Sway has it at [param t], its aim [param reach] meters ahead: the aim moved by [method
+## sway_at] scaled to that reach, so it turns by the angle the Dispatch desk's chair does on its whole desk wherever it looks.
+static func swayed(xf: Transform3D, t: float, entry: Dictionary, reach: float) -> Transform3D:
+	var by := sway_at(t, entry)
+	if by == Vector3.ZERO or reach <= 0.0:
+		return xf
+	var fwd := -xf.basis.z
+	var aim := xf.origin + fwd * reach + by * (reach / SWAY_REACH)
+	return Transform3D(Basis.looking_at(aim - xf.origin, xf.basis.y), xf.origin)
 
 
 ## Why [param sort] stays on its format's list, "" where it can be taken off.

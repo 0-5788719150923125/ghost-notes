@@ -17,6 +17,9 @@ class_name ShowFeed
 ## Handed, with a default: whoever mounts a part sets its `feed`; a part nobody handed one (a gate that builds a
 ## medium by hand, a placeholder scene) starts on the show that is up ([method playing]).
 
+## The sorts of camera the show up sees through changed ([member cameras_seen]).
+signal cameras_seen_changed
+
 static var _playing: ShowFeed
 
 
@@ -57,10 +60,22 @@ var camera_follow := {}
 ## The cameras a show cuts between, in priority order, as the note's Camera card lists them ([Cameras]): `[{sort, ...}]`, empty
 ## for a format's own. Set through [method Director.set_cameras]; persisted as `[director] cameras`.
 var cameras: Array = []
+## The sorts of camera the show up registers beyond those its format always sees through, as what makes it or plays it says (a
+## game at the table registers its dice, marching, seat and drifting cameras; a reading at the table none): none until one says
+## ([method see_cameras]). The Camera card lists a camera only where it is used ([method Cameras.seen]).
+var cameras_seen := PackedStringArray()
 ## The notebook's handwriting: a key of the notebook's hands, or "random" to draw one per session from the seed (a
 ## setting, not only a draw, because the seed comes from the audio's fingerprint). Set through
 ## [method Director.set_hand]; persisted as `[director] hand`.
 var hand := "kalam"
+
+## The show up registers the cameras [param sorts] ([member cameras_seen]): told on the app's thread by what makes or plays it,
+## and none again as a note opens ([method Director.reset_show]).
+func see_cameras(sorts: PackedStringArray) -> void:
+	if sorts == cameras_seen:
+		return
+	cameras_seen = sorts
+	cameras_seen_changed.emit()
 
 # --- the holds at each end ------------------------------------------------------------------------
 

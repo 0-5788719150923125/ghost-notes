@@ -407,8 +407,12 @@ func keep_prop() -> void:
 	_show_versions()
 
 
-## The Refine window opened on the version shown.
+## The Refine window opened on the version shown - or, for a row its section refines itself ([method PropSection.refines]), that
+## row's own.
 func open_refine() -> void:
+	if _sec is PropSection and (_sec as PropSection).refines(_key):
+		_say((_sec as PropSection).act(_key, "refine"))
+		return
 	if _refine == null or not is_instance_valid(_refine):
 		_refine = PropRefine.new()
 		add_child(_refine)
@@ -505,9 +509,11 @@ func _show_versions() -> void:
 	for c in [_prev, _ver, _next]:
 		(c as Control).visible = many
 	var can := _pv != null and _sec is PropSection and _pv.refinable((_sec as PropSection).prop_of(_key))
-	_refine_btn.disabled = not can or (not _kept.is_empty() and PropRefining.busy(_kept))
+	var own := _sec is PropSection and (_sec as PropSection).refines(_key)
+	_refine_btn.disabled = not (can or own) or (not _kept.is_empty() and PropRefining.busy(_kept))
 	_refine_btn.tooltip_text = ("Have an agent change what you say about the version shown - a part's shape, a size, a color - and keep "
-		+ "the rest. It makes a new version beside the others.") if can else "This is built by code, not written as parts, so it cannot be refined."
+		+ "the rest. It makes a new version beside the others.") if can else ("Have an agent change it as you say." if own
+		else "This is built by code, not written as parts, so it cannot be refined.")
 	var kept := _pv != null and not _kept.is_empty() and _pv.kept(_kept)
 	_keep_btn.visible = can
 	_keep_btn.disabled = kept

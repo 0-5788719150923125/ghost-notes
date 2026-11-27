@@ -8,7 +8,8 @@ extends SceneTree
 ## - Every rules file parses, is a map of parts, and every item is a line, an empty line or a map of known keys
 ##   (when, say, insert, include, each); every `include` names a part that exists (control: a file naming one
 ##   that does not is found).
-## - Every prompt renders whole: the producer, the designer, the set dresser (with tools and without), the prop refiner, a reader's
+## - Every prompt renders whole: the producer, the designer, the set dresser (with tools and without), the prop refiner, the table
+##   refiner, a reader's
 ##   intro, card and close, every picture, what Grok is told beside them, and an episode's YouTube tags and
 ##   painted thumbnail, over a fixture plan, leave nothing unfilled ([member Rules.missing] empty, no `{{`
 ##   left); control: a part asked for a name nobody gives is said.
@@ -225,6 +226,11 @@ func _prompts() -> bool:
 	_ok(texts.back().contains("\"fine scrolls\": a running border of thin scrolls"), "the prop refiner is told the ornaments kept in the library")
 	_ok(texts.back().contains("\"knapped flint\": the scallops of a struck flint") and texts.back().contains("`mottle`")
 		and texts.back().contains("chipped:"), "...and the textures kept, the surface's fields and the built-in textures")
+	# the table refined (table/table_refiner.yaml), the set dresser's table vocabulary with it
+	var tref := TableRefine.prompt({"top": {"shape": "rect"}, "materials": {"the oak": {}}}, plan, "a darker top", true)
+	texts.append(String(tref["system"]) + "\n" + String(tref["prompt"]))
+	_ok(texts.back().contains("a darker top") and texts.back().contains("\"the oak\"") and texts.back().contains("pedestal"),
+		"the table refiner is told the table, its materials and the table's vocabulary")
 	for step in ["intro", "1", "2", "close"]:
 		var upto := 0 if step == "intro" else (3 if step == "close" else int(step))
 		texts.append(TablePrompts.reader("Show", "a brief", plan, step, ["hello"], [card, card, card].slice(0, upto), 3, true, [], [], ["Moth"])["prompt"])

@@ -8,13 +8,16 @@ class_name CameraCard
 ## Above them, where the format plans shots of its own (the comic, the novel, the notebook, the tablet: [method Medium.uses]
 ## "camera"), its Severity ([member ShowFeed.camera]): how far, how often and how fast those shots move.
 ##
+## A format that flies no camera of its own (the table: its cameras are its list) shows no rows: nothing here would move it.
+##
 ## Like the Look it is the Director's ([method Director.set_camera_follow]), so a reading and an export render follow it
 ## alike, and a playing show takes a change on its next frame. Its block in a document is `camera:`, only what is set (`severity` among them). Where
 ## and when the camera looks stays the format's; what a format changes for a moment (springs quickened on a new page) is
 ## laid over these.
 ##
-## Below them, THE CAMERAS ([Cameras]): a list, as the Props card lists props, of the cameras the format in use sees through
-## (its sorts alone, [method Cameras.of]; none listed where it has none), each an entry with its own settings, in priority order
+## Below them, THE CAMERAS ([Cameras]): a list, as the Props card lists props, of the cameras the format in use sees through - its
+## sorts alone ([method Cameras.of]), and of them only those used ([method Cameras.seen]: kept, or registered by the show) - each an
+## entry with its own settings, a Sway among them where it is held by a hand, in priority order
 ## (the higher in the list wins a moment both want; ↑ lifts one). Unset, the format has every sort of its own; an entry's × takes
 ## that sort off the list, save one the format always sees through (grayed, saying why). Kept in the block as `cameras`, every
 ## format's entries together: a list edited here leaves another format's as they are.
@@ -74,6 +77,7 @@ func _init() -> void:
 	_add.get_popup().id_pressed.connect(_added)
 	add_child(_add)
 	Director.medium_changed.connect(refresh)
+	Director.cameras_seen_changed.connect(refresh)
 	refresh()
 
 
@@ -85,10 +89,14 @@ func refresh() -> void:
 	var shots := Medium.takes_settings(fmt) and Medium.uses(fmt, "camera")
 	if not own.is_empty():
 		_said.text = "How the camera turns to what it looks at. Unset, a row stands at the %s's own." % label
+	elif not _sorts(fmt).is_empty():
+		_said.text = "The cameras the %s sees through, each with its own settings." % label
 	elif shots:
 		_said.text = "The %s plans its own shots: Severity steers them, and the rest apply where the note is shown in a format that follows." % label
 	else:
 		_said.text = "The %s flies no camera of its own: these apply where the note is shown in a format that does." % label
+	# ...a format that flies no camera has no rows: they would move nothing it shows
+	_form.visible = not own.is_empty() or shots
 	var defaults := CameraFollow.settings(own, {})
 	var rows := {}
 	var values: Dictionary = Director.camera_follow.duplicate()
@@ -106,19 +114,26 @@ func refresh() -> void:
 
 # --- the cameras -------------------------------------------------------------------------------------------------------
 
-## The format in use's list as it stands: the note's, or every sort of the format dimmed where it has none.
+## The format in use's list as it stands: the note's, or every sort of the format dimmed where it has none - of the sorts the show
+## up sees through.
 func _cameras() -> Array:
-	return Cameras.sanitize(Director.cameras, true, Director.resolved_medium())
+	return Cameras.seen(Cameras.sanitize(Director.cameras, true, Director.resolved_medium()), Director.cameras_seen)
+
+
+## The sorts of format [param fmt] the show up sees through.
+func _sorts(fmt: String) -> Array:
+	return Cameras.seen(Cameras.of(fmt), Director.cameras_seen)
 
 
 func _draw_cameras() -> void:
 	for c in _list.get_children():
 		c.queue_free()
 	var fmt := Director.resolved_medium()
-	var any := not Cameras.of(fmt).is_empty()
+	var sorts := _sorts(fmt)
+	var any := not sorts.is_empty()
 	_head.visible = any
 	_list.visible = any
-	_add.visible = Cameras.of(fmt).any(func(k: String) -> bool: return Cameras.kept(k).is_empty())
+	_add.visible = sorts.any(func(k: String) -> bool: return Cameras.kept(k).is_empty())
 	if not any:
 		return
 	var list := _cameras()
@@ -171,7 +186,7 @@ func _draw_cameras() -> void:
 	pop.clear()
 	var keys := Cameras.REGISTRY.keys()
 	for k in keys.size():
-		if String(Registry.field(Cameras.REGISTRY, String(keys[k]), "format", "")) == fmt and Cameras.rank(list, String(keys[k])) < 0:
+		if sorts.has(String(keys[k])) and Cameras.rank(list, String(keys[k])) < 0:
 			pop.add_item(Registry.label(Cameras.REGISTRY, String(keys[k])), k)
 			pop.set_item_tooltip(pop.item_count - 1, Registry.blurb(Cameras.REGISTRY, String(keys[k])))
 	_add.disabled = pop.item_count == 0
@@ -189,12 +204,15 @@ func _added(id: int) -> void:
 	_set_list(l)
 
 
-## The format in use's list [param l], every other format's entries kept as they are.
+## The format in use's list [param l], every other format's entries kept as they are, and so are its sorts the show up does not
+## use (a game's dice, never listed on a reading's note, stay as they stood).
 func _set_list(l: Array) -> void:
 	var fmt := Director.resolved_medium()
 	var others := Director.cameras.filter(func(e: Dictionary) -> bool:
 		return String(Registry.field(Cameras.REGISTRY, String(e.get("sort", "")), "format", "")) != fmt)
-	Director.set_cameras(others + l)
+	var unseen := Cameras.sanitize(Director.cameras, true, fmt).filter(func(e: Dictionary) -> bool:
+		return Cameras.seen([e], Director.cameras_seen).is_empty())
+	Director.set_cameras(others + l + unseen)
 	refresh()
 
 

@@ -34,6 +34,8 @@ const UNDER := Color(0.1, 0.1, 0.11)
 
 ## Asked to be brought into view whole ([method reveal]): by a press on its bar or its chip.
 signal reveal_asked
+## Asked to bring [param part], a control on it, into view whole ([method reveal_part]): an entry opened on it.
+signal part_asked(part: Control)
 
 ## Which panel and which card: "<panel>.<key>".
 var key := ""
@@ -109,6 +111,12 @@ func _notification(what: int) -> void:
 ## answers. A card no deck holds (a footer's) is always in view, and nothing answers.
 func reveal() -> void:
 	reveal_asked.emit()
+
+
+## Asks for [param part], a control on it, to be brought into view whole once it is laid out, or its top where it is taller than
+## the room between the piles: the [PanelDeck] holding its bar answers. A card no deck holds is always in view, and nothing answers.
+func reveal_part(part: Control) -> void:
+	part_asked.emit(part)
 
 
 ## Anything that changes how much room it wants.

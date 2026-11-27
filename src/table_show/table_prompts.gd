@@ -1572,8 +1572,17 @@ static func height_image(look: Dictionary, target: String) -> String:
 	return Rules.say("table/painter.height", _look_vars(look, target))
 
 
-## The room past the table, through a level lens ([constant CardTable.BACKDROP_LENS]).
-static func backdrop_image(look: Dictionary, target: String) -> String:
+## The room past the table, seen as [param view] says ([method CardTable.backdrop_view]; episode 0's where it is empty): from the
+## reader's eye, tilted down, and where in the picture the band the camera sees past the table falls.
+static func backdrop_image(look: Dictionary, target: String, view := {}) -> String:
+	var v: Dictionary = view if not view.is_empty() else CardTable.backdrop_view(0)
 	var vars := _look_vars(look, target)
-	vars["lens"] = int(CardTable.BACKDROP_LENS)
+	var band: Array = v.get("band", [15.0, 25.0])
+	vars["lens"] = int(float(v.get("lens_mm", CardTable.BACKDROP_LENS)))
+	vars["tilt"] = roundi(float(v.get("tilt", 0.0)))
+	vars["eye_cm"] = int(v.get("eye_cm", 110))
+	vars["floor_m"] = "%.1f" % float(v.get("floor_m", 3.0))
+	vars["horizon"] = clampi(roundi(CardTable.backdrop_share(v, 0.0) * 100.0), 0, 100)
+	vars["band_from"] = clampi(roundi(CardTable.backdrop_share(v, float(band[0])) * 100.0), 0, 100)
+	vars["band_to"] = clampi(roundi(CardTable.backdrop_share(v, float(band[1])) * 100.0), 0, 100)
 	return Rules.say("table/painter.backdrop", vars)

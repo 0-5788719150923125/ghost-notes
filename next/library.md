@@ -93,6 +93,10 @@ The user judges: the names (Props, Dex, Used), the 3D view, the Dex, kept voices
   rows), `tests/table/shot_reach_check.gd` (what a table played hides out of the shot); a look: `props_card_probe.gd`. A voice's
   sample is so far made only against a stand-in host in a gate: the first Keep on the real voice host is its test.
 
+The table itself is a prop on a table show's Props card (`TableProp`; next/cards.md, "The table"): its top, base and cloths tuned
+and refined there, each change a hand's version of the episode's table. Not yet: kinds of desk (an L-shape, a standing desk, a glass
+top), a table kept in the library and offered on the Dex, and the table's 3D view refined from its Refine… there.
+
 Not built: the `Keys` registry and its shelf (step 3), kept props on a desk other than a desk thing's own versions
 (`DeskLook._pack` from a built size), and Choose… on the Letter desk's things (`DeskProps`).
 

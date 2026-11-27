@@ -417,6 +417,10 @@ func seek_file(t: float) -> void:
 		var hold := paused or not _waits.is_empty()
 		_player.stream_paused = not hold
 		_player.stream_paused = hold
+		#...and, held, the clock put there now: a paused player is not `playing`, so [method _process] publishes the last
+		#time it held until Play, and the picture, the playhead and the words would stay where they were
+		if hold:
+			_last_time = _clock_offset() + pos
 	else:
 		_player.seek(pos)
 
@@ -918,7 +922,8 @@ func _process(delta: float) -> void:
 	elif _has_audio:
 		#A loaded session never falls back to the idle clock: the player can stop while audio is loaded (past
 		#the end, or a seek onto the last fraction of a second), and reverting to `_idle_time` would restart
-		#the clock from zero. Hold the last position; the tail and the finish signal own what happens next.
+		#the clock from zero. Hold the last position; the tail and the finish signal own what happens next. A
+		#paused or waiting player is not `playing` either: it is held here, where a seek puts it ([method seek_file]).
 		f.time = _last_time
 	else:
 		_idle_time += delta

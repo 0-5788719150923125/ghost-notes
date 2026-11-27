@@ -1301,6 +1301,8 @@ def props_page(classes: Dict[str, Script]) -> str:
                 " - ".join(f"{float(v):g}" for v in items(r, "tall"))] for k, r in roles.items())),
         "## Refining a prop", doc_of("LibraryVersions"),
         "What the agent is told: [rules/table/prop_refiner.yaml](../rules/table/prop_refiner.yaml).",
+        "## The table itself", doc_of("TableProp"), "### Refining the table", doc_of("TableRefine"),
+        "What the agent is told: [rules/table/table_refiner.yaml](../rules/table/table_refiner.yaml).",
         "## What a prop is made of", doc_of("Props"),
         f"### Shapes ({len(shapes)})", "A part is one of these (`Props.SHAPES`), as the set dresser reads them.",
         [f"- **`{k}`** - {md(str(v))}" for k, v in shapes.items()],

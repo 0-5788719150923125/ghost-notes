@@ -280,6 +280,7 @@ var _top_o := Tables.top_outline({})  # ...its outline, read once (Tables.sdf), 
 var _painting_tex: Texture2D = null  # the episode's surface painting, as laid on the table
 var _height_tex: Texture2D = null    # ...the painter's height map of it, when one lined up with it
 var _backdrop: MeshInstance3D
+var _cameras_seen := PackedStringArray()   # the sorts of camera this episode registers ([method cameras_seen])
 var _backdrop_mat: ShaderMaterial
 var _props: Node3D
 var _probe: ReflectionProbe
@@ -788,6 +789,7 @@ func _make_episode(d: Dictionary, pay: Dictionary, src: String, hold: float) -> 
 	# and decides nothing of its own.
 	_source = src
 	_plan = TablePlan.make(d, _table_json(pay), hold)
+	_cameras_seen = cameras_seen(CardTable.game_of(_plan.pay.get("plan", {}) if _plan.pay.get("plan") is Dictionary else {}))
 	var spoken: PackedStringArray = _plan.parse.get("spoken", PackedStringArray()) if not _plan.parse.is_empty() \
 		else PackedStringArray()
 	_est = _word_times(spoken)
@@ -1457,18 +1459,21 @@ func _picture(path: String, force := false) -> Texture2D:
 	return tex
 
 
-## The room. A picture asked for as a level photograph from a seated eye (`backdrop.json` beside it names its lens,
-## [constant CardTable.BACKDROP_LENS]) is projected from the camera's eye: an upright plane far behind the table, its
-## middle at the eye's height straight ahead, as wide as its lens saw - so every point of the picture lies in the
-## direction it was seen from, and the camera, tilted down at the table, sees the room as it would really look past the
-## table's edge. Laid square to the tilted camera with its horizon on the table's edge, a room reads as seen from the
-## height of the cloth, which is wrong for a wall or a window just past the table. A picture with no view beside it
-## holds nothing below its horizon for the camera to see, so it keeps that placement.
+## The room. A picture asked for as a photograph from the reader's eye (`backdrop.json` beside it names its lens and how far
+## it was tilted down, [method CardTable.backdrop_view]; a level one none) is projected from the camera's eye: a plane far
+## past the table, square to the way the picture looked and as wide as its lens saw - so every point of the picture lies in
+## the direction it was seen from, and the camera, tilted down at the table, sees the room as it would really look past the
+## table's edge (and turning about the lens, as a hand-held camera sways, still does). Laid square to the tilted camera with
+## its horizon on the table's edge, a room reads as seen from the height of the cloth, which is wrong for a wall or a window
+## just past the table. A picture with no view beside it holds nothing below its horizon for the camera to see, so it keeps
+## that placement.
 func _place_backdrop() -> void:
 	var view := _backdrop_view()
 	if not view.is_empty():
 		var lens := clampf(float(view.get("lens_mm", CardTable.BACKDROP_LENS)), 8.0, 200.0)
-		var ahead := Vector3(-_plan.cam_base.basis.z.x, 0.0, -_plan.cam_base.basis.z.z).normalized()
+		var tilt := deg_to_rad(clampf(float(view.get("tilt", 0.0)), 0.0, 60.0))
+		var level := Vector3(-_plan.cam_base.basis.z.x, 0.0, -_plan.cam_base.basis.z.z).normalized()
+		var ahead := (level * cos(tilt) + Vector3.DOWN * sin(tilt)).normalized()
 		var reach := _room_reach(true)
 		_backdrop.transform = Transform3D(Basis.looking_at(ahead, Vector3.UP), _plan.cam_base.origin + ahead * reach)
 		# a 36 x 24 frame behind a lens of this length, seen at this reach
@@ -1529,8 +1534,8 @@ static func room_blur(cam: Transform3D, fov: float, room: Transform3D, size: Vec
 	return Vector2(meters / maxf(size.x, 1e-4), meters / maxf(size.y, 1e-4))
 
 
-## The view the room's picture was asked for (`backdrop.json` beside it): `{view, lens_mm}`, or empty
-## for a picture made before there was one.
+## The view the room's picture was asked for (`backdrop.json` beside it): `{view, lens_mm, tilt}` (a level one has no tilt),
+## or empty for a picture made before there was one.
 func _backdrop_view() -> Dictionary:
 	var path := String(_plan.pay.get("dir", "")).path_join("backdrop.json")
 	if not FileAccess.file_exists(path):
@@ -1538,7 +1543,7 @@ func _backdrop_view() -> Dictionary:
 	var j := JSON.new()
 	if j.parse(FileAccess.get_file_as_string(path)) != OK or not (j.data is Dictionary):
 		return {}
-	return j.data if String((j.data as Dictionary).get("view", "")) == "level" else {}
+	return j.data if String((j.data as Dictionary).get("view", "")) in ["level", "tilted"] else {}
 
 
 # --- the spread ------------------------------------------------------------------------------------
@@ -1879,6 +1884,11 @@ func _breathe() -> void:
 
 # --- the camera ----------------------------------------------------------------------------------------
 
+## The sorts of camera a table registers ([method ShowFeed.see_cameras]): a game's cuts; a reading none beyond the table's own.
+static func cameras_seen(game: bool) -> PackedStringArray:
+	return PackedStringArray(Cameras.of("table")) if game else PackedStringArray()
+
+
 ## The frame the table is shown in, width over height, as the show says it ([method ShowFeed.frame_aspect]): 16:9 for a table
 ## nobody shows, or one photographed for its agents ([constant CardTable.DRESSED], [member previewed]).
 func aspect() -> float:
@@ -1890,15 +1900,23 @@ func lens() -> Vector2:
 	return CardTable.lens(_cam.fov, aspect())
 
 
-## The reader's eye: still - or, on a table that rides ([Rides]), given what its mount gives.
+## The reader's eye: still - or held by a hand, as the Camera card's table camera has it, or on a table that rides ([Rides]), given
+## what its mount gives.
 func _tick_camera(t: float) -> void:
 	# ...its lens the frame's short side, so a portrait frame sees the table turned on end ([method CardTable.keep])
 	_cam.keep_aspect = CardTable.keep(aspect())
-	# A locked-off camera: the table is filmed from a tripod. Aboard something that moves the tripod rides with the
-	# table, and only its give shows: a faint buzz, a quick nod at a jolt (Rides.camera) - turned about the lens, so
-	# what is posed from the camera's place (a card held up, its page) is where it was
+	# ...and the show told which cameras it uses, here on the app's thread (a table may be built on a worker)
+	if feed != null and feed.cameras_seen != _cameras_seen:
+		feed.see_cameras(_cameras_seen)
+	# A locked-off camera: the table is filmed from a tripod - unless the table camera has a Sway, when its aim wanders as a
+	# hand's does (every shot of a game's with it). Aboard something that moves the tripod rides with the table, and only its
+	# give shows: a faint buzz, a quick nod at a jolt (Rides.camera). Both turn it about the lens, so what is posed from the
+	# camera's place (a card held up, its page) is where it was
 	var give := Rides.camera(_ride, t)
 	var base := _plan.cam_base if _work.game == null else _work.game.shot_at(t, _plan.cam_base)
+	var held := Cameras.entry_of(Cameras.sanitize(feed.cameras if feed != null else [], true, "table"), "table")
+	var fwd := -base.basis.z
+	base = Cameras.swayed(base, t, held, clampf(-base.origin.y / fwd.y, 0.1, 10.0) if fwd.y < -0.01 else Cameras.SWAY_REACH)
 	_cam.transform = base if give == Vector3.ZERO else base * Transform3D(Basis.from_euler(give), Vector3.ZERO)
 	# ...a game cuts between cameras, each with its own lens ([Cameras])
 	if _work.game != null:

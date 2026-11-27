@@ -293,6 +293,7 @@ func reset_show() -> void:
 	set_camera(1.0)
 	set_camera_follow({})
 	set_cameras([])
+	see_cameras(PackedStringArray())
 	set_hand("kalam")
 	set_intro_hold(INTRO_DEFAULT)
 	set_outro_hold(OUTRO_DEFAULT)

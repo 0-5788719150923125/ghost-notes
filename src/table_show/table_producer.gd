@@ -1075,15 +1075,16 @@ func _make_image(step: String) -> void:
 			# the painting's depth, redrawn from the painting - an edit of it, checked as it lands
 			_submit_image(step, TablePrompts.height_image(look, target), [episode.file_of("image:surface")])
 		"backdrop":
-			# The view it is asked for, kept beside it: the table projects a level picture from the
-			# camera's eye, and keeps a picture made before (none beside it) as it always stood
+			# The view it is asked for, kept beside it: the table projects the picture from the camera's eye, tilted as it was
+			# asked, and keeps a picture made before (none beside it) as it always stood
 			var view := episode.dir.path_join("backdrop.json")
+			var seen := CardTable.backdrop_view(episode.seed)
 			var f := FileAccess.open(view + ".part", FileAccess.WRITE)
 			if f != null:
-				f.store_string(JSON.stringify({"view": "level", "lens_mm": CardTable.BACKDROP_LENS}))
+				f.store_string(JSON.stringify(seen))
 				f.close()
 				DirAccess.rename_absolute(view + ".part", view)
-			_submit_image(step, TablePrompts.backdrop_image(look, target), [])
+			_submit_image(step, TablePrompts.backdrop_image(look, target, seen), [])
 
 
 # --- a sticker book (next/sticker_book.md) -----------------------------------------------------------------------------------------------------------
@@ -2041,7 +2042,7 @@ func _make_table() -> void:
 		images.append({"path": episode.file_of("image:surface"), "label": "The painting of this episode's surface, seen from above:", "flip": false})
 	# The room, so the light agrees with it: where its windows are, which side its sun comes from
 	if room:
-		images.append({"path": episode.file_of("image:backdrop"), "label": "The painting of the room past the table, as the reader sees it (only its lower part shows, out of focus):", "flip": false})
+		images.append({"path": episode.file_of("image:backdrop"), "label": "The painting of the room past the table, as the reader sees it (only a band of it shows past the table's far edge, out of focus):", "flip": false})
 	if not images.is_empty():
 		p["images"] = images
 	_submit_text("table", p, "best", extra)

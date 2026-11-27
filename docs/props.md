@@ -77,7 +77,7 @@ Every shelf a section puts on the Dex: the section, the shelf, and what it holds
 
 PropsCard - the panel's Props card: what the note's presentation sets down, one entry a prop (`EntryCard`) - its picture, its name and size, and a × that takes it off - under the groups its sections give (`PropSection`, handed by whatever shows props), and "+ Add a prop", which opens the Dex on the section's shelves (`DexWindow`). A click on an entry opens it: its Used tick, its verbs and its properties (`PropSection`'s `fields`, `SchemaForm`), each change handed to its section. A click on a picture opens the prop whole, in 3D, to be turned (`PropViewer`). Shown only while some section has a row or something to add. Looked at again every second (what a section has follows what is shown and made), and drawn again only when that changed. The Environment card's list is one of these.
 
-A PROP AN AGENT IS REFINING SAYS SO ON ITS ROW (`PropRefining`): what the agent is doing, said again in place each look, then that a new version is ready, or why not, until its 3D view has shown it - so the progress of every prop refined at once is read here.
+A PROP AN AGENT IS REFINING SAYS SO ON ITS ROW (`PropRefining`): what the agent is doing, said again in place each look, then that a new version is ready, or why not, until its 3D view has shown it - so the progress of every prop refined at once is read here. A row refined by something other than its versions (a table show's table, `TableRefine`) names what it is refined as (`refining_as`).
 
 Source: [src/ui/props_card.gd](../src/ui/props_card.gd)
 
@@ -132,6 +132,22 @@ LibraryVersions - the versions of the library's props, and refining one (`PropVe
 Source: [src/table_show/library_versions.gd](../src/table_show/library_versions.gd)
 
 What the agent is told: [rules/table/prop_refiner.yaml](../rules/table/prop_refiner.yaml).
+
+## The table itself
+
+TableProp - the table itself as a prop: its top, what holds it up and the cloths laid on it, as a person tunes them on a table show's Props card (`EpisodeProps`) and an agent refines them (`TableRefine`). Each property reads the table as it is made safe (`Tables`) and writes what the set dresser wrote (`table.json`'s `top` and `layers`), so the table stands as it did but for what was changed: its size, shape, corners, edge and thickness, what holds it up, what its top is made of and its finish; a cloth's fabric, pattern, colors, size and lie.
+
+Built alone for its picture and its 3D view (`made`): the table whole on its base, the painting laid where it takes it.
+
+Source: [src/table/table_prop.gd](../src/table/table_prop.gd)
+
+### Refining the table
+
+TableRefine - an episode's table refined by an agent, as a person asks on its Props card row (`EpisodeProps`, `TableProp`): its top and the cloths laid on it as written, changed where the words say and nowhere else (`rules/table/table_refiner.yaml`), and written as a hand's version of `table.json` - kept, passed by Generate, the table before it a version back - the things on it as they stand when the answer lands. It runs in the background whether or not its card or window stays (`PropRefining`, under `name_of`): the row says what the agent is doing, and the window, while it is open.
+
+Source: [src/table_show/table_refine.gd](../src/table_show/table_refine.gd)
+
+What the agent is told: [rules/table/table_refiner.yaml](../rules/table/table_refiner.yaml).
 
 ## What a prop is made of
 

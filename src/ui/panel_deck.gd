@@ -73,6 +73,7 @@ func adopt(card: Card) -> void:
 	_clip.add_child(bar)
 	bar.gui_input.connect(_on_head.bind(card))
 	card.reveal_asked.connect(reveal.bind(card))
+	card.part_asked.connect(_reveal_part)
 	card.visibility_changed.connect(_place)
 
 
@@ -256,6 +257,22 @@ func reveal(card: Card) -> void:
 		to = clampf(free - card.get_combined_minimum_size().y, top, at)
 	if absf(at - to) >= 1.0:
 		_glide_to(_scroll.get_v_scroll_bar().value + at - to)
+
+
+## Brings [param part], a control on a card, into view whole between the piles once it is laid out (what has just opened takes its
+## room on the next frame), or its top just under the top pile where it is taller than the room. A part whole in view stays.
+func _reveal_part(part: Control) -> void:
+	await get_tree().process_frame
+	if not is_instance_valid(part) or not part.is_visible_in_tree() or not is_inside_tree():
+		return
+	var y := part.global_position.y - _scroll.global_position.y
+	var by := 0.0
+	if y < _above or part.size.y >= _below - _above:
+		by = y - _above
+	elif y + part.size.y > _below:
+		by = y + part.size.y - _below
+	if absf(by) >= 1.0:
+		_glide_to(_scroll.get_v_scroll_bar().value + by)
 
 
 ## How far there is to scroll has changed: a view that was at the end goes to the new one, unless the viewer is what moved it.

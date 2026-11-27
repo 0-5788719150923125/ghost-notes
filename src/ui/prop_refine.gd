@@ -8,7 +8,8 @@ class_name PropRefine
 ## sessions ([method AgentPick.keep_for]).
 ##
 ## The same window refines a picture ([IllustrationPanel]'s Refine…), built with `PropRefine.new("picture", painter)`: its agent
-## a painter, its words a picture's ([constant WORDS]), and what is made a new version of the picture.
+## a painter, its words a picture's ([constant WORDS]), and what is made a new version of the picture; and a table show's table
+## (`PropRefine.new("table")`, [TableRefine]), whose agent rewrites its top and cloths.
 
 ## What to change, and who changes it (`{agent, model, effort}`).
 signal asked(direction: String, pick: Dictionary)
@@ -23,13 +24,16 @@ const WORDS := {
 	"prop": {"say": "What to change. The agent changes only what you ask; every other part, size and color stays as it is.",
 		"hint": "Which part is wrong, and how it should be instead.", "who": "Who refines the prop.",
 		"go": "Have the agent make a new version from the one shown. It is added beside the others; the one shown when you close the view is the prop."},
+	"table": {"say": "What to change in the table: its top, what holds it up, the cloths on it. The agent changes only what you ask; the things on it stay where they are.",
+		"hint": "What is wrong with the table or its cloths, and how it should be instead.", "who": "Who refines the table.",
+		"go": "Have the agent rewrite the table as you say. The table on the stage follows; the one before is kept a version back."},
 	"picture": {"say": "What to change. The painter changes only what you ask; the rest of the picture stays as it is.",
 		"hint": "What is wrong in the picture, and how it should be instead.", "who": "Who repaints the picture.",
 		"go": "Have the painter make a new version from the one shown, changed as you say. It is shown at once; the one it was made from stays a version before it."},
 }
 
 ## The kind of job the agent picked last is kept for between sessions ([method AgentPick.last_for]): a prop's refiner, a picture's.
-const PICKED := {"prop": "refine_prop", "picture": "refine_picture"}
+const PICKED := {"prop": "refine_prop", "picture": "refine_picture", "table": "refine_prop"}
 
 var _what := "prop"
 

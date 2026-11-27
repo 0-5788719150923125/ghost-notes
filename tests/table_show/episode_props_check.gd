@@ -9,7 +9,11 @@ extends Node
 ##   the table stood from it stands it no more - the control, before, it does; ticked again it stands again. The card draws a row
 ##   for each.
 ## - An entry's × takes a thing off the table for good, from Used or Set aside (the control: one not there cannot be).
-## - The groups are Used and Set aside, and a game's land and figures (empty for a show with no game), and no row offers Always. No row has Keep: its 3D view's Keep puts a thing in the library, and its row says so; only a used
+## - The table itself and its cloth are rows under The table ([TableProp]): the table's line says its size, its rows stand at what it is,
+##   and it offers Refine…; a property set is written into `table.json` as a hand's version, the things on it kept, its row then
+##   saying it is yours and offering Set dresser's, and unset it goes back to the set dresser's; a cloth's property is written the same,
+##   its × takes it off, and the table's own × cannot (control). Built whole, it stands on the floor to be turned.
+## - The groups are The table, Used and Set aside, and a game's land and figures (empty for a show with no game), and no row offers Always. No row has Keep: its 3D view's Keep puts a thing in the library, and its row says so; only a used
 ##   thing offers Select. A row's prop whole is its table's thing and materials ([method EpisodeProps.prop_of]), built whole to be
 ##   turned ([method EpisodeProps.model_of]); the viewer holds it, a drag turns it and Set straight puts it back (the control: a
 ##   key with no prop builds nothing). With no table yet there is nothing to add to.
@@ -71,7 +75,7 @@ func _run() -> void:
 		return
 
 	# What stands, and set aside
-	var rows := sec.rows()
+	var rows := sec.rows().filter(func(r: Dictionary) -> bool: return String(r["group"]) != "furniture")
 	_ok(rows.size() == 2 and rows.all(func(r: Dictionary) -> bool: return r["on"] == true and String(r["group"]) == "table"),
 		"the rows are the table's things, ticked (%s)" % str(rows.map(func(r: Dictionary) -> String: return String(r["key"]))))
 	_ok(_stands(ep, "cup"), "the control: before it is set aside, the cup stands")
@@ -86,15 +90,18 @@ func _run() -> void:
 	_ok(sec.set_on("aside:cup", true).is_empty() and _stands(ep, "cup") and not (ep.read_json("table") as Dictionary).has("aside"),
 		"ticked again, it stands again and the aside list goes")
 
+	# The table itself
+	await _furniture(sec, ep)
+
 	# The card draws them
 	var card := PropsCard.new(func() -> Array: return ed.prop_sections)
 	add_child(card)
 	card.refresh(true)
-	_ok(card.row_count() == 2, "the card draws a row for each (%d)" % card.row_count())
+	_ok(card.row_count() == 4, "the card draws a row for each, the table and its cloth among them (%d)" % card.row_count())
 
 	# Used, Keep, Select
-	_ok(sec.groups().map(func(g: Dictionary) -> String: return String(g["label"])) == ["Used", "Set aside", "The land", "Figures", "Characters", "Sets", "Surfaces worn"],
-		"the groups are Used and Set aside, a game's land and figures, and its sticker book's characters and sets")
+	_ok(sec.groups().map(func(g: Dictionary) -> String: return String(g["label"])) == ["The table", "Used", "Set aside", "The land", "Figures", "Characters", "Sets", "Surfaces worn"],
+		"the groups are The table, Used and Set aside, a game's land and figures, and its sticker book's characters and sets")
 	_ok(sec.rows().filter(func(r: Dictionary) -> bool: return String(r["group"]) in ["board", "figures", "cast", "sets"]).is_empty(),
 		"a show with no game lists nothing under the land, figures, characters or sets")
 	var verbs_of := func(key: String) -> Array:
@@ -220,7 +227,8 @@ func _run() -> void:
 	show._episode = ep
 	# Taken off: an entry's × takes a thing off the table for good, from either list
 	var used: Array = sec.rows().filter(func(r: Dictionary) -> bool: return String(r["key"]).begins_with("thing:"))
-	_ok(used.size() >= 2 and sec.rows().all(func(r: Dictionary) -> bool: return r.has("remove_tip")), "every entry has its ×")
+	_ok(used.size() >= 2 and sec.rows().all(func(r: Dictionary) -> bool: return r.has("remove_tip") or String(r["key"]) == "furniture:top"),
+		"every entry has its ×, but the table's own")
 	if used.size() >= 2:
 		var first := String(used[0]["name"])
 		var second := String(used[1]["name"])
@@ -234,6 +242,46 @@ func _run() -> void:
 	_ok(not sec.remove("thing:nothing").is_empty(), "the control: a thing not on the table cannot be taken off")
 	card.free()
 	_finish(ed, was_root, was_library)
+
+
+## The table itself and its cloth on the Props card ([TableProp]): set, unset, a cloth taken off, built whole.
+func _furniture(sec: EpisodeProps, ep: TableEpisode) -> void:
+	var row_of := func(key: String) -> Dictionary:
+		for r in sec.rows():
+			if String(r["key"]) == key:
+				return r
+		return {}
+	var top: Dictionary = row_of.call("furniture:top")
+	_ok(not top.is_empty() and String(top["group"]) == "furniture" and String(top["line"]).contains("190 x 85")
+		and float((top["fields"] as Dictionary)["width"]["default"]) == 190.0 and top.has("picture")
+		and (top["verbs"] as Array).any(func(v: Dictionary) -> bool: return String(v["key"]) == "refine"),
+		"the table is a row under The table: its size said, its rows at what it is, Refine… offered (%s)" % str(top.get("line", "")))
+	_ok(not row_of.call("furniture:cloth:0").is_empty(), "the cloth the cards are read on is a row of its own")
+	_ok(sec.set_field("furniture:top", "width", 220.0).is_empty(), "the table's width is set")
+	var t: Dictionary = ep.read_json("table")
+	_ok(float((t["top"] as Dictionary)["size"][0]) == 220.0 and (t["things"] as Array).size() == 2 and ep.kept("table")
+		and String(ep.record("table").get("by", "")) == "hand", "it is written as a hand's version of the table, its things kept")
+	top = row_of.call("furniture:top")
+	_ok(float((top["values"] as Dictionary).get("width", 0.0)) == 220.0 and not (top["values"] as Dictionary).has("depth")
+		and (top["verbs"] as Array).any(func(v: Dictionary) -> bool: return String(v["key"]) == "own"),
+		"its row says the width is yours, the rest the set dresser's, and offers Set dresser's (%s)" % str(top.get("values", {})))
+	_ok(sec.set_field("furniture:top", "width", null).is_empty() and float(((ep.read_json("table") as Dictionary)["top"] as Dictionary)["size"][0]) == 190.0,
+		"unset, the width goes back to the set dresser's")
+	_ok(sec.set_field("furniture:cloth:0", "fabric", "velvet").is_empty()
+		and String(((ep.read_json("table") as Dictionary)["layers"] as Array)[0]["fabric"]) == "velvet", "a cloth's fabric is set")
+	var model: Dictionary = await sec.model_of("furniture:top")
+	_ok(model.get("node") is Node3D and absf((model["box"] as AABB).position.y) < 0.002 and (model["box"] as AABB).end.y > 0.7,
+		"built whole, the table stands on the floor to be turned")
+	if model.get("node") is Node:
+		(model["node"] as Node).free()
+	_ok(not sec.remove("furniture:top").is_empty(), "the control: the table's own × cannot take it off")
+	_ok(sec.remove("furniture:cloth:0").is_empty() and ((ep.read_json("table") as Dictionary)["layers"] as Array).is_empty()
+		and row_of.call("furniture:cloth:0").is_empty(), "a cloth's × takes it off the table")
+	_ok(sec.act("furniture:top", "own").is_empty() and not (ep.read_json("table") as Dictionary).has("layers")
+		and ((ep.read_json("table") as Dictionary)["things"] as Array).size() == 2,
+		"Set dresser's puts the table and its cloths back as the set dresser laid them, the things as they are")
+	_ok(not (row_of.call("furniture:top")["verbs"] as Array).any(func(v: Dictionary) -> bool: return String(v["key"]) == "own"),
+		"the control: a table as the set dresser laid it offers no Set dresser's")
 
 
 ## The pictures of props ([PropPictures]) on a taker of the gate's own, which records the order and takes a frame each.

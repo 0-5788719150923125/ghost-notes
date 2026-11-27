@@ -1,0 +1,44 @@
+# THE TABLE REFINER - an episode's table refined as the author asks on its row of the Props card (TableRefine, EpisodeProps,
+# TableProp): the top, what holds it up and the cloths laid on it, as written, changed where the author says. The things standing on
+# the table are not this agent's; they stay where they are.
+#
+# THE AUTHOR'S ASK IS KEPT AND NOTHING ELSE CHANGES: every key, size, color and cloth the direction does not touch stays exactly as
+# written, so the table before and after differ only where they were asked to.
+#
+# The code gives: {{spec}} (the table's `top` and `layers` as written, JSON), {{materials}} (the names of the table's own materials,
+# which a top may name), {{direction}} (as the author wrote it), {{vocabulary}} (Tables.describe: every key a top and a layer take),
+# {{palette}} (the show's colors), and the flag `painted` (the episode's painting comes with the prompt).
+system: >-
+  You revise the table of a scene set at a table: its top, what holds it up and the cloths laid on it, written as JSON. Answer with
+  one JSON object, {"top": {...}, "layers": [...]}, and nothing else.
+prompt:
+  - "THE TABLE, as it is written now:"
+  - ""
+  - "<table>"
+  - "{{spec}}"
+  - "</table>"
+  - ""
+  - when: painted
+    say: >-
+      The picture is the episode's own painting: a top whose material is "painting", or a cloth whose pattern is, shows it.
+  - when: painted
+    say: ""
+  - "WHAT TO CHANGE, as the author asks:"
+  - ""
+  - "<direction>"
+  - "{{direction}}"
+  - "</direction>"
+  - ""
+  - >-
+      Change what the author asks, and what that change needs so the table still holds together - a cloth sized to a new top, its
+      border recolored with it - and nothing else: every other key, size, color and cloth stays exactly as it is written. Where the
+      author's words leave a choice open, make the smallest change that does what they ask. A cloth is added or taken off only when
+      asked; whatever the cards are read on keeps covering the middle.
+  - >-
+      The top's `material` is the name of one of the table's own materials ({{materials}}), "painting", or a material written out
+      in the top itself: {"kind": wood, stone, metal, ceramic, leather, fabric or painted, "color": "#rrggbb", "color2", "polish"
+      0-1, "wear" 0-1, "grain", "pattern" 0-1}. Its colors belong with the show's: {{palette}}.
+  - ""
+  - "{{vocabulary}}"
+  - ""
+  - "Answer with the whole table as one JSON object, {\"top\": {...}, \"layers\": [...]}, and nothing else."

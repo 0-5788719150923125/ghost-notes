@@ -374,6 +374,29 @@ def check_said_ipa_wins() -> None:
     print(f"    say: {told}   CONTROL arpa: {plain}")
 
 
+def check_ts_is_said_on_its_s() -> None:
+    """A word eSpeak or the dictionary reads opening on /ts/ (Tsai, tsunami) is said on its /s/, its stress kept, and a
+    /ts/ inside or at the end of a word is left alone (CONTROL: an authored spelling, ARPAbet or IPA, is said as written)."""
+    from backends.piper import PiperBackend, _said_onset
+
+    def said(tok: dict, espeak: bool = True) -> str:
+        toks = [{"text": "auntie", "punct": "", "fallback": []}, tok]
+        return "".join(ch for ch, i in PiperBackend()._symbols(toks, "espeak" if espeak else "ghost", LANG, "")
+                       if i == 1).strip()
+
+    tsai = said({"text": "tsai", "cased": "Tsai", "punct": "!", "fallback": ["T", "S", "AY1"]})
+    assert tsai.startswith("s") and "t" not in tsai, f"eSpeak's Tsai should open on its s: {tsai!r}"
+    guessed = said({"text": "tsai", "cased": "Tsai", "punct": "!", "fallback": ["T", "S", "AY1"]}, espeak=False)
+    assert not guessed.lstrip("ˈˌ").startswith("t") and "s" in guessed, f"ghost's ARPAbet Tsai should open on its s: {guessed!r}"
+    assert _said_onset("ˈtsuːnɑːmi") == "ˈsuːnɑːmi", "a stress mark before the /ts/ stays"
+    for kept in ("kˈæts", "ɪts", "tˈəsk", "tˈɛst"):
+        assert _said_onset(kept) == kept, f"{kept!r} has no /ts/ to open on and should be left alone"
+    spelled = said({"text": "tsai", "cased": "Tsai", "punct": "!", "fallback": [], "arpa": ["T", "S", "AY1"]})
+    told = said({"text": "tsai", "cased": "Tsai", "punct": "!", "fallback": [], "say": "tsˈaɪ"})
+    assert spelled.startswith("ts") and told.startswith("ts"), f"CONTROL: authored spellings say /ts/: {spelled!r} {told!r}"
+    print(f"    Tsai: {tsai} (ghost's: {guessed})   CONTROL authored: {spelled} {told}")
+
+
 def check_whole_sentence_untouched() -> None:
     """A sentence with no homograph in it must come back with NOTHING set.
 
@@ -462,6 +485,7 @@ CHECKS = [
     check_soft_cases_stay_soft,
     check_author_wins,
     check_said_ipa_wins,
+    check_ts_is_said_on_its_s,
     check_whole_sentence_untouched,
     check_degrades_without_tagger,
     check_probe_is_cached,

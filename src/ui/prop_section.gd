@@ -71,6 +71,12 @@ func versions_of() -> PropVersions:
 	return null
 
 
+## Whether row [param key] is refined by the section itself rather than through versions: its 3D view's Refine… is then the row's
+## own (`refine`, [method act]) - a table show's table.
+func refines(_key: String) -> bool:
+	return false
+
+
 ## Row or offer [param key]'s prop kept in the library, as a person's Keep in the 3D view asks ([PropViewer]) - the only Keep a prop
 ## has - said by [method keep_line]. One held as a draft is kept with its versions. "" done, else why not.
 func keep_prop(key: String) -> String:

@@ -21,10 +21,10 @@ class_name DispatchMedium
 ## on a screen, the printer, the bell, the lamp switched (the whole desk, to see it go dark). `look:` turns it on purpose
 ## and it stays, as the gain knob holds it on the radar. It leans toward what it looks at and its lens closes in on the
 ## small things, by the one follow every flown camera has ([CameraFollow]: the Camera card's over the format's own, a long
-## look across the desk quicker than a short one); with nothing new for a while it eases back to the
-## whole desk, with a slow breath of wander under it. Every look holds long enough to settle ([constant LOOK_LEAST]), a
-## ping to the end of the sentence said over it ([constant PING_HOLD]), and it never leaves a thing only to come straight
-## back ([constant AWAY_LEAST]).
+## look across the desk quicker than a short one); with nothing new for a while it eases back to the whole desk. Under every
+## look its aim wanders as a hand's does, by the chair camera's Sway ([method Cameras.sway_at]; 0 a tripod). Every look holds
+## long enough to settle ([constant LOOK_LEAST]), a ping to the end of the sentence said over it ([constant PING_HOLD]), and it
+## never leaves a thing only to come straight back ([constant AWAY_LEAST]).
 ##
 ## A phone in hand is held to the ear: it rises out of its row, flips open and floats up beside the camera, in the frame's
 ## lower right (drawn in nearer the eye where the camera has come close to something, [method held_in]), its screen saying
@@ -76,9 +76,6 @@ const TABLET_LEAVE := 1.0
 ## one: the camera holds between them rather than ease away and straight back.
 const SAME_BRIDGE := 45.0
 const WORD_EST := 0.4
-## Its wander (m at the aim, a slow breath) and how fast.
-const WANDER := Vector3(0.010, 0.006, 0.006)
-const WANDER_RATE := 0.11
 ## The radar: its sweep's round (seconds), how many of its paints of the target it keeps fading behind the newest,
 ## an aircraft drifting across it now and then (a pass's seconds; one starts in the first half of every stretch this long, so
 ## the scope is empty of them most of the night).
@@ -4439,9 +4436,7 @@ func _tick_camera(delta: float) -> void:
 	var aim: Vector3 = want["aim"]
 	var eye: Vector3 = want["eye"]
 	var fov := float(want["fov"])
-	var w := Vector3(sin(_now * WANDER_RATE * TAU + 1.3) * WANDER.x, sin(_now * WANDER_RATE * 0.77 * TAU) * WANDER.y,
-		sin(_now * WANDER_RATE * 0.53 * TAU + 2.1) * WANDER.z)
-	aim += w
+	aim += Cameras.sway_at(_now, Cameras.entry_of(Cameras.sanitize(feed.cameras if feed != null else [], true, "dispatch"), "chair"))
 	_cam_follow.configure(camera_follow())
 	if _snap:
 		_cam_follow.snap([aim, eye, fov])

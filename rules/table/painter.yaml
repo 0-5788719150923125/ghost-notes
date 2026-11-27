@@ -247,8 +247,10 @@ height:
       FORMAT: the same size and shape as the attached image (LANDSCAPE 3:2, 1536x1024). No border,
       no text, no watermark.
 
-# THE ROOM past the table: only its lower third is seen, out of focus, through a level lens of
-# {{lens}} mm (CardTable.BACKDROP_LENS)
+# THE ROOM past the table: from the reader's eye, {{eye_cm}} cm over the floor, through a {{lens}} mm lens tilted down {{tilt}}
+# degrees (CardTable.backdrop_view) - the camera looks down at the table, and sees only a band of the room past its far edge, out of
+# focus: from {{band_from}}% to {{band_to}}% of the way down the picture, where the floor is about {{floor_m}} m off. {{horizon}} is
+# where the level horizon falls, % down from the top. The table projects the picture from the camera's own eye.
 backdrop:
   - include: head
   - ""
@@ -256,15 +258,19 @@ backdrop:
       THE PICTURE: a photograph of the room or the world the host of a show at a table sits in, taken
       from the host's chair: {{setting}}. Lit by {{light_kind}}.
   - >-
-      THE CAMERA IS LEVEL, at a seated person's eye height - about 110 cm above the floor - looking
-      straight ahead through a wide {{lens}} mm lens: the eye's height (the horizon) runs straight
-      across the exact middle of the picture, and every upright line stays upright, none leaning in.
+      THE CAMERA is at a seated person's eye, {{eye_cm}} cm above the floor, and looks through a wide
+      {{lens}} mm lens TILTED DOWN {{tilt}} degrees from level - as someone sitting at a table looks
+      across it and down at the floor past it. The level horizon (the eye's height) runs straight across
+      the picture about {{horizon}}% of the way down from its top; upright lines lean in a little toward
+      the bottom, as they do in a photograph tilted down.
   - >-
-      ONLY THE LOWER THIRD WILL BE SEEN, just past the far edge of a table and out of focus. So the
-      lower half carries the place: the floor or the ground and what stands or lies on it - rugs,
-      the feet of furniture, low shelves, baskets, a hearth, a doorway's sill, the ground or water
-      running away outdoors - one place, its broad shapes and its light. Do NOT show a table, cards,
-      hands or people: the table stands in front of this picture separately.
+      ONLY A BAND OF IT WILL BE SEEN, out of focus: a table stands in front of this picture and hides
+      everything below about {{band_to}}% of the way down, and the top of the frame cuts it at about
+      {{band_from}}%. That band, across the middle, carries the whole place: the floor or the ground
+      about {{floor_m}} m away and the lower parts of what stands there - the feet of furniture, low
+      shelves, baskets, a hearth, a doorway's sill, the foot of a wall, the ground or water running away
+      outdoors - one place, its broad shapes and its light. Keep the band from being bare floor. Do NOT
+      show a table, cards, hands or people: the table stands in front of this picture separately.
   - "Its colors belong to this palette: {{palette}}."
   - "FORMAT: LANDSCAPE 3:2 (1536x1024). No text, no watermark, no signature."
 

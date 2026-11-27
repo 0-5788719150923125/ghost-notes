@@ -1,9 +1,14 @@
 extends PropSection
 class_name EpisodeProps
 
-## EpisodeProps - a table show's props on the Props card ([PropsCard]): what the open episode's table uses, and what is set aside
-## from it.
+## EpisodeProps - a table show's props on the Props card ([PropsCard]): the table itself, what the open episode's table uses, and
+## what is set aside from it.
 ##
+##   The table  the table itself and each cloth laid on it ([TableProp]): its picture opens the table whole in 3D; its properties -
+##              size, shape, edge, base, what its top is made of and its finish; a cloth's fabric, pattern, colors, size and lie -
+##              each change written into `table.json` as a hand's version, as unticking a thing is; Refine… has an agent rewrite
+##              the top and cloths as a person says ([TableRefine]), in the background, its progress on the row. A cloth's ×
+##              takes it off the table.
 ##   Used       the things in `table.json`, each ticked: unticked, it moves to the table's `aside` list, which nothing stands and no
 ##              agent reads - the table is a hand's version then (kept, passed by Generate) and the work blocked on it goes stale
 ##              ([method EpisodeCard._hand_write]). Select picks it on the stage; Keep, in the 3D view its picture opens ([PropViewer],
@@ -31,6 +36,7 @@ class_name EpisodeProps
 ## prop's picture is taken once and kept by its hash ([PropStudio]); a row's when it first shows.
 
 const GROUPS := [
+	{"key": "furniture", "label": "The table", "tip": "The table everything stands on and the cloths laid on it. Open one to change what it is made of, its size and shape, or have an agent refine it; open its picture to turn it in 3D."},
 	{"key": "table", "label": "Used", "tip": "What this episode's table uses. Untick one to set it aside: the table is then yours, and the work done on it is blocked again on Generate."},
 	{"key": "aside", "label": "Set aside", "tip": "Taken off this episode's table and kept here: tick one to use it again."},
 	{"key": "board", "label": "The land", "tip": "The places modeled on this game's board. Open one and Keep it to find it again on another night."},
@@ -48,6 +54,11 @@ var library := LibraryProps.new()
 
 var _table_key := ""              # the episode and its table's digest, as last read
 var _table := {}
+var _made := {}                   # the table as last read, made safe ([method CardTable.sanitize_table]): its top and cloths as built
+var _look := {}                   # the episode's look, as last read with it
+var _dresser_key := ""            # the set dresser's last table, made safe, while a hand's version of it stands
+var _dresser := {}
+var _refine: PropRefine = null    # the table's Refine window, while it has been opened
 var _hashes := {}                 # a thing's name -> its hash ([method ThingLibrary.hash_of]), for the table as last read
 var _models_key := ""
 var _models := {}                 # "place" / "figure" -> name -> {thing, materials, hash}, the board and the figures as last read
@@ -65,7 +76,7 @@ func groups() -> Array:
 
 
 func rows() -> Array:
-	var out: Array = []
+	var out: Array = _furniture_rows()
 	var t := _read_table()
 	var mats: Dictionary = t.get("materials", {}) if t.get("materials") is Dictionary else {}
 	var kept := library.kept_by_hash()
@@ -255,6 +266,182 @@ func _read_models() -> Dictionary:
 	return _models
 
 
+# --- the table itself ([TableProp]) -------------------------------------------------------------------
+
+## The table and each cloth on it, as rows: the table's picture taken as it is built alone ([method TableProp.made]).
+func _furniture_rows() -> Array:
+	var ep := card._episode
+	var t := _read_table()
+	if ep == null or t.is_empty() or not (_made.get("top") is Dictionary):
+		return []
+	var top: Dictionary = _made["top"]
+	var refining := TableRefine.name_of(ep.dir)
+	var spec := {"top": top, "layers": _made.get("layers", [])}
+	var paint := ep.file_of("image:surface") if ep.has("image:surface") else ""
+	var h := TableProp.hash_of(spec, ep.seed, ep.digest("image:surface") if not paint.is_empty() else "")
+	var verbs: Array = [{"key": "refine", "label": "Refine…", "off": TableRefine.busy(ep.dir),
+		"tip": "Have an agent change the table as you say - its top, what holds it up, the cloths on it. It runs while you work on; the table before is kept a version back." \
+			if not TableRefine.busy(ep.dir) else "An agent is refining it now."}]
+	if not _dressers_made().is_empty() and not TableProp.same(_dressers_made(), _made):
+		verbs.append({"key": "own", "label": "Set dresser's", "tip": "The table and its cloths back as the set dresser laid them, the things on it as they are; the one you changed is kept a version back."})
+	var out: Array = [{"key": "furniture:top", "name": "The table", "line": TableProp.line_of(top), "group": "furniture",
+		"tip": String(top.get("why", "")) if not String(top.get("why", "")).is_empty() else "The table everything stands on.",
+		"picture": library.pictures.of_made(h, func() -> Dictionary: return await TableProp.made_away(spec, ep.seed, paint)),
+		"verbs": verbs, "fields": TableProp.top_rows(top), "refining_as": refining,
+		"values": _yours(TableProp.top_values(top), TableProp.top_values(_dressers_made().get("top", top))),
+		"remove_off": "The table stays: everything stands on it."}]
+	var layers: Array = _made.get("layers", []) if _made.get("layers") is Array else []
+	for i in layers.size():
+		var l: Dictionary = layers[i]
+		out.append({"key": "furniture:cloth:%d" % i, "name": String(l.get("name", "a cloth")), "line": TableProp.cloth_line(l),
+			"group": "furniture", "tip": String(l.get("what", "")), "verbs": [], "fields": TableProp.cloth_rows(l),
+			"values": _yours(TableProp.cloth_values(l), TableProp.cloth_values(_dressers_cloth(String(l.get("name", "")), l))),
+			"remove_tip": "Take this cloth off the table: the table is then yours, kept as a version."})
+	return out
+
+
+## What of [param now] a hand changed from [param was] (the set dresser's): those properties alone, so the rest stand dimmed at its.
+static func _yours(now: Dictionary, was: Dictionary) -> Dictionary:
+	var out := {}
+	for k in now:
+		var a: Variant = now[k]
+		var b: Variant = was.get(k)
+		if typeof(a) == TYPE_FLOAT and typeof(b) in [TYPE_FLOAT, TYPE_INT]:
+			if not is_equal_approx(float(a), float(b)):
+				out[k] = a
+		elif str(a) != str(b):
+			out[k] = a
+	return out
+
+
+## The table itself as the set dresser laid it ([method TableEpisode.dressed]), made safe with the table's materials, while a
+## hand's version of the table stands; {} where it stands as the set dresser made it.
+func _dressers_made() -> Dictionary:
+	var ep := card._episode
+	var d := ep.dressed() if ep != null else {}
+	if d.is_empty():
+		_dresser_key = ""
+		_dresser = {}
+		return _dresser
+	var key := "%s|%s" % [_table_key, JSON.stringify(d)]
+	if key != _dresser_key:
+		_dresser_key = key
+		var raw := _table.duplicate(true)
+		for k in ["top", "layers"]:
+			if d.get(k) == null:
+				raw.erase(k)
+			else:
+				raw[k] = d[k]
+		_dresser = CardTable.sanitize_table(raw, _look)
+	return _dresser
+
+
+## The set dresser's cloth named [param name] (made safe), or [param fallback] where it laid none of that name.
+func _dressers_cloth(name: String, fallback: Dictionary) -> Dictionary:
+	for l in (_dressers_made().get("layers", []) as Array):
+		if l is Dictionary and String((l as Dictionary).get("name", "")) == name:
+			return l
+	return fallback
+
+
+## A property of the table or a cloth on it set, as a hand's version of the table - unset (null), back to the set dresser's. ""
+## written, else why not.
+func _set_furniture(key: String, field: String, value: Variant) -> String:
+	if value == null:
+		# ...the set dresser's value of it, where the table is a hand's version of its
+		var was := _dressers_made()
+		if was.is_empty():
+			return ""
+		if key == "furniture:top":
+			value = TableProp.top_values(was.get("top", {})).get(field)
+		else:
+			var i := int(key.get_slice(":", 2))
+			var l: Dictionary = (_made.get("layers", []) as Array)[i] if i < (_made.get("layers", []) as Array).size() else {}
+			value = TableProp.cloth_values(_dressers_cloth(String(l.get("name", "")), l)).get(field)
+		if value == null:
+			return ""
+	var ep := card._episode
+	if ep == null or not ep.has("table") or not (_made.get("top") is Dictionary):
+		return "this episode has no table yet"
+	var err := card._hand_write("table", func() -> String:
+		var raw: Variant = ep.read_json("table")
+		if not (raw is Dictionary):
+			return "the table is not readable"
+		ep.keep_dressed()
+		var t: Dictionary = (raw as Dictionary).duplicate(true)
+		if key == "furniture:top":
+			t["top"] = TableProp.set_top(t.get("top", {}) if t.get("top") is Dictionary else {}, _made["top"], field, value)
+		else:
+			t["layers"] = TableProp.set_cloth(t.get("layers"), _made.get("layers", []), int(key.get_slice(":", 2)), field, value)
+		return ep.write_json("table", t))
+	card._after_hand("table", err)
+	return err
+
+
+## Cloth [param i] taken off the table, as a hand's version. "" written, else why not.
+func _take_cloth(i: int) -> String:
+	var ep := card._episode
+	if ep == null or not ep.has("table"):
+		return "this episode has no table yet"
+	var err := card._hand_write("table", func() -> String:
+		var raw: Variant = ep.read_json("table")
+		if not (raw is Dictionary):
+			return "the table is not readable"
+		ep.keep_dressed()
+		var t: Dictionary = (raw as Dictionary).duplicate(true)
+		var ls: Array = (t["layers"] as Array).duplicate(true) if t.get("layers") is Array else (_made.get("layers", []) as Array).duplicate(true)
+		if i < 0 or i >= ls.size():
+			return "that cloth is not on the table"
+		ls.remove_at(i)
+		t["layers"] = ls
+		return ep.write_json("table", t))
+	card._after_hand("table", err)
+	return err
+
+
+## The table's Refine window opened: what is asked of it handed to an agent ([TableRefine]), which works on whether or not it stays.
+func _open_refine() -> String:
+	var ep := card._episode
+	if ep == null or not ep.has("table"):
+		return "this episode has no table yet"
+	if _refine == null or not is_instance_valid(_refine):
+		_refine = PropRefine.new("table")
+		card.add_child(_refine)
+		_refine.asked.connect(func(direction: String, pick: Dictionary) -> void:
+			var e := card._episode
+			if e == null:
+				_refine.say("No episode is open.")
+				return
+			var err := TableRefine.start(e.dir, direction, pick, _refine)
+			if not err.is_empty():
+				_refine.say("Not refined: %s." % err)
+				return
+			_refine.working(true)
+			_refine.say("An agent is refining the table: starting."))
+		_refine.stopped.connect(func() -> void:
+			if card._episode != null:
+				TableRefine.stop(card._episode.dir))
+	var busy := TableRefine.busy(ep.dir)
+	_refine.working(busy)
+	if not busy and String(PropRefining.of(TableRefine.name_of(ep.dir)).get("state", "")) == "failed":
+		_refine.say("Not refined: %s." % String(PropRefining.of(TableRefine.name_of(ep.dir))["error"]))
+		PropRefining.seen(TableRefine.name_of(ep.dir))
+	_refine.open_for("The table", card.get_window())
+	# ...beside the side panel, never under it
+	Shell.center_beside(_refine, card)
+	return ""
+
+
+func refines(key: String) -> bool:
+	return key == "furniture:top"
+
+
+func set_field(key: String, field: String, value: Variant) -> String:
+	if key.begins_with("furniture:"):
+		return _set_furniture(key, field, value)
+	return "nothing here is tuned"
+
+
 func set_on(key: String, on: bool) -> String:
 	var from := "aside" if on else "things"
 	var to := "things" if on else "aside"
@@ -265,6 +452,10 @@ func set_on(key: String, on: bool) -> String:
 
 
 func remove(key: String) -> String:
+	if key.begins_with("furniture:cloth:"):
+		return _take_cloth(int(key.get_slice(":", 2)))
+	if key == "furniture:top":
+		return "the table stays: everything stands on it"
 	var from := "aside" if key.begins_with("aside:") else "things"
 	var name := key.substr(key.find(":") + 1)
 	var err := card._hand_write("table", func() -> String: return move_thing(name, from, ""))
@@ -302,6 +493,29 @@ func act(key: String, verb: String) -> String:
 	var name := key.substr(kind.length() + 1)
 	if kind == "ornament":
 		return _act_ornament(name, verb)
+	if key == "furniture:top":
+		match verb:
+			"refine":
+				return _open_refine()
+			"own":
+				var ep := card._episode
+				var d := ep.dressed() if ep != null else {}
+				if d.is_empty():
+					return "the table stands as the set dresser made it"
+				var err := card._hand_write("table", func() -> String:
+					var raw: Variant = ep.read_json("table")
+					if not (raw is Dictionary):
+						return "the table is not readable"
+					var t: Dictionary = (raw as Dictionary).duplicate(true)
+					for k in ["top", "layers"]:
+						if d.get(k) == null:
+							t.erase(k)
+						else:
+							t[k] = d[k]
+					return ep.write_json("table", t))
+				card._after_hand("table", err)
+				return err
+		return "nothing here does that"
 	match verb:
 		"keep":
 			# a sticker's Keep is its row's; a prop's is its 3D view's ([method PropSection.keep_prop])
@@ -358,6 +572,13 @@ func prop_of(key: String) -> Dictionary:
 
 
 func model_of(key: String) -> Dictionary:
+	if key == "furniture:top" and card._episode != null and _made.get("top") is Dictionary:
+		var ep := card._episode
+		var made: Dictionary = await TableProp.made_away({"top": _made["top"], "layers": _made.get("layers", [])}, ep.seed,
+			ep.file_of("image:surface") if ep.has("image:surface") else "")
+		if made.is_empty():
+			return {}
+		return {"node": made["node"], "box": made["size"], "size": PropStudio.size_text(made["size"])}
 	var p := prop_of(key)
 	if p.is_empty():
 		return {}
@@ -500,6 +721,9 @@ func _read_table() -> Dictionary:
 		_table_key = key
 		var raw: Variant = ep.read_json("table")
 		_table = raw if raw is Dictionary else {}
+		var plan: Variant = ep.read_json("plan")
+		_look = (plan as Dictionary).get("look", {}) if plan is Dictionary and (plan as Dictionary).get("look") is Dictionary else {}
+		_made = CardTable.sanitize_table(_table, _look) if not _table.is_empty() else {}
 		_hashes = {}
 		var mats: Dictionary = _table.get("materials", {}) if _table.get("materials") is Dictionary else {}
 		for list in ["things", "aside"]:

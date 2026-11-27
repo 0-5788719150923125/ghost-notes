@@ -53,6 +53,8 @@ var _written: Array = []            # per drawn card: a written card, nothing pa
 var _height_stamp := "-"          # the table file the height map's wanting was last read from
 var _height_wanted := false
 var _game_cache := {}
+var _dressed_stamp := ""            # the set dresser's table as last read ([method dressed]), and when its file was
+var _dressed := {}
 
 
 static func open(show_key: String, seed_value: int) -> TableEpisode:
@@ -269,6 +271,47 @@ func write_text(step: String, text: String) -> String:
 
 func write_json(step: String, value: Variant) -> String:
 	return write_text(step, JSON.stringify(value, "\t"))
+
+
+# --- the table as the set dresser laid it -------------------------------------------------------
+
+## The table itself as the set dresser laid it (`{top, layers}`, each null where it wrote none), kept beside the episode while a
+## hand or a refining agent changes it ([method keep_dressed]) - whatever versions of the table are kept - and let go once the
+## table is made anew by its agent ([method note_made]).
+const DRESSED := "dressed.json"
+
+
+## The table itself as the set dresser laid it, while a hand's version of the table stands: `{top, layers}`, {} for none. Read
+## again only when its file changes.
+func dressed() -> Dictionary:
+	var p := dir.path_join(DRESSED)
+	if String(record("table").get("by", "")) != "hand" or not FileAccess.file_exists(p):
+		return {}
+	var stamp := "%d|%d" % [FileAccess.get_modified_time(p), FileAccess.get_size(p)]
+	if stamp != _dressed_stamp:
+		_dressed_stamp = stamp
+		var got: Variant = JSON.parse_string(FileAccess.get_file_as_string(p))
+		_dressed = got if got is Dictionary else {}
+	return _dressed
+
+
+## The table's top and cloths kept as the set dresser laid them ([method dressed]), before a hand or an agent changes them: where
+## none is kept, or the table stands as its agent made it. "" kept or nothing to keep, else why not.
+func keep_dressed() -> String:
+	var p := dir.path_join(DRESSED)
+	if FileAccess.file_exists(p) and String(record("table").get("by", "")) == "hand":
+		return ""
+	var t: Variant = read_json("table")
+	if not (t is Dictionary):
+		return ""
+	return KeptSteps._put(p, JSON.stringify({"top": (t as Dictionary).get("top"), "layers": (t as Dictionary).get("layers")}, "\t"))
+
+
+## A step made: the table made anew by its agent lets go of the set dresser's last ([method dressed]).
+func note_made(step: String, by: String, from := {}) -> String:
+	if step == "table" and by != "hand" and FileAccess.file_exists(dir.path_join(DRESSED)):
+		DirAccess.remove_absolute(dir.path_join(DRESSED))
+	return super(step, by, from)
 
 
 # --- the steps -------------------------------------------------------------------------

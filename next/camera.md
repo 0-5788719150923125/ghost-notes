@@ -26,7 +26,19 @@ on a quicker clock, its end included (`long`, between `long_from` and `long_full
 
 - **The cameras, a list** (next/tabletop.md, "The diorama"): below the rows, the card lists the cameras a show cuts between
   ([Cameras], `src/motion/cameras.gd`), each an entry with its own settings in priority order, as the Props card lists props.
-  A game at the table reads it ([TableGame]); no other format does yet. Gate: `tests/motion/cameras_check.gd`.
+  A game at the table reads it ([TableGame]), and the Dispatch desk its chair and the camera behind it. Gate:
+  `tests/motion/cameras_check.gd`.
+- **Every table show has the card** (Table brings it): its own camera, At the table (`table`, kept), holds whenever nothing else
+  wants the moment. A CAMERA IS LISTED ONLY WHERE IT IS USED (`Cameras.seen`): a format's kept ones, and those the show registers
+  ([method ShowFeed.see_cameras]) - a game's episode registers its dice, march, seat and drift as it opens and as it plays; a
+  reading, or a note with nothing made, registers none, so True Tarot lists its one camera. A format that flies no camera of its
+  own (the table) shows no follow rows. A list edited there keeps the sorts it does not show as they stood. Gate:
+  `tests/show/camera_card_check.gd` (control: a game lists its four).
+- **Sway** (`sway`, `sway_speed` on the table camera and the Dispatch desk's chair): a hand-held unsteadiness, the aim wandering on
+  three slow waves (`Cameras.sway_at`, `SWAY` at `SWAY_RATE`), a function of show time. The chair's own is 1, the desk's wander as
+  it always was; the table's own is 0, a tripod, and at a game every shot sways with it. `Cameras.swayed` turns a camera by the
+  angle the chair turns on its whole desk (`SWAY_REACH`) wherever it looks, about its lens, so what is posed from the camera's place
+  stays put. Open: the author's eye on a Sway at the table.
 
 - **A dice camera that cuts in** (2026-11-23; the author: "cinematic camera angles on the board, on the dice rolls"): the dice camera's
   new fields - `reach` (how much of the way it goes, 0.75 as before), `rise` (its angle as they land, 52 as before), `top` (the angle it

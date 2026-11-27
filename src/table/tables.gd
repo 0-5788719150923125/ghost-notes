@@ -5,7 +5,7 @@ class_name Tables
 ## oval, a many-sided polygon, its rim scalloped if it likes), a thickness, the profile its edge is cut
 ## to (bevel, bullnose, ogee...), and what it is made of - boards of a wood, a slab of stone, metal,
 ## lacquer, leather, tiles, a baize, or the episode's own painting - with a pattern inlaid in it and a
-## band along its edge if it has them. Over it, its layers from the bottom up: a tablecloth, a runner, a
+## band along its edge if it has them; and what holds it up to the floor ([constant BASES]). Over it, its layers from the bottom up: a tablecloth, a runner, a
 ## square laid as a diamond, a mat under the cards - each a fabric woven in a pattern (stripes, checks, a
 ## plaid, diamonds, dots, a medallion, dyed clouds, ikat, or the painting), with a border along its hem
 ## and a fringe on its ends if it has them. Every surface has a relief - its threads or grain, its
@@ -22,7 +22,10 @@ class_name Tables
 ## proportions kept - a round table is at least ~1.2 m across. Things stand on the top [constant
 ## THING_EDGE] in from its edge ([method inside]). A layer that runs past the edge hangs over it as cloth
 ## does - rolled over the edge, straight down, its hem in folds ([method _drape]) - real geometry; the
-## relief is not (lifting the surface would lift the cards off it, or sink them in).
+## relief is not (lifting the surface would lift the cards off it, or sink them in). The base stands
+## under the top, down to the floor [constant HIGH] below, and is left out of the built `bounds`: what
+## lights the table measures the top and its cloths. The camera looking down across the top never sees
+## it; the table seen whole does ([TableProp]).
 ##
 ## Space: a description is in centimeters, x to the reader's right and z toward the reader, from the
 ## middle of the reading - where the cards are dealt, [constant ORIGIN] on the table; the top's own
@@ -52,6 +55,9 @@ const LAYER_GAP := 0.00012
 const LAYERS_UNDER := 0.0006
 ## The most a cloth hangs below the top (meters): it reaches the floor.
 const DROP_MOST := 0.7
+## How high the top stands over the floor (meters, a dining table's): the reader's eye stands this much higher than the camera over
+## the top, and a base reaches the floor from here.
+const HIGH := 0.75
 ## How finely a top's face and a layer are cut into triangles (meters), and how many rays find an
 ## outline's edge.
 const TOP_STEP := 0.05
@@ -77,6 +83,23 @@ const EDGES := {
 	"ogee": "an S-curve, the molded edge of a fine table",
 	"bead": "a small round bead along the top, stepped in below it",
 }
+
+## What holds the top up (`base`): a table round or many-sided stands on a pedestal unless it says, any other on legs.
+const BASES := {
+	"legs": "four legs inset from its corners, an apron joining them under a rectangle",
+	"pedestal": "one column in its middle on a broad round foot",
+	"trestle": "a trestle at each end, a stretcher between them low down: a refectory or a work table",
+	"none": "nothing seen: the top laid on something out of sight",
+}
+## A base (meters): a leg's side and how far in from the top's edge legs stand, an apron's depth, a pedestal's column (its
+## radius) and its foot (a share of the top's smaller half), a trestle's post and how far in from the ends it stands.
+const LEG := 0.05
+const LEG_IN := 0.07
+const APRON := 0.08
+const COLUMN := 0.06
+const FOOT := 0.55
+const TRESTLE := 0.07
+const TRESTLE_IN := 0.2
 
 ## The fabrics a layer is woven in, with their shader codes and their threads' depth (mm).
 const FABRICS := {
@@ -122,6 +145,8 @@ const TOP_KINDS := {"wood": 7, "stone": 6, "crystal": 6, "metal": 1, "ceramic": 
 const TOP_DEPTH := {"wood": 0.35, "stone": 0.3, "crystal": 0.2, "metal": 0.25, "ceramic": 0.05, "leather": 0.3,
 	"fabric": 0.3, "painted": 0.1, "painting": 0.0}
 
+## The name a top's material written out in it goes by, made safe: its own, no other thing's.
+const TOP_OWN := "the top's own"
 ## The default table: boards of a dark wood, its painting laid on it as a cloth.
 const DEFAULT_TOP := {"shape": "rect", "size": [190.0, 85.0], "thickness": 5.0, "edge": "eased", "material": "the table's wood",
 	"boards": {"width": 18.0, "turn": 0.0}}
@@ -134,7 +159,7 @@ const _TEXTILE_SHADER := preload("res://shaders/table_textile.gdshader")
 ## The vocabulary, as the set dresser reads it.
 static func describe() -> String:
 	var lines := PackedStringArray()
-	lines.append("THE TOP (`top`): {\"shape\", \"size\", \"corner\", \"sides\", \"scallops\", \"thickness\", \"edge\", \"material\", \"boards\", \"tiles\", \"pattern\", \"inlay\", \"relief\", \"why\"} - centimeters.")
+	lines.append("THE TOP (`top`): {\"shape\", \"size\", \"corner\", \"sides\", \"scallops\", \"thickness\", \"edge\", \"material\", \"boards\", \"tiles\", \"pattern\", \"inlay\", \"relief\", \"base\", \"why\"} - centimeters.")
 	lines.append("- shape:")
 	for k in SHAPES:
 		lines.append("  - %s: %s" % [k, SHAPES[k]])
@@ -145,9 +170,12 @@ static func describe() -> String:
 	lines.append("- thickness: %d to %d cm. edge, the profile it is cut to (what the camera sees of the table's side):" % [int(THICK.x), int(THICK.y)])
 	for k in EDGES:
 		lines.append("  - %s: %s" % [k, EDGES[k]])
-	lines.append("- material: the name of one of `materials` (wood, stone, metal, ceramic, leather, fabric for a baize, or painted lacquer - its color, color2, polish, wear, pattern and grain as for a thing), or \"painting\": the painting itself is the top, as boards or a slab it shows.")
+	lines.append("- material: the name of one of `materials` (wood, stone, metal, ceramic, leather, fabric for a baize, or painted lacquer - its color, color2, polish, wear, pattern and grain as for a thing), a material written out the same way ({\"kind\", \"color\", ...}), or \"painting\": the painting itself is the top, as boards or a slab it shows.")
 	lines.append("- boards: {\"width\", \"turn\"} - the top made of boards that wide, running side to side (turn 0) or front to back (90), their ends staggered and their seams cut in. tiles: {\"size\", \"grout\": \"#rrggbb\"} - laid in square tiles.")
 	lines.append("- pattern: inlaid in the top - marquetry, parquetry, a painted chessboard - as a layer's pattern is (below), taking the material's own grain. inlay: {\"width\", \"inset\", \"color\"} - a band of another wood, stone or metal along the edge, `inset` in from it.")
+	lines.append("- base, what holds it up (a round or many-sided top a pedestal unless it says, any other legs):")
+	for k in BASES:
+		lines.append("  - %s: %s" % [k, BASES[k]])
 	lines.append("")
 	lines.append("THE LAYERS (`layers`, from the bottom up, at most %d - or none: a bare top): each {\"name\", \"what\", \"outline\", \"size\", \"sides\", \"drop\", \"at\", \"turn\", \"fabric\", \"pattern\", \"border\", \"fringe\", \"relief\", \"sheen\"}." % MAX_LAYERS)
 	lines.append("- what: a few words - a tablecloth, a runner, an altar cloth laid as a diamond, a reading mat, a tapestry. outline: rect, round, oval or polygon (with `sides`) at `size` [width, depth] - width side to side and depth front to back, before it is turned - or \"top\": the top's own outline, hanging `drop` cm over its edge all round - a tablecloth.")
@@ -235,12 +263,17 @@ static func _sanitize_top(t: Dictionary, materials: Dictionary, pal: Array, note
 		"corner": Props._num(t.get("corner"), 0.0, 0.0, minf(size.x, size.y) * 0.5),
 		"scallops": int(Props._num(t.get("scallops"), 0.0, 0.0, 48.0)) if shape != "rect" else 0,
 		"thickness": Props._num(t.get("thickness"), 4.0, THICK.x, THICK.y),
-		"edge": _key(t.get("edge"), EDGES, "eased"), "why": Props._text(t.get("why", ""), 200)}
+		"edge": _key(t.get("edge"), EDGES, "eased"), "why": Props._text(t.get("why", ""), 200),
+		"base": _key((t["base"] as Dictionary).get("kind") if t.get("base") is Dictionary else t.get("base"), BASES,
+			"legs" if shape == "rect" or shape == "oval" else "pedestal")}
 	if int(out["scallops"]) > 0 and int(out["scallops"]) < 12:
 		out["scallops"] = 12
-	# The material: one of the table's, by name - or the painting
-	var mname := Props._text(t.get("material", ""), 80)
-	if mname.to_lower() == "painting" or mname.to_lower() == "the painting":
+	# The material: one of the table's, by name - or written out here - or the painting
+	var mname := Props._text(t.get("material", ""), 80) if not (t.get("material") is Dictionary) else ""
+	if t.get("material") is Dictionary:
+		out["material"] = TOP_OWN
+		out["look"] = Props.sanitize_material(t["material"], String(DEFAULT_WOOD["color"]))
+	elif mname.to_lower() == "painting" or mname.to_lower() == "the painting":
 		out["material"] = "painting"
 		out["look"] = {"kind": "painting", "color": String(pal[0]), "color2": String(pal[0]), "polish": 0.3, "wear": 0.0,
 			"pattern": 0.0, "grain": 1.0}
@@ -581,7 +614,87 @@ static func build(spec: Dictionary, seed: int) -> Dictionary:
 		if String((l.get("pattern", {}) as Dictionary).get("kind", "")) == "painting":
 			painted.append({"mat": mat, "size": (lo["half"] as Vector2) * 2.0 + Vector2.ONE * float(lo.get("grow", 0.0)) * 2.0})
 		bounds = bounds.merge(lm["bounds"])
+	var base := _base(top, o, th, seed)
+	if base != null:
+		root.add_child(base)
 	return {"node": root, "top_mat": top_mat, "layer_mats": layer_mats, "painted": painted, "bounds": bounds}
+
+
+## What holds top [param top] (outline [param o], [param th] thick) up to the floor ([constant BASES]), in the top's material
+## (a dark wood under the painting), casting no shadow: null for none.
+static func _base(top: Dictionary, o: Dictionary, th: float, seed: int) -> Node3D:
+	var kind := String(top.get("base", "legs"))
+	if kind == "none" or not BASES.has(kind):
+		return null
+	var look: Dictionary = top.get("look", {}) if top.get("look") is Dictionary else {}
+	if String(look.get("kind", "")) == "painting" or look.is_empty():
+		look = Props.sanitize_material(DEFAULT_WOOD, String(DEFAULT_WOOD["color"]))
+	var mat := Props.material(look, null, 0.25, HIGH, hash([seed, "base"]), true)
+	var root := Node3D.new()
+	root.name = "Base"
+	var c: Vector2 = o["center"]
+	var half: Vector2 = o["half"]
+	var down := HIGH - th
+	var add := func(mesh: Mesh, at: Vector3) -> void:
+		var mi := MeshInstance3D.new()
+		mi.mesh = mesh
+		mi.material_override = mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.position = Vector3(c.x, 0.0, c.y) + at
+		root.add_child(mi)
+	match kind:
+		"legs":
+			var rect := String(o["shape"]) == "rect"
+			var inset := LEG_IN + (float(o["corner"]) * 0.3 if rect else 0.0)
+			var corners: Array = []
+			for sx in [-1.0, 1.0]:
+				for sz in [-1.0, 1.0]:
+					if rect:
+						corners.append(Vector2(sx * (half.x - inset), sz * (half.y - inset)))
+					else:
+						# ...on a round or many-sided top, at its diagonals, as far in from the rim
+						corners.append(Vector2(sx * (half.x - inset) * 0.7071, sz * (half.y - inset) * 0.7071))
+			for p in corners:
+				var leg := BoxMesh.new()
+				leg.size = Vector3(LEG, down, LEG)
+				add.call(leg, Vector3((p as Vector2).x, -th - down * 0.5, (p as Vector2).y))
+			if rect:
+				var span := Vector2(half.x - inset, half.y - inset) * 2.0
+				for sz in [-1.0, 1.0]:
+					var apron := BoxMesh.new()
+					apron.size = Vector3(span.x, APRON, 0.02)
+					add.call(apron, Vector3(0.0, -th - APRON * 0.5, sz * (half.y - inset + LEG * 0.5 - 0.01)))
+				for sx in [-1.0, 1.0]:
+					var apron := BoxMesh.new()
+					apron.size = Vector3(0.02, APRON, span.y)
+					add.call(apron, Vector3(sx * (half.x - inset + LEG * 0.5 - 0.01), -th - APRON * 0.5, 0.0))
+		"pedestal":
+			var column := CylinderMesh.new()
+			column.top_radius = COLUMN
+			column.bottom_radius = COLUMN * 1.25
+			column.height = down - 0.04
+			column.radial_segments = 24
+			add.call(column, Vector3(0.0, -th - (down - 0.04) * 0.5, 0.0))
+			var foot := CylinderMesh.new()
+			foot.top_radius = minf(half.x, half.y) * FOOT * 0.6
+			foot.bottom_radius = minf(half.x, half.y) * FOOT
+			foot.height = 0.04
+			foot.radial_segments = 40
+			add.call(foot, Vector3(0.0, -HIGH + 0.02, 0.0))
+		"trestle":
+			var x := maxf(half.x - TRESTLE_IN, half.x * 0.3)
+			for sx in [-1.0, 1.0]:
+				var post := BoxMesh.new()
+				post.size = Vector3(TRESTLE, down - 0.12, TRESTLE * 1.6)
+				add.call(post, Vector3(sx * x, -th - 0.06 - (down - 0.12) * 0.5, 0.0))
+				for y in [-th - 0.03, -HIGH + 0.03]:
+					var bar := BoxMesh.new()
+					bar.size = Vector3(TRESTLE, 0.06, half.y * (1.7 if y < -0.3 else 1.4))
+					add.call(bar, Vector3(sx * x, y, 0.0))
+			var stretcher := BoxMesh.new()
+			stretcher.size = Vector3(x * 2.0, 0.06, 0.04)
+			add.call(stretcher, Vector3(0.0, -HIGH * 0.72, 0.0))
+	return root
 
 
 ## The painting laid on every surface that takes it - its pixels square there, the part of it that fits
@@ -1205,7 +1318,8 @@ static func summary(spec: Dictionary) -> String:
 	var parts := PackedStringArray()
 	var mat := String(top.get("material", ""))
 	var look: Dictionary = top.get("look", {})
-	var made := "the painting" if mat == "painting" else ("%s (%s)" % [mat, String(look.get("kind", ""))] if not mat.is_empty() else "wood")
+	var made := "the painting" if mat == "painting" else ("%s (%s)" % [mat, String(look.get("kind", ""))] if not mat.is_empty() and mat != TOP_OWN
+		else String(look.get("kind", "wood")))
 	var dims := ("%d cm across" % roundi(float(size[0]))) if String(top.get("shape", "")) == "round" else \
 		("%d x %d cm" % [roundi(float(size[0])), roundi(float(size[1]))])
 	var shape := String(top.get("shape", "rect"))
@@ -1222,6 +1336,8 @@ static func summary(spec: Dictionary) -> String:
 		extra.append("an inlaid band")
 	if int(top.get("scallops", 0)) > 0:
 		extra.append("a scalloped rim")
+	if String(top.get("base", "none")) != "none":
+		extra.append("on %s" % {"legs": "legs", "pedestal": "a pedestal", "trestle": "trestles"}.get(String(top["base"]), String(top["base"])))
 	parts.append("%s %s top of %s, %s, %s edge%s" % ["an" if shape.substr(0, 1) in ["a", "e", "i", "o", "u"] else "a", shape, made, dims, String(top.get("edge", "eased")),
 		(" - " + ", ".join(extra)) if not extra.is_empty() else ""])
 	for l in spec.get("layers", []):

@@ -6,6 +6,7 @@ class_name EntryCard
 ## its name and a line, and a × in its top-right corner as the card's own has. The × takes the entry away, pressed twice (the first
 ## arms it, [constant ARMED] seconds), or stands grayed saying why it cannot. A click on the entry opens it to show what can be done
 ## with it ([member options]), and again closes it; one with nothing to show never opens, and a [member fixed] one is always open.
+## Opened by a click, it is brought into view whole ([method Card.reveal_part]).
 ##
 ## Its list keeps which entries are open ([signal toggled]): a list drawn again opens them again.
 
@@ -105,11 +106,9 @@ func _init(name: String, line := "", tip := "") -> void:
 
 func _ready() -> void:
 	# framed in the color of the card it is on
-	var n: Node = get_parent()
-	while n != null and not (n is Card):
-		n = n.get_parent()
-	if n is Card:
-		_color = (n as Card).color()
+	var card := _card()
+	if card != null:
+		_color = card.color()
 	_show()
 
 
@@ -148,6 +147,17 @@ func _pressed(e: InputEvent) -> void:
 	_head.accept_event()
 	open = not open
 	toggled.emit(open)
+	var card := _card()
+	if open and card != null:
+		card.reveal_part(self)
+
+
+## The card it is on, null for none.
+func _card() -> Card:
+	var n: Node = get_parent()
+	while n != null and not (n is Card):
+		n = n.get_parent()
+	return n as Card
 
 
 func _x_pressed() -> void:

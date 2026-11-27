@@ -1995,14 +1995,34 @@ func _candles() -> bool:
 	return true
 
 
-## The room's picture is asked for as the table projects it: a level camera at a seated eye, its
-## horizon across the middle, through the lens the table assumes ([constant CardTable.BACKDROP_LENS]),
-## with the lower third - all the tilted camera sees past the table - carrying the place.
+## The room's picture is asked for as the table projects it: from the reader's eye, tilted down to the middle of the band the
+## camera sees past the table ([method CardTable.backdrop_view]), through the lens the table assumes ([constant
+## CardTable.BACKDROP_LENS]) - so that band lies across the picture's middle, where its place is painted - with where the horizon
+## and the band fall said in the numbers the view gives. Control: a level picture puts that band in its bottom quarter.
 func _room_prompt() -> bool:
-	var p := TablePrompts.backdrop_image({"setting": "a quiet room", "palette": ["#112233"]}, "/tmp/x.png")
-	_ok(p.contains("THE CAMERA IS LEVEL") and p.contains("%d mm lens" % int(CardTable.BACKDROP_LENS))
-		and p.contains("exact middle") and p.contains("LOWER THIRD"),
-		"the room's picture is not asked for level, through the table's lens, its lower third carrying the place")
+	var lying := true
+	for seed in [1, 77, 1234, 98765]:
+		var v := CardTable.backdrop_view(seed)
+		var b: Array = v["band"]
+		var a0 := CardTable.backdrop_share(v, float(b[0]))
+		var a1 := CardTable.backdrop_share(v, float(b[1]))
+		if not (float(b[0]) < float(b[1]) and float(v["tilt"]) >= float(b[0]) - 0.5 and float(v["tilt"]) <= float(b[1]) + 0.5
+				and a0 > 0.35 and a1 < 0.65 and CardTable.backdrop_share(v, 0.0) < a0 and int(v["eye_cm"]) > 95 and int(v["eye_cm"]) < 125):
+			lying = false
+			print("  view of %d: %s, band %.2f-%.2f" % [seed, v, a0, a1])
+	_ok(lying, "the band the camera sees past the table does not lie across the room picture's middle")
+	var view := CardTable.backdrop_view(1234)
+	var level := view.duplicate()
+	level["tilt"] = 0.0
+	_ok(CardTable.backdrop_share(level, float((view["band"] as Array)[0])) > 0.7, "control: a level picture's band is not in its bottom part")
+	var band: Array = view["band"]
+	var from := roundi(CardTable.backdrop_share(view, float(band[0])) * 100.0)
+	var to := roundi(CardTable.backdrop_share(view, float(band[1])) * 100.0)
+	var p := TablePrompts.backdrop_image({"setting": "a quiet room", "palette": ["#112233"]}, "/tmp/x.png", view)
+	_ok(p.contains("TILTED DOWN %d degrees" % roundi(float(view["tilt"]))) and p.contains("%d mm lens" % int(CardTable.BACKDROP_LENS))
+		and p.contains("%d cm above the floor" % int(view["eye_cm"])) and p.contains("below about %d%%" % to)
+		and p.contains("cuts it at about %d%%" % from) and p.contains("ONLY A BAND"),
+		"the room's picture is not asked for tilted to the band the camera sees, through the table's lens, the band said where it falls")
 	return true
 
 

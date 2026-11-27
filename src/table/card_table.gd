@@ -239,10 +239,37 @@ const VFOV := 42.0
 ## table's lightness is read ([constant TableMedium.LUM_RECT]) and its light is counted.
 const SEEN_RECT := Rect2(-0.7, -0.8, 1.4, 1.24)
 const SEEN_GRID := Vector2i(35, 31)
-## The room's picture is asked for as a level photograph from a seated reader's eye, its horizon across its middle, through a lens this
-## wide (millimeters, on a 36 x 24 frame) - the photograph an image model makes most reliably - and projected from the camera's own
-## eye, so the room past the table is seen as the tilted camera would see it ([method TableMedium._place_backdrop]).
+## The room's picture is asked for as a photograph from the reader's eye through a lens this wide (millimeters, on a 36 x 24 frame),
+## tilted down to the band the camera sees past the table ([method backdrop_view]), and projected from the camera's own eye, so the
+## room past the table is seen as the tilted camera would see it ([method TableMedium._place_backdrop]).
 const BACKDROP_LENS := 20.0
+## The view the room's picture is asked for: through [constant BACKDROP_LENS] from the reader's eye as episode [param seed]'s camera
+## stands ([method layout_of]), tilted down to the middle of the band that camera sees past the default table's far edge, so that band
+## lies across the picture's middle, where a painter puts the place. `{view, lens_mm, tilt, eye_cm, band, floor_m}`: `tilt` degrees
+## under level, `band` `[from, to]` degrees under level (the frame's top, the far edge), `floor_m` how far off the floor is across the
+## picture's middle.
+static func backdrop_view(seed: int) -> Dictionary:
+	var lay := layout_of(seed)
+	var cam: Transform3D = lay["camera"]
+	var fwd := -cam.basis.z
+	var top := rad_to_deg(asin(clampf(-fwd.y, -1.0, 1.0))) - float(lay["fov"]) * 0.5
+	var far_z := Tables.ORIGIN.y + Tables.TOP_AT.y - float((Tables.DEFAULT_TOP["size"] as Array)[1]) * 0.005
+	var ahead := Vector2(fwd.x, fwd.z).normalized()
+	var across := (cam.origin.z - far_z) / maxf(-ahead.y, 0.2)
+	var edge := rad_to_deg(atan2(cam.origin.y, across))
+	var tilt := roundf((maxf(top, 0.0) + edge) * 0.5)
+	var eye := Tables.HIGH + cam.origin.y
+	return {"view": "tilted", "lens_mm": BACKDROP_LENS, "tilt": tilt, "eye_cm": roundi(eye * 100.0),
+		"band": [snappedf(top, 0.1), snappedf(edge, 0.1)], "floor_m": snappedf(eye / tan(deg_to_rad(maxf(tilt, 1.0))), 0.1)}
+
+
+## How far down picture [param view] ([method backdrop_view]) a line of sight [param below] degrees under level lies, as a share of its
+## height from its top (outside 0-1 off the picture).
+static func backdrop_share(view: Dictionary, below: float) -> float:
+	var half := atan(12.0 / maxf(float(view.get("lens_mm", BACKDROP_LENS)), 1.0))
+	return 0.5 + tan(deg_to_rad(below - float(view.get("tilt", 0.0)))) / (2.0 * tan(half))
+
+
 ## The cloth's picture is asked for as this much of the surface, centimeters - as wide as the cloth and a little deeper, landscape as the
 ## painters make it - so its grain comes out at its true size ([method cloth_crop]).
 const CLOTH_PICTURE := Vector2(120.0, 80.0)

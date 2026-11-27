@@ -1039,7 +1039,10 @@ static func _pencil(r: RandomNumberGenerator, mats: Dictionary, length: float, n
 static func dress(look: Dictionary, seed: int, face: float) -> Dictionary:
 	var root := Node3D.new()
 	root.name = "Desk"
-	var spec := Tables.sanitize(look["top"], look["layers"], look["materials"], [])
+	# ...a top alone: what holds it up is never in the shot ([constant Tables.BASES] `none`)
+	var top: Dictionary = (look["top"] as Dictionary).duplicate() if look.get("top") is Dictionary else Tables.DEFAULT_TOP.duplicate()
+	top["base"] = "none"
+	var spec := Tables.sanitize(top, look["layers"], look["materials"], [])
 	var built := Tables.build(spec, seed)
 	var furniture: Node3D = built["node"]
 	furniture.position = Vector3(-Tables.ORIGIN.x, face, -Tables.ORIGIN.y)

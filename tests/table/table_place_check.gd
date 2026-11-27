@@ -22,6 +22,8 @@ extends Node
 ##     key, on a dark one a candle at [constant TableMedium.KEY_ENERGY];
 ##   - no two flames keep time: each its own tempo, its drafts its own (control: one tempo for all); the room's out-of-shot
 ##     candles are out of shot, throw no shadows, and flicker too;
+##   - the reader's eye: a tripod unless the Camera card's table camera has a Sway, when it turns about its lens and the eye stays
+##     (control: at 0 it is the episode's own camera); a reading registers no camera beyond the table's own;
 ##   - the outro: lit while the voice speaks, fading to black after its last word; opening on its title, the channel's name over
 ##     the intro and never again; the table out of focus all the while the name is up, the blur lifting as the focus pulls and off
 ##     for the reading - a box's reading as a deck's, though a box is never shuffled (control: its shuffle time is none); and
@@ -171,6 +173,8 @@ func _run() -> void:
 
 	print("the room past the table")
 	_backdrop()
+	print("the camera, held")
+	_held()
 	print("the outro")
 	_outro()
 
@@ -493,14 +497,29 @@ func _mean_lum(at: Vector3, r: float) -> float:
 
 ## The outro, on a reading whose word times are known: the table's brightness from the end fade, and the title's from its own curve, sampled
 ## across the whole reading. The room is seen from the reader's eye: a picture asked for level (`backdrop.json` beside it) stands on an
-## upright plane straight ahead of the camera, its middle at the eye's height and as wide as its lens saw - two-sided: with no view beside
-## it, the picture keeps its place, square to the tilted camera.
+## upright plane straight ahead of the camera, its middle at the eye's height and as wide as its lens saw; one asked for tilted down
+## ([method CardTable.backdrop_view]) stands square to that tilt, its middle on the tilted line from the eye - two-sided: with no view
+## beside it, the picture keeps its place, square to the tilted camera.
 func _backdrop() -> void:
 	var dir := DIR.path_join("dark")
 	var vf := dir.path_join("backdrop.json")
 	var level := 0
+	var tilted := 0
 	var old := 0
 	for s in range(1, 9):
+		var view := CardTable.backdrop_view(s)
+		var f2 := FileAccess.open(vf, FileAccess.WRITE)
+		f2.store_string(JSON.stringify(view))
+		f2.close()
+		var doc2 := {"show": "place-check", "seed": s, "dir": dir, "plan": {"look": {"candles": 1}}, "cards": []}
+		subs.document = {"source": _script, "title": "Place Check", "table": doc2}
+		medium._key = ""
+		medium._ensure_doc()
+		var bx := medium._backdrop.global_transform
+		var eye2 := medium._plan.cam_base.origin
+		var to := (bx.origin - eye2).normalized()
+		var down := rad_to_deg(asin(-to.y))
+		tilted += 1 if absf(down - float(view["tilt"])) < 0.05 and bx.basis.z.normalized().dot(-to) > 0.999 else 0
 		for v in [true, false]:
 			if v:
 				var f := FileAccess.open(vf, FileAccess.WRITE)
@@ -527,7 +546,29 @@ func _backdrop() -> void:
 	if FileAccess.file_exists(vf):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(vf))
 	_ok(level == 8, "a level picture stands upright at the eye, straight ahead, as wide as its lens (%d of 8)" % level)
+	_ok(tilted == 8, "a picture tilted down stands square to its tilt, on the tilted line from the eye (%d of 8)" % tilted)
 	_ok(old == 8, "a picture made before keeps its place, square to the camera (%d of 8)" % old)
+
+
+## The reader's eye held by a hand ([method Cameras.swayed]): the table camera's Sway turns it about its lens, the eye where it was,
+## and none leaves the episode's own camera; a reading registers no camera beyond the table's own.
+func _held() -> void:
+	var was: Array = Director.cameras.duplicate(true)
+	Director.see_cameras(PackedStringArray(["dice"]))
+	Director.set_cameras([{"sort": "table", "sway": 0.0}])
+	medium._tick_camera(12.3)
+	_ok(medium._cam.transform.is_equal_approx(medium._plan.cam_base), "control: a table camera with no Sway is the episode's own")
+	_ok(Director.cameras_seen.is_empty(), "a reading registers no camera beyond the table's own (%s)" % str(Director.cameras_seen))
+	Director.set_cameras([{"sort": "table", "sway": 2.0}])
+	var turned := 0
+	for t in [3.0, 12.3, 40.7]:
+		medium._tick_camera(t)
+		var xf := medium._cam.transform
+		var a := (-xf.basis.z).angle_to(-medium._plan.cam_base.basis.z)
+		turned += 1 if xf.origin.is_equal_approx(medium._plan.cam_base.origin) and a > 0.0005 and a < 0.05 else 0
+	_ok(turned == 3, "with a Sway it turns a little about its lens, the eye where it was (%d of 3)" % turned)
+	Director.set_cameras(was)
+	medium._tick_camera(0.0)
 
 
 func _outro() -> void:

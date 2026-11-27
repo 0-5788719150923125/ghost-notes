@@ -281,9 +281,22 @@ until the plan is redone. Gate: cards_check `_card_stock`.
 
 ## The table
 
-A static camera from the reader's chair (locked; the panel has no Camera dial), cloth from the episode's
-`surface`, its `backdrop` out of focus beyond the far edge. The lamp is low and to one side, so things
-throw shadows you can see.
+A camera from the reader's chair - a tripod, unless the Camera card's own table camera (`Cameras` `table`)
+has a Sway, when its aim wanders as a hand's does (`Cameras.swayed`) - cloth from the episode's `surface`,
+its `backdrop` out of focus beyond the far edge. The lamp is low and to one side, so things throw shadows
+you can see.
+
+THE TABLE ITSELF IS A PROP (`TableProp`): its top, what holds it up (`Tables.BASES`: legs, a pedestal,
+trestles, none; never in the reading's shot, and out of the built `bounds` the light measures) and the
+cloths laid on it are rows under The table on the Props card (`EpisodeProps`) - size, shape, corners,
+edge, thickness, base, what the top is made of (a material written out in the top, `Tables.TOP_OWN`, or
+the painting) and its finish; a cloth's fabric, pattern, colors, size, turn, fringe and sheen. Each change
+is a hand's version of `table.json`; the set dresser's top and cloths are kept beside it while one stands
+(`TableEpisode.dressed`), so a row says what is yours, ↺ and Set dresser's go back to its. Refine… has an
+agent rewrite the top and cloths as a person says (`TableRefine`, `rules/table/table_refiner.yaml`), in
+the background, the things on it kept. The table seen whole stands on the floor (`TableProp.made`). The
+Dispatch desk and the Letter's desk build their tops with no base. Gates: table_prop_check,
+episode_props_check.
 
 THE SET TABLE. A step of its own, `table` (`table.json`): the set dresser (`TablePrompts.set_dresser`, best
 tier) sets the reader's table from the plan, looking at the cloth (it waits for it; a new cloth keeps the
@@ -725,17 +738,21 @@ colors: subtitle words carry their speaker, and `Subtitles.voice_hue` gives the 
 whole rainbow and each after it a band of its own (`VOICE_BANDS`), swept there and back by the same flowing
 phase; the book's highlight too.
 
-THE ROOM IS SEEN FROM THE READER'S EYE. The camera looks down 34-42 degrees through a 42-degree lens, so the
-frame's top is 13-21 degrees below eye level: all it sees past the table is a thin band below the horizon
-(in a real room, the floor and the feet of things). Not a skewed picture and not a painter asked for the
-camera's own tilt (image models steer poorly to an angle): the backdrop is asked for as photograph models
-make most reliably, level at a seated eye (110 cm), horizon across the exact middle, a 20 mm lens
-(`CardTable.BACKDROP_LENS`), its lower third carrying the place; and projected from the camera's eye
-(`_place_backdrop`): an upright plane straight ahead, its middle at the eye's height, 36 x 24 times its
-reach over the lens, so every pixel lies in the direction it was seen from and Godot's own perspective does
-the rest. The view it was asked for is kept beside it (`backdrop.json`, written as the job is submitted); a
-picture made before has none, holds nothing below its horizon, and keeps the old placement until its
-backdrop step is made again. Gates: table_place_check (two-sided), cards_check `_room_prompt`.
+THE ROOM IS SEEN FROM THE READER'S EYE. The camera looks down 34-42 degrees through a 42-degree lens, so
+all it sees past the table is a thin band some 13-26 degrees below eye level (in a real room, the floor
+and the feet of things). The backdrop is asked for as that eye sees it (`CardTable.backdrop_view`): a 20
+mm lens (`CardTable.BACKDROP_LENS`) at the reader's eye (about 110 cm over the floor, `Tables.HIGH` under
+the top), tilted down to the middle of the band the episode's camera sees past the default table's far
+edge, the painter told where the horizon falls and that only that band is seen - across the picture's
+middle, where a painter puts the place: the floor a few meters off and the feet of what stands there. It
+is projected from the camera's eye (`_place_backdrop`): a plane square to the tilt, 36 x 24 times its
+reach over the lens, so every pixel lies in the direction it was seen from and Godot's own perspective
+does the rest; a camera turning about its lens (a sway) still sees it true, so a curved surface adds
+nothing until a camera moves round the table. The view is kept beside it (`backdrop.json`: `view` tilted
+or level, `lens_mm`, `tilt`); a picture with none keeps the old placement until its room is painted
+again. Open: image models may steer poorly to a tilt - the first rooms painted this way want the
+author's eye. Gates: table_place_check (tilted, level and none), cards_check `_room_prompt` (the band
+across the middle; control: a level picture's band in its bottom part).
 
 THE INTRO IS OUT OF FOCUS: the channel's name alone (no episode title, which is the video's, on the
 platform) over the table thrown far out of focus, and the focus pulls as the shuffle starts (`_tick_focus`,

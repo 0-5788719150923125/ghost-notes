@@ -619,6 +619,48 @@ def test_a_rest_goes_between_the_words_hisses():
 
 
 @check
+def test_a_hiss_is_the_word_it_touches():
+    """A word ending on a hiss whose plan runs on past its sound (held frames the model leaves silent, "match,"),
+    then the model's rest, then the next word coming in on a breath - hiss for a frame or two before its vowel
+    ("and"). The breath is the next word's: the cut goes in the rest, never after the breath with a piece of the
+    next word left before the rest. The same breath touching the window's start is the word's own hiss running
+    on, and the cut goes after it. Mirrored: a word's own hiss with the rest after it is never the next word's
+    opening hiss, whatever the next word opens on, and the cut never goes before it."""
+    import numpy as np
+    from backends.piper import SPLICE_QUIET, _between, _hiss_runs, _trough
+
+    rng = np.random.default_rng(13)
+    t = np.arange(int(0.80 * SR)) / SR
+    peak = 0.5
+    quiet = SPLICE_QUIET * peak
+
+    def word(start: float, end: float):
+        env = np.clip((t - start) / 0.025, 0.0, 1.0) * np.clip((end - t) / 0.025, 0.0, 1.0)
+        return peak * np.sin(2.0 * np.pi * 220.0 * t) * env
+
+    def hiss(start: float, end: float, rms: float):
+        return rng.standard_normal(t.size) * rms * ((t >= start) & (t < end))
+
+    def cut(audio, lo, hi, ends, opens):
+        a, b = _between(audio, int(lo * SR), int(hi * SR), SR, peak, ends, opens)
+        return _trough(audio, a, b, SR, quiet) / SR
+
+    # "match": its vowel, its sh to 0.25; the rest to 0.60; "and" on a 25 ms breath, its vowel from 0.625
+    audio = (word(0.0, 0.15) + hiss(0.15, 0.25, 0.03) + hiss(0.60, 0.625, 0.03) + word(0.625, 0.80)).astype(np.float32)
+    runs = _hiss_runs(audio, int(0.33 * SR), int(0.66 * SR), SR, peak)
+    ok(len(runs) == 1 and abs(runs[0][0] / SR - 0.60) < 0.01, "control: the window's one hiss is the breath (%s)"
+       % [(round(a / SR, 3), round(b / SR, 3)) for a, b in runs])
+    at = cut(audio, 0.33, 0.66, True, False)
+    ok(0.33 <= at < 0.60, "a breath after the rest is the next word's: the cut is in the rest (%.4f s)" % at)
+    at = cut(audio, 0.595, 0.66, True, False)
+    ok(at >= 0.62, "a hiss touching the window's start is the word's own: the cut is after it (%.4f s)" % at)
+    # "match, he": its own sh, the rest, a vowel whose h the waveform does not show as hiss
+    audio = (word(0.0, 0.15) + hiss(0.15, 0.25, 0.03) + word(0.60, 0.80)).astype(np.float32)
+    at = cut(audio, 0.14, 0.62, False, True)
+    ok(0.25 <= at < 0.60, "the word's own hiss is not the next word's: the cut is in the rest after it (%.4f s)" % at)
+
+
+@check
 def test_a_long_rest_is_trimmed_to_the_target():
     """A rest longer than its target gives the excess back, from the middle of the silence.
 

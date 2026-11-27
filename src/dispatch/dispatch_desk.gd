@@ -70,8 +70,9 @@ static func build(v: Dictionary, seed: int) -> Node3D:
 	var wood := Color.html(String(v["wood"]))
 	var mat := {"kind": "wood", "color": "#" + wood.to_html(false), "color2": "#" + wood.darkened(0.52).to_html(false),
 		"polish": float(v["polish"]), "pattern": 0.6, "grain": float(v["grain"]), "wear": float(v["wear"])}
+	# ...its own base below ([constant FIELDS] `base`), none of a table's
 	var top := {"shape": "rect", "size": [w * 100.0, d * 100.0], "thickness": float(v["thick"]), "edge": String(v["edge"]),
-		"material": "the desk", "boards": {"width": float(v["boards"]), "turn": 0.0}}
+		"material": "the desk", "boards": {"width": float(v["boards"]), "turn": 0.0}, "base": "none"}
 	var layers: Array = []
 	if String(v["pad"]) != "none":
 		var pad := DispatchSet.BLOTTER

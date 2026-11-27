@@ -15,6 +15,8 @@ extends Node
 ##   clears it, one in the bottom pile comes whole, one in the top pile comes under the bars above it, and one taller than the
 ##   room comes with its bar there (control: a card already whole in view stays where it is, and a press never folds it). A
 ##   chip's press brings its card as a bar's does. The wheel over a bar scrolls.
+## - An entry opened by a click comes into view whole: one at a card's foot under the bottom pile comes up until it clears the
+##   pile (controls: before the click it is cut off; one opened where it shows whole stays where it is).
 ## - The fan: pointing at a bar in a pile moves those on it off it (control: a bar the other side of it stays).
 ## - A view at the end stays there as what is in the cards grows, in the last card or above it, a list built again and a list
 ##   gone shorter too, and a panel that fits follows its last card past the window's foot (controls: a view at the top, or
@@ -36,6 +38,7 @@ func _run() -> void:
 	await _piles()
 	await _titles_show()
 	await _presses()
+	await _entry_opens()
 	await _fan()
 	await _keeps_the_end()
 	_sizes()
@@ -308,6 +311,64 @@ func _presses() -> void:
 	var was := bar.value
 	_click(all[7], MOUSE_BUTTON_WHEEL_DOWN)
 	_ok(bar.value > was, "the wheel over a bar scrolls the panel (%d to %d)" % [int(was), int(bar.value)])
+	panel.free()
+	await _settle(1)
+
+
+## An entry on [param card], last on it, with [param rows] rows to show when open.
+func _entry(card: Card, rows: int) -> EntryCard:
+	var e := EntryCard.new("entry", "its line")
+	for r in rows:
+		var l := Label.new()
+		l.text = "option %d" % r
+		l.custom_minimum_size.y = 24.0
+		e.options.add_child(l)
+	card.body.add_child(e)
+	return e
+
+
+func _open_entry(e: EntryCard) -> void:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	(e.get_child(0).get_child(0) as Control).gui_input.emit(ev)
+
+
+## Whether [param e] shows whole between the piles.
+func _entry_shows(panel: SidePanel, e: EntryCard) -> bool:
+	var y := e.global_position.y - panel._scroll.global_position.y
+	return y >= panel._deck._above - 1.0 and y + e.size.y <= panel._deck._below + 1.0
+
+
+## An entry opened
+func _entry_opens() -> void:
+	var panel := await _panel(8, 4)
+	var room := panel.room()
+	panel.free()
+	await _settle(1)
+	# the second card about 0.6 of the view, so its foot (where its entry is) lies under the bottom pile
+	panel = await _panel(8, int(room * 0.6 / 32.0))
+	var all := _cards(panel)
+	var low := _entry(all[1], 5)
+	await _settle()
+	var bar := panel._scroll.get_v_scroll_bar()
+	var from := bar.value
+	_ok(not low.open and not _entry_shows(panel, low), "the control: an entry at a card's foot, under the bottom pile")
+	_open_entry(low)
+	await _glided()
+	_ok(low.open and low.options.is_visible_in_tree() and _entry_shows(panel, low) and bar.value > from + 1.0,
+		"opened, it comes up until it shows whole (%d to %d)" % [int(from), int(bar.value)])
+	panel.free()
+	await _settle(1)
+	var high: EntryCard
+	panel = await _panel(3, 2)
+	high = _entry(_cards(panel)[0], 2)
+	await _settle()
+	bar = panel._scroll.get_v_scroll_bar()
+	from = bar.value
+	_open_entry(high)
+	await _glided()
+	_ok(high.open and _entry_shows(panel, high) and absf(bar.value - from) < 0.5, "the control: one opened where it shows whole stays where it is")
 	panel.free()
 	await _settle(1)
 

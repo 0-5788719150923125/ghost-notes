@@ -10,7 +10,8 @@ class_name PropsCard
 ## is one of these.
 ##
 ## A PROP AN AGENT IS REFINING SAYS SO ON ITS ROW ([PropRefining]): what the agent is doing, said again in place each look, then that a
-## new version is ready, or why not, until its 3D view has shown it - so the progress of every prop refined at once is read here.
+## new version is ready, or why not, until its 3D view has shown it - so the progress of every prop refined at once is read here. A
+## row refined by something other than its versions (a table show's table, [TableRefine]) names what it is refined as (`refining_as`).
 
 ## What the card is for, on its title bar and its chip ([member Card.blurb]).
 const BLURB := "What the scene uses: untick a prop to set it aside, click a picture to turn it in 3D - to refine it, or Keep it to use again - and add props from your library."
@@ -94,7 +95,8 @@ func refresh(force := false) -> void:
 ## changes), what that says kept to be said in place ([member _refining]); the row as it is where nothing refines its prop.
 func _with_refining(sec: PropSection, r: Dictionary) -> Dictionary:
 	var pv := sec.versions_of()
-	var name := pv.name_of(sec.prop_of(String(r.get("key", "")))) if pv != null else ""
+	var name := String(r["refining_as"]) if r.get("refining_as") is String \
+		else (pv.name_of(sec.prop_of(String(r.get("key", "")))) if pv != null else "")
 	var w := PropRefining.of(name) if not name.is_empty() else {}
 	if w.is_empty():
 		return r

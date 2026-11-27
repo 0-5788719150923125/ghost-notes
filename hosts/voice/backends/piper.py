@@ -312,6 +312,9 @@ TRAIL_JOIN = 0.002
 _HISSES = frozenset("szʃʒfθ")
 # What a rest's cut must not split: the frication a word ends on or the next opens on (`_between`).
 _FRICATIVES = _HISSES | frozenset("vðh")
+# ...each a word's only where it touches the word: a hiss with this much silence between it and the word is the
+# other word's (the next word's breath or burst after a rest is hiss too, and no end of the word before it).
+BETWEEN_APART = 0.03
 TRAIL_HISS_ABOVE = 2000.0
 TRAIL_HISS_GAP = 0.12
 TRAIL_HISS_DROP = 0.015
@@ -464,6 +467,16 @@ SPLICE_REST_REACH = (
 
 # Symbols that are punctuation rather than a word's sound, as `_symbols` emits them.
 _MARK_SYMBOLS = frozenset(PAUSE_AFTER)
+
+
+def _said_onset(ipa: str) -> str:
+    """A guessed reading `ipa` (eSpeak's, or ghost's ARPAbet) as English says it: a word that opens on /ts/ (Tsai,
+    tsunami, tsetse) is said on its /s/ - read as two sounds, the /t/ is heard closing the word before it ("Auntie
+    Tsai" as "Auntied sigh"). Its stress marks stay where they are. A reading the author spelled never comes here."""
+    k = 0
+    while k < len(ipa) and ipa[k] in "ˈˌ":
+        k += 1
+    return ipa[:k] + ipa[k + 1 :] if ipa[k : k + 2] == "ts" else ipa
 
 
 def _split_sentences(phones: list) -> list[list]:
@@ -1495,6 +1508,37 @@ def _gap_for(mark: str, params: dict) -> float:
     return _rest_for(str(mark), _sentence_params(params), base)
 
 
+def _level(audio, lo: int, hi: int, sr: int):
+    """What a cut is placed by at each sample of [lo, hi) (`_trough`): a moving average (SPLICE_ENV_MS) of
+    |x| + |x[n] - x[n-1]|. Under SPLICE_QUIET of the peak it is silence."""
+    import numpy as np
+
+    n = int(audio.size)
+    w = max(1, int(round(SPLICE_ENV_MS * sr / 1000.0)))
+    a0, a1 = max(0, lo - w), min(n, hi + w)
+    seg = audio[a0:a1].astype(np.float64)
+    level = np.abs(seg) + np.abs(np.diff(seg, prepend=seg[0]))
+    c = np.concatenate(([0.0], np.cumsum(level)))
+    pos = np.arange(lo, hi)
+    s0 = np.clip(pos - w // 2, a0, a1) - a0
+    s1 = np.clip(pos - w // 2 + w, a0, a1) - a0
+    return (c[s1] - c[s0]) / np.maximum(s1 - s0, 1)
+
+
+def _apart(audio, lo: int, hi: int, sr: int, quiet: float) -> bool:
+    """Whether [lo, hi) in samples holds BETWEEN_APART of unbroken silence (`_level` under `quiet`)."""
+    import numpy as np
+
+    need = max(1, int(round(BETWEEN_APART * sr)))
+    lo, hi = max(0, int(lo)), min(int(audio.size), int(hi))
+    if hi - lo < need:
+        return False
+    silent = (_level(audio, lo, hi, sr) <= quiet).astype(np.int8)
+    edge = np.diff(np.concatenate(([0], silent, [0])))
+    starts, ends = np.flatnonzero(edge == 1), np.flatnonzero(edge == -1)
+    return bool(starts.size) and int((ends - starts).max()) >= need
+
+
 def _trough(audio, lo: int, hi: int, sr: int, quiet: float) -> int:
     """The sample in [lo, hi) to cut at: the quietest PLACE, refined to a zero crossing.
 
@@ -1513,15 +1557,7 @@ def _trough(audio, lo: int, hi: int, sr: int, quiet: float) -> int:
     hi = min(max(int(hi), lo), n)
     if hi - lo <= 1:
         return lo
-    w = max(1, int(round(SPLICE_ENV_MS * sr / 1000.0)))
-    a0, a1 = max(0, lo - w), min(n, hi + w)
-    seg = audio[a0:a1].astype(np.float64)
-    level = np.abs(seg) + np.abs(np.diff(seg, prepend=seg[0]))
-    c = np.concatenate(([0.0], np.cumsum(level)))
-    pos = np.arange(lo, hi)
-    s0 = np.clip(pos - w // 2, a0, a1) - a0
-    s1 = np.clip(pos - w // 2 + w, a0, a1) - a0
-    smooth = (c[s1] - c[s0]) / np.maximum(s1 - s0, 1)
+    smooth = _level(audio, lo, hi, sr)
     silent = smooth <= quiet
     if silent.any():
         edge = np.diff(np.concatenate(([0], silent.astype(np.int8), [0])))
@@ -1559,19 +1595,29 @@ def _between(audio, lo: int, hi: int, sr: int, peak: float, ends: bool, opens: b
     them (`_hiss_runs`). Where one word runs straight into the next, the quietest place is often inside
     the fricative (the tail of the f of "five" is quieter than the "a" before it).
 
-    This word's hiss is the window's first run and the next word's its last; one run where both are
-    asked for is the two run together, and the window stays as it is. A hiss the window opens inside
-    began earlier: it is walked back to its start, no further than TRAIL_EARLY, and the cut goes there.
+    This word's hiss is the window's first run and the next word's its last, each only where it touches
+    its word: a run with silence (BETWEEN_APART) between it and the window's start is not this word's, nor
+    one with silence between it and the window's end the next word's. The plan's word end can lie far
+    from its last sound (a held word's extra frames are silence, inside its last sound), and the next
+    word's breath or burst after a rest is hiss too: taken for this word's, the cut would go after it, a
+    piece of the next word left before the rest. One run both words touch is the two run together, and
+    the window stays as it is. A hiss the window opens inside began earlier: it is walked back to its
+    start, no further than TRAIL_EARLY, and the cut goes there.
     """
     if not (ends or opens) or hi - lo <= 1 or peak <= 0.0:
         return lo, hi
     runs = _hiss_runs(audio, lo, hi, sr, peak)
-    if not runs or (ends and opens and len(runs) < 2):
+    if not runs:
+        return lo, hi
+    quiet = SPLICE_QUIET * peak
+    mine = ends and not _apart(audio, lo, runs[0][0], sr, quiet)
+    theirs = opens and not _apart(audio, runs[-1][1], hi, sr, quiet)
+    if mine and theirs and len(runs) < 2:
         return lo, hi
     a, b = lo, hi
-    if ends:
+    if mine:
         a = runs[0][1]
-    if opens:
+    if theirs:
         b = runs[-1][0]
         if b <= lo:
             early = max(0, lo - int(round(TRAIL_EARLY * sr)))
@@ -2000,7 +2046,7 @@ TRAINED = "trained"
 # How this backend reads a request, said on every voice's row (`voices`): a row keys the takes kept in its voice
 # (TakeCache), so raising it has every sentence kept before said again. Raised when the same request comes out
 # another take - and kokoro.py's READS with it when the change is in what the two share (the splice, a rest's cut).
-READS = 2
+READS = 4
 
 
 @register
@@ -2564,10 +2610,10 @@ class PiperBackend(Backend):
                 for ch in written(got):
                     out.append((ch, i))
             elif t.get("ipa"):
-                for ch in written(self._dictionary_reading(str(t["ipa"]), t)):
+                for ch in written(_said_onset(self._dictionary_reading(str(t["ipa"]), t))):
                     out.append((ch, i))
             elif i in espoke:
-                for ch in written(self._dictionary_reading(espoke[i], t)):
+                for ch in written(_said_onset(self._dictionary_reading(espoke[i], t))):
                     out.append((ch, i))
             elif t.get("text"):
                 # no eSpeak: fall back to ghost's ARPAbet if it sent any
@@ -2577,7 +2623,7 @@ class PiperBackend(Backend):
                         [str(x) for x in t.get("fallback", [])]
                     )
                 )
-                for ch in written(got):
+                for ch in written(_said_onset(got)):
                     out.append((ch, i))
             for ch in str(t.get("punct", "")):
                 out.append((ch, i))

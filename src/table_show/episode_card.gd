@@ -983,6 +983,8 @@ func _open_episode() -> void:
 	_producer = TableProducer.of(_episode)
 	_producer.holder = self
 	_frame_episode()
+	# ...its cameras registered with the show as it opens, before anything plays: a game's cuts, a reading's none beyond the table's own
+	Director.see_cameras(TableMedium.cameras_seen(_episode.wants_game()))
 	if is_inside_tree() and reading != null:
 		Director.pin_medium(_shown_in(), self)
 	_brief_changed = false
