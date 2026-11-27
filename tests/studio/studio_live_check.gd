@@ -6,6 +6,7 @@ extends Node
 ##   document moves the camera, the tripod staying (control: before the change, where the studio stands it);
 ## - another version of a make used (a refine's, a version picked in the 3D view) is another choice and stands at once, no restart; the
 ##   ring light is listed on the Environment card (the camera not) and shines at its share there;
+## - an act that goes on under the words is laid in windows from where it begins to where it ends, its motion made that far;
 ## - a paused show looked over: the eye turned by a look holds while paused, frame after frame (control: the show's own eye before);
 ## - once the show plays, the eye eases back to the show's own - most of the way within a few seconds, never in one frame.
 ##
@@ -109,6 +110,18 @@ func _run() -> void:
 	await _frames(medium, 5, func() -> bool: return false)
 	var dim := _energy((medium._set["rigs"] as Dictionary).get("ring_light"))
 	_ok(full > 0.0 and is_equal_approx(snappedf(dim / full, 0.01), 0.25), "the ring light shines at its share on the Environment card (%.2f of %.2f)" % [dim, full])
+	# an act that goes on under the words: its windows laid from where it begins, none past where it ends, made as far as that
+	var said := "Hello there.\n<!-- rub: fur, left hand -->\n" + "and on and on we go together ".repeat(12) + "\n<!-- /rub -->\nGoodbye now."
+	subs.words = StudioScript.rehearsal(StudioScript.parse(said))
+	subs.document["source"] = said
+	await _frames(medium, 600, func() -> bool: return medium._made.size() == 1 and medium._made[0] != null and medium._keys[0] != null)
+	var placed: Array = medium._sounds._placed
+	var t0 := medium._t0[0]
+	var t1 := medium._t1[0]
+	var last_w: float = placed.reduce(func(m: float, p: Dictionary) -> float: return maxf(m, float(p["t0"])), -1.0)
+	_ok(t0 < INF and t1 < INF and t1 - t0 > 20.0 and placed.size() >= 3 and is_equal_approx(float((placed[0] as Dictionary)["t0"]), t0)
+		and last_w <= t1 + StudioSounds.RELEASE and float((medium._made[0] as Dictionary)["secs"]) >= t1 - t0,
+		"an act under the words is laid in windows from where it begins (%.1f s) to where it ends (%.1f s), made that far (%d windows)" % [t0, t1, placed.size()])
 	# looked over while paused: held
 	await _frames(medium, 3, func() -> bool: return false)
 	var own: Transform3D = medium._cam.transform

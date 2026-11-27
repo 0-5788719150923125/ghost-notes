@@ -337,9 +337,10 @@ func tick() -> void:
 		var res := AgentJobs.result(id)
 		AgentJobs.forget(id)
 		_jobs.erase(step)
-		_land(String(step), res)
-		# (...a sticker cut off its ground once it lands is made when its cut is, not as its painting arrives)
-		if episode.has(String(step)) and not _errors.has(step) and not _hosts.has(step) and not _cut_owed.has(step):
+		var landed := _land(String(step), res)
+		# (...a sticker cut off its ground once it lands is made when its cut is, not as its painting arrives; and an answer that did
+		# not land - to be asked again - leaves the step as it was: what stood before is not made from what stands now)
+		if landed and episode.has(String(step)) and not _errors.has(step) and not _hosts.has(step) and not _cut_owed.has(step):
 			_made(String(step), String(MAKERS.get(String(step).get_slice(":", 0), "agent")))
 		moved = true
 	for step in _hosts.keys():
@@ -647,8 +648,7 @@ func resume(step: String) -> String:
 	running = true
 	_live[episode.dir] = self
 	if bool(toolset.get("submitted")) and FileAccess.file_exists(dir.path_join("submitted.json")):
-		_land(step, {"ok": true})
-		if not _errors.has(step) and episode.has(step):
+		if _land(step, {"ok": true}) and not _errors.has(step) and episode.has(step):
 			_made(step, String(MAKERS.get(step, "agent")))
 	else:
 		var job: Dictionary = (request["job"] as Dictionary).duplicate(true)
@@ -2787,7 +2787,9 @@ static func _then_moves(p: Dictionary, n: int) -> Array:
 
 # --- landing a job -------------------------------------------------------------------------
 
-func _land(step: String, res: Dictionary) -> void:
+## Job [param step] ended with [param res], landed: whether its answer landed (written where it goes), or was refused - to be asked
+## again, or failed for good ([member _errors]).
+func _land(step: String, res: Dictionary) -> bool:
 	# The solver's session, ended: what it handed in, or an honest account of a run that handed in nothing ([method _land_solve])
 	if step == "solve":
 		var t: Dictionary = _tools.get("solve", {})
@@ -2796,17 +2798,17 @@ func _land(step: String, res: Dictionary) -> void:
 		_close_tools("solve")
 		if handed_in.is_empty() and not _resume_info(step).is_empty():
 			_errors[step] = String(res.get("error", "The solver stopped before submitting; its progress can be resumed."))
-			return
+			return false
 		var why := _land_solve(handed_in, res, checks)
 		if why.is_empty():
 			# what the runs left in their folder was scratch: what they did is in runs.json
 			Provision.remove_tree(episode.job_dir("solve").path_join("compute"))
 			_errors.erase(step)
-			return
+			return true
 		push_warning("ghost: table solve - %s" % why)
 		if int(_tries.get(step, 0)) > SOLVE_RETRIES:
 			_errors[step] = why
-		return
+		return false
 	var err := ""
 	var had_tools := _tools.has(step)
 	var handed := _handed_in(step) if had_tools else ""
@@ -2878,7 +2880,7 @@ func _land(step: String, res: Dictionary) -> void:
 						_start_cut(step)
 					if err.is_empty():
 						_errors.erase(step)
-						return
+						return true
 				err = "" if episode.has(step) else "the picture did not arrive"
 				if err.is_empty() and step == "image:height":
 					err = _land_height()
@@ -2904,10 +2906,11 @@ func _land(step: String, res: Dictionary) -> void:
 					err = "the puppeteer stopped without handing its work in"
 	if err.is_empty():
 		_errors.erase(step)
-		return
+		return true
 	push_warning("ghost: table %s - %s" % [step, err])
 	if int(_tries.get(step, 0)) > RETRIES or not _resume_info(step).is_empty():
 		_errors[step] = err
+	return false
 
 
 ## The height map, kept only if it lies under the painting ([method Tables.height_fit]) - or is flat

@@ -142,6 +142,11 @@ func _run() -> void:
 			Spectrum.virtual_clock = t
 			Spectrum.current.time = t
 			medium.advance(Spectrum.current, DT, 1.0)
+			# held where the studio waits for a sound, as a render is
+			var held_from := Time.get_ticks_msec()
+			while studio._waiting and Time.get_ticks_msec() - held_from < 120000:
+				await get_tree().process_frame
+				medium.advance(Spectrum.current, 0.0, 1.0)
 			if not _sound.is_empty():
 				var n := int(round(t * StudioSounds.RATE)) - audio.size()
 				if n > 0:
@@ -217,7 +222,7 @@ static func _write_wav(path: String, frames: PackedVector2Array) -> void:
 func _fixture_makes() -> Dictionary:
 	Library.root = ProjectSettings.globalize_path(_out.get_base_dir().path_join("library"))
 	var by_role := {"camera": "vlog_camera", "tripod": "tripod", "ring_light": "ring_light", "microphone": "microphone",
-		"block": "wood_block", "brush": "powder_brush"}
+		"block": "wood_block", "brush": "powder_brush", "room": "room"}
 	var makes := {}
 	for role in by_role:
 		var path := String(_props[role]) if _props.has(role) else "res://tests/fixtures/studio/%s.prop.json" % by_role[role]

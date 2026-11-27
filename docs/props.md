@@ -131,6 +131,7 @@ Source: [src/desk/prop_makes.gd](../src/desk/prop_makes.gd)
 | `block` The wooden block | One of two blocks of hardwood, scraped and knocked together. | `` |  |  | 1 - 10 |
 | `brush` The powder brush | A big, soft brush swept over the windscreen and the lens. | `` |  |  | 10 - 35 |
 | `backdrop` The green screen | A green cloth backdrop on its stands behind the viewer's chair: the camera's flip screen shows it behind nobody. | `` |  |  | 180 - 300 |
+| `room` The room | The room the studio stands in: four plain walls, a door, a few windows, a floor and a ceiling and nothing else - so dark that only its shape shows. | `` |  |  | 240 - 280 |
 
 ## Refining a prop
 

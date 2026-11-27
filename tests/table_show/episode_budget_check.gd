@@ -3,6 +3,7 @@ extends SceneTree
 ## Episode budgets and content history, without a writer or renderer. New plans default to [constant TablePrompts.MINUTES]; a brief's
 ## explicit range survives. The word budget covers the whole show at the selected voice's pace, including a card's separate
 ## work passage. Controls: legacy passage sizes remain unchanged; short replies and voice marks do not satisfy a budget.
+## A refused reply says it did not land, and the passage before keeps its record (never made from what stands now).
 ## Written cards with no art reach the producer's history with their contents, and never leak into an opening reader's prompt.
 ##
 ##   godot --headless --path . --script tests/table_show/episode_budget_check.gd
@@ -115,8 +116,16 @@ func _landed() -> bool:
 	producer._tries["say:1"] = TableProducer.RETRIES + 1
 	producer._land("say:1", {"ok": true, "text": "A tiny story."})
 	_ok(not ep.has("say:1") and not producer.error_of("say:1").is_empty(), "an undersized reply stays failed instead of making a short episode")
-	producer._land("say:1", {"ok": true, "text": "word ".repeat(requested.x)})
-	_ok(ep.has("say:1") and producer.error_of("say:1").is_empty(), "control: a full passage is accepted")
+	var full := producer._land("say:1", {"ok": true, "text": "word ".repeat(requested.x)})
+	_ok(full and ep.has("say:1") and producer.error_of("say:1").is_empty(), "control: a full passage is accepted, and says it landed")
+	# a passage made again whose new reply is refused, to be asked again: the one before stands, never recorded as made from now
+	ep.note_made("say:1", "reader", {"plan": "an older plan"})
+	producer._tries["say:1"] = 1
+	producer._jobs["say:1"] = "episode_budget_check_refused"
+	var landed := producer._land("say:1", {"ok": true, "text": "A tiny story."})
+	_ok(not landed and ep.has("say:1") and String(ep.record("say:1").get("from", {}).get("plan", "")) == "an older plan",
+		"a passage made again whose reply is refused says so, and the one before keeps its record (control above: a full one lands)")
+	producer._jobs.erase("say:1")
 	return true
 
 

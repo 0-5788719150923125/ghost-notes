@@ -89,7 +89,35 @@ static func timed(body: String, words: Array) -> Array:
 static func plan(body: String, words: Array, bank: Array, targets := {}, feel := {}) -> Dictionary:
 	if bank.is_empty() or words.is_empty():
 		return {}
-	return HeadPlan.make(timed(body, words), words, bank, SEED, targets, -1.0, feel)
+	return HeadPlan.make(timed(body, words), words, bank, SEED, targets, -1.0, feel, whole(body, words))
+
+
+## Whether [param words] reach the last word [param body] says: the whole reading heard, its close known.
+static func whole(body: String, words: Array) -> bool:
+	var spoken: PackedStringArray = read(body)["spoken"]
+	if spoken.is_empty():
+		return true
+	var f := ReadingFollower.new()
+	f.reset(spoken)
+	f.extend(words)
+	var n := f.st1.size()
+	return n > 0 and f.st1[n - 1] != ReadingFollower.NO_TIME
+
+
+## Where the mouth is round the capsule (listener frame, m) every [constant VoiceFX.PLACE_STEP] frames from frame [param a] to [param b]
+## of [param head_plan] at [param sr]: what [member VoiceFX.ears_at] hears it from.
+static func mouths(head_plan: Dictionary, a: int, b: int, sr: int) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	if head_plan.is_empty() or b <= a:
+		return out
+	var k := 0
+	while true:
+		var f := a + k * VoiceFX.PLACE_STEP
+		out.append(HeadPlan.pose_at(head_plan, float(f) / float(sr))["mouth"])
+		if f >= b:
+			break
+		k += 1
+	return out
 
 
 ## The names [param body] calls that [param bank] has no phrase for.

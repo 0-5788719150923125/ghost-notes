@@ -27,6 +27,13 @@ class_name StudioMedium
 
 ## An act placed before the next words by at least this much (s), and one said `under` begun this much before its words.
 const TAIL := 0.3
+## A hand's fingertips on the windscreen: how far apart (m), and where each was a moment ago - how long ago (s) and how much of its
+## press is left there.
+const FINGER := 0.016
+const TRAIL := [[0.0, 1.0], [0.1, 0.55], [0.2, 0.3]]
+## How far past the show an act that goes on is made before it is made longer (s), and in what steps.
+const HORIZON_SPARE := 20.0
+const HORIZON_STEP := 30.0
 const UNDER_LEAD := 0.15
 ## How long the studio fades up from black (s), and how long before an act the show is held for its sound.
 const FADE_UP := 1.2
@@ -38,15 +45,21 @@ const WAIT_FOR := "the studio's sounds"
 const INTRO_SOUND := 25
 const CLOSE_SOUND := 45
 const SOUND_SHARE := Vector2(0.5, 0.8)
+## How much of a passage's talk the hands go on under.
+const UNDER_SHARE := 0.85
 
 var _subs = null
 var _doc_key := ""
 var _source := ""
 var _parsed := {}
 var _acts: Array = []
-var _made: Array = []                   # each act's motion ([method StudioActs.make]), once made
-var _keys := PackedStringArray()        # each act's sound's key
+var _made: Array = []                   # each act's motion ([method StudioActs.make]), null until made
+var _keys: Array = []                   # each act's sound's windows' keys ([method StudioSounds.make_all])
+var _starts: Array = []                 # ...and where each window begins in the act (s)
+var _specs := {}                        # every window handed to the sounds
+var _horizon := {}                      # an act that goes on -> how long its motion is made (s), or being made
 var _t0 := PackedFloat32Array()         # each act's start (INF until placed)
+var _t1 := PackedFloat32Array()         # each act's end (INF until known: the word it ends at not yet heard)
 var _held := {}                         # an act begun -> its start, kept
 var _follower := ReadingFollower.new()
 var _built_n := -1
@@ -62,6 +75,7 @@ var _build_box := {}
 var _make_task := -1
 var _make_box := {}
 var _make_for := ""                     # the source and takes the acts being made are of
+var _marks := {}                        # each act's words as a Refine changed them ([method marks_of])
 var _takes := {}                        # each act made again: its own number -> its take ([method StudioScript.with_takes])
 var _root3: Node3D
 var _cam: Camera3D
@@ -86,8 +100,8 @@ var _rendering := not Engine.get_write_movie_path().is_empty()   # a render sees
 
 # --- for the agents who make an episode for it (asked by path: [TableProducer], [EpisodeWalk]) ---------------------------------
 
-## [param text] (an episode's script) as its voice reads it: each act not said `under` a quiet rest as long as it, where it is
-## written - the reader stops talking while the hands work ([constant CardReading.QUIET_MARK]).
+## [param text] (an episode's script) as its voice reads it: the voice talks over the hands, save an act said `alone` - a quiet rest
+## as long as it, where it is written ([constant CardReading.QUIET_MARK]).
 static func voiced(text: String, _doc: Dictionary = {}) -> String:
 	var mark := RegEx.create_from_string(StudioScript.MARK)
 	var out := ""
@@ -101,10 +115,10 @@ static func voiced(text: String, _doc: Dictionary = {}) -> String:
 	return out + text.substr(at)
 
 
-## The marks a reader may write in its passages here: the hands' acts ([constant StudioScript.MARK]) and the head's phrases it calls
-## ([constant HeadMarks.MARK]).
+## The marks a reader may write in its passages here: the hands' acts and where they end ([constant StudioScript.EITHER]) and the
+## head's phrases it calls ([constant HeadMarks.MARK]).
 static func reader_marks() -> String:
-	return "(?:%s)|(?:%s)" % [StudioScript.MARK, HeadMarks.MARK]
+	return "(?:%s)|(?:%s)" % [StudioScript.EITHER, HeadMarks.MARK]
 
 
 ## What the reader is told of them: rules/table/studio.yaml, with every word an act's mark may use, from [StudioActs]' rows - and,
@@ -125,7 +139,8 @@ static func _phrases_told(show: String) -> String:
 
 
 ## What is wrong with the marks in passage [param text] ([param told] as [method reader_rules] has it), "" for nothing: a word a mark
-## does not know, and far less of the hands' sound than the passage was asked for - the reader is asked once more, told this.
+## does not know, a closing mark that ends nothing, and far less of the hands' sound than the passage was asked for (an act that goes
+## on counted for as long as a steady voice takes to reach where it ends) - the reader is asked once more, told this.
 static func reader_check(text: String, told: Dictionary = {}) -> String:
 	var faults := PackedStringArray()
 	var d := StudioScript.parse(text)
@@ -136,19 +151,24 @@ static func reader_check(text: String, told: Dictionary = {}) -> String:
 		odd.append("\"%s\" (no phrase of the head is called that)" % n)
 	if not odd.is_empty():
 		faults.append("these words are in no list a mark may use: %s" % ", ".join(odd))
+	var stray: PackedStringArray = d.get("stray", PackedStringArray())
+	if not stray.is_empty():
+		faults.append("these closing marks end nothing open: %s" % ", ".join(Array(stray).map(func(v: String) -> String: return "<!-- %s -->" % v)))
 	var asked := sound_seconds(told)
 	if not String(told.get("work", "")).strip_edges().is_empty() and asked > 0:
 		var made := 0.0
+		var lengths := StudioScript.lengths(d)
 		for a in d["acts"]:
-			made += float((a as Dictionary)["secs"])
+			made += float(lengths.get(int((a as Dictionary)["i"]), float((a as Dictionary)["secs"])))
 		if made < float(asked) * 0.5:
 			faults.append("its marks give the hands %d seconds of sound where about %d were asked for" % [roundi(made), asked])
 	return "; ".join(faults)
 
 
 ## About how many seconds of the hands' sound a passage's marks take ([param told] as [method reader_rules] has it): the intro's
-## and the close's their own, a beat's what the episode's share with no words ([constant SOUND_SHARE], the plan's `quiet` where it
-## asks for more) gives beside its words.
+## and the close's their own; a beat's most of its talk ([constant UNDER_SHARE]: the hands go on under the words), and what the
+## episode's share with no words ([constant SOUND_SHARE], the plan's `quiet` where it asks for more) gives beside them where the
+## plan asks for quiet.
 static func sound_seconds(told: Dictionary) -> int:
 	match String(told.get("beat", "")):
 		"intro":
@@ -157,8 +177,9 @@ static func sound_seconds(told: Dictionary) -> int:
 			return CLOSE_SOUND
 	var words: Vector2i = told.get("words", Vector2i(60, 90)) if told.get("words") is Vector2i else Vector2i(60, 90)
 	var talk := float(words.x + words.y) * 0.5 * float(told.get("said_word", TablePrompts.SAID_WORD))
-	var share := clampf(maxf(float(told.get("quiet", 0.0)), SOUND_SHARE.x), SOUND_SHARE.x, SOUND_SHARE.y)
-	return roundi(talk * share / (1.0 - share) / 5.0) * 5
+	var quiet := float(told.get("quiet", 0.0))
+	var alone := talk * quiet / maxf(1.0 - quiet, 0.2) if quiet > SOUND_SHARE.x else 0.0
+	return roundi((talk * UNDER_SHARE + alone) / 5.0) * 5
 
 
 func mount(st: SubViewport) -> void:
@@ -364,6 +385,7 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_title.fisheye = feed.fisheye()
 	_title.queue_redraw()
 	_pose(_now, delta)
+	_sounds.now = _now
 	_sounds.pump()
 	_hold_for_sounds()
 	_sounds.fade_from = _last_sound()
@@ -384,16 +406,19 @@ func _end_fade() -> float:
 	return ShowOpening.fade_out(_now, _last_sound(), feed.tail())
 
 
-## When the footage's last sound ends (show time, s): the last word, or the end of an act the hands go on with past it - INF until
-## the last word is heard.
+## When the footage's last sound ends (show time, s): the last word, or the end of an act written after it - INF until the last word
+## is heard. The hands at work as the words end go on under the outro and fade with it ([method _end_of]).
 func _last_sound() -> float:
 	var last := _follower.known_last()
 	if _spoken_n == 0 or last < _spoken_n - 1:
 		return INF
 	var t := _follower.st1[last]
+	# (the hands at work as the words end go on through the outro, fading with it: only an act written after the last word holds it)
 	for i in mini(_t0.size(), _acts.size()):
-		if _t0[i] < INF:
-			t = maxf(t, _t0[i] + float((_acts[i] as Dictionary)["secs"]))
+		if _t0[i] < INF and int((_acts[i] as Dictionary)["after"]) >= _spoken_n:
+			if _t1[i] == INF:
+				return INF
+			t = maxf(t, _t1[i] + StudioSounds.RELEASE)
 	return t
 
 
@@ -417,6 +442,7 @@ func _ensure_doc() -> void:
 	var start: PackedStringArray = d.get("start_words", PackedStringArray()) if d.get("start_words") is PackedStringArray else PackedStringArray()
 	var block: Dictionary = d.get("medium", {}) if d.get("medium") is Dictionary else {}
 	var takes: Dictionary = block.get("takes", {}) if block.get("takes") is Dictionary else {}
+	var marks := marks_of(block)
 	_restand(makes_of(block), StudioSet.places_of(block))
 	# the Environment card's shares of what throws light ([method Surroundings.share_of]), applied as they change
 	var env := Surroundings.sanitize(d.get("environment"))
@@ -425,12 +451,23 @@ func _ensure_doc() -> void:
 		_surround_key = ek
 		_surround = env
 		_shine_things()
-	var key := "%d|%s|%s" % [src.hash(), " ".join(start), JSON.stringify(takes)]
+	var key := "%d|%s|%s|%s" % [src.hash(), " ".join(start), JSON.stringify(takes), JSON.stringify(marks)]
 	if key == _doc_key:
 		return
 	_doc_key = key
 	_takes = takes
+	_marks = marks
 	load_script(src, start, int(d.get("start_index", -1)))
+
+
+## The words a Medium block [param block] keeps for its acts as a Refine changed them: `{own number: words}`.
+static func marks_of(block: Dictionary) -> Dictionary:
+	var out := {}
+	var m: Dictionary = block.get("marks", {}) if block.get("marks") is Dictionary else {}
+	for k in m:
+		if m[k] is String and String(k).is_valid_int() and not String(m[k]).strip_edges().is_empty():
+			out[String(k)] = String(m[k]).strip_edges()
+	return out
 
 
 ## The makes a Medium block [param block] chooses for the studio's things: `{role: choice}` ([PropMakes]), each one a role can take.
@@ -447,7 +484,7 @@ static func makes_of(block: Dictionary) -> Dictionary:
 ## reading started part way), and the acts' motions made again on a worker where the script changed. Public for a gate.
 func load_script(source: String, start := PackedStringArray(), near := -1) -> void:
 	_source = source
-	_parsed = StudioScript.parse(source)
+	_parsed = StudioScript.parse(source, _marks)
 	_acts = StudioScript.with_takes(_parsed["acts"], _takes)
 	var spoken: PackedStringArray = _parsed["spoken"]
 	_spoken_n = spoken.size()
@@ -459,34 +496,82 @@ func load_script(source: String, start := PackedStringArray(), near := -1) -> vo
 	_t0 = PackedFloat32Array()
 	_t0.resize(_acts.size())
 	_t0.fill(INF)
+	_t1 = _t0.duplicate()
 	if _make_for != _making_of():
 		_made = []
-		_keys = PackedStringArray()
+		_keys = []
+		_starts = []
 
 
-## What the acts are made of: the script and their takes.
+## What the acts are made of: the script, their takes and their words as changed.
 func _making_of() -> String:
-	return _source + JSON.stringify(_takes)
+	return _source + JSON.stringify(_takes) + JSON.stringify(_marks)
 
 
-## The acts' motions and sounds, made on a worker once the set stands ([method StudioActs.make]); taken when done.
+## The acts' motions and sounds, made on a worker once the set stands ([method StudioActs.make]); taken when done. An act that goes
+## on is made a stretch ahead of the show and made longer as the show comes to the end of it (the same where they overlap, so
+## the windows already made stay made); only the acts that want it are made again.
 func _take_made() -> void:
 	if _set.is_empty() or _acts.is_empty():
 		return
-	if _make_task < 0 and _make_for != _making_of():
-		_make_for = _making_of()
-		_make_box = {}
-		var box := _make_box
-		var acts := _acts.duplicate(true)
-		var geo: Dictionary = _set["geo"]
-		_make_task = WorkerThreadPool.add_task(func() -> void: box.merge(StudioSounds.make_all(acts, geo), true))
-	if _make_task >= 0 and WorkerThreadPool.is_task_completed(_make_task):
+	if _make_task >= 0:
+		if not WorkerThreadPool.is_task_completed(_make_task):
+			return
 		WorkerThreadPool.wait_for_task_completion(_make_task)
 		_make_task = -1
-		_made = _make_box.get("made", [])
-		_keys = _make_box.get("keys", PackedStringArray())
-		_sounds.want(_make_box.get("specs", {}))
-		_place_sounds()
+		var got := _make_box
+		if String(got.get("for", "")) == _make_for:
+			var which: Array = got.get("which", [])
+			for j in which.size():
+				var i := int(which[j])
+				_made[i] = (got["made"] as Array)[j]
+				_keys[i] = (got["keys"] as Array)[j]
+				_starts[i] = (got["starts"] as Array)[j]
+			_specs.merge(got.get("specs", {}), true)
+			_sounds.want(_specs)
+			_place_sounds()
+	if _make_for != _making_of():
+		_make_for = _making_of()
+		_made = []
+		_made.resize(_acts.size())
+		_keys = []
+		_keys.resize(_acts.size())
+		_starts = []
+		_starts.resize(_acts.size())
+		_specs = {}
+		_horizon = {}
+	var which: Array = []
+	var horizons := {}
+	for a in _acts:
+		var i := int((a as Dictionary)["i"])
+		var open := not bool((a as Dictionary)["timed"])
+		var need := _need(i) if open else 0.0
+		if _made[i] != null and (not open or need <= float(_horizon.get(i, 0.0)) - HORIZON_SPARE):
+			continue
+		if open:
+			horizons[i] = ceilf((need + HORIZON_SPARE) / HORIZON_STEP) * HORIZON_STEP
+			_horizon[i] = horizons[i]
+		which.append((a as Dictionary).duplicate(true))
+	if which.is_empty():
+		return
+	_make_box = {}
+	var box := _make_box
+	var geo: Dictionary = _set["geo"]
+	var of := _make_for
+	var idx: Array = which.map(func(a: Dictionary) -> int: return int(a["i"]))
+	_make_task = WorkerThreadPool.add_task(func() -> void:
+		box.merge(StudioSounds.make_all(which, geo, horizons), true)
+		box["which"] = idx
+		box["for"] = of)
+
+
+## How long act [param i] (one that goes on) must be made for now (s): to its end where that is known, else well past the show.
+func _need(i: int) -> float:
+	if _t1[i] < INF and _t0[i] < INF:
+		return _t1[i] - _t0[i] + StudioSounds.RELEASE + 1.0
+	if _t0[i] < INF:
+		return maxf(StudioSounds.OPEN_LEAST, _now - _t0[i] + StudioSounds.AHEAD * 2.0)
+	return StudioSounds.OPEN_LEAST
 
 
 ## The voice's words so far, matched, and the acts placed again where more came. Public for a gate.
@@ -518,9 +603,41 @@ func _place_head(words: Array) -> void:
 	_head = HeadMarks.plan(_source, words, bank, targets, _feel())
 
 
-## How gently the head is performed: the Camera card's head camera ([method HeadPlan.feel_of]).
+## Each hand on the windscreen ([param hands]: per hand `{track, u, fade}` or null) as the fingertips that press it: three across the
+## stroke, each with where it was a moment ago pressing less ([constant TRAIL]), so the fur is combed along the stroke and springs
+## back behind it. [param lis] is the listener; [param middle] the windscreen's own middle, what the fingertips spread round.
+static func _fingers(hands: Array, lis: Transform3D, middle: Vector3) -> Array:
+	var out: Array = []
+	for h in hands:
+		if h == null:
+			continue
+		var tc: Dictionary = (h as Dictionary)["track"]
+		var u := float(h["u"])
+		var fade := float(h["fade"])
+		for tr in TRAIL:
+			var uu := u - float(tr[0])
+			if uu < 0.0:
+				continue
+			var at := Gesture.at3(tc["at"], uu)
+			var dep := Gesture.at(tc["depth"], uu) * float(tr[1]) * fade
+			if dep <= 0.0:
+				continue
+			var push := Gesture.at3(tc["push"], uu)
+			var nrm := (at - middle).normalized()
+			var across := push.cross(nrm)
+			if across.length() < 1e-5:
+				across = lis.basis.y.cross(nrm)
+			across = across.normalized()
+			for f in [-1.0, 0.0, 1.0]:
+				out.append({"at": at + across * f * FINGER, "depth": dep * (1.0 if f == 0.0 else 0.85), "push": push})
+	return out
+
+
+## How gently the head is performed: the Camera card's head camera ([method HeadPlan.feel_of]), resting at the chair wherever the
+## microphone is placed.
 func _feel() -> Dictionary:
-	return HeadPlan.feel_of(feed.cameras if feed != null else [])
+	var block: Dictionary = _subs.document.get("medium", {}) if _subs != null and is_instance_valid(_subs) and _subs.document.get("medium") is Dictionary else {}
+	return HeadPlan.feel_of(feed.cameras if feed != null else [], StudioSet.places_of(block).get("microphone", {}))
 
 
 ## Where node [param n] is in rig node [param root]'s own space.
@@ -533,48 +650,99 @@ static func _in_rig(n: Node3D, root: Node3D) -> Vector3:
 	return xf.origin
 
 
-## Each act in the rest the voice left for it; one said `under` as the words after it begin; one begun kept where it began.
+## Each act where it begins and ends: under the words, as the word after its mark begins, until the word it ends at begins (its
+## closing mark's, or where another act takes its hand), its seconds, or past the last word; one said `alone` in the rest the voice
+## left for it. One begun is kept where it began.
 func _place_acts() -> void:
 	var holding: Array = []
 	for a in _acts:
 		var i := int((a as Dictionary)["i"])
-		if _held.has(i):
-			continue
-		if bool((a as Dictionary)["under"]):
-			var w := int((a as Dictionary)["after"])
-			if w < _follower.said0.size() and _follower.said0[w] != ReadingFollower.NO_TIME:
-				_t0[i] = _follower.said0[w] - UNDER_LEAD
-			continue
-		holding.append({"after": int((a as Dictionary)["after"]), "dur": float((a as Dictionary)["secs"]), "i": i})
+		if not _held.has(i):
+			if bool((a as Dictionary)["under"]):
+				var w := int((a as Dictionary)["after"])
+				if w < _follower.said0.size() and _follower.said0[w] != ReadingFollower.NO_TIME:
+					_t0[i] = _follower.said0[w] - UNDER_LEAD
+				elif w >= _spoken_n and _spoken_n > 0 and _follower.known_last() >= _spoken_n - 1:
+					# written after the last word: as it ends
+					_t0[i] = _follower.st1[_spoken_n - 1] + 0.3
+			else:
+				holding.append({"after": int((a as Dictionary)["after"]), "dur": float((a as Dictionary)["secs"]), "i": i})
 	var opening := maxf(feed.intro_hold, 0.0) + StudioScript.OPENING * 0.4
 	for p in _follower.place(holding, opening, 0.2, TAIL):
-		_t0[int((p["a"] as Dictionary)["i"])] = float(p["t0"])
+		var k := int((p["a"] as Dictionary)["i"])
+		if not _held.has(k):
+			_t0[k] = float(p["t0"])
+	for a in _acts:
+		var i := int((a as Dictionary)["i"])
+		_t1[i] = _end_of(a, _t0[i])
 	for i in _t0.size():
 		if _t0[i] < INF and _now >= _t0[i]:
 			_held[i] = _t0[i]
 	_place_sounds()
 
 
-## The show held while an act about to begin, or begun, has no sound yet (made on the host a few at a time, and quickly): it
-## waits rather than play an act an export would hear and the live show would not. A sound that cannot be made holds nothing.
+## When act [param a] (begun at [param t0]) ends, as far as the words heard so far say: INF while that is not known.
+func _end_of(a: Dictionary, t0: float) -> float:
+	if t0 == INF:
+		return INF
+	if not bool(a["under"]):
+		return t0 + float(a["secs"])
+	var out := INF
+	var e := int(a["end"])
+	var last := _follower.known_last()
+	if e >= 0:
+		if e < _follower.said0.size() and _follower.said0[e] != ReadingFollower.NO_TIME:
+			out = _follower.said0[e] - UNDER_LEAD
+		elif e >= _spoken_n and _spoken_n > 0 and last >= _spoken_n - 1:
+			out = _follower.st1[_spoken_n - 1] + 0.3
+	elif String(a["ends"]) == "end" and _spoken_n > 0 and last >= _spoken_n - 1:
+		out = _follower.st1[_spoken_n - 1] + StudioScript.PAST_LAST
+	if bool(a["timed"]):
+		out = minf(out, t0 + float(a["secs"]))
+	# one begun before the last word ends with the outro at the latest, faded out with the picture
+	if int(a["after"]) < _spoken_n and _spoken_n > 0 and last >= _spoken_n - 1:
+		out = minf(out, _follower.st1[_spoken_n - 1] + maxf(feed.tail() if feed != null else 0.0, 0.5))
+	return maxf(out, t0 + 0.5)
+
+
+## The show held while an act about to begin, or going on, has no sound for now yet - its motion not made this far, or the window
+## sounding now not read (made on the host a few at a time, and quickly): it waits rather than play what an export would hear and
+## the live show would not. A sound that cannot be made holds nothing.
 func _hold_for_sounds() -> void:
 	var want := false
 	for i in _t0.size():
-		if _t0[i] == INF or _now < _t0[i] - WAIT_AHEAD or _now > _t0[i] + float((_acts[i] as Dictionary)["secs"]):
+		if _t0[i] == INF or _now < _t0[i] - WAIT_AHEAD or _now > _t1[i]:
 			continue
-		if i >= _keys.size() or not _sounds.ready_for(_keys[i]):
+		if i >= _made.size() or _made[i] == null or (not bool((_acts[i] as Dictionary)["timed"]) and _now - _t0[i] > float((_made[i] as Dictionary)["secs"]) - 1.0):
 			want = true
+			break
+		var ks: PackedStringArray = _keys[i] if _keys[i] != null else PackedStringArray()
+		var st: PackedFloat32Array = _starts[i] if _starts[i] != null else PackedFloat32Array()
+		for j in ks.size():
+			var w0 := _t0[i] + st[j]
+			if w0 <= _now + WAIT_AHEAD and w0 + _sounds.length_of(ks[j]) >= _now and not _sounds.heard(ks[j]):
+				want = true
+				break
+		if want:
 			break
 	if want != _waiting:
 		_waiting = want
 		feed.wait_for(WAIT_FOR, want)
 
 
+## Every act's windows laid where they sound: from where it begins, none past where it ends.
 func _place_sounds() -> void:
 	var placed: Array = []
 	for i in mini(_keys.size(), _t0.size()):
-		if _t0[i] < INF:
-			placed.append({"key": _keys[i], "t0": _t0[i]})
+		if _t0[i] == INF or _keys[i] == null:
+			continue
+		var ks: PackedStringArray = _keys[i]
+		var st: PackedFloat32Array = _starts[i]
+		for j in ks.size():
+			var w0 := _t0[i] + st[j]
+			if w0 > _t1[i] + StudioSounds.RELEASE:
+				break
+			placed.append({"key": ks[j], "t0": w0, "end": _t1[i]})
 	_sounds.place(placed)
 
 
@@ -606,22 +774,31 @@ func _pose(t: float, dt: float) -> void:
 	var shake := {"camera": 0.0, "mic": 0.0}
 	var posed := {}
 	for i in mini(_made.size(), _t0.size()):
-		if _t0[i] == INF:
+		if _t0[i] == INF or _made[i] == null:
 			continue
 		var m: Dictionary = _made[i]
 		var u := t - _t0[i]
-		if u < 0.0 or u > float(m["secs"]) + 0.3:
+		var end := _t1[i]
+		var timed := bool((_acts[i] as Dictionary)["timed"])
+		var whole := timed and end >= _t0[i] + float(m["secs"]) - 0.05
+		if u < 0.0 or t > end + StudioActs.GO + 0.3 or (whole and u > float(m["secs"]) + 0.3):
 			continue
+		# where it ends the hand lifts and what it brought is carried back - unless the act, made whole, does that itself
+		var lifted := 0.0 if end == INF else clampf((t - end) / StudioSounds.RELEASE, 0.0, 1.0)
+		var held_u := u if (whole or end == INF) else minf(u, end - _t0[i])
 		for k in (m["tracks"] as Dictionary):
-			posed[k] = StudioActs.pose_at((m["tracks"] as Dictionary)[k], u)
-		var slot := 0
+			var xf := StudioActs.pose_at((m["tracks"] as Dictionary)[k], minf(held_u, float(m["secs"])))
+			if not whole and end < INF and t > end and rests.has(k):
+				xf = StudioActs.carried(xf, rests[k], Gesture.min_jerk((t - end) / StudioActs.GO))
+			posed[k] = xf
+		var hand := String((_acts[i] as Dictionary).get("hand", "right"))
+		var slot := 0 if hand == "left" else 1
 		for tc in m["touches"]:
 			if slot < 2:
-				touches[slot] = {"at": Gesture.at3((tc as Dictionary)["at"], u), "depth": Gesture.at((tc as Dictionary)["depth"], u),
-					"push": Gesture.at3((tc as Dictionary)["push"], u)}
+				touches[slot] = {"track": tc, "u": minf(held_u, float(m["secs"])), "fade": 1.0 - lifted}
 			slot += 1
 		for k in (m["shake"] as Dictionary):
-			shake[k] = float(shake[k]) + Gesture.at((m["shake"] as Dictionary)[k], u)
+			shake[k] = float(shake[k]) + Gesture.at((m["shake"] as Dictionary)[k], minf(held_u, float(m["secs"]))) * (1.0 - lifted)
 	for k in ["block_a", "block_b", "brush"]:
 		if not rigs.has(k):
 			continue
@@ -632,11 +809,7 @@ func _pose(t: float, dt: float) -> void:
 		var mic: PropRig = rigs["microphone"]
 		var a := float(shake["mic"])
 		mic.node.transform = (_bases["microphone"] as Transform3D) * Transform3D(Basis.from_euler(Vector3(a, 0.0, a * 0.45)), Vector3.ZERO)
-		for s in 2:
-			if touches[s] == null:
-				mic.touch(s, Vector3.ZERO, 0.0)
-			else:
-				mic.touch(s, touches[s]["at"], float(touches[s]["depth"]), touches[s]["push"])
+		mic.touch_all(_fingers(touches, (geo["listener"] as Transform3D), geo.get("fur_c", (geo["listener"] as Transform3D).origin)))
 	if rigs.has("camera"):
 		var a2 := float(shake["camera"])
 		var cam_rig: PropRig = rigs["camera"]

@@ -201,10 +201,14 @@ func head_bank() -> Array:
 	return HeadBank.read(HeadBank.key_of(_blocks, note_path))
 
 
-## How gently the show's head is performed: the Camera card's head camera ([method HeadPlan.feel_of], the note's `camera` block).
+## How gently the show's head is performed: the Camera card's head camera ([method HeadPlan.feel_of], the note's `camera` block), and
+## where it rests seen from the microphone where the note places it (its Medium block's `places`).
 func head_feel() -> Dictionary:
 	var cam: Dictionary = _blocks.get("camera", {}) if _blocks.get("camera") is Dictionary else {}
-	return HeadPlan.feel_of(cam.get("cameras", []) if cam.get("cameras") is Array else [])
+	var med: Dictionary = _blocks.get("medium", {}) if _blocks.get("medium") is Dictionary else {}
+	var places: Dictionary = med.get("places", {}) if med.get("places") is Dictionary else {}
+	return HeadPlan.feel_of(cam.get("cameras", []) if cam.get("cameras") is Array else [],
+		places.get("microphone", {}) if places.get("microphone") is Dictionary else {})
 
 
 ## Whether the show's head is performed ([HeadBank], [HeadMarks]): its voice is heard from where the mouth is, never by the Lean and
@@ -1474,7 +1478,9 @@ func take_sig(body := "") -> String:
 	var bank := HeadBank.hash_of(head_bank())
 	if not bank.is_empty():
 		parts.append(bank)
-		# ...as gently as the Camera card's head camera has it performed
+		# ...by the head that hears the mouth where it is (its front toward the chair), as gently as the Camera card's head camera
+		# has it performed
+		parts.append([VoiceFX.PLACE_SHARE, VoiceFX.EAR_HEAD, VoiceFX.EAR_BACK_DARK, VoiceFX.EAR_ALPHA_LEAST, "front: chair"])
 		if head_feel() != HeadPlan.FEEL:
 			parts.append(head_feel())
 	return JSON.stringify(parts).sha256_text()
@@ -1733,6 +1739,7 @@ static func _join_take(job: Dictionary, box: Dictionary) -> void:
 			fx.side = join.side_between(a, b, pan_of)
 			leans = leans or not fx.side.is_empty()
 			fx.place = HeadMarks.lane(head_plan, a, b, int(job["sr"]))
+			fx.ears_at = HeadMarks.mouths(head_plan, a, b, int(job["sr"]))
 			wet.append_array(fx.process_stereo(pcm.slice(a, b)))
 	var env: SoundBed = job["env"]
 	if env != null:

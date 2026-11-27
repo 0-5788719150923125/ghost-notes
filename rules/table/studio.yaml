@@ -1,7 +1,8 @@
 # THE STUDIO - what a reader is told when the episode is shown at the studio (StudioMedium.reader_rules fills it in; src/data/rules.gd
 # says how a rules file reads). The episode is raw ASMR footage: the reader is the one voice, and the hands nobody sees make every
 # sound. The hands' acts are marks the reader writes among its words; each act is one motion that moves the studio's things and is
-# heard, and the voice waits it out unless the mark says `under`. The brief, in the system prompt, says what the show is.
+# heard, going on under the words until it ends (its closing mark, another act on its hand, its seconds or the end), one hand's or
+# both. The brief, in the system prompt, says what the show is.
 #
 # The code gives: {{vocabulary}} (every word an act's mark may use, from StudioActs' rows); `work` (whether the plan has work in this
 # passage), {{planned}} (it, in the producer's words), {{seconds}} (about how many seconds of sound the passage's marks take) and
@@ -9,26 +10,34 @@
 reader:
   - >-
     THE HANDS. This episode is shown at a studio: a camera looks back at the creator's chair, a giant fluffy microphone stands
-    between, and the hands nobody sees make every sound. Write what the hands do as marks among your words, each on a line of its
-    own where it happens, in the form <!-- VERB: words -->, its words in any order and parted by commas: a thing, a side, its
-    seconds, a pace, a pressure, a pattern, a tool, and under where the words after it are said over it. A mark's seconds are
-    sound and nothing else: the voice is silent through them unless the mark says under, so a passage is its words AND its marks,
-    and the marks are most of an episode - long, unhurried stretches of sound the viewer came for, the talk between them short.
-    Never write a rest or a quiet mark for an act: its own seconds are its rest. No other mark starts the hands. Every word of a
-    mark is one of these:
+    between, and the hands nobody sees make every sound. Write what the hands do as marks among your words. A mark starts an act,
+    <!-- VERB: words -->, its words in any order and parted by commas: a thing, a side, a hand, a pace, a pressure, a pattern, a
+    tool. AN ACT GOES ON UNDER YOUR WORDS: you talk over it while the hands keep working, as long as it lasts - write
+    <!-- /VERB --> where the hands stop (<!-- /VERB: left hand --> where both hands are doing it), or start another act on that
+    hand, which takes the hand over. An act left open goes on to the end. This is how the footage is made: the hands work for long
+    stretches, minutes at a time, and the voice goes on over them; it is never a sound in a pause.
+  - >-
+    TWO HANDS. Each act is one hand's (or both, for the acts that need both): a hand on the left of the microphone is heard in the
+    left ear, one on the right in the right. The two hands may work at once - one rubbing the left of the fur while the other taps
+    on the right - or one alone while the other rests. Keep the hands busy under the talk: a passage with the hands still is rare.
+    A number of seconds ends an act after that long; alone, with its seconds, makes a short sound heard on its own while the voice
+    waits - use it seldom. Never write a rest or a quiet mark for an act. No other mark starts the hands. Every word of a mark is
+    one of these:
   - ""
   - insert: vocabulary
   - ""
   - >-
     A mark names only these words; anything else in it is dropped. Use the sides: sound that moves from ear to ear (around, left
     to right) and sound close to one ear (left, right) is what this footage is for. Let the hands build and change - slow, then
-    quicker, then slow again; soft, then firm - and say what they are about to do only now and then, never every time.
+    quicker, then slow again; soft, then firm; one hand, then both - and say what they are doing only now and then, never every
+    time.
   # THE PLAN'S WORK IS THE PASSAGE'S MARKS: nobody else blocks it, so the reader is told it and how long its sound runs. What it
   # describes that no mark can do is left out, never forced into a word.
   - when: work
     say: >-
-      THE HANDS IN THIS PASSAGE, as the episode's plan has them: {{planned}} Write it as marks, about {{seconds}} seconds of
-      them in all, a new mark where the work changes - its thing, its side, its pace or its pressure - and the talk around them.
+      THE HANDS IN THIS PASSAGE, as the episode's plan has them: {{planned}} Write it as acts going on under your words, about
+      {{seconds}} seconds of the hands' sound in all, a new mark where the work changes - its thing, its side, its hand, its pace or
+      its pressure.
       What the plan describes that the words above cannot say is left out.
   # THE HEAD (next/head.md): the camera is the creator's head and the voice is heard from where the mouth is; the head performs the
   # show's own phrases, the reader calling one where it wants it, the performer improvising from them the rest of the time

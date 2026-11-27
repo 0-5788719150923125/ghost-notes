@@ -14,7 +14,8 @@ extends SceneTree
 ##   says - the fall's own speed;
 ## - a reach ends where it was sent, still at both ends, its path bowed; a quick one is corrected by a second, smaller move
 ##   (control: a slow one has one bell of speed);
-## - a held thing at rest drifts a few millimeters and never stands still.
+## - a held thing at rest drifts a few millimeters and never stands still;
+## - an open rub is the same wherever two lengths of it overlap, still rubbing at its end (control: a closed one lifts there).
 ##
 ##   godot --headless --path . --script tests/motion/gesture_check.gd
 
@@ -176,6 +177,20 @@ func _init() -> void:
 	_ok(far < 0.008 and moved, "a held thing drifts a few millimeters (%.1f at most) and never stands still" % (far * 1000.0))
 
 	print("%d checks, %d failed" % [_checks, _fails])
+	# an open rub: the same wherever two lengths of it overlap, still rubbing at the end of the shorter (control: a closed one
+	# lands and lifts at its end)
+	var o := {"open": true, "ramp": 20.0, "pace": 1.4, "reach": 0.03, "breaks": 0.05}
+	var short := Gesture.strokes(17, 30.0, o)
+	var long := Gesture.strokes(17, 70.0, o)
+	var same := true
+	for i in range(0, (short["u"] as PackedFloat32Array).size() - 1, 7):
+		same = same and is_equal_approx((short["u"] as PackedFloat32Array)[i], (long["u"] as PackedFloat32Array)[i]) \
+			and is_equal_approx((short["press"] as PackedFloat32Array)[i], (long["press"] as PackedFloat32Array)[i])
+	var end_on := (short["on"] as PackedFloat32Array)[(short["on"] as PackedFloat32Array).size() - 1]
+	var closed := Gesture.strokes(17, 30.0, {"pace": 1.4, "reach": 0.03})
+	var closed_end := (closed["on"] as PackedFloat32Array)[(closed["on"] as PackedFloat32Array).size() - 1]
+	_ok(same and end_on > 0.9 and closed_end < 0.05,
+		"an open rub is the same wherever two lengths overlap, still rubbing at the end (%.2f; control: a closed one lifts, %.2f)" % [end_on, closed_end])
 	quit(1 if _fails > 0 else 0)
 
 

@@ -97,6 +97,9 @@ const ROLES := {
 	"backdrop": {"label": "The green screen", "blurb": "A green cloth backdrop on its stands behind the viewer's chair: the camera's flip screen shows it behind nobody.",
 		"designed": true, "find": "backdrop", "tall": [180.0, 300.0], "faces": [], "feeds": {},
 		"needs": {"part cloth": "the cloth, chroma-key green and matte, hung wide (at least two meters across) and flat enough to key, facing its front (+z)"}},
+	"room": {"label": "The room", "blurb": "The room the studio stands in: four plain walls, a door, a few windows, a floor and a ceiling and nothing else - so dark that only its shape shows.",
+		"designed": true, "find": "room", "tall": [240.0, 280.0], "faces": [], "feeds": {},
+		"needs": {"part floor": "the floor, its top at height 0 under the whole room, the room's middle over the origin: about 360 cm wide (x) and 380 cm deep (z), four walls standing on its edges and a ceiling over them, each wall, the floor and the ceiling built of panels no more than 300 cm long; one plain door in a wall and two or three plain windows, a faint night outside them; every surface matte and nearly black, nothing on the walls and nothing in the room"}},
 }
 ## How many of a role's recipe the Dex draws to choose from.
 const DRAWS := 24

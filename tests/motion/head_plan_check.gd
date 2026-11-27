@@ -12,6 +12,8 @@ extends SceneTree
 ## - turned away from the microphone the voice muffles (control: facing it, it does not); the mouth never enters the windscreen;
 ## - as gently as the Camera card's head camera says: Reach 0 and Turns 0 keep it home facing the microphone, Pace 0.5 moves less often
 ##   (control: its own feel performs as before); a mouth at one ear is heard there far more than a lean is;
+## - made as the words arrive it performs what the plan of all of them does (control: calmed as if the reading ended there); the head
+##   rests at the chair wherever the microphone is moved;
 ## - measured as its designer is told: a weave crosses the ears, a calm phrase does not;
 ## - a bank is kept for its show and read back, the one before a version back.
 ##
@@ -145,8 +147,38 @@ func _init() -> void:
 	var moves_slow := (slow["keys"] as Array).filter(func(k: Dictionary) -> bool: return float(k["t"]) < 60.0).size()
 	_ok(moves_slow < moves_a * 0.75 and HeadPlan.make(calls, words, bank, 7, {}, -1.0, {})["keys"] == a["keys"],
 		"Pace 0.5 moves less often (%d keys in a minute, the show's own %d); its own feel performs as before (the control)" % [moves_slow, moves_a])
+	# made as the words arrive, it performs what the plan of all of them does, up to where they have reached (control: the close
+	# calmed at the last word known, as if the reading ended there)
+	var some: Array = words.slice(0, 120)
+	var live := HeadPlan.make(calls, some, bank, 7, {}, -1.0, {}, false)
+	var ended := HeadPlan.make(calls, some, bank, 7, {}, -1.0, {}, true)
+	var reach_t := float((some[some.size() - 1] as Dictionary)["t1"]) - 4.0
+	var agree := true
+	var differ := false
+	var t2 := 0.0
+	while t2 < reach_t:
+		agree = agree and (HeadPlan.pose_at(live, t2)["mouth"] as Vector3).is_equal_approx(HeadPlan.pose_at(a, t2)["mouth"])
+		differ = differ or not (HeadPlan.pose_at(ended, t2)["mouth"] as Vector3).is_equal_approx(HeadPlan.pose_at(a, t2)["mouth"])
+		t2 += 0.25
+	_ok(agree and differ, "made as the words arrive, it performs what the plan of all of them does (control: calmed as if it ended there)")
+	# the head rests at the chair: the microphone moved 20 cm to the right, the rest is 20 cm to its left
+	var moved_feel := HeadPlan.feel_of([], {"x": 20.0})
+	var resting := HeadPlan.make([], words, [], 7, {}, -1.0, moved_feel)
+	var rest_mouth: Vector3 = HeadPlan.pose_at(resting, 5.0)["mouth"]
+	_ok(is_equal_approx(snappedf((moved_feel["home"] as Vector3).x, 0.001), -0.2) and rest_mouth.x < -0.15 and HeadPlan.lane_at(resting, 5.0).x < -0.2
+		and not HeadPlan.feel_of([], {}).has("home"), "the head rests at the chair: the microphone moved right, the voice rests at its left (%.3f m)" % rest_mouth.x)
+	# Sway 0: the head at rest is still - no drift, breath or waver (control: the show's own wanders)
+	var calm_plan := HeadPlan.make([], words, [], 7, {}, -1.0, {"sway": 0.0})
+	var own_plan := HeadPlan.make([], words, [], 7, {}, -1.0, {})
+	var still_most := 0.0
+	var own_most := 0.0
+	for i in 40:
+		still_most = maxf(still_most, (HeadPlan.pose_at(calm_plan, 2.0 + i * 0.1)["eyes"] as Vector3).distance_to(HeadPlan.pose_at(calm_plan, 2.0)["eyes"]))
+		own_most = maxf(own_most, (HeadPlan.pose_at(own_plan, 2.0 + i * 0.1)["eyes"] as Vector3).distance_to(HeadPlan.pose_at(own_plan, 2.0)["eyes"]))
+	_ok(still_most < 0.0005 and own_most > 0.001, "Sway 0 holds the head at rest still (%.4f m; control: its own wanders %.4f m)" % [still_most, own_most])
 	var feel := HeadPlan.feel_of([{"sort": "creator", "reach": 0.4, "pace": 0.6}])
 	_ok(is_equal_approx(float(feel["reach"]), 0.4) and is_equal_approx(float(feel["turns"]), 1.0) and is_equal_approx(float(feel["pace"]), 0.6)
+		and is_equal_approx(float(feel["sway"]), 1.0)
 		and HeadPlan.feel_of([]) == HeadPlan.FEEL, "the feel is the Camera card's head camera, the rest at 1 (none set: the show's own)")
 	# the head's place splits the ears far more than a lean (control: a lean's 70/30)
 	var g_place := VoiceFX.lean_gains(1.0, VoiceFX.PLACE_SHARE)

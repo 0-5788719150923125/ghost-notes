@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 896 references inside a folder, 1665 down the stack, 0 up it.
+Between scripts today: 897 references inside a folder, 1672 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -225,5 +225,5 @@ Godot compiles a script with every script it names by class or preload, wherever
 
 | launch | builds | scripts | lines | budget |
 | --- | --- | --- | --- | --- |
-| the phone shell | `app/main`, `app/phone_shell` | 81 | 32,328 | 40,000 |
-| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 126 | 54,365 | 65,000 |
+| the phone shell | `app/main`, `app/phone_shell` | 81 | 32,330 | 40,000 |
+| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 126 | 54,367 | 65,000 |

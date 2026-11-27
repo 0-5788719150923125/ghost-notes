@@ -226,6 +226,18 @@ const LEAN_SHARE := 0.7
 ## The near ear's share of the voice with the head's mouth fully to one side of the microphone ([member place]): a binaural head
 ## hears a mouth at one ear far more in it than a reader leaning on a stage (about 19 dB apart at the limit).
 const PLACE_SHARE := 0.9
+## The head that hears a mouth placed round the capsule ([member ears_at]), as the act sounds' (contact.py: SOUND_SPEED, HEAD,
+## EAR_NEAREST, ALPHA_LEAST, THETA_LEAST, BACK_DARK, BACK_HZ): its radius (m), the nearest an ear is taken to be (m), the far ear's
+## least highs and the angle it reaches them at (degrees), how much of the highs a sound wholly behind loses and above what (Hz).
+const EAR_HEAD := 0.0875
+const EAR_NEAREST := 0.035
+const EAR_ALPHA_LEAST := 0.1
+const EAR_THETA_LEAST := 150.0
+const EAR_BACK_DARK := 0.55
+const EAR_BACK_HZ := 3800.0
+const SOUND_SPEED := 343.0
+## The longest path difference between the ears heard (frames' worth of delay line).
+const EAR_LINE := 64
 ## How many frames apart a [member place] lane's points are.
 const PLACE_STEP := 256
 ## A mouth turned away from the microphone: its direct voice dulled above this (Hz), by this share of it at the most, and quieter by
@@ -318,6 +330,17 @@ var lean := 0.0                # 0..1 how often the reader leans to one side (se
 ## the mouth facing the microphone to 1 turned away: its highs and some of its level gone), eased between. Handed for one buffer and
 ## used once, as [member side] is; empty, the lean and the near are the dials' own. The head's ([HeadMarks]).
 var place := PackedVector3Array()
+var _ear_line := PackedFloat32Array()   # the direct voice's last frames, each ear reading its own delay back ([member ears_at])
+var _ear_w := 0
+var _ear_lo := Vector2.ZERO             # each ear's head-shadow low, and its highs' low for the darkening from behind
+var _ear_back := Vector2.ZERO
+var _ear_back2 := Vector2.ZERO
+## Where the mouth is round the capsule over the next buffer (listener frame, m: x toward the viewer's right, y up, +z toward the chair)
+## every [constant PLACE_STEP] frames, eased between: the direct voice heard by a head at the capsule, its left and right the viewer's
+## and its front toward the chair, as the Studio's act sounds are (hosts/music/contact.py `ears`) - each ear's own path and the far
+## one's head shadow, darker from behind (the camera's side) - all the way round, in place of [member place]'s pan. Handed for one
+## buffer and used once.
+var ears_at := PackedVector3Array()
 ## Where this voice sits: -1 the left ear to 1 the right ([method Delivery.pan_of_seat]). A lean moves from here. Heard only in the direct voice, as a lean is.
 var seat := 0.0
 ## The voices over this one, for the buffer about to be run ([method ReadingJoin.side_between]): left and right, already where they sit. Taken once.
@@ -429,6 +452,11 @@ var _fd_n := 0
 var _fd_i := 0
 
 func setup(sr: int) -> void:
+	_ear_line = PackedFloat32Array()
+	_ear_w = 0
+	_ear_lo = Vector2.ZERO
+	_ear_back = Vector2.ZERO
+	_ear_back2 = Vector2.ZERO
 	sample_rate = sr
 	_echo.resize(maxi(1, int(ECHO_DELAY * sr)))
 	_echo.fill(0.0)
@@ -630,6 +658,18 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 	var placed := place
 	place = PackedVector3Array()
 	var has_place := not placed.is_empty()
+	var mouths := ears_at
+	ears_at = PackedVector3Array()
+	var has_ears := stereo and not mouths.is_empty()
+	# each ear's gain, delay (frames), head-shadow alpha and how far behind, at each point of the lane ([method _ear_point])
+	var ear_pts: Array = []
+	if has_ears:
+		for q in mouths:
+			ear_pts.append(_ear_point(q))
+		if _ear_line.is_empty():
+			_ear_line.resize(EAR_LINE)
+	var shadow_a := 1.0 - exp(-TAU * (SOUND_SPEED / (PI * EAR_HEAD)) / sample_rate)
+	var back_a := 1.0 - exp(-TAU * EAR_BACK_HZ / sample_rate)
 	var pl := Vector3.ZERO
 	var muf_a := 1.0 - exp(-TAU * MUFFLE_HZ / sample_rate)
 	_resolve_echo()
@@ -815,8 +855,42 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 
 		buf[i] = clampf(wet + (sv.x + sv.y) * 0.5 * (1.0 - SIDE_ROOM), -1.0, 1.0)
 
+		# --- the head at the capsule: the direct voice heard by each ear from where the mouth is ---
+		if has_ears:
+			var je := float(i) / float(PLACE_STEP)
+			var e0 := mini(int(je), ear_pts.size() - 1)
+			var e1 := mini(e0 + 1, ear_pts.size() - 1)
+			var fe := je - float(int(je))
+			var pa: PackedFloat32Array = ear_pts[e0]
+			var pb: PackedFloat32Array = ear_pts[e1]
+			_ear_line[_ear_w] = direct
+			var ear := Vector2.ZERO
+			for e in 2:
+				var o := e * 3
+				var gain := lerpf(pa[o], pb[o], fe)
+				var delay := lerpf(pa[o + 1], pb[o + 1], fe)
+				var alpha := lerpf(pa[o + 2], pb[o + 2], fe)
+				# read the line [delay] frames back, between two frames
+				var at := float(_ear_w) - delay
+				var r0 := posmod(floori(at), EAR_LINE)
+				var fr: float = at - floorf(at)
+				var x := lerpf(_ear_line[r0], _ear_line[(r0 + 1) % EAR_LINE], fr)
+				# its highs by the head's shadow (the shadow's low is the line's own, read as late)
+				var lo := _ear_lo[e] + shadow_a * (x - _ear_lo[e])
+				_ear_lo[e] = lo
+				var v := (lo + alpha * (x - lo)) * gain
+				# darker from behind (its highs over two poles, as the act sounds' second-order filter takes them)
+				var hi_lo := _ear_back[e] + back_a * (v - _ear_back[e])
+				_ear_back[e] = hi_lo
+				var hi_lo2 := _ear_back2[e] + back_a * (hi_lo - _ear_back2[e])
+				_ear_back2[e] = hi_lo2
+				v -= lerpf(pa[6], pb[6], fe) * (v - hi_lo2)
+				ear[e] = v
+			_ear_w = (_ear_w + 1) % EAR_LINE
+			var base := wet - direct
+			out[i] = Vector2(clampf(base + ear.x + sv.x * (1.0 - SIDE_ROOM), -1.0, 1.0), clampf(base + ear.y + sv.y * (1.0 - SIDE_ROOM), -1.0, 1.0))
 		# --- lean: the direct voice, moved between the ears ---
-		if stereo:
+		elif stereo:
 			var p := pl.x if has_place else _tick_lean()
 			if p == 0.0 and seat == 0.0:
 				out[i] = Vector2(clampf(wet + sv.x * (1.0 - SIDE_ROOM), -1.0, 1.0), clampf(wet + sv.y * (1.0 - SIDE_ROOM), -1.0, 1.0))
@@ -1056,6 +1130,42 @@ static func near_plan(ks: PackedFloat32Array, who: PackedStringArray, seed: int)
 					cur = {"c": depth, "hush": depth if float(u[4]) < NEAR_HUSHED else 0.0}
 		state[who[i]] = [cur, left]
 		out.append(cur)
+	return out
+
+
+## What each ear makes of a mouth at [param q] (listener frame, m), as the act sounds' head does: `[gain L, delay L, alpha L, gain R,
+## delay R, alpha R, behind]` - each ear's level against the capsule's (its own distance; the level the near sets stays the
+## voice's), its delay in frames past the nearer ear's (straight where it sees the mouth, else round the head), its highs' share
+## by the angle (Brown and Duda's shadow), and how much of the highs a mouth behind loses.
+func _ear_point(q: Vector3) -> PackedFloat32Array:
+	var r := maxf(q.length(), EAR_HEAD * 1.02)
+	var u := q.normalized() if q.length() > 1e-6 else Vector3.BACK
+	var p := u * r
+	var gains := Vector2.ZERO
+	var paths := Vector2.ZERO
+	var alphas := Vector2.ZERO
+	for e in 2:
+		var side_s := -1.0 if e == 0 else 1.0
+		var ear := Vector3(side_s * EAR_HEAD, 0.0, 0.0)
+		var d := p.distance_to(ear)
+		var cos_th := clampf(u.x * side_s, -1.0, 1.0)
+		var th := rad_to_deg(acos(cos_th))
+		alphas[e] = EAR_ALPHA_LEAST if th > EAR_THETA_LEAST else (1.0 + EAR_ALPHA_LEAST / 2.0) + (1.0 - EAR_ALPHA_LEAST / 2.0) * cos(deg_to_rad(th * 180.0 / EAR_THETA_LEAST))
+		var path := d
+		if cos_th * r < EAR_HEAD:
+			var tangent := sqrt(maxf(r * r - EAR_HEAD * EAR_HEAD, 0.0))
+			path = maxf(tangent + EAR_HEAD * maxf(acos(cos_th) - acos(clampf(EAR_HEAD / r, -1.0, 1.0)), 0.0), d)
+		paths[e] = path
+		gains[e] = 1.0 / maxf(d, EAR_NEAREST)
+	# the level against the capsule's own: only the difference between the ears is the head's
+	var own := 1.0 / maxf(r, EAR_NEAREST)
+	var nearer := minf(paths.x, paths.y)
+	var out := PackedFloat32Array()
+	for e in 2:
+		out.append(gains[e] / own)
+		out.append(minf((paths[e] - nearer) / SOUND_SPEED * sample_rate, float(EAR_LINE - 2)))
+		out.append(alphas[e])
+	out.append(clampf(-u.z, 0.0, 1.0) * EAR_BACK_DARK)
 	return out
 
 

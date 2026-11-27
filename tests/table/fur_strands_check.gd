@@ -174,14 +174,17 @@ func _run() -> void:
 	_ok(rig.furred(), "its rig is furred")
 	var dup := rig.copy()
 	rig.touch(0, Vector3(0.1, 0.15, 0.0), 0.01, Vector3(0, 0, 0.02))
-	_ok(sm != null and sm.get_shader_parameter("touch0") == Vector4(0.1, 0.15, 0.0, 0.01) and sm.get_shader_parameter("push0") == Vector3(0, 0, 0.02),
-		"a touch reaches the strands")
+	_ok(sm != null and _first(sm, "touches") == Vector4(0.1, 0.15, 0.0, 0.01) and _first(sm, "pushes") == Vector3(0, 0, 0.02)
+		and int(sm.get_shader_parameter("touch_n")) == 1, "a touch reaches the strands")
+	rig.touch_all([{"at": Vector3(0.1, 0.15, 0.0), "depth": 0.01}, {"at": Vector3(0.12, 0.15, 0.0), "depth": 0.008}, {"at": Vector3.ZERO, "depth": 0.0}])
+	_ok(int(sm.get_shader_parameter("touch_n")) == 2, "fingertips press it together, one that does not press left out")
+	rig.touch(0, Vector3(0.1, 0.15, 0.0), 0.01, Vector3(0, 0, 0.02))
 	var dup_furs := dup.node.find_children("*", "MultiMeshInstance3D", true, false)
 	var dup_sm := (dup_furs[0] as GeometryInstance3D).material_override as ShaderMaterial if dup_furs.size() == 1 else null
 	dup.touch(0, Vector3(-0.1, 0.1, 0.0), 0.02)
-	_ok(dup_sm != null and dup_sm != sm and dup_sm.get_shader_parameter("touch0") == Vector4(-0.1, 0.1, 0.0, 0.02),
+	_ok(dup_sm != null and dup_sm != sm and _first(dup_sm, "touches") == Vector4(-0.1, 0.1, 0.0, 0.02),
 		"a copy is pressed on its own")
-	_ok(sm != null and sm.get_shader_parameter("touch0") == Vector4(0.1, 0.15, 0.0, 0.01), "the control: the original keeps its touch")
+	_ok(sm != null and _first(sm, "touches") == Vector4(0.1, 0.15, 0.0, 0.01), "the control: the original keeps its touch")
 	var bare := Props.sanitize({"things": [{"name": "a ball", "parts": [{"shape": "ball", "size": [5, 5, 5], "material": "body"}]}],
 		"materials": spec["materials"]}, [])
 	var bb := Props.build((bare["things"] as Array)[0], bare["materials"], 5)
@@ -195,3 +198,13 @@ func _run() -> void:
 	else:
 		print("fur_strands_check: %d FAILED" % _fails)
 	quit(1 if _fails > 0 else 0)
+
+
+## The first of shader array [param key] on [param sm], null where there is none.
+func _first(sm: ShaderMaterial, key: String) -> Variant:
+	var v: Variant = sm.get_shader_parameter(key)
+	if v is PackedVector4Array and not (v as PackedVector4Array).is_empty():
+		return (v as PackedVector4Array)[0]
+	if v is PackedVector3Array and not (v as PackedVector3Array).is_empty():
+		return (v as PackedVector3Array)[0]
+	return null

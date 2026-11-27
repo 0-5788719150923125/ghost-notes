@@ -29,11 +29,13 @@ uniform float droop = 0.25;
 uniform float gather = 0.4;            // how far a strand's tip is drawn toward its lock's root
 uniform vec3 root_color : source_color = vec3(0.1);
 uniform vec3 tip_color : source_color = vec3(0.5);
-uniform vec4 touch0 = vec4(0.0);       // a world point, and how deep it presses (m; 0 for none)
-uniform vec3 push0 = vec3(0.0);        // the sweep there (world, m)
-uniform vec4 touch1 = vec4(0.0);
-uniform vec3 push1 = vec3(0.0);
-uniform float reach = 0.036;           // how far round a touch the fur answers (m)
+// the fingers on it, and where each just was: a world point and how deep it presses (m; 0 for none), and the sweep there (world, m)
+// - PropRig.touch_all hands them, at most TOUCH_MOST (Props.TOUCH_MOST)
+const int TOUCH_MOST = 24;
+uniform vec4 touches[24];
+uniform vec3 pushes[24];
+uniform int touch_n = 0;
+uniform float reach = 0.016;           // how far round a fingertip the fur answers (m)
 uniform vec3 crown = vec3(0.0, 1.0, 0.0);  // where it parts: the top of the part, in its mesh's own space (Props sets it)
 
 varying vec3 v_tangent;                // view space, root to tip
@@ -151,8 +153,9 @@ void vertex() {
 	float press = 0.0;
 	vec3 lay = vec3(0.0);
 	vec3 part = vec3(0.0);
-	pressed(root, n, back, MODEL_MATRIX[3].xyz, s, touch0, push0, press, lay, part);
-	pressed(root, n, back, MODEL_MATRIX[3].xyz, s, touch1, push1, press, lay, part);
+	for (int i = 0; i < min(touch_n, TOUCH_MOST); i++) {
+		pressed(root, n, back, MODEL_MATRIX[3].xyz, s, touches[i], pushes[i], press, lay, part);
+	}
 	// its lock: the tip drawn toward the lock's root, the lock waving as one
 	vec3 g = lock_root(root, max(fur_len * 0.3, 1e-4));
 	vec3 to_lock = (g - root) - n * dot(g - root, n);

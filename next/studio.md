@@ -16,8 +16,10 @@ reader is told (`rules/table/studio.yaml`, every word from `StudioActs`' and `He
 (`reader_marks`), a passage handed back told why (`reader_check`), the voice's rests for its acts (`voiced`), its things and its
 sounds on the Pipeline card (`StudioFormat`), its things on the Props card (`StudioProps`), each designed by an agent (`RoleDesign`),
 a part's `fur` drawn as strands (`FurStrands`, `prop_fur.gdshader`, `PropRig.touch`), the head performed from the show's own
-phrases (next/head.md: `HeadPlan`, `HeadBank`, `HeadDesign`, `HeadMarks`; the voice placed by it and the eye moving with it), the chair on the Camera card (`Cameras` `creator`), `Gesture` in
-`motion/`, and the sound host (`hosts/music/contact.py`).
+phrases (next/head.md: `HeadPlan`, `HeadBank`, `HeadDesign`, `HeadMarks`; the voice placed by it and the eye moving with it), the
+head on the Camera card (`Cameras` `creator`: its Reach, Turns and Pace), its act sounds on the Sound card, which Table brings
+(`ShowSounds`, `MadeSounds`), the ring light's own light passing round what stands at its middle (`StudioSet._round_the_lens`: the
+camera neither lit from inside nor shading it), `Gesture` in `motion/`, and the sound host (`hosts/music/contact.py`).
 
 Measured on the pilot's render (`tests/studio/studio_probe.gd --sound`): every act's sound runs its act's length where it was
 placed; a rub on the left is 14.5 dB louder in the left ear and one on the right mirrors it; `around` swings the balance from
@@ -30,6 +32,23 @@ reader is told its beat's planned work and about how many seconds of sound to wr
 Known limits: no make ships with the app - a note's studio stands empty until Generate has its things designed (the probe stands the
 fixtures in `tests/fixtures/studio/`); a close voice is not hushed yet (the near plan stands aside for the head, and the hush with it).
 
+ACTS ARE GENERATORS, built: an act goes on under the words until it ends (its closing mark `<!-- /VERB -->`, another act on its
+hand, its seconds, or the end), the voice talking over it; `alone` keeps a short sound in a rest. TWO HANDS: each act one hand's
+(or both: cup, scrape, knock), named or taken from its side, each heard from where it works. Its motion is open-ended (`Gesture`
+`open`, `StudioActs.make` with a horizon: the same wherever two lengths overlap), its sound made in 8-second windows laid over each
+other (`StudioSounds.windows_of`, the host's `skip`/`fade`/`batch`), made as the show comes to them and held near the playhead, dying
+away where the act ends. The fur is pressed by each hand's three fingertips and where they were a moment ago (`PropRig.touch_all`,
+prop_fur.gdshader's `touches`), so it is combed along the stroke and springs back. Measured in the probe: a left hand's rub runs
+unbroken from its word to its closing mark (35 s, no dip between windows), louder in the left ear by about 10 dB, the right
+hand's taps beside it; the fur moves frame to frame under the hand.
+
+Also built: THE ROOM (`room`, a designed role like the rest: four walls, a door, windows onto a faint night, a floor and a ceiling of
+panels, matte and nearly black, its floor's middle at `StudioSet.ROOM`) - only the room's shape shows; an act's sound REFINED on the
+Sound card (its Refine… a writer who changes the act's words, kept in the Medium block's `marks` by the act's own number, the script
+as written; `StudioFormat.chat_for`); every sound MADE ON ITS OWN as soon as it is missing (the Pipeline's maker `auto`); the hands
+work round the windscreen's own middle (`fur_c`), the capsule where the sound is heard; the head camera's SWAY (a held head's drift,
+breath and waver between moves).
+
 Open for the user: the first episode Table makes, by ear (the fur first) and by eye; the things its agents design; the head's moves
 by eye and ear; the fur's color.
 
@@ -37,7 +56,7 @@ by eye and ear; the fur's color.
 
 ### The set (`StudioSet`)
 
-- The viewer sits in the creator's chair (the stage camera at eye height, its Sway the Camera card's `creator`). The camera on its tripod, centered, its lens toward the viewer,
+- The viewer sees through the creator's eyes (the stage camera is the head, as gently as the Camera card's `creator` has it). The camera on its tripod, centered, its lens toward the viewer,
   inside a small (12-inch) ring light behind it; the microphone on a short stand in the lower middle, its fur windscreen the size of a head.
 - The things lie on a side table beside the chair, below every view (the frame wherever the head goes, the flip screen's): the
   blocks stacked, the brush on its side. An act brings one up into the frame and lays it back (held, it is never still:
@@ -121,10 +140,12 @@ Every move a pure function of time from a seeded plan, never a straight line or 
 
 ### Acts (`StudioActs`, `StudioScript`)
 
-A mark on a line of its own, `<!-- VERB: words -->`, its words in any order: a thing, a side, seconds, a pace, a pressure, a
-pattern, `under`. Table's reader writes them among its words, told every word they may use (`rules/table/studio.yaml`, filled from
-the rows), and its passages keep them (`reader_marks`). The voice waits out an act's seconds - a quiet rest where it is written
-(`voiced`) - unless it says `under` (the words after it are said over it).
+A mark, `<!-- VERB: words -->`, its words in any order: a thing, a side, a hand (`left hand`, `right hand`, `both hands`),
+seconds, a pace, a pressure, a pattern, `alone`. Table's reader writes them among its words, told every word they may use
+(`rules/table/studio.yaml`, filled from the rows), and its passages keep them and their closing marks (`reader_marks`). AN ACT GOES
+ON UNDER THE WORDS until its closing mark (`<!-- /VERB -->`, or `<!-- /VERB: left hand -->`), another act on its hand, its seconds
+or the end; the voice waits only for one said `alone` (a quiet rest of its seconds, `voiced`). A closing mark that ends nothing
+sends the passage back (`reader_check`).
 
 - verbs: `rub` (fingertips), `brush` (the powder brush), `scratch` (nails), `tap`, `scrape` (block on block), `knock` (blocks
   struck together), `cup` (both hands round the windscreen);
@@ -134,8 +155,11 @@ the rows), and its passages keep them (`reader_marks`). The voice waits out an a
 - pace `slow` `quick` `faster` `slower`; pressure `soft` `firm`; pattern `circles` `long` `short`.
 
 An act is a pure function of its own time: where each thing is, and its CONTACT LANES - for each contact, where it is round the
-microphone (meters, the listener's frame), how fast it slides (m/s) and how hard it presses (N), and each hit with its speed.
-Placed in the rest the voice leaves for it (`ReadingFollower.place`).
+microphone (meters, the listener's frame), how fast it slides (m/s) and how hard it presses (N), and each hit with its speed. One
+that goes on is open: made as far ahead as the show needs and made longer as it comes (its pace easing over 20 s, a sweep circling
+every 16 s or crossing every 9), nothing drawn at its end - where it ends, the hand lifts and what it brought is carried back. It
+begins as the word after its mark does and ends as the word it ends at does; one said `alone` is placed in the rest the voice
+leaves for it (`ReadingFollower.place`).
 
 ### The sound (`hosts/music/contact.py`, `StudioSounds`)
 
@@ -154,8 +178,8 @@ Synthesized from the motion (no samples, no audio model):
   faster; stick-slip creaks where it is slow and pressed hard; both blocks' modes ringing, damped by the hands;
 - **hits**: a contact pulse as long as the materials are soft (a fingertip a few ms, a nail or wood on wood a fraction), its
   spectrum falling past one over that; the struck body's modes (a bar's, a shell's, a tube's) and a deep body thud;
-- **where it is heard**: a spherical head at the capsule, turned as the viewer is (screen left is the left ear; front is toward
-  the camera). Each ear's own distance (the near-field level difference close to one ear), the far ear's head shadow (Brown and
+- **where it is heard**: a spherical head at the capsule, its left and right the viewer's and its front toward the chair (as the
+  microphone faces whoever speaks into it; the voice is heard by the same head, `VoiceFX.ears_at`). Each ear's own distance (the near-field level difference close to one ear), the far ear's head shadow (Brown and
   Duda 1998, one pole and one zero), the delay round the head as a moving fractional delay (its Doppler free), darker from
   behind, a pinna notch that moves with height, and the cardioid's proximity bass growing as the sound comes close;
 - the microphone's color (a little presence and air), a small dry room, a soft limiter. Levels are absolute (never normalized

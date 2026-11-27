@@ -812,7 +812,8 @@ func _game_needs(parts: PackedStringArray) -> Array:
 
 
 ## What [param step] is made from, as it stands: each made step it needs (never one it waits on only for order, [method _soft]) ->
-## its digest. The script is put together from every passage, so it is made from all of them.
+## its digest. The script is put together from every passage, so it is made from all of them. A passage, in a format whose reader
+## writes its own marks, is also made from the rules it writes them under (`marks`, [method marks_rules]).
 func made_from(step: String) -> Dictionary:
 	# ...a game's page is made from its own picture alone ([method page_key]): a word of the script changed paints no page again
 	if _page_step(step):
@@ -827,6 +828,8 @@ func made_from(step: String) -> Dictionary:
 	for n in from:
 		if not _soft(String(n), step) and has(String(n)):
 			out[String(n)] = digest(String(n))
+	if step.begins_with("say:") and own_work():
+		out["marks"] = marks_rules()
 	return out
 
 
@@ -886,12 +889,33 @@ func stale(step: String) -> bool:
 		if from is Dictionary and (from as Dictionary).has("page"):
 			return String((from as Dictionary)["page"]) != sticker_key(step)
 	# ...and one made from the puppeteer's work where the format's reader writes the work itself ([method own_work]): it was written
-	# to the table's act marks, never the format's
+	# to the table's act marks, never the format's; and a passage written under other rules for the format's marks than its
+	# reader is told now ([method marks_rules]), or before passages kept which
 	if has(step):
 		var made: Variant = record(step).get("from")
 		if made is Dictionary and (made as Dictionary).has("acts") and own_work():
 			return true
+		if step.begins_with("say:") and own_work() and made is Dictionary and String((made as Dictionary).get("marks", "")) != marks_rules():
+			return true
 	return super(step)
+
+
+## Each format's [method marks_rules], worked out once a session: its reader's rules are the app's own files.
+static var _marks_rules := {}
+
+## The rules a passage's marks are written under, in a format whose reader writes them itself ([method own_work]): a fingerprint of
+## what its reader is told of them (the format's `reader_rules`, asked by path, with nothing planned) - "" in any other format. A
+## passage written under other rules is stale, and Generate writes it again.
+func marks_rules() -> String:
+	if not own_work():
+		return ""
+	var fmt := medium()
+	if not _marks_rules.has(fmt):
+		var path := String(Registry.field(Medium.REGISTRY, fmt, "script", ""))
+		var script: GDScript = load(path) as GDScript if not path.is_empty() else null
+		_marks_rules[fmt] = String(script.call("reader_rules", {})).sha256_text().left(16) \
+			if script != null and script.has_method("reader_rules") else ""
+	return String(_marks_rules[fmt])
 
 
 ## Every page recorded as made from the whole script, and fresh by it, recorded as made from its own picture instead

@@ -307,6 +307,8 @@ const PLAYS := {
 
 ## A sheet's outlines: its half-width along its length, 0 at the base to 1 at the tip.
 const OUTLINES := ["leaf", "petal", "feather", "oval", "rect"]
+## The most fingertips (and where they just were) that press a fur at once (prop_fur.gdshader's TOUCH_MOST).
+const TOUCH_MOST := 24
 ## The shapes told otherwise to a set dresser ([method describe]): a face shows what a scene hands it, and a table hands it nothing - but
 ## the words written on it ([constant FACE_WORDS]).
 const SCENE_SHAPES := ["face"]
@@ -1322,7 +1324,8 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 				if not held_meshes.has(hid):
 					held_meshes[hid] = []
 				(held_meshes[hid] as Array).append(mi)
-				var mat := material(m, part.get("ornament", {}), g.girth, g.height, hash([seed, salt, gi, nm]), _solid(part), not String(part.get("shape", "")) in ["lathe", "extrude"], see_through(m) and _pane(g))
+				var mat := material(face_glass(m) if String(part.get("shape", "")) == "face" else m, part.get("ornament", {}), g.girth, g.height,
+					hash([seed, salt, gi, nm]), _solid(part), not String(part.get("shape", "")) in ["lathe", "extrude"], see_through(m) and _pane(g))
 				# built as it starts: its own light (a face's, or a glow it starts with), which the work or a rig moves on from
 				var starts: Dictionary = (part.get("work", {}) as Dictionary).get("start", {}) if (part.get("work", {}) as Dictionary).get("start") is Dictionary else {}
 				if starts.has("glow") or part.has("lit"):
@@ -2054,6 +2057,22 @@ static func _pane(g: Tris) -> bool:
 		if absf(g.n[i].dot(way)) >= PANE_SQUARE and absf(g.n[i + 1].dot(way)) >= PANE_SQUARE and absf(g.n[i + 2].dot(way)) >= PANE_SQUARE:
 			square += size
 	return whole > 0.0 and square >= PANE_FLAT * whole
+
+
+## A face's material [param m] as it is drawn with nothing handed to it: a see-through one is DARK GLASS - opaque and glossy in its own
+## color, so what is behind the panel (the wall a window is laid on, a screen's own body) never shows through it, and a shadow falls
+## on it as on near-black glass, all but unseen; any other as it is.
+static func face_glass(m: Dictionary) -> Dictionary:
+	if not see_through(m):
+		return m
+	# (drawn as a glossy solid: glass that cannot be seen through is drawn frosted, and pale)
+	var c := Color.html(String(m.get("color", "#101418")))
+	var out := m.duplicate()
+	out["kind"] = "plastic"
+	out["clarity"] = 0.0
+	out["polish"] = maxf(float(m.get("polish", 0.95)), 0.95)
+	out["color"] = "#" + c.darkened(0.35).to_html(false)
+	return out
 
 
 ## The material for one part: the named material's look with this part's ornament, laid out for its own girth and height (so a motif keeps

@@ -12,6 +12,11 @@ func sounds() -> Array:
 	return []
 
 
+## The conversation that changes sound [param key] ([WriterChat], opened by its Refine… on the card), null where it has none.
+func chat_of(_key: String) -> WriterChat:
+	return null
+
+
 ## What its sounds are called on the card.
 func heading() -> String:
 	return "Made by the show"

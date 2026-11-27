@@ -8,7 +8,9 @@ Held, each against a control that must differ:
 - faster is brighter and louder: fur rubbed at 0.3 m/s against 0.05 m/s, a block scraped quick against slow;
 - harder is louder: the same scrape at 3 N against 0.5 N;
 - the side heard: a rub on the left of the windscreen is louder in the left ear and reaches it first (the right side the
-  other way round); one at the back (toward the viewer) is darker than one at the front at the same distance;
+  other way round); one at the back (the camera's side) is darker than one at the front (the chair's) at the same distance;
+- a window of a longer act is its own length once the run before it is dropped, eased in at equal power; a batch makes every
+  window in one process, saying each one's result; a window that runs too long before itself is refused;
 - near is louder: a tap on the camera across the room is quieter than one on the microphone's body;
 - a hit's softness: a fingertip's tap is darker than a nail's on the same body;
 - stick-slip: a slow, hard scrape has the creak's regular slips (its envelope periodic at speed / SLIP_STEP), a quick one
@@ -149,10 +151,10 @@ def main(argv: list[str]) -> int:
     tap_l = make("tap_left", {"secs": 0.6, "tail": 0.2, "seed": 1, "lane_rate": LR, "contacts": [],
                               "hits": [{"t": 0.1, "speed": 0.4, "on": "fur", "by": "skin", "at": left}]})
     ok(onset_lag(tap_l) > 5, "a tap on the left reaches the left ear first (by %d samples)" % onset_lag(tap_l))
-    bk = make("fur_back", rub(secs, back, 0.12, 1.0))
-    fr = make("fur_front", rub(secs, front, 0.12, 1.0))
+    bk = make("fur_back", rub(secs, front, 0.12, 1.0))
+    fr = make("fur_front", rub(secs, back, 0.12, 1.0))
     ok(centroid(mid(bk, secs)) < centroid(mid(fr, secs)) * 0.95,
-       "behind (toward the viewer) is darker than in front (%.0f against %.0f Hz)" % (centroid(mid(bk, secs)), centroid(mid(fr, secs))))
+       "behind (the camera's side) is darker than in front (the chair's: %.0f against %.0f Hz)" % (centroid(mid(bk, secs)), centroid(mid(fr, secs))))
 
     # near is louder, a fingertip darker than a nail
     shell = {"shape": "shell", "size": [0.13, 0.09, 0.08], "material": "plastic"}
@@ -217,6 +219,29 @@ def main(argv: list[str]) -> int:
         res = json.loads(Path(spec["done"]).read_text()) if Path(spec["done"]).exists() else {}
         ok(bool(res.get("ok")) and Path(spec["out"]).exists() and res.get("heard", {}).get("frames"),
            "contact.py writes the WAV and the done file, its heard numbers in it")
+
+    # a window of a longer act: its own length once the run before it is dropped, eased in and out at equal power
+    win = rub(3.0, back, 0.12, 1.0)
+    win.update({"secs": 2.0, "tail": 0.0, "skip": 0.5, "fade": [0.25, 0.25]})
+    wx = contact.render(win)
+    edge = np.abs(wx[:, :20]).max()
+    middle = np.abs(wx[:, int(0.8 * contact.RATE):int(1.2 * contact.RATE)]).max()
+    ok(wx.shape[1] == int(round(2.0 * contact.RATE)) and edge < middle * 0.05,
+       "a window is its own length, the run before it dropped, eased in (%.4f at its edge, %.4f in it)" % (edge, middle))
+    ok("skip" in contact.check(dict(win, skip=9.0)) and "fade" in contact.check(dict(win, fade=[0.2])),
+       "a window that runs too long before itself, or fades oddly, is refused, saying so")
+    with tempfile.TemporaryDirectory() as d:
+        batch = {"batch": [], "done": str(Path(d) / "b.done.json")}
+        for k in range(2):
+            one = dict(win)
+            one["out"] = str(Path(d) / ("w%d.wav" % k))
+            batch["batch"].append(one)
+        sp = Path(d) / "b.spec.json"
+        sp.write_text(json.dumps(batch))
+        subprocess.run([sys.executable, "-I", str(HERE / "contact.py"), str(sp)], check=False, capture_output=True)
+        res = json.loads(Path(batch["done"]).read_text()) if Path(batch["done"]).exists() else {}
+        ok(bool(res.get("ok")) and all(Path(one["out"]).exists() for one in batch["batch"]) and len(res.get("made", {})) == 2,
+           "a batch makes every window in one process, saying each one's result")
 
     # the levels, for the ear and the voice beside them (it speaks at about -24 dB)
     for name, x in made.items():

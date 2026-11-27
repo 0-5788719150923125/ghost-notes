@@ -10,7 +10,9 @@ class_name HeadPlan
 ## how long each move takes, how many times it runs through. A phrase the script calls (`<!-- head: NAME -->`, [HeadMarks]) begins at
 ## its word; between calls the performer picks one from the bank by its weight, a short settle between, so the head is never parked.
 ## A move's arrival lands on a stressed word or a sentence's end where the phrase says (head motion follows speech), and the head keeps
-## near home through the opening and the close ([method calm]).
+## near home through the opening and the close ([method calm]). Home is the chair: where the microphone is moved, the head still rests
+## there, so the voice is heard from where it really is ([method feel_of] `home`). The close is calmed only once the last word is
+## known, so a plan made as the words arrive performs what the plan of all of them does.
 ##
 ## How a head moves, kept: a move is minimum-jerk along a bowed path; the turn leads it and the lean lags it, each on its own clock, with
 ## a swing of its own on the way; a held head drifts and breathes ([method Gesture.idle]). Space is the microphone's listener frame, in
@@ -43,8 +45,9 @@ const PHRASE_FIELDS := {
 	"calm": "true for a phrase that keeps near home, the one the opening and the close favor",
 }
 ## How gently it is performed, each 1 as the show's own ([method feel_of]): `reach` (how far a move goes from home), `turns` (how far
-## the head turns, tips and leans) and `pace` (how often it moves: each phrase lasts 1 / pace as long).
-const FEEL := {"reach": 1.0, "turns": 1.0, "pace": 1.0}
+## the head turns, tips and leans), `pace` (how often it moves: each phrase lasts 1 / pace as long) and `sway` (how much a held head
+## drifts, breathes and wavers between moves: 0 still).
+const FEEL := {"reach": 1.0, "turns": 1.0, "pace": 1.0, "sway": 1.0}
 
 ## The nearest the mouth comes to the capsule (m); the highest over it a seated head reaches; the furthest out past it toward the
 ## camera; and how far to either side (m).
@@ -128,8 +131,9 @@ static func fields_told() -> String:
 ## [param seed]; [param targets] where `look` looks (`screen`, `lens`: listener-frame points); [param until] where it stops (s; past
 ## the close where it is less than 0). A plan: `{keys, targets, first, last, seed}`, each key `{t, mouth, turn, tilt, roll, look,
 ## swing}` - the pose it reaches at `t`.
-static func make(calls: Array, words: Array, bank: Array, seed: int, targets := {}, until := -1.0, feel := {}) -> Dictionary:
+static func make(calls: Array, words: Array, bank: Array, seed: int, targets := {}, until := -1.0, feel := {}, whole := true) -> Dictionary:
 	var how := FEEL.merged(feel, true)
+	var home: Vector3 = how["home"] if how.get("home") is Vector3 else HOME
 	var by_name := {}
 	for p in bank:
 		if p is Dictionary and not String((p as Dictionary).get("name", "")).is_empty():
@@ -147,9 +151,10 @@ static func make(calls: Array, words: Array, bank: Array, seed: int, targets := 
 			ends.append(float(w["t1"]))
 	var sorted := calls.filter(func(c: Variant) -> bool: return c is Dictionary and by_name.has(String((c as Dictionary).get("name", ""))))
 	sorted.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["at"]) < float(b["at"]))
-	var plan := {"keys": [], "targets": targets, "first": first, "last": last, "seed": seed, "feel": how}
+	# (the close is calmed only once the last word is known: words still arriving would calm wherever the reading has reached)
+	var plan := {"keys": [], "targets": targets, "first": first, "last": last if whole else INF, "seed": seed, "feel": how, "home": home}
 	var keys: Array = plan["keys"]
-	keys.append(_key(0.0, HOME, 0.0, 0.0, 0.0, "", 0.0))
+	keys.append(_key(0.0, home, 0.0, 0.0, 0.0, "", 0.0))
 	var end_t := until if until >= 0.0 else maxf(last, float((sorted[sorted.size() - 1] as Dictionary)["at"]) if not sorted.is_empty() else 0.0) + CLOSING
 	var t := 0.0
 	var ci := 0
@@ -172,7 +177,7 @@ static func make(calls: Array, words: Array, bank: Array, seed: int, targets := 
 		if phrase.is_empty():
 			# nothing to perform: rest at home until the next call, or the end
 			var rest_to := float((sorted[ci] as Dictionary)["at"]) if ci < sorted.size() else end_t
-			keys.append(_key(rest_to, _home_of(rng), 0.0, 0.0, 0.0, "", 0.0))
+			keys.append(_key(rest_to, _home_of(plan, rng), 0.0, 0.0, 0.0, "", 0.0))
 			t = rest_to
 			slot += 1
 			continue
@@ -200,10 +205,16 @@ static func make(calls: Array, words: Array, bank: Array, seed: int, targets := 
 
 
 ## How gently the head is performed, from a show's camera list [param cameras] (its studio head camera's Reach, Turns and Pace,
-## [Cameras] `creator`): [constant FEEL]'s fields.
-static func feel_of(cameras: Array) -> Dictionary:
+## [Cameras] `creator`): [constant FEEL]'s fields - and, where the microphone is moved from where the studio stands it ([param mic]:
+## its place, `x`, `y`, `z` cm), `home`: the chair where the head rests, as seen from the capsule where it is now.
+static func feel_of(cameras: Array, mic := {}) -> Dictionary:
 	var e := Cameras.entry_of(Cameras.sanitize(cameras, true, "studio"), "creator")
-	return {"reach": Cameras.value(e, "reach"), "turns": Cameras.value(e, "turns"), "pace": Cameras.value(e, "pace")}
+	var out := {"reach": Cameras.value(e, "reach"), "turns": Cameras.value(e, "turns"), "pace": Cameras.value(e, "pace"),
+		"sway": Cameras.value(e, "sway")}
+	var by := Vector3(float(mic.get("x", 0.0)), float(mic.get("y", 0.0)), float(mic.get("z", 0.0))) * 0.01
+	if not by.is_zero_approx():
+		out["home"] = HOME - by
+	return out
 
 
 ## A key: the pose reached at [param t].
@@ -212,8 +223,9 @@ static func _key(t: float, mouth: Vector3, turn: float, tilt: float, roll: float
 
 
 ## Home, a little off where it was last time.
-static func _home_of(rng: RandomNumberGenerator) -> Vector3:
-	return bounded(HOME + Vector3(rng.randf_range(-0.03, 0.03), rng.randf_range(-0.015, 0.015), rng.randf_range(-0.04, 0.04)))
+static func _home_of(plan: Dictionary, rng: RandomNumberGenerator) -> Vector3:
+	var sway := clampf(float((plan.get("feel", FEEL) as Dictionary).get("sway", 1.0)), 0.0, 3.0)
+	return bounded((plan.get("home", HOME) as Vector3) + Vector3(rng.randf_range(-0.03, 0.03), rng.randf_range(-0.015, 0.015), rng.randf_range(-0.04, 0.04)) * sway)
 
 
 ## A phrase picked from [param bank] by its weight, the calm ones favored as [param calm_k] (0..1) is high.
@@ -269,11 +281,13 @@ static func _perform(plan: Dictionary, phrase: Dictionary, start: float, dur: fl
 		var feel: Dictionary = plan.get("feel", FEEL)
 		var keep := (1.0 - CALM_PULL * calm_k) * clampf(float(feel["reach"]), 0.0, 2.0)
 		var spin := (1.0 - CALM_PULL * calm_k) * clampf(float(feel["turns"]), 0.0, 2.0)
-		var side := deg_to_rad(_draw(m["side"], rng) * keep)
-		var dist := lerpf(HOME.length(), _draw(m["distance"], rng), minf(keep, 1.0)) if keep <= 1.0 else _draw(m["distance"], rng)
-		var rise := clampf(lerpf(HOME.y, _draw(m["rise"], rng), minf(keep, 1.0)) if keep <= 1.0 else _draw(m["rise"], rng), -0.1, minf(dist, HIGHEST))
+		# the place the move is written to round the microphone, then only as much of the way there from home as is kept
+		var side := deg_to_rad(_draw(m["side"], rng))
+		var dist := _draw(m["distance"], rng)
+		var rise := clampf(_draw(m["rise"], rng), -0.1, minf(dist, HIGHEST))
 		var flat := sqrt(maxf(dist * dist - rise * rise, 0.0))
-		var mouth := bounded(Vector3(sin(side) * flat, rise, cos(side) * flat))
+		var home: Vector3 = plan.get("home", HOME)
+		var mouth := bounded(home + (Vector3(sin(side) * flat, rise, cos(side) * flat) - home) * keep)
 		var swing := rng.randf_range(-12.0, 12.0) * spin
 		keys.append(_key(reach, mouth, _draw(m["turn"], rng) * spin, _draw(m["tilt"], rng) * spin, _draw(m["roll"], rng) * spin, String(m["look"]), swing))
 		if arrive - reach > 0.05:
@@ -311,7 +325,7 @@ static func calm(plan: Dictionary, t: float) -> float:
 	if last <= first:
 		return 0.0
 	var opening := 1.0 - smoothstep(first, first + OPENING, t)
-	var closing := smoothstep(maxf(last - CLOSING, first), last, t)
+	var closing := 0.0 if is_inf(last) else smoothstep(maxf(last - CLOSING, first), last, t)
 	return clampf(maxf(opening, closing), 0.0, 1.0)
 
 
@@ -329,7 +343,7 @@ static func pose_at(plan: Dictionary, t: float) -> Dictionary:
 	var keys: Array = plan.get("keys", [])
 	var seed := int(plan.get("seed", 1))
 	if keys.is_empty():
-		return _posed(HOME, 0.0, 0.0, 0.0, "", seed, t, plan)
+		return _posed(plan.get("home", HOME), 0.0, 0.0, 0.0, "", seed, t, plan)
 	var j := keys.bsearch_custom(t, func(k: Variant, x: Variant) -> bool: return float((k as Dictionary)["t"]) < float(x))
 	if j <= 0:
 		var k0: Dictionary = keys[0]
@@ -358,8 +372,10 @@ static func pose_at(plan: Dictionary, t: float) -> Dictionary:
 
 ## The pose from where the mouth is and how the head is turned, drifting and breathing: the eyes, the way they look and the head's up.
 static func _posed(mouth_in: Vector3, turn_in: float, tilt_in: float, roll_in: float, look_at: String, seed: int, t: float, plan: Dictionary) -> Dictionary:
-	var spin := clampf(float((plan.get("feel", FEEL) as Dictionary).get("turns", 1.0)), 0.0, 2.0)
-	var mouth := bounded(mouth_in + Gesture.idle(seed, t, 0.004) + Vector3(0.0, 0.0025 * sin(TAU * t / 4.1), 0.0))
+	var feel: Dictionary = plan.get("feel", FEEL)
+	var sway := clampf(float(feel.get("sway", 1.0)), 0.0, 3.0)
+	var spin := clampf(float(feel.get("turns", 1.0)), 0.0, 2.0) * sway
+	var mouth := bounded(mouth_in + (Gesture.idle(seed, t, 0.004) + Vector3(0.0, 0.0025 * sin(TAU * t / 4.1), 0.0)) * sway)
 	var turn := turn_in + 2.0 * spin * Gesture.wave(seed + 5, t, 7.0, 2.5)
 	var tilt := tilt_in + 1.5 * spin * Gesture.wave(seed + 9, t, 6.0, 2.0)
 	var roll := roll_in + 1.2 * spin * Gesture.wave(seed + 13, t, 8.0, 3.0)

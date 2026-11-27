@@ -3,10 +3,14 @@ extends SceneTree
 ## studio_script_check - a note read at the studio ([StudioScript]) and its acts made into motion and sound lanes
 ## ([StudioActs]). It holds:
 ##
-## - an act mark's words read in any order: its verb, thing, side, seconds, paces, pressure, pattern, tool and `under`; a word
+## - an act mark's words read in any order: its verb, thing, side, hand, seconds, paces, pressure, pattern, tool and `alone`; a word
 ##   it does not know named, never guessed (control: a mark of known words names nothing);
 ## - a thing an act cannot be done to is named and the verb's own taken;
-## - the voice rests an act's seconds where it is written, opening on a rest, and not at all for one said `under`;
+## - the voice talks over every act, resting only for one said `alone` (its seconds), opening on a rest;
+## - two hands: a hand named, else a free one, else the side's; cupping takes both; an act ends at its closing mark, where another
+##   act takes its hand, or at the end; a closing mark that ends nothing named; an act on the fur with no side works its hand's;
+## - an act that goes on is made as long as asked, the same where two lengths overlap, nothing carried back; its sound windows laid
+##   over each other, those made already the same when it goes on longer; every tap in a window; where it ends it dies away;
 ## - the spoken words leave the marks and headings out, and each act knows how many came before it;
 ## - each act its own number: the same words twice are two numbers, the same note the same numbers;
 ## - a rub on the left of the windscreen is heard left (every lane x under 0; control: one on the right, over 0); one `around`
@@ -45,7 +49,7 @@ func _init() -> void:
 		"<!-- rub: fur, left, 10, slower, firm -->", "",
 		"Now the other side.", "",
 		"<!-- rub: right, fur, 10 -->", "",
-		"<!-- tap: camera, 5, under -->", "Taps while I talk.", "",
+		"<!-- tap: camera, 5, alone -->", "Taps on their own.", "",
 		"<!-- scrape: blocks, 9, slow, long -->", "",
 		"<!-- brush: lens, 8 -->", "",
 		"<!-- rub: fur, left, 10, slower, firm -->", "",
@@ -58,7 +62,7 @@ func _init() -> void:
 	_ok(String(a0["verb"]) == "rub" and String(a0["thing"]) == "fur" and String(a0["side"]) == "left" and is_equal_approx(float(a0["secs"]), 10.0)
 		and (a0["paces"] as Array) == ["slower"] and String(a0["press"]) == "firm", "a mark's words read: rub, fur, left, 10 s, slower, firm")
 	_ok(String(acts[1]["side"]) == "right" and String(acts[1]["thing"]) == "fur", "...in any order")
-	_ok(bool(acts[2]["under"]) and not bool(a0["under"]), "under is read")
+	_ok(not bool(acts[2]["under"]) and bool(acts[2]["alone"]) and bool(a0["under"]), "every act goes on under the words, but one said alone")
 	_ok(String(acts[3]["pattern"]) == "long" and (acts[3]["paces"] as Array) == ["slow"], "a pattern and a pace")
 	var unknown: Array = d["unknown"]
 	var named := unknown.map(func(u: Array) -> String: return String(u[1]))
@@ -70,8 +74,8 @@ func _init() -> void:
 	# the voice's rests
 	var speak := String(d["speakable"])
 	var holds := RegEx.create_from_string("action-hold: ([0-9.]+)").search_all(speak).map(func(m: RegExMatch) -> float: return float(m.get_string(1)))
-	_ok(holds.size() == 8 and is_equal_approx(float(holds[0]), StudioScript.OPENING), "it opens on a rest, and rests for each act but the one said under (%d)" % holds.size())
-	_ok(is_equal_approx(float(holds[1]), 10.0 + StudioScript.AFTER), "an act's rest is its seconds")
+	_ok(holds.size() == 2 and is_equal_approx(float(holds[0]), StudioScript.OPENING), "it opens on a rest, and rests only for the act said alone (%d)" % holds.size())
+	_ok(holds.size() == 2 and is_equal_approx(float(holds[1]), 5.0 + StudioScript.AFTER), "an act alone rests its seconds")
 	_ok(not speak.contains("rub:") and speak.contains("<!-- speaker: Whisper -->"), "the marks go, a speaker's cue stays")
 	var spoken: PackedStringArray = d["spoken"]
 	_ok(spoken[0] == "hello" and not spoken.has("test") and not spoken.has("rub"), "the spoken words leave marks and headings out")
@@ -135,9 +139,9 @@ func _init() -> void:
 	_ok(lens_z < -0.3, "the lens is heard far in front of the microphone (%.2f m)" % lens_z)
 
 	# for the agents who make an episode for it
-	var voiced := StudioMedium.voiced("Before.\n\n<!-- rub: fur, left, 10 -->\n\nDuring.\n\n<!-- tap: camera, 4, under -->\nOver it.\n")
-	_ok(voiced.contains("<!-- rub: fur, left, 10 --> <!-- quiet: %s -->" % String.num(10.0 + StudioScript.AFTER, 2)) and voiced.count("quiet:") == 1,
-		"an episode's voice rests each act's seconds where it is written, and not for one said under")
+	var voiced := StudioMedium.voiced("Before.\n\n<!-- rub: fur, left, 10, alone -->\n\nDuring.\n\n<!-- tap: camera, 4 -->\nOver it.\n")
+	_ok(voiced.contains("<!-- rub: fur, left, 10, alone --> <!-- quiet: %s -->" % String.num(10.0 + StudioScript.AFTER, 2)) and voiced.count("quiet:") == 1,
+		"an episode's voice talks over the hands, and rests only for an act said alone")
 	var kept := TableProducer.voice_marks_only("Soft. <!-- rub: fur, left, 10 --> Now. <!-- wiggle: 3 -->", [], StudioMedium.reader_marks())
 	_ok(kept.contains("<!-- rub: fur, left, 10 -->") and not kept.contains("wiggle"), "a reader's act marks are kept in its passage, nothing else")
 	_ok(not TableProducer.voice_marks_only("Soft. <!-- rub: fur, left, 10 -->").contains("rub:"), "control: a format with no marks of its own keeps none")
@@ -158,10 +162,12 @@ func _init() -> void:
 
 	var planned := StudioMedium.reader_rules({"work": "PLANNED the fur is rubbed slowly.", "beat": "3", "words": Vector2i(31, 46),
 		"said_word": 0.52, "quiet": 0.65})
-	_ok(planned.contains("PLANNED the fur is rubbed slowly.") and planned.contains("about 35 seconds") and not planned.contains("{{"),
+	_ok(planned.contains("PLANNED the fur is rubbed slowly.") and planned.contains("about 55 seconds") and not planned.contains("{{"),
 		"the reader is told its passage's planned work and about how long its sound runs")
 	_ok(not told.contains("THE HANDS IN THIS PASSAGE"), "control: with no work planned, none is told")
 	_check_ends()
+	_check_hands()
+	_check_open(geo)
 	_check_rests()
 	_check_head()
 	_check_places()
@@ -201,6 +207,13 @@ func _check_ends() -> void:
 	m.take_words(said)
 	var said_end := float((said[said.size() - 1] as Dictionary)["t1"])
 	_ok(m._last_sound() >= said_end + 19.9, "an act past the last word holds the close until it ends (%.2f after the last word)" % (m._last_sound() - said_end))
+	var going := "Hello there.\n<!-- rub: fur, left, 45 -->\nGoodbye now, sleep well."
+	m.load_script(going)
+	var heard := StudioScript.rehearsal(StudioScript.parse(going))
+	m.take_words(heard)
+	var going_end := float((heard[heard.size() - 1] as Dictionary)["t1"])
+	_ok(is_equal_approx(m._last_sound(), going_end) and m._t1[0] <= going_end + maxf(m.feed.tail(), 0.5) + 0.01,
+		"hands at work as the words end fade with the outro: the close is the last word's (%.2f), the act ends with the outro" % (m._last_sound() - going_end))
 	m.feed.free()
 	m.free()
 	var snd := StudioSounds.new()
@@ -217,6 +230,104 @@ func _check_ends() -> void:
 	_ok(is_equal_approx(early[0].x, 0.1) and is_zero_approx(late[0].x) and is_zero_approx(late[63].y),
 		"the studio's sound goes down with the picture after its last sound (%.3f, then %.3f)" % [early[0].x, late[0].x])
 	_ok(is_equal_approx(open[0].x, 0.1), "control: with the end not known it plays on (%.3f)" % open[0].x)
+
+
+## Two hands and where acts end: a hand named, else the side's, else a free one; a closing mark ends the latest act of its verb (the
+## one of its hand, where it names one); another act on a hand ends the one there; both-hand acts take both; a closing mark that ends
+## nothing is named; an act on the fur that names no side works its hand's.
+func _check_hands() -> void:
+	var note := "\n".join(PackedStringArray([
+		"One two three.", "<!-- rub: fur, left hand -->", "four five six.",
+		"<!-- tap: camera -->", "seven eight.", "<!-- /rub -->", "nine ten.",
+		"<!-- brush: fur, right hand -->", "eleven twelve.", "<!-- cup: fur -->", "thirteen.", "<!-- /scratch -->",
+		"<!-- rub: fur, right -->", "fourteen fifteen.", "<!-- rub: fur, left -->", "sixteen.", "<!-- /rub: right hand -->", "seventeen."]))
+	var d := StudioScript.parse(note)
+	var acts: Array = d["acts"]
+	var hands: Array = acts.map(func(a: Dictionary) -> String: return String(a["hand"]))
+	var ends: Array = acts.map(func(a: Dictionary) -> String: return "%s@%d" % [String(a["ends"]), int(a["end"])])
+	_ok(hands == ["left", "right", "right", "both", "right", "left"],
+		"a hand named, else a free one, else the side's; cupping takes both (%s)" % str(hands))
+	_ok(ends[0] == "mark@8" and ends[1] == "hand@10" and ends[2] == "hand@12" and ends[3] == "hand@13" and ends[4] == "mark@16" and ends[5] == "end@-1",
+		"an act ends at its closing mark, where another takes its hand (both, for cupping), or at the end (%s)" % str(ends))
+	_ok(Array(d["stray"]) == ["/scratch"] and StudioMedium.reader_check("Hi.\n<!-- /tap -->\nThere.").contains("<!-- /tap -->"),
+		"a closing mark that ends nothing is named, and a passage with one handed back")
+	_ok(String((acts[0] as Dictionary)["side"]) == "back-left" and String((acts[2] as Dictionary)["side"]) == "back-right"
+		and String((acts[4] as Dictionary)["side"]) == "right", "an act on the fur that names no side works its hand's side (control: one named)")
+	# an act's words as a Refine changed them: its sound made from those, its own number kept (control: the others as written)
+	var own := str(int((acts[0] as Dictionary)["seed"]))
+	var changed := StudioScript.parse(note, StudioMedium.marks_of({"marks": {own: "fur, right, right hand, slow", "bad": "x", "7": ""}}))
+	var c0: Dictionary = (changed["acts"] as Array)[0]
+	_ok(String(c0["side"]) == "right" and String(c0["hand"]) == "right" and int(c0["seed"]) == int((acts[0] as Dictionary)["seed"])
+		and String((changed["acts"] as Array)[1]["words"]) == String(acts[1]["words"]),
+		"an act's words as a Refine changed them make it, its own number kept (control: the others as written)")
+	Rules.missing.clear()
+	var sys := Rules.say("agents/refine.system", {"what": "the sound of act 1 (rub)", "title": "", "act": true, "verb": "rub",
+		"vocabulary": StudioActs.vocabulary(), "parts": [], "marks": [], "has_parts": false, "has_marks": false, "tools": true})
+	_ok(Rules.missing.is_empty() and sys.contains("Its verb (rub) stays") and sys.contains("both hands"), "its writer is told every word an act may use")
+	var lengths := StudioScript.lengths(d)
+	_ok(lengths.has(0) and float(lengths[0]) > 1.0 and not lengths.has(99), "an act that goes on is given a length a steady voice would take")
+
+
+## An act that goes on: made as long as asked, the same wherever two lengths overlap, nothing carried back; its sound cut into
+## windows laid over each other, the windows already made the same keys when it is made longer; a short timed act one sound.
+func _check_open(geo: Dictionary) -> void:
+	var act := StudioScript.act_of("rub", "fur, left hand, around", [])
+	act["seed"] = 77
+	act["timed"] = false
+	var short := StudioActs.make(act, geo, 30.0)
+	var long := StudioActs.make(act, geo, 70.0)
+	var sx: PackedFloat32Array = short["sound"]["contacts"][0]["lanes"]["x"]
+	var lx: PackedFloat32Array = long["sound"]["contacts"][0]["lanes"]["x"]
+	var same := sx.size() >= int(29.0 * Gesture.RATE)
+	for i in range(0, sx.size() - 3, 11):
+		same = same and is_equal_approx(sx[i], lx[i])
+	_ok(bool(short["open"]) and same and _min(lx) < -0.05 and _max(lx) > 0.05,
+		"an act that goes on is made as long as asked, the same where two lengths overlap, circling on its own clock")
+	var brushing := StudioScript.act_of("brush", "fur, right hand", [])
+	brushing["timed"] = false
+	var bt: Dictionary = StudioActs.make(brushing, geo, 30.0)["tracks"]["brush"]
+	_ok(StudioActs.pose_at(bt, 999.0).origin.distance_to(((geo["rests"] as Dictionary)["brush"] as Transform3D).origin) > 0.05,
+		"what an act that goes on brings is not carried back by it (whatever ends it does that)")
+	var a := StudioSounds.make_all([act.merged({"i": 0})], geo, {0: 30.0})
+	var b := StudioSounds.make_all([act.merged({"i": 0})], geo, {0: 50.0})
+	var ka: PackedStringArray = a["keys"][0]
+	var kb: PackedStringArray = b["keys"][0]
+	var st: PackedFloat32Array = a["starts"][0]
+	var spec0: Dictionary = (a["specs"] as Dictionary)[ka[0]]
+	var spec1: Dictionary = (a["specs"] as Dictionary)[ka[1]] if ka.size() > 1 else {}
+	_ok(ka.size() == 3 and kb.size() > ka.size() and kb.slice(0, ka.size()) == ka and is_equal_approx(st[1], StudioSounds.WINDOW)
+		and is_equal_approx(float(spec0["secs"]), StudioSounds.WINDOW + StudioSounds.OVERLAP) and is_equal_approx(float(spec1.get("skip", 0.0)), StudioSounds.PRE)
+		and is_zero_approx(float(spec0["skip"])), "its sound is windows laid over each other, those made already the same when it goes on longer (%d, then %d)" % [ka.size(), kb.size()])
+	var brief := StudioSounds.make_all([act.merged({"i": 0})], geo, {0: 3.0})
+	_ok((brief["keys"][0] as PackedStringArray).size() == 1 and (brief["keys"][0] as PackedStringArray)[0] == ka[0],
+		"an act that goes on but briefly still has its first window to sound in, the same as a longer one's")
+	var timed := StudioSounds.make_all([StudioScript.act_of("tap", "camera, 6", []).merged({"i": 0, "seed": 5})], geo)
+	_ok((timed["keys"][0] as PackedStringArray).size() == 1, "a short act with its seconds is one sound")
+	var taps := StudioScript.act_of("tap", "camera", [])
+	taps.merge({"i": 0, "seed": 9, "timed": false}, true)
+	var tw := StudioSounds.windows_of(StudioActs.make(taps, geo, 40.0)["sound"], true)
+	var every := true
+	for h in StudioActs.make(taps, geo, 40.0)["sound"]["hits"]:
+		var t := float((h as Dictionary)["t"])
+		if t > float(tw.size()) * StudioSounds.WINDOW:
+			continue
+		var held := false
+		for w in tw:
+			var w0 := float(w["at"]) - float(w["sound"]["skip"])
+			for hh in w["sound"]["hits"]:
+				held = held or is_equal_approx(float(hh["t"]) + w0, t)
+		every = every and held
+	_ok(every, "every tap is in a window that sounds it")
+	# where it ends, it dies away
+	var snd := StudioSounds.new()
+	var clip := PackedVector2Array()
+	clip.resize(StudioSounds.RATE * 4)
+	clip.fill(Vector2(0.1, 0.1))
+	snd._clips = {"k": clip}
+	snd.place([{"key": "k", "t0": 0.0, "end": 1.0}])
+	var before := snd.render(0.9, 8)
+	var gone := snd.render(1.0 + StudioSounds.RELEASE + 0.01, 8)
+	_ok(is_equal_approx(before[0].x, 0.1) and is_zero_approx(gone[0].x), "where an act ends its sound dies away (%.3f, then %.3f)" % [before[0].x, gone[0].x])
 
 
 ## The studio's things as roles: what a make must have, what its designer is told, how its answer is read.

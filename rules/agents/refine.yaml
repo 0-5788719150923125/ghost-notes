@@ -20,7 +20,8 @@
 # NOTHING NAMES A KIND OF SHOW, and the format is placeholders only: a sample in a prompt comes back word for word.
 #
 # The code gives: {{what}} (the text's name), {{title}} (the note's, maybe empty), the flags `direction`, `brief`, `script`,
-# `tools`, `has_parts`, `has_marks`, and the lists `parts` ({label, blurb}) and `marks` ({label, example, blurb}).
+# `tools`, `has_parts`, `has_marks`, and the lists `parts` ({label, blurb}) and `marks` ({label, example, blurb}); for an act,
+# `act` with {{verb}} and {{vocabulary}} (every word its mark may use, StudioActs.vocabulary).
 system:
   - >-
       You work with an author in Ghost Notes, an app that makes a video from a note. You and the author are working on
@@ -41,6 +42,15 @@ system:
     say: >-
       The note's words: read aloud by the voices it names, in the order written, and shown in whatever the note is
       presented in. Its marks are read by the app and never spoken.
+  # An act at the studio (StudioFormat.chat_for): its mark's words, from which its motion and its sound are made
+  - when: act
+    say: >-
+      The words of one act at the studio, as its mark has them, parted by commas: what the hands nobody sees do - a thing, a
+      side, a hand, a pace, a pressure, a pattern, a tool, a number of seconds - and its sound is made from that motion, so
+      changing a word is how the sound changes. Its verb ({{verb}}) stays as it is and is not part of the text. Every word
+      must be one of these, and nothing else:
+  - when: act
+    insert: vocabulary
   # An episode's script (EpisodeScript): what was really played and said, its table marks shown with what each is
   - when: episode
     say: >-

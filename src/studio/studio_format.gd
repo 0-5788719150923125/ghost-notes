@@ -6,7 +6,8 @@ class_name StudioFormat
 ##
 ## THE STUDIO'S SOUNDS ARE THE PIPELINE'S ([method pipeline]): one row for each act of the episode up now (its script, written by
 ## Table's reader with the hands' act marks in it, [StudioScript]), made on the music host from the act's motion ([StudioSounds],
-## hosts/music/contact.py). Generate makes the ones not made; a row's ⟳ makes ANOTHER TAKE of its act - the hands do it again,
+## hosts/music/contact.py). Each is made on its own as soon as it is missing (after a restart, a refine, a take); a row's ⟳ makes
+## ANOTHER TAKE of its act - the hands do it again,
 ## another performance, and its sound is made from that (`takes` in the Medium's block, [method StudioScript.with_takes]); the take
 ## before is kept. The playing studio takes a new take at once ([method _redress_live]).
 ##
@@ -22,7 +23,7 @@ class_name StudioFormat
 ## Its keys in the Medium's block: each act made again, its own number (as text) -> its take; each thing's make, its role -> its
 ## choice ([PropMakes]); and where each thing is moved from where the studio stands it, its role -> its place ([constant
 ## StudioSet.PLACE_FIELDS]).
-const KNOBS := {"takes": {}, "makes": {}, "places": {}}
+const KNOBS := {"takes": {}, "makes": {}, "places": {}, "marks": {}}
 ## What a make an agent designed is asked once it is looked at in the studio.
 const CHECK_ASK := "You designed this for the studio. Look at it where the studio stands it: are its named points where they belong (the scene puts it by them), is its size right beside the others, does it rest on what it should and pass into nothing? Put right whatever is wrong - its points and parts as a new version, where it stands as a place - and change nothing that is right."
 ## How often it looks at the episode up now and its script (seconds).
@@ -41,7 +42,8 @@ var _planned_of := ""                   # the script and takes the rows were las
 var _script := ""                       # the episode's script, as last read
 var _script_at := ""                    # ...and the file and time it was read at
 var _acts: Array = []                   # its acts, with their takes
-var _keys := PackedStringArray()        # each act's sound's key
+var _folder := ""                       # the note's folder, where each act's Refine conversation is kept
+var _keys: Array = []                   # each act's sound's windows' keys ([method StudioSounds.make_all])
 var _look_t := 0.0
 var _ask_after_plan := false            # a take asked for: its sound asked as soon as its motion is made
 var _show := ""                         # the show its things are designed for: the note's title and the studio
@@ -55,8 +57,10 @@ var _head_error := ""                   # why the head's phrases could not be de
 static func for_note(ctx: Dictionary) -> StudioFormat:
 	var card := StudioFormat.new()
 	card._panel = ctx.get("workspace") as ReadingPanel
+	card._folder = String(ctx.get("folder", ""))
 	card._maker.reads = false
-	card._maker.auto = false
+	# every sound missing is made as soon as it is: after a restart, a refine, a take or a script written again, never waiting for a press
+	card._maker.auto = true
 	card._section = Section.new(card)
 	var title := FrontMatter.field_of(FileAccess.get_file_as_string(String(ctx.get("path", ""))), "title") if not String(ctx.get("path", "")).is_empty() else ""
 	card._head_key = HeadBank.key_of(ctx.get("blocks", {}) if ctx.get("blocks") is Dictionary else {}, String(ctx.get("path", "")))
@@ -113,7 +117,7 @@ func _process(delta: float) -> void:
 	if _plan_task >= 0 and WorkerThreadPool.is_task_completed(_plan_task):
 		WorkerThreadPool.wait_for_task_completion(_plan_task)
 		_plan_task = -1
-		_keys = _plan_box.get("keys", PackedStringArray())
+		_keys = _plan_box.get("keys", [])
 		_maker.want(_plan_box.get("specs", {}))
 	_maker.pump()
 	_look_t -= delta
@@ -121,15 +125,18 @@ func _process(delta: float) -> void:
 		return
 	_look_t = LOOK_EVERY
 	_read_script()
-	var of := _script + JSON.stringify(_knobs["takes"]) + _geo_for
+	var of := _script + JSON.stringify(_knobs["takes"]) + JSON.stringify(_knobs["marks"]) + _geo_for
 	if not _geo.is_empty() and _plan_task < 0 and of != _planned_of:
 		_planned_of = of
-		_acts = StudioScript.with_takes(StudioScript.parse(_script)["acts"], _knobs["takes"])
+		_acts = StudioScript.with_takes(StudioScript.parse(_script, _knobs["marks"])["acts"], _knobs["takes"])
 		_plan_box = {}
 		var box := _plan_box
 		var acts := _acts.duplicate(true)
 		var geo := _geo
-		_plan_task = WorkerThreadPool.add_task(func() -> void: box.merge(StudioSounds.make_all(acts, geo), true))
+		# an act that goes on is made as long as a steady voice would take to reach where it ends; the playing studio makes more
+		# where the words run longer
+		var horizons := StudioScript.lengths(StudioScript.parse(_script, _knobs["marks"]))
+		_plan_task = WorkerThreadPool.add_task(func() -> void: box.merge(StudioSounds.make_all(acts, geo, horizons), true))
 
 
 ## The episode up now's script (its folder's `script.md`), read again where the file changed; "" while there is none.
@@ -148,7 +155,7 @@ func _read_script() -> void:
 
 func capture() -> Dictionary:
 	var out := {}
-	for k in ["takes", "makes", "places"]:
+	for k in ["takes", "makes", "places", "marks"]:
 		if not (_knobs[k] as Dictionary).is_empty():
 			out[k] = (_knobs[k] as Dictionary).duplicate(true)
 	return out
@@ -163,6 +170,7 @@ func apply(cfg: Dictionary) -> void:
 				_knobs["takes"][String(k)] = n
 	_knobs["makes"] = StudioMedium.makes_of(cfg)
 	_knobs["places"] = StudioSet.places_of(cfg)
+	_knobs["marks"] = StudioMedium.marks_of(cfg)
 
 
 # --- the studio's things ---------------------------------------------------------------------------------------------
@@ -190,7 +198,7 @@ func choose(role: String, choice: Dictionary) -> String:
 
 ## Whether the acts are about to be made again or are being made: the script or the set changed since they were last planned.
 func planning() -> bool:
-	return _plan_task >= 0 or (not _script.is_empty() and not _geo.is_empty() and _planned_of != _script + JSON.stringify(_knobs["takes"]) + _geo_for)
+	return _plan_task >= 0 or (not _script.is_empty() and not _geo.is_empty() and _planned_of != _script + JSON.stringify(_knobs["takes"]) + JSON.stringify(_knobs["marks"]) + _geo_for)
 
 
 ## Whether the show's head has its phrases ([HeadBank]).
@@ -311,6 +319,88 @@ func _check_design(role: String, name: String, pick: Dictionary) -> void:
 		choose(role, {"kept": String(ThingLibrary.read(name).get("name", name))})
 
 
+## Where act [param i]'s sound stands, all its windows together ([constant PipelineRow.STATES]): made once every one is, failed where
+## one could not be, running while one is being made.
+func state_of_act(i: int) -> String:
+	var ks: PackedStringArray = _keys[i] if i < _keys.size() and _keys[i] != null else PackedStringArray()
+	if ks.is_empty():
+		return "queued"
+	var states := {}
+	for k in ks:
+		states[_maker.state_of(k)] = true
+	for st in ["failed", "running", "queued", "missing"]:
+		if states.has(st):
+			return st
+	return "made"
+
+
+## Why act [param i]'s sound could not be made: its first window's reason.
+func why_act(i: int) -> String:
+	for k in (_keys[i] if i < _keys.size() and _keys[i] != null else PackedStringArray()):
+		if not _maker.why(k).is_empty():
+			return _maker.why(k)
+	return ""
+
+
+## Act [param i] named as a row says it: its number, what the hand does, which hand, and its take.
+func act_name(i: int) -> String:
+	var a: Dictionary = _acts[i]
+	return "%d. %s %s, %s, %s hand%s%s" % [i + 1, String(a["verb"]), String(a["thing"]), String(a["side"]), String(a.get("hand", "right")),
+		"s" if String(a.get("hand", "")) == "both" else "", (" (take %d)" % (int(a.get("take", 0)) + 1)) if int(a.get("take", 0)) > 0 else ""]
+
+
+## How long act [param i] runs, in words: its seconds, or until what ends it.
+func length_line(i: int) -> String:
+	var a: Dictionary = _acts[i]
+	var n := (_keys[i] as PackedStringArray).size() if i < _keys.size() and _keys[i] != null else 0
+	var windows := " in %d windows" % n if n > 1 else ""
+	match String(a.get("ends", "")):
+		"mark":
+			return "goes on under the words to its closing mark" + windows
+		"hand":
+			return "goes on under the words until the hand turns to the next act" + windows
+		"end":
+			return "goes on under the words to the end" + windows
+	return "%d s%s%s" % [roundi(float(a["secs"])), ", alone" if bool(a.get("alone", false)) else "", windows]
+
+
+## The conversation about act [param i]'s sound ([TextRefine], [WriterChat]): a writer who changes the act's words - what the hands
+## do, from which its sound is made - kept in the block by the act's own number, and played at once; the script stays as written.
+func chat_for(i: int) -> WriterChat:
+	if i < 0 or i >= _acts.size():
+		return null
+	var own := str(int((_acts[i] as Dictionary).get("own", (_acts[i] as Dictionary)["seed"])))
+	var chat := WriterChat.at(TextRefine.folder_for(_folder, "act-" + own))
+	var verb := String((_acts[i] as Dictionary)["verb"])
+	chat.read_text = func() -> String: return _words_of(own)
+	chat.apply = func(at: int, gone: int, put: String) -> void:
+		var was := _words_of(own)
+		set_words(own, was.substr(0, at) + put + was.substr(at + gone))
+	chat.about = func() -> Dictionary:
+		return {"what": "the sound of act %d (%s)" % [i + 1, verb], "title": "", "act": true, "verb": verb,
+			"vocabulary": StudioActs.vocabulary(), "parts": [], "marks": [], "has_parts": false, "has_marks": false}
+	return chat
+
+
+## Act (by its own number [param own]) words as they stand: as a Refine changed them, else as the script has them.
+func _words_of(own: String) -> String:
+	if (_knobs["marks"] as Dictionary).has(own):
+		return String(_knobs["marks"][own])
+	for a in _acts:
+		if str(int((a as Dictionary).get("own", (a as Dictionary)["seed"]))) == own:
+			return String((a as Dictionary)["words"])
+	return ""
+
+
+## Act [param own]'s words set to [param words] (its verb kept): kept in the block, the act made again from them and played at once.
+func set_words(own: String, words: String) -> void:
+	_knobs["marks"][own] = words.strip_edges()
+	if _panel != null:
+		_panel.touch()
+	_redress_live()
+	_ask_after_plan = true
+
+
 ## Act [param i] made again: its next take, kept in the block and played at once.
 func _another_take(i: int) -> void:
 	if i < 0 or i >= _acts.size():
@@ -335,6 +425,7 @@ func _redress_live() -> void:
 	block["takes"] = (_knobs["takes"] as Dictionary).duplicate(true)
 	block["makes"] = (_knobs["makes"] as Dictionary).duplicate(true)
 	block["places"] = (_knobs["places"] as Dictionary).duplicate(true)
+	block["marks"] = (_knobs["marks"] as Dictionary).duplicate(true)
 	doc["medium"] = block
 
 
@@ -356,17 +447,18 @@ class Heard extends ShowSounds:
 	func heading() -> String:
 		return "Made from the hands' acts"
 
+	func chat_of(key: String) -> WriterChat:
+		return card.chat_for(int(key.trim_prefix("act:")) - 1) if key.begins_with("act:") else null
+
 	func sounds() -> Array:
 		var out: Array = []
 		for i in card._acts.size():
 			var a: Dictionary = card._acts[i]
-			var key := card._keys[i] if i < card._keys.size() else ""
-			var state := card._maker.state_of(key) if not key.is_empty() else "queued"
-			var line: String = {"made": "made, %d s" % roundi(float(a["secs"])), "running": "being made", "failed": card._maker.why(key)}.get(state, "not made yet")
-			out.append({"key": "act:%d" % (i + 1), "name": "%d. %s %s, %s%s" % [i + 1, String(a["verb"]), String(a["thing"]), String(a["side"]),
-					(" (take %d)" % (int(a.get("take", 0)) + 1)) if int(a.get("take", 0)) > 0 else ""],
-				"line": line, "tip": String(a["words"]),
-				"path": ProjectSettings.globalize_path(StudioSounds.wav_of(key)) if state == "made" else ""})
+			var ks: PackedStringArray = card._keys[i] if i < card._keys.size() else PackedStringArray()
+			var state := card.state_of_act(i)
+			var line: String = {"made": card.length_line(i), "running": "being made", "failed": card.why_act(i)}.get(state, "not made yet")
+			out.append({"key": "act:%d" % (i + 1), "name": card.act_name(i), "line": line, "tip": String(a["words"]),
+				"path": ProjectSettings.globalize_path(StudioSounds.wav_of(ks[0])) if state == "made" and not ks.is_empty() else ""})
 		return out
 
 
@@ -395,11 +487,10 @@ class Section extends PipelineSection:
 			var r := PipelineRow.new()
 			r.key = "act:%d" % (i + 1)
 			r.group = "Sounds"
-			r.label = "%d. %s %s, %s, %ds%s" % [i + 1, String(a["verb"]), String(a["thing"]), String(a["side"]), roundi(float(a["secs"])),
-				(" (take %d)" % (int(a.get("take", 0)) + 1)) if int(a.get("take", 0)) > 0 else ""]
-			var key := card._keys[i] if i < card._keys.size() else ""
-			r.state = card._maker.state_of(key) if not key.is_empty() else "queued"
-			r.said = card._maker.why(key) if r.state == "failed" else String(a["words"])
+			r.label = card.act_name(i)
+			var key := "act" if i < card._keys.size() else ""
+			r.state = card.state_of_act(i)
+			r.said = card.why_act(i) if r.state == "failed" else "%s - %s" % [card.length_line(i), String(a["words"])]
 			r.again = "Another take: the hands do this act again - another performance, heard from its motion. The take before is kept."
 			r.open = not key.is_empty()
 			var at := i
@@ -465,8 +556,8 @@ class Section extends PipelineSection:
 			if card.designed(String(role)):
 				things += 1
 		var made := 0
-		for k in card._keys:
-			if card._maker.state_of(k) == "made":
+		for i in card._keys.size():
+			if card.state_of_act(i) == "made":
 				made += 1
 		var out := "%d of %d things designed" % [things, StudioSet.ROLES.size()]
 		return out if card._keys.is_empty() else "%s, %d of %d sounds made" % [out, made, card._keys.size()]
@@ -503,8 +594,8 @@ class Section extends PipelineSection:
 		for role in StudioSet.ROLES:
 			if not card.designed(String(role)):
 				return true
-		for k in card._keys:
-			if card._maker.state_of(k) != "made":
+		for i in card._keys.size():
+			if card.state_of_act(i) != "made":
 				return true
 		return card._keys.is_empty() and not card._script.is_empty()
 

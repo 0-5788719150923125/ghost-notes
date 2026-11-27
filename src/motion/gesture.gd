@@ -20,6 +20,8 @@ class_name Gesture
 ## - the hand presses hardest where it moves fastest on the stroke out, and lands and lifts rather than appearing;
 ## - assumptions break now and then, seeded: it hesitates mid-stroke, lifts and sets down a little elsewhere (a re-grip),
 ##   or hurries one cycle;
+## - a rub may be OPEN (`open`): made as long as asked, the same wherever two lengths of it overlap, so a hand can go on for as
+##   long as the words do - no break drawn against its end, no lift at it;
 ## - taps come in rolls (two to five, quick, the first hardest) with rests between, each lifted slowly and struck
 ##   accelerating, landing a millimeter or two from the last;
 ## - a held thing drifts on slow waves, rises and falls with a breath and trembles at 8-12 Hz (physiological tremor,
@@ -37,6 +39,8 @@ const CYCLE_SPREAD := 0.09
 const LEAN := 0.54
 ## How far a rub's middle wanders (m), and the share of the stroke out's bow the stroke back keeps (bowing the other way).
 const WANDER := 0.004
+## An open rub's blocks of time, each drawing its own breaks (s).
+const BLOCK := 8.0
 const BACK_BOW := 0.6
 ## Hesitations, re-grips and hurried cycles: how many a second at most, and how long each lasts (s, least and most).
 const BREAKS := 0.06
@@ -182,6 +186,10 @@ static func reach(seed: int, from: Vector3, to: Vector3, secs: float, bow := Vec
 ## `press` and `press_to` (N), `circles` (an ellipse instead of back and forth), `lead` and `tail` (seconds it takes to
 ## land and to lift), `breaks` (hesitations and re-grips a second, at most [constant BREAKS]).
 static func strokes(seed: int, secs: float, o := {}) -> Dictionary:
+	# open (`open`): a rub with no end, made [param secs] long - each block of time draws its own breaks, the pace and pressure
+	# ease over `ramp` seconds and it never lifts at the end, so a longer one made later is the same where they overlap
+	var open := bool(o.get("open", false))
+	var ramp := maxf(float(o.get("ramp", secs)), 0.01)
 	var pace := float(o.get("pace", 1.6))
 	var pace_to := float(o.get("pace_to", pace))
 	var reach_m := float(o.get("reach", 0.022))
@@ -197,7 +205,17 @@ static func strokes(seed: int, secs: float, o := {}) -> Dictionary:
 	rng.seed = hash([seed, "strokes"])
 	# the breaks: hesitations, re-grips and a hurried cycle, each at a seeded moment away from the ends
 	var events: Array = []
-	var count := int(floor(breaks * secs + rng.randf()))
+	if open:
+		for blk in int(ceil(secs / BLOCK)):
+			var er := RandomNumberGenerator.new()
+			er.seed = hash([seed, "strokes", "block", blk])
+			if er.randf() >= breaks * BLOCK:
+				continue
+			var sort_o: String = ["hesitate", "regrip", "hurry"][er.randi() % 3]
+			var dur_o := er.randf_range(HESITATE.x, HESITATE.y) if sort_o == "hesitate" else er.randf_range(REGRIP.x, REGRIP.y)
+			var shift_o := Vector2(er.randf_range(-1.0, 1.0), er.randf_range(-1.0, 1.0)).normalized() * REGRIP_SHIFT
+			events.append({"sort": sort_o, "t": maxf(float(blk) * BLOCK + er.randf_range(0.0, BLOCK - dur_o), lead + 1.0), "dur": dur_o, "shift": shift_o})
+	var count := 0 if open else int(floor(breaks * secs + rng.randf()))
 	for k in count:
 		var sort: String = ["hesitate", "regrip", "hurry"][rng.randi() % 3]
 		var dur := rng.randf_range(HESITATE.x, HESITATE.y) if sort == "hesitate" else rng.randf_range(REGRIP.x, REGRIP.y)
@@ -233,7 +251,7 @@ static func strokes(seed: int, secs: float, o := {}) -> Dictionary:
 	var shift := Vector2.ZERO
 	for i in n:
 		var t := float(i) / RATE
-		var s := t / secs
+		var s := t / ramp
 		# the pace: eased from where it begins to where it ends, drifting; getting going over its first cycle
 		var f := lerpf(pace, pace_to, smoothstep(0.0, 1.0, s)) * (1.0 + PACE_DRIFT * 2.0 * wave(seed + 11, t, 4.7, 1.3))
 		f *= lerpf(0.35, 1.0, clampf(t / (lead + 1.0 / maxf(pace, 0.1)), 0.0, 1.0))
@@ -274,7 +292,7 @@ static func strokes(seed: int, secs: float, o := {}) -> Dictionary:
 			su = -cos(th) * a
 			sw = sin(th) * b * (1.0 if th < PI else BACK_BOW)
 			share = maxf(sin(th), 0.0) - 0.25 * maxf(-sin(th), 0.0)
-		var land := min_jerk(t / maxf(lead, 0.01)) * min_jerk((secs - t) / maxf(tail, 0.01)) * lift
+		var land := min_jerk(t / maxf(lead, 0.01)) * (1.0 if open else min_jerk((secs - t) / maxf(tail, 0.01))) * lift
 		var center := Vector2(wave(seed + 3, t, 7.0, 2.0), wave(seed + 4, t, 6.0, 2.4)) * WANDER + off
 		var moving := absf(f * a) / 0.04
 		var tr := tremor(seed, t, TREMOR * (1.0 + TREMOR_MOVING * clampf(moving, 0.0, 1.0)))

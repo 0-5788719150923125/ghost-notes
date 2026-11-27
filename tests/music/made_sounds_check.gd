@@ -4,6 +4,7 @@ extends SceneTree
 ##
 ## - each sound a show says it makes is an entry, in order, under the show's heading; one not made has its Test off, one made on;
 ## - a sound made since is shown made at the next read (rebuilt only when what it lists changed);
+## - a sound the show can change has its Refine… (control: one it cannot, none);
 ## - a show that makes none shows nothing (the control), and the part stands hidden.
 ##
 ##   godot --headless --path . --script tests/music/made_sounds_check.gd
@@ -15,8 +16,13 @@ class Stub extends ShowSounds:
 	func sounds() -> Array:
 		return list
 
+	var chat: WriterChat = null
+
 	func heading() -> String:
 		return "Made from the hands' acts"
+
+	func chat_of(_key: String) -> WriterChat:
+		return chat
 
 
 var _fails := 0
@@ -38,6 +44,12 @@ func _init() -> void:
 	part.refresh()
 	tests = part.find_children("*", "Button", true, false).filter(func(b: Button) -> bool: return b.text.contains("Test") and not b.is_queued_for_deletion())
 	_ok(tests.size() == 2 and tests.all(func(b: Button) -> bool: return not b.disabled), "a sound made since is shown made at the next read")
+	var refines := part.find_children("*", "Button", true, false).filter(func(b: Button) -> bool: return b.text == "Refine…" and not b.is_queued_for_deletion())
+	stub.chat = WriterChat.new()
+	stub.list[0] = (stub.list[0] as Dictionary).merged({"line": "made, 5 s"}, true)
+	part.refresh()
+	var now_refines := part.find_children("*", "Button", true, false).filter(func(b: Button) -> bool: return b.text == "Refine…" and not b.is_queued_for_deletion())
+	_ok(refines.is_empty() and now_refines.size() == 2, "a sound the show can change has its Refine… (control: one it cannot, none)")
 	shows.clear()
 	_ok(not part.refresh() and not part.visible, "a show that makes none shows nothing (the control)")
 	part.free()

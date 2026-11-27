@@ -33,12 +33,16 @@ Journal 2014; Farnell, "Designing Sound", 2010):
   a fraction of one), its spectrum falling past one over that; the near-field pressure of the body stopping (a deep thud
   close to the capsule) and both bodies' modes.
 
-WHERE IT IS HEARD: a spherical head of radius HEAD at the capsule, turned as the viewer is. Each ear's own distance (so a
+WHERE IT IS HEARD: a spherical head of radius HEAD at the capsule, its left and right the viewer's and its front toward the chair,
+as the microphone faces whoever speaks into it. Each ear's own distance (so a
 sound a few centimeters from one ear is far louder there); the far ear's head shadow (Brown and Duda, "A structural model
 for binaural sound synthesis", 1998: one pole and one zero, alpha by the angle); the path round the head as a moving
-fractional delay (cubic), so its Doppler comes free; darker from behind (toward the viewer); a pinna notch that rises with
+fractional delay (cubic), so its Doppler comes free; darker from behind (the camera's side); a pinna notch that rises with
 height; and the capsule's proximity bass, more the nearer it is. Then the microphone's color (presence and air), a small
 dry room and a soft limiter. LEVELS ARE ABSOLUTE (GAIN): a sound far from the capsule is quiet, never normalized.
+
+A WINDOW of a long act is a spec of its own (`skip`, `fade`: render), and a spec of `batch` makes several in one process,
+the done file saying each one's result by where it was written (`made`).
 
 THE HEARD NUMBERS (`heard`): `frames` every FRAME seconds - loudness each ear (dBFS), the balance (left minus right, dB) and
 brightness (spectral centroid, Hz); `peak_db`; `seconds`.
@@ -68,6 +72,11 @@ LONGEST = 180.0
 TAIL_MOST = 6.0
 CONTACTS_MOST = 8
 HITS_MOST = 4000
+# The most a window may run before itself (s), the longest equal-power fade at its ends (s), and the most windows one process
+# makes.
+SKIP_MOST = 4.0
+FADE_MOST = 2.0
+BATCH_MOST = 16
 LANE_RATES = (50.0, 2000.0)
 KINDS = ("rub", "brush", "scratch", "scrape", "cup")
 # The speed of sound (m/s), the head's radius (m), the nearest an ear is ever taken to be (m) and the distance heard at
@@ -159,6 +168,11 @@ def check(spec: dict) -> str:
         return "secs %.2f is outside 0.05-%g" % (secs, LONGEST)
     if not (0.0 <= float(spec.get("tail", 0.0)) <= TAIL_MOST):
         return "tail is outside 0-%g" % TAIL_MOST
+    if not (0.0 <= float(spec.get("skip", 0.0)) <= SKIP_MOST):
+        return "skip is outside 0-%g" % SKIP_MOST
+    fade = spec.get("fade")
+    if fade is not None and not (isinstance(fade, list) and len(fade) == 2 and all(0.0 <= float(f) <= FADE_MOST for f in fade)):
+        return "fade is not two lengths of 0-%g s" % FADE_MOST
     lr = float(spec.get("lane_rate", 300.0))
     if not (LANE_RATES[0] <= lr <= LANE_RATES[1]):
         return "lane_rate %g is outside %g-%g" % (lr, *LANE_RATES)
@@ -531,8 +545,8 @@ def ears(mono: np.ndarray, x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.nd
         shaded = lp + alpha * hp
         delayed = _cubic_read(shaded, np.arange(n) - path / SOUND_SPEED * RATE)
         out[e] = delayed * (EAR_REF / np.maximum(d, EAR_NEAREST))
-    # darker from behind (toward the viewer)
-    back = np.clip(u[2], 0.0, 1.0) * BACK_DARK
+    # darker from behind (the camera's side: the microphone faces the chair)
+    back = np.clip(-u[2], 0.0, 1.0) * BACK_DARK
     if np.any(back > 0.0):
         for e in range(2):
             out[e] -= back * dsp.butter(out[e], "highpass", BACK_HZ, 2, RATE)
@@ -553,10 +567,13 @@ def ears(mono: np.ndarray, x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.nd
 
 def render(spec: dict) -> np.ndarray:
     """The act's sound, [2, n] at RATE: every contact and hit made and placed, the microphone's color, the room, the
-    limiter."""
+    limiter. A WINDOW of a longer act says `skip` (the seconds its lanes and hits run before it: made, to settle the filters,
+    the compressor and the room, then dropped) and `fade` (its first and last seconds eased in and out at equal power, to be
+    laid over the windows beside it)."""
     secs = float(spec["secs"])
     tail = float(spec.get("tail", 0.6))
-    n = int(round((secs + tail) * RATE))
+    skip = float(spec.get("skip", 0.0))
+    n = int(round((skip + secs + tail) * RATE))
     lr = float(spec.get("lane_rate", 300.0))
     seed = int(spec.get("seed", 0))
     mix = np.zeros((2, n))
@@ -600,8 +617,19 @@ def render(spec: dict) -> np.ndarray:
     mix = color(mix)
     mix = room(mix, np.random.default_rng([seed, 3]))
     mix = soft_limit(mix)
+    mix = mix[:, int(round(skip * RATE)):]
+    m = mix.shape[1]
+    fade = spec.get("fade")
+    if fade is not None:
+        # a window: equal power at each end, so two laid over each other keep their level
+        k_in, k_out = min(int(float(fade[0]) * RATE), m // 2), min(int(float(fade[1]) * RATE), m // 2)
+        if k_in:
+            mix[:, :k_in] *= np.sin(np.linspace(0.0, np.pi / 2.0, k_in))
+        if k_out:
+            mix[:, -k_out:] *= np.cos(np.linspace(0.0, np.pi / 2.0, k_out))
+        return mix
     # eased in and out: an act's edges never click
-    k_in, k_out = min(int(0.004 * RATE), n // 4), min(int(0.03 * RATE), n // 4)
+    k_in, k_out = min(int(0.004 * RATE), m // 4), min(int(0.03 * RATE), m // 4)
     if k_in:
         mix[:, :k_in] *= np.sin(np.linspace(0.0, np.pi / 2.0, k_in)) ** 2
     if k_out:
@@ -674,22 +702,32 @@ def write_wav(path: str, x: np.ndarray, seed: int = 0) -> None:
     Path(tmp).replace(path)
 
 
-def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print("usage: contact.py <spec.json>", file=sys.stderr)
-        return 2
-    spec = json.loads(Path(argv[1]).read_text())
-    done = str(spec.get("done", ""))
+def make_one(spec: dict) -> dict:
+    """One spec made and written where it says (`out`): what the app is told of it."""
     try:
         why = check(spec)
         if why:
             raise ValueError(why)
         x = render(spec)
         write_wav(str(spec["out"]), x, int(spec.get("seed", 0)))
-        result = {"ok": True, "wav": str(spec["out"]), "seconds": round(x.shape[1] / RATE, 3), "heard": heard(x)}
+        return {"ok": True, "wav": str(spec["out"]), "seconds": round(x.shape[1] / RATE, 3), "heard": heard(x)}
     except Exception as exc:  # the app shows why
         traceback.print_exc()
-        result = {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": str(exc)}
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 2:
+        print("usage: contact.py <spec.json>", file=sys.stderr)
+        return 2
+    spec = json.loads(Path(argv[1]).read_text())
+    done = str(spec.get("done", ""))
+    if isinstance(spec.get("batch"), list):
+        # several windows in one process: each made and written, each one's result by where it was written
+        made = {str(one.get("out", "")): make_one(one) for one in spec["batch"][:BATCH_MOST]}
+        result = {"ok": all(r["ok"] for r in made.values()), "made": made}
+    else:
+        result = make_one(spec)
     if done:
         Path(done + ".part").write_text(json.dumps(result))
         Path(done + ".part").replace(done)

@@ -1053,6 +1053,7 @@ func _pump_fx() -> void:
 			_head_words = _join.words.size()
 			_head_plan = HeadMarks.plan(_head_body, _join.words, _head_bank, {}, _head_feel)
 		chain.place = HeadMarks.lane(_head_plan, _through, _through + n, panel._sr)
+		chain.ears_at = HeadMarks.mouths(_head_plan, _through, _through + n, panel._sr)
 	var piece := _pending.slice(_read, _read + n)
 	_read += n
 	_through += n

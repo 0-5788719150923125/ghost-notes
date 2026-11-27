@@ -6,7 +6,8 @@ class_name StudioSet
 ## frame, and the things the hands work laid on a side table beside the chair, out of every view, until an act brings them up. Black
 ## round all of it.
 ##
-## Every thing is a prop playing a role ([PropMakes]: `camera`, `tripod`, `ring_light`, `microphone`, `block`, `brush`, `backdrop`),
+## Every thing is a prop playing a role ([PropMakes]: `camera`, `tripod`, `ring_light`, `microphone`, `block`, `brush`, `backdrop`,
+## `room` - the dark room round it all),
 ## its make the note's choice ([StudioProps]: a prop an agent designed, [RoleDesign]), placed where the note moves it from where the
 ## studio stands it ([constant PLACE_FIELDS]; a place is the scene's, never a version of the prop), worked through its rig ([PropRig]);
 ## a role with no make yet stands empty. [method build] makes it all off the tree (a worker builds it) and hands back the root, the rigs
@@ -36,9 +37,11 @@ const RESTS := {
 }
 ## The render layer the camera's own things are on (its screen never sees them).
 const CAMERA_LAYER := 2
+## Where the room's middle stands on the floor: between the chair and the ring light, so all of the studio is inside it.
+const ROOM := Vector3(0.0, 0.0, -0.3)
 ## Each role's number, salted from the set's: the same set draws the same makes.
 const SALTS := {"camera": "studio camera", "tripod": "studio tripod", "ring_light": "studio ring", "microphone": "studio mic",
-	"block": "studio block", "brush": "studio brush", "backdrop": "studio backdrop"}
+	"block": "studio block", "brush": "studio brush", "backdrop": "studio backdrop", "room": "studio room"}
 ## Where a thing is moved from where the studio stands it, as a note places it (a thing's entry on the Props card, a refine that
 ## places it): centimeters, degrees and a size, each its range and default - and what the agent placing it is told of each.
 const PLACE_FIELDS := {
@@ -51,7 +54,7 @@ const PLACE_FIELDS := {
 	"scale": {"label": "Size", "blurb": "How much bigger it is made here (1 its own size).", "type": "float", "min": 0.25, "max": 4.0, "step": 0.01, "default": 1.0},
 }
 ## The roles the studio sets out (the block twice).
-const ROLES := ["camera", "tripod", "ring_light", "microphone", "block", "brush", "backdrop"]
+const ROLES := ["camera", "tripod", "ring_light", "microphone", "block", "brush", "backdrop", "room"]
 ## The light: a soft warm key from over the viewer's left shoulder (its color, energy and where it is), a dim fill, and how little
 ## the room gives back.
 const KEY_COLOR := Color(1.0, 0.86, 0.72)
@@ -69,7 +72,7 @@ static func build(seed: int, makes := {}, places := {}) -> Dictionary:
 	var root := Node3D.new()
 	root.name = "Studio"
 	var rigs := {}
-	for role in ["camera", "tripod", "ring_light", "microphone", "brush", "backdrop"]:
+	for role in ["camera", "tripod", "ring_light", "microphone", "brush", "backdrop", "room"]:
 		var b := PropMakes.made(role, makes.get(role, {}) if makes.get(role) is Dictionary else {}, hash([seed, SALTS[role]]))
 		if b.is_empty():
 			continue
@@ -109,6 +112,13 @@ static func _place(rigs: Dictionary, places := {}) -> Dictionary:
 			for mi in screen.find_children("*", "MeshInstance3D", true, false):
 				var box := (mi as MeshInstance3D).get_aabb()
 				geo["fur_r"] = maxf(box.size.x, box.size.z) * 0.5 * mic.node.basis.get_scale().x
+				# the windscreen's own middle, wherever the microphone stands: what the hands work round (the capsule may sit at its top)
+				var xf := Transform3D.IDENTITY
+				var at: Node = mi
+				while at != null and at != mic.node and at is Node3D:
+					xf = (at as Node3D).transform * xf
+					at = at.get_parent()
+				geo["fur_c"] = mic.node.transform * (xf * box.get_center())
 				break
 		var body: Variant = mic.point_in_thing("body")
 		geo["mic_body"] = mic.node.transform * (body as Vector3 if body is Vector3 else Vector3(0.0, 0.13, 0.034))
@@ -155,6 +165,11 @@ static func _place(rigs: Dictionary, places := {}) -> Dictionary:
 		var back: PropRig = rigs["backdrop"]
 		back.node.transform = Transform3D(Basis(Vector3.UP, PI) * back.node.basis, BACKDROP)
 		moved(back, places.get("backdrop", {}))
+	if rigs.has("room"):
+		# round everything: its floor on the floor, its middle between the chair and the ring light
+		var room: PropRig = rigs["room"]
+		room.node.position = ROOM
+		moved(room, places.get("room", {}))
 	# what the hands work, as big as its make is
 	if rigs.has("brush"):
 		var tip: Variant = (rigs["brush"] as PropRig).point_in_thing("tip")

@@ -21,6 +21,7 @@ var _light_scale := 1.0          # how strongly its lights throw their light, ov
 var _power := 1.0                # how much of its power it has: its lights and its glowing parts at that share ([method set_power])
 var _glows := {}                 # a glowing material no part works -> its glow as built, found the first time the power changes
 var _furs: Array = []            # every fur's strands' material ([method Props._fur]), what a touch is told
+var _touched: Array = []         # each slot's touch as [method touch] was last told it
 
 
 ## The rig of thing [param b], as [method Props.build] (or [method PropMakes.made]) handed it back.
@@ -135,12 +136,32 @@ func furred() -> bool:
 ## Its fur touched: touch [param slot] (0 or 1: two hands) at [param at] (a world point), pressed [param depth] meters into the fur
 ## and swept by [param push] (world, meters) - the strands there pressed flat and laid over, round it parted. A depth of 0 lets go.
 func touch(slot: int, at: Vector3, depth: float, push := Vector3.ZERO) -> void:
-	var t := "touch1" if slot == 1 else "touch0"
-	var p := "push1" if slot == 1 else "push0"
-	var v := Vector4(at.x, at.y, at.z, maxf(depth, 0.0))
+	_touched.resize(maxi(_touched.size(), slot + 1))
+	_touched[slot] = {"at": at, "depth": depth, "push": push}
+	touch_all(_touched.filter(func(x: Variant) -> bool: return x is Dictionary))
+
+
+## Every fur pressed by [param points] at once (`[{at (world), depth (m), push (world, m)}]`, at most [constant Props.TOUCH_MOST]):
+## the fingers on it, and where each just was. None, and it springs back.
+func touch_all(points: Array) -> void:
+	var tv := PackedVector4Array()
+	var pv := PackedVector3Array()
+	for p in points:
+		if tv.size() >= Props.TOUCH_MOST:
+			break
+		var d: Dictionary = p
+		if float(d.get("depth", 0.0)) <= 0.0:
+			continue
+		var at: Vector3 = d["at"]
+		tv.append(Vector4(at.x, at.y, at.z, float(d["depth"])))
+		pv.append(d.get("push", Vector3.ZERO))
+	var n := tv.size()
+	tv.resize(Props.TOUCH_MOST)
+	pv.resize(Props.TOUCH_MOST)
 	for m in _furs:
-		(m as ShaderMaterial).set_shader_parameter(t, v)
-		(m as ShaderMaterial).set_shader_parameter(p, push)
+		(m as ShaderMaterial).set_shader_parameter("touches", tv)
+		(m as ShaderMaterial).set_shader_parameter("pushes", pv)
+		(m as ShaderMaterial).set_shader_parameter("touch_n", n)
 
 
 ## The names of the faces this make has.

@@ -14,7 +14,8 @@ extends SceneTree
 ## - The designer's text and what lands from it: a property changed lands, one left alone stays drawn by the element's number (the
 ##   control: one changed is set), a hand's change meanwhile is kept, a word of its own added and taken out, a key it does not know and
 ##   a value past its bounds told, text that is no JSON object refused.
-## - On the card: a heard element has Refine… and a light none (the control); Refine… opens its conversation under the card; a turn
+## - On the card: a heard element has Refine… and a light none (the control); Refine… docks its conversation beside the cards in
+##   their panel ([RefineDock]), never a window, its verb pressed while open and not once folded (the control); a turn
 ##   that changes the sound keeps how it was and what it became, puts it in place and offers both on its Version picker; picking the
 ##   first makes it that again; a turn that changes nothing keeps nothing (the control). Hear tells the draft's numbers, and refuses a
 ##   draft that is no JSON object (the control).
@@ -24,6 +25,7 @@ const ROOT := "user://environment_refine_check"
 ## The panel and the card, by path: each names autoloads, which resolve only once the tree is up.
 const PANEL := "res://src/reading/reading_panel.gd"
 const CARD := "res://src/table/environment_card.gd"
+const SIDE := "res://src/ui/side_panel.gd"
 const RATE := 22050
 
 var _fails := 0
@@ -212,7 +214,10 @@ func _card() -> void:
 	panel.subtitles = Words.new()
 	var note := ROOT.path_join("note")
 	var card: Control = (load(CARD) as GDScript).call("for_note", {"workspace": panel, "folder": note})
-	root.add_child(card)
+	# (the card stands in a side panel, as in the app: a Refine docks there)
+	var side: Control = (load(SIDE) as GDScript).new(380.0)
+	root.add_child(side)
+	(side.get("body") as Node).add_child(card)
 	await process_frame
 	card.apply({"elements": [{"kind": "light", "preset": "dusk", "seed": 2}, {"kind": "stream", "seed": 8, "size": 0.4}]})
 	var sec: PropSection = card.get("section")
@@ -220,10 +225,19 @@ func _card() -> void:
 		return ((sec.rows()[i] as Dictionary)["verbs"] as Array).map(func(v: Dictionary) -> String: return String(v["key"]))
 	_ok((verbs.call(1) as Array).has("refine") and not (verbs.call(0) as Array).has("refine"), "a heard element has Refine…; the control: a light none")
 	_ok(not (verbs.call(1) as Array).has("version"), "with no versions yet, no Version picker")
+	var pressed := func() -> bool:
+		for v in ((sec.rows()[1] as Dictionary)["verbs"] as Array):
+			if String((v as Dictionary)["key"]) == "refine":
+				return (v as Dictionary).get("pressed") == true
+		return false
 	_ok(sec.act("el:1", "refine").is_empty(), "Refine… opens")
-	var windows := card.get_children().filter(func(c: Node) -> bool: return c is Window)
+	var refines := side.find_children("*", "", true, false).filter(func(c: Node) -> bool: return c is TextRefine)
 	var folder: String = sec.call("sound_folder", sec.call("elements"), 1)
-	_ok(windows.size() == 1 and folder == note.path_join("refine").path_join("environment-stream-1"), "its conversation, under the card, kept in the note's folder")
+	_ok(refines.size() == 1 and (refines[0] as Node).get_window() == root and bool(side.call("docked", refines[0])) and pressed.call()
+		and folder == note.path_join("refine").path_join("environment-stream-1"),
+		"its conversation docked beside the cards in their panel, never a window, kept in the note's folder")
+	_ok(sec.act("el:1", "refine").is_empty() and refines.size() == 1 and not RefineDock.is_open(refines[0]) and not pressed.call(),
+		"the control: pressed again it folds away, its verb no longer pressed")
 	var d := EnvironmentSoundDesign.live(folder)
 	_ok(d != null and d.element_of.is_valid() and String(d.element_of.call().get("kind", "")) == "stream", "its designer stands for the stream")
 	var before: Dictionary = card.capture()["elements"][1]
@@ -260,7 +274,7 @@ func _card() -> void:
 	d.call("_read")
 	d.draft = "not a sound"
 	_ok((await d.hear(5.0)).has("error"), "the control: hear refuses a draft that is no JSON object")
-	card.queue_free()
+	side.queue_free()
 	panel.free()
 	await process_frame
 

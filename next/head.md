@@ -17,6 +17,15 @@ Built, each piece with its gate:
 - the phrases a script calls, timed on a take's words (`HeadMarks`, `ScriptMarks` `head`);
 - the voice placed by the performance in the kept take's pass and the live stream (`VoiceFX` `place`: pan, nearness, muffle; Lean and Near standing aside);
 - the Studio's eye moving with the head, rolling with its lean;
+- how gently it is performed, the Camera card's head camera (`Cameras` `creator`, `HeadPlan.feel_of`): Reach (how far each move goes
+  round the microphone), Turns (how far it turns, tips and leans) and Pace (how often: each phrase played longer), in the eye and the
+  voice alike and in the kept take's signature; a phrase cut short by the next keeps its own timing and does only the moves that fit;
+- the voice heard by the act sounds' head at the capsule, all the way round (`VoiceFX.ears_at`, as hosts/music/contact.py `ears`):
+  each ear's own path and level, the far ear's head shadow, darker from behind; left and right the viewer's, the front toward the
+  chair (the microphone faces whoever speaks into it), so the voice at rest is bright and round the back of the microphone dull;
+- the head rests at the chair wherever the microphone is placed (`HeadPlan.feel_of` `home`, from the Medium block's `places`);
+- a plan made as the words arrive (the live stream, the playing studio) performs what the plan of all of them does: the close is
+  calmed only once the last word is known (`HeadMarks.whole`);
 - what the reader is told (the show's phrases by name), and a passage handed back told why (`StudioMedium.reader_check`, `TableProducer` `sent_back`).
 
 Looked at in the probe with the fixture bank (`tests/fixtures/studio/head_bank.json`): near the middle through the opening, then leaning in at either side, close on the fur, the picture rolling with the lean, sitting back at other angles.

@@ -117,6 +117,8 @@ const REGISTRY := {
 				"blurb": "How far the head turns, tips and leans: 0 always facing the microphone, 1 the show's own. A turning eye is the hardest to watch."},
 			"pace": {"label": "Pace", "type": "float", "min": 0.25, "max": 1.5, "step": 0.05, "default": 1.0,
 				"blurb": "How often it moves: 1 the show's own; 0.5 each move twice as long, and half as many."},
+			"sway": {"label": "Sway", "type": "float", "min": 0.0, "max": 3.0, "step": 0.05, "default": 1.0,
+				"blurb": "How unsteady it is at rest, between moves - drifting, breathing, wavering: 0 still, 1 the show's own; more is restless."},
 		}},
 }
 ## How long a cut between two cameras takes (seconds): every change of camera is a move, never a jump.

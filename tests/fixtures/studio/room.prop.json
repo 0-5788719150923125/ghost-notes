@@ -1,0 +1,339 @@
+{
+	"thing": {
+		"name": "dark studio room",
+		"parts": [
+			{
+				"name": "floor",
+				"shape": "box",
+				"size": [
+					180,
+					4,
+					190
+				],
+				"at": [
+					-90,
+					-4,
+					-95
+				],
+				"material": "floor"
+			},
+			{
+				"name": "ceiling 1",
+				"shape": "box",
+				"size": [
+					180,
+					4,
+					190
+				],
+				"at": [
+					-90,
+					260,
+					-95
+				],
+				"material": "ceiling"
+			},
+			{
+				"name": "floor 2",
+				"shape": "box",
+				"size": [
+					180,
+					4,
+					190
+				],
+				"at": [
+					90,
+					-4,
+					-95
+				],
+				"material": "floor"
+			},
+			{
+				"name": "ceiling 2",
+				"shape": "box",
+				"size": [
+					180,
+					4,
+					190
+				],
+				"at": [
+					90,
+					260,
+					-95
+				],
+				"material": "ceiling"
+			},
+			{
+				"name": "floor 3",
+				"shape": "box",
+				"size": [
+					180,
+					4,
+					190
+				],
+				"at": [
+					-90,
+					-4,
+					95
+				],
+				"material": "floor"
+			},
+			{
+				"name": "ceiling 3",
+				"shape": "box",
+				"size": [
+					180,
+					4,
+					190
+				],
+				"at": [
+					-90,
+					260,
+					95
+				],
+				"material": "ceiling"
+			},
+			{
+				"name": "floor 4",
+				"shape": "box",
+				"size": [
+					180,
+					4,
+					190
+				],
+				"at": [
+					90,
+					-4,
+					95
+				],
+				"material": "floor"
+			},
+			{
+				"name": "ceiling 4",
+				"shape": "box",
+				"size": [
+					180,
+					4,
+					190
+				],
+				"at": [
+					90,
+					260,
+					95
+				],
+				"material": "ceiling"
+			},
+			{
+				"name": "front wall 1",
+				"shape": "box",
+				"size": [
+					180,
+					260,
+					6
+				],
+				"at": [
+					-90,
+					0,
+					-193
+				],
+				"material": "wall"
+			},
+			{
+				"name": "front wall 2",
+				"shape": "box",
+				"size": [
+					180,
+					260,
+					6
+				],
+				"at": [
+					90,
+					0,
+					-193
+				],
+				"material": "wall"
+			},
+			{
+				"name": "back wall left",
+				"shape": "box",
+				"size": [
+					180,
+					260,
+					6
+				],
+				"at": [
+					-90,
+					0,
+					193
+				],
+				"material": "wall"
+			},
+			{
+				"name": "back wall right",
+				"shape": "box",
+				"size": [
+					180,
+					260,
+					6
+				],
+				"at": [
+					90,
+					0,
+					193
+				],
+				"material": "wall"
+			},
+			{
+				"name": "left wall 1",
+				"shape": "box",
+				"size": [
+					6,
+					260,
+					190
+				],
+				"at": [
+					-183,
+					0,
+					-95
+				],
+				"material": "wall"
+			},
+			{
+				"name": "right wall 1",
+				"shape": "box",
+				"size": [
+					6,
+					260,
+					190
+				],
+				"at": [
+					183,
+					0,
+					-95
+				],
+				"material": "wall"
+			},
+			{
+				"name": "left wall 2",
+				"shape": "box",
+				"size": [
+					6,
+					260,
+					190
+				],
+				"at": [
+					-183,
+					0,
+					95
+				],
+				"material": "wall"
+			},
+			{
+				"name": "right wall 2",
+				"shape": "box",
+				"size": [
+					6,
+					260,
+					190
+				],
+				"at": [
+					183,
+					0,
+					95
+				],
+				"material": "wall"
+			},
+			{
+				"name": "door",
+				"shape": "box",
+				"size": [
+					90,
+					205,
+					3
+				],
+				"at": [
+					70,
+					0,
+					189
+				],
+				"material": "door"
+			},
+			{
+				"name": "left window",
+				"shape": "box",
+				"size": [
+					3,
+					110,
+					90
+				],
+				"at": [
+					-179,
+					100,
+					-60
+				],
+				"material": "night",
+				"lit": 0.25
+			},
+			{
+				"name": "right window",
+				"shape": "box",
+				"size": [
+					3,
+					110,
+					90
+				],
+				"at": [
+					179,
+					100,
+					-60
+				],
+				"material": "night",
+				"lit": 0.25
+			},
+			{
+				"name": "right window 2",
+				"shape": "box",
+				"size": [
+					3,
+					110,
+					90
+				],
+				"at": [
+					179,
+					100,
+					90
+				],
+				"material": "night",
+				"lit": 0.25
+			}
+		]
+	},
+	"materials": {
+		"floor": {
+			"kind": "wood",
+			"color": "#151210",
+			"polish": 0.1
+		},
+		"ceiling": {
+			"kind": "painted",
+			"color": "#18181a",
+			"polish": 0.0
+		},
+		"wall": {
+			"kind": "painted",
+			"color": "#19191c",
+			"polish": 0.0
+		},
+		"door": {
+			"kind": "wood",
+			"color": "#1f1813",
+			"polish": 0.1
+		},
+		"night": {
+			"kind": "glass",
+			"color": "#0c1422",
+			"clarity": 0.2,
+			"polish": 0.8
+		}
+	},
+	"line": "A plain room in the dark: four walls, a door, three windows onto the night, a floor and a ceiling."
+}

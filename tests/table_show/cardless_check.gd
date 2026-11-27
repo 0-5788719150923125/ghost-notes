@@ -230,6 +230,14 @@ func _own_work() -> bool:
 	desk.note_made("say:intro", "reader", desk.made_from("say:intro"))
 	_ok(studio.stale("say:intro") and not desk.stale("say:intro"),
 		"a passage written from a puppeteer's acts is stale where the reader writes the work itself (control: the desk's is fresh)")
+	# a passage written under the rules its reader is told now is fresh; one from before passages kept which, or under others, stale
+	studio.note_made("say:intro", "reader", studio.made_from("say:intro"))
+	var fresh := not studio.stale("say:intro") and String(studio.made_from("say:intro").get("marks", "")) == studio.marks_rules() and not studio.marks_rules().is_empty()
+	studio.note_made("say:intro", "reader", {"draw": studio.digest("draw")})
+	var unmarked := studio.stale("say:intro")
+	studio.note_made("say:intro", "reader", {"draw": studio.digest("draw"), "marks": "other rules"})
+	_ok(fresh and unmarked and studio.stale("say:intro") and desk.marks_rules().is_empty() and not desk.made_from("say:intro").has("marks"),
+		"a passage keeps the rules its marks were written under: stale under others or none (control: fresh under these; the desk keeps none)")
 	var one := String(TableProducer.new(studio, {"title": "Show", "brief": "A brief.", "deck": []}).say_prompt("1")["prompt"])
 	_ok(not one.contains("ABOUT-ONE") and not one.contains("<!-- act:") and not one.contains("<!-- quiet:")
 		and one.contains("THE HANDS IN THIS PASSAGE") and one.contains("the base is laid on"),
