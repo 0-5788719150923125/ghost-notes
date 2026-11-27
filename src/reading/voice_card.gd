@@ -10,14 +10,18 @@ class_name VoiceCard
 ## the cast stays the panel's and the card is where it is shown and kept - the panel hands it over in `ctx`
 ## (`cast`), as a producer is handed the panel itself.
 ##
+## Under them, THE DELIVERIES the note's script says ([DeliverySection], drawn as the Props card draws props, [PropsCard]): each
+## set aside or said stronger, opened in its Lab to be heard, shaped, refined and kept, and more added from the Dex.
+##
 ## Its block is `voice:` ([method ReadingCast.capture], [method ReadingCast.apply]): every voice by the
-## name the script cues it with, the reader's first.
+## name the script cues it with, the reader's first, and what the note says of its deliveries (`deliveries`).
 
 ## The block this card keeps under a document's `ghost:` key.
 const KEY := "voice"
 
 var _cast: ReadingCast
 var _kept := {}     # with no cast, the block as it was handed over, so a capture never blanks it
+var _deliveries: DeliverySection
 
 
 ## This card for a reading's panel, from what the panel says of itself ([method NoteCards.make]): the
@@ -38,6 +42,15 @@ func _init(cast: ReadingCast) -> void:
 		return
 	cast.build_cast(self)
 	cast.build_voice(self)
+	var head := Label.new()
+	head.text = "Deliveries"
+	head.add_theme_font_size_override("font_size", 12)
+	head.tooltip_text = ("How the script's words are said: every delivery and act it says ([words]{terms}, <!-- delivery: -->), each "
+		+ "heard, shaped and refined in its Lab, set aside or said stronger here, and kept for every note.")
+	head.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(head)
+	_deliveries = DeliverySection.new(cast)
+	add_child(PropsCard.new(func() -> Array: return [_deliveries]))
 
 
 ## The cast's block - or, on a panel with no cast, the block exactly as it came: a card that cannot

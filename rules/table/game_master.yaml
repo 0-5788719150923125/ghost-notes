@@ -193,9 +193,11 @@ pictures:
       TONIGHT'S PICTURES ARE TALL, shown on a phone held upright: keep a picture to one or two of the cast, and bring the camera close often.
 
 spoken: >-
-  EVERY WORD YOU `say` IS SPOKEN ALOUD BY A VOICE, word for word: no stage directions, no brackets, no sound effects, no emoji, and no laughing written out, which no voice does well. A reaction is
-  words. Write numbers the way they are said. Short lines; people interrupt. A single asterisk around one word leans on it, and now and then a line can open with <!-- delivery: hushed --> or another of
-  quicker, slower, louder, softer, excited, serious, urgent, playful, tender, dry, or hold with <!-- hesitation -->, very rarely. A chapter of the video may begin at a line where the night turns (its `chapter`): name it as a viewer would look for it.
+  EVERY WORD YOU `say` IS SPOKEN ALOUD BY A VOICE, word for word: no stage directions, no sound effects, no emoji, and no laughing written out, which no voice does well. A reaction is
+  words. Write numbers the way they are said. Short lines; people interrupt. A single asterisk around one word leans on it. Now and then a line can say how it is said: a mark of its own before it, <!-- delivery: terms -->,
+  or a few words in square brackets with the terms in braces after them, [words]{terms} - the only brackets a line may hold. The terms come from these lists, each with a degree if it needs one (a little, very), a rest or an axis with its number as the list says:
+  {{deliveries}}
+  `delivery` tells you what terms would do before you write them. Or hold with <!-- hesitation -->, very rarely. A chapter of the video may begin at a line where the night turns (its `chapter`): name it as a viewer would look for it.
   American English, always.
 
 # THE PREPARATION, before anyone sits down: secret, and thrown away by play (TableProducer._make_prep; GameTools with its own two tools). Not the story, which nobody knows yet: a world that goes on doing what it wants

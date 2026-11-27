@@ -200,26 +200,65 @@ def voicing() -> None:
 
 
 def script() -> None:
+    """A script's acts (next/delivery.md): `none` on every word of its run, a contour on the run's last word, as
+    delivery_bank.gd lays them."""
     told = words("am I fired?")
     for t in told:
-        t["inflect"] = "none"
+        t["acts"] = [["none", 1.0]]
     check(inflection.plan(told, True) == {}, "a question the script says to inflect none does not rise")
     check(bool(inflection.plan(words("am I fired?"), True)), "...and unmarked, it does (the control)")
     lean = words("I said *she* did.")
-    lean[2]["inflect"] = "none"
+    lean[2]["acts"] = [["none", 1.0]]
     check(inflection.plan(lean, True) == {}, "a leaned-on word the script says to inflect none is not accented")
     wh = tagged("then/RB who/WP did/VBD I/PRP flash/VB?")
     check(inflection.plan(wh, True) == {}, "a wh-question falls (the control)")
-    for t in wh:
-        t["inflect"] = "rise"
+    wh[4]["acts"] = [["rise", 1.0]]
     up = inflection.plan(wh, True)
-    check(list(up) == [4] and up[4].pitch[-1][1] == 6.0, "...and rises on its last word where the script says rise")
+    check(list(up) == [4] and up[4].shapes()[0][-1][1] == 6.0, "...and rises on its last word where the script says rise")
     run = words("he went home and slept.")
-    for t in run[:3]:
-        t["inflect"] = "rise"
+    run[2]["acts"] = [["rise", 1.0]]
     check(list(inflection.plan(run, True)) == [2], "a rise run rises on its own last word, mid-sentence")
     some = inflection.plan(wh, {"question": {"rise": 3.0}})
-    check(some[4].pitch[-1][1] == 3.0, "...by the question rule's fields as set")
+    check(some[4].shapes()[0][-1][1] == 3.0, "...by the question rule's fields as set")
+
+
+def delivered() -> None:
+    """What a word's `x` and acts make of it: a contour replaces the rules' marks (a question told to fall falls), the
+    timing acts and the axes ride on the Mark, and a word with neither is left alone (the control)."""
+    q = words("am I fired?")
+    q[2]["acts"] = [["fall", 1.0]]
+    m = inflection.plan(q, True)
+    check(list(m) == [2] and m[2].shapes()[0][-1][1] < 0.0, "a question the script says falls does not fall")
+    d = words("a frog and five arrows.")
+    d[2]["acts"] = [["drawn", 1.0], ["held", 1.0]]
+    d[3]["x"] = {"pitch": 2.0, "rate": 1.25, "range": 0.5, "tremor": 0.4, "push": 0.6, "breath": -0.2, "precision": 0.5}
+    m = inflection.plan(d, True)
+    check(2 in m and abs(m[2].drawn - inflection.DRAWN_SECONDS) < 1e-9 and m[2].flatten == 1.0,
+          "a drawn, held word is not drawn at a level pitch")
+    check(3 in m and m[3].level == 2.0 and abs(m[3].pace - 0.8) < 1e-9 and m[3].range == 0.5 and m[3].tremor == 0.4
+          and m[3].push == 0.6 and m[3].breath == -0.2 and m[3].precision == 0.5 and m[3].pitched(),
+          "a word's axis values do not ride on its Mark")
+    check(0 not in m and 1 not in m and 4 not in m, "words a script says nothing of are marked (the control)")
+    c = words("I came home.")
+    c[1]["acts"] = [["cut off", 1.0]]
+    c[2]["acts"] = [["clipped", 1.0]]
+    m = inflection.plan(c, False)
+    check(m[1].cut and m[2].clip and not m[1].pitched(), "cut off and clipped are not said, or move the pitch")
+    import numpy as np
+    # range scales the model's own swing about the call's mean, and tremor shakes it, where nothing else moves it
+    owners, frames, sounds = [-1, 0, 0, 1, 1, -1], [2, 4, 4, 4, 4, 2], [False, True, True, True, True, False]
+    steps = sum(frames) * 2
+    f0 = 200.0 * 2.0 ** (np.sin(np.arange(steps) / 6.0) * 4.0 / 12.0)
+    wide = inflection.curve({0: inflection.Mark(range=2.0), 1: inflection.Mark(range=2.0)}, owners, frames, sounds, None, f0)
+    flat = inflection.curve({0: inflection.Mark(range=0.0), 1: inflection.Mark(range=0.0)}, owners, frames, sounds, None, f0)
+    swing = lambda k: float(np.ptp(np.log2(f0[4:steps - 4] * k[4:steps - 4])))
+    check(wide is not None and flat is not None and swing(wide) > swing(np.ones(steps)) > swing(flat),
+          "range does not widen and narrow the model's own swing")
+    shaken = inflection.curve({0: inflection.Mark(tremor=1.0), 1: inflection.Mark(tremor=1.0)}, owners, frames, sounds)
+    check(shaken is not None and float(np.ptp(12.0 * np.log2(shaken))) > 1.0,
+          "a tremor does not shake the pitch")
+    check(inflection.curve({0: inflection.Mark(range=2.0)}, owners, frames, sounds) is None,
+          "range moves the pitch with no planned pitch to scale (the control)")
 
 
 if __name__ == "__main__":
@@ -229,5 +268,6 @@ if __name__ == "__main__":
     curves()
     voicing()
     script()
+    delivered()
     print(f"\n{len(FAILS)} failed" if FAILS else "\nall passed")
     raise SystemExit(1 if FAILS else 0)

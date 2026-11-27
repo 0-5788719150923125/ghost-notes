@@ -439,9 +439,17 @@ once a note, `fade_at`). More heard far ahead of the playhead changes nothing se
 waits until the reading comes within a minute of what the plan knows: a paused reading making fifteen minutes of
 voice makes the plan a handful of times, not once a sentence. A render and a gate make it at once.
 
+**On the graphics card** (GPU on the Voice row, `VoiceHost.set_gpu`, the machine's `voice` / `gpu` setting, off by
+default): the host runs from a second environment, `voice_gpu_venv` (hosts/voice/requirements_gpu.txt: onnxruntime-gpu
+with NVIDIA's CUDA and cuDNN wheels, about 1.5 GB, installed the first time it is asked for), with `--gpu`; every session
+that makes sound opens through `backends.open_session`, CUDA first. Measured on an RTX 5060 Ti: a 4.9 s Kokoro sentence
+3.0-3.6 s on the processor, 0.24-0.35 s on the card; a moving blend 7.0 s and 0.5-0.65 s; the same voice (lengths
+within 1 ms, spectrograms correlating 0.99, TF32 off). Kokoro's STFT has no CUDA kernel and stays on the processor (a
+third of a call); written as a convolution it was faster but not the same voice. Where the card is asked for and cannot
+be used, the capabilities reply says why (`device_why`) and GPU's tooltip says it.
+
 **Faster still, not done:** the int8 graph (`model_quantized.onnx`, smaller and quicker on a processor, some
-quality lost: to be heard first), or the graphics card (onnxruntime's CUDA build: tens of times real time, but
-gigabytes of CUDA libraries in the voice environment, which is kept small on purpose).
+quality lost: to be heard first).
 
 ### One-word sentences (2026-10-25, late)
 

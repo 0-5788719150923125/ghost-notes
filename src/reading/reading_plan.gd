@@ -46,6 +46,8 @@ const PARA_CEILING := 8
 ## How many of the last words of the sentence before a chunk it carries (`before`, [method lead_ins]): a voice that
 ## reads them first comes into the sentence as one in a paragraph does. One is too few for Kokoro to rest after.
 const BEFORE_WORDS := 3
+## The shortest hesitation said (seconds): a delivery that shortens one below it takes it out.
+const HESITATION_LEAST := 0.04
 ## What of a token the words before carry: how it is said, never how it is delivered.
 const BEFORE_KEYS := ["text", "cased", "punct", "fallback", "arpa", "say", "rare"]
 ## The estimate the scrub bar is laid out by: a reading pace, plus every rest at its own length.
@@ -66,6 +68,7 @@ static func make(body: String, title: String, ask: Dictionary, from_sentence := 
 	var out: Array = []
 	var sentence_no := from_sentence
 	var bare: PackedStringArray = PackedStringArray()
+	var unknown: Array = []
 	for seg in passages(body, title, ask):
 		var text := String((seg as Dictionary)["text"])
 		var who := String((seg as Dictionary)["speaker"])
@@ -77,6 +80,24 @@ static func make(body: String, title: String, ask: Dictionary, from_sentence := 
 		sentence_no = int(part["sentence_no"])
 		if chunks.is_empty():
 			continue
+		# its stretches laid over its words: each token's axis values and acts ([DeliveryBank])
+		var toks: Array = []
+		for c in chunks:
+			toks.append_array((c as Dictionary)["tokens"])
+		DeliveryBank.resolve(toks, (seg as Dictionary).get("spans", []))
+		# ...and each hesitation as long as the delivery of the word it follows says ([method DeliveryBank.rest_of])
+		for c in chunks:
+			_rested(c)
+		# ...and a word a delivery hits shown as hit, as `*word*` is
+		for c in chunks:
+			var ts: Array = (c as Dictionary)["tokens"]
+			for w in (c as Dictionary)["words"]:
+				var at_ := int((w as Dictionary).get("index", -1))
+				if at_ >= 0 and at_ < ts.size():
+					(w as Dictionary)["emph"] = maxi(int((w as Dictionary).get("emph", 0)), int((ts[at_] as Dictionary).get("emph", 0)))
+		for u in (seg as Dictionary).get("unknown", []):
+			if not unknown.has(String(u)):
+				unknown.append(String(u))
 				# Placement is per passage: a speaker's turn is its own piece of discourse, opening in its own register, so
 				# measuring it against the whole chapter would hand the second voice the contour of a paragraph it is not in.
 		place(chunks, text)
@@ -97,9 +118,7 @@ static func make(body: String, title: String, ask: Dictionary, from_sentence := 
 				for w in head.get("words", []):
 					(w as Dictionary)["sentence"] = prev_sentence
 		var fade := bool((seg as Dictionary).get("fade", false))
-		var leans: Array = (seg as Dictionary).get("leans", [])
 		var heard := String((seg as Dictionary).get("heard", ""))
-		var cursor := 0
 		for c in chunks:
 			(c as Dictionary)["speaker"] = who
 			if fade:
@@ -107,29 +126,16 @@ static func make(body: String, title: String, ask: Dictionary, from_sentence := 
 						# ...heard through what its turn says ([constant Manuscript.HEARD]): every chunk of it
 			if not heard.is_empty():
 				(c as Dictionary)["heard"] = heard
-						# A chunk's delivery is the one marked where its first word is in the passage
-			var aim := Vector4.ZERO
-			if not leans.is_empty():
-				var first := ""
-				for w in (c as Dictionary)["words"]:
-					first = String((w as Dictionary).get("text", "")).strip_edges()
-					if not first.is_empty():
-						break
-				var found := text.find(first, cursor) if not first.is_empty() else -1
-				if found >= 0:
-					cursor = found + first.length()
-				for sp in leans:
-					if int((sp as Array)[0]) <= (found if found >= 0 else cursor):
-						aim = (sp as Array)[1]
-			(c as Dictionary)["lean_aim"] = aim
 		out.append_array(chunks)
-	Delivery.ease_leans(out)
 	var trimmed := trim_to_outro(out, float(ask.get("outro", 0.0)))
 		# what the script needs fixing, for the line someone is looking at with their hand on Play: TextNorm has already
 		# warned into the log, but a macro with no default is words missing from a reading about to be made
 	var note := ""
 	if not bare.is_empty():
 		note = "%d macro(s) will not read as intended: %s - write ${NAME:value}" % [bare.size(), ", ".join(bare)]
+	if not unknown.is_empty():
+		var said := "%d delivery word(s) no delivery knows, said as nothing: %s" % [unknown.size(), ", ".join(PackedStringArray(unknown))]
+		note = said if note.is_empty() else note + "; " + said
 	return {"chunks": trimmed["chunks"], "note": note, "fade": trimmed["fade"], "sentences": sentence_no}
 
 
@@ -141,7 +147,7 @@ static func said_in(source: String) -> Dictionary:
 	return said
 
 
-## Split a script into passages by speaker: `[{speaker, text, fade, leans, holds, said}]` - `said` every word a `say:` mark has
+## Split a script into passages by speaker: `[{speaker, text, fade, spans, unknown, holds, said}]` - `said` every word a `say:` mark has
 ## told so far ([constant Manuscript.SAY]). Text before the first cue
 ## (and a script with no cues at all) is the reader's ([param ask] `reader`).
 ##
@@ -153,6 +159,7 @@ static func said_in(source: String) -> Dictionary:
 ## passage after it.
 static func passages(body: String, title: String, ask: Dictionary) -> Array:
 	var kept: Array = []
+	body = Manuscript.delivered_as_marks(body)
 	var on := bool(ask.get("hesitate", true))
 	var bare := float(ask.get("bare", 0.0))
 	var reader := String(ask.get("reader", Manuscript.NARRATOR))
@@ -164,6 +171,9 @@ static func passages(body: String, title: String, ask: Dictionary) -> Array:
 	# every word a `say:` mark has told so far, as its phones ([constant Manuscript.SAY]): the note's own (a medium's walk hands
 	# on only what is spoken, its marks gone), and any in the text read
 	var said: Dictionary = (ask.get("said", {}) as Dictionary).duplicate()
+	# the deliveries the note says its own way (the Voice card's, [method DeliveryBank.defs_for]), then its own named ones, as each
+	# is met ([method resolve_marks])
+	var defs := DeliveryBank.defs_for(ask.get("deliveries", {}) if ask.get("deliveries") is Dictionary else {})
 	# whether the passage before ended its paragraph: a blank line before a cue leaves it ending on a line break (the cue's own line
 	# takes the last), and the next one then begins a paragraph - as one with a blank line after its cue does
 	var broke := false
@@ -207,79 +217,154 @@ static func passages(body: String, title: String, ask: Dictionary) -> Array:
 				if om2 != null:
 					over = float(om2.get_string(1)) if not om2.get_string(1).is_empty() else Manuscript.OVER_BARE
 				together = Manuscript._rx(Manuscript.TOGETHER).search(String(parts[k])) != null
-			var res := resolve_marks(String(parts[k]), on, bare)
+			var res := resolve_marks(String(parts[k]), on, bare, defs)
 			var out := String(res["text"])
 			# A passage of nothing but hesitations: its rests would have no word to sit on.
 			if not out.replace(TextNorm.HOLD_MARK, "").strip_edges().is_empty():
 				kept.append({"speaker": reader if name == Manuscript.NARRATOR else name, "text": out,
-					"fade": fading, "leans": res["leans"], "holds": res["holds"], "over": over, "together": together,
+					"fade": fading, "spans": res["spans"], "unknown": res["unknown"], "holds": res["holds"], "over": over, "together": together,
 					"heard": heard, "said": said, "para": opens and k == 0})
 		# A tablet's opening run (wake, open the browser, type) comes after the intro, end to end: the intro is the
 		# tablet lying dark on the desk, and its rest is the run's own
 	return kept
 
 
-## A passage's marks resolved: `{text, holds, leans}`. Every hesitation (and the tablet's action rests) becomes a
+## Chunk [param c]'s hesitations each as long as the delivery of the word it follows says (its `hesitations`, its `pauses`, or
+## their seconds; [method DeliveryBank.rest_of]): the rest spliced in (`holds`) and the voice told of it on that word
+## (`rest_after`) together. One said near nothing is no rest at all, and the voice reads straight on.
+static func _rested(c: Dictionary) -> void:
+	var ts: Array = c.get("tokens", [])
+	for h in c.get("holds", []):
+		var hd: Dictionary = h
+		if hd.has("hum") or float(hd.get("sec", 0.0)) <= 0.0:
+			continue
+		var at := int(hd.get("tok", -1))
+		var before := bool(hd.get("before", false))
+		var owner := at - 1 if before and at > 0 else at
+		if owner < 0 or owner >= ts.size():
+			continue
+		var was := float(hd["sec"])
+		var now := DeliveryBank.rest_of(ts[owner], "hesitations", was)
+		if now < HESITATION_LEAST:
+			now = 0.0
+		if is_equal_approx(now, was):
+			continue
+		hd["sec"] = now
+		var told := at - 1 if before else at
+		if told >= 0 and told < ts.size():
+			var t: Dictionary = ts[told]
+			var left := maxf(0.0, float(t.get("rest_after", 0.0)) - was + now)
+			if left > 0.0:
+				t["rest_after"] = left
+			else:
+				t.erase("rest_after")
+
+
+## A passage's marks resolved: `{text, holds, spans, unknown}`. Every hesitation (and the tablet's action rests) becomes a
 ## [constant TextNorm.HOLD_MARK] welded to the word before it (or leading the next, when nothing precedes it), with
-## its length in `holds`; a delivery mark is noted where it falls in `leans` (see [method Delivery.leans_of]); an
-## inflection mark's run has its sentinel ([constant TextNorm.INFLECTS]) welded to its first word and its last; every
-## other comment goes.
-static func resolve_marks(t: String, on: bool, bare: float) -> Dictionary:
-	var out := ""
-	var at := 0
+## its length in `holds`. Every delivery (`<!-- delivery: -->`, `<!-- inflect: -->`, and `[words]{terms}` already made
+## one by [method Manuscript.delivered_as_marks]) is a stretch in `spans` (`{id, d, closed}`, [DeliveryBank]) with
+## its slot's sentinels welded to its first word and its last ([constant TextNorm.DELIVERY_OPEN]): a closed one ends at
+## its `<!-- /delivery -->`, one with none at its paragraph's end or the next such mark. A mark naming a delivery of
+## the note's own goes into [param defs]. A term no delivery knows is in `unknown`. Every other comment goes.
+static func resolve_marks(t: String, on: bool, bare: float, defs: Dictionary = {}) -> Dictionary:
 	var holds: Array = []
-	var leans: Array = []
 	var re := Manuscript._rx(Manuscript.COMMENT)
 	var hes := Manuscript._rx(Manuscript.HESITATION)
-	var lean_re := Manuscript._rx(Manuscript.DELIVERY)
+	var dv_re := Manuscript._rx(Manuscript.DELIVERY)
+	var end_re := Manuscript._rx(Manuscript.DELIVERY_END)
 	var inflect_re := Manuscript._rx(Manuscript.INFLECT)
-	var opening := ""          # an inflection mark's sentinel, welded to the next word written
-	var open_kinds: Array = []  # the inflection marks open, innermost last
-	for m in re.search_all(t):
-		var welded := _weld_ahead(t.substr(at, m.get_start() - at), opening)
-		out += String(welded[0])
-		opening = String(welded[1])
-		at = m.get_end()
-				# How the words it wraps are inflected ([constant Manuscript.INFLECT]): the run's sentinel welded to its first
-				# word and again to its last, toggles as emphasis is ([method Phonemes.parse])
-		var im := inflect_re.search(m.get_string())
+	var marks := re.search_all(t)
+	# which marks open a closed stretch: each end pairs with the nearest open before it not yet paired, an inflection
+	# mark's with its own kind
+	var closed := {}
+	var opens_d: Array = []
+	var opens_i: Array = []
+	for i in marks.size():
+		var c := (marks[i] as RegExMatch).get_string()
+		if end_re.search(c) != null:
+			if not opens_d.is_empty():
+				closed[opens_d.pop_back()] = true
+			continue
+		var lm := dv_re.search(c)
+		if lm != null and not lm.get_string(1).contains("="):
+			opens_d.append(i)
+			continue
+		var im := inflect_re.search(c)
 		if im != null:
 			if im.get_string(1).is_empty():
-				var kind := im.get_string(2).to_lower()
-				if TextNorm.INFLECTS.has(kind):
-					open_kinds.append(kind)
-					opening += String(TextNorm.INFLECTS[kind])
-			elif not open_kinds.is_empty():
-				var mark := String(TextNorm.INFLECTS[open_kinds.pop_back()])
-				var pending := opening.find(mark)
-				if pending >= 0:
-					opening = opening.erase(pending, 1)  # opened and closed round no words: nothing
-				else:
-					var tail := out.rstrip(" \t\n")
-					out = tail + mark + out.substr(tail.length())
+				opens_i.append(i)
+			elif not opens_i.is_empty():
+				closed[opens_i.pop_back()] = true
+	for i in opens_i:
+		closed[i] = true          # an inflection mark never closed runs to the passage's end
+	var free: Array = []
+	for k in TextNorm.DELIVERY_SLOTS:
+		free.append(k)
+	var st := {"out": "", "opening": "", "pending": [], "free": free, "para": -1, "closing": [], "inflects": [],
+		"spans": [], "span_of": {}, "unknown": []}
+	var at := 0
+	for i in marks.size():
+		var m: RegExMatch = marks[i]
+		_text_piece(st, t.substr(at, m.get_start() - at))
+		at = m.get_end()
+		var c := m.get_string()
+		if end_re.search(c) != null:
+			if not (st["closing"] as Array).is_empty():
+				_close_stretch(st, int((st["closing"] as Array).pop_back()))
+			continue
+		var im := inflect_re.search(c)
+		if im != null:
+			if im.get_string(1).is_empty():
+				var slot := _open_stretch(st, DeliveryBank.parse(im.get_string(2)), true)
+				if slot >= 0:
+					(st["inflects"] as Array).append(slot)
+			elif not (st["inflects"] as Array).is_empty():
+				_close_stretch(st, int((st["inflects"] as Array).pop_back()))
+			continue
+		var lm := dv_re.search(c)
+		if lm != null:
+			var terms := lm.get_string(1)
+			if terms.contains("="):
+				# a delivery of the note's own: named here, said wherever its name is
+				var name := " ".join(terms.get_slice("=", 0).strip_edges().to_lower().split(" ", false))
+				var d := DeliveryBank.parse(terms.substr(terms.find("=") + 1), defs)
+				(st["unknown"] as Array).append_array(d["unknown"])
+				if not name.is_empty():
+					defs[name] = d
+				continue
+			var d := DeliveryBank.parse(terms, defs)
+			(st["unknown"] as Array).append_array(d["unknown"])
+			var slot := _open_stretch(st, d, closed.has(i))
+			if slot >= 0 and closed.has(i):
+				(st["closing"] as Array).append(slot)
 			continue
 				# The tablet's hand is not a hesitation: its rest is the time a tap or typed address takes, so it stays when the
 				# Hesitate box is off
-		var secs := TabletScript.hold_of(m.get_string())
+		var secs := TabletScript.hold_of(c)
 		if secs < 0.0:
-			var lm := lean_re.search(m.get_string())
-			if lm != null:
-				leans.append([out.length(), Delivery.lean_of(lm.get_string(1))])
-				continue
 			if not on:
 				continue
-			var hm := hes.search(m.get_string())
+			var hm := hes.search(c)
 			if hm == null:
 				continue             # an authoring note
 			var v := hm.get_string(1) if not hm.get_string(1).is_empty() else hm.get_string(2)
 			secs = clampf(float(v), 0.0, 30.0) if not v.is_empty() else bare
 				# Welded, never left standing: a sentinel alone between two spaces is a token of its own, and a non-word token
 				# confuses the sentence splitter. Trailing whitespace is stepped over so it lands after the previous word.
-		var head := out.rstrip(" \t\n")
-		out = head + TextNorm.HOLD_MARK + out.substr(head.length())
+		var o := String(st["out"])
+		var head := o.rstrip(" \t\n")
+		st["out"] = head + TextNorm.HOLD_MARK + o.substr(head.length())
 		holds.append(secs)
-	out += String(_weld_ahead(t.substr(at), opening)[0])
-	leans = Delivery.leans_of(out, leans)
+	_text_piece(st, t.substr(at))
+	# every stretch still open ends with the passage
+	for slot in (st["closing"] as Array).duplicate():
+		_close_stretch(st, int(slot))
+	for slot in (st["inflects"] as Array).duplicate():
+		_close_stretch(st, int(slot))
+	if int(st["para"]) >= 0:
+		_close_stretch(st, int(st["para"]))
+	var out := String(st["out"])
 		# Sentinels with nothing before them in the passage lead the next word instead: close the gap so they weld on.
 	var body_t := out.strip_edges()
 	var n := 0
@@ -288,25 +373,92 @@ static func resolve_marks(t: String, on: bool, bare: float) -> Dictionary:
 		body_t = body_t.substr(1).strip_edges(true, false)
 		# ...after a heading's `#`s, never before them: `#` is only markup at the start of a line, and a sentinel in
 		# front of it would leave "##" to be read as a word
-	var marks := ""
+	var lead := ""
 	if n > 0 and body_t.begins_with("#"):
 		var k := 0
 		while k < body_t.length() and body_t[k] == "#":
 			k += 1
-		marks = body_t.substr(0, k) + " "
+		lead = body_t.substr(0, k) + " "
 		body_t = body_t.substr(k).strip_edges(true, false)
-	var said := marks + TextNorm.HOLD_MARK.repeat(n) + body_t
-		# A delivery mark is where it falls in what is returned: it was noted in `out` before the passage's leading
-		# whitespace went, so it is shifted to match (tests/reading/multi_voice_check.gd).
-	var gone := out.strip_edges(false, true).length() - said.length()
-	if gone != 0:
-		for lean in leans:
-			(lean as Array)[0] = maxi(0, int((lean as Array)[0]) - gone)
-	return {"text": said, "holds": holds, "leans": leans}
+	var spans: Array = []
+	for sp in st["spans"]:
+		if not bool((sp as Dictionary).get("dead", false)):
+			spans.append(sp)
+	return {"text": lead + TextNorm.HOLD_MARK.repeat(n) + body_t, "holds": holds, "spans": spans,
+		"unknown": st["unknown"]}
 
 
-## [param piece] with [param opening] (an inflection mark's sentinels) welded to its first word, and what is left of
-## [param opening]: all of it where [param piece] has no word to weld to, for the next piece written.
+## A stretch opened ([method resolve_marks]): a free slot given it, its open sentinel waiting for the next word, and -
+## one to its paragraph's end - the one open before it ended here. The slot, or -1 when every slot is taken.
+static func _open_stretch(st: Dictionary, d: Dictionary, is_closed: bool) -> int:
+	if not is_closed and int(st["para"]) >= 0:
+		_close_stretch(st, int(st["para"]))
+	var free: Array = st["free"]
+	if free.is_empty():
+		return -1
+	var slot := int(free.pop_front())
+	(st["span_of"] as Dictionary)[slot] = (st["spans"] as Array).size()
+	(st["spans"] as Array).append({"id": slot, "d": d, "closed": is_closed})
+	st["opening"] = String(st["opening"]) + TextNorm.delivery_end(slot, false)
+	(st["pending"] as Array).append(slot)
+	if not is_closed:
+		st["para"] = slot
+	return slot
+
+
+## A stretch ended: its close sentinel welded to the last word written, or - where its open still waits for a word - the
+## stretch dropped, its open taken back. Its slot is free again.
+static func _close_stretch(st: Dictionary, slot: int) -> void:
+	var pending: Array = st["pending"]
+	if pending.has(slot):
+		pending.erase(slot)
+		st["opening"] = String(st["opening"]).replace(TextNorm.delivery_end(slot, false), "")
+		var at := int((st["span_of"] as Dictionary).get(slot, -1))
+		if at >= 0:
+			((st["spans"] as Array)[at] as Dictionary)["dead"] = true
+	else:
+		var o := String(st["out"])
+		var tail := o.rstrip(" \t\n")
+		st["out"] = tail + TextNorm.delivery_end(slot, true) + o.substr(tail.length())
+	if int(st["para"]) == slot:
+		st["para"] = -1
+	(st["closing"] as Array).erase(slot)
+	(st["inflects"] as Array).erase(slot)
+	var free: Array = st["free"]
+	free.append(slot)
+	free.sort()
+
+
+## A run of text between marks written ([method resolve_marks]): the stretches waiting for a word opened on its first,
+## and a stretch to its paragraph's end closed where the paragraph ends in it.
+static func _text_piece(st: Dictionary, piece: String) -> void:
+	var opening := String(st["opening"])
+	var from := 0
+	if not opening.is_empty():
+		var welded := _weld_ahead(piece, opening)
+		if String(welded[1]).is_empty():
+			from = String(welded[0]).find(opening) + opening.length()
+			piece = String(welded[0])
+			st["opening"] = ""
+			(st["pending"] as Array).clear()
+	if int(st["para"]) >= 0 and not (st["pending"] as Array).has(int(st["para"])):
+		var j := piece.find("\n\n", from)
+		if j >= 0:
+			var head := piece.substr(0, j).rstrip(" \t\n")
+			if head.strip_edges().is_empty() or head.length() < from:
+				_close_stretch(st, int(st["para"]))
+			else:
+				var slot := int(st["para"])
+				piece = head + TextNorm.delivery_end(slot, true) + piece.substr(head.length())
+				st["para"] = -1
+				var free: Array = st["free"]
+				free.append(slot)
+				free.sort()
+	st["out"] = String(st["out"]) + piece
+
+
+## [param piece] with [param opening] (the delivery stretches' open sentinels) welded to its first word, and what is left
+## of [param opening]: all of it where [param piece] has no word to weld to, for the next piece written.
 static func _weld_ahead(piece: String, opening: String) -> Array:
 	if opening.is_empty():
 		return [piece, ""]
@@ -408,9 +560,11 @@ static func cut(body: String, sentence_no: int, holds: Array = [], said := {}) -
 						# lifts the word a little (piper.py `EMPHASIS`). Sent only when set.
 			if stressed_at.has(flat):
 				tok["emph"] = int(stressed_at[flat])
-						# ...and inflected as an inflection mark says (hosts/voice/inflection.py): sent only when set
-			if w.has("inflect"):
-				tok["inflect"] = String(w["inflect"])
+						# ...and the delivery stretches it is in, for [method make] to lay out ([DeliveryBank]): never sent
+			if w.has("dv"):
+				tok["_dv"] = w["dv"]
+			if w.has("dv_new"):
+				tok["_dvn"] = w["dv_new"]
 			toks.append(tok)
 						# One subtitle entry per source run: `2009` is three spoken words and one thing on the page, so the
 						# words after the first in a rewritten run extend this one's end and the highlight sweeps across all

@@ -24,6 +24,10 @@ godot --headless --path . -- --provision mathlib # Lean and Mathlib, for a table
 - **Python**, ~35 MB - The interpreter every environment below runs on: CPython's newest patch of the version Ghost Notes targets, installed by uv into its own directory - never onto PATH or into the system.
 - **Voice environment**, ~320 MB - onnxruntime, numpy and the eSpeak phonemizer for the Generative voice. Built the first time you open Generative.
   - Not on Intel Macs: onnxruntime publishes no build for Intel Macs.
+- **Voice environment (graphics card)**, ~1.5 GB, ~2.5 GB installed - The voice environment with onnxruntime's CUDA build and NVIDIA's CUDA and cuDNN libraries, so Kokoro and Piper voices are made on an NVIDIA graphics card (one whose driver speaks CUDA 13). Built the first time the Voice card's graphics card setting is ticked; the voice falls back to the processor where the card cannot run it.
+  - Not on Apple silicon Macs: CUDA does not run on a Mac.
+  - Not on Intel Macs: CUDA does not run on a Mac.
+  - Not on Windows on ARM: onnxruntime publishes no CUDA build for Windows on ARM.
 - **Download environment**, ~140 MB - yt-dlp, for importing a clip straight from a URL, with Deno to answer YouTube's download challenges (without one, imports crawl at YouTube's punitive throttle). Built the first time you paste a URL into the notes list's field.
   - Not on Windows on ARM: yt-dlp's brotli dependency has no Windows-on-ARM build.
 - **Page-capture environment**, ~150 MB, and Chromium ~170 MB - Playwright and its Chromium, for the tablet medium's REAL pages: a url the chapter writes nothing under is captured from the web once, as a picture. Built the first time you press Capture on one.

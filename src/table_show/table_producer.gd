@@ -819,6 +819,9 @@ func _plan() -> Dictionary:
 	var p: Variant = episode.read_json("plan")
 	if not (p is Dictionary):
 		return {}
+	# ...the deliveries its script may say, as the note's Voice card has them ([method ReadingPanel.delivery_told])
+	if not String(spec.get("deliveries", "")).is_empty():
+		(p as Dictionary)["deliveries_told"] = String(spec["deliveries"])
 	# ...what is being built, for everyone after whoever designed it ([method TableEpisode.model_words])
 	var words := episode.model_words()
 	if not words.is_empty():
@@ -3532,7 +3535,7 @@ func _reader_name() -> String:
 ## other is dropped as any mark is. A chapter the reader names (`<!-- chapter: name -->`) stays, its name one line: the export
 ## times it from the take ([method CardReading.chapters]).
 static func voice_marks_only(text: String, acts: Array = []) -> String:
-	var keep := [Manuscript._rx(Manuscript.DELIVERY), Manuscript._rx(Manuscript.HESITATION),
+	var keep := [Manuscript._rx(Manuscript.DELIVERY), Manuscript._rx(Manuscript.DELIVERY_END), Manuscript._rx(Manuscript.HESITATION),
 		Manuscript._rx(Manuscript.SPEAKER), Manuscript._rx(CardReading.QUIET_MARK)]
 	var cue := Manuscript._rx(CardReading.ACT_MARK)
 	var chapter := Manuscript._rx(CardReading.CHAPTER_MARK)
@@ -3613,7 +3616,8 @@ static func own_voices(text: String, voices: Array, reader := "") -> String:
 
 
 static func clean_spoken(text: String, acts: Array = []) -> String:
-	var t := voice_marks_only(text.strip_edges(), acts)
+	# words said a way (`[words]{terms}`) are a delivery round them before any bracket is taken as a direction
+	var t := voice_marks_only(Manuscript.delivered_as_marks(text.strip_edges()), acts)
 	if t.length() >= 2 and t.begins_with("\"") and t.ends_with("\""):
 		t = t.substr(1, t.length() - 2)
 	var keep := PackedStringArray()

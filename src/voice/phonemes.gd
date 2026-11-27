@@ -212,9 +212,11 @@ static func parse(text: String, said := {}) -> Array:
 	# The emphasis level in force. The sentinels TextNorm leaves are toggles welded to the word at each
 	# end of a run, so this carries the level across everything between.
 	var emph_state := 0
-	# The inflection in force (`<!-- inflect: none -->`, [constant TextNorm.INFLECTS]'s kinds, "" none): toggled by the
-	# sentinels welded to the words at each end of a run, as emphasis is.
-	var inflect_state := ""
+	# The delivery stretches in force, by slot ([constant TextNorm.DELIVERY_OPEN]): opened by the sentinel welded before a
+	# stretch's first word, closed by the one after its last. A word is in every stretch open when its letters come,
+	# and opens those whose sentinel it carries (`dv_new`, kept for the next word where a token makes none).
+	var dv_state: Array = []
+	var dv_new: Array = []
 	# Hesitation sentinels peeled off the current token, not yet given to a word.
 	var hold_acc := {"lead": 0, "tail": 0, "count": 0, "carry": 0}
 	for ti in toks.size():
@@ -225,22 +227,26 @@ static func parse(text: String, said := {}) -> Array:
 		# is known whether it produced one - see [method _settle_holds].
 		_settle_holds(words, sentences, hold_acc)
 		var emph := emph_state
-		var inflect := inflect_state
-		if token.contains(TextNorm.EMPH_ITALIC) or token.contains(TextNorm.EMPH_BOLD) \
-				or token.contains(TextNorm.HOLD_MARK) or token.contains(TextNorm.INFLECT_NONE) \
-				or token.contains(TextNorm.INFLECT_RISE):
+		var dv: Array = dv_state.duplicate()
+		var closing: Array = []
+		if _sentinelled(token):
 			var clean := ""
 			var seen := 0
-			inflect = ""
+			var lettered := false
 			for ci in token.length():
 				var ech := token[ci]
+				var code := token.unicode_at(ci)
 				if ech == TextNorm.EMPH_ITALIC:
 					emph_state ^= TextNorm.EMPH_I
 				elif ech == TextNorm.EMPH_BOLD:
 					emph_state ^= TextNorm.EMPH_B
-				elif ech == TextNorm.INFLECT_NONE or ech == TextNorm.INFLECT_RISE:
-					var kind := "none" if ech == TextNorm.INFLECT_NONE else "rise"
-					inflect_state = "" if inflect_state == kind else kind
+				elif code >= TextNorm.DELIVERY_OPEN and code < TextNorm.DELIVERY_OPEN + TextNorm.DELIVERY_SLOTS:
+					var slot := code - TextNorm.DELIVERY_OPEN
+					if not dv_state.has(slot):
+						dv_state.append(slot)
+					dv_new.append(slot)
+				elif code >= TextNorm.DELIVERY_CLOSE and code < TextNorm.DELIVERY_CLOSE + TextNorm.DELIVERY_SLOTS:
+					closing.append(code - TextNorm.DELIVERY_CLOSE)
 				elif ech == TextNorm.HOLD_MARK:
 					# Before any letter it is a rest BEFORE this word, after one a rest after it.
 					if clean.strip_edges().is_empty():
@@ -249,11 +255,16 @@ static func parse(text: String, said := {}) -> Array:
 						hold_acc["tail"] = int(hold_acc["tail"]) + 1
 				else:
 					seen |= emph_state
-					if not inflect_state.is_empty():
-						inflect = inflect_state
+					if not lettered and not ech.strip_edges().is_empty():
+						lettered = true
+						dv = dv_state.duplicate()
 					clean += ech
 			token = clean
 			emph = seen
+			if not lettered:
+				dv = dv_state.duplicate()
+			for slot in closing:
+				dv_state.erase(slot)
 		# which source run this token is part of: a rewritten run covers one or more tokens ("two
 		# thousand nine") and the reader is shown its source spelling once, over the whole run, so the
 		# first token of a run carries the source and the rest nothing to draw. `src_span` groups them
@@ -273,8 +284,7 @@ static func parse(text: String, said := {}) -> Array:
 		if token.begins_with("["):
 			var lit := _literal_word(token)
 			lit["emph"] = emph
-			if not inflect.is_empty():
-				lit["inflect"] = inflect
+			_delivered(lit, dv, dv_new)
 			words.append(lit)
 			continue
 		var pause := "none"
@@ -306,8 +316,7 @@ static func parse(text: String, said := {}) -> Array:
 			words.append({"text": "…", "display": "…", "phones": ["AH", "M"],
 				"stressed": false, "pause_after": pause, "punct": punct, "hesit": true,
 				"emph": emph})
-			if not inflect.is_empty():
-				(words[words.size() - 1] as Dictionary)["inflect"] = inflect
+			_delivered(words[words.size() - 1], dv, dv_new)
 			if pause == "stop" and words.size() > 0 and _ends_sentence(toks, ti):
 				sentences.append(words)
 				words = []
@@ -388,9 +397,8 @@ static func parse(text: String, said := {}) -> Array:
 					entry["literal"] = true
 					if told.has("ipa"):
 						entry["say"] = String(told["ipa"])
-				# how the words an inflection mark wraps are inflected ([constant TextNorm.INFLECTS])
-				if not inflect.is_empty():
-					entry["inflect"] = inflect
+				# the delivery stretches it is in, and those it opens ([DeliveryBank])
+				_delivered(entry, dv, dv_new)
 				words.append(entry)
 		if pause == "stop" and words.size() > 0 and _ends_sentence(toks, ti):
 			sentences.append(words)
@@ -400,6 +408,24 @@ static func parse(text: String, said := {}) -> Array:
 		sentences.append(words)
 	_pin_words(sentences)
 	return sentences
+
+
+## Whether [param token] carries any sentinel ([constant TextNorm.SENTINELS]).
+static func _sentinelled(token: String) -> bool:
+	for i in token.length():
+		if TextNorm.is_sentinel(token.unicode_at(i)):
+			return true
+	return false
+
+
+## The delivery stretches [param word] is in ([param dv], by slot) and those it opens, taken from [param opened] (which
+## is then emptied: a stretch opens on the first word made after its sentinel).
+static func _delivered(word: Dictionary, dv: Array, opened: Array) -> void:
+	if not dv.is_empty():
+		word["dv"] = dv.duplicate()
+	if not opened.is_empty():
+		word["dv_new"] = opened.duplicate()
+		opened.clear()
 
 
 ## Give the hesitations peeled off the last token to a word. A token appends at most one word, so

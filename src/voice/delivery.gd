@@ -3,8 +3,8 @@ class_name Delivery
 
 ## Delivery - how one voice's settings become what the voice host is asked for and what its room is
 ## dialed to: the tone presets, the pause curve and the rests at a seam and a handover, the stress a run
-## of italics gets, the leans a delivery mark asks for, eased sentence by sentence, and the request for
-## one chunk in one voice. A slot is one voice's settings ([constant ReadingPanel.SLOT_DEFAULTS]);
+## of italics gets, and the request for one chunk in one voice. How a script's delivery marks move the words
+## is [DeliveryBank]'s, carried on each token (`x`, `acts`). A slot is one voice's settings ([constant ReadingPanel.SLOT_DEFAULTS]);
 ## everything here is a function of a slot and a chunk.
 ##
 ## One copy of every rule (next/structure.md): the live window, the audition and the export all read a
@@ -36,35 +36,9 @@ const MAX_TURN_SCALE := 6.0
 const TURN_CEILING := 4.0
 
 
-## The delivery a script marks (`<!-- delivery: quicker, brighter -->`, [constant Manuscript.DELIVERY]):
-## each word a step on four axes - pace, brightness (a touch higher, livelier, more effort), pauses (+ is
-## longer) and volume (effort alone, no pitch) - and the intents a reader has as small combinations of
-## them. `steady` is the voice's own. Steps add, at most two each way.
-const DELIVERY_WORDS := {
-	"quicker": Vector4(1, 0, 0, 0), "faster": Vector4(1, 0, 0, 0), "slower": Vector4(-1, 0, 0, 0),
-	"brighter": Vector4(0, 1, 0, 0), "graver": Vector4(0, -1, 0, 0),
-	"tighter": Vector4(0, 0, -1, 0), "looser": Vector4(0, 0, 1, 0),
-	"louder": Vector4(0, 0, 0, 1), "softer": Vector4(0, 0, 0, -1),
-	"excited": Vector4(1, 1, -1, 0), "urgent": Vector4(1, 0, -1, 1), "playful": Vector4(1, 1, 0, 0),
-	"serious": Vector4(-1, -1, 1, 0), "hushed": Vector4(-1, -1, 1, -1), "tender": Vector4(-1, 0, 1, -1),
-	"dry": Vector4(0, -1, 0, 0), "steady": Vector4.ZERO,
-}
-## What one step is, on each axis: pace 4%, pitch a third of a semitone (on the formant-locked path, so
-## the speaker keeps their size), effort and melody a little, pauses a fifth. Two steps is the most.
-const LEAN_PACE := 0.04
-const LEAN_SEMIS := 0.33
-const LEAN_EFFORT := 0.08
-const LEAN_LIVELY := 0.07
-## A pause step is the widest (x1.3 a step).
-const LEAN_PAUSE := 1.3
-## Volume is effort alone - the spectral tilt and the level, no pitch.
-const LEAN_LOUD := 0.12
-## A hushed approach is this many "softer" steps of effort - the tilt of a dropped voice; the level
-## itself is VoiceFX's ([constant VoiceFX.NEAR_HUSH_DB]).
-const NEAR_SOFTER := 2.0
-## How much of the way to a new delivery each sentence goes: a change eases in over two or three
-## sentences, and back out the same way after its paragraph.
-const LEAN_EASE := 0.5
+## A hushed approach ([method VoiceFX.near_plan]) is a softer voice as well as a quieter one: this much less effort at full
+## hush - the tilt of a dropped voice; the level itself is VoiceFX's ([constant VoiceFX.NEAR_HUSH_DB]).
+const NEAR_EFFORT := 0.24
 
 ## Tone presets. VITS has no affect control: the handles are pace, sampled variation (`noise`, `noise_w`)
 ## and pitch (`semis`, by resampling: the model is asked to speak r times slower and the host plays it back
@@ -330,11 +304,51 @@ static func gap_before(chunks: Array, idx: int, s: Dictionary, turn := 1.0) -> f
 	var g := paragraph_gap_of(s) if starts else seam_gap_of(s)
 	if idx <= 0 or idx >= chunks.size():
 		return g
+	# ...as long as the delivery of the word before it says ([method DeliveryBank.rest_of]: its `pauses` and its sentence or
+	# paragraph rests, or their seconds): the whole rest heard, the model's own share in it, as the dials scale it
+	var last := {}
+	for t in (chunks[idx - 1] as Dictionary).get("tokens", []):
+		if t is Dictionary and not String((t as Dictionary).get("text", "")).strip_edges().is_empty():
+			last = t
+	if not last.is_empty():
+		var heard := DeliveryBank.rest_of(last, "paragraphs" if starts else "ends", g + SENTENCE_DWELL)
+		if not is_equal_approx(heard, g + SENTENCE_DWELL):
+			g = maxf(0.0, heard - SENTENCE_DWELL)
 	if String((chunks[idx - 1] as Dictionary).get("speaker", "")) \
 			== String((chunks[idx] as Dictionary).get("speaker", "")):
 		return g
 	return minf(g + TURN_GAP * clampf(turn,
 		0.0, MAX_TURN_SCALE), TURN_CEILING)
+
+
+## What the delivery keeps from the voice host ([constant APP_RESTS]): the rests made here, after a sentence or a paragraph and at a
+## hesitation, which the host never reads - so a change to one asks no take again.
+const APP_RESTS := ["ends", "paragraphs", "hesitations", "ends_s", "paragraphs_s", "hesitations_s"]
+
+
+## [param tokens] as the host is sent them: a token whose delivery says a rest made here sent with a copy of its `x` without it,
+## every other one as it is.
+static func host_tokens(tokens: Array) -> Array:
+	var out: Array = tokens
+	for i in tokens.size():
+		var t: Variant = tokens[i]
+		if not (t is Dictionary) or not ((t as Dictionary).get("x") is Dictionary):
+			continue
+		var x: Dictionary = t["x"]
+		if not APP_RESTS.any(func(k: String) -> bool: return x.has(k)):
+			continue
+		if out == tokens:
+			out = tokens.duplicate()
+		var kept := x.duplicate()
+		for k in APP_RESTS:
+			kept.erase(k)
+		var copy: Dictionary = (t as Dictionary).duplicate()
+		if kept.is_empty():
+			copy.erase("x")
+		else:
+			copy["x"] = kept
+		out[i] = copy
+	return out
 
 
 ## Everything the host needs to read one chunk in one voice. Written once for the live window and the
@@ -344,21 +358,29 @@ static func gap_before(chunks: Array, idx: int, s: Dictionary, turn := 1.0) -> f
 ## moves within one, and which paragraph it is (`plan_p`) only when its noise wanders.
 static func request_args(s: Dictionary, ch: Dictionary, speaker := 0, blend := "") -> Dictionary:
 	var t := preset_of(s)
-	var lean: Vector4 = ch.get("lean", Vector4.ZERO)
 	var near: Dictionary = ch.get("near", {})
 	# length_scale = r / pace: the model speaks r times slower so that playing back r times faster
 	# restores the intended pace
 	var r := pitch_ratio_of(s)
 	var d := delivery_of(s)
+	# the paragraph's arc swings as far as the sentence's words are told to ([DeliveryBank] `range`): a deadpan sentence
+	# keeps to its register
+	var swing := 0.0
+	var said := 0
+	for tok in ch.get("tokens", []):
+		if tok is Dictionary and not String((tok as Dictionary).get("text", "")).strip_edges().is_empty():
+			swing += float(((tok as Dictionary).get("x", {}) as Dictionary).get("range", 1.0))
+			said += 1
+	if said > 0:
+		d["prosody_arc"] = float(d["prosody_arc"]) * (swing / float(said))
 	var args := {
-		"length_scale": r / maxf(float(s["pace"]) * float(t["pace"]), 0.1) * (1.0 - LEAN_PACE * lean.x),
-		"noise_scale": float(t["noise"]) * (1.0 + LEAN_LIVELY * lean.y), "noise_w": float(t["noise_w"]),
-		"lean_semis": LEAN_SEMIS * lean.y,
+		"length_scale": r / maxf(float(s["pace"]) * float(t["pace"]), 0.1),
+		"noise_scale": float(t["noise"]), "noise_w": float(t["noise_w"]),
 		# coming in hushed is a softer voice as well as a quieter one (VoiceFX drops the level)
-		"lean_effort": LEAN_EFFORT * lean.y + LEAN_LOUD * (lean.w - NEAR_SOFTER * float(near.get("hush", 0.0))),
+		"lean_effort": -NEAR_EFFORT * float(near.get("hush", 0.0)),
 		"whisper": float(t["whisper"]), "muffle": float(t["muffle"]),
 		"speaker": speaker,
-		"sentence_gap": SENTENCE_GAP, "pause_scale": pause_scale_of(s) * pow(LEAN_PAUSE, lean.z),
+		"sentence_gap": SENTENCE_GAP, "pause_scale": pause_scale_of(s),
 		"dynamics": d["dynamics"],
 		"prosody_arc": d["prosody_arc"],
 		"effort": d["effort"],
@@ -367,12 +389,12 @@ static func request_args(s: Dictionary, ch: Dictionary, speaker := 0, blend := "
 		# ...and the host plays it back r times faster, band-limited, so every time it returns is
 		# already in the heard audio's seconds (piper.py `_resample`)
 		"play_ratio": r,
-		"tokens": ch["tokens"],
+		"tokens": host_tokens(ch["tokens"]),
 	}
 	# the Pause at sentence ends, for the sentence ends inside the chunk: asked only where it is not the Pause at commas, so a
 	# take said before the two were apart keeps its key
 	if not is_equal_approx(sentence_scale_of(s), pause_scale_of(s)):
-		args["sentence_scale"] = sentence_scale_of(s) * pow(LEAN_PAUSE, lean.z)
+		args["sentence_scale"] = sentence_scale_of(s)
 	if not blend.is_empty():
 		args["blend"] = blend
 		if VoiceBlend.moves(blend):
@@ -381,45 +403,6 @@ static func request_args(s: Dictionary, ch: Dictionary, speaker := 0, blend := "
 		if VoiceBlend.wanders(blend):
 			args["plan_p"] = int(ch.get("plan_p", 0))
 	return args
-
-
-## A delivery mark's words ([constant DELIVERY_WORDS]) as one lean: their steps added, at most two each
-## way. A word not on the list is nothing.
-static func lean_of(words: String) -> Vector4:
-	var v := Vector4.ZERO
-	for w in words.to_lower().replace(",", " ").split(" ", false):
-		v += DELIVERY_WORDS.get(String(w).strip_edges(), Vector4.ZERO)
-	return v.clamp(Vector4(-2, -2, -2, -2), Vector4(2, 2, 2, 2))
-
-
-## Delivery marks [param marks] (`[at, lean]` in [param text]) with the return each implies: a
-## delivery lasts to the end of its paragraph (a blank line), where the voice's own comes back.
-static func leans_of(text: String, marks: Array) -> Array:
-	var out: Array = []
-	for i in marks.size():
-		var at := int((marks[i] as Array)[0])
-		out.append(marks[i])
-		var para := text.find("\n\n", at)
-		var next := int((marks[i + 1] as Array)[0]) if i + 1 < marks.size() else text.length() + 1
-		if para >= 0 and para < next:
-			out.append([para, Vector4.ZERO])
-	return out
-
-
-## Eased, never switched: each sentence goes [constant LEAN_EASE] of the way from the delivery the
-## sentence before it had to the one marked for it, per voice - a mark leans in over two or three
-## sentences and its paragraph's end lets go the same way.
-static func ease_leans(chunks: Array) -> void:
-	var cur := {}
-	for c in chunks:
-		var d: Dictionary = c
-		var who := String(d.get("speaker", ""))
-		var was: Vector4 = cur.get(who, Vector4.ZERO)
-		var now := was + ((d.get("lean_aim", Vector4.ZERO) as Vector4) - was) * LEAN_EASE
-		if now.length() < 0.02:
-			now = Vector4.ZERO
-		cur[who] = now
-		d["lean"] = now
 
 
 ## Push one voice's settings onto a [VoiceFX] chain. One definition, so a dial need appear in only one

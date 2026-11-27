@@ -97,6 +97,28 @@ func _patterns_match_examples() -> void:
 		_ok(hit, "%s's pattern does not find its own example %s" % [k, ex.c_escape()])
 
 
+## {word: its acts, comma-joined} for every token of [param chunks] ([DeliveryBank]): "" for a word with none.
+func _acts_of(chunks: Array) -> Dictionary:
+	var out := {}
+	for c in chunks:
+		for tok in (c as Dictionary)["tokens"]:
+			var names := PackedStringArray()
+			for a in (tok as Dictionary).get("acts", []):
+				names.append(String(a[0]))
+			out[String((tok as Dictionary)["text"])] = ",".join(names)
+	return out
+
+
+## {word: its axis values} for every token of [param chunks] that a delivery moves.
+func _xs_of(chunks: Array) -> Dictionary:
+	var out := {}
+	for c in chunks:
+		for tok in (c as Dictionary)["tokens"]:
+			if (tok as Dictionary).has("x"):
+				out[String((tok as Dictionary)["text"])] = (tok as Dictionary)["x"]
+	return out
+
+
 func _kinds(d: Dictionary) -> Array:
 	var out := []
 	for a in d["actions"]:
@@ -139,19 +161,18 @@ func _parsers_agree() -> void:
 						and String((heard[1] as Dictionary).get("heard", "")) == fill and VoiceFX.HEARD.has(fill),
 					"a turn marked %s is not heard through it" % ex)
 			"inflect":
-				# the words it wraps carry its kind to the voice, the words round it nothing (the control), spaced or not,
-				# and no sentinel is spoken or shown
+				# the words it wraps carry its act to the voice - none on every word, rise on the last - the words round it
+				# nothing (the control), spaced or not, and no sentinel is spoken or shown
 				for form in [ex, ex.replace("-->A", "--> A").replace("?<!", "? <!"), ex.replace(": none", ": rise")]:
 					var kind := "rise" if form.contains("rise") else "none"
 					var made := ReadingPlan.make("They left. %s Then what?\n" % form, "", {"reader": "Narrator", "hesitate": true, "bare": 1.0, "outro": 0.0})["chunks"] as Array
-					var got := {}
+					var got := _acts_of(made)
 					var shown := ""
 					for c in made:
-						for tok in (c as Dictionary)["tokens"]:
-							got[String((tok as Dictionary)["text"])] = String((tok as Dictionary).get("inflect", ""))
 						for w in (c as Dictionary)["words"]:
 							shown += String((w as Dictionary)["text"]) + " "
-					_ok(got.get("am", "") == kind and got.get("i", "") == kind and got.get("fired", "") == kind,
+					var want_am := kind if kind == "none" else ""
+					_ok(got.get("am", "") == want_am and got.get("i", "") == want_am and got.get("fired", "") == kind,
 						"the words %s wraps are not inflected %s (%s)" % [form, kind, str(got)])
 					_ok(got.has("left") and got["left"] == "" and got.has("what") and got["what"] == "",
 						"words outside %s are inflected too (%s)" % [form, str(got)])
@@ -163,10 +184,7 @@ func _parsers_agree() -> void:
 				var own := "<!-- speaker: Van -->\n\n%s\n\n<!-- speaker: Control -->\n\nGo home.\n" % ex
 				var desk := DispatchScript.speakable("<!-- call: VAN -->\n\n" + own)
 				var desk_made := ReadingPlan.make(desk, "", {"reader": "Control", "hesitate": true, "bare": 1.0, "outro": 0.0})["chunks"] as Array
-				var desk_said := {}
-				for c in desk_made:
-					for tok in (c as Dictionary)["tokens"]:
-						desk_said[String((tok as Dictionary)["text"])] = String((tok as Dictionary).get("inflect", ""))
+				var desk_said := _acts_of(desk_made)
 				_ok(desk_said.get("fired", "") == "none" and desk_said.get("go", "x") == "",
 					"a dispatch desk drops the words an inflection mark wraps on a line of its own (%s)" % str(desk_said))
 				var letter := ""
@@ -176,6 +194,37 @@ func _parsers_agree() -> void:
 				_ok(letter.contains("Am I fired?"), "a letter drops the words an inflection mark wraps on a line of its own")
 				_ok(DispatchScript._classify("<!-- hesitation: 2 --> <!-- sound: a door -->").get("kind", "") == "note",
 					"a line of comments alone is no longer a note")
+			"delivered":
+				# the bracketed words carry the act to the voice and the words round them nothing (the control); the brackets
+				# and braces are never spoken, captioned or printed - on a page, in a letter, at the dispatch desk or in a table
+				# reader's passage
+				var made := ReadingPlan.make("A frog, %s five arrows.\n" % ex, "", {"reader": "Narrator", "hesitate": true, "bare": 1.0, "outro": 0.0})["chunks"] as Array
+				var got := _acts_of(made)
+				_ok(String(got.get("and", "")).contains("drawn") and String(got.get("and", "")).contains("held")
+						and got.get("five", "x") == "" and got.get("frog", "x") == "",
+					"%s does not reach its word alone (%s)" % [ex, str(got)])
+				var shown := ""
+				for c in made:
+					for w in (c as Dictionary)["words"]:
+						shown += String((w as Dictionary)["text"]) + " "
+				_ok(not shown.contains("[") and not shown.contains("{") and shown.contains("and"),
+					"%s is captioned as written (%s)" % [ex, shown])
+				var page := ""
+				for blk in Manuscript.blocks("A frog, %s five arrows.\n" % ex):
+					page += String((blk as Dictionary).get("text", ""))
+				_ok(page == "A frog, and five arrows.", "%s reached the page as written (%s)" % [ex, page])
+				_ok(Manuscript.unspoken("A frog, %s five." % ex) == "A frog, and five.", "%s survives into a reading of no marks" % ex)
+				var letter := ""
+				for blk in LetterScript.blocks("A frog, %s five arrows.\n" % ex):
+					if String((blk as Dictionary)["kind"]) == "para":
+						letter += String((blk as Dictionary)["text"])
+				_ok(not letter.contains("{") and Manuscript.unspoken(letter).contains("and five"), "a letter writes %s as written (%s)" % [ex, letter])
+				var desk := DispatchScript.speakable("<!-- call: VAN -->\n\n<!-- speaker: Van -->\n\n" + Manuscript.delivered_as_marks("A frog, %s five arrows.\n" % ex))
+				var desk_acts := _acts_of(ReadingPlan.make(desk, "", {"reader": "Control", "hesitate": true, "bare": 1.0, "outro": 0.0})["chunks"] as Array)
+				_ok(String(desk_acts.get("and", "")).contains("drawn"), "a dispatch desk drops %s (%s)" % [ex, str(desk_acts)])
+				var passage := TableProducer.clean_spoken("A frog, %s five arrows." % ex)
+				_ok(passage.contains("delivery") and passage.contains("and") and not passage.contains("{"),
+					"a table reader's passage loses %s or keeps its braces (%s)" % [ex, passage])
 			"hesitation", "hesitation_timed":
 				var h := Manuscript.hesitations("Wait %s for it." % ex)
 				_ok(h.size() == 1, "%s is not a hesitation" % k)
@@ -377,17 +426,20 @@ func _parsers_agree() -> void:
 				_ok(not Manuscript.unspoken("Before %s after." % ex).contains(fill),
 					"a note survives into the synthesis reading")
 			"delivery":
-				# a delivery is the voice's business (ReadingPanel reads it, multi_voice_check holds
-				# what it does); here: it carries its words, and it is never read aloud or printed
+				# a delivery is the voice's business (DeliveryBank lays it out, delivery_check holds what it does); here: it
+				# carries its words, it reaches the words of its paragraph and no further, and it is never read aloud or printed
 				var lm := Manuscript._rx(Manuscript.DELIVERY).search(ex)
 				_ok(lm != null and lm.get_string(1) == fill, "a delivery mark does not carry its words")
-				_ok(not _words(Manuscript.unspoken("Before.\n%s\nAfter." % ex)).has("quicker"),
+				_ok(not _words(Manuscript.unspoken("Before.\n%s\nAfter." % ex)).has("excited"),
 					"a delivery mark is read aloud")
 				var b := Manuscript.blocks("Before.\n%s\nAfter.\n" % ex)
 				var shown := ""
 				for blk in b:
 					shown += String((blk as Dictionary).get("text", ""))
-				_ok(not shown.contains("quicker"), "a delivery mark reached the page")
+				_ok(not shown.contains("excited"), "a delivery mark reached the page")
+				var told := _xs_of(ReadingPlan.make("Calm here.\n\n%s\nThis goes up and up and up.\n\nCalm again, and on and on, and later still at home." % ex, "", {"reader": "Narrator", "hesitate": true, "bare": 1.0, "outro": 0.0})["chunks"] as Array)
+				_ok(not told.has("here") and told.has("up") and not told.has("home"),
+					"a delivery mark does not reach its paragraph alone, letting go after it (%s)" % str(told.keys()))
 			"thought", "strike", "struck", "color", "unspoken", "sketch_timed", "point", "tap", "image_end", "still", "new_page":
 				_letter_mark(k, ex)
 			"call", "hang_up", "ring", "text_msg", "ping", "desk_sound", "static", "print", "sleep", "screen_off", "look", "lift", \

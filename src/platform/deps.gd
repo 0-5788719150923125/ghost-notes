@@ -158,6 +158,24 @@ const MANAGED := [
 			+ "Built the first time you open Generative.",
 	},
 	{
+		"key": "voice_gpu_venv",
+		"name": "Voice environment (graphics card)",
+		"kind": KIND_MANAGED,
+		"path": "user://voice_gpu_venv",
+		"requirements": "res://hosts/voice/requirements_gpu.txt",
+		"imports": "onnxruntime, numpy, espeakng_loader, phonemizer, nltk",
+		"size": "~1.5 GB, ~2.5 GB installed",
+		"unsupported": {
+			"macos-arm64": "CUDA does not run on a Mac",
+			"macos-x86_64": "CUDA does not run on a Mac",
+			"windows-arm64": "onnxruntime publishes no CUDA build for Windows on ARM",
+		},
+		"used_for": "The voice environment with onnxruntime's CUDA build and NVIDIA's CUDA and cuDNN "
+			+ "libraries, so Kokoro and Piper voices are made on an NVIDIA graphics card (one whose "
+			+ "driver speaks CUDA 13). Built the first time the Voice card's graphics card setting "
+			+ "is ticked; the voice falls back to the processor where the card cannot run it.",
+	},
+	{
 		"key": "ytdlp_venv",
 		"name": "Download environment",
 		"kind": KIND_MANAGED,

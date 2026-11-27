@@ -1071,6 +1071,50 @@ def filters_page(base: Script) -> str:
     return page("Filters: the look over the whole picture", blocks)
 
 
+def delivery_page(bank: Script) -> str:
+    """docs/delivery.md, from DeliveryBank's rows (next/delivery.md): the vocabulary a script says how its words are said
+    in - its axes, degrees, shapes and acts, and every named delivery by family with its terms."""
+    axes, degrees = bank.const("AXES", {}), bank.const("DEGREES", {})
+    shapes, acts = bank.const("SHAPES", {}), bank.const("ACTS", {})
+    families, rows = bank.const("FAMILIES", {}), bank.const("BANK", {})
+    if not rows or not axes:
+        warn("could not parse DeliveryBank's rows")
+    blocks: List[Block] = [
+        "How a script says its words are said, in three forms that differ only in how much they cover: "
+        "`[words]{terms}` the bracketed words, `<!-- delivery: terms -->` a stretch (the paragraph under it, eased in and "
+        "out; inline, from that word; exactly up to a `<!-- /delivery -->`), and a note's own named delivery "
+        "(`<!-- delivery: giddy = excited, speeding up -->`). Terms are comma-separated, each a delivery below, an act, a "
+        "shape, or an axis given a number (`rate 1.2`, `pitch +3st`, `volume -6dB`, `rate 1..1.4` a ramp), with a degree "
+        "word before or after it or a number (0-2) after it.",
+        full_doc(bank.doc),
+        f"Rows: `DeliveryBank` in {link(bank.rel)} ({len(rows)} deliveries, {len(acts)} acts, {len(shapes)} shapes, "
+        f"{len(axes)} axes). The plan and its sources: [next/delivery.md](../next/delivery.md).",
+        "## Axes",
+        table(["Axis", "Unit", "Limits", "What it moves"],
+              ([f"`{k}`", text(r, "unit") or "-", f"{r.get('lo')} to {r.get('hi')}", md(text(r, "blurb"))]
+               for k, r in axes.items()), rule="| --- | --- | --- | --- |"),
+        "## Degrees",
+        table(["Word", "Times"], ([f"`{k}`", r.get("value")] for k, r in degrees.items()), rule="| --- | --- |"),
+        "## Shapes",
+        table(["Shape", "What it does", "Also"],
+              ([f"`{k}`", md(text(r, "blurb")), ", ".join(r.get("aka", []))] for k, r in shapes.items()),
+              rule="| --- | --- | --- |"),
+        "## Acts on a word",
+        table(["Act", "What it does", "Also"],
+              ([f"`{k}`", md(text(r, "blurb")) + (" (every word)" if r.get("every") else ""), ", ".join(r.get("aka", []))]
+               for k, r in acts.items()), rule="| --- | --- | --- |"),
+    ]
+    for fam, f in families.items():
+        mine = [(k, r) for k, r in rows.items() if r.get("family") == fam]
+        if not mine:
+            continue
+        blocks += [f"## {text(f, 'label', fam)}", md(text(f, "blurb")),
+                   table(["Delivery", "Terms", "What it is", "Also"],
+                         ([f"`{k}`", f"`{text(r, 'terms')}`" if text(r, "terms") else "-", md(text(r, "blurb")),
+                           ", ".join(r.get("aka", []))] for k, r in mine), rule="| --- | --- | --- | --- |")]
+    return page("Delivery: how the words are said", blocks)
+
+
 def script_page(marks: Script) -> str:
     """docs/script.md, from ScriptMarks.REGISTRY + GROUPS: every authoring mark a script
     may carry, as the editor's palette offers them."""
@@ -2107,7 +2151,7 @@ RULES: List[Rule] = [
          (("a.gd", "\tvar box := TextEdit.new()", 1), ("a.gd", "\tvar list := ScrollContainer.new()", 1),
           ("a.gd", "\tvar t := SceneTree.new()\n\tvar f := TextField.new()", 0)),
          skip=("side_panel.gd", "text_field.gd", "script_writer.gd", "reading_cast.gd", "reader_browser.gd", "voice_fishing.gd", "mask_editor.gd",
-               "storyboard_editor.gd", "timeline_dock.gd", "source_window.gd", "episode_script.gd", "design_window.gd", "note_kept.gd", "note_grid.gd", "assistant.gd", "dex_window.gd", "prop_refine.gd", "text_refine.gd")),
+               "storyboard_editor.gd", "timeline_dock.gd", "source_window.gd", "episode_script.gd", "design_window.gd", "note_kept.gd", "note_grid.gd", "assistant.gd", "dex_window.gd", "prop_refine.gd", "text_refine.gd", "delivery_lab.gd")),
     # `Films.pump()` is called from main's `_process`: a window cut is an ffmpeg child, and something with a
     # frame must notice it exit and promote its output out of the `.part` name. A probe replaces the main scene,
     # so no gate sees this.
@@ -2592,6 +2636,9 @@ def main() -> int:
          "the video effects editor: its model, its effects and its headless tools."),
         ("script", "Script marks", str(count("script_marks")),
          "every mark a script may carry - the script editor's palette."),
+        ("delivery", "Delivery", f"{count('delivery_bank', 'BANK')} deliveries, {count('delivery_bank', 'ACTS')} acts",
+         "how a script says its words are said: expressions, axes, ramps, shapes and word acts, on words, stretches and "
+         "paragraphs."),
         ("agents", "Agents",
          f"{count('text_gen')} writers, {count('image_gen')} painters, {count('assistant_backends')} assistants",
          "the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each "
@@ -2615,6 +2662,7 @@ def main() -> int:
         "media": lambda: media_page(s("medium")),
         "filters": lambda: filters_page(s("filters")),
         "script": lambda: script_page(s("script_marks")),
+        "delivery": lambda: delivery_page(s("delivery_bank")),
         "architecture": lambda: architecture_page(class_index(), scenes, s("layer"), s("primitives"), s("medium")),
         "environment": lambda: environment_page(s("deps")),
         "agents": lambda: agents_page(s("text_gen"), s("image_gen"), s("assistant_backends"), s("deps")),

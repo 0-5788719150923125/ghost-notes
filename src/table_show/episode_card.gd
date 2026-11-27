@@ -688,12 +688,14 @@ func _show_title() -> String:
 ## the brief (as the agents get it: its card list taken out, its macros read, its notes to self gone - see [method
 ## TablePrompts.brief]), the deck the brief lists (or none, when the producer chooses each episode's - `chooses`), the show's
 ## voices (every one its document names - the reader's and any other, a familiar's - for the reader to hand lines to), how long
-## a word takes its reader to say (what its passages are written to), and the knobs.
+## a word takes its reader to say (what its passages are written to), the deliveries its script may say, and the knobs.
 func _spec() -> Dictionary:
 	var body := Manuscript.strip_frontmatter(_doc.pull())
 	return {"title": _show_title(), "byline": _show_byline(), "names": _names_of(null), "uploads_as": _uploads_as(),
 		"brief": TablePrompts.brief(body), "deck": CardDeck.of(body), "fixed": FixedTable.parse(body), "hand": TablePrompts.hand_of(body),
 		"chooses": CardDeck.chooses(body), "voices": reading.cast_names(), "seats": reading.cast_seats(), "said_word": reading.reader_said_word(),
+		# ...and the deliveries its script may say, as the Voice card has them now: its own, those kept, those set aside
+		"deliveries": reading.delivery_told() if reading != null else DeliveryBank.listed(),
 		"writer": _knobs["writer"], "writer_model": _knobs["writer_model"], "writer_effort": _knobs["writer_effort"],
 		"painter": _knobs["painter"], "painter_model": _knobs["painter_model"], "painter_effort": _knobs["painter_effort"],
 		# ...and where to take the next episode, as the Direction card says it now ([Direction]): an episode takes it up as its plan is made

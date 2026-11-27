@@ -239,7 +239,8 @@ static func _target(arg: String) -> Dictionary:
 ## `{kind: "para", text}` - a comment over several lines read as one line, any other own-line comment a note that ends
 ## the paragraph and is dropped.
 static func blocks(body: String) -> Array:
-	var src := Manuscript.strip_frontmatter(body)
+	# words said a way (`[words]{terms}`) are the delivery round them: a voice mark, never words the pen writes
+	var src := Manuscript.delivered_as_marks(Manuscript.strip_frontmatter(body))
 	var mark := _rx(MARK)
 	var pic := _rx("^\\s*<!--\\s*(image|sketch)\\s*(?:\\(\\s*([^)]*?)\\s*\\))?\\s*:\\s*((?:(?!-->)[\\s\\S])*?)\\s*-->\\s*$")
 	var voice := _rx("^\\s*(?:<!--\\s*(?:hesitation|delivery|speaker|point)\\b(?:(?!-->)[\\s\\S])*?-->\\s*)+$")

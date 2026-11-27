@@ -173,7 +173,9 @@ func _prompts() -> bool:
 	var one := String(prod.say_prompt("1")["prompt"])
 	_ok(one.contains("beat 1, \"The Hook\"") and one.contains("ABOUT-ONE") and not one.contains("ABOUT-THREE") and not one.contains("ABOUT-INTRO"),
 		"beat 1's reader is told its beat and handed its own acts alone")
-	_ok(not one.contains("drawn") and not one.contains("The spread:") and not one.contains("The deck:") and not one.contains("THE CARDS MOVE"),
+	# (a card drawn, never a word drawn out: `drawn` is one of the delivery acts every reader is told of)
+	_ok(not one.contains("been drawn") and not one.contains("just drawn") and not one.contains("were drawn")
+			and not one.contains("The spread:") and not one.contains("The deck:") and not one.contains("THE CARDS MOVE"),
 		"...and no card, spread or deck")
 	_ok(one.contains("The next beat begins: \"The Turn\""), "...and what comes after it")
 	ep.write_text("say:1", "One.")

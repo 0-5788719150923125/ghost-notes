@@ -657,6 +657,13 @@ static func painting(title: String, brief: String, plan: Dictionary, beats: Arra
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/painting.prompt", vars)}
 
 
+## The deliveries a reader or the game master may write, as the note's Voice card has them where the plan carries them
+## (`deliveries_told`), else the bank's ([method DeliveryBank.listed]).
+static func told_deliveries(plan: Dictionary) -> String:
+	var told := String(plan.get("deliveries_told", ""))
+	return told if not told.is_empty() else DeliveryBank.listed()
+
+
 ## The game master's preparation (next/tabletop.md): tonight's world and every player's sheet, made alone, secret from everyone else at the table.
 static func game_prep(title: String, brief: String, plan: Dictionary, people: PackedStringArray, past: Array) -> Dictionary:
 	var vars := _game_vars(title, plan, people)
@@ -683,7 +690,7 @@ static func game_master(title: String, brief: String, plan: Dictionary, people: 
 		"lo": aim.x, "hi": aim.y, "minutes": _said_minutes(aim), "hidden": true,
 		"paced": plan.has("picture_seconds") and picture_words(plan) != GameTools.PICTURE_EVERY,
 		"picture_seconds": roundi(float(picture_words(plan)) * SAID_WORD),
-		"previously": String(plan.get("previously", "")).strip_edges()})
+		"previously": String(plan.get("previously", "")).strip_edges(), "deliveries": told_deliveries(plan)})
 	return {"system": show_context(title, brief), "prompt": Rules.say("table/game_master.prompt", vars)}
 
 
@@ -918,7 +925,7 @@ static func reader(title: String, brief: String, plan: Dictionary, step: String,
 		"spread_size": spread_size, "positions": listed, "deck_name": String(look.get("deck_name", "")), "surface": String(look.get("surface", "")),
 		"on_the_table": CardTable.on_the_table(look), "said": spoken, "on_table": on_table, "box": boxed, "pictured": pictured,
 		"intro": step == "intro", "close": step == "close", "card": step != "intro" and step != "close", "voices": not voices.is_empty(),
-		"box_count": box_count if boxed else 0}
+		"box_count": box_count if boxed else 0, "deliveries": told_deliveries(plan)}
 	# ...and the work really done, where the plan fixed a problem (table/solver.worked): every passage is written from it
 	vars.merge(worked_vars(plan.get("worked", {}) if plan.get("worked") is Dictionary else {}))
 	var bare := CardTable.cardless(plan)

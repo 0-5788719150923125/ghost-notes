@@ -22,7 +22,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from . import Backend, BackendError, register, report
+from . import Backend, BackendError, open_session, register, report
 
 
 def _reporter(name: str):
@@ -623,7 +623,7 @@ def _discourse_plan(groups: list, params: dict) -> list[dict]:
     return plan
 
 
-def _effort(a, sr: int, tilt: float, gain_db: float):
+def _effort(a, sr: int, tilt: float, gain_db: float, curve=None):
     """Vocal effort: spectral TILT first, level second.
 
     The high band is what changes with effort, so it is what gets moved - a boxcar
@@ -634,9 +634,14 @@ def _effort(a, sr: int, tilt: float, gain_db: float):
     """
     import numpy as np
 
-    if abs(tilt) < 1e-3 and abs(gain_db) < 1e-3:
+    # `curve`, where a script's delivery moves the effort word by word (`_word_curve`): tilt added a sample at a time
+    if curve is not None and a.size > 8:
+        curve = np.asarray(curve, dtype=np.float64)[: a.size]
+        if not np.any(np.abs(curve) >= 1e-3):
+            curve = None
+    if abs(tilt) < 1e-3 and abs(gain_db) < 1e-3 and curve is None:
         return a
-    if abs(tilt) >= 1e-3 and a.size > 8:
+    if (abs(tilt) >= 1e-3 or curve is not None) and a.size > 8:
         # ~1.2 kHz corner: below the speech formants that carry effort, above the
         # fundamental, so the tilt moves brightness and not the voice's weight.
         n = max(2, int(round(sr / 1200.0)))
@@ -652,7 +657,7 @@ def _effort(a, sr: int, tilt: float, gain_db: float):
         # sentence came in at, so `gain_db` below is the ONLY thing that sets level
         # and the number in the tooltip is the number you get.
         rms0 = float(np.sqrt(np.mean(a.astype(np.float64) ** 2)))
-        a = a + tilt * (a - 2.0 * lo)
+        a = a + (tilt + curve if curve is not None else tilt) * (a - 2.0 * lo)
         rms1 = float(np.sqrt(np.mean(a.astype(np.float64) ** 2)))
         if rms1 > 1e-9 and rms0 > 1e-9:
             a = (a * (rms0 / rms1)).astype(np.float32)
@@ -686,7 +691,10 @@ def _emphasize(audio, edges: dict, group: list, sr: int):
         for ti, t in enumerate(group)
         if int(t.get("emph", 0) or 0) in EMPHASIS and ti in edges
     ]
-    if not lifts or audio.size == 0:
+    # ...and a script's delivery: each word's volume (dB) and tremor, as curves across the take (`_word_curve`)
+    vol = _word_curve(edges, group, "volume", audio.size, sr)
+    shake = _word_curve(edges, group, "tremor", audio.size, sr)
+    if (not lifts and vol is None and shake is None) or audio.size == 0:
         return audio
     gain = np.ones(audio.size, dtype=np.float64)
     ramp = max(1, int(round(EMPHASIS_RAMP * sr)))
@@ -707,7 +715,112 @@ def _emphasize(audio, edges: dict, group: list, sr: int):
             g[:n] = 1.0 + (g[:n] - 1.0) * ease
             g[-n:] = 1.0 + (g[-n:] - 1.0) * ease[::-1]
         gain[lo:hi] = np.maximum(gain[lo:hi], g)
+    if vol is not None or shake is not None:
+        import inflection
+
+        db = vol if vol is not None else np.zeros(audio.size)
+        if shake is not None:
+            t = np.arange(audio.size) / float(sr)
+            hz = inflection.TREMOR_HZ + inflection.TREMOR_WANDER * np.sin(2.0 * np.pi * 0.37 * t) * np.sin(
+                2.0 * np.pi * 0.11 * t + 1.3)
+            db = db + TREMOR_DB * shake * np.sin(np.cumsum(2.0 * np.pi * hz / float(sr)))
+        lift = 10.0 ** (db / 20.0)
+        # never into the clip: a lift has the room the audio leaves under the ceiling, block by block
+        if np.any(db > 0.0):
+            block = max(1, int(round(0.01 * sr)))
+            n = (audio.size + block - 1) // block
+            padded = np.zeros(n * block)
+            padded[: audio.size] = np.abs(audio)
+            peak = padded.reshape(n, block).max(axis=1)
+            peak = np.maximum(peak, np.concatenate(([0.0], peak[:-1])))
+            peak = np.maximum(peak, np.concatenate((peak[1:], [0.0])))
+            room = np.repeat(EMPHASIS_CEILING / np.maximum(peak, 1e-6), block)[: audio.size] / np.maximum(gain, 1e-6)
+            lift = np.where(db > 0.0, np.minimum(lift, np.maximum(room, 1.0)), lift)
+        gain = gain * lift
     return np.clip(audio * gain, -1.0, 1.0).astype(np.float32)
+
+
+# A script's delivery per word (next/delivery.md): a tremor of 1 shakes the level this many dB either way; an effort of 1
+# tilts as much as the discourse plan's effort of 1 (`_discourse_plan`: tilt 0.45 e).
+TREMOR_DB = 3.0
+EFFORT_TILT = 0.45
+
+
+def _word_curve(edges: dict, group: list, key: str, n: int, sr: int, scale: float = 1.0):
+    """A script's delivery value `key` of each word (its `x`, 0 where it says none), a sample at a time across a take of `n`
+    samples: held over each word's own sounds (`edges`, seconds), eased straight from one word's to the next's in the
+    gap between them, held past the ends - `scale` times it. None where no word moves it."""
+    import numpy as np
+
+    pts = []
+    any_ = False
+    for ti in sorted(edges):
+        if ti >= len(group):
+            continue
+        x = group[ti].get("x") or {}
+        v = float(x.get(key, 0.0) or 0.0) * scale
+        any_ = any_ or v != 0.0
+        a, b = float(edges[ti][0]), float(edges[ti][1])
+        pts.append((a, v))
+        pts.append((max(a, b), v))
+    if not any_ or n <= 0:
+        return None
+    xs = np.array([p[0] for p in pts])
+    order = np.argsort(xs, kind="stable")
+    return np.interp(np.arange(n) / float(sr), xs[order], np.array([p[1] for p in pts])[order])
+
+
+def _pauses_of(tok: dict) -> float:
+    """How much longer than the voice's own the rest at a mark inside a sentence after a word is, by its delivery: its `pauses`
+    times its `commas` (delivery_bank.gd RESTS), 1 where it says neither."""
+    x = tok.get("x") or {}
+    try:
+        return max(0.0, float(x.get("pauses", 1.0) or 1.0)) * max(0.0, float(x.get("commas", 1.0) or 0.0))
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def _rest_seconds(tok: dict, kind: str):
+    """The seconds a word's delivery gives the rest of `kind` after it (`x.<kind>_s`: exact, whatever the dial), None for none."""
+    x = tok.get("x") or {}
+    v = x.get(kind + "_s")
+    try:
+        return max(0.0, float(v)) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+# A word cut off goes quiet over this many seconds at its first vowel's end.
+CUT_FADE = 0.008
+
+
+def _cut_off(audio, said: list, group: list, sr: int):
+    """Each word a script says is cut off (its act `cut off`) silent from its first vowel's end to its last sound's, as
+    if interrupted: `said` its phones ({p, t0, t1, w}, seconds, `w` its token)."""
+    import numpy as np
+
+    import inflection
+
+    cut = [ti for ti, t in enumerate(group) if "cut off" in inflection.acts_of(t)]
+    if not cut or audio.size == 0:
+        return audio
+    out = None
+    for ti in cut:
+        mine = [ph for ph in said if int(ph.get("w", -1)) == ti]
+        first = next((ph for ph in mine if str(ph.get("p", ""))[:1] in _VOWELS), None)
+        if first is None:
+            continue
+        at = int(round(float(first["t1"]) * sr))
+        end = int(round(max(float(ph["t1"]) for ph in mine) * sr))
+        if end <= at or at >= audio.size:
+            continue
+        if out is None:
+            out = np.array(audio, dtype=np.float32, copy=True)
+        fade = max(1, int(round(CUT_FADE * sr)))
+        lo = max(0, at - fade)
+        out[lo:at] *= np.linspace(1.0, 0.0, at - lo, dtype=np.float32)
+        out[at:min(end, out.size)] = 0.0
+    return audio if out is None else out
 
 
 def _rms_envelope(a, n: int):
@@ -1163,7 +1276,7 @@ def _rms_match(frames, target_frames):
     return frames * (want / np.maximum(have, 1e-9))[:, None]
 
 
-def _whisper(a, sr: int, amount: float):
+def _whisper(a, sr: int, amount: float, curve=None):
     """Keep the vocal tract, replace the voice in it with breath.
 
     A whisper has no fundamental and no harmonics, and the words survive in the resonances. No inference
@@ -1175,7 +1288,15 @@ def _whisper(a, sr: int, amount: float):
     import numpy as np
 
     amount = min(1.0, max(0.0, float(amount)))
-    if amount <= 1e-3 or a.size < 4:
+    # `curve`, where a script's delivery whispers word by word (`_word_curve`): the amount a sample at a time
+    mix = None
+    if curve is not None and a.size >= 4:
+        mix = np.clip(amount + np.asarray(curve, dtype=np.float64)[: a.size], 0.0, 1.0)
+        if float(np.max(mix)) <= 1e-3:
+            mix = None
+            if amount <= 1e-3:
+                return a
+    elif amount <= 1e-3 or a.size < 4:
         return a
     win, hop, nfft, window = _lpc_windows(sr)
     frames = _framed(a, win, hop) * window
@@ -1197,6 +1318,10 @@ def _whisper(a, sr: int, amount: float):
     # Power-preserving: the whisper (noise) and the voice under it are uncorrelated, so they add in
     # power and a straight `a*wet + (1-a)*dry` lands at sqrt(a^2 + (1-a)^2) of the level (-2.95 dB at
     # 0.45, nothing at either end). Matches the prediction to 0.02 dB.
+    if mix is not None:
+        norm = np.sqrt(mix * mix + (1.0 - mix) ** 2)
+        out = (mix * wet + (1.0 - mix) * dry) / np.maximum(norm, 1e-9)
+        return np.clip(out, -1.0, 1.0).astype(np.float32)
     norm = math.sqrt(amount * amount + (1.0 - amount) ** 2)
     out = (amount * wet + (1.0 - amount) * dry) / max(norm, 1e-9)
     return np.clip(out, -1.0, 1.0).astype(np.float32)
@@ -1875,7 +2000,7 @@ TRAINED = "trained"
 # How this backend reads a request, said on every voice's row (`voices`): a row keys the takes kept in its voice
 # (TakeCache), so raising it has every sentence kept before said again. Raised when the same request comes out
 # another take - and kokoro.py's READS with it when the change is in what the two share (the splice, a rest's cut).
-READS = 1
+READS = 2
 
 
 @register
@@ -2085,9 +2210,7 @@ class PiperBackend(Backend):
         cfg = json.loads(cfgp.read_text(encoding="utf-8"))
         opts = ort.SessionOptions()
         opts.log_severity_level = 3  # the protocol owns stdout
-        sess = ort.InferenceSession(
-            str(onnx), sess_options=opts, providers=["CPUExecutionProvider"]
-        )
+        sess = open_session(onnx, opts)
         self._sessions[voice] = sess
         self._configs[voice] = cfg
         # Ask this checkpoint whether it says the vowel its phoneme string names (en_US-libritts-high
@@ -2734,6 +2857,7 @@ class PiperBackend(Backend):
                 edges = dict(self._last_edges)
                 frame = self.hop / float(sr)
                 audio = _emphasize(audio, edges, group, sr)
+                audio = _cut_off(audio, said, group, sr)
                 if self.quiets_lead:
                     audio = _quiet_lead(audio, edges, group, params, sr)
                 if self.trails:
@@ -2754,10 +2878,12 @@ class PiperBackend(Backend):
                         % (len(unplaced), len(group), " ".join(unplaced[:8])),
                         file=sys.stderr,
                     )
-                audio = _effort(audio, sr, float(step["tilt"]), float(step["gain_db"]))
+                audio = _effort(audio, sr, float(step["tilt"]), float(step["gain_db"]),
+                                _word_curve(edges, group, "effort", audio.size, sr, EFFORT_TILT))
                 # The source, if this reading wants a different one. Before the pitch move because a whisper has
                 # no pitch to move and the other order spends the work twice.
-                audio = _whisper(audio, sr, float(params.get("whisper", 0.0)))
+                audio = _whisper(audio, sr, float(params.get("whisper", 0.0)),
+                                 _word_curve(edges, group, "whisper", audio.size, sr))
                 audio = _muffle(audio, sr, float(params.get("muffle", 0.0)))
                 if abs(pr - 1.0) > 1e-4:
                     # The ratio is measured, not assumed: playing back by exactly `pr` tilts the pace across a
@@ -2834,7 +2960,13 @@ class PiperBackend(Backend):
                     # (mark's token end, top-up, next token start, the table's dwell): the splicer measures
                     # what the model already rests there and tops it up to the target (see `_rest_from`; the
                     # mark's share is `_tail_share`'s). The window is where the cut may go.
-                    share = _tail_share(group, ti)
+                    # ...as long as the word's delivery says (its `pauses` and `commas`, next/delivery.md): the whole rest
+                    # heard - or exactly its seconds (`commas_s`), whatever the dial
+                    share = _tail_share(group, ti) * _pauses_of(tok)
+                    exact = _rest_seconds(tok, "commas")
+                    if exact is not None:
+                        whole = (_top_up(mark, params) + _dwell_for(mark)) * _pause_multiplier(params)
+                        share = exact / whole if whole > 0.0 else 0.0
                     point = (
                         float(per_token[ti][1]),
                         _top_up(mark, params) * share,
@@ -3040,7 +3172,7 @@ class PiperBackend(Backend):
             # a word the script says to inflect none is leaned on as without inflection
             for ti, t in enumerate(group):
                 level = int(t.get("emph", 0) or 0)
-                if str(t.get("inflect", "")) == "none" and level in EMPHASIS:
+                if "none" in inflection.acts_of(t) and level in EMPHASIS:
                     stretch[ti] = EMPHASIS[level][0]
         else:
             stretch = {
@@ -3052,7 +3184,7 @@ class PiperBackend(Backend):
         held = {}
         for ti, t in enumerate(group):
             w = _trail_weight(str(t.get("punct", "")), params, _rest_after(t), _tail_share(group, ti))
-            if w > 0.0:
+            if w > 0.0 and not (ti in marks and marks[ti].clip):  # a clipped word is never held
                 held[ti] = 1.0 + TRAIL_STRETCH * w
         return self._render_symbols(
             symbols, cfg, sess, params, floors, stretch, opening=OPENING_VOWEL, hold=held,

@@ -484,7 +484,8 @@ spoken: >-
   FORMAT - everything you write is spoken aloud by a voice over the video, word for word:
 
   - Spoken words only. No stage directions, no headings, no lists, no emoji, no markdown, no
-  quotation marks around the passage, no sound effects in brackets.
+  quotation marks around the passage, no sound effects in brackets (square brackets are only for words said a
+  way, with their braces after them).
 
   - You may put single asterisks around ONE word you lean on - *this* - and only now and then. The
   voice hits that word, holding it longer and saying it louder, and the subtitle shows it in
@@ -504,17 +505,27 @@ spoken: >-
   - The viewer sees the table, not you. Never describe your own hands or face.
 
 
-  HOW YOU SAY IT - the voice reading your words has a steady delivery of its own, and you can lean
-  it a little, the way a real reader speeds up as they get going, goes graver for a hard card, or
-  barely pauses when they are on a roll. Put a mark on a line of its own before the stretch: <!--
-  delivery: quicker, brighter -->. The words: quicker or slower; brighter or graver (a touch higher
-  and livelier, or lower and flatter); tighter or looser (shorter pauses, as when you are on a roll,
-  or longer ones, letting a moment sit); louder or softer (projecting, or leaning in); or one of
-  excited, serious, hushed, urgent, playful, tender, dry. It lasts to the end of its paragraph and
-  eases in and out over a few sentences. Where you would really stop - a beat before a reveal - put
-  <!-- hesitation --> at that exact spot (<!-- hesitation: 2 --> for two seconds). Sparingly: most
-  paragraphs carry no mark at all, and a passage seldom more than one or two. These marks are never
-  read aloud, so never also describe the delivery in words.
+  HOW YOU SAY IT - the voice reading your words has a steady delivery of its own, and you can say how a
+  stretch of them is said, the way a real reader speeds up as they get going, goes graver for a hard card, or
+  draws a word out before the thing they are about to reveal. There are two forms, and both use the same words:
+
+  - A stretch: a mark on a line of its own before a paragraph, <!-- delivery: terms -->, lasts that paragraph
+  and eases in and out. Inline, it starts at that word; <!-- /delivery --> after it ends it exactly there.
+
+  - A word or a few: put them in square brackets and the terms in braces straight after, [words]{terms}. The
+  brackets and braces are never spoken or shown.
+
+  The terms, separated by commas, come from these lists. A delivery word may take a degree before it (a little,
+  quite, very, extremely) or a number from 0 to 2 after it; a shape says how a stretch moves from its start to
+  its end; a word's act goes on the last word in brackets; a rest or an axis takes its number as the list says.
+  {{deliveries}}
+
+  Where you would really stop - a beat before a reveal - put <!-- hesitation --> at that exact spot (<!--
+  hesitation: 2 --> for two seconds); where you would rather hold the word than stop, draw it out instead. A
+  stretch can breathe its own way too: its rests longer or shorter than the voice's own. Mark
+  where a reader would really change, and let the words carry the feeling: a delivery that fights them lands
+  weakly. Sparingly: most paragraphs carry no mark at all, and a passage seldom more than one or two. These marks
+  are never read aloud, so never also describe the delivery in words.
 
 
   A LINE THE BRIEF GIVES YOU WORD FOR WORD - a greeting, a catchphrase, a sign-off - is said exactly

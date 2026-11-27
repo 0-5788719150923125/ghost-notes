@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 845 references inside a folder, 1526 down the stack, 0 up it.
+Between scripts today: 860 references inside a folder, 1560 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -20,14 +20,14 @@ Between scripts today: 845 references inside a folder, 1526 down the stack, 0 up
 | `table_show/` | The table's show | 30 | `table`, `cartoon`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `geometry`, `audio`, `platform`, `data` |
 | `table/` | The set | 90 | `reading`, `media`, `ui`, `agents`, `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio`, `platform`, `data` |
 | `cartoon/` | Cartoon | 5 | `reading`, `timeline`, `show`, `ui`, `notes`, `agents`, `stage`, `platform`, `data` |
-| `reading/` | The voice's workspaces | 17 | `export`, `music`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `scene_kit`, `audio`, `platform`, `data` |
+| `reading/` | The voice's workspaces | 22 | `export`, `music`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `audio`, `platform`, `data` |
 | `export/` | Export | 12 | `show`, `media`, `voice`, `ui`, `notes`, `agents`, `stage`, `scene_kit`, `render`, `audio`, `platform`, `data` |
 | `music/` | Music | 18 | `timeline`, `show`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 9 | `show`, `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `show/` | The show | 12 | `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `media/` | Media | 22 | `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
-| `voice/` | Synthesis (voice) | 19 | `ui`, `audio`, `platform`, `data` |
-| `ui/` | The panel kit | 39 | `notes`, `agents`, `render`, `platform`, `data` |
+| `voice/` | Synthesis (voice) | 23 | `ui`, `audio`, `platform`, `data` |
+| `ui/` | The panel kit | 40 | `notes`, `agents`, `render`, `platform`, `data` |
 | `notes/` | Notes | 13 | `agents`, `platform`, `data` |
 | `agents/` | Agents | 9 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
@@ -110,13 +110,13 @@ The note as a file: where notes live, a document kept in step with its file, the
 
 What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow the window and its "+", a component's card in its family's color and the chips over the cards, the cards a note's components bring (built from the registry's rows, attached and detached), the one list of what is made for a note (`PipelineCard`), the Script card every note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` - the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a kit for a note's components.
 
-[`agent_pick`](../src/ui/agent_pick.gd), [`armed_delete`](../src/ui/armed_delete.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`dex_window`](../src/ui/dex_window.gd), [`direction_card`](../src/ui/direction_card.gd), [`entry_card`](../src/ui/entry_card.gd), [`find_bar`](../src/ui/find_bar.gd), [`graphics_panel`](../src/ui/graphics_panel.gd), [`icons`](../src/ui/icons.gd), [`keys_window`](../src/ui/keys_window.gd), [`note_cards`](../src/ui/note_cards.gd), [`note_editor`](../src/ui/note_editor.gd), [`note_grid`](../src/ui/note_grid.gd), [`note_kept`](../src/ui/note_kept.gd), [`note_tile`](../src/ui/note_tile.gd), [`panel_deck`](../src/ui/panel_deck.gd), [`picture_window`](../src/ui/picture_window.gd), [`pipeline_card`](../src/ui/pipeline_card.gd), [`prop_refine`](../src/ui/prop_refine.gd), [`prop_refining`](../src/ui/prop_refining.gd), [`prop_section`](../src/ui/prop_section.gd), [`prop_versions`](../src/ui/prop_versions.gd), [`prop_viewer`](../src/ui/prop_viewer.gd), [`props_card`](../src/ui/props_card.gd), [`row_status`](../src/ui/row_status.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shelf_section`](../src/ui/shelf_section.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`source_window`](../src/ui/source_window.gd), [`status_log`](../src/ui/status_log.gd), [`tag_field`](../src/ui/tag_field.gd), [`text_field`](../src/ui/text_field.gd), [`text_refine`](../src/ui/text_refine.gd), [`touch_text`](../src/ui/touch_text.gd), [`volume_knob`](../src/ui/volume_knob.gd)
+[`agent_pick`](../src/ui/agent_pick.gd), [`armed_delete`](../src/ui/armed_delete.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`curve_edit`](../src/ui/curve_edit.gd), [`dex_window`](../src/ui/dex_window.gd), [`direction_card`](../src/ui/direction_card.gd), [`entry_card`](../src/ui/entry_card.gd), [`find_bar`](../src/ui/find_bar.gd), [`graphics_panel`](../src/ui/graphics_panel.gd), [`icons`](../src/ui/icons.gd), [`keys_window`](../src/ui/keys_window.gd), [`note_cards`](../src/ui/note_cards.gd), [`note_editor`](../src/ui/note_editor.gd), [`note_grid`](../src/ui/note_grid.gd), [`note_kept`](../src/ui/note_kept.gd), [`note_tile`](../src/ui/note_tile.gd), [`panel_deck`](../src/ui/panel_deck.gd), [`picture_window`](../src/ui/picture_window.gd), [`pipeline_card`](../src/ui/pipeline_card.gd), [`prop_refine`](../src/ui/prop_refine.gd), [`prop_refining`](../src/ui/prop_refining.gd), [`prop_section`](../src/ui/prop_section.gd), [`prop_versions`](../src/ui/prop_versions.gd), [`prop_viewer`](../src/ui/prop_viewer.gd), [`props_card`](../src/ui/props_card.gd), [`row_status`](../src/ui/row_status.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shelf_section`](../src/ui/shelf_section.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`source_window`](../src/ui/source_window.gd), [`status_log`](../src/ui/status_log.gd), [`tag_field`](../src/ui/tag_field.gd), [`text_field`](../src/ui/text_field.gd), [`text_refine`](../src/ui/text_refine.gd), [`touch_text`](../src/ui/touch_text.gd), [`volume_knob`](../src/ui/volume_knob.gd)
 
 ### `voice/` - Synthesis (voice)
 
 Text to narrated audio in two paths: ghost's own formant synthesizer (no models, no weights, fully inspectable, and the only path that can sing), made in-process, and local neural voices run by a subprocess host - both answered alike to the reading. Shared between them: the text front end and its normalization, the room and the buffer effects. Design: next/voice.md.
 
-[`delivery`](../src/voice/delivery.gd), [`formant_singing`](../src/voice/formant_singing.gd), [`formant_voice`](../src/voice/formant_voice.gd), [`library_voices`](../src/voice/library_voices.gd), [`phonemes`](../src/voice/phonemes.gd), [`phrasing`](../src/voice/phrasing.gd), [`room_fx`](../src/voice/room_fx.gd), [`splice`](../src/voice/splice.gd), [`text_norm`](../src/voice/text_norm.gd), [`voice`](../src/voice/voice.gd), [`voice_blend`](../src/voice/voice_blend.gd), [`voice_field`](../src/voice/voice_field.gd), [`voice_fx`](../src/voice/voice_fx.gd), [`voice_host`](../src/voice/voice_host.gd), [`voice_library`](../src/voice/voice_library.gd), [`voice_party`](../src/voice/voice_party.gd), [`voice_readers`](../src/voice/voice_readers.gd), [`voice_sampler`](../src/voice/voice_sampler.gd), [`voice_stream`](../src/voice/voice_stream.gd)
+[`delivery`](../src/voice/delivery.gd), [`delivery_bank`](../src/voice/delivery_bank.gd), [`delivery_library`](../src/voice/delivery_library.gd), [`delivery_shelf`](../src/voice/delivery_shelf.gd), [`delivery_versions`](../src/voice/delivery_versions.gd), [`formant_singing`](../src/voice/formant_singing.gd), [`formant_voice`](../src/voice/formant_voice.gd), [`library_voices`](../src/voice/library_voices.gd), [`phonemes`](../src/voice/phonemes.gd), [`phrasing`](../src/voice/phrasing.gd), [`room_fx`](../src/voice/room_fx.gd), [`splice`](../src/voice/splice.gd), [`text_norm`](../src/voice/text_norm.gd), [`voice`](../src/voice/voice.gd), [`voice_blend`](../src/voice/voice_blend.gd), [`voice_field`](../src/voice/voice_field.gd), [`voice_fx`](../src/voice/voice_fx.gd), [`voice_host`](../src/voice/voice_host.gd), [`voice_library`](../src/voice/voice_library.gd), [`voice_party`](../src/voice/voice_party.gd), [`voice_readers`](../src/voice/voice_readers.gd), [`voice_sampler`](../src/voice/voice_sampler.gd), [`voice_stream`](../src/voice/voice_stream.gd)
 
 ### `media/` - Media
 
@@ -152,7 +152,7 @@ Rendering a session to video (bake + Movie Maker, background processes) and uplo
 
 The panels a voice runs in: the reading (script, cast, voice, stream, export), the Voice card and its Lab (who reads, a blend of readers, and the fishing game that breeds the formant voice).
 
-[`note_upload`](../src/reading/note_upload.gd), [`reader_browser`](../src/reading/reader_browser.gd), [`reading_audition`](../src/reading/reading_audition.gd), [`reading_bed`](../src/reading/reading_bed.gd), [`reading_cast`](../src/reading/reading_cast.gd), [`reading_join`](../src/reading/reading_join.gd), [`reading_panel`](../src/reading/reading_panel.gd), [`reading_plan`](../src/reading/reading_plan.gd), [`reading_publish`](../src/reading/reading_publish.gd), [`reading_stream`](../src/reading/reading_stream.gd), [`reading_timeline`](../src/reading/reading_timeline.gd), [`take_cache`](../src/reading/take_cache.gd), [`text_walk`](../src/reading/text_walk.gd), [`voice_card`](../src/reading/voice_card.gd), [`voice_fishing`](../src/reading/voice_fishing.gd), [`voice_keep`](../src/reading/voice_keep.gd), [`voice_shape`](../src/reading/voice_shape.gd)
+[`delivery_design`](../src/reading/delivery_design.gd), [`delivery_hearing`](../src/reading/delivery_hearing.gd), [`delivery_lab`](../src/reading/delivery_lab.gd), [`delivery_section`](../src/reading/delivery_section.gd), [`delivery_tools`](../src/reading/delivery_tools.gd), [`note_upload`](../src/reading/note_upload.gd), [`reader_browser`](../src/reading/reader_browser.gd), [`reading_audition`](../src/reading/reading_audition.gd), [`reading_bed`](../src/reading/reading_bed.gd), [`reading_cast`](../src/reading/reading_cast.gd), [`reading_join`](../src/reading/reading_join.gd), [`reading_panel`](../src/reading/reading_panel.gd), [`reading_plan`](../src/reading/reading_plan.gd), [`reading_publish`](../src/reading/reading_publish.gd), [`reading_stream`](../src/reading/reading_stream.gd), [`reading_timeline`](../src/reading/reading_timeline.gd), [`take_cache`](../src/reading/take_cache.gd), [`text_walk`](../src/reading/text_walk.gd), [`voice_card`](../src/reading/voice_card.gd), [`voice_fishing`](../src/reading/voice_fishing.gd), [`voice_keep`](../src/reading/voice_keep.gd), [`voice_shape`](../src/reading/voice_shape.gd)
 
 ### `cartoon/` - Cartoon
 
@@ -218,5 +218,5 @@ Godot compiles a script with every script it names by class or preload, wherever
 
 | launch | builds | scripts | lines | budget |
 | --- | --- | --- | --- | --- |
-| the phone shell | `app/main`, `app/phone_shell` | 80 | 32,089 | 40,000 |
-| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 125 | 54,032 | 65,000 |
+| the phone shell | `app/main`, `app/phone_shell` | 80 | 32,136 | 40,000 |
+| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 125 | 54,105 | 65,000 |

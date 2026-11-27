@@ -31,6 +31,7 @@ extends Node
 ##   always stops it (a blend changed meanwhile too), and the next press reads the new blend;
 ## - picking another voice ends the blend;
 ## - a voice of one reader opens on its rows alone, Test ready; readers nobody described are picked by number;
+## - the Lab is a window of its own, never a popup a click elsewhere closes;
 ## - every Lab opens sized to what its voice holds, in the middle of the room beside the panel and clear of it - a
 ##   narrow one opened after a wide one too (centered on the last one's size, it would keep the wide one's left edge);
 ## - on Ghost Notes' own voice ([FormantVoice]) the Lab is its fishing game ([VoiceFishing]), the paragraph dials it
@@ -119,6 +120,8 @@ func _run() -> void:
 		and b._sound.is_ancestor_of(cast._fx_pad) and not b._sound.is_ancestor_of(cast._test)
 		and b._popup.is_inside_tree() and not ("_speaker_row" in cast) and cast._speaker is int,
 		"the Lab holds the voice's own rows, in the tree with the card, and the card has no reader number")
+	_ok(not (b._popup is Popup) and b._popup.visible and b._popup.title.begins_with("Lab - "),
+		"the Lab is a popup, closed by a click elsewhere, where every other window stays open until it is closed")
 	_ok(b != null and b._blends and b._tree.columns == 1 and b._shape_box.visible and b.shape().names.size() == 1,
 		"a voice whose readers blend opens with ticks and its shape")
 	_ok(b._test != null and b._test.get_parent().get_index() == 0 and b._test.get_index() == 0,

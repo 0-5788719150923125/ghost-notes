@@ -1180,45 +1180,45 @@ func _check_stress_reaches_the_voice() -> void:
 		"a long italic run was sent as stress, or the short one after it was not: %s" % [long])
 
 
-## A delivery mark leans the voice a step at a time and eases in and out: the leaned sentence is quicker,
-## higher and less paused than the plain one by a little; an unknown word is nothing; the voice's own pitch ratio is never touched.
+## A delivery mark moves the words of its paragraph, token by token ([DeliveryBank]): eased in over its first syllables, let go
+## after its paragraph, the paragraph before it untouched (the control); an unknown word is nothing; what a token carries
+## reaches the request.
 func _check_delivery_marks() -> void:
 	_slots(1)
 	_ed._cast._slots[0]["pace"] = 1.0
 	_ed._cast._slots[0]["tone"] = 1                      # Warm: the voice's own
 	_ed._cast._slots[0]["pause"] = 1.0
 	var chunks: Array = _ed._build_chunks("Calm start here.\n\n<!-- delivery: excited -->\nOh wow. This is big. "
-		+ "Really big.\n\nBack to calm now. And calmer.\n\n<!-- delivery: nonsense -->\nStill the voice's own.")
-	var leans: Array = []
+		+ "Really big.\n\nBack to calm now. And calmer and calmer, on and on, to the very end.\n\n<!-- delivery: nonsense -->\nStill the voice's own.")
+	var rate := {}
 	for c in chunks:
-		leans.append((c as Dictionary).get("lean", Vector4.ZERO))
-	var pace: Array = []
-	for v in leans:
-		pace.append(snappedf((v as Vector4).x, 0.01))
-	_ok(pace.size() == 7 and float(pace[0]) == 0.0 and 0.0 < float(pace[1]) and float(pace[1]) < float(pace[2])
-		and float(pace[2]) < float(pace[3]) and float(pace[3]) <= 1.0,
-		"a delivery did not ease in over its sentences: %s" % str(pace))
-	_ok(float(pace[4]) < float(pace[3]) and float(pace[4]) > 0.0 and float(pace[5]) < float(pace[4]),
-		"after its paragraph the delivery did not ease back out: %s" % str(pace))
-	var calm: Dictionary = _ed._request_args(_ed._cast.slot_cfg(0), chunks[0])
+		for t in (c as Dictionary)["tokens"]:
+			rate[String((t as Dictionary)["text"])] = float(((t as Dictionary).get("x", {}) as Dictionary).get("rate", 1.0))
+	_ok(float(rate.get("start", 0.0)) == 1.0 and float(rate.get("here", 0.0)) == 1.0,
+		"the paragraph before a delivery was moved: %s" % str(rate))
+	_ok(1.0 < float(rate.get("oh", 1.0)) and float(rate.get("oh", 1.0)) < float(rate.get("really", 1.0)),
+		"a delivery did not ease in over its first syllables: %s" % str(rate))
+	_ok(float(rate.get("back", 1.0)) > 1.0 and float(rate.get("back", 1.0)) < float(rate.get("really", 1.0))
+		and float(rate.get("end", 0.0)) == 1.0,
+		"after its paragraph the delivery did not let go: %s" % str(rate))
+	_ok(float(rate.get("still", 0.0)) == 1.0, "an unknown delivery word moved the voice: %s" % str(rate))
 	var lit: Dictionary = _ed._request_args(_ed._cast.slot_cfg(0), chunks[3])
-	_ok(float(lit["length_scale"]) < float(calm["length_scale"]) and float(lit["lean_semis"]) > 0.0
-		and float(lit["pause_scale"]) < float(calm["pause_scale"]) and float(calm["lean_semis"]) == 0.0,
-		"an excited stretch is not quicker, brighter and tighter than the voice's own")
-	_ok(float(lit["length_scale"]) > float(calm["length_scale"]) * 0.9 and float(lit["lean_semis"]) <= 0.7,
-		"a delivery moved the voice by more than a lean: %s against %s" % [str(lit), str(calm)])
-	_ok(Delivery.lean_of("nonsense words") == Vector4.ZERO and Delivery.lean_of("quicker quicker quicker") == Vector4(2, 0, 0, 0),
-		"an unknown word moved the voice, or three steps went past two")
-	# A passage that opens on something stripped (an authoring note): a mark is noted before the leading
-	# whitespace goes and applied after, so the offsets must match or a mark starts a sentence late.
+	var sent := false
+	for t in lit["tokens"]:
+		sent = sent or ((t as Dictionary).has("x") and float((t as Dictionary)["x"].get("pitch", 0.0)) > 0.0)
+	_ok(sent and not lit.has("lean_semis"), "what a delivery says of a word does not reach the request: %s" % str(lit["tokens"]))
+	_ok((DeliveryBank.parse("nonsense words")["unknown"] as Array) == ["nonsense words"]
+			and is_equal_approx(float(DeliveryBank.parse("faster faster")["axes"]["rate"]), 2.0 * log(1.15)),
+		"an unknown word was not reported, or a word said twice was not twice")
+	# A passage that opens on something stripped (an authoring note): the delivery still starts on its own first word.
 	var led: Array = _ed._build_chunks("<!-- a note -->\n\nCalm start here.\n\n<!-- delivery: excited -->\nOh wow. This is big.")
-	var led_pace: Array = []
+	var led_x := {}
 	for c in led:
-		led_pace.append(snappedf(((c as Dictionary).get("lean", Vector4.ZERO) as Vector4).x, 0.01))
-	_ok(led_pace.size() == 3 and float(led_pace[0]) == 0.0 and float(led_pace[1]) > 0.0
-		and float(led_pace[2]) > float(led_pace[1]),
-		"a delivery marked after a stripped opening did not start on its own first sentence: %s" % str(led_pace))
-	# VOLUME is effort alone: louder asks for more effort and no pitch at all
-	var loud := {"tokens": [], "plan_u": 0.0, "plan_v": 0.0, "lean": Delivery.lean_of("louder")}
-	var la: Dictionary = _ed._request_args(_ed._cast.slot_cfg(0), loud)
-	_ok(float(la["lean_effort"]) > 0.0 and float(la["lean_semis"]) == 0.0, "louder moved the pitch, or not the effort")
+		for t in (c as Dictionary)["tokens"]:
+			led_x[String((t as Dictionary)["text"])] = (t as Dictionary).has("x")
+	_ok(not bool(led_x.get("here", true)) and bool(led_x.get("wow", false)) and bool(led_x.get("big", false)),
+		"a delivery marked after a stripped opening did not start on its own first word: %s" % str(led_x))
+	# VOLUME is level and effort: louder asks for both and no pitch at all
+	var loud: Dictionary = DeliveryBank.parse("louder")
+	_ok(float(loud["axes"].get("volume", 0.0)) > 0.0 and float(loud["axes"].get("effort", 0.0)) > 0.0
+		and not (loud["axes"] as Dictionary).has("pitch"), "louder moved the pitch, or not the level")

@@ -97,11 +97,11 @@ Tracked work for Ghost Notes, from the notes refactor's next steps to the long a
 - [ ] **A composed Sound, by ear, then a chorus**
       Built: Song became Sound - a file, or a song composed from seeded parts with the note's words sung by Kokoro on a reference's tune or one made for them (next/music.md). Open: ERROR ME FOUND judged by ear; a chorus of voices; lyrics aligned to the reference by Whisper; notes edited on the Timeline; MIDI and stems out; a Sound played from another note.
 
-- [ ] **Delivery at every scope**
-      Planned, not built: one vocabulary of ways to say words - expressions, axes, word acts, shapes - written on words (`[words]{terms}`), over a stretch (`<!-- delivery: -->`) or between words (`{sigh}`), changing inside a sentence through the per-token duration, pitch, energy and style the patched Kokoro already takes. Waiting on the author's answers to its open questions. See [delivery.md](delivery.md).
-
 - [ ] **Bounce light, by eye**
       The Graphics panel's Bounce light (screen-space indirect light, `Graphics.dress`) is off until judged (true-tarot 279427: subtle at strength 1, 2.5 ms a frame). The tonemapper is a choice on the Look card since 2026-11-06 (`Tonemaps`: Filmic the default, AgX and ACES at the presets the user was shown, three adjustments kept for each); the user preferred AgX there, and its preset may want tuning per set once watched.
+
+- [ ] **Delivery at every scope**
+      Built, waiting on the author's ear: one vocabulary of ways to say words - 126 deliveries, 17 word acts, shapes and ramps, any with a degree - written on words (`[words]{terms}`) or over a stretch (`<!-- delivery: -->`), changing inside a sentence through Kokoro's per-token durations, pitch curve and style rows. Open: sounds between words (`{sigh}`), the editor's palette, tuning by ear. See [delivery.md](delivery.md).
 
 - [ ] **Cards, generalized**
       Built: the rename (Cards), the table's verbs as one registry, positions as data, a dealer's tools and the reader's guard (step 9). Open: card state over show time; decks and faces read from the show's guide (the rules are every show's since 2026-10-08 - a tarot show is its brief; the card's size and face are still the tarot's); a dealer run by a real agent (the tools exist, and no episode step calls them yet); pick-a-pile episodes.

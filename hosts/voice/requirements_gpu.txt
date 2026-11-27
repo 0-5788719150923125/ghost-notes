@@ -1,0 +1,20 @@
+# ghost voice host dependencies for the graphics card (the voice_gpu_venv row in src/platform/deps.gd).
+#
+# requirements.txt with onnxruntime's CUDA build in place of its CPU build: the two install the
+# same `onnxruntime` package and cannot share an environment, so this is an environment of its own,
+# chosen by the "voice" / "gpu" setting (VoiceHost). Why each other package is here is said in
+# requirements.txt; keep the two lists the same apart from onnxruntime.
+#
+# onnxruntime-gpu on PyPI is built for CUDA 13 from 1.28 on, which runs on compute capability 12.0
+# (Blackwell) with a driver that speaks CUDA 13. Its `cuda` and `cudnn` extras bring the CUDA
+# runtime, cuBLAS, cuFFT, cuRAND, NVRTC and cuDNN as NVIDIA's own wheels, loaded from this
+# environment (backends.providers calls onnxruntime.preload_dlls), so nothing is installed
+# system-wide; only the NVIDIA driver is the machine's. MIT; NVIDIA's wheels are under NVIDIA's
+# redistributable license.
+
+onnxruntime-gpu[cuda,cudnn]>=1.30,<2
+numpy>=2.5.3
+espeakng-loader>=0.2.4
+phonemizer>=3.4
+nltk>=3.10.3
+onnx>=1.23.1

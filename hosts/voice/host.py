@@ -18,7 +18,9 @@ to a file whose path is returned, because base64 over a pipe is a needless copy
 of megabytes and Godot can load a WAV directly.
 
   -> {"id": 1, "op": "capabilities"}
-  <- {"id": 1, "ok": true, "backends": {...}}
+  <- {"id": 1, "ok": true, "backends": {...}, "device": "gpu", "device_why": ""}
+     `device` is where the models run: "gpu" when the host was started with `--gpu` and CUDA runs, else
+     "cpu", with `device_why` saying why the card was not used when it was asked for (backends.device).
 
   -> {"id": 2, "op": "voices"}
   <- {"id": 2, "ok": true, "voices": [{"id", "name", "backend", "license", ...}]}
@@ -34,6 +36,8 @@ of megabytes and Godot can load a WAV directly.
      A `semis` in its params (a voice's Tone) is a change of SIZE, the notes and their times kept (`_sung_at_size`);
      every phrase is sung on past its end and cut, so its last word is whole (`_sung_whole`).
 
+  -> {"id": 7, "op": "measure", "wavs": ["/path/a.wav", "/path/b.wav"]}
+  <- {"id": 7, "ok": true, "measured": {"takes": [{seconds, voiced, pitch, ...}], "all": {...}}}
   -> {"id": 4, "op": "cancel", "ids": [2, 3]}
   <- {"id": 3, "ok": false, "cancelled": true}
   <- {"id": 4, "ok": true, "dropped": 1}
@@ -213,9 +217,12 @@ class Host:
 
     def dispatch(self, op: str, req: dict) -> dict:
         if op == "capabilities":
+            where = backends.device()
             return {
                 "protocol": PROTOCOL_VERSION,
                 "backends": {name: cls.describe() for name, cls in REGISTRY.items()},
+                "device": where["device"],
+                "device_why": where["why"],
             }
         if op == "voices":
             voices = []
@@ -255,6 +262,11 @@ class Host:
             if abs(semis) > 1e-3:
                 return _sung_at_size(backend, voice, req.get("words") or [], req["out"], params, req.get("style") or {}, semis)
             return _sung_whole(backend, voice, req.get("words") or [], req["out"], params, req.get("style") or {})
+        if op == "measure":
+            # what takes sound like as numbers (measure.py): a delivery heard against its plain twin
+            import measure
+
+            return {"measured": measure.of_files(req.get("wavs") or [])}
         if op == "ensure":
             # download/prepare a voice without synthesizing, so a UI can show
             # progress before the user is waiting on audio
@@ -365,4 +377,6 @@ def _sung_at_size(backend, voice: str, words: list, out: str, params: dict, styl
 
 
 if __name__ == "__main__":
+    # `--gpu`: the models run on the graphics card where CUDA can (the voice_gpu_venv environment)
+    backends.use_gpu("--gpu" in sys.argv[1:])
     raise SystemExit(Host().run())

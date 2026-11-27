@@ -2,16 +2,105 @@
 
 ## Status
 
-**Planned. Nothing here is built.** What exists today, and what this plan grows from:
+**Built; waiting on the author's ear.** What is here:
 
-- `<!-- delivery: quicker, brighter -->` leans the rest of a paragraph a step at a time on four axes (pace, brightness,
-  pauses, volume), one value per sentence, eased half the way each sentence (`Delivery.lean_of`, `LEAN_EASE`).
-- `<!-- inflect: none|rise -->...<!-- /inflect -->` takes away or adds a question's rise on the words it wraps; `*italic*`
-  and `**bold**` hit a word (a pitch accent, a longer stressed vowel, louder). A question rises by rule
-  (`hosts/voice/inflection.py`).
-- `<!-- hesitation -->` is a silence spliced in; `Hmm.` is a hum held by overlap-add.
+- **The bank** (`src/voice/delivery_bank.gd`, `DeliveryBank`, docs/delivery.md): 11 axes, 11 degree words, 4 shapes,
+  17 acts and 126 named deliveries in 11 families, every row written in the grammar a mark takes, with synonyms (`aka`).
+  `parse` reads terms (degrees before or after, numbers, ramps, repeats, a note's own names), `resolve` lays a passage's
+  stretches over its tokens: each token's `x` (axis values) and `acts`.
+- **The forms**: `<!-- delivery: terms -->` (to its paragraph's end, eased in over 4 syllables and let go over 6 after;
+  inline from that word; exact up to a `<!-- /delivery -->`), `[words]{terms}` (read as a closed delivery round the
+  words, `Manuscript.delivered_as_marks`, at every entry: `ReadingPlan.passages`, the reading's walk, `CardReading`,
+  `LetterScript`, `TableProducer.clean_spoken`; shown as the words alone, `Manuscript.plain`), and
+  `<!-- delivery: name = terms -->`. `<!-- inflect: -->` is a closed delivery of the act it names. A stretch rides the
+  phonemizer as two sentinels of one of 64 slots (`TextNorm.DELIVERY_OPEN`), reused as stretches close. A term no
+  delivery knows is said in the plan's note.
+- **The voice host** (Kokoro): a word's `x` and acts become inflection.py Marks (`delivered`): `rate` is each sound's
+  `dur_scale`, `precision` its consonants', `pitch` a level and `range` a scaling of the planned curve about the call's
+  mean (both through `f0_keep`, shapes scaled with it), `tremor` a wandering shake of pitch and level, `push` and `breath`
+  style rows a token (the moving graph, opened for them), the contour acts keyframes on the stressed vowel, `drawn` frame
+  floors on the last vowel and the sounds after it, `clipped` a shorter last sound and no trail, `cut off` silence from the
+  first vowel's end. `volume`, `effort` and `whisper` are curves across the take (`_word_curve`), and `pauses` scales the
+  rests at the word's marks and, in Godot, at the seam after it (`Delivery.gap_before`). The old per-sentence lean is gone.
+- **Agents**: the reader's and the game master's rules teach the two forms; the bank's names are filled in from the rows
+  (`DeliveryBank.listed`).
+- **Gates**: `tests/voice/delivery_check.gd` (the grammar, every row, stretches, words, shapes, slots, names, seams),
+  `tests/notes/script_marks_check.gd` (the Delivery, Said a way and Inflection marks through every reader), the delivery
+  checks of `tests/reading/multi_voice_check.gd`; the host's `test_delivery.py` and `test_inflection.py`.
+- **Listening**: `tests/reading/delivery_take_probe.gd` reads a folder of scripts in a note's voice; the first set is
+  `dist/delivery_samples/` (each with a plain twin). Heard: most "sound pretty great"; the comma's stretched vowel ("bird,")
+  and a drawn word held on one note were the two faults, both fixed (below).
+- **Tuning a delivery** (the section below): the Voice card lists every delivery and act the script says, plus any added
+  from the Dex, and each opens in a Lab where it is heard, shaped, refined and kept.
 
-What the author still has to judge: the schema, the bank's breadth and sizes, and the open questions at the end.
+**Not built:** the points (`{sigh}`, `{breath}`, `{um}`); the Jefferson colons (`a::nd`); the `energy`, `creak` and
+`smile` axes (to be measured as `breath` and `push` were); on Piper, the axes that need Kokoro's inputs (rate, pitch,
+range, tremor, lanes, the acts' contours and timing) - Piper takes volume, effort, whisper and pauses; a delivery tuned for
+one voice and not another (a note's tuning is every voice's); hearing a delivery from the agents writing a script (the game
+master's `delivery` tool says what terms do, without sound).
+
+**For the author:** every number below is a first guess at degree 1, to be tuned by ear in the Lab.
+
+## Tuning a delivery
+
+Built for the author to tune by ear what was tuned by hand in code, and for agents to do it beside them.
+
+- **The list** (`DeliverySection` on the Voice card, drawn by `PropsCard`): every name the script says, found by
+  `DeliveryBank.names_in` in its marks ("Said in the script"), and those put on the list from the Dex ("On the list": the
+  bank, the acts, the library, or a new one of the note's own). Each entry: Used (unticked, set aside: its words read plain,
+  and `DeliveryBank.listed` tells the agents never to write it), Strength (its degree times 0-2), Lab…, its Version, "As
+  the bank says it". A name the script defines (`<!-- delivery: giddy = ... -->`) is the script's, changed where written.
+- **The order a delivery is said in**: the note's version where its entry is `tuned`, the library's where one is kept
+  under its name, the bank's. The panel hands it to the plan as `ask.deliveries` (`ReadingCast.delivery_tuning`:
+  `{tuned, strength, off, about}`), which `DeliveryBank.defs_for` turns into parses read before the bank's - a synonym
+  of a tuned row is said its way, an act tuned or set aside is so inside every delivery that says it. The block keeps
+  `voice: deliveries: {name: {off, strength, tuned, added, about}}`; the versions are files beside the note
+  (`<note>/refine/delivery-<name>/versions.json`, `DeliveryVersions`), its designer's conversation with them.
+- **A spec** (`DeliveryBank.spec_of`): every number in its axis's own units - `axes: {axis: [[x, value]]}` (x 0 at the
+  stretch's first word, 1 at its last; one point holds, more move through them straight), `brake` (a rate ramp's
+  Friberg q), `shape`, `acts: {act: degree}`, `contours: {act: [[at, semitones]]}` (the pitch an act draws across its
+  word at degree 1, `at` 0-1 or the stressed vowel's `stress<`, `stress`, `stress>`), `emph`. The parse's ramps are
+  points too (`ramp_at`), and an act carries its own contour as a third element to the host (`inflection.contours_of`).
+  The ACTS rows' `contour` is the host's own (`test_delivery.py` holds the two equal).
+- **The Lab** (`DeliveryLab`, a window beside the panel): a voice of the note's cast, words to hear it on, picked from
+  the script's own lines that say it (`DeliverySection.lines_for`) and then lines made to show it
+  (`DeliveryHearing.words_for`: an act's with its word bracketed, a family's, lines that suit anything), the first filled in
+  so nothing need be typed; ▶ As said and ▶ Plain through the Test's audition (`ReadingPanel.audition_chunks`),
+  Measure (`DeliveryHearing`: both said, measured by the host's `measure`, hosts/voice/measure.py - length, pitch
+  median, 10th and 90th percentiles, spread, level, and both across it in tenths); a `CurveEdit` per axis and per act's
+  contour, the shape, the acts added and taken off with their degrees, the stress. A hand's change is the version at once
+  (`DeliveryVersions.set_hand`: a run of moves one version). Refine… is a designer (`DeliveryDesign`, `DeliveryTools`,
+  rules/voice/delivery.yaml) who reads the spec as JSON and HEARS a draft against plain before it is a version. Keep puts
+  it in the library (`DeliveryLibrary`, `user://library/deliveries/`, with its last measured take to hear on the Dex),
+  and the note then follows the library.
+- **The Dex** (`DeliveryShelf`, in Chrome's `DEX_SHELVES`): kept deliveries (heard, renamed, removed), the bank by
+  family, the acts; opened from the Voice card, "Add it" and "A new delivery".
+- **Agents**: the list they are told (`DeliveryBank.listed`) names each delivery by family, each act with what it sounds
+  like (its row's `told`), the shapes, and the rests and axes with their numbers (`ends 1.5`, `paragraphs 2s`, `rate 1.2`).
+  An episode's spec carries `ReadingPanel.delivery_told` (the note's own and kept names with what each is,
+  those set aside), which the reader's and the game master's prompts say (`TablePrompts.told_deliveries`); the game
+  master's `delivery` tool says what terms would do (`DeliveryBank.explained`).
+- **Gates**: `tests/reading/delivery_lab_check.gd` (the list, set aside, strength, the Lab's curves and contours reaching
+  their words, versions, Keep, the Dex, a new name, the block), `tests/voice/delivery_check.gd`'s specs and tuning,
+  `test_delivery.py`'s contours and measures, the designer's prompt in `rules_check`.
+- **Rests** (`DeliveryBank.RESTS`): the voice's dials (Pause at commas, at sentence ends, at paragraph ends; Hesitate) are its
+  own breathing, and a delivery modulates them, never replaces them: `commas`, `ends`, `paragraphs` and `hesitations` are
+  multipliers over each dial, `pauses` over all four. Only a number in seconds overrides (`paragraphs 2s`, `pauses 1s` every
+  kind: that silence whatever the dial; a spec's `secs`), never a bank row. A rest belongs to the word before it. Where each
+  is made: a comma's in the host (piper.py `_pauses_of`, `_rest_seconds`; measured on Kokoro: plain 0.22 s, `commas 2`
+  0.47 s, `commas 0.8s` 0.77 s), a sentence's and a paragraph's at the seam (`Delivery.gap_before`, `DeliveryBank.rest_of`),
+  a hesitation in the plan (`ReadingPlan._rested`: spliced and told the voice together; under `HESITATION_LEAST` it is
+  taken out). The host is never sent the three made in Godot (`Delivery.host_tokens`), so a change to one asks no take
+  again. The rows that breathe their own way use them: an auctioneer's and a commentator's commas and ends nearly closed,
+  paragraphs a little; grieving, bedtime, campfire, orator, storyteller long ends and longer paragraphs; confident,
+  commanding, newsreader, drill sergeant few hesitations; nervous, scared, doubtful, confused more; and `unhesitating`,
+  `unhurried` say one thing each. Not built: a delivery that places hesitations of its own ("halting").
+- **Two faults heard in the first samples, fixed in the Kokoro backend**: a word before a comma had its vowel stretched
+  by the hold's ratio on top of Kokoro's own lengthening there ("bird," 150 -> 250 ms with its continuation rise across
+  it): the hold's ratio is the rime's consonants' alone now, and a word's last vowel before a comma, semicolon or colon is
+  at most `PRE_MARK_VOWEL_MOST` (0.18 s; "bird," 175 ms). A drawn word is a hill, never one note (`DRAWN_HILL`,
+  `DRAWN_PEAK`: up 3 st a quarter of the way through, down to 3 under by its end, by the square root of its degree;
+  measured +1.3 st and back).
 
 ## The idea
 

@@ -161,6 +161,8 @@ func _tools() -> Array:
 			"inputSchema": {"type": "object", "properties": {"lines": {"type": "array", "items": {"type": "object", "properties": {
 				"who": who, "says": {"type": "string"}, "over": {"description": "true, or seconds"}, "together": {"type": "boolean"}, "chapter": {"type": "string", "description": "this line begins a chapter of the video, named so"}},
 				"required": ["who", "says"]}}}, "required": ["lines"]}},
+		{"name": "delivery", "description": "Check how a line would be said before you write it: `terms`, what a [words]{terms} or <!-- delivery: terms --> mark would say. Answered with what each term does to the voice, and any word no delivery knows or that is set aside here. Nothing is said or written.",
+			"inputSchema": {"type": "object", "properties": {"terms": {"type": "string"}}, "required": ["terms"]}},
 		{"name": "roll", "description": "Dice thrown onto the table, now, by the person named, from where they sit. Answered with what came up and, when it needed something, whether it made it: that stands, and nothing rolls it again. Say what the roll is for and who throws it BEFORE you know the result. Written as players write it: 1d20+5, 2d20kh1+5, 8d6, 20d6>=3, 1d100, 4dF.",
 			"inputSchema": {"type": "object", "properties": {"who": who, "dice": {"type": "string"}, "why": {"type": "string"},
 				"needs": {"type": "string", "description": "what it must come to, decided now, before it lands, from what is happening: a number it must reach (15), a comparison (<=40 for a game rolled under, >=3 for counted successes), or none when nothing is to be reached (an amount, an order of turns, a table to read). Never changed after."},
@@ -191,12 +193,22 @@ func _tools() -> Array:
 	]
 
 
+## The deliveries the note sets aside, as its plan tells them ([method TablePrompts.told_deliveries]).
+func _set_aside() -> Array:
+	for line in String(plan.get("deliveries_told", "")).split("\n"):
+		if String(line).begins_with("Set aside here, never to be written: "):
+			return Array(String(line).trim_prefix("Set aside here, never to be written: ").split(", ", false))
+	return []
+
+
 func call_tool(name: String, args: Dictionary) -> Dictionary:
 	if _released or submitted:
 		return {"text": "This scene is over and its tools are closed.", "error": true}
 	match name:
 		"say":
 			return _say(args)
+		"delivery":
+			return {"text": DeliveryBank.explained(String(args.get("terms", "")), _set_aside())}
 		"roll":
 			var needs: Variant = args.get("needs")
 			var need := str(int(needs)) if needs is float or needs is int else str(needs) if needs != null else ""

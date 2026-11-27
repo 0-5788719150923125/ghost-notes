@@ -140,7 +140,8 @@ static func parse(body: String) -> Dictionary:
 	var who := Manuscript.NARRATOR
 	for p in passages:
 		var kind := String((p as Dictionary)["kind"])
-		var text := "\n".join(PackedStringArray((p as Dictionary)["lines"] as Array)).strip_edges()
+		# words said a way (`[words]{terms}`) are a delivery round them from here on: marks, never words the table counts
+		var text := Manuscript.delivered_as_marks("\n".join(PackedStringArray((p as Dictionary)["lines"] as Array)).strip_edges())
 		# The reader's marks go on to the voice - a delivery, a hesitation, a change of speaker - but
 		# no comment is ever a word the table follows, and any other note is not read at all
 		var voiced := _voice_marks(text)
@@ -337,6 +338,7 @@ static func _words_before(text: String, at: int) -> int:
 ## is read past as a note and the line goes to whoever spoke before it.
 static func _voice_marks(text: String) -> String:
 	var lean := _rx(Manuscript.DELIVERY)
+	var lean_end := _rx(Manuscript.DELIVERY_END)
 	var hes := _rx(Manuscript.HESITATION)
 	var cue := _rx(Manuscript.SPEAKER)
 	var quiet := _rx(QUIET_MARK)
@@ -351,7 +353,7 @@ static func _voice_marks(text: String) -> String:
 		if q != null:
 			# a table's rest, as a move's is ([constant QUIET_MARK])
 			out += "<!-- action-hold: %s -->" % String.num(minf(float(q.get_string(1)), QUIET_MOST), 2)
-		elif lean.search(m.get_string()) != null or hes.search(m.get_string()) != null or over.search(m.get_string()) != null or together.search(m.get_string()) != null:
+		elif lean.search(m.get_string()) != null or lean_end.search(m.get_string()) != null or hes.search(m.get_string()) != null or over.search(m.get_string()) != null or together.search(m.get_string()) != null:
 			out += m.get_string()
 		elif cue.search(m.get_string()) != null:
 			out = out.rstrip(" \t") + "\n" + m.get_string().strip_edges() + "\n"

@@ -67,6 +67,10 @@ Every shelf a section puts on the Dex: the section, the shelf, and what it holds
 | [StickerShelf](../src/table/sticker_shelf.gd) | Sets | The places kept from a sticker book's pages (and a cartoon's painted sets): a later night set in one of the same name uses it. |
 | [LibraryProps](../src/table_show/library_props.gd) | Kept props | The props in your library, kept from any show. |
 | [LibraryProps](../src/table_show/library_props.gd) | Seen props | Every prop a set dresser has made for any episode, as it stands there. Open one and Keep it to have it in your library. |
+| [DeliveryShelf](../src/voice/delivery_shelf.gd) | Kept deliveries | The deliveries in your library, kept from any note's Voice card: one kept under a bank name is said that way in every note, one under a name of its own is a word every script may say. |
+| [DeliveryShelf](../src/voice/delivery_shelf.gd) | The bank | Every delivery Ghost Notes knows, as it comes: expressions, ways of telling, ramps over a stretch. |
+| [DeliveryShelf](../src/voice/delivery_shelf.gd) | On a word | What one word can do: a pitch shape, drawn out, clipped, cut off, stressed. |
+| [DeliveryShelf](../src/voice/delivery_shelf.gd) | New | A delivery that moves nothing yet, named by you and shaped in its Lab. |
 | [LibraryVoices](../src/voice/library_voices.gd) | Kept voices | The voices in your library, kept from any note's Voice card: every note can read in one by name. |
 
 ## The Props card

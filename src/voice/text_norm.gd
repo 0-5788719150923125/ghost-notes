@@ -44,15 +44,16 @@ const EMPH_MARKS := EMPH_ITALIC + EMPH_BOLD
 ## emphasis sentinels do: [Phonemes.parse] peels it into `hold` / `hold_before` on the word, and the
 ## panel splices the silence into the take there.
 const HOLD_MARK := "\uE003"
-## How the words between two of one are inflected (`<!-- inflect: none -->`, [constant Manuscript.INFLECT]): toggles as the
-## emphasis sentinels are, welded to the words at each end of the run by [method ReadingPlan.resolve_marks];
-## [Phonemes.parse] peels them into `inflect` on each word between.
-const INFLECT_NONE := "\uE004"
-const INFLECT_RISE := "\uE005"
-## The kinds an inflection mark names, each its sentinel.
-const INFLECTS := {"none": INFLECT_NONE, "rise": INFLECT_RISE}
+## A delivery's two ends ([DeliveryBank], next/delivery.md): the character of slot k (from DELIVERY_OPEN) opens the
+## stretch numbered k at the word it is welded before, the one of slot k from DELIVERY_CLOSE closes it after the word it
+## is welded to - welded by [method ReadingPlan.resolve_marks], peeled by [Phonemes.parse] into `dv` (the stretches a
+## word is in) and `dv_new` (those it opens). A slot is free again once its stretch closes.
+const DELIVERY_SLOTS := 64
+const DELIVERY_OPEN := 0xE100
+const DELIVERY_CLOSE := 0xE140
+const DELIVERY_ENDS := "\uE100\uE101\uE102\uE103\uE104\uE105\uE106\uE107\uE108\uE109\uE10A\uE10B\uE10C\uE10D\uE10E\uE10F\uE110\uE111\uE112\uE113\uE114\uE115\uE116\uE117\uE118\uE119\uE11A\uE11B\uE11C\uE11D\uE11E\uE11F\uE120\uE121\uE122\uE123\uE124\uE125\uE126\uE127\uE128\uE129\uE12A\uE12B\uE12C\uE12D\uE12E\uE12F\uE130\uE131\uE132\uE133\uE134\uE135\uE136\uE137\uE138\uE139\uE13A\uE13B\uE13C\uE13D\uE13E\uE13F\uE140\uE141\uE142\uE143\uE144\uE145\uE146\uE147\uE148\uE149\uE14A\uE14B\uE14C\uE14D\uE14E\uE14F\uE150\uE151\uE152\uE153\uE154\uE155\uE156\uE157\uE158\uE159\uE15A\uE15B\uE15C\uE15D\uE15E\uE15F\uE160\uE161\uE162\uE163\uE164\uE165\uE166\uE167\uE168\uE169\uE16A\uE16B\uE16C\uE16D\uE16E\uE16F\uE170\uE171\uE172\uE173\uE174\uE175\uE176\uE177\uE178\uE179\uE17A\uE17B\uE17C\uE17D\uE17E\uE17F"
 ## Every sentinel, for the passes that treat one as a wrapper (like a quote) rather than part of the word.
-const SENTINELS := EMPH_ITALIC + EMPH_BOLD + HOLD_MARK + INFLECT_NONE + INFLECT_RISE
+const SENTINELS := EMPH_ITALIC + EMPH_BOLD + HOLD_MARK + DELIVERY_ENDS
 ## Level bits carried on a word: 1 italic, 2 bold, 3 both.
 const EMPH_I := 1
 const EMPH_B := 2
@@ -245,18 +246,27 @@ static func _strip_markdown(text: String) -> String:
 ## words and nothing else (everyone except [Phonemes.parse]).
 static func strip_emphasis(text: String) -> String:
 	var any := false
-	for c in SENTINELS:
-		if text.contains(c):
+	for i in text.length():
+		if is_sentinel(text.unicode_at(i)):
 			any = true
 			break
 	if not any:
 		return text
 	var out := ""
 	for i in text.length():
-		var c := text[i]
-		if not SENTINELS.contains(c):
-			out += c
+		if not is_sentinel(text.unicode_at(i)):
+			out += text[i]
 	return out
+
+
+## Whether the character [param code] is one of [constant SENTINELS].
+static func is_sentinel(code: int) -> bool:
+	return (code >= 0xE001 and code <= 0xE003) or (code >= DELIVERY_OPEN and code < DELIVERY_CLOSE + DELIVERY_SLOTS)
+
+
+## The character that opens (or, [param closing], closes) delivery slot [param slot].
+static func delivery_end(slot: int, closing: bool) -> String:
+	return String.chr((DELIVERY_CLOSE if closing else DELIVERY_OPEN) + slot)
 
 
 ## Which marker runs in `text` are a matched emphasis pair: `{start index -> {len, put}}`, where `len` is

@@ -106,10 +106,17 @@ func _init(owner: ReadingPanel) -> void:
 
 ## Read [param passage] in the voice named [param name]: its first sentences asked of the host, the rest as it plays.
 func start(passage: String, name: String) -> void:
+	var cut: Array = ReadingPlan.cut(passage, 0)["chunks"]
+	ReadingPlan.place(cut, passage)
+	start_chunks(cut, name)
+
+
+## Read chunks [param plan] (a plan's, [method ReadingPlan.make] or [method ReadingPlan.cut]) in the voice named [param name]: a
+## delivery's Lab hears its words so, their deliveries laid on.
+func start_chunks(plan: Array, name: String) -> void:
 	stop()
 	voice = name
-	chunks = ReadingPlan.cut(passage, 0)["chunks"]
-	ReadingPlan.place(chunks, passage)
+	chunks = plan
 	for c in chunks:
 		(c as Dictionary)["speaker"] = name
 	panel._plan_near(chunks, 0, name)

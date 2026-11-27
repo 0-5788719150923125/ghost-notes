@@ -9,7 +9,11 @@ class_name VoiceHost
 ##
 ## The environment is ghost's own (`voice_venv`, see [Provision]): built by uv the first time the voice is
 ## wanted. This waits for it, saying what the install is doing, then starts the host with that
-## environment's Python and keeps it warm for the session.
+## environment's Python and keeps it warm for the session. While the machine's `voice` / `gpu` setting is on
+## ([method set_gpu]) it is `voice_gpu_venv`, onnxruntime's CUDA build, and the host runs with `--gpu`; where
+## that environment cannot be had the voice runs from `voice_venv`, said on `progress`. Where the models run
+## is the `device` of the capabilities reply ("gpu" or "cpu", with `device_why` when the card was asked for
+## and not used).
 ##
 ## Nothing here blocks the frame. The wait is polled; synthesis is a request whose reply arrives on a
 ## later frame. The caller gets signals, not return values.
@@ -25,8 +29,15 @@ signal synthesized(request_id: int, result: Dictionary)
 
 const ENV := "voice_venv"
 const VENV_DIR := "user://voice_venv"
+const GPU_ENV := "voice_gpu_venv"           # onnxruntime's CUDA build, while the setting below is on
+const GPU_VENV_DIR := "user://voice_gpu_venv"
+const GPU_SECTION := "voice"                # the machine's setting that puts the voice on the graphics card
+const GPU_KEY := "gpu"
 const HOST_REL := "hosts/voice/host.py"
 const POLL_SEC := 0.25
+
+static var _hosts: Array = []               # every host in the tree, moved together ([method _move_hosts])
+static var _awaiting := false               # the hosts move when the graphics card's environment is installed
 
 var _state := "idle"                 # idle | provisioning | starting | up | dead
 var _pid := -1
@@ -40,10 +51,60 @@ var _stderr: FileAccess              # the host's diagnostics
 var _erx := ""
 var _here: Array = []                # requests for [FormantVoice] waiting their turn: [{id, out, params}], a sung one with op, words, style
 var _making := {}                    # the one being made: {id, task, box}
+var _env := ENV                      # the environment the host runs from, picked at each start
 
 
 func _ready() -> void:
 	set_process(false)
+
+
+func _enter_tree() -> void:
+	if not _hosts.has(self):
+		_hosts.append(self)
+
+
+## Whether the voice is asked to run on the graphics card: the machine's `voice` / `gpu` setting, off by default.
+static func gpu() -> bool:
+	var st := _settings()
+	return bool(st.call("read", GPU_SECTION, GPU_KEY, false)) if st != null else false
+
+
+## Put the voice on the graphics card ([param on]) or back on the processor: the setting written, and the hosts
+## moved ([method _move_hosts]). The graphics card's environment is installed the first time (about 1.5 GB), the
+## hosts reading on the processor meanwhile and moving when it is ready.
+static func set_gpu(on: bool) -> void:
+	var st := _settings()
+	if st != null:
+		st.call("write", GPU_SECTION, GPU_KEY, on)
+	_move_hosts()
+
+
+## The settings' owner, found by its node rather than named: this compiles where no autoload is up (a gate's first lines).
+static func _settings() -> Node:
+	var tree := Engine.get_main_loop() as SceneTree
+	return tree.root.get_node_or_null("Settings") if tree != null and tree.root != null else null
+
+
+## Every host running or on its way up from another environment than the setting now names, stopped (its process
+## by its pid) and started again from that one, so its owner hears `host_ready` and asks for the capabilities and
+## the voices again. What a moved host was still making is dropped, unanswered.
+static func _move_hosts() -> void:
+	for host in _hosts.duplicate():
+		var h: VoiceHost = host
+		if h._state in ["up", "starting", "provisioning"] and h._env != h._wanted_env(false):
+			h.stop()
+			h.start()
+
+
+## The hosts moved once the graphics card's environment has installed (Provisioner's `finished`), connected once.
+static func _await_gpu_env() -> void:
+	var agent := Provision.agent()
+	if _awaiting or agent == null or not agent.has_signal("finished"):
+		return
+	_awaiting = true
+	agent.connect("finished", func(key: String, ok: bool, _message: String) -> void:
+		if key == GPU_ENV and ok:
+			_move_hosts())
 
 
 ## Bring the host up, waiting for its environment if this is the first use.
@@ -51,6 +112,7 @@ func _ready() -> void:
 func start() -> void:
 	if _state in ["up", "starting", "provisioning"]:
 		return
+	_env = _wanted_env(true)
 	var why := Provision.unsupported(ENV)
 	if not why.is_empty():
 		failed.emit("deps", "the neural voice is not available on this machine: " + why)
@@ -71,13 +133,15 @@ func stop() -> void:
 	if _pid > 0:
 		Subprocess.stop(_pid)
 		_pid = -1
-	Provision.release(ENV, "voice host")
+	_pending.clear()                 # a stopped host answers nothing
+	Provision.release(_env, "voice host")
 	_state = "idle"
 	set_process(false)
 
 
 func _exit_tree() -> void:
 	stop()
+	_hosts.erase(self)
 
 
 ## Synthesize. Returns the request id immediately; the audio arrives later on
@@ -116,6 +180,16 @@ func sing(words: Array, voice: String, out_path: String, params := {}, style := 
 	_pending[id] = {"op": "sing", "voice": voice}
 	_send({"id": id, "op": "sing", "voice": voice, "out": ProjectSettings.globalize_path(out_path), "words": words,
 		"params": params, "style": style})
+	return id
+
+
+## What the takes at [param wavs] sound like as numbers (the host's `measure`, hosts/voice/measure.py): the reply on `synthesized`
+## carries `measured` - `{takes: [{seconds, voiced, pitch, pitch_low, pitch_high, spread, level, pitch_tenths, level_tenths}], all}`.
+func measure(wavs: Array) -> int:
+	var id := _next_id
+	_next_id += 1
+	_pending[id] = {"op": "measure"}
+	_send({"id": id, "op": "measure", "wavs": wavs.map(func(p: Variant) -> String: return ProjectSettings.globalize_path(String(p)))})
 	return id
 
 
@@ -168,8 +242,27 @@ func is_up() -> bool:
 ## The environment's OWN interpreter - `bin/python` on Unix, `Scripts\python.exe` on
 ## Windows, which is why this asks [Deps] rather than joining "bin" itself.
 func _venv_python() -> String:
-	var p := Deps.venv_bin(VENV_DIR, "python")
+	var p := Deps.venv_bin(GPU_VENV_DIR if _env == GPU_ENV else VENV_DIR, "python")
 	return p if FileAccess.file_exists(p) else ""
+
+
+## The environment a start runs the host from: the graphics card's while [method gpu] asks for it and it is
+## installed, else the processor's - its install started where it can be, and the reason said on `progress` when
+## [param say].
+func _wanted_env(say: bool) -> String:
+	if not gpu():
+		return ENV
+	var why := Provision.unsupported(GPU_ENV)
+	if why.is_empty():
+		if Provision.ensure(GPU_ENV):
+			return GPU_ENV
+		_await_gpu_env()
+		var s := Provision.state(GPU_ENV)
+		why = "its environment could not be installed: %s" % s["error"] if s.has("error") \
+			else "its environment is being installed" if bool(s.get("running", false)) else Provision.hint(GPU_ENV)
+	if say:
+		progress.emit("deps", "The voice runs on the processor - the graphics card is not used: " + why)
+	return ENV
 
 
 func _host_script() -> String:
@@ -179,10 +272,10 @@ func _host_script() -> String:
 ## Start the host once the environment is ready; until then, say what its install is
 ## doing (every change, once), and fail with the install's own reason if it stops.
 func _wait_for_env() -> void:
-	if Provision.ensure(ENV):
+	if Provision.ensure(_env):
 		_spawn_host()
 		return
-	var s := Provision.state(ENV)
+	var s := Provision.state(_env)
 	if not bool(s.get("running", false)):
 		if s.has("error"):
 			_fail("deps", "the voice environment could not be installed: %s" % s["error"])
@@ -190,7 +283,7 @@ func _wait_for_env() -> void:
 		if not Provision.can_install():
 			_fail("deps", Provision.hint(ENV))
 			return
-	var line := "Preparing the voice - " + Provision.describe(ENV, s)
+	var line := "Preparing the voice - " + Provision.describe(_env, s)
 	if line != _said:
 		_said = line
 		progress.emit("deps", line)
@@ -198,11 +291,14 @@ func _wait_for_env() -> void:
 
 func _spawn_host() -> void:
 	_state = "starting"
-	Provision.hold(ENV, "voice host")
+	Provision.hold(_env, "voice host")
 	var py := _venv_python()
+	var args := PackedStringArray(["-u", _host_script()])
+	if _env == GPU_ENV:
+		args.append("--gpu")
 	# blocking=false gives a FileAccess over the child's stdio pair. Through [Subprocess] so the host
 	# dies with ghost and does not outlive it holding the model.
-	var info := Subprocess.start_with_pipe(py, ["-u", _host_script()], "voice host")
+	var info := Subprocess.start_with_pipe(py, args, "voice host")
 	if info.is_empty():
 		_fail("host", "could not start the voice host process")
 		return
@@ -217,7 +313,7 @@ func _spawn_host() -> void:
 
 func _fail(stage: String, msg: String) -> void:
 	print("ghost/voice: FAILED at %s - %s" % [stage, msg])
-	Provision.release(ENV, "voice host")
+	Provision.release(_env, "voice host")
 	_state = "dead"
 	set_process(not _making.is_empty())    # a sentence made here still comes back
 	failed.emit(stage, msg)

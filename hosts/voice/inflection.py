@@ -28,9 +28,11 @@ A Mark is what one word does:
 - `stretch`: its stressed vowel held this much longer, on top. With inflection on, the rules' stretches are all a word
   has: the backend's own emphasis stretch is not added.
 
-A SCRIPT OVERRIDES THE RULES word by word: a token's `inflect` (the script's `<!-- inflect: none -->...<!-- /inflect -->`,
-src/data/manuscript.gd INFLECT) is "none" (no rule marks it) or "rise" (the last word of each run so wrapped rises as a
-question's last word does, whatever the sentence is).
+A SCRIPT SAYS HOW ITS WORDS ARE SAID (next/delivery.md, src/voice/delivery_bank.gd): a token's `acts` (`[name, degree]`)
+are what the word does - `none` (no rule marks it), `rise` and the other contours of ACTS (its pitch shape, replacing what
+the rules gave it), `drawn`, `clipped`, `cut off`, `spaced` - and its `x` how a stretch moves it: `pitch` (semitones, a
+`level` held over the word), `range` (the swing of the pitch about the call's mean, the word's shapes scaled with it),
+`tremor`, `rate` (its `pace`), `precision`, `push` and `breath` (the style lanes it is read in). `delivered` makes them.
 
 Outside a marked word the curve is 1 (the model's own pitch), and the whole is eased over SMOOTH steps so no rule
 makes a step the decoder would click on. `settings` is True (every rule at its defaults), False/None (none), or
@@ -40,7 +42,7 @@ makes a step the decoder would click on. `settings` is True (every rule at its d
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 # Curve steps (12.5 ms each, two a duration frame) the pitch curve is eased over: a Hann window of about 90 ms.
 SMOOTH = 7
@@ -67,11 +69,29 @@ class Mark:
     flatten: float = 0.0
     more: list = field(default_factory=list)  # other rules' shapes on the same word, each read alone and added
     voice: bool = False
+    level: float = 0.0      # semitones the whole word is moved, held to the next word's first sound (a delivery's pitch)
+    range: float = 1.0      # the swing of the model's pitch about the call's mean, and of the word's shapes
+    tremor: float = 0.0     # 0..1: TREMOR_SEMIS of shaking at about TREMOR_HZ
+    pace: float = 1.0       # every sound's frames times this (a delivery's rate is 1 / it): shorter as well as longer
+    drawn: float = 0.0      # seconds the word's last vowel and what sounds after it are held longer
+    clip: bool = False      # its last sound cut short, no trail
+    cut: bool = False       # it stops at its first vowel's end
+    push: float = 0.0       # the style lanes it is read in (blend.py: push 1 = PUSH_SIGMAS, breath 1 = BREATH_SIGMAS)
+    breath: float = 0.0
+    precision: float = 0.0  # consonants' frames times 1 + PRECISION of it
 
     def add(self, other: "Mark") -> "Mark":
         return Mark(self.pitch, self.slow * other.slow, self.stretch * other.stretch,
                     max(self.flatten, other.flatten), self.more + ([other.pitch] if other.pitch else []) + other.more,
-                    self.voice or other.voice)
+                    self.voice or other.voice, self.level + other.level, self.range * other.range,
+                    max(self.tremor, other.tremor), self.pace * other.pace, max(self.drawn, other.drawn),
+                    self.clip or other.clip, self.cut or other.cut, self.push + other.push, self.breath + other.breath,
+                    self.precision + other.precision)
+
+    def pitched(self) -> bool:
+        """Whether the word asks anything of the pitch curve (a lane does too: its own pull on the pitch is taken out)."""
+        return (bool(self.shapes()) or self.flatten > 0.0 or self.level != 0.0 or self.range != 1.0 or self.tremor > 0.0
+                or self.push != 0.0 or self.breath != 0.0)
 
     def shapes(self) -> list:
         return [sh for sh in [self.pitch, *self.more] if sh]
@@ -171,36 +191,145 @@ RULES: dict = {
 }
 
 
-def plan(group: list, settings) -> dict:
-    """{token index: Mark} for one sentence, every rule `settings` leaves on combined, then what the script says
-    word by word (`inflect`): a word marked "none" unmarked, the last of each run marked "rise" given a question's rise
-    (by the question rule's fields) where the question rule has not already."""
-    if not settings:
-        return {}
-    told = settings if isinstance(settings, dict) else {}
+# A delivery's tremor at 1: semitones either way, its rate (Hz) and how far the rate wanders either way.
+TREMOR_SEMIS = 0.8
+TREMOR_HZ = 5.8
+TREMOR_WANDER = 1.2
+# What precision 1 does to a consonant's frames.
+PRECISION = 0.3
+# The seconds `drawn` holds at degree 1 (delivery_bank.gd DRAWN_SECONDS).
+DRAWN_SECONDS = 0.35
+# A drawn word's pitch is a hill, never a held note: up DRAWN_HILL semitones DRAWN_PEAK of the way through the word, and
+# down to DRAWN_HILL under where it began by its end; both grow with the square root of the degree.
+DRAWN_HILL = 3.0
+DRAWN_PEAK = 0.25
+
+
+def acts_of(t: dict) -> dict:
+    """{act: degree} a token's `acts` say, the last of each kept."""
     out: dict = {}
-    risen: set = set()
-    for key, row in RULES.items():
-        own = told.get(key, True)
-        if own is False:
+    for a in t.get("acts") or []:
+        try:
+            out[str(a[0])] = float(a[1])
+        except (TypeError, ValueError, IndexError):
             continue
-        fields = {**row["fields"], **(own if isinstance(own, dict) else {})}
-        for ti, m in row["fn"](group, fields).items():
-            out[ti] = out[ti].add(m) if ti in out else m
-            if key == "question":
-                risen.add(ti)
-    asked = [str(t.get("inflect", "") or "") for t in group]
+    return out
+
+
+def contours_of(t: dict) -> dict:
+    """{act: [(at, semitones)]} the pitch a token's acts draw their own way (an act's third element: a delivery tuned in its
+    Lab, delivery_bank.gd `from_spec`), at degree 1; `at` 0..1 or an anchor."""
+    out: dict = {}
+    for a in t.get("acts") or []:
+        if not isinstance(a, (list, tuple)) or len(a) < 3 or not isinstance(a[2], list):
+            continue
+        keys = []
+        for p in a[2]:
+            try:
+                at = p[0] if p[0] in ANCHORS else min(max(float(p[0]), 0.0), 1.0)
+                keys.append((at, float(p[1])))
+            except (TypeError, ValueError, IndexError):
+                continue
+        if keys:
+            out[str(a[0])] = keys
+    return out
+
+
+def _scaled(keys: list, k: float) -> list:
+    return [(at, st * k) for at, st in keys]
+
+
+def _contour(name: str, d: float, q_fields: dict):
+    """The Mark an act of ACTS makes at degree `d`, or None for one that is not a contour."""
+    if name == "rise":
+        return _rise({**q_fields, "rise": float(q_fields["rise"]) * d})
+    if name == "low rise":
+        return Mark(pitch=[(0.0, 0.0), ("stress<", -1.5 * d), ("stress>", -1.0 * d), (1.0, 4.0 * d)], flatten=0.6, voice=True)
+    if name == "fall":
+        return Mark(pitch=[("stress<", 0.0), ("stress", 1.0 * d), (1.0, -5.0 * d)], flatten=0.8)
+    if name == "rise-fall":
+        return Mark(pitch=[("stress<", 0.0), ("stress", 4.0 * d), ("stress>", 2.0 * d), (1.0, -3.0 * d)], flatten=0.6)
+    if name == "fall-rise":
+        return Mark(pitch=[("stress<", 0.0), ("stress", -3.0 * d), ("stress>", -2.0 * d), (1.0, 3.0 * d)], flatten=0.6,
+                    voice=True)
+    if name == "contrast":
+        return Mark(pitch=[(0.0, 0.0), ("stress<", -2.0 * d), ("stress", 4.0 * d), (1.0, -1.0 * d)], flatten=0.5,
+                    slow=1.0 + 0.05 * d, stretch=1.0 + 0.3 * d)
+    if name == "scoop":
+        return Mark(pitch=[("stress<", -2.0 * d), ("stress", -1.5 * d), ("stress>", 1.0 * d), (1.0, 3.0 * d)], flatten=0.6)
+    if name == "reminder":
+        return Mark(pitch=[(0.0, 2.0 * d), ("stress<", 2.0 * d), ("stress", -1.0 * d), (1.0, -2.0 * d)], flatten=0.5)
+    if name == "held":
+        return Mark(pitch=[("stress<", 0.0), (1.0, 0.0)], flatten=1.0)
+    if name == "chant":
+        return Mark(pitch=[("stress<", 2.0 * d), ("stress>", 2.0 * d), (0.8, 0.0), (1.0, 0.0)], flatten=1.0,
+                    drawn=0.2 * d)
+    return None
+
+
+def delivered(group: list, q_fields: dict) -> tuple:
+    """What a script says of each word of `group` ({token: Mark} its acts and `x` make), and the words whose rule marks its
+    acts take away (`none`, or a contour that replaces what the rules gave): (marks, replaced)."""
+    out: dict = {}
+    replaced: set = set()
+    for ti, t in enumerate(group):
+        acts = acts_of(t)
+        own = contours_of(t)
+        x = t.get("x") or {}
+        m = Mark()
+        for name, d in acts.items():
+            if name == "none":
+                replaced.add(ti)
+                continue
+            c = _contour(name, d, q_fields)
+            if c is not None:
+                replaced.add(ti)
+                m = m.add(replace(c, pitch=_scaled(own[name], d)) if name in own else c)
+                continue
+            if name == "drawn":
+                h = DRAWN_HILL * max(d, 0.0) ** 0.5
+                hill = _scaled(own[name], max(d, 0.0) ** 0.5) if name in own else [("stress<", 0.0), (DRAWN_PEAK, h), (1.0, -h)]
+                m = m.add(Mark(pitch=hill, drawn=DRAWN_SECONDS * d, flatten=0.8))
+            elif name == "clipped":
+                m = m.add(Mark(clip=True))
+            elif name == "cut off":
+                m = m.add(Mark(cut=True))
+            elif name == "spaced":
+                spaced = _scaled(own[name], d) if name in own else [("stress<", 0.0), ("stress", 2.0 * d), (1.0, -1.0 * d)]
+                m = m.add(Mark(pitch=spaced, slow=1.0 + 0.25 * d,
+                               stretch=1.0 + 0.3 * d, precision=0.6 * d))
+        if x:
+            m = m.add(Mark(level=float(x.get("pitch", 0.0) or 0.0), range=float(x.get("range", 1.0) or 1.0),
+                           tremor=float(x.get("tremor", 0.0) or 0.0),
+                           pace=1.0 / max(float(x.get("rate", 1.0) or 1.0), 0.25),
+                           push=float(x.get("push", 0.0) or 0.0), breath=float(x.get("breath", 0.0) or 0.0),
+                           precision=float(x.get("precision", 0.0) or 0.0)))
+        if m != Mark():
+            out[ti] = m
+    return out, replaced
+
+
+def plan(group: list, settings) -> dict:
+    """{token index: Mark} for one sentence: every rule `settings` leaves on combined (none when it is falsy), then what
+    the script says word by word (`delivered`): a word whose acts say `none` or give it a contour loses the rules' marks,
+    and what its acts and `x` make is added."""
+    told = settings if isinstance(settings, dict) else {}
     q = told.get("question")
     q_fields = {**RULES["question"]["fields"], **(q if isinstance(q, dict) else {})}
-    said = [ti for ti, t in enumerate(group) if str(t.get("text", "")).strip()]
-    for k, ti in enumerate(said):
-        if asked[ti] != "rise" or (k + 1 < len(said) and asked[said[k + 1]] == "rise"):
-            continue  # not the last word of a run marked to rise
-        if ti not in risen:
-            out[ti] = out[ti].add(_rise(q_fields)) if ti in out else _rise(q_fields)
-    for ti, kind in enumerate(asked):
-        if kind == "none":
-            out.pop(ti, None)
+    out: dict = {}
+    if settings:
+        for key, row in RULES.items():
+            own = told.get(key, True)
+            if own is False:
+                continue
+            fields = {**row["fields"], **(own if isinstance(own, dict) else {})}
+            for ti, m in row["fn"](group, fields).items():
+                out[ti] = out[ti].add(m) if ti in out else m
+    said, replaced = delivered(group, q_fields)
+    for ti in replaced:
+        out.pop(ti, None)
+    for ti, m in said.items():
+        out[ti] = out[ti].add(m) if ti in out else m
     return out
 
 
@@ -231,12 +360,15 @@ def curve(marks: dict, owners: list, frames: list, sounds: list, stress: dict | 
     no mark moves the pitch; None where nothing is marked to."""
     import numpy as np
 
-    if not any(m.shapes() or (m.flatten > 0.0 and planned is not None) for m in marks.values()):
+    if not any(m.shapes() or m.level != 0.0 or m.tremor > 0.0
+               or ((m.flatten > 0.0 or m.range != 1.0) and planned is not None) for m in marks.values()):
         return None
     starts = np.concatenate(([0.0], np.cumsum(np.asarray(frames, dtype=np.float64))))
     steps = int(round(starts[-1])) * 2
     semis = np.zeros(steps)
     shaped = np.zeros(steps)  # the shapes, laid `lead` steps early after
+    ranged = np.ones(steps)   # each step's range, where a word's reaches
+    shakes = np.zeros(steps)  # each step's tremor
     f0 = None
     if planned is not None:
         f0 = np.asarray(planned, dtype=np.float64).ravel()
@@ -260,7 +392,13 @@ def curve(marks: dict, owners: list, frames: list, sounds: list, stress: dict | 
         u = ((np.arange(lo, hi) + 0.5) / 2.0 - a) / (b - a)
         for sh in m.shapes():
             keys = sorted((min(max(at_of[at] if at in at_of else float(at), 0.0), 1.0), float(v)) for at, v in sh)
-            shaped[lo:hi] += [shape_at(keys, x) for x in u]
+            shaped[lo:hi] += np.asarray([shape_at(keys, x) for x in u]) * m.range
+        if m.level != 0.0:
+            shaped[lo:hi] += m.level
+        if m.range != 1.0:
+            ranged[lo:hi] = m.range
+        if m.tremor > 0.0:
+            shakes[lo:hi] = np.maximum(shakes[lo:hi], m.tremor)
         if m.flatten > 0.0 and f0 is not None:
             # read on the word's own sounds alone (what follows in the call may be another sentence's), held after
             end = max(lo + 1, min(hi, int(math.ceil(b * 2))))
@@ -270,12 +408,52 @@ def curve(marks: dict, owners: list, frames: list, sounds: list, stress: dict | 
     if lead > 0:
         shaped = np.concatenate((shaped[lead:], np.full(min(lead, steps), shaped[-1] if steps else 0.0)))[:steps]
     semis += shaped
+    if f0 is not None and np.any(ranged != 1.0):
+        semis += _ranged(f0, ranged)
     if SMOOTH > 1:
         w = np.hanning(SMOOTH + 2)[1:-1]
         w /= w.sum()
         pad = SMOOTH // 2
         semis = np.convolve(np.pad(semis, pad, mode="edge"), w, mode="valid")[:steps]
+    if np.any(shakes > 0.0):
+        semis += _tremor(shakes, lead)
     return (2.0 ** (semis / 12.0)).astype(np.float32)
+
+
+def _ranged(f0, ranged):
+    """Semitones a step that scale the model's voiced pitch about the call's mean (its log-mean) by each step's range,
+    unvoiced steps carried over from the voiced ones beside them, held within FLATTEN_MOST either way."""
+    import numpy as np
+
+    over = f0[f0 > VOICED]
+    if over.size < 2:
+        return np.zeros(f0.size)
+    voiced = np.nonzero(f0 > max(VOICED, VOICED_SHARE * float(np.median(over))))[0]
+    if voiced.size < 2:
+        return np.zeros(f0.size)
+    ref = float(np.exp(np.mean(np.log(f0[voiced]))))
+    st = np.clip((ranged[voiced] - 1.0) * 12.0 * np.log2(f0[voiced] / ref), -FLATTEN_MOST, FLATTEN_MOST)
+    return np.interp(np.arange(f0.size), voiced, st)
+
+
+def _tremor(shakes, lead: int):
+    """Semitones a step of a shaking voice: TREMOR_SEMIS at a tremor of 1, at TREMOR_HZ wandering TREMOR_WANDER either way
+    (never a steady vibrato), its depth eased in and out, laid `lead` steps early as the shapes are."""
+    import numpy as np
+
+    n = shakes.size
+    dt = 0.0125
+    t = np.arange(n) * dt
+    hz = TREMOR_HZ + TREMOR_WANDER * np.sin(2.0 * np.pi * 0.37 * t) * np.sin(2.0 * np.pi * 0.11 * t + 1.3)
+    phase = np.cumsum(2.0 * np.pi * hz * dt)
+    depth = shakes.astype(np.float64)
+    k = 9
+    w = np.hanning(k + 2)[1:-1]
+    w /= w.sum()
+    depth = np.convolve(np.pad(depth, k // 2, mode="edge"), w, mode="valid")[:n]
+    if lead > 0:
+        depth = np.concatenate((depth[lead:], np.full(min(lead, n), depth[-1] if n else 0.0)))[:n]
+    return TREMOR_SEMIS * depth * np.sin(phase)
 
 
 def _flattened(f0, u, onset: float, amount: float):

@@ -19,7 +19,7 @@ class_name ScriptMarks
 ## out before any agent sees the brief ([method TablePrompts.brief]), and a hesitation, a delivery or a stressed word
 ## stands in a line the brief gives the host word for word (rules/table/reader.yaml, `spoken`). The marks of a page or
 ## a tablet (pictures, scene lines, web pages) and the inline pronunciation are not offered: the table is the only
-## medium there, and a reader's passage keeps no bracket ([method TableProducer.clean_spoken]).
+## medium there, and a reader's passage keeps no bracket but a word said a way's ([method TableProducer.clean_spoken]).
 
 ## Fields of an entry:
 ##   label    the palette button
@@ -118,16 +118,25 @@ const REGISTRY := {
 	"delivery": {
 		"label": "Delivery",
 		"group": "timing",
-		"blurb": "Lean how the rest of this paragraph is said, a step at a time: quicker / slower, brighter / graver, tighter / looser (pauses), louder / softer, or excited, serious, hushed, urgent, playful, tender, dry; steady is the voice's own. Small, and eased in and out over a few sentences.",
-		"before": "<!-- delivery: ", "fill": "quicker, brighter", "after": " -->", "line": "own",
+		"blurb": "How the words from here are said, in the delivery bank's terms (docs/delivery.md): an expression (excited, sarcastic, shouting, sports commentator), a step on one axis (faster, flatter, breathier), a ramp (speeding up, rising, dying away) or a shape (building, fading, sudden), each with a degree (a little, very, or 0-2). On a line of its own, the paragraph under it, eased in and out; inline, from that word to the paragraph's end; with <!-- /delivery --> after it, exactly up to there. A line naming one (giddy = excited, speeding up) says how a name is said. steady is the voice's own.",
+		"before": "<!-- delivery: ", "fill": "excited, building", "after": " -->", "line": "own",
 		"modes": ["generative", "table"],
-		"blurbs": {"table": "On a line of its own before words the brief gives the host to say word for word: leans how they are said - quicker / slower, brighter / graver, tighter / looser, louder / softer, or excited, serious, hushed, urgent, playful, tender, dry. Everywhere else the reader chooses its own."},
-		"pattern": Manuscript.DELIVERY,
+		"blurbs": {"table": "On a line of its own before words the brief gives the host to say word for word: how they are said, in the delivery bank's terms - an expression (excited, sarcastic, shouting), an axis (faster, flatter, breathier), a ramp (speeding up, dying away) or a shape (building, fading), with a degree. Everywhere else the reader chooses its own."},
+		"pattern": "<!--\\s*/?\\s*delivery\\b[^>]*-->",
+	},
+	"delivered": {
+		"label": "Said a way",
+		"group": "timing",
+		"blurb": "The bracketed words said as the braces say, in the delivery bank's terms: an act on the last word (drawn, rise, fall-rise, contrast, held, cut off), or anything a delivery takes (shouting, whispered, faster). Shown and captioned as the words alone.",
+		"before": "[", "fill": "and", "after": "]{drawn, held}", "line": "",
+		"modes": ["generative", "table"],
+		"blurbs": {"table": "In a line the brief gives the host to say word for word: the bracketed words said as the braces say - an act (drawn, rise, contrast, held) or a delivery (shouting, whispered). Everywhere else the reader chooses its own."},
+		"pattern": Manuscript.DELIVERED,
 	},
 	"inflect": {
 		"label": "Inflection",
 		"group": "timing",
-		"blurb": "How the words it wraps are inflected: none says them with no inflection the text would give (a question's rise at its end, an italic word's accent), rise gives their last word a question's rise whatever the sentence is (a wh-question that should rise). Kokoro voices.",
+		"blurb": "How the words it wraps are inflected: none says them with no inflection the text would give (a question's rise at its end, an italic word's accent), rise gives their last word a question's rise whatever the sentence is (a wh-question that should rise). The same as [words]{none} and [words]{rise}. Kokoro voices.",
 		"before": "<!-- inflect: none -->", "fill": "Am I fired?", "after": "<!-- /inflect -->", "line": "",
 		"modes": ["generative"],
 		"pattern": "<!--\\s*inflect\\s*:\\s*[A-Za-z]+\\s*-->[\\s\\S]*?<!--\\s*/\\s*inflect\\s*-->",

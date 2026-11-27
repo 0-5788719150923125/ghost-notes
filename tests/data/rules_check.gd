@@ -356,6 +356,12 @@ func _prompts() -> bool:
 	texts.append(String(re["system"]) + "\n" + String(re["prompt"]))
 	_ok((ActorPrompts.land_rest({"rest": [3, 3, 0, 13, 1.0]}, 12)["rest"] as Array) == [2, 0]
 		and ActorPrompts.land_rest({"stills": [1]}, 12).has("error"), "the answer of At rest was not made sound")
+	# a delivery's designer (rules/voice/delivery.yaml), told what it tunes as its Lab tells it, with tools and without
+	var dd := DeliveryDesign.new("user://rules_check_delivery", "excited")
+	dd.words_of = func() -> String: return "The king laughed."
+	for tools in [true, false]:
+		texts.append(WriterChat.system_of(dd.about(), tools, "voice/delivery") + "\n"
+			+ WriterChat.first_message(dd.about(), DeliveryDesign.text_of(DeliveryBank.spec_of_name("excited")), "livelier", "", "", "voice/delivery"))
 	_ok(Rules.missing.is_empty(), "rendering every prompt left these unfilled: %s" % str(Rules.missing.slice(0, 6)))
 	for t in texts:
 		_ok(_kinds_named(t).is_empty(), "a prompt over a fixture naming no kind of card names one: %s" % ", ".join(_kinds_named(t)))

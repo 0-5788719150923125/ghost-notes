@@ -8,7 +8,8 @@ class_name ReaderBrowser
 ## on its rows alone.
 ##
 ## Built once, hung on the Voice row ([method build]): its rows are in the tree wherever the card is, so a change to
-## one reaches the tab whether the Lab is open or not. [method open] fills it for the voice on screen, sized to what
+## one reaches the tab whether the Lab is open or not. A window of its own, as every window is: a click elsewhere leaves it
+## open, and its close or Escape closes it. [method open] fills it for the voice on screen, sized to what
 ## that voice's Lab holds and centered in the room beside the panel - never under the panel where it fits - and it
 ## stays centered as what it holds changes its size ([method _center]).
 ##
@@ -37,7 +38,7 @@ class_name ReaderBrowser
 ## The cast this is a part of.
 var cast: ReadingCast
 
-var _popup: PopupPanel
+var _popup: Window
 var _who: Label                # whose voice the Lab is working on, in which model
 var _readers: VBoxContainer    # the list's pane, on a voice of more than one reader
 var _fishing: VoiceFishing     # the game's pane, on the formant voice
@@ -76,11 +77,27 @@ func _init(owner: ReadingCast) -> void:
 ## The Lab, hung on [param host] (the card's Voice row) and hidden until [method open]: the column the voice's own
 ## rows go in is handed back for the cast to build them into.
 func build(host: Node) -> VBoxContainer:
-	_popup = PopupPanel.new()
+	# a window of its own, as every other is: a click elsewhere leaves it open, its title bar's close or Escape closes it
+	_popup = Window.new()
+	_popup.visible = false
+	_popup.transient = true
+	_popup.wrap_controls = true
+	_popup.title = "Lab"
+	_popup.close_requested.connect(_popup.hide)
+	_popup.window_input.connect(func(e: InputEvent) -> void:
+		if e is InputEventKey and (e as InputEventKey).pressed and (e as InputEventKey).keycode == KEY_ESCAPE:
+			_popup.hide())
+	var bg := PanelContainer.new()
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_popup.add_child(bg)
+	var pad := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 8)
+	bg.add_child(pad)
 	var box := VBoxContainer.new()
 	box.custom_minimum_size = Vector2(0, 500)
 	box.add_theme_constant_override("separation", 6)
-	_popup.add_child(box)
+	pad.add_child(box)
 
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 8)
@@ -132,7 +149,9 @@ func build(host: Node) -> VBoxContainer:
 	_fishing = VoiceFishing.new(cast)
 	_fishing.visible = false
 	body.add_child(_fishing)
-	_popup.popup_hide.connect(_fishing.close)
+	_popup.visibility_changed.connect(func() -> void:
+		if not _popup.visible:
+			_fishing.close())
 	_readers = VBoxContainer.new()
 	_readers.custom_minimum_size = Vector2(380, 0)
 	_readers.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -261,6 +280,7 @@ func open() -> void:
 	_blends = cast.blends(vid) and not _all.is_empty()
 	_take_selection()
 	_who.text = "%s  ·  %s" % [cast.tab_name(), cast.voice_name(vid)]
+	_popup.title = "Lab - %s" % cast.tab_name()
 	_who.tooltip_text = "Every change here is to %s's voice, and reaches the reading as it is made." % cast.tab_name()
 	if not cast.kept_shown().is_empty():
 		_who.text = "%s  ·  %s (kept)" % [cast.tab_name(), cast.kept_shown()]
@@ -281,7 +301,7 @@ func open() -> void:
 	_fill()
 	_show_shape()
 	_say()
-	# Never the stage's height: a popup is sized to what its controls ask as it opens, before they are laid out,
+	# Never the stage's height: the window is sized to what its controls ask as it opens, before they are laid out,
 	# and never shrinks after, so the Lab is capped at a share of the window.
 	var host := _popup.get_parent()
 	var stage := host.get_viewport() if host != null and host.is_inside_tree() else null   # none out of the tree (a gate's)

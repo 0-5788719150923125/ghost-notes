@@ -93,6 +93,9 @@ var _stream := ReadingStream.new(self)
 
 ## The audition ([ReadingAudition]): Test's voice heard on its own, with its own state.
 var _audition := ReadingAudition.new(self)
+## Host replies a part asked for itself (a delivery heard in its Lab, [DeliveryHearing]): request id -> `func(result: Dictionary)`,
+## handed `{error}` where the host failed.
+var _asked := {}
 var _status: Label
 
 ## The voice's sample rate, as the host last reported it: the stream's, the audition's and the export's.
@@ -823,6 +826,12 @@ func stop_speaking() -> void:
 	_stream.stop()
 
 
+## The deliveries a script of this note may say, as an agent writing it is told them ([method DeliveryBank.listed]): the bank's
+## and the library's, the note's own, and what the Voice card sets aside.
+func delivery_told() -> String:
+	return DeliveryBank.listed(_cast.delivery_tuning())
+
+
 ## Every voice the cast has, by the name the script cues it with - the reader's first.
 func cast_names() -> Array:
 	return _cast.cast_dict().keys()
@@ -866,7 +875,8 @@ func _reading_body() -> String:
 ## What the voice reads of [param body] and the title it announces first: `{body, title}`. A tablet chapter is
 ## read off the screen and nothing else.
 func _reading_of(body: String) -> Dictionary:
-	return walk.spoken(body, _doc_field(body, "title").strip_edges())
+	# words said a way (`[words]{terms}`) reach every medium's walk as the delivery round them that it already passes on
+	return walk.spoken(Manuscript.delivered_as_marks(body), _doc_field(body, "title").strip_edges())
 
 
 ## The text the cast is derived from - the speaker cues in it are the tabs.
@@ -1021,6 +1031,8 @@ func _plan_ask(body := "") -> Dictionary:
 	# how the note says its words ([constant Manuscript.SAY]), read off its own text as well as the words read: a medium's walk
 	# hands on only what is said, and an episode's script (a walk that reads something else) has none of the note's
 	ask["said"] = ReadingPlan.said_in(_text.text if _text != null else "").merged(ReadingPlan.said_in(body), true)
+	# how the note says its deliveries: those kept, tuned, said stronger or weaker, set aside (the Voice card's list)
+	ask["deliveries"] = _cast.delivery_tuning()
 	return ask
 
 
@@ -1149,6 +1161,67 @@ func _gap_before(chunks: Array, idx: int, s: Dictionary) -> float:
 	return Delivery.gap_before(chunks, idx, s, _cast.turn_scale())
 
 
+# --- a take a part asks for itself ------------------------------------------------------------------
+
+
+## Chunk [param chunk] said in voice settings [param s] into [param to], [param done] (`func(result)`) handed the host's reply - or at
+## once, a take kept when it was said before in this voice as it is now ([TakeCache]) - with `wav` where it landed, or `{error}`.
+## A take the host makes is kept, where this process may keep the author's things.
+func hear_take(s: Dictionary, chunk: Dictionary, to: String, done: Callable) -> void:
+	var args: Dictionary = _request_args(s, chunk)
+	var key: String = take_key(s, args)
+	var kept := TakeCache.find(key)
+	var copy := TakeCache.copy_out(key, to) if not kept.is_empty() else ""
+	if not copy.is_empty():
+		var out: Dictionary = (kept["out"] as Dictionary).duplicate()
+		out["wav"] = copy
+		done.call(out)
+		return
+	if _host == null or not _host.is_up():
+		done.call({"error": "the voice host is not up"})
+		return
+	var id := _host.request("", _cast.voice_id_of(s), to, args, null)
+	_asked[id] = func(result: Dictionary) -> void:
+		if not result.has("error") and not Settings.is_read_only():
+			TakeCache.put(key, String(result.get("wav", "")), result)
+		done.call(result)
+
+
+## What the takes at [param wavs] sound like as numbers ([method VoiceHost.measure]), handed to [param done] (`func(result)`,
+## `measured` or `error`).
+func hear_measured(wavs: Array, done: Callable) -> void:
+	if _host == null or not _host.is_up():
+		done.call({"error": "the voice host is not up"})
+		return
+	_asked[_host.measure(wavs)] = done
+
+
+## Chunks [param chunks] (a plan's, [method ReadingPlan.make]) auditioned in voice [param name] as the Voice card's Test is - a test
+## playing stopped first - as a delivery's Lab plays what it tunes.
+func audition_chunks(chunks: Array, name: String) -> void:
+	if _test_busy():
+		_stop_test()
+	if _host == null or not _host.is_up() or _cast.voice_meta.is_empty():
+		return
+	if Spectrum.transport_playing():
+		Spectrum.transport_pause()
+	_cast.capture_slot()
+	_stream.yield_host()
+	_audition.start_chunks(chunks, name)
+	_show_testing(true)
+	_set_status("Testing %s…" % name)
+
+
+## Whether a test (the Voice card's, or a delivery's Lab's) is being made or heard.
+func testing() -> bool:
+	return _test_busy()
+
+
+## A test playing, stopped.
+func stop_testing() -> void:
+	_stop_test()
+
+
 # --- the audition ---------------------------------------------------------------------------------
 
 
@@ -1202,6 +1275,14 @@ func voice_made(id: String) -> void:
 
 func _on_failed(stage: String, message: String) -> void:
 	_set_status("%s failed: %s" % [stage, message])
+	if not _asked.is_empty() and stage in ["synthesize", "measure"]:
+		var waiting := _asked.values()
+		_asked.clear()
+		for done in waiting:
+			if (done as Callable).is_valid():
+				(done as Callable).call({"error": message})
+		if stage == "measure" or not _stream.live():
+			return
 	if stage != "synthesize":
 		return
 	if _cast.keep != null:
@@ -1219,6 +1300,7 @@ func warm_voice(voice: String) -> void:
 
 func _on_synthesized(id: int, result: Dictionary) -> void:
 	if result.has("backends"):
+		_cast.show_device(String(result.get("device", "")), String(result.get("device_why", "")))
 		var caps: Dictionary = result["backends"]
 		for name in caps:
 			if bool((caps[name] as Dictionary).get("duration_control", false)):
@@ -1232,6 +1314,12 @@ func _on_synthesized(id: int, result: Dictionary) -> void:
 		return
 	if result.has("voices"):
 		_cast.fill_voices(result["voices"])
+		return
+	if _asked.has(id):
+		var done: Callable = _asked[id]
+		_asked.erase(id)
+		if done.is_valid():
+			done.call(result)
 		return
 	if _cast.keep != null and _cast.keep.owns(id):
 		_cast.keep.take(id, result)

@@ -39,13 +39,17 @@ const TIMESTAMP_LEAD := "(?m)^([ \\t]*[\\[(]?\\d{1,2}[:.h]\\d{2}(?::\\d{2})?(?:[
 const OUTRO := "<!--\\s*outro\\s*-->"
 ## Any other comment is an authoring note.
 const COMMENT := "<!--[\\s\\S]*?-->"
-## How a stretch is said: `<!-- delivery: quicker, brighter -->` - a few words from a closed list
-## (Delivery.DELIVERY_WORDS), each a small step in pace, brightness or pauses - from here to the end of its
-## paragraph, eased in and out across sentences. A lean of the voice's own delivery, never a different voice.
+## How a stretch is said (next/delivery.md): `<!-- delivery: excited, building -->` in the terms of [DeliveryBank] -
+## from here to the end of its paragraph, eased in and out, or to a [constant DELIVERY_END] after it, exactly. Group 1
+## its terms. One that names a delivery of the note's own (`giddy = excited, speeding up`) says how that is said and
+## moves nothing itself. A lean of the voice's own delivery, never a different voice.
 const DELIVERY := "<!--\\s*delivery\\s*(?::\\s*([^>]*?))?\\s*-->"
-## How the words it wraps are inflected (hosts/voice/inflection.py): `<!-- inflect: none -->Am I fired?<!-- /inflect -->`
-## says them with no inflection the text would give them, `rise` with a question's rise on their last word whatever the
-## sentence is. Group 1 the closing slash, group 2 the kind (a key of [constant TextNorm.INFLECTS]). [ReadingPlan], [Phonemes].
+const DELIVERY_END := "<!--\\s*/\\s*delivery\\s*-->"
+## Words said a way: `[and]{drawn, held}` - the bracketed words, the terms in braces. Read as a closed delivery round them
+## ([method delivered_as_marks]), and shown as the words alone ([method plain]). Group 1 the words, group 2 the terms.
+const DELIVERED := "\\[([^\\[\\]\\n{}]+)\\]\\{([^{}\\n]*)\\}"
+## How the words it wraps are inflected: `<!-- inflect: none -->Am I fired?<!-- /inflect -->`, a closed delivery with that
+## act ([DeliveryBank], `none` or `rise`). Group 1 the closing slash, group 2 the kind. [ReadingPlan].
 const INFLECT := "<!--\\s*(/)?\\s*inflect\\s*(?::\\s*([A-Za-z]+))?\\s*-->"
 ## Text before the first cue belongs to this voice. A chapter that opens on a cue never has one.
 const NARRATOR := "Narrator"
@@ -147,7 +151,22 @@ static func strip_frontmatter(body: String) -> String:
 ## [param text] with every HTML comment removed, for a reader that honors none of the marks (the Lab's fishing
 ## line); otherwise a cue or hesitation is read aloud.
 static func unspoken(text: String) -> String:
-	return _rx(COMMENT).sub(text, "", true)
+	return plain(_rx(COMMENT).sub(text, "", true))
+
+
+## [param text] with every `[words]{terms}` ([constant DELIVERED]) a closed delivery mark round its words - the form every
+## reader of marks already takes, so a word said a way is a delivery wherever a reading's text goes.
+static func delivered_as_marks(text: String) -> String:
+	if not text.contains("]{"):
+		return text
+	return _rx(DELIVERED).sub(text, "<!-- delivery: $2 -->$1<!-- /delivery -->", true)
+
+
+## [param text] with every `[words]{terms}` its words alone: what a page, a tile or a letter shows.
+static func plain(text: String) -> String:
+	if not text.contains("]{"):
+		return text
+	return _rx(DELIVERED).sub(text, "$1", true)
 
 
 ## [param body] with every speaker cue that names [param old] naming [param new] instead, each cue keeping its own form
@@ -374,7 +393,7 @@ static func _strip_notes(line: String) -> String:
 		if _rx(HESITATION).search(m.get_string()) != null:
 			res += m.get_string()
 		at = m.get_end()
-	return res + line.substr(at)
+	return plain(res + line.substr(at))
 
 
 ## Where a picture goes, decided by where the author put it. Full page when it opens something: the chapter's
@@ -450,10 +469,10 @@ static func is_scene_line(text: String) -> bool:
 
 ## The first words of [param plain], for a note's tile and a card's preview: its paragraphs one to a line, blank
 ## lines and runs of spaces closed up, cut at a word near [param most] characters.
-static func preview_of(plain: String, most := 600) -> String:
+static func preview_of(text: String, most := 600) -> String:
 	var lines: Array = []
 	var n := 0
-	for line in plain.split("\n"):
+	for line in plain(text).split("\n"):
 		var l := RegEx.create_from_string("\\s+").sub(String(line), " ", true).strip_edges()
 		if l.is_empty():
 			continue

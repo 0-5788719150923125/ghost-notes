@@ -120,6 +120,16 @@ var _kept_name := ""
 var _pick_kept: Array = []
 ## Keep… and "Make it this note's own", and the samples ([VoiceKeep]): built with the Voice row.
 var keep: VoiceKeep
+## GPU on the Voice row: every voice made on the graphics card ([method VoiceHost.set_gpu]), a setting of the machine's, not the note's.
+var _gpu: Button
+const GPU_TIP := ("Make the voices on the graphics card (NVIDIA, CUDA) in place of the processor: Kokoro about ten times faster, the "
+	+ "same voice. The first time, its environment is installed (about 1.5 GB) while the voice goes on reading on the processor. "
+	+ "A setting of this machine's, for every note. Switching stops what is playing.")
+## The deliveries the note says its own way (next/delivery.md, "Tuning a delivery"; the Voice card's list, [DeliverySection]), by
+## name: `{off, strength, tuned, added, about}` - set aside, said stronger or weaker, said as its Lab's version used (kept in its
+## folder, [method delivery_folder]), put on the list by hand (a script that never says it keeps it), and what a name of the note's
+## own is. Kept in the voice block's `deliveries`.
+var deliveries := {}
 
 
 func _init(owner: ReadingPanel) -> void:
@@ -296,6 +306,14 @@ func build_voice(box: VBoxContainer) -> void:
 		+ "is this tab's. Every change reaches the reading as it is made.")
 	lab.pressed.connect(_open_lab)
 	vrow.add_child(lab)
+	_gpu = Button.new()
+	_gpu.toggle_mode = true
+	_gpu.focus_mode = Control.FOCUS_NONE
+	_gpu.button_pressed = VoiceHost.gpu()
+	Card.toggle_look(_gpu, &"voice", "GPU")
+	_gpu.tooltip_text = GPU_TIP
+	_gpu.toggled.connect(_gpu_toggled)
+	vrow.add_child(_gpu)
 	keep = VoiceKeep.new(self)
 	keep.build(box)
 
@@ -675,6 +693,69 @@ func show_pace() -> void:
 		_rate_row.visible = true
 
 
+# --- where the voices are made ----------------------------------------------------------------------
+
+
+## GPU pressed or let go: what plays stopped (the host is started again, and what it was making is dropped), and the voices moved.
+func _gpu_toggled(on: bool) -> void:
+	if _syncing:
+		return
+	panel.stop_testing()
+	panel.stop_speaking()
+	VoiceHost.set_gpu(on)
+	panel._set_status("Moving the voices to the %s…" % ("graphics card" if on else "processor"))
+
+
+## Where the host says the voices are made ([param device] "gpu" or "cpu"), and why not on the card where it was asked for and
+## could not be ([param why]): said on GPU's tooltip and the status line.
+func show_device(device: String, why: String) -> void:
+	if _gpu == null:
+		return
+	var on := device == "gpu"
+	_gpu.tooltip_text = GPU_TIP + ("\n\nNow: on the graphics card." if on else ("\n\nNow: on the processor."
+		+ ((" The card was asked for and not used: " + why) if not why.is_empty() else "")))
+	if not why.is_empty():
+		panel._set_status("The voices are made on the processor: %s" % why)
+
+
+# --- the deliveries the note says its own way -------------------------------------------------------
+
+
+## The folder delivery [param name]'s Lab keeps its versions and its designer's conversation in, beside the note.
+func delivery_folder(name: String) -> String:
+	return TextRefine.folder_for(NoteUpload.folder_of(panel.note_path), "delivery-" + name.replace(" ", "-").validate_filename())
+
+
+## What the note says of its deliveries, as a plan reads it ([method DeliveryBank.defs_for]): those kept in the library, then the
+## note's own versions over them, their strengths, those set aside, and what each name of its own is.
+func delivery_tuning() -> Dictionary:
+	var tuned: Dictionary = DeliveryLibrary.tuned().duplicate(true)
+	var strength := {}
+	var off: Array = []
+	var about: Dictionary = DeliveryLibrary.about()
+	for name in deliveries:
+		var e: Dictionary = deliveries[name] if deliveries[name] is Dictionary else {}
+		if bool(e.get("tuned", false)):
+			var spec := DeliveryVersions.spec(delivery_folder(String(name)))
+			if not spec.is_empty():
+				tuned[String(name)] = spec
+		if e.has("strength") and not is_equal_approx(float(e["strength"]), 1.0):
+			strength[String(name)] = float(e["strength"])
+		if bool(e.get("off", false)):
+			off.append(String(name))
+		if not DeliveryBank.is_named(String(name)):
+			about[String(name)] = String(e.get("about", ""))
+			if not tuned.has(String(name)):
+				tuned[String(name)] = {}    # named, nothing shaped yet: it moves nothing, and is no unknown word
+	return {"tuned": tuned, "strength": strength, "off": off, "about": about}
+
+
+## The deliveries changed (a tick, a strength, a version, one added or taken off): kept in the block, and the reading planned again.
+func deliveries_changed() -> void:
+	panel.touch()
+	panel.mark_stale()
+
+
 # --- the voice block, and what is kept between sessions -------------------------------------------
 
 
@@ -684,8 +765,11 @@ func show_pace() -> void:
 ## is on screen is not the document's.
 func capture() -> Dictionary:
 	capture_slot()
-	return {"turn": _turn.value, "voices": cast_dict(),
+	var out := {"turn": _turn.value, "voices": cast_dict(),
 		"hesitate": _hesitate.value, "hesitate_on": _hesitate_on.button_pressed}
+	if not deliveries.is_empty():
+		out["deliveries"] = deliveries.duplicate(true)
+	return out
 
 
 ## The voice block, to the cast. A block with no cast changes nothing: `_merge` gives every row every key, so a
@@ -695,6 +779,7 @@ func capture() -> Dictionary:
 func apply(cfg: Dictionary) -> void:
 	if keep != null:
 		keep.settle()
+	deliveries = (cfg.get("deliveries", {}) as Dictionary).duplicate(true) if cfg.get("deliveries") is Dictionary else {}
 	var rows: Variant = cfg.get("voices", {})
 	var cast: Dictionary = _merge_cast(rows as Dictionary) if rows is Dictionary \
 		else _cast_from_rows(rows if rows is Array else [], panel._cast_text())
