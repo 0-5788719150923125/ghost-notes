@@ -54,6 +54,10 @@ const PLACE_FIELDS := {
 	"roll": {"label": "Lean", "blurb": "Degrees leaned toward its own left (its right, less than 0).", "type": "float", "min": -90.0, "max": 90.0, "step": 1.0, "default": 0.0},
 	"scale": {"label": "Size", "blurb": "How much bigger it is made here (1 its own size).", "type": "float", "min": 0.25, "max": 4.0, "step": 0.01, "default": 1.0},
 }
+## The number every studio is built with - the playing show's, the Pipeline card's, a render's and an agent's look alike: a make
+## built with another comes out a hair otherwise (its fur's strands), and the hands' sounds made on one would not be the ones played on
+## the other.
+const SEED := 1
 ## The roles the studio sets out (the block twice).
 const ROLES := ["camera", "tripod", "ring_light", "microphone", "block", "brush", "backdrop", "room"]
 ## The light: a soft warm key from over the viewer's left shoulder (its color, energy and where it is), a dim fill, and how little

@@ -122,6 +122,7 @@ var _sign: Button
 var _remove: Button
 var _client: Button
 var _resume: Button
+var _again: Button               # the note's saved export sent up again ([method Exporter.youtube_upload_again])
 var _state: Label
 var _write_tags: CheckBox
 var _desc: TextField
@@ -356,6 +357,14 @@ func _init() -> void:
 		+ "connection. It carries on from where YouTube says it stopped.")
 	_resume.pressed.connect(_on_resume)
 	_into.add_child(_resume)
+	# the note's saved export sent up again, as the card says now (a file repaired or made again after it went up)
+	_again = Button.new()
+	_again.focus_mode = Control.FOCUS_NONE
+	_again.add_theme_font_size_override("font_size", 12)
+	_again.clip_text = true
+	_again.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_again.pressed.connect(_on_again)
+	_into.add_child(_again)
 	_state = _small("")
 	_into.add_child(_state)
 	_into = self
@@ -849,6 +858,11 @@ func _refresh_account() -> void:
 		+ "client can sign in to every channel.")
 	var waiting := not p.is_empty() and FileAccess.file_exists(str(p.get("file", "")))
 	_resume.visible = ex != null and waiting and not busy
+	var last := String(ex.call("youtube_last_export")) if ex != null and ex.has_method("youtube_last_export") else ""
+	_again.visible = ex != null and not last.is_empty() and not waiting and not busy
+	_again.text = "Upload %s again…" % last.get_file()
+	_again.tooltip_text = ("Send this note's saved export up again as a new video, as the card says now - its title, description, "
+		+ "tags, thumbnail and playlist. For a file repaired or made again after it went up; the video before stays where it is.")
 	var to := YouTube.name_of(YouTube.channel(str(p.get("channel", ""))))
 	_resume.text = "Resume the upload of %s%s" % [str(p.get("file", "")).get_file(), (" to " + to) if not to.is_empty() else ""]
 	_reload.disabled = _loading or ex == null or id.is_empty()
@@ -1381,6 +1395,28 @@ func _on_client() -> void:
 		ex.youtube_import_client(func() -> void:
 			_client_pick = YouTube.client_key(str(YouTube.client().get("client_id", "")))
 			_seen = [])
+
+
+## The saved export sent up again, asked first: it makes a new video on the channel.
+func _on_again() -> void:
+	var ex := _exporter()
+	if ex == null:
+		return
+	var file := String(ex.call("youtube_last_export"))
+	var ask := ConfirmationDialog.new()
+	ask.title = "Upload again?"
+	ask.dialog_autowrap = true
+	ask.dialog_text = ("%s goes up again as a new video, as this card says now. The video it made before stays on the channel "
+		+ "as it is - remove or hide it on YouTube if this one replaces it.") % file.get_file()
+	ask.ok_button_text = "Upload"
+	ask.confirmed.connect(func() -> void:
+		var why := String(ex.call("youtube_upload_again"))
+		if not why.is_empty():
+			_state.text = "⚠  Not sent: " + why
+		ask.queue_free())
+	ask.canceled.connect(ask.queue_free)
+	add_child(ask)
+	ask.popup_centered()
 
 
 func _on_resume() -> void:

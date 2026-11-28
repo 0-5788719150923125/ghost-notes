@@ -226,4 +226,4 @@ Godot compiles a script with every script it names by class or preload, wherever
 | launch | builds | scripts | lines | budget |
 | --- | --- | --- | --- | --- |
 | the phone shell | `app/main`, `app/phone_shell` | 81 | 32,600 | 40,000 |
-| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 128 | 54,956 | 65,000 |
+| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 128 | 54,992 | 65,000 |

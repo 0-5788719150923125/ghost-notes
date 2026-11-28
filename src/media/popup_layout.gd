@@ -197,26 +197,34 @@ func _measure(sc: Dictionary, first: bool) -> Array:
 
 
 ## Where the left page's words end so the two pages hold about as much: just past a line near half the scene's
-## height - the end of a paragraph where one falls within a quarter of it, else the line whose foot is nearest. A scene
-## of a few lines is never split (one line a page reads as a mistake): its words stay on the left page.
+## height - the end of a paragraph where one falls within a quarter of it, else the line whose foot is nearest - and only
+## where what is left fits on the right page (a paragraph's end that would push a line onto a spread of its own is passed
+## over). A scene of a few lines is never split (one line a page reads as a mistake): its words stay on the left page.
 func _split_at(lines: Array) -> float:
 	if lines.size() <= SPLIT_LEAST:
 		return _page_foot()
 	var top := float((lines[0] as Array)[0])
-	var height := float((lines[lines.size() - 1] as Array)[1]) - top
+	var bottom := float((lines[lines.size() - 1] as Array)[1])
+	var height := bottom - top
+	var room := _page_foot() - top
 	var half := height * 0.5
-	var best := 0
+	var best := -1
 	var best_para := -1
 	for i in lines.size() - 1:
-		var off := absf(float((lines[i] as Array)[1]) - top - half)
-		if off < absf(float((lines[best] as Array)[1]) - top - half):
+		var foot := float((lines[i] as Array)[1])
+		if foot - top > room or bottom - foot > room:
+			continue                 # the left page would overflow, or the right one
+		var off := absf(foot - top - half)
+		if best < 0 or off < absf(float((lines[best] as Array)[1]) - top - half):
 			best = i
 		# a paragraph ends where the next line starts after a gap
-		var ends := float((lines[i + 1] as Array)[0]) > float((lines[i] as Array)[1]) + 1.0
+		var ends := float((lines[i + 1] as Array)[0]) > foot + 1.0
 		if ends and off <= height * 0.25 and (best_para < 0
 				or off < absf(float((lines[best_para] as Array)[1]) - top - half)):
 			best_para = i
 	var at := best_para if best_para >= 0 else best
+	if at < 0:
+		return _page_foot()
 	return minf(float((lines[at] as Array)[1]) + 0.5, _page_foot())
 
 

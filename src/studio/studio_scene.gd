@@ -24,7 +24,7 @@ static func _role_of_rig(k: String) -> String:
 ## The set built from [param makes] and [param places] described for an agent placing [param role]: a text. Builds off the tree; a
 ## worker's.
 static func report(makes: Dictionary, places: Dictionary, role: String) -> String:
-	var built := StudioSet.build(1, makes, places)
+	var built := StudioSet.build(StudioSet.SEED, makes, places)
 	var out := describe(built, makes, places, role)
 	var root: Node = built.get("root")
 	if root != null:
@@ -226,7 +226,7 @@ static func views(makes: Dictionary, places: Dictionary, role: String, dir: Stri
 	if not PropStudio.can_see():
 		return []
 	var box := {}
-	var task := WorkerThreadPool.add_task(func() -> void: box["set"] = StudioSet.build(1, makes, places))
+	var task := WorkerThreadPool.add_task(func() -> void: box["set"] = StudioSet.build(StudioSet.SEED, makes, places))
 	while not WorkerThreadPool.is_task_completed(task):
 		await PropStudio.tree().process_frame
 	WorkerThreadPool.wait_for_task_completion(task)

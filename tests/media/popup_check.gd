@@ -5,7 +5,8 @@ extends SceneTree
 ## Held: a scene opens at a picture after words and takes a spread of its own, which says which scene it shows; its
 ## pop-ups stand on it in the order written, at most three; its picture stands behind them as its scenery, and a floor
 ## picture is printed across both pages; its words are set below the pop-up band, split over the two pages within a line
-## or two of even (a scene of a few lines kept whole on its left page); the title is the first spread's first words and
+## or two of even (a scene of a few lines kept whole on its left page, a paragraph's end passed over where the rest would not
+## fit the right page); the title is the first spread's first words and
 ## counted; the cover is the book's and printed on no page; what follows the unread line is set at the back, every word
 ## inside its page. The crease: open flat it stands upright, square to both feet at every opening, leaning forward as
 ## the spread closes and nothing standing once it has. A piece's footprint: a V's ridge toward the reader, a box's front
@@ -135,6 +136,23 @@ func _layout() -> void:
 	_ok(nl > 0 and nr > 0 and absi(nl - nr) <= 2, "the first scene's words are not split over both pages (%d, %d lines)" % [nl, nr])
 	_ok(short_pages.keys() == [4], "a scene of two lines is split over its pages: %s" % str(short_pages.keys()))
 	_ok(back_words > 10, "the sources are not set at the back")
+	# a paragraph's end near the middle is passed over where what follows it would not fit on the right page
+	var lorem := "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt labore dolore magna aliqua".split(" ")
+	var pa := PackedStringArray()
+	for i in 28:
+		pa.append(lorem[i % lorem.size()])
+	var pb := PackedStringArray()
+	for i in 70:
+		pb.append(lorem[(i + 3) % lorem.size()])
+	# four lines, then thirteen: split at the paragraph's end, the right page would overflow by four
+	var split_doc := "<!-- spread: a field -->\n\n" + " ".join(pa) + ".\n\n" + " ".join(pb) + ".\n"
+	var tight := PopupLayout.new()
+	tight.build(split_doc, func(_k: String) -> Vector2: return Vector2.ZERO)
+	var tight_pages := {}
+	for w in tight.words:
+		tight_pages[int(w["page"])] = true
+	_ok(tight.spreads() == 1 and tight_pages.keys().size() == 2,
+		"a scene that fits a spread spills onto another, split where the right page cannot hold the rest (%d spreads)" % tight.spreads())
 	# control: the novel sets the same chapter's words where the pop-up stands
 	var novel := BookLayout.new()
 	novel.build(DOC, func(_k: String) -> Vector2: return Vector2.ZERO)

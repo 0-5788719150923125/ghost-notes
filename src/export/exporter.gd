@@ -1877,6 +1877,42 @@ func youtube_resume() -> void:
 	_resume_upload()
 
 
+## The saved export this note's Upload card last sent (its record's latest upload), "" for none or one no longer on the disk.
+func youtube_last_export() -> String:
+	var rec := str(_upload_peek().get("record", ""))
+	var ups := YouTube.uploads_in(rec) if not rec.is_empty() else []
+	var file := str((ups[ups.size() - 1] as Dictionary).get("file", "")) if not ups.is_empty() else ""
+	return file if not file.is_empty() and FileAccess.file_exists(file) else ""
+
+
+## That export ([method youtube_last_export]) sent up again as the note's Upload card says now - its title, words, tags,
+## thumbnail and playlist, worked out as an export's own upload is - queued and sent as one is: a new video beside the one before.
+## "" begun, else why not.
+func youtube_upload_again() -> String:
+	if _prepping or _state in ["baking", "rendering", "transcoding", "stitching", "preparing", "upload_wait", "uploading", "tiktok"]:
+		return "an export or an upload is under way"
+	var file := youtube_last_export()
+	if file.is_empty():
+		return "this note has no saved export to send"
+	var take := Spectrum.audio_path()
+	var meta: Variant = upload_provider.call(take) if upload_provider.is_valid() else {}
+	if not (meta is Dictionary) or (meta as Dictionary).is_empty():
+		return "this note's Upload card describes nothing to send"
+	if (meta as Dictionary).has("refused"):
+		return str((meta as Dictionary)["refused"])
+	_upload_meta = meta
+	_out = file
+	if take.get_extension().to_lower() == "wav":
+		_song_dur = _wav_seconds(take)
+	# the sign-in settled first, as an export settles it as it starts: the queued upload goes once it has
+	if targets_of(meta).has("youtube"):
+		_check_sign_in(Callable(), scopes_for(meta), str(meta.get("channel", "")), str(meta.get("channel_name", "")),
+			str(meta.get("client", "")))
+	_queue_upload()
+	_set_status("⏳  Sending %s up again…" % file.get_file(), Color(0.85, 0.9, 1.0))
+	return ""
+
+
 ## Is an upload on its way - its thumbnail being taken, its sign-in awaited, or its bytes going up?
 func youtube_busy() -> bool:
 	return _state in ["preparing", "upload_wait", "uploading"]

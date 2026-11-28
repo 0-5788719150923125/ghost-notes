@@ -94,7 +94,7 @@ func _stand() -> void:
 	var makes: Dictionary = (_knobs["makes"] as Dictionary).duplicate(true)
 	var places: Dictionary = (_knobs["places"] as Dictionary).duplicate(true)
 	_geo_task = WorkerThreadPool.add_task(func() -> void:
-		var built := StudioSet.build(1, makes, places)
+		var built := StudioSet.build(StudioSet.SEED, makes, places)
 		box["geo"] = built.get("geo", {})
 		var root: Node = built.get("root")
 		if root != null:

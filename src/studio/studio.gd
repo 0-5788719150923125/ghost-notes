@@ -281,10 +281,11 @@ func _restand(makes: Dictionary, places := {}) -> void:
 	_set_for = key
 	_build_box = {}
 	var box := _build_box
-	var seed := _seed
+	# (built with the studio's one number, never the session's: the windscreen the hands' sounds are made on is the same here, on the
+	# Pipeline card and in a render, so every sound made for it is the one played)
 	var m := makes.duplicate(true)
 	var pl := places.duplicate(true)
-	_build_task = WorkerThreadPool.add_task(func() -> void: box["set"] = StudioSet.build(seed, m, pl))
+	_build_task = WorkerThreadPool.add_task(func() -> void: box["set"] = StudioSet.build(StudioSet.SEED, m, pl))
 
 
 ## The set, once the worker has made it: put in the world in place of the one before, its flip screen built.
