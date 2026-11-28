@@ -129,7 +129,7 @@ func _process(delta: float) -> void:
 		return
 	_look_t = LOOK_EVERY
 	_read_script()
-	var of := _script + JSON.stringify(_knobs["takes"]) + JSON.stringify(_knobs["marks"]) + _geo_for + _take_stamp()
+	var of := _plan_key()
 	if not _geo.is_empty() and _plan_task < 0 and of != _planned_of:
 		_planned_of = of
 		_acts = StudioScript.with_takes(StudioScript.parse(_script, _knobs["marks"])["acts"], _knobs["takes"])
@@ -149,6 +149,12 @@ func _process(delta: float) -> void:
 			for k in timed:
 				horizons[k] = maxf(float(horizons.get(k, 0.0)), float(timed[k]))
 			box.merge(StudioSounds.make_all(acts, geo, horizons), true))
+
+
+## What the acts and their sounds are planned from, as one value: the script, the takes and words changed, the set and the take - a
+## plan made from another is planned again ([method planning]).
+func _plan_key() -> String:
+	return _script + JSON.stringify(_knobs["takes"]) + JSON.stringify(_knobs["marks"]) + _geo_for + _take_stamp()
 
 
 ## The episode's take kept, "" for none ([method EpisodeFeed.take]).
@@ -262,7 +268,7 @@ func choose(role: String, choice: Dictionary) -> String:
 
 ## Whether the acts are about to be made again or are being made: the script or the set changed since they were last planned.
 func planning() -> bool:
-	return _plan_task >= 0 or (not _script.is_empty() and not _geo.is_empty() and _planned_of != _script + JSON.stringify(_knobs["takes"]) + JSON.stringify(_knobs["marks"]) + _geo_for)
+	return _plan_task >= 0 or (not _script.is_empty() and not _geo.is_empty() and _planned_of != _plan_key())
 
 
 ## Whether the show's head has its phrases ([HeadBank]).
@@ -604,7 +610,7 @@ class Section extends PipelineSection:
 
 	func tick() -> void:
 		# a take asked for: made once its new motion is
-		if card._ask_after_plan and card._plan_task < 0 and card._planned_of == card._script + JSON.stringify(card._knobs["takes"]) + card._geo_for:
+		if card._ask_after_plan and card._plan_task < 0 and card._planned_of == card._plan_key():
 			card._ask_after_plan = false
 			card._maker.ask_missing()
 
