@@ -32,8 +32,31 @@ uniform sampler2D skin_finish : filter_linear, repeat_disable;
 // ...each read over the pixel's footprint at these four places (a rotated grid, shares of the pixel's step along screen x and y)
 const vec2 SKIN_TAPS[4] = vec2[4](vec2(0.375, 0.125), vec2(-0.375, -0.125), vec2(-0.125, 0.375), vec2(0.125, -0.375));
 #include "res://shaders/prop_common.gdshaderinc"
+// A cutaway, while `cut_on` (a room looked into from outside): what stands between the eye and the box from `cut_lo` to `cut_hi`
+// (world, m) is left out, so the box's inside is seen through it. An eye inside the box (and a light inside it) cuts nothing.
+uniform float cut_on = 0.0;
+uniform vec3 cut_lo = vec3(0.0);
+uniform vec3 cut_hi = vec3(0.0);
 
 void fragment() {
+	if (cut_on > 0.5) {
+		vec3 wp = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+		vec3 eye = CAMERA_POSITION_WORLD;
+		vec3 d = wp - eye;
+		float len = length(d);
+		vec3 dir = d / max(len, 1e-6);
+		vec3 inv = 1.0 / mix(dir, vec3(1e-6), vec3(lessThan(abs(dir), vec3(1e-6))));
+		vec3 ta = (cut_lo - eye) * inv;
+		vec3 tb = (cut_hi - eye) * inv;
+		vec3 tn3 = min(ta, tb);
+		vec3 tf3 = max(ta, tb);
+		float tn = max(max(tn3.x, tn3.y), tn3.z);
+		float tf = min(min(tf3.x, tf3.y), tf3.z);
+		// (the box is ahead of this point along the eye's line to it: the point stands in the way)
+		if (tn > 0.0 && tf > tn && len < tn) {
+			discard;
+		}
+	}
 	float n1 = fbm(opos * 0.6);
 	float n2 = fbm(opos * 3.1 + vec3(7.0));
 	vec2 o = ornament(UV, UV2);

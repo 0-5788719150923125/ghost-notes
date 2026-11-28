@@ -47,6 +47,38 @@ const CLOSE_SOUND := 45
 const SOUND_SHARE := Vector2(0.5, 0.8)
 ## How much of a passage's talk the hands go on under.
 const UNDER_SHARE := 0.85
+## The regions what drifts in the air keeps to (studio space, m): round the work at the microphone, far off behind the camera (out of
+## focus, the room's depth), and the room. Where shafts come from (degrees round and up, [method Surroundings.toward]: high on the
+## viewer's left, as through the room's windows), what they fall onto and from how high; how far from the eye the fog is worked out (m).
+const AIR_NEAR := AABB(Vector3(-0.5, 0.85, -1.0), Vector3(1.0, 0.6, 0.75))
+const AIR_FAR := AABB(Vector3(-2.0, 0.2, -3.2), Vector3(4.0, 2.4, 1.9))
+const AIR_ROOM := AABB(Vector3(-2.0, 0.0, -2.8), Vector3(4.0, 2.6, 3.6))
+const RAYS_FROM := Vector2(250.0, 50.0)
+const RAYS_ONTO := AABB(Vector3(-1.4, 0.0, -1.8), Vector3(2.8, 0.0, 2.2))
+const RAYS_REACH := 2.2
+const FOG_LENGTH := 6.0
+## How near the eye a held block's nearest surface comes (m): the head never passes through, or right up against, what the hands hold
+## up; and how far either side of the moment the head's coming is looked for (s), so the blocks ease aside before it and back after.
+const EYE_CLEAR := 0.24
+const CLEAR_AHEAD := 0.75
+const CLEAR_STEPS := 6
+## Where a push from the eye goes: out in front, toward the camera and a little down ([constant FRONT]) - never round behind the head or
+## swung about it; how little of the way from the eye that is taken to win (a cosine), and the most it moves a block (m).
+const FRONT := Vector3(0.0, -0.35, -0.94)
+const FRONT_LEAST := 0.35
+const PUSH_MOST := 0.25
+## How far outside the windscreen's fur a held block stays (m), and how far a block reaches from the pair's middle (m).
+const FUR_CLEAR := 0.01
+const BLOCK_REACH := 0.07
+## How the hands holding the blocks sway: how far they drift (m), how far they turn (degrees) and their own number.
+const HELD_DRIFT := 0.005
+const HELD_TURN := 3.0
+const HELD_SEED := 7717
+## How thick the room's walls, floor and ceiling are taken to be (m): its inside, for the cutaway, is its box less this all round.
+const ROOM_WALL := 0.3
+## An act's sound's Level on the Sound card, least and most (dB).
+const LEVEL_LEAST := -30.0
+const LEVEL_MOST := 12.0
 
 var _subs = null
 var _doc_key := ""
@@ -77,6 +109,10 @@ var _make_box := {}
 var _make_for := ""                     # the source and takes the acts being made are of
 var _marks := {}                        # each act's words as a Refine changed them ([method marks_of])
 var _takes := {}                        # each act made again: its own number -> its take ([method StudioScript.with_takes])
+var _levels := {}                       # how loud and how muffled each act's sound is heard ([method levels_of])
+var _mic_voice := PackedByteArray()     # the voice as the microphone received it, each ear a byte at a time ([method VoiceFX.meter_at])
+var _mic_key := 0
+var _mic_gain := 0.0                    # the recorder's input gain (dB): the take's, which the hands' sounds are brought up by too
 var _root3: Node3D
 var _cam: Camera3D
 var _env: Environment
@@ -96,6 +132,14 @@ var _surround_key := ""
 var _head := {}                         # the head's performance ([HeadPlan]), {} where the show has no phrases: the eye sits in the chair
 var _look := FreeLook.new()             # the eye as a person looking the paused show over turned it ([method look_by])
 var _rendering := not Engine.get_write_movie_path().is_empty()   # a render sees only the show's own eye
+var _air: Effects.Air = null           # what drifts in the air round the studio ([method _dress_environment])
+var _rays: Node3D = null                # its shafts of light
+var _dressed := "-"                     # what is round the scene as it was last dressed, as JSON
+var _table_seen := ""                   # the episode table read for it, by file and time
+var _table_els: Array = []              # ...and its air and sound as elements ([TableSurroundings])
+var _room_cut := -1                     # whether the room is cut away for an eye outside it ([method _cut_room]); -1 not yet said
+var _tufts: Array = []                  # the brush's tufts of hairs ([method _tufts_of]), and the make they are of
+var _tufts_for: PropRig = null
 
 
 # --- for the agents who make an episode for it (asked by path: [TableProducer], [EpisodeWalk]) ---------------------------------
@@ -265,10 +309,26 @@ func _land_set() -> void:
 	for k in ["camera", "microphone", "tripod"]:
 		if rigs.has(k):
 			_bases[k] = (rigs[k] as PropRig).node.transform
+	_mount_screen()
+	_shine_things()
+	_room_cut = -1
+	# the acts are made again for this set, and the head's gazes aimed at its things
+	_make_for = ""
+	_built_n = -1
+
+
+## The camera's flip screen built and put on its `screen` face ([StudioScreen]) - with each set, and again where a stop let it go
+## while the set stayed ([method release]).
+func _mount_screen() -> void:
+	if _set.is_empty():
+		return
+	if _screen != null:
+		_screen.release()
+		_screen.queue_free()
 	_screen = StudioScreen.new()
 	add_child(_screen)
-	var geo: Dictionary = _set["geo"]
 	_screen.mount(self, stage.find_world_3d() if stage != null else _root3.get_world_3d(), _lens_xf(), _env)
+	var rigs: Dictionary = _set["rigs"]
 	if rigs.has("camera"):
 		var face := (rigs["camera"] as PropRig).face("screen")
 		if face != null:
@@ -276,10 +336,95 @@ func _land_set() -> void:
 			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			mat.albedo_texture = _screen.texture()
 			face.material_override = mat
-	_shine_things()
-	# the acts are made again for this set, and the head's gazes aimed at its things
-	_make_for = ""
-	_built_n = -1
+
+
+## The room seen into from outside: while the eye stands outside its inside (a paused show looked over from far off), what stands
+## between the eye and the inside is left out of every part of it (prop.gdshader's cutaway) - from inside, nothing is.
+func _cut_room() -> void:
+	var rigs: Dictionary = _set.get("rigs", {})
+	if not rigs.has("room") or _cam == null or not _cam.is_inside_tree():
+		return
+	var room: PropRig = rigs["room"]
+	var box := StudioScene.box_of(room.node)
+	var parent := room.node.get_parent() as Node3D
+	if parent != null and parent.is_inside_tree():
+		box = parent.global_transform * box
+	# (its inside: the walls, floor and ceiling taken off)
+	box = box.grow(-ROOM_WALL)
+	if box.size.x <= 0.0 or box.size.y <= 0.0 or box.size.z <= 0.0:
+		return
+	var outside := 1 if not box.has_point(_cam.global_position) else 0
+	if outside == _room_cut:
+		return
+	_room_cut = outside
+	for mi in room.node.find_children("*", "GeometryInstance3D", true, false):
+		var mat := (mi as GeometryInstance3D).material_override as ShaderMaterial
+		if mat == null:
+			continue
+		mat.set_shader_parameter("cut_on", float(outside))
+		mat.set_shader_parameter("cut_lo", box.position)
+		mat.set_shader_parameter("cut_hi", box.end)
+
+
+## What is round the studio, as the Environment card has it ([Surroundings]): how bright it is, shafts of light through the room's air,
+## fog lying in it and what drifts - haze far off behind the camera, motes round the work, a room's worth - from the note's own elements
+## and, at a table show, the episode's (its table's air and sound, [TableSurroundings]: the card lists them in the note's place). The
+## sound is the reading's (the bed under the voice), never the studio's. Dressed again only where it changed.
+func _dress_environment(d: Dictionary) -> void:
+	var spec := _surround.duplicate(true)
+	(spec["elements"] as Array).append_array(_episode_elements(d))
+	spec = Surroundings.sanitize(spec)
+	var key := JSON.stringify(spec)
+	if key == _dressed or _env == null:
+		return
+	_dressed = key
+	Tonemaps.dress(_env, Surroundings.brightness(spec))
+	var row := Surroundings.light_of(spec)
+	if _rays != null:
+		_rays.queue_free()
+		_rays = null
+	if Surroundings.has_shafts(spec):
+		_rays = Surroundings.rays(spec, Color.html(String(row["key_color"])), Surroundings.toward(RAYS_FROM.x, RAYS_FROM.y),
+			[RAYS_ONTO], RAYS_REACH)
+		_root3.add_child(_rays)
+	Surroundings.fog_for(_env, spec, 0.0)
+	_env.volumetric_fog_length = FOG_LENGTH
+	if _air != null:
+		_air.release()
+		_air = null
+	var fx := Surroundings.effects_of(spec, Color.html(String(row["fog"])))
+	if not fx.is_empty():
+		# its motes spread over the studio as the chair sees it, never over wherever the head happens to be
+		_air = Effects.build(fx, {"regions": {"near": AIR_NEAR, "far": AIR_FAR, "room": AIR_ROOM},
+			"camera": Transform3D(Basis.looking_at(StudioSet.LOOK - StudioSet.EYE, Vector3.UP), StudioSet.EYE), "fov": StudioSet.VFOV,
+			"aspect": 16.0 / 9.0, "around": true}, hash([_seed, "studio air"]))
+		_root3.add_child(_air.root)
+
+
+## At a table show, the episode's air and sound as Environment elements ([method TableSurroundings.elements_of]), from its table as it
+## is written now - read again only when the file changes, looked at once a second.
+func _episode_elements(d: Dictionary) -> Array:
+	var ep: Dictionary = d.get("table", {}) if d.get("table") is Dictionary else {}
+	var dir := String(ep.get("dir", ""))
+	if dir.is_empty():
+		return []
+	var now := Time.get_ticks_msec()
+	if now - _table_polled < 1000:
+		return _table_els
+	_table_polled = now
+	var path := dir.path_join("table.json")
+	var seen := "%s|%d" % [path, FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else 0]
+	if seen == _table_seen:
+		return _table_els
+	_table_seen = seen
+	var table: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
+	var plan: Dictionary = ep.get("plan", {}) if ep.get("plan") is Dictionary else {}
+	var look: Variant = plan.get("look", {})
+	var palette: Array = CardTable.sanitize_look(look if look is Dictionary else {}).get("palette", [])
+	_table_els = TableSurroundings.elements_of(table, int(ep.get("seed", 0)), palette) if table is Dictionary else []
+	return _table_els
+
+var _table_polled := -100000
 
 
 ## Each thing that throws light at its share of it, as the Environment card has it ([method Surroundings.share_of], by its role).
@@ -313,8 +458,11 @@ func release() -> void:
 	_subs = null
 	_doc_key = ""
 	_sounds.stop()
+	# (its pictures let go; built again with the set still standing when the show comes back, [method _mount_screen])
 	if _screen != null:
 		_screen.release()
+		_screen.queue_free()
+		_screen = null
 	for task in [_build_task, _make_task]:
 		if int(task) >= 0:
 			WorkerThreadPool.wait_for_task_completion(int(task))
@@ -324,6 +472,9 @@ func release() -> void:
 
 func _exit_tree() -> void:
 	_sounds.stop()
+	if _air != null:
+		_air.release()
+		_air = null
 	if stage != null and is_instance_valid(stage) and not _stage_was.is_empty():
 		for key in _stage_was:
 			stage.set(key, _stage_was[key])
@@ -366,6 +517,9 @@ func on_stage_resized(_size: Vector2) -> void:
 
 func advance(_features, delta: float, _bookend: float) -> void:
 	var t := maxf(feed.show_time(), 0.0)
+	if _air != null:
+		_air.tick(_now)
+	Surroundings.tick_rays(_rays, _now)
 	_land_set()
 	_ensure_doc()
 	_take_made()
@@ -391,9 +545,11 @@ func advance(_features, delta: float, _bookend: float) -> void:
 	_sounds.fade_from = _last_sound()
 	_sounds.outro = feed.tail()
 	_sounds.tick(_now, self)
+	if _screen == null and not _set.is_empty():
+		_mount_screen()
 	if _screen != null:
 		_screen.set_time(_now)
-		var lv := _sounds.level_at(_now)
+		var lv := _mic_levels(_now)
 		_screen.set_levels(lv.x, lv.y, delta)
 	if _sounds.status != _said:
 		_said = _sounds.status
@@ -445,6 +601,24 @@ func _ensure_doc() -> void:
 		_surround_key = ek
 		_surround = env
 		_shine_things()
+	# ...and what is round the scene: the note's own elements and, at a table show, the episode's (its table's air and sound, where the
+	# card lists them), dressed as they change
+	_dress_environment(d)
+	# the voice as the microphone received it, as the take measured it ([member VoiceFX.meter])
+	var mv := String(d.get("mic_voice", ""))
+	if mv.hash() != _mic_key:
+		_mic_key = mv.hash()
+		_mic_voice = Marshalls.base64_to_raw(mv) if not mv.is_empty() else PackedByteArray()
+	# ...and the recorder's input gain the take was brought up by: the hands' sounds come up with it
+	var mg := float(d.get("mic_gain", 0.0)) if (d.get("mic_gain") is float or d.get("mic_gain") is int) else 0.0
+	if not is_equal_approx(mg, _mic_gain):
+		_mic_gain = mg
+		_place_sounds()
+	# each act's sound as loud and as muffled as the Sound card says, heard at once (nothing is made again)
+	var lv := levels_of(block)
+	if JSON.stringify(lv) != JSON.stringify(_levels):
+		_levels = lv
+		_place_sounds()
 	var key := "%d|%s|%s|%s" % [src.hash(), " ".join(start), JSON.stringify(takes), JSON.stringify(marks)]
 	if key == _doc_key:
 		return
@@ -462,6 +636,31 @@ static func marks_of(block: Dictionary) -> Dictionary:
 		if m[k] is String and String(k).is_valid_int() and not String(m[k]).strip_edges().is_empty():
 			out[String(k)] = String(m[k]).strip_edges()
 	return out
+
+
+## How loud and how muffled a Medium block [param block] has the acts' sounds heard: `{own number or "all": {db, muffle}}` - `db` a
+## level (0 as made), `muffle` 0 (as made) to 1 (through thick cloth, [method StudioSounds.muffled]); "all" every act's, under its own.
+static func levels_of(block: Dictionary) -> Dictionary:
+	var out := {}
+	var m: Dictionary = block.get("levels", {}) if block.get("levels") is Dictionary else {}
+	for k in m:
+		if not (m[k] is Dictionary) or not (String(k).is_valid_int() or String(k) == "all"):
+			continue
+		var d: Dictionary = m[k]
+		var db := clampf(float(d.get("db", 0.0)) if (d.get("db") is float or d.get("db") is int) else 0.0, LEVEL_LEAST, LEVEL_MOST)
+		var mu := clampf(float(d.get("muffle", 0.0)) if (d.get("muffle") is float or d.get("muffle") is int) else 0.0, 0.0, 1.0)
+		if absf(db) > 0.001 or mu > 0.001:
+			out[String(k)] = {"db": db, "muffle": mu}
+	return out
+
+
+## What act [param act] is heard as, from [param levels] ([method levels_of]): `{gain, muffle}` - its own level over every act's and
+## its mark's (`-6 dB`, [StudioScript]), and its own muffle with every act's and its mark's.
+static func tone_of(levels: Dictionary, act: Dictionary) -> Dictionary:
+	var own: Dictionary = levels.get(str(int(act.get("own", act.get("seed", 0)))), {})
+	var all: Dictionary = levels.get("all", {})
+	return {"gain": db_to_linear(float(own.get("db", 0.0)) + float(all.get("db", 0.0)) + float(act.get("db", 0.0))),
+		"muffle": clampf(float(own.get("muffle", 0.0)) + float(all.get("muffle", 0.0)) + float(act.get("muffle", 0.0)), 0.0, 1.0)}
 
 
 ## The makes a Medium block [param block] chooses for the studio's things: `{role: choice}` ([PropMakes]), each one a role can take.
@@ -627,6 +826,12 @@ static func _fingers(hands: Array, lis: Transform3D, middle: Vector3) -> Array:
 	return out
 
 
+## Where the head camera rests its eyes (the Camera card's `creator` Tilt and Pan): `(tilt, pan)` degrees, up and to the right.
+func _aim() -> Vector2:
+	var e := Cameras.entry_of(Cameras.sanitize(feed.cameras if feed != null else [], true, "studio"), "creator")
+	return Vector2(Cameras.value(e, "tilt"), Cameras.value(e, "pan"))
+
+
 ## How gently the head is performed: the Camera card's head camera ([method HeadPlan.feel_of]), resting at the chair wherever the
 ## microphone is placed.
 func _feel() -> Dictionary:
@@ -732,11 +937,12 @@ func _place_sounds() -> void:
 			continue
 		var ks: PackedStringArray = _keys[i]
 		var st: PackedFloat32Array = _starts[i]
+		var tone := tone_of(_levels, _acts[i]) if i < _acts.size() else {"gain": 1.0, "muffle": 0.0}
 		for j in ks.size():
 			var w0 := _t0[i] + st[j]
 			if w0 > _t1[i] + StudioSounds.RELEASE:
 				break
-			placed.append({"key": ks[j], "t0": w0, "end": _t1[i]})
+			placed.append({"key": ks[j], "t0": w0, "end": _t1[i], "gain": float(tone["gain"]) * db_to_linear(_mic_gain), "muffle": tone["muffle"]})
 	_sounds.place(placed)
 
 
@@ -757,8 +963,13 @@ func _pose(t: float, dt: float) -> void:
 		# (the head's own up: a lean ear toward shoulder rolls the picture)
 		var up: Vector3 = lis.basis * (hp["up"] as Vector3)
 		eye = Transform3D(Basis.looking_at(look, up if absf(look.normalized().dot(up.normalized())) < 0.97 else Vector3.UP), lis * (hp["eyes"] as Vector3))
+	# ...aimed where the Camera card's head camera rests its eyes (its Tilt and Pan, under every move: the eyes alone, never the voice)
+	var aim := _aim()
+	if not aim.is_zero_approx():
+		eye.basis = Basis(Vector3.UP, -deg_to_rad(aim.y)) * eye.basis * Basis(Vector3.RIGHT, deg_to_rad(aim.x))
 	# ...and as a person looking the paused show over turned it ([FreeLook]): held while paused, eased back once it plays
 	_cam.transform = _look.eye(eye, dt, feed != null and feed.paused() and not _rendering)
+	_cut_room()
 	if _set.is_empty():
 		return
 	var rigs: Dictionary = _set["rigs"]
@@ -775,16 +986,15 @@ func _pose(t: float, dt: float) -> void:
 		var end := _t1[i]
 		var timed := bool((_acts[i] as Dictionary)["timed"])
 		var whole := timed and end >= _t0[i] + float(m["secs"]) - 0.05
-		if u < 0.0 or t > end + StudioActs.GO + 0.3 or (whole and u > float(m["secs"]) + 0.3):
+		if u < 0.0 or t > end + float(m.get("go", StudioActs.GO)) + float(m.get("apart", 0.0)) + 0.3 or (whole and u > float(m["secs"]) + 0.3):
 			continue
 		# where it ends the hand lifts and what it brought is carried back - unless the act, made whole, does that itself
 		var lifted := 0.0 if end == INF else clampf((t - end) / StudioSounds.RELEASE, 0.0, 1.0)
 		var held_u := u if (whole or end == INF) else minf(u, end - _t0[i])
 		for k in (m["tracks"] as Dictionary):
-			var xf := StudioActs.pose_at((m["tracks"] as Dictionary)[k], minf(held_u, float(m["secs"])))
-			if not whole and end < INF and t > end and rests.has(k):
-				xf = StudioActs.carried(xf, rests[k], Gesture.min_jerk((t - end) / StudioActs.GO))
-			posed[k] = xf
+			var xf: Variant = _thing_at(i, String(k), t)
+			if xf != null:
+				posed[k] = xf
 		var hand := String((_acts[i] as Dictionary).get("hand", "right"))
 		var slot := 0 if hand == "left" else 1
 		for tc in m["touches"]:
@@ -793,12 +1003,38 @@ func _pose(t: float, dt: float) -> void:
 			slot += 1
 		for k in (m["shake"] as Dictionary):
 			shake[k] = float(shake[k]) + Gesture.at((m["shake"] as Dictionary)[k], minf(held_u, float(m["secs"]))) * (1.0 - lifted)
+	# the blocks held clear of the eye: pushed away, together, while the head comes near them, back where they were held once it is past
+	# ...and never into the windscreen: what the eye pushed into the fur pushed back out of it, the two worked out together
+	var clear := _clear_of_eye(t) if posed.has("block_a") or posed.has("block_b") else Vector3.ZERO
+	clear += _round_the_fur(posed, clear)
+	if not clear.is_zero_approx():
+		for k in ["block_a", "block_b"]:
+			if posed.has(k):
+				posed[k] = (posed[k] as Transform3D).translated(clear)
+	# ...and swaying gently as hands holding them do, the pair as one (a knock or a scrape between them stays in touch)
+	var sway := _hands_sway(posed, t)
+	for k in ["block_a", "block_b"]:
+		if posed.has(k):
+			posed[k] = sway * (posed[k] as Transform3D)
+	# ...each hand its own once the blocks are apart: the second block's sway its own as far as it is from the held one (in touch, the
+	# pair's alone, so a knock or a scrape stays in touch)
+	if posed.has("block_a") and posed.has("block_b"):
+		var apart := clampf(((posed["block_a"] as Transform3D).origin.distance_to((posed["block_b"] as Transform3D).origin) - 0.03) / 0.06, 0.0, 1.0)
+		if apart > 0.0:
+			var own := Gesture.idle(HELD_SEED + 40, t, HELD_DRIFT) * apart
+			var turn := Basis.from_euler(Vector3(Gesture.wave(HELD_SEED + 41, t, 6.0, 2.6), Gesture.wave(HELD_SEED + 42, t, 7.5, 3.1),
+				Gesture.wave(HELD_SEED + 43, t, 5.5, 2.4)) * deg_to_rad(HELD_TURN) * apart)
+			var a: Transform3D = posed["block_a"]
+			posed["block_a"] = Transform3D(turn * a.basis, a.origin + own)
 	for k in ["block_a", "block_b", "brush"]:
 		if not rigs.has(k):
 			continue
-		# held, it drifts as a hand does; laid on the desk out of shot, it lies still
-		(rigs[k] as PropRig).node.transform = (posed[k] as Transform3D).translated(Gesture.idle(hash(k) % 1000, t, 0.0018)) \
-			if posed.has(k) else rests.get(k, Transform3D())
+		# (the brush's hairs bent by how it is dragged and pressed, below, once it is where it is)
+		# held, it drifts as a hand does (the blocks have swayed already, above); laid on the desk out of shot, it lies still
+		(rigs[k] as PropRig).node.transform = ((posed[k] as Transform3D) if k != "brush" else (posed[k] as Transform3D).translated(
+			Gesture.idle(hash(k) % 1000, t, 0.0018))) if posed.has(k) else rests.get(k, Transform3D())
+	if rigs.has("brush"):
+		_bend_bristles(rigs["brush"], t)
 	if rigs.has("microphone"):
 		var mic: PropRig = rigs["microphone"]
 		var a := float(shake["mic"])
@@ -812,3 +1048,245 @@ func _pose(t: float, dt: float) -> void:
 			# the lens where the camera's sway has taken it
 			var lens_local := (_bases["camera"] as Transform3D).affine_inverse() * (geo["lens"] as Vector3)
 			_screen.place(Transform3D(cam_rig.node.transform.basis, cam_rig.node.transform * lens_local))
+
+
+## What the camera's meters show at show time [param t]: each ear's peak (dBFS) of what is recorded - what the microphone receives,
+## at the recorder's input gain: the voice as the take measured it at the capsule (its direct voice alone: no echo, room, ambience or
+## bed, nothing laid on after) and the hands' sounds and the room tone ([method StudioSounds.peak_at], already at that gain). Two peaks are added as they could meet at worst (amplitude), so a peak
+## is never missed.
+func _mic_levels(t: float) -> Vector2:
+	var hands := _sounds.peak_at(t)
+	if _mic_voice.is_empty():
+		return hands
+	var voice := VoiceFX.meter_at(_mic_voice, t) + Vector2(_mic_gain, _mic_gain)
+	var add := func(a: float, b: float) -> float: return linear_to_db(db_to_linear(a) + db_to_linear(b))
+	return Vector2(add.call(hands.x, voice.x), add.call(hands.y, voice.y))
+
+
+## How the held blocks sway at show time [param t], as the hands holding them never quite stay still: a slow drift of a few
+## millimeters ([constant HELD_DRIFT]) and a turn of about a degree ([constant HELD_TURN]), about the pair's own middle - the identity
+## where neither is held.
+func _hands_sway(posed: Dictionary, t: float) -> Transform3D:
+	var held: Array = []
+	for k in ["block_a", "block_b"]:
+		if posed.has(k):
+			held.append((posed[k] as Transform3D).origin)
+	if held.is_empty():
+		return Transform3D.IDENTITY
+	var mid := Vector3.ZERO
+	for p in held:
+		mid += p as Vector3
+	mid /= float(held.size())
+	var turn := Basis.from_euler(Vector3(Gesture.wave(HELD_SEED, t, 7.0, 3.0), Gesture.wave(HELD_SEED + 1, t, 8.0, 3.5),
+		Gesture.wave(HELD_SEED + 2, t, 6.5, 2.8)) * deg_to_rad(HELD_TURN))
+	var drift := Gesture.idle(HELD_SEED + 3, t, HELD_DRIFT)
+	return Transform3D(Basis.IDENTITY, mid + drift) * Transform3D(turn, Vector3.ZERO) * Transform3D(Basis.IDENTITY, -mid)
+
+
+## How far the held blocks are pushed at show time [param t] to keep their nearest surface [constant EYE_CLEAR] from the eye and out of
+## the windscreen: what each moment a while either side of [param t] needs ([constant CLEAR_AHEAD]), averaged, each weighed less the
+## further it is from [param t] - so they ease aside before the head comes and back slowly once it is past, never flipping from one
+## way to another. Zero where none is near.
+func _clear_of_eye(t: float) -> Vector3:
+	var sum := Vector3.ZERO
+	var weight := 0.0
+	var steps := CLEAR_STEPS
+	for j in range(-steps, steps + 1):
+		var w := 1.0 - absf(float(j)) / float(steps + 1)
+		var at := t + CLEAR_AHEAD * float(j) / float(steps)
+		# (at each moment the push from the eye and then out of the fur, together, so the two never fight from frame to frame)
+		sum += _push_at(at) * w
+		weight += w
+	return sum / weight
+
+
+## The held blocks where the acts have them at show time [param t] (before any push or sway): `{block_a, block_b}`, each held.
+func _blocks_at(t: float) -> Dictionary:
+	var out := {}
+	for k in ["block_a", "block_b"]:
+		for i in mini(_made.size(), _t0.size()):
+			var p: Variant = _thing_at(i, k, t)
+			if p != null:
+				out[k] = p
+	return out
+
+
+## How far the held blocks must move at show time [param t] for their nearest surface to stand [constant EYE_CLEAR] from the eye then
+## (the blocks already moved [param moved]): out in front ([constant FRONT]), as far as the nearer block is inside it.
+func _push_at(t: float, moved := Vector3.ZERO) -> Vector3:
+	var eye := _eye_at(t) - moved
+	var size: Vector3 = (_set.get("geo", {}) as Dictionary).get("block_size", Vector3(0.15, 0.02, 0.05))
+	var lo := Vector3(-size.x * 0.5, 0.0, -size.z * 0.5)
+	var hi := Vector3(size.x * 0.5, size.y, size.z * 0.5)
+	var push := Vector3.ZERO
+	var held := _blocks_at(t)
+	for k in held:
+		var b: Transform3D = held[k]
+		var near := b * (b.affine_inverse() * eye).clamp(lo, hi)
+		var d := near - eye
+		if d.length() < EYE_CLEAR and d.length() > 1e-5:
+			# always the one way, out in front (toward the camera and a little down: never round behind the head, never swung about it),
+			# as far as clears the eye, and no further than [constant PUSH_MOST]
+			var away := d.normalized()
+			var need := FRONT * minf((EYE_CLEAR - d.length()) / maxf(away.dot(FRONT), FRONT_LEAST), PUSH_MOST)
+			if need.length() > push.length():
+				push = need
+	return push
+
+
+## How far the held blocks (as [param posed] has them, moved by [param shift]) must move for the pair never to pass into the windscreen -
+## held, pushed or carried from one side of it to another: their middle kept outside a ball round the windscreen as wide as its fur and
+## a block more ([constant FUR_CLEAR], [constant BLOCK_REACH]). A moving point pressed out onto a ball moves smoothly, so nothing jumps.
+func _round_the_fur(posed: Dictionary, shift: Vector3) -> Vector3:
+	var geo: Dictionary = _set.get("geo", {})
+	if not (geo.get("fur_c") is Vector3):
+		return Vector3.ZERO
+	var held: Array = []
+	for k in ["block_a", "block_b"]:
+		if posed.has(k):
+			held.append((posed[k] as Transform3D).origin + shift)
+	if held.is_empty():
+		return Vector3.ZERO
+	var mid := Vector3.ZERO
+	for p in held:
+		mid += p as Vector3
+	mid /= float(held.size())
+	var c: Vector3 = geo["fur_c"]
+	var reach := float(geo.get("fur_r", 0.088)) + float(geo.get("fur_len", 0.024)) + FUR_CLEAR + BLOCK_REACH
+	var d := mid - c
+	if d.length() >= reach:
+		return Vector3.ZERO
+	return (d.normalized() if d.length() > 1e-5 else Vector3.UP) * (reach - d.length())
+
+
+## Where the eye is at show time [param t]: the creator's head as performed ([HeadPlan]), else the chair.
+func _eye_at(t: float) -> Vector3:
+	if _head.is_empty() or _set.is_empty():
+		return StudioSet.EYE
+	var lis: Transform3D = (_set["geo"] as Dictionary)["listener"]
+	return lis * (HeadPlan.pose_at(_head, t)["eyes"] as Vector3)
+
+
+## Where act [param i] has thing [param k] at show time [param t], null where it has it nowhere then: along its track; carried back
+## to where it rests once the act ends (unless the act, made whole, does that itself); and brought from wherever the act before it
+## left it - a thing another act still holds is taken from there, never from where it rests.
+func _thing_at(i: int, k: String, t: float) -> Variant:
+	if i >= mini(_made.size(), _t0.size()) or _t0[i] == INF or _made[i] == null:
+		return null
+	var m: Dictionary = _made[i]
+	var tracks: Dictionary = m["tracks"]
+	if not tracks.has(k):
+		return null
+	var u := t - _t0[i]
+	var end := _t1[i]
+	var secs := float(m["secs"])
+	var come := float(m.get("come", StudioActs.COME))
+	var go := float(m.get("go", StudioActs.GO))
+	# (two hands take a pair back one after the other: the held block after the one that worked it)
+	var late := float(m.get("apart", 0.0)) if k == "block_b" else 0.0
+	var whole := bool((_acts[i] as Dictionary)["timed"]) and end >= _t0[i] + secs - 0.05
+	# taken up again by another act soon after: never put back first - held where its work ended, the next act carrying it on from
+	# there (whichever poses it later wins)
+	var next := _next_taker(i, k)
+	var handed := next >= 0 and _t0[next] <= _t0[i] + secs + 0.5
+	if handed:
+		whole = false
+		end = minf(end, _t0[next])
+	if u < 0.0 or t > end + go + late + 0.3 or (whole and u > secs + 0.3):
+		return null
+	var rests: Dictionary = (_set["geo"] as Dictionary)["rests"]
+	var held_u := u if (whole or end == INF) else minf(u, end - _t0[i])
+	if handed:
+		held_u = minf(held_u, float(m.get("held_until", INF)))
+	var xf := StudioActs.pose_at(tracks[k], minf(held_u, secs))
+	if not whole and end < INF and t > end + late and rests.has(k):
+		xf = StudioActs.carried(xf, rests[k], Gesture.min_jerk((t - end - late) / go))
+	if u < come and rests.has(k):
+		var from: Variant = null
+		for j in i:
+			var p: Variant = _thing_at(j, k, _t0[i])
+			if p != null:
+				from = p
+		if from != null:
+			# (two hands, one after the other: the held block first, the other [constant StudioActs.HANDS_APART] after it)
+			var apart := float(m.get("apart", 0.0))
+			var start := apart if k == "block_a" else 0.0
+			var span := maxf(come - apart, 0.1) if apart > 0.0 else come
+			xf = StudioActs.carried(from, StudioActs.pose_at(tracks[k], minf(come, secs)), Gesture.min_jerk(clampf((u - start) / span, 0.0, 1.0)))
+	return xf
+
+
+## The first act after act [param i] that takes up thing [param k] too, -1 for none (looked for among the few acts after it).
+func _next_taker(i: int, k: String) -> int:
+	for j in range(i + 1, mini(i + 6, mini(_made.size(), _t0.size()))):
+		if _made[j] != null and _t0[j] != INF and ((_made[j] as Dictionary)["tracks"] as Dictionary).has(k):
+			return j
+	return -1
+
+
+## The brush's hairs at show time [param t] ([Bristles], as a brush laying paint bends them): trailing as it is dragged across what it
+## sweeps and bent over as it is pressed leaning, a moment behind as a stiff spring follows; straight in the air.
+func _bend_bristles(rig: PropRig, t: float) -> void:
+	var tufts := _tufts_of(rig)
+	if tufts.is_empty():
+		return
+	var at := -1
+	for i in mini(_made.size(), _t0.size()):
+		if _thing_at(i, "brush", t) != null:
+			at = i
+	var bent := [Vector3.ZERO, 0.0]
+	if at >= 0:
+		var m: Dictionary = _made[at]
+		var track: Dictionary = (m["tracks"] as Dictionary)["brush"]
+		var press: PackedFloat32Array = (m.get("press", {}) as Dictionary).get("brush", PackedFloat32Array())
+		var normals: PackedVector3Array = (m.get("normals", {}) as Dictionary).get("brush", PackedVector3Array())
+		var t0 := _t0[at]
+		var end := _t1[at]
+		var secs := float(m["secs"])
+		var tip_v: Vector3 = (_set["geo"] as Dictionary).get("brush_tip_v", Vector3(0.0, float((_set["geo"] as Dictionary)["brush_tip"]), 0.0))
+		var first: Dictionary = tufts[0]
+		var target := func(tt: float) -> Array:
+			var u := tt - t0
+			if u < 0.0 or tt > end or press.is_empty():
+				return [Vector3.ZERO, 0.0]
+			var x := clampi(int(minf(u, secs) * Gesture.RATE), 0, press.size() - 1)
+			var p0 := StudioActs.pose_at(track, minf(maxf(u - 0.03, 0.0), secs))
+			var p1 := StudioActs.pose_at(track, minf(u + 0.03, secs))
+			var v := ((p1 * tip_v) - (p0 * tip_v)) / 0.06
+			var axis := (p1.basis * (first["axis"] as Vector3)).normalized()
+			var n: Vector3 = normals[x] if x < normals.size() else Vector3.ZERO
+			var ahead := -(axis - n * axis.dot(n)) if n.length_squared() > 0.5 else Vector3.ZERO
+			return Bristles.target(v, press[x], float(first["len"]), axis, ahead, float(first["bends"]))
+		bent = Bristles.response(target, t)
+	for tf in tufts:
+		if not is_instance_valid((tf as Dictionary)["mesh"]):
+			_tufts_for = null
+			return
+		var mi: MeshInstance3D = (tf as Dictionary)["mesh"]
+		var mat: ShaderMaterial = (tf as Dictionary)["mat"]
+		mat.set_shader_parameter("bristle_bend", mi.global_basis.inverse() * (bent[0] as Vector3) if mi.is_inside_tree() else Vector3.ZERO)
+		mat.set_shader_parameter("bristle_splay", float(bent[1]))
+		mat.set_shader_parameter("bristle_lay", Vector2.ZERO)
+
+
+## [param rig]'s tufts of hairs (a brush's: [Bristles]), each `{mesh, mat, axis, len, bends}` - its hairs' way out from their root in
+## the rig's own space, and how long they are (m); gathered once a make.
+func _tufts_of(rig: PropRig) -> Array:
+	if _tufts_for == rig:
+		return _tufts
+	_tufts_for = rig
+	_tufts = []
+	if not rig.node.is_inside_tree():
+		_tufts_for = null
+		return _tufts
+	var inv := rig.node.global_transform.affine_inverse()
+	for mi in rig.node.find_children("*", "MeshInstance3D", true, false):
+		var mat := (mi as MeshInstance3D).material_override as ShaderMaterial
+		if mat == null or not mat.has_meta("tuft"):
+			continue
+		var tuft: Dictionary = mat.get_meta("tuft")
+		var rel := inv * (mi as MeshInstance3D).global_transform
+		_tufts.append({"mesh": mi, "mat": mat, "axis": (rel.basis * (tuft["axis"] as Vector3)).normalized(),
+			"len": float(tuft["len"]) * (mi as MeshInstance3D).global_basis.get_scale().y / maxf(rig.node.global_basis.get_scale().y, 1e-4),
+			"bends": Bristles.bends_of(String(tuft.get("kind", "round")))})
+	return _tufts

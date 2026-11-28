@@ -341,6 +341,9 @@ const LIGHT_SHARE := Vector2(0.0, 3.0)
 const HEARD_SHARE := Vector2(0.0, 2.0)
 ## How loud what is heard is under the voice ([Soundscape]'s bed level).
 const BED_LEVEL := 0.5
+## The Environment's own Level over everything heard round the scene, least and most (dB).
+const LEVEL_LEAST := -30.0
+const LEVEL_MOST := 12.0
 ## An element's picture, on its row and the Dex (pixels); a fog's picture is a room this many centimeters tall, drawn in blocks this
 ## many pixels square.
 const PICTURE := Vector2i(176, 132)
@@ -353,6 +356,10 @@ const PICTURE_BLOCK := 4
 static func sanitize(raw: Variant) -> Dictionary:
 	var d: Dictionary = raw if raw is Dictionary else {}
 	var out := {"elements": [], "lights": _shares(d.get("lights"), LIGHT_SHARE), "heard": _shares(d.get("heard"), HEARD_SHARE)}
+	# (its Level only where it is set: a block never given one is written as it was)
+	var lv: Variant = d.get("level")
+	if (lv is float or lv is int) and absf(float(lv)) > 0.001:
+		out["level"] = clampf(float(lv), LEVEL_LEAST, LEVEL_MOST)
 	var seen := {}
 	for e in ((d["elements"] as Array) if d.get("elements") is Array else []):
 		var el := element(e)
@@ -602,6 +609,11 @@ static func brightness(spec: Dictionary) -> float:
 ## How strongly the thing a scene calls [param name] throws its light ([constant KNOBS] `lights`): 1 where the block says nothing.
 static func share_of(spec: Dictionary, name: String) -> float:
 	return float((spec.get("lights", {}) as Dictionary).get(name, 1.0))
+
+
+## How loud everything heard round the scene is over how it is made (dB, the block's `level`): 0 where it says nothing.
+static func level_of(spec: Dictionary) -> float:
+	return float(spec.get("level", 0.0))
 
 
 ## How loud the thing a scene calls [param name] is in what it makes of its own ([constant KNOBS] `heard`): 1 where the block says

@@ -15,7 +15,7 @@ host_for(incoming)   - the node an arriving scene is added to. `full` returns th
 
 A medium is a Node2D mounted inside the stage SubViewport, so the stage governor stops the medium and every panel viewport under it together.
 
-Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (12 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
+Registry: `Medium.REGISTRY` in [src/media/medium.gd](../src/media/medium.gd) (13 entries). Select with `--medium NAME`, or the Medium picker in the Generative panel (persisted to `user://ghost.cfg`, `[director] medium`).
 
 ## `auto` - Auto
 
@@ -67,9 +67,29 @@ No scenes: the Director still keeps its schedule, but a cut hands over to one hi
 
 Real 3D: the stage SubViewport has a world of its own, so the book is geometry in it: a Camera3D, a lamp, a desk, a cloth cover, two page stacks and three leaves (the left page, the right page, and the one being turned), each leaf a subdivided plane bent by `LEAF_SHADER` into the gutter curve and, while turning, rolled over the spine with a curl. Each visible page is a SubViewport drawn by `BookMedium.PageCanvas`, redrawn only when what is printed or lit on it changes. Four page targets cover the worst case, a turn (old left, old right, new left and new right all in shot).
 
+A cover painted for the chapter (`<!-- image (cover): -->`, `BookLayout.cover`) is laid on the front board, its title, subtitle and author set over it by `draw_cover` - never painted - in place of the gilt on cloth.
+
 A gentle camera, unlike the comic's: a wide view of the spread most of the time, drifting toward the page and then the lines being read, changing framing on a slow schedule drawn from the session seed and the show clock (so an export frames the same shots). Every channel follows by the one follow every flown camera has (`CameraFollow`: the Camera card's over the format's own), so nothing is a jump. `Director.camera` scales how far and how often it moves.
 
 Source: [src/media/book.gd](../src/media/book.gd)
+
+## `popup` - Pop-up book
+
+_The chapter as a pop-up book open on the Letter's desk, one scene a spread: its cut-outs (`<!-- popup: ... -->`) stand up off the gutter, creased and turned as the note's design says, in front of its scenery (`<!-- image: ... -->`); they fold flat as the stiff page turns, the voice resting while it does, and the words are set below, each lit as it is spoken. It opens from its painted cover and shuts it again at the end._
+
+PopupMedium - the reading as a pop-up book open on the Letter's desk, one scene a spread (`PopupLayout`).
+
+Everything that makes the book work is the book's (the 3D spread, the turn, the voice followed word by word, the camera); here is what a pop-up book does differently.
+
+THE DESK IS THE LETTER'S (`DeskLook`, `DeskLight`): its top, the things lying on it (none under the open book), its lamp, its candles and the room's light as its mood says, chosen on the Medium card's desk rows (`PopupFormat`, the document's `medium`) and lit as the Environment card says (`environment`). The book is set on it at its real size (`BOOK_M` a page's width), the camera worked out in the book's own units.
+
+Its pages are boards, so a leaf turns flat (`_leaf_bend`). What stands on a spread is pieces of card, each a picture creased into panels (`footprint`): its creases at fractions across the picture (`folds`), each panel turned from facing the reader (`turns`, degrees, + its right end back), one crease on the spine (`at`) at a depth (`z`). A cut-out (`<!-- popup: -->`, painted on magenta and cut out, `Illustrations`) is one; the scene's picture (`<!-- image: -->`) stands behind them whole as its scenery. How each stands is the design the note keeps (`PopupDesign`, the document's `popup`), else a V for each cut-out, its ridge toward the reader.
+
+A piece folds flat as its spread closes - with the cover as the book opens, and as a leaf turns, the old scene folding onto the rising leaf as the new one rises from under it: every crease leans as a V-fold's does (`crease`: square to both feet, each at `FOLD` to the spine), while each foot of the piece rides its own page. Exact for a V; for any other shape nothing ever passes through a page, and every crease of a spread leans together, so the pieces fold as a stack.
+
+THE VOICE WAITS FOR THE BOOK (`PopupWalk` rests it): after the title, while the cover opens and the first scene stands up, and at each scene, while the leaf turns (`_turn_lead`) and the next scene stands. It opens on the closed book seen from above, its painted cover (`<!-- image (cover): -->`) held while the title is read; after the sources (what follows the unread line) the cover shuts again, the camera rises back over it, and only then does the picture fade.
+
+Source: [src/desk/popup.gd](../src/desk/popup.gd)
 
 ## `notebook` - Notebook
 
@@ -227,6 +247,7 @@ Each format's own (its row's `follow`), which the card's rows stand at until set
 | Format | Its own |
 | --- | --- |
 | `book` | `settle` 1.6 |
+| `popup` | `settle` 1.8 |
 | `notebook` | `settle` 1.6 |
 | `tablet` | `settle` 2.1 |
 | `letter` | `settle` 2.1 |

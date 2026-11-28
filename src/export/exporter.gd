@@ -196,6 +196,9 @@ var take_first := false
 ## Optional companion to [member take_provider]: true when the provider has something worth rendering (a reading: words and
 ## a voice to read them). When false the button grays out.
 var take_ready := Callable()
+## Why the note may not be exported yet, asked as the export is pressed: () -> String, "" for nothing in the way (what the show
+## plays still being made - a render plays only what is made). Unset, nothing is.
+var blocked_provider := Callable()
 
 ## What the video is called, when the mode knows: a name without an extension (an episode's title), or "" for the exporter's
 ## own `ghost_notes_<quality>`. Asked as the save dialog opens; goes through [method safe_name].
@@ -748,6 +751,12 @@ func _on_export() -> void:
 		_note_t = 4.0
 		_set_status("⚠  Nothing to export yet - give the note a voice to read it, or a sound to play",
 			Color(1.0, 0.85, 0.6))
+		return
+	# What the show plays still being made: a render cannot make it, and would export it silent or missing
+	var blocked := String(blocked_provider.call()) if blocked_provider.is_valid() else ""
+	if not blocked.is_empty():
+		_note_t = 10.0
+		_set_status("⏳  Not yet - " + blocked, Color(1.0, 0.85, 0.6))
 		return
 	# An upload whose title cannot be made (the note's YouTube card names a macro the note does not fill, YouTubeCard.why_not)
 	# says so now, before the render it would follow

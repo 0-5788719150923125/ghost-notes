@@ -28,11 +28,12 @@ const SHELF := 0.62
 ## Where the green screen stands, behind the viewer's chair facing the camera: out of the viewer's sight, the flip screen's
 ## background (m).
 const BACKDROP := Vector3(0.0, 0.0, 0.95)
-## Where each thing rests (m, and degrees turned): on the side table beside the chair, below the frame wherever the head goes and
-## below the flip screen's view - the blocks stacked, the brush on its side - until an act brings it up ([StudioActs]).
+## Where each thing rests (m, and degrees turned), below the frame wherever the head goes and below the flip screen's view until an act
+## brings it up ([StudioActs]): the brush on its side on the side table beside the chair, the blocks stacked low under the microphone -
+## brought up from below, never past the face.
 const RESTS := {
-	"block_b": [Vector3(-0.28, SHELF, 0.05), Vector3(0.0, 20.0, 0.0)],
-	"block_a": [Vector3(-0.275, SHELF + 0.02, 0.045), Vector3(0.0, 31.0, 0.0)],
+	"block_b": [Vector3(-0.3, SHELF, -0.42), Vector3(0.0, 20.0, 0.0)],
+	"block_a": [Vector3(-0.295, SHELF + 0.02, -0.425), Vector3(0.0, 31.0, 0.0)],
 	"brush": [Vector3(0.28, SHELF + 0.008, 0.05), Vector3(-85.0, 30.0, 0.0)],
 }
 ## The render layer the camera's own things are on (its screen never sees them).
@@ -175,6 +176,8 @@ static func _place(rigs: Dictionary, places := {}) -> Dictionary:
 		var tip: Variant = (rigs["brush"] as PropRig).point_in_thing("tip")
 		if tip is Vector3:
 			geo["brush_tip"] = ((rigs["brush"] as PropRig).node.basis * (tip as Vector3)).length() * float(place_of(places.get("brush", {})).get("scale", 1.0))
+			# (where its tip is in its own space: an act's track places it by that, unscaled as a track is)
+			geo["brush_tip_v"] = tip as Vector3
 	if rigs.has("block_b"):
 		# (a make fitted to the role says its size as fitted, [method PropMakes.fitted])
 		var bsize: Variant = (rigs["block_b"] as PropRig).built.get("size")

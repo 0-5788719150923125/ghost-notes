@@ -16,8 +16,11 @@ class_name StudioSounds
 ## ([method place] `end`): the window sounding then dies away over the hand's lift ([constant RELEASE]), and those after are never
 ## laid. Only the windows near the show are held as frames ([constant AHEAD], [constant BEHIND]); the rest stay on the disk.
 ##
+## AS LOUD AND AS MUFFLED AS ITS ACT IS TOLD, AS IT PLAYS: [method place]'s `gain` on each window as it is heard, its `muffle` as it is read
+## ([method muffled]) - nothing is made again.
+##
 ## [method want] hands it the acts' sounds (`{key: spec}`), [method place] when each begins; [method pump] each frame starts what
-## must be made or read; [method level_at] is what the camera's meters show. Two kinds use it: the medium, which plays (it reads
+## must be made or read; [method peak_at] is what the hands' sounds give the camera's meters. Two kinds use it: the medium, which plays (it reads
 ## each sound into frames, and makes one still missing as it is wanted), and the Studio's rows on the Medium card, which make
 ## every sound missing on their own as soon as it is (the Pipeline's: [member reads] off; a row's ⟳ asks for another take). A sound
 ## one of them is making the other waits for ([member _inflight]), never makes twice.
@@ -39,6 +42,11 @@ const ROOM_LOOP := 7.0
 const ROOM_SEAM := 0.8
 ## The meters' window (s).
 const METER := 0.05
+## An act's sound muffled ([method muffled]): its corner as it begins to muffle and fully muffled (Hz), and how much quieter fully
+## muffled (dB).
+const MUFFLE_FROM := 9000.0
+const MUFFLE_TO := 450.0
+const MUFFLE_DB := -4.0
 ## An act's sound's windows: how long each is, how far before it the motion it is made from begins, and how long it is laid
 ## over the next (s); and how long an act's sound dies away once it ends - the hand lifting.
 const WINDOW := 8.0
@@ -75,7 +83,8 @@ var _clips := {}                 # a sound's key -> its frames, once read
 var _reading := {}               # a sound's key -> {task, box}: its WAV being read on a worker
 var _making := {}                # a sound's key -> {pid, done, wav}: being made on the host
 var _failed := {}                # a sound's key -> why it could not be made (not asked again this session)
-var _placed: Array = []          # {key, t0, len, end}, in the order they begin
+var _placed: Array = []          # {key, t0, len, end, gain, muffle}, in the order they begin
+var _muffle := {}                # a sound's key -> how muffled it is read ([method muffled])
 var _room := PackedVector2Array()
 var _room_task := -1
 var _room_box := {}
@@ -104,6 +113,13 @@ func place(placed: Array) -> void:
 		q["len"] = length_of(String(q["key"]))
 		if not q.has("end"):
 			q["end"] = INF
+		q["gain"] = float(q.get("gain", 1.0))
+		# a window muffled otherwise than it was read is read again, muffled as it is now ([method muffled])
+		var k := String(q["key"])
+		var m := snappedf(clampf(float(q.get("muffle", 0.0)), 0.0, 1.0), 0.01)
+		if not is_equal_approx(float(_muffle.get(k, 0.0)), m):
+			_muffle[k] = m
+			_clips.erase(k)
 		_placed.append(q)
 	_placed.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["t0"]) < float(b["t0"]))
 
@@ -179,7 +195,8 @@ func pump() -> void:
 			WorkerThreadPool.wait_for_task_completion(int(job["task"]))
 			_reading.erase(k)
 			var frames: PackedVector2Array = (job["box"] as Dictionary).get("frames", PackedVector2Array())
-			if not frames.is_empty():
+			# (read muffled otherwise than it is now: read again)
+			if not frames.is_empty() and is_equal_approx(float(job.get("muffle", 0.0)), float(_muffle.get(k, 0.0))):
 				_clips[k] = frames
 				want(_specs)
 	# a batch made: each of its windows read where it is near, or known made
@@ -283,8 +300,28 @@ func _read(key: String) -> void:
 		return
 	var box := {}
 	var wav := wav_of(key)
-	var task := WorkerThreadPool.add_task(func() -> void: box["frames"] = SoundEffects.frames_of(wav))
-	_reading[key] = {"task": task, "box": box}
+	var m := float(_muffle.get(key, 0.0))
+	var task := WorkerThreadPool.add_task(func() -> void: box["frames"] = muffled(SoundEffects.frames_of(wav), m))
+	_reading[key] = {"task": task, "box": box, "muffle": m}
+
+
+## [param frames] heard through cloth, [param m] of the way (0 as made, 1 through a thick muffle): two one-pole lowpasses, their
+## corner from [constant MUFFLE_FROM] down to [constant MUFFLE_TO] Hz, and a little quieter. Pure; a worker's.
+static func muffled(frames: PackedVector2Array, m: float) -> PackedVector2Array:
+	if m <= 0.001 or frames.is_empty():
+		return frames
+	var fc := MUFFLE_FROM * pow(MUFFLE_TO / MUFFLE_FROM, clampf(m, 0.0, 1.0))
+	var a := 1.0 - exp(-TAU * fc / float(RATE))
+	var g := db_to_linear(MUFFLE_DB * m)
+	var out := PackedVector2Array()
+	out.resize(frames.size())
+	var s1 := Vector2.ZERO
+	var s2 := Vector2.ZERO
+	for i in frames.size():
+		s1 += (frames[i] - s1) * a
+		s2 += (s1 - s2) * a
+		out[i] = s2 * g
+	return out
 
 
 ## Sounds [param keys] made on one of the music host's own processes (a batch), the music environment installed first if it must be.
@@ -519,12 +556,14 @@ func render(t0: float, n: int) -> PackedVector2Array:
 		var e0 := int(round(end * RATE)) if end < INF else 1 << 60
 		var e1 := e0 + int(RELEASE * RATE)
 		b = mini(b, e1)
+		# (as loud as its act's Level says)
+		var lv := float(p.get("gain", 1.0))
 		for s in range(a, b):
 			if s < e0:
-				out[s - s0] += clip[s - c0]
+				out[s - s0] += clip[s - c0] * lv
 			else:
 				var g := 1.0 - float(s - e0) / float(e1 - e0)
-				out[s - s0] += clip[s - c0] * (g * g)
+				out[s - s0] += clip[s - c0] * (g * g * lv)
 	# the outro: down with the picture, eased across the block
 	var g0 := ShowOpening.fade_out(t0, fade_from, outro)
 	var g1 := ShowOpening.fade_out(t0 + float(n) / float(RATE), fade_from, outro)
@@ -544,6 +583,14 @@ func level_at(t: float) -> Vector2:
 		l += v.x * v.x
 		r += v.y * v.y
 	return Vector2(linear_to_db(sqrt(l / float(n)) + 1e-9), linear_to_db(sqrt(r / float(n)) + 1e-9))
+
+
+## Each ear's peak over the last [constant METER] seconds at show time [param t] (dBFS): what the camera's meters show of the hands.
+func peak_at(t: float) -> Vector2:
+	var pk := Vector2.ZERO
+	for v in render(t - METER, int(METER * RATE)):
+		pk = Vector2(maxf(pk.x, absf(v.x)), maxf(pk.y, absf(v.y)))
+	return Vector2(linear_to_db(pk.x + 1e-9), linear_to_db(pk.y + 1e-9))
 
 
 ## Let go: the player stopped and taken off its host, every job left to finish on its own.

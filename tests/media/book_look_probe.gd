@@ -7,8 +7,12 @@ extends Node
 ##
 ## `--times` are the show seconds to photograph (the session steps there continuously); `--pages` also writes the
 ## flat page textures; `--word S` is seconds per word. `--camera X` sets Director.camera for the run (not saved).
-## `--medium notebook` drives the notebook instead; `--sketch <png>` stands in for every `<!-- sketch: -->` as
-## `--image` does for pictures.
+## `--medium notebook` drives the notebook instead (`--medium popup` the pop-up book); `--sketch <png>` stands in for
+## every `<!-- sketch: -->` as `--image` does for pictures, and `--popup <png>` (a cut-out on transparency) for every
+## `<!-- popup: -->`, `--cover <png>` for the cover's picture. The words are timed from what the voice reads ([method
+## TextWalk.spoken]): no sources, no citations. `--length S` gives the show a length (bookends included) and `--intro S`
+## its intro, as a take would: the medium then sees its end coming (a pop-up book closes its cover before it). `--design
+## <popup.json>` stands a pop-up book's spreads as that design says.
 ##
 ## It asserts only that a frame is not uniform.
 
@@ -26,6 +30,11 @@ var _image := ""        # a PNG to stand in for every illustration (via Illustra
 var _turns := 0         # photograph the middle of this many leaf turns
 var _medium := "book"
 var _sketch := ""       # a PNG to stand in for every sketch
+var _popup := ""        # a PNG to stand in for every pop-up
+var _cover := ""        # a PNG to stand in for the cover's picture
+var _length := 0.0      # the show's length, 0 for none known
+var _intro := 2.0       # seconds before the first word
+var _design := ""       # a pop-up book's design (popup.json) to stand its spreads by
 
 
 func _ready() -> void:
@@ -44,6 +53,11 @@ func _run() -> void:
 			"--camera": Director.camera = float(args[i + 1])
 			"--image": _image = args[i + 1]
 			"--sketch": _sketch = args[i + 1]
+			"--popup": _popup = args[i + 1]
+			"--cover": _cover = args[i + 1]
+			"--length": _length = float(args[i + 1])
+			"--intro": _intro = float(args[i + 1])
+			"--design": _design = args[i + 1]
 			"--medium": _medium = args[i + 1]
 			"--turns": _turns = int(args[i + 1])
 			"--settle": _settle = int(args[i + 1])
@@ -56,10 +70,12 @@ func _run() -> void:
 				for s in String(args[i + 1]).split(","):
 					_pages.append(int(s))
 	var body := FileAccess.get_file_as_string(_doc)
-	if not _image.is_empty() or not _sketch.is_empty():
+	if not _image.is_empty() or not _sketch.is_empty() or not _popup.is_empty() or not _cover.is_empty():
 		var idx := {}
 		for im in Manuscript.images(body):
-			var f := _sketch if bool(im.get("sketch", false)) else _image
+			var f := _sketch if bool(im.get("sketch", false)) else (_popup if bool(im.get("popup", false)) else _image)
+			if String(im.get("placement", "")) == "cover" and not _cover.is_empty():
+				f = _cover
 			if not f.is_empty():
 				idx[String(im["key"])] = {"versions": [{"file": f, "sig": ""}], "current": 0}
 		Illustrations.use_for_test({"index": idx}, true)
@@ -74,6 +90,12 @@ func _run() -> void:
 	medium.mount(stage)
 	Director.attach(stage, medium)
 	Director.hold(true)
+	if _length > 0.0:
+		var pf := ProbeFeed.new()
+		pf.length = _length
+		pf.intro_hold = _intro
+		pf.camera = Director.camera
+		medium.feed = pf
 
 	var subs: Subtitles = preload("res://src/show/subtitles.gd").new()
 	subs.words = _timeline(body)
@@ -85,6 +107,10 @@ func _run() -> void:
 			if voices[who] is Dictionary and not String(voices[who].get("ink", "")).is_empty():
 				inks[who] = String(voices[who]["ink"])
 	subs.document = {"source": body, "inks": inks}
+	if not _design.is_empty():
+		var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(_design))
+		if d is Dictionary:
+			subs.document["popup"] = d
 	add_child(subs)
 	if medium.bind_captions(subs):
 		subs.overlay_hidden = true
@@ -167,16 +193,27 @@ var _was_turning := false
 
 
 func _timeline(body: String) -> Array:
-	var lay := BookLayout.new()
-	lay.build(body, func(_k: String) -> Vector2: return Vector2.ZERO)
+	var walk: TextWalk = PopupWalk.new() if _medium == "popup" else TextWalk.new()
+	var title := FrontMatter.field_of(body, "title")
+	var said := String(walk.spoken(body, title)["body"])
+	# each word in reading order, a rest (a hesitation's seconds, as the walk wrote it) added before the word it opens
+	var text := (title + " . " if not title.is_empty() else "") + Manuscript.strip_frontmatter(said)
+	var rest := RegEx.create_from_string("<!--\\s*hesitation\\s*:\\s*([0-9.]+)\\s*-->")
+	text = rest.sub(text, " @rest:$1 ", true)
+	text = Manuscript._rx(Manuscript.COMMENT).sub(text, " ", true).replace("\n", " ").replace("\t", " ")
 	var out: Array = []
-	var t := 2.0
+	var t := _intro
 	var si := 0
-	for w in lay.words:
-		var text := String((w as Dictionary)["text"])
-		out.append({"text": text, "t0": t, "t1": t + _word * 0.85, "sentence": si, "emph": 0})
+	for raw in text.split(" ", false):
+		var word := String(raw).strip_edges()
+		if word.begins_with("@rest:"):
+			t += float(word.substr(6))
+			continue
+		if word == "." or word.is_empty() or word.begins_with("#"):
+			continue
+		out.append({"text": word, "t0": t, "t1": t + _word * 0.85, "sentence": si, "emph": 0})
 		t += _word
-		var tail := text.rstrip("\"'”’)*_")
+		var tail := word.rstrip("\"'”’)*_")
 		if tail.ends_with(".") or tail.ends_with("?") or tail.ends_with("!"):
 			si += 1
 			t += 0.45
@@ -192,3 +229,18 @@ func _spread(img: Image) -> float:
 			lo = minf(lo, l)
 			hi = maxf(hi, l)
 	return hi - lo
+
+
+## A show's clock with a length, for a probe with no song: the session's virtual clock, a known end, an intro.
+class ProbeFeed:
+	extends ShowFeed
+	var length := 0.0
+
+	func show_time() -> float:
+		return maxf(Spectrum.virtual_clock, 0.0)
+
+	func show_length() -> float:
+		return length
+
+	func lead() -> float:
+		return intro_hold

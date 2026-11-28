@@ -18,6 +18,8 @@ const GAP := 16
 ## least size before it widened and how much it widened by (less than the refine where the screen had no more room).
 const SHIFT := &"refine_dock_shift"
 const WAS := &"refine_dock_was"
+## What a refine is marked with: the button that opened it (a [WeakRef]), let go of when it is closed some other way (a ×).
+const BUTTON := &"refine_dock_button"
 
 
 ## Where [param from] (the node a Refine button is on, or null) docks a refine: the nearest open window above it that is not the
@@ -53,6 +55,8 @@ static func is_open(panel: Control) -> bool:
 ## The Refine button's toggle: [param panel] opened docked where [param from] is ([method host_of]), or folded away where it stands
 ## open; [param button] shown pressed while it is open. Whether it is open now.
 static func toggle(from: Node, panel: Control, button: BaseButton = null) -> bool:
+	if button != null and panel != null:
+		panel.set_meta(BUTTON, weakref(button))
 	if is_open(panel):
 		close(panel)
 	else:
@@ -118,6 +122,10 @@ static func close(panel: Control) -> void:
 	var host := panel.get_parent()
 	while host != null and not _is_panel(host) and not (host is Window):
 		host = host.get_parent()
+	# (its button let go of, however it was closed)
+	var ref: Variant = panel.get_meta(BUTTON) if panel.has_meta(BUTTON) else null
+	if ref is WeakRef and (ref as WeakRef).get_ref() is BaseButton:
+		((ref as WeakRef).get_ref() as BaseButton).set_pressed_no_signal(false)
 	if _is_panel(host):
 		host.call("undock", panel)
 		return

@@ -16,6 +16,10 @@ func set_level(_d: float) -> void:
 	pass
 
 
+## Its gain over that level (dB, 0 as it is): the Environment's own Level, a person's ([method ReadingBed.gain_db]).
+var gain_db := 0.0
+
+
 ## [param voice] with the bed under it, frame for frame.
 func mix(voice: PackedVector2Array) -> PackedVector2Array:
 	return voice

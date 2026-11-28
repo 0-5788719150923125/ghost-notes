@@ -223,6 +223,10 @@ const KEY_HEARD := 36
 ## The near ear's share of the voice at the deepest lean: 70/30 and never further, so the far ear
 ## always hears the reader (about 7.4 dB apart at the limit).
 const LEAN_SHARE := 0.7
+## How often the voice as a microphone receives it is metered (a second: each reading the peak since the last), and the meter's
+## floor (dBFS).
+const METER_RATE := 50
+const METER_FLOOR := -60.0
 ## The near ear's share of the voice with the head's mouth fully to one side of the microphone ([member place]): a binaural head
 ## hears a mouth at one ear far more in it than a reader leaning on a stage (about 19 dB apart at the limit).
 const PLACE_SHARE := 0.9
@@ -341,6 +345,14 @@ var _ear_back2 := Vector2.ZERO
 ## one's head shadow, darker from behind (the camera's side) - all the way round, in place of [member place]'s pan. Handed for one
 ## buffer and used once.
 var ears_at := PackedVector3Array()
+## Where it is metered ([member metering]): what a microphone receives of the voice - the direct voice as each ear of the head at the
+## capsule has it, never the echo, the room or the bed laid after - each ear's peak [constant METER_RATE] times a second, a byte
+## each ([method meter_byte], [method meter_at]), past full scale where it is over; a take keeps it in its sidecar for the camera's
+## meters.
+var metering := false
+var meter := PackedByteArray()
+var _meter_peak := Vector2.ZERO
+var _meter_n := 0
 ## Where this voice sits: -1 the left ear to 1 the right ([method Delivery.pan_of_seat]). A lean moves from here. Heard only in the direct voice, as a lean is.
 var seat := 0.0
 ## The voices over this one, for the buffer about to be run ([method ReadingJoin.side_between]): left and right, already where they sit. Taken once.
@@ -854,6 +866,8 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 				direct = dulled
 
 		buf[i] = clampf(wet + (sv.x + sv.y) * 0.5 * (1.0 - SIDE_ROOM), -1.0, 1.0)
+		# (what a microphone receives of the voice: the direct voice alone, as each ear has it below - no echo, room or bed)
+		var mic := Vector2(direct, direct)
 
 		# --- the head at the capsule: the direct voice heard by each ear from where the mouth is ---
 		if has_ears:
@@ -887,6 +901,7 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 				v -= lerpf(pa[6], pb[6], fe) * (v - hi_lo2)
 				ear[e] = v
 			_ear_w = (_ear_w + 1) % EAR_LINE
+			mic = ear
 			var base := wet - direct
 			out[i] = Vector2(clampf(base + ear.x + sv.x * (1.0 - SIDE_ROOM), -1.0, 1.0), clampf(base + ear.y + sv.y * (1.0 - SIDE_ROOM), -1.0, 1.0))
 		# --- lean: the direct voice, moved between the ears ---
@@ -900,9 +915,32 @@ func _run(buf: PackedFloat32Array, stereo: bool) -> Array:
 				var reach := 1.0 if has_place else (lerpf(LEAN_REACH_HOME, 1.0, c) if c >= 0.0 \
 					else lerpf(LEAN_REACH_HOME, LEAN_REACH_BACK, -c))
 				var g := lean_gains(clampf(seat + p * reach, -1.0, 1.0), PLACE_SHARE if has_place else LEAN_SHARE)
+				mic = direct * g
 				out[i] = Vector2(clampf(wet + direct * (g.x - 1.0) + sv.x * (1.0 - SIDE_ROOM), -1.0, 1.0),
 					clampf(wet + direct * (g.y - 1.0) + sv.y * (1.0 - SIDE_ROOM), -1.0, 1.0))
+		if metering:
+			_meter_peak = Vector2(maxf(_meter_peak.x, absf(mic.x)), maxf(_meter_peak.y, absf(mic.y)))
+			_meter_n += 1
+			if _meter_n >= maxi(sample_rate / METER_RATE, 1):
+				meter.append(meter_byte(linear_to_db(_meter_peak.x + 1e-9)))
+				meter.append(meter_byte(linear_to_db(_meter_peak.y + 1e-9)))
+				_meter_peak = Vector2.ZERO
+				_meter_n = 0
 	return [buf, out]
+
+
+## A level (dBFS) as one byte of [member meter]: [constant METER_FLOOR] to [constant METER_FLOOR] + 63.75 dB (past full scale, so
+## an overload shows) in quarter decibels.
+static func meter_byte(db: float) -> int:
+	return clampi(roundi((maxf(db, METER_FLOOR) - METER_FLOOR) * 4.0), 0, 255)
+
+
+## Each ear's level (dBFS) at [param t] seconds of a meter ([member meter], as bytes) - [constant METER_FLOOR] past its end.
+static func meter_at(m: PackedByteArray, t: float) -> Vector2:
+	var k := int(t * float(METER_RATE)) * 2
+	if t < 0.0 or k + 1 >= m.size():
+		return Vector2(METER_FLOOR, METER_FLOOR)
+	return Vector2(float(m[k]) / 4.0 + METER_FLOOR, float(m[k + 1]) / 4.0 + METER_FLOOR)
 
 
 ## [member heard]'s filters for this buffer: resolved when it changed (its states cleared, so a voice

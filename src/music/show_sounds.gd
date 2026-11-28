@@ -17,6 +17,17 @@ func chat_of(_key: String) -> WriterChat:
 	return null
 
 
+## How loud and how muffled sound [param key] is heard (`""`: all of them): `{db, muffle}` - `db` its level (0 as made), `muffle` 0
+## (as made) to 1 (through thick cloth); {} where the show sets no level.
+func level_of(_key: String) -> Dictionary:
+	return {}
+
+
+## Sound [param key] (`""`: all of them) heard [param db] louder and [param muffle] muffled from now, at once.
+func set_level(_key: String, _db: float, _muffle: float) -> void:
+	pass
+
+
 ## What its sounds are called on the card.
 func heading() -> String:
 	return "Made by the show"

@@ -203,3 +203,22 @@ func _style() -> void:
 	s.content_margin_top = 4
 	s.content_margin_bottom = 6
 	add_theme_stylebox_override("panel", s)
+
+
+## Its line held to [param n] lines, always that tall whatever it says: a longer one cut short with "…" (whole on hover), a shorter
+## one leaving the room - so what it says never moves what is under it.
+func hold_lines(n: int) -> void:
+	line_label.max_lines_visible = n
+	line_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	line_label.clip_text = true
+	line_label.visible = true
+	var font := line_label.get_theme_font("font") if line_label.is_inside_tree() else ThemeDB.fallback_font
+	line_label.custom_minimum_size.y = float(n) * (font.get_height(11) + float(line_label.get_theme_constant("line_spacing")))
+	line_label.tooltip_text = line_label.text
+	if not line_label.is_connected("draw", _tip_line):
+		line_label.draw.connect(_tip_line)
+
+
+## The held line's whole words on hover, as it says now.
+func _tip_line() -> void:
+	line_label.tooltip_text = line_label.text

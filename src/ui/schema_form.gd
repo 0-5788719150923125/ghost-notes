@@ -38,6 +38,7 @@ const DIM := Color(1, 1, 1, 0.45)
 var read_only := false
 
 var _building := false
+var _boxes: Array = []           # each number box's text, for the keys let go of on a click elsewhere ([method _input])
 
 
 func _init() -> void:
@@ -52,6 +53,7 @@ func show_fields(schema: Dictionary, values: Dictionary, context := {}) -> void:
 	for c in get_children():
 		remove_child(c)
 		c.queue_free()
+	_boxes = []
 	for key in schema:
 		_add_row(String(key), schema[key] as Dictionary, values, context)
 	if bool(context.get("extra", false)):
@@ -307,6 +309,13 @@ func _slider(key: String, field: Dictionary, value: Variant, has: bool) -> Contr
 	slide.custom_minimum_size = Vector2(90, 0)
 	slide.editable = not read_only
 	spin.editable = not read_only
+	# Only a hand on it moves it: the slider takes no wheel (the wheel scrolls what holds the form) and keeps no keys, and the box lets
+	# its keys go once a number is entered or a click lands anywhere else ([method _input]) - a key or the wheel meant for something
+	# else never nudges a field left in focus, and what is being typed or selected in it is left alone.
+	slide.scrollable = false
+	slide.focus_mode = Control.FOCUS_NONE
+	spin.get_line_edit().text_submitted.connect(func(_t: String) -> void: spin.get_line_edit().release_focus())
+	_boxes.append(spin.get_line_edit())
 	row.modulate.a = 1.0 if has else 0.6
 	var out := func(v: float) -> Variant: return int(v) if whole else v
 	var dragging := [false]
@@ -327,6 +336,17 @@ func _slider(key: String, field: Dictionary, value: Variant, has: bool) -> Contr
 	row.add_child(slide)
 	row.add_child(spin)
 	return row
+
+
+## A click anywhere but in the number box that has the keys lets them go (what was typed in it is taken), as a desktop field does.
+func _input(event: InputEvent) -> void:
+	var mb := event as InputEventMouseButton
+	if mb == null or not mb.pressed:
+		return
+	for b in _boxes:
+		var le := b as LineEdit
+		if le != null and is_instance_valid(le) and le.has_focus() and not le.get_global_rect().has_point(le.get_global_mouse_position()):
+			le.release_focus()
 
 
 func _emit(key: String, value: Variant) -> void:

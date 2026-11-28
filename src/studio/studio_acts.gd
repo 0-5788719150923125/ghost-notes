@@ -31,7 +31,7 @@ const VERBS := {
 		"things": ["fur"], "tool": "skin", "secs": 12.0},
 }
 ## What an act is done to: its material (contact.py's) and, where it rings, its body (`shape`, `size` meters, `material`).
-## `also` the other words a mark may call it by.
+## `also` the other words a mark may call it by; `both` where it is held in both hands, whatever the mark says.
 const THINGS := {
 	"fur": {"label": "The windscreen", "blurb": "The microphone's fur windscreen, right over the capsule: heard closest of all.",
 		"material": "fur", "also": ["windscreen", "fluffy"]},
@@ -42,7 +42,7 @@ const THINGS := {
 	"lens": {"label": "The camera's lens", "blurb": "The glass of the camera's lens, its barrel round it.",
 		"material": "glass", "body": {"shape": "tube", "size": [0.089, 0.078, 0.078], "material": "plastic"}, "also": ["glass"]},
 	"blocks": {"label": "The wooden blocks", "blurb": "Two blocks of hardwood, brought up in front of the microphone.",
-		"material": "wood", "body": {"shape": "bar", "size": [0.15, 0.05, 0.02], "material": "wood"}, "also": ["block", "wood"]},
+		"both": true, "material": "wood", "body": {"shape": "bar", "size": [0.15, 0.05, 0.02], "material": "wood"}, "also": ["block", "wood"]},
 }
 ## Where round the microphone, as the listener hears it: `at` a direction (x right, y up, z toward the viewer), or `sweep`
 ## for one that moves over the act.
@@ -95,18 +95,35 @@ const STROKES := {"rub": [1.5, 0.024, 1.1], "brush": [1.1, 0.03, 1.0], "scratch"
 	"scrape": [1.0, 0.035, 1.4]}
 ## A tap's own: taps a second in a roll, the most in a roll, the rest between rolls (s), its speed landing (m/s).
 const TAPS := {"rate": 6.5, "group": 4, "gap": 0.55, "speed": 0.38}
-## How long a thing the hands bring takes to come and to go back (s), and the least an act's own work lasts (s).
-const COME := 1.1
+## How long the blocks take to be brought and taken back (s: two hands, one after the other, [constant HANDS_APART] apart), and how
+## it eases ([method _carry]: brought, most of the way covered early and the last of it drifted in).
+const BLOCK_COME := 3.0
+const BLOCK_GO := 3.0
+const HANDS_APART := 0.8
+const CARRY_EASE := 1.8
+## How far over a block coming down its first edge touches before it lies flat (m, [method _landing]).
+const LAND_EDGE := 0.004
+## How a held block takes a blow from the other ([method _bump_at]): how far it gives (m for each meter a second of the blow), how fast
+## it springs back (Hz), how soon that dies away (s), and how far it tips about its length as it gives (radians a meter).
+const BUMP_DEPTH := 0.008
+const BUMP_HZ := 7.0
+const BUMP_DIES := 0.09
+const BUMP_TIP := 2.5
+## How long a thing the hands bring takes to come and to go back (s: unhurried, as ASMR is), and the least an act's own work lasts (s).
+const COME := 2.2
 ## An open act's pace and pressure ease over this long (s); one that circles goes round once in [constant AROUND] seconds, and one
 ## that crosses from ear to ear goes across in [constant OVER] and back.
 const RAMP := 20.0
 const AROUND := 16.0
 const OVER := 9.0
-const GO := 1.2
+const GO := 2.2
 const WORK_LEAST := 1.2
+## How much of a stroke's reach a brush keeps on the lens, whose glass is smaller than a stroke elsewhere: its tip stays well inside
+## the glass, the bristles round it reaching the rim.
+const LENS_FIT := 0.33
 ## How far out from the capsule the blocks are held (m), and how far above it: in front of the windscreen's top, where the chair
 ## sees them.
-const HOLD_OUT := 0.17
+const HOLD_OUT := 0.22
 const HOLD_UP := 0.045
 ## What the sound is told: its tail after the act (s).
 const TAIL := 1.2
@@ -162,7 +179,11 @@ static func make(act_in: Dictionary, geo: Dictionary, horizon := -1.0) -> Dictio
 	var open := not bool(act.get("timed", true)) and horizon > 0.0
 	act["_open"] = open
 	var secs := horizon if open else maxf(float(act.get("secs", VERBS[verb]["secs"])), 0.5)
-	var out := {"secs": secs, "open": open, "tracks": {}, "touches": [], "shake": {}, "sound": {"secs": secs, "tail": 0.0 if open else TAIL,
+	var blocks := thing == "blocks" or verb in ["knock", "scrape"]
+	# (`held_until`: where, made whole, its own putting back begins - an act that takes the same things next takes them from there)
+	var out := {"secs": secs, "open": open, "come": BLOCK_COME if blocks else COME, "go": BLOCK_GO if blocks else GO,
+		"held_until": (secs - (BLOCK_GO if blocks else GO)) if not open else INF,
+		"apart": HANDS_APART if blocks else 0.0, "tracks": {}, "touches": [], "shake": {}, "sound": {"secs": secs, "tail": 0.0 if open else TAIL,
 		"lane_rate": Gesture.RATE, "contacts": [], "hits": []}}
 	match verb:
 		"tap":
@@ -366,6 +387,10 @@ static func _brush_on(act: Dictionary, thing: String, secs: float, geo: Dictiona
 	var r := float(geo["fur_r"])
 	var fl := float(geo["fur_len"])
 	var surface := "fur"
+	var nrms := PackedVector3Array()         # which way is out of what the bristles touch (world)
+	nrms.resize(n)
+	# (on the lens the strokes keep to its glass, which is smaller than a stroke elsewhere)
+	var fit := LENS_FIT if thing == "lens" else 1.0
 	for i in n:
 		var p: Vector3
 		var away: Vector3
@@ -379,14 +404,19 @@ static func _brush_on(act: Dictionary, thing: String, secs: float, geo: Dictiona
 			away = lis.basis * (d + Vector3(0.0, 0.45, 0.0)).normalized()
 			tat[i] = on_fur(geo, dir * (r + fl * 0.5))
 			depth[i] = dep
+			nrms[i] = lis.basis * dir
 		else:
 			var spot: Dictionary = _surface_of(thing, geo)
 			var nrm: Vector3 = spot["normal"]
 			var a1: Vector3 = spot["along"]
 			var a2 := nrm.cross(a1).normalized()
 			var lift := (1.0 - on[i]) * 0.02
-			p = (spot["at"] as Vector3) + a1 * u[i] + a2 * w[i] + nrm * (lift - 0.002 * on[i])
-			away = (nrm + Vector3(0.0, 0.5, 0.0)).normalized()
+			p = (spot["at"] as Vector3) + (a1 * u[i] + a2 * w[i]) * fit + nrm * (lift - 0.002 * on[i])
+			# (on the lens it comes at the glass nearly face-on from the side of the hand holding it, so its bristles cover the glass -
+			# what the lens itself sees, and its screen - and the handle never hides them from the eye)
+			var side := (-1.0 if String(act.get("hand", "right")) == "left" else 1.0) * 0.35 if thing == "lens" else 0.0
+			away = (nrm + lis.basis.x * side + Vector3(0.0, 0.15 if thing == "lens" else 0.5, 0.0)).normalized()
+			nrms[i] = nrm
 			surface = String(THINGS[thing]["material"])
 		tips[i] = p
 		outs[i] = away
@@ -396,21 +426,31 @@ static func _brush_on(act: Dictionary, thing: String, secs: float, geo: Dictiona
 	var vel := _eased(_sweeps(tips, on, 1.0), 0.12)
 	var lead := int(COME * Gesture.RATE)
 	var rest: Transform3D = (geo["rests"] as Dictionary)["brush"]
-	var tip_len := float(geo["brush_tip"])
+	# (its tip where its make says, in its own space: the bristles land where the stroke is, whichever way the make was drawn)
+	var tip_v: Vector3 = geo.get("brush_tip_v", Vector3(0.0, float(geo["brush_tip"]), 0.0))
 	var poses: Array = []
 	for i in n:
 		var axis := ((outs[i] as Vector3) - (vel[i] as Vector3) * 0.18).normalized()
 		var y := -axis
 		poses.append(_basis_y(y, lis.basis.y).orthonormalized())
-	var first := Transform3D(poses[0], tips[0] - (poses[0] as Basis).y * tip_len + (outs[0] as Vector3) * 0.03)
-	var last := Transform3D(poses[n - 1], tips[n - 1] - (poses[n - 1] as Basis).y * tip_len + (outs[n - 1] as Vector3) * 0.03)
+	var first := Transform3D(poses[0], tips[0] - (poses[0] as Basis) * tip_v + (outs[0] as Vector3) * 0.03)
+	var last := Transform3D(poses[n - 1], tips[n - 1] - (poses[n - 1] as Basis) * tip_v + (outs[n - 1] as Vector3) * 0.03)
 	var track := _carry(seed, rest, first, COME, Vector3(0.0, 0.05, 0.0))
+	# how hard the bristles are pressed and which way is out of what they touch, a sample each beside the track (none in the air)
+	var bpress := PackedFloat32Array()
+	var bnorm := PackedVector3Array()
+	bpress.resize(track.size())
+	bnorm.resize(track.size())
 	for i in n:
 		var b: Basis = poses[i]
-		track.append(Transform3D(b, tips[i] - b.y * tip_len))
+		track.append(Transform3D(b, tips[i] - b * tip_v))
+		bpress.append(clampf(press[i] / 1.2, 0.0, 1.0) * on[i])
+		bnorm.append(nrms[i])
 	if not bool(act["_open"]):
-		track.append_array(_carry(seed + 1, last, rest, secs - COME - work, Vector3(0.0, 0.04, 0.0)))
+		track.append_array(_carry(seed + 1, last, rest, secs - COME - work, Vector3(0.0, 0.04, 0.0), false))
 	out["tracks"]["brush"] = _track(track)
+	out["press"] = {"brush": bpress}
+	out["normals"] = {"brush": bnorm}
 	if thing == "fur":
 		out["touches"].append({"at": _shift(tat, lead), "depth": _shift_f(depth, lead), "push": _sweeps(_shift(tat, lead), _shift_f(on, lead), fl * 0.8)})
 	var lanes := _lanes(_shift(here, lead), _shift_f(sp, lead), _shift_f(press, lead))
@@ -430,8 +470,8 @@ static func _tap(act: Dictionary, thing: String, secs: float, geo: Dictionary, o
 	for p in act.get("paces", []):
 		o["rate"] = float(o["rate"]) * float((PACES.get(String(p), {}) as Dictionary).get("pace", 1.0))
 	o["speed"] = float(o["speed"]) * float((PRESSES.get(String(act.get("press", "")), {}) as Dictionary).get("press", 1.0))
-	var start := COME if thing == "blocks" else 0.0
-	var work := maxf(secs - ((COME + (0.0 if bool(act["_open"]) else GO)) if thing == "blocks" else 0.0), WORK_LEAST)
+	var start := BLOCK_COME if thing == "blocks" else 0.0
+	var work := maxf(secs - ((BLOCK_COME + (0.0 if bool(act["_open"]) else BLOCK_GO)) if thing == "blocks" else 0.0), WORK_LEAST)
 	var tp := Gesture.taps(seed, work, o)
 	var hits: Array = tp["hits"]
 	var lift: PackedFloat32Array = tp["lift"]
@@ -460,7 +500,7 @@ static func _tap(act: Dictionary, thing: String, secs: float, geo: Dictionary, o
 		spot = {"at": b * Vector3(0.03, float(geo["block_size"].y) * 0.5, 0.0), "body": THINGS["blocks"]["body"]}
 		# the block brought up, held while it is tapped (each tap nudging it), and taken back
 		var rest: Transform3D = (geo["rests"] as Dictionary)["block_b"]
-		var track := _carry(seed, rest, b, COME, Vector3(0.0, 0.04, 0.0))
+		var track := _carry(seed, rest, b, BLOCK_COME, Vector3(0.0, 0.04, 0.0))
 		for i in lift.size():
 			var tt := float(i) / Gesture.RATE
 			var nudge := 0.0
@@ -470,7 +510,7 @@ static func _tap(act: Dictionary, thing: String, secs: float, geo: Dictionary, o
 					nudge += float(h["speed"]) * 0.004 * exp(-since / 0.06) * sin(TAU * 11.0 * since)
 			track.append(Transform3D(b.basis, b.origin + b.basis.y * -nudge + Gesture.idle(seed, tt, 0.0015)))
 		if not bool(act["_open"]):
-			track.append_array(_carry(seed + 1, b, rest, GO, Vector3(0.0, 0.04, 0.0)))
+			track.append_array(_carry(seed + 1, b, rest, BLOCK_GO, Vector3(0.0, 0.04, 0.0), false))
 		out["tracks"]["block_b"] = _track(track)
 	else:
 		var s := _surface_of(thing, geo)
@@ -492,7 +532,7 @@ static func _tap(act: Dictionary, thing: String, secs: float, geo: Dictionary, o
 static func _knock(act: Dictionary, secs: float, geo: Dictionary, out: Dictionary) -> void:
 	var seed := int(act.get("seed", 1))
 	var lis: Transform3D = geo["listener"]
-	var work := maxf(secs - COME - (0.0 if bool(act["_open"]) else GO), WORK_LEAST)
+	var work := maxf(secs - BLOCK_COME - (0.0 if bool(act["_open"]) else BLOCK_GO), WORK_LEAST)
 	var o := TAPS.duplicate()
 	o["rate"] = 4.5
 	o["group"] = 3
@@ -503,27 +543,41 @@ static func _knock(act: Dictionary, secs: float, geo: Dictionary, out: Dictionar
 	var b: Transform3D = held["b"]
 	var a: Transform3D = held["a"]
 	var lift: PackedFloat32Array = tp["lift"]
-	var ta := _carry(seed, (geo["rests"] as Dictionary)["block_a"], _lifted(a, b, lift[0]), COME, Vector3(0.0, 0.05, 0.0))
-	var tb := _carry(seed + 2, (geo["rests"] as Dictionary)["block_b"], b, COME, Vector3(0.0, 0.03, 0.0))
+	var size: Vector3 = geo["block_size"]
+	# (the blows first: the blocks are brought to where the first begins and taken back from where the last ends, never jumping)
+	var wa: Array = []
+	var wb: Array = []
+	var hits: Array = tp["hits"]
 	for i in lift.size():
 		var tt := float(i) / Gesture.RATE
-		ta.append(_lifted(a, b, lift[i]).translated(Gesture.idle(seed + 5, tt, 0.001)))
-		tb.append(b.translated(Gesture.idle(seed + 6, tt, 0.001)))
+		# the held block taking each blow: given a little the way it is struck, sprung back, tipped a touch - and the striking block,
+		# while it is on it, going with it
+		var held_b := _bump_at(hits, tt, b) * b.translated(Gesture.idle(seed + 6, tt, 0.001))
+		# (the striking block stood on the held one as it is now, so the gap between them is the lift and nothing more)
+		var a_on := held_b * (b.affine_inverse() * a)
+		wa.append(_landing(a_on, held_b, lift[i], _edge_at(seed, tt), size))
+		wb.append(held_b)
+	# (one hand first, the held block; the other after it)
+	var ta := _carry_late(seed, (geo["rests"] as Dictionary)["block_a"], wa[0], BLOCK_COME, HANDS_APART, Vector3(0.0, 0.05, 0.0))
+	var tb := _carry_early(seed + 2, (geo["rests"] as Dictionary)["block_b"], wb[0], BLOCK_COME, HANDS_APART, Vector3(0.0, 0.03, 0.0))
+	ta.append_array(wa)
+	tb.append_array(wb)
 	if not bool(act["_open"]):
-		ta.append_array(_carry(seed + 1, _lifted(a, b, lift[lift.size() - 1]), (geo["rests"] as Dictionary)["block_a"], GO, Vector3(0.0, 0.05, 0.0)))
-		tb.append_array(_carry(seed + 3, b, (geo["rests"] as Dictionary)["block_b"], GO, Vector3(0.0, 0.03, 0.0)))
+		# (taken back the other way round: the striking block first, the held one after)
+		ta.append_array(_carry_early(seed + 1, wa[wa.size() - 1], (geo["rests"] as Dictionary)["block_a"], BLOCK_GO, HANDS_APART, Vector3(0.0, 0.05, 0.0), false))
+		tb.append_array(_carry_late(seed + 3, wb[wb.size() - 1], (geo["rests"] as Dictionary)["block_b"], BLOCK_GO, HANDS_APART, Vector3(0.0, 0.03, 0.0), false))
 	out["tracks"]["block_a"] = _track(ta)
 	out["tracks"]["block_b"] = _track(tb)
 	var at_l: Vector3 = lis.affine_inverse() * (b * Vector3(0.0, float(geo["block_size"].y) * 0.5, 0.0))
 	for h in tp["hits"]:
-		(out["sound"]["hits"] as Array).append({"t": float(h["t"]) + COME, "speed": float(h["speed"]), "on": "wood", "by": "wood",
+		(out["sound"]["hits"] as Array).append({"t": float(h["t"]) + BLOCK_COME, "speed": float(h["speed"]), "on": "wood", "by": "wood",
 			"at": [at_l.x, at_l.y, at_l.z], "body": THINGS["blocks"]["body"], "body2": THINGS["blocks"]["body"]})
 
 
 static func _scrape(act: Dictionary, secs: float, geo: Dictionary, out: Dictionary) -> void:
 	var seed := int(act.get("seed", 1))
 	var lis: Transform3D = geo["listener"]
-	var work := maxf(secs - COME - (0.0 if bool(act["_open"]) else GO), WORK_LEAST)
+	var work := maxf(secs - BLOCK_COME - (0.0 if bool(act["_open"]) else BLOCK_GO), WORK_LEAST)
 	var g := Gesture.strokes(seed, work, stroke_opts(act, "scrape"))
 	var held := _held(act, geo)
 	var b: Transform3D = held["b"]
@@ -534,24 +588,32 @@ static func _scrape(act: Dictionary, secs: float, geo: Dictionary, out: Dictiona
 	var n := u.size()
 	var here := PackedVector3Array()
 	here.resize(n)
-	var ta := _carry(seed, (geo["rests"] as Dictionary)["block_a"], _lifted(a, b, 0.012), COME, Vector3(0.0, 0.05, 0.0))
-	var tb := _carry(seed + 2, (geo["rests"] as Dictionary)["block_b"], b, COME, Vector3(0.0, 0.03, 0.0))
+	var size: Vector3 = geo["block_size"]
+	# (the strokes first: the blocks are brought to where the first begins and taken back from where the last ends, never jumping)
+	var wa: Array = []
+	var wb: Array = []
 	var hb := float(geo["block_size"].y)
 	for i in n:
 		var tt := float(i) / Gesture.RATE
 		var yaw := 0.05 * Gesture.wave(seed + 9, tt, 3.0, 0.8)
 		var slid := Transform3D(a.basis.rotated(b.basis.y.normalized(), yaw), a.origin + b.basis.x * u[i] + b.basis.z * w[i])
 		var held_b := b.translated(Gesture.idle(seed + 6, tt, 0.0008))
-		var lifted := _lifted(slid, held_b, (1.0 - on[i]) * 0.012)
-		ta.append(lifted)
-		tb.append(held_b)
+		# (the sliding block on the held one as it is now: the gap between them is the lift alone)
+		var lifted := _landing(held_b * (b.affine_inverse() * slid), held_b, (1.0 - on[i]) * 0.012, _edge_at(seed, tt), size)
+		wa.append(lifted)
+		wb.append(held_b)
 		here[i] = lis.affine_inverse() * (held_b * Vector3(0.0, hb * 0.5, 0.0) + b.basis.x * u[i] + b.basis.z * w[i])
+	# (one hand first, the held block; the other after it)
+	var ta := _carry_late(seed, (geo["rests"] as Dictionary)["block_a"], wa[0], BLOCK_COME, HANDS_APART, Vector3(0.0, 0.05, 0.0))
+	var tb := _carry_early(seed + 2, (geo["rests"] as Dictionary)["block_b"], wb[0], BLOCK_COME, HANDS_APART, Vector3(0.0, 0.03, 0.0))
+	ta.append_array(wa)
+	tb.append_array(wb)
 	if not bool(act["_open"]):
-		ta.append_array(_carry(seed + 1, _lifted(a, b, 0.012), (geo["rests"] as Dictionary)["block_a"], GO, Vector3(0.0, 0.05, 0.0)))
-		tb.append_array(_carry(seed + 3, b, (geo["rests"] as Dictionary)["block_b"], GO, Vector3(0.0, 0.03, 0.0)))
+		ta.append_array(_carry_early(seed + 1, wa[n - 1], (geo["rests"] as Dictionary)["block_a"], BLOCK_GO, HANDS_APART, Vector3(0.0, 0.05, 0.0), false))
+		tb.append_array(_carry_late(seed + 3, wb[n - 1], (geo["rests"] as Dictionary)["block_b"], BLOCK_GO, HANDS_APART, Vector3(0.0, 0.03, 0.0), false))
 	out["tracks"]["block_a"] = _track(ta)
 	out["tracks"]["block_b"] = _track(tb)
-	var lead := int(COME * Gesture.RATE)
+	var lead := int(BLOCK_COME * Gesture.RATE)
 	(out["sound"]["contacts"] as Array).append({"kind": "scrape", "on": "wood", "by": "wood", "body": THINGS["blocks"]["body"],
 		"body2": THINGS["blocks"]["body"], "lanes": _lanes(_shift(here, lead), _shift_f(Gesture.speeds(u, w), lead), _shift_f(g["press"], lead))})
 
@@ -560,7 +622,7 @@ static func _scrape(act: Dictionary, secs: float, geo: Dictionary, out: Dictiona
 static func _on_block(act: Dictionary, verb: String, secs: float, geo: Dictionary, out: Dictionary) -> void:
 	var seed := int(act.get("seed", 1))
 	var lis: Transform3D = geo["listener"]
-	var work := maxf(secs - COME - (0.0 if bool(act["_open"]) else GO), WORK_LEAST)
+	var work := maxf(secs - BLOCK_COME - (0.0 if bool(act["_open"]) else BLOCK_GO), WORK_LEAST)
 	var g := Gesture.strokes(seed, work, stroke_opts(act, verb))
 	var b: Transform3D = _held(act, geo)["b"]
 	var u: PackedFloat32Array = g["u"]
@@ -568,7 +630,7 @@ static func _on_block(act: Dictionary, verb: String, secs: float, geo: Dictionar
 	var n := u.size()
 	var here := PackedVector3Array()
 	here.resize(n)
-	var tb := _carry(seed + 2, (geo["rests"] as Dictionary)["block_b"], b, COME, Vector3(0.0, 0.03, 0.0))
+	var tb := _carry(seed + 2, (geo["rests"] as Dictionary)["block_b"], b, BLOCK_COME, Vector3(0.0, 0.03, 0.0))
 	var hb := float(geo["block_size"].y)
 	for i in n:
 		var tt := float(i) / Gesture.RATE
@@ -576,9 +638,9 @@ static func _on_block(act: Dictionary, verb: String, secs: float, geo: Dictionar
 		tb.append(held_b)
 		here[i] = lis.affine_inverse() * (held_b * Vector3(0.0, hb * 0.5, 0.0) + b.basis.x * u[i] + b.basis.z * w[i])
 	if not bool(act["_open"]):
-		tb.append_array(_carry(seed + 3, b, (geo["rests"] as Dictionary)["block_b"], GO, Vector3(0.0, 0.03, 0.0)))
+		tb.append_array(_carry(seed + 3, b, (geo["rests"] as Dictionary)["block_b"], BLOCK_GO, Vector3(0.0, 0.03, 0.0), false))
 	out["tracks"]["block_b"] = _track(tb)
-	var lead := int(COME * Gesture.RATE)
+	var lead := int(BLOCK_COME * Gesture.RATE)
 	(out["sound"]["contacts"] as Array).append({"kind": verb if verb != "brush" else "brush", "on": "wood",
 		"by": _tool(act, String(VERBS[verb]["tool"])), "body": THINGS["blocks"]["body"],
 		"lanes": _lanes(_shift(here, lead), _shift_f(Gesture.speeds(u, w), lead), _shift_f(g["press"], lead))})
@@ -641,22 +703,88 @@ static func _held(act: Dictionary, geo: Dictionary) -> Dictionary:
 	return {"a": a, "b": b}
 
 
-## Block [param a] resting on [param b], raised [param lift] meters off it.
-static func _lifted(a: Transform3D, b: Transform3D, lift: float) -> Transform3D:
-	return Transform3D(a.basis, a.origin + b.basis.y.normalized() * lift)
+## Block [param a] coming down onto [param b] from [param lift] meters off it as a hand brings it, never quite level: tipped, the edge
+## of its underside at [param edge] (radians round its middle, [method _edge_at]) lowest - that edge touches once it is within
+## [constant LAND_EDGE] of [param b], and the rest settles flat as the last of the lift goes. [param size] the block's.
+static func _landing(a: Transform3D, b: Transform3D, lift: float, edge: float, size: Vector3) -> Transform3D:
+	if lift <= 0.0:
+		return a
+	var up := b.basis.y.normalized()
+	var low := maxf(lift - LAND_EDGE, 0.0)
+	var a1 := Transform3D(a.basis, a.origin + up * low)
+	# the low edge's point on its underside, and the line it tips about there
+	var r := Vector3(cos(edge) * size.x * 0.5, 0.0, sin(edge) * size.z * 0.5)
+	if r.length() < 1e-5:
+		return a1
+	var pivot := a1 * r
+	var axis := (a1.basis * Vector3(-r.z, 0.0, r.x)).normalized()
+	var across := 2.0 * r.length()
+	var tip := atan((lift - low) / maxf(across, 1e-4))
+	var turn := Basis(axis, tip)
+	# (tipped the way that lifts the far side)
+	if (turn * (a1.basis * -r)).dot(up) < (a1.basis * -r).dot(up):
+		turn = Basis(axis, -tip)
+	return Transform3D(turn, pivot - turn * pivot) * a1
+
+
+## How a held block [param b] is moved at time [param t] by the blows [param hits] (each `{t, speed}`) it has taken: each pressing it
+## the way it was struck ([constant BUMP_DEPTH] a meter a second of the blow) and springing back, dying away ([constant BUMP_HZ],
+## [constant BUMP_DIES]), tipping it a little about its length - the identity where none is still felt.
+static func _bump_at(hits: Array, t: float, b: Transform3D) -> Transform3D:
+	var give := 0.0
+	for h in hits:
+		var since := t - float((h as Dictionary)["t"])
+		if since >= 0.0 and since < BUMP_DIES * 6.0:
+			give += float((h as Dictionary)["speed"]) * BUMP_DEPTH * exp(-since / BUMP_DIES) * sin(TAU * BUMP_HZ * since)
+	if absf(give) < 1e-6:
+		return Transform3D.IDENTITY
+	var down := -b.basis.y.normalized()
+	var length := b.basis.x.normalized()
+	var tip := Basis(length, give * BUMP_TIP)
+	return Transform3D(Basis.IDENTITY, b.origin + down * give) * Transform3D(tip, Vector3.ZERO) * Transform3D(Basis.IDENTITY, -b.origin)
+
+
+## Which edge of a block coming down leads at time [param t] of an act with [param seed]: an angle round its underside, turning slowly
+## from one landing to the next.
+static func _edge_at(seed: int, t: float) -> float:
+	return TAU * float(absi(hash([seed, "edge"])) % 1000) / 1000.0 + 2.2 * Gesture.wave(seed + 11, t, 5.0, 2.0)
 
 
 ## A thing carried from [param from] to [param to] over [param secs] as a hand carries it: minimum-jerk along a path bowed by
 ## [param bow], turned on the way. A list of transforms, [constant Gesture.RATE] a second.
-static func _carry(seed: int, from: Transform3D, to: Transform3D, secs: float, bow: Vector3) -> Array:
+static func _carry(seed: int, from: Transform3D, to: Transform3D, secs: float, bow: Vector3, arriving := true) -> Array:
 	var path := Gesture.reach(seed, from.origin, to.origin, maxf(secs, 0.1), bow, false)
 	var q0 := from.basis.get_rotation_quaternion()
 	var q1 := to.basis.get_rotation_quaternion()
 	var out: Array = []
 	var n := path.size()
 	for i in n - 1:
-		var k := Gesture.min_jerk(float(i) / float(maxi(n - 1, 1)))
-		out.append(Transform3D(Basis(q0.slerp(q1, k)).scaled(from.basis.get_scale()), path[i]))
+		# (brought, it covers most of the way early - out of shot - and drifts the last of it in; taken back, it leaves slowly and
+		# hurries once it is away)
+		var u := float(i) / float(maxi(n - 1, 1))
+		var w := 1.0 - pow(1.0 - u, CARRY_EASE) if arriving else pow(u, CARRY_EASE)
+		var x := w * float(n - 1)
+		var j := mini(int(x), n - 1)
+		var at: Vector3 = path[j].lerp(path[mini(j + 1, n - 1)], x - float(j))
+		out.append(Transform3D(Basis(q0.slerp(q1, Gesture.min_jerk(w))).scaled(from.basis.get_scale()), at))
+	return out
+
+
+## [method _carry] beginning [param late] seconds in, standing at [param from] till then - the second hand coming after the first.
+static func _carry_late(seed: int, from: Transform3D, to: Transform3D, secs: float, late: float, bow: Vector3, arriving := true) -> Array:
+	var out: Array = []
+	for i in int(late * Gesture.RATE):
+		out.append(from)
+	out.append_array(_carry(seed, from, to, secs - late, bow, arriving))
+	return out
+
+
+## [method _carry] done [param early] seconds before [param secs] are up, standing at [param to] after - the first hand going before
+## the second.
+static func _carry_early(seed: int, from: Transform3D, to: Transform3D, secs: float, early: float, bow: Vector3, arriving := true) -> Array:
+	var out := _carry(seed, from, to, secs - early, bow, arriving)
+	for i in int(early * Gesture.RATE):
+		out.append(to)
 	return out
 
 

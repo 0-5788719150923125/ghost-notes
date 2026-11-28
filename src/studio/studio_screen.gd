@@ -5,7 +5,8 @@ class_name StudioScreen
 ## turned toward the viewer. A second camera at the lens renders the studio's own world, its own things left out (it never sees
 ## itself, [constant StudioSet.CAMERA_LAYER]); the picture is mirrored, as a selfie screen shows it; over it, unmirrored, a
 ## recording camera's own marks: REC blinking, the take's running timecode (raw footage: it never stops), and the two audio
-## meters, fed what the act sounds measure left and right ([method set_levels]) - the side of the microphone a sound is on, seen.
+## meters, fed what the microphone receives left and right ([method set_levels]: the voice at the capsule and the hands' sounds,
+## nothing laid on after) - the side of the microphone a sound is on, seen.
 ##
 ## Built by [method mount] under the medium; its picture is [method texture], put on the camera's `screen` face.
 
@@ -13,10 +14,10 @@ class_name StudioScreen
 const SIZE := Vector2i(720, 480)
 const FOV := 48.0
 const AHEAD := 0.006
-## The timecode's frames a second, and how fast the meters fall back (dB a second) and their floor (dB).
+## The timecode's frames a second; the meters' floor (dBFS, [LevelMeter]'s) and how wide they are (a share of the picture), centered.
 const FPS := 30.0
-const FALL := 24.0
-const FLOOR := -60.0
+const FLOOR := LevelMeter.FLOOR
+const METER_W := 0.5
 
 var _see: SubViewport          # what the lens sees
 var _show: SubViewport         # ...mirrored, with the marks over it: the screen's picture
@@ -77,12 +78,11 @@ func set_time(t: float) -> void:
 		_marks.queue_redraw()
 
 
-## The meters: [param left] and [param right] (dBFS) as heard now, held and falling back as a meter's do.
+## The meters: [param left] and [param right] (each ear's peak now, dBFS), [param dt] seconds after the last - falling back, held
+## as a [LevelMeter]'s do.
 func set_levels(left: float, right: float, dt: float) -> void:
-	if _marks == null:
-		return
-	_marks.left = maxf(left, _marks.left - FALL * dt)
-	_marks.right = maxf(right, _marks.right - FALL * dt)
+	if _marks != null:
+		_marks.reading.feed(left, right, dt)
 
 
 func release() -> void:
@@ -96,8 +96,7 @@ func release() -> void:
 ## A recording camera's marks over the picture.
 class Marks extends Control:
 	var t := 0.0
-	var left := StudioScreen.FLOOR
-	var right := StudioScreen.FLOOR
+	var reading := LevelMeter.Reading.new()
 
 	func _draw() -> void:
 		var font := ThemeDB.fallback_font
@@ -119,19 +118,6 @@ class Marks extends Control:
 		draw_rect(Rect2(bx, by, w * 0.08, h * 0.05), Color(1, 1, 1, 0.8), false, 2.0)
 		draw_rect(Rect2(bx + w * 0.08, by + h * 0.015, w * 0.008, h * 0.02), Color(1, 1, 1, 0.8))
 		draw_rect(Rect2(bx + 3.0, by + 3.0, w * 0.05, h * 0.05 - 6.0), Color(1, 1, 1, 0.75))
-		# the two meters: left above right, -60 to 0 dB, green, then amber past -12, red past -3
-		for k in 2:
-			var db := left if k == 0 else right
-			var y := h * (0.8 + 0.05 * k)
-			var x0 := w * 0.3
-			var x1 := w * 0.8
-			draw_rect(Rect2(x0, y, x1 - x0, h * 0.03), Color(0, 0, 0, 0.45))
-			var share := clampf((db - StudioScreen.FLOOR) / -StudioScreen.FLOOR, 0.0, 1.0)
-			var lit := x0 + (x1 - x0) * share
-			var seg := [[-60.0, -12.0, Color(0.3, 0.9, 0.35)], [-12.0, -3.0, Color(0.95, 0.8, 0.2)], [-3.0, 0.0, Color(0.95, 0.25, 0.2)]]
-			for s in seg:
-				var a: float = x0 + (x1 - x0) * clampf((float(s[0]) - StudioScreen.FLOOR) / -StudioScreen.FLOOR, 0.0, 1.0)
-				var b: float = minf(x0 + (x1 - x0) * clampf((float(s[1]) - StudioScreen.FLOOR) / -StudioScreen.FLOOR, 0.0, 1.0), lit)
-				if b > a:
-					draw_rect(Rect2(a, y, b - a, h * 0.03), s[2])
-			draw_string(font, Vector2(x0 - w * 0.04, y + h * 0.028), "L" if k == 0 else "R", HORIZONTAL_ALIGNMENT_LEFT, -1, int(fs * 0.7), Color(1, 1, 1, 0.8))
+		# the two meters, centered, the scale under them ([LevelMeter])
+		var x0 := w * (0.5 - StudioScreen.METER_W * 0.5)
+		LevelMeter.draw_meter(self, Rect2(x0, h * 0.8, w * StudioScreen.METER_W, h * 0.115), reading, font, int(fs * 0.5), int(fs * 0.7))

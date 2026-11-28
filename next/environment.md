@@ -16,6 +16,10 @@ that throws light throws it. A component (`environment`, a family and hue of its
   (`Effects.build`), so the count is how thick the air is. Open: homes are drawn in the camera's view as the show starts; a camera
   that turns looks into air with none.
 
+Also built: the card's own LEVEL over everything heard round the scene (the block's `level`, dB, shown while anything is heard,
+`Surroundings.level_of`), a gain on the bed under the voice (`SoundBed.gain_db`, `ReadingBed.gain_db`); the bed is in the voice's
+take, so a change makes the take again.
+
 Built:
 
 - **A list, as the Props card is** (`EnvironmentCard`, `EnvironmentSection` in `src/table/`, drawn by `PropsCard`): an entry an

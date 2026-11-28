@@ -51,6 +51,9 @@ var panel: ReadingPanel
 # between two words and never inside one (see [method Splice.chunk]).
 const HESITATE_DEFAULT := 1.5
 const HESITATE_MAX := 6.0
+## The reading's Level, least and most (dB).
+const LEVEL_LEAST := -18.0
+const LEVEL_MOST := 18.0
 var voice_pick: OptionButton
 var _test: Button
 var _rate: HSlider
@@ -94,6 +97,7 @@ var _inflecting := {}            # the backends that inflect words from the text
 ## fishing game, read where the tab's voice is the formant one.
 var _formant := {}
 var _turn: HSlider
+var _level: HSlider              # the reading's level (dB) against what plays beside it, heard at once ([method level_db])
 var _hesitate: HSlider
 var _hesitate_on: CheckBox
 var _tabs: VBoxContainer      # one row per speaker the script names
@@ -179,6 +183,41 @@ func build_cast(box: VBoxContainer) -> void:
 	show_turn.call(_turn.value)
 	_turn.value_changed.connect(show_turn)
 	turow.add_child(tur)
+
+		# The reading's level, above the tabs: one take carries every voice, so it is the take's, played louder or softer as it is
+		# heard. Nothing is made again.
+	var lvrow := HBoxContainer.new()
+	lvrow.add_theme_constant_override("separation", 8)
+	box.add_child(lvrow)
+	var lvl := Label.new()
+	lvl.text = "Level"
+	lvl.custom_minimum_size = Vector2(72, 0)
+	lvl.add_theme_font_size_override("font_size", 12)
+	lvrow.add_child(lvl)
+	_level = HSlider.new()
+	_level.min_value = LEVEL_LEAST
+	_level.max_value = LEVEL_MOST
+	_level.step = 0.5
+	_level.value = 0.0
+	_level.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_level.tooltip_text = ("How loud the reading is, in decibels, against everything that plays beside it - the show's own "
+		+ "sounds, a room, a song. 0 is as it was made; +6 about twice as loud, -6 about half. It is heard at once and in the "
+		+ "export, and nothing is made again. Presence is distance, not loudness: this is the loudness.")
+	_level.value_changed.connect(func(_v: float) -> void:
+		if _syncing:
+			return
+		panel.touch())
+	lvrow.add_child(_level)
+	var lvr := Label.new()
+	lvr.custom_minimum_size = Vector2(42, 0)
+	lvr.add_theme_font_size_override("font_size", 12)
+	lvr.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	lvr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var show_level := func(v: float) -> void:
+		lvr.text = ("+%.1f dB" if v > 0.0 else "%.1f dB") % v
+	show_level.call(_level.value)
+	_level.value_changed.connect(show_level)
+	lvrow.add_child(lvr)
 
 		# Hesitations are global, like Turn: a `<!-- hesitation -->` belongs to a moment in the text, not to a voice. The
 		# checkbox switches every marker off at once; the dial is the length of a bare marker, and a marker that names
@@ -767,6 +806,8 @@ func capture() -> Dictionary:
 	capture_slot()
 	var out := {"turn": _turn.value, "voices": cast_dict(),
 		"hesitate": _hesitate.value, "hesitate_on": _hesitate_on.button_pressed}
+	if absf(_level.value) > 0.001:
+		out["level"] = _level.value
 	if not deliveries.is_empty():
 		out["deliveries"] = deliveries.duplicate(true)
 	return out
@@ -798,6 +839,7 @@ func apply(cfg: Dictionary) -> void:
 	_slots = []
 	_syncing = true
 	_turn.value = clampf(float(cfg.get("turn", _turn.value)), 0.0, Delivery.MAX_TURN_SCALE)
+	_level.value = clampf(float(cfg.get("level", 0.0)), LEVEL_LEAST, LEVEL_MOST)
 	_hesitate.value = clampf(float(cfg.get("hesitate", _hesitate.value)),
 		_hesitate.min_value, HESITATE_MAX)
 	_hesitate_on.button_pressed = bool(cfg.get("hesitate_on", _hesitate_on.button_pressed))
@@ -820,6 +862,7 @@ func persist() -> void:
 	capture_slot()
 	Settings.write(panel.section(), "cast", cast_dict())
 	Settings.write(panel.section(), "turn", _turn.value)
+	Settings.write(panel.section(), "level", _level.value)
 		# A new key, not "tab" (an int index): Settings' no-op guard compares the stored value with the new one, and
 		# an int against a String is a script error.
 	Settings.write(panel.section(), "tab_name", tab_name())
@@ -850,6 +893,7 @@ func load_stored() -> void:
 		return
 	_syncing = true
 	_turn.value = clampf(float(Settings.read(panel.section(), "turn", 1.0)), 0.0, Delivery.MAX_TURN_SCALE)
+	_level.value = clampf(float(Settings.read(panel.section(), "level", 0.0)), LEVEL_LEAST, LEVEL_MOST)
 	_hesitate.value = clampf(float(Settings.read(panel.section(), "hesitate", HESITATE_DEFAULT)),
 		_hesitate.min_value, HESITATE_MAX)
 	_hesitate_on.button_pressed = bool(Settings.read(panel.section(), "hesitate_on", true))
@@ -1776,3 +1820,8 @@ func turn_scale() -> float:
 func hesitation() -> Dictionary:
 	return {"hesitate": _hesitate_on == null or _hesitate_on.button_pressed,
 		"bare": _hesitate.value if _hesitate != null else HESITATE_DEFAULT}
+
+
+## How loud the reading is heard (dB): its Level, 0 as it was made.
+func level_db() -> float:
+	return _level.value if _level != null else 0.0

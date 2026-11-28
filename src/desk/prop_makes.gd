@@ -93,7 +93,7 @@ const ROLES := {
 		"needs": {"point face": "the middle of its top face, the face scraped against the other block"}},
 	"brush": {"label": "The powder brush", "blurb": "A big, soft brush swept over the windscreen and the lens.",
 		"designed": true, "find": "brush", "tall": [10.0, 35.0], "faces": [], "feeds": {},
-		"needs": {"point tip": "the tip of its bristles, straight up its length", "point grip": "where a hand holds its handle"}},
+		"needs": {"point tip": "the tip of its bristles (`tuft` parts, whose hairs bend as it sweeps), straight up its length", "point grip": "where a hand holds its handle"}},
 	"backdrop": {"label": "The green screen", "blurb": "A green cloth backdrop on its stands behind the viewer's chair: the camera's flip screen shows it behind nobody.",
 		"designed": true, "find": "backdrop", "tall": [180.0, 300.0], "faces": [], "feeds": {},
 		"needs": {"part cloth": "the cloth, chroma-key green and matte, hung wide (at least two meters across) and flat enough to key, facing its front (+z)"}},

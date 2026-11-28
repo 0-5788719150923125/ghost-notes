@@ -5,7 +5,7 @@
 
 Written from `FOLDERS` and `UPWARD` in [docs.py](../docs.py), which holds the code to both at every `python docs.py --check`: a new reference that points up fails, and so does a listed one that is gone. [next/structure.md](../next/structure.md) is why the stack is in this order and what is being done about the rest.
 
-Between scripts today: 897 references inside a folder, 1672 down the stack, 0 up it.
+Between scripts today: 919 references inside a folder, 1719 down the stack, 0 up it.
 
 ## The stack, top first
 
@@ -14,10 +14,10 @@ Between scripts today: 897 references inside a folder, 1672 down the stack, 0 up
 | `app/` | The shell | 14 | `reading`, `export`, `music`, `timeline`, `show`, `media`, `ui`, `notes`, `agents`, `stage`, `render`, `audio`, `platform`, `data` |
 | `masking/` | Masking | 14 | `timeline`, `voice`, `ui`, `notes`, `platform`, `data` |
 | `likeness/` | Likeness | 15 | `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `platform`, `data` |
-| `studio/` | Studio | 10 | `desk`, `table_show`, `table`, `reading`, `music`, `media`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
+| `studio/` | Studio | 10 | `desk`, `table_show`, `table`, `reading`, `music`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `dispatch/` | Dispatch desk | 15 | `desk`, `table_show`, `table`, `reading`, `export`, `music`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio`, `platform`, `data` |
 | `letter/` | Letter | 3 | `desk`, `table`, `reading`, `show`, `media`, `ui`, `notes`, `agents`, `platform`, `data` |
-| `desk/` | The desk | 16 | `table_show`, `table`, `reading`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `platform`, `data` |
+| `desk/` | The desk | 23 | `table_show`, `table`, `reading`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `platform`, `data` |
 | `table_show/` | The table's show | 31 | `table`, `cartoon`, `reading`, `export`, `timeline`, `show`, `media`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `geometry`, `audio`, `platform`, `data` |
 | `table/` | The set | 92 | `reading`, `media`, `ui`, `agents`, `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio`, `platform`, `data` |
 | `cartoon/` | Cartoon | 5 | `reading`, `timeline`, `show`, `ui`, `notes`, `agents`, `stage`, `platform`, `data` |
@@ -26,9 +26,9 @@ Between scripts today: 897 references inside a folder, 1672 down the stack, 0 up
 | `music/` | Music | 20 | `timeline`, `show`, `voice`, `ui`, `notes`, `agents`, `scene_kit`, `audio`, `platform`, `data` |
 | `timeline/` | The storyboard's editor | 9 | `show`, `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `audio`, `platform`, `data` |
 | `show/` | The show | 13 | `media`, `ui`, `notes`, `scenes`, `stage`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
-| `media/` | Media | 22 | `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
+| `media/` | Media | 23 | `voice`, `ui`, `notes`, `agents`, `scene_kit`, `motion`, `render`, `audio`, `platform`, `data` |
 | `voice/` | Synthesis (voice) | 23 | `ui`, `audio`, `platform`, `data` |
-| `ui/` | The panel kit | 41 | `notes`, `agents`, `render`, `platform`, `data` |
+| `ui/` | The panel kit | 42 | `notes`, `agents`, `render`, `platform`, `data` |
 | `notes/` | Notes | 13 | `agents`, `platform`, `data` |
 | `agents/` | Agents | 9 | `platform`, `data` |
 | `scenes/` | Scenes | 59 | `stage`, `scene_kit`, `geometry`, `motion`, `render`, `audio` |
@@ -111,7 +111,7 @@ The note as a file: where notes live, a document kept in step with its file, the
 
 What every note's panel is built from, and what it asks of the window it is in: a side panel that cannot outgrow the window and its "+", a component's card in its family's color and the chips over the cards, the cards a note's components bring (built from the registry's rows, attached and detached), the one list of what is made for a note (`PipelineCard`), the Script card every note has (its editor window and highlighter), rows drawn from a table of fields, two small controls, and `Shell` - the bottom-right row, room along the bottom edge, the way back to the notes. Above `notes/` because it is a kit for a note's components.
 
-[`agent_pick`](../src/ui/agent_pick.gd), [`armed_delete`](../src/ui/armed_delete.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`curve_edit`](../src/ui/curve_edit.gd), [`dex_window`](../src/ui/dex_window.gd), [`direction_card`](../src/ui/direction_card.gd), [`entry_card`](../src/ui/entry_card.gd), [`find_bar`](../src/ui/find_bar.gd), [`graphics_panel`](../src/ui/graphics_panel.gd), [`icons`](../src/ui/icons.gd), [`keys_window`](../src/ui/keys_window.gd), [`note_cards`](../src/ui/note_cards.gd), [`note_editor`](../src/ui/note_editor.gd), [`note_grid`](../src/ui/note_grid.gd), [`note_kept`](../src/ui/note_kept.gd), [`note_tile`](../src/ui/note_tile.gd), [`panel_deck`](../src/ui/panel_deck.gd), [`picture_window`](../src/ui/picture_window.gd), [`pipeline_card`](../src/ui/pipeline_card.gd), [`prop_refine`](../src/ui/prop_refine.gd), [`prop_refining`](../src/ui/prop_refining.gd), [`prop_section`](../src/ui/prop_section.gd), [`prop_versions`](../src/ui/prop_versions.gd), [`prop_viewer`](../src/ui/prop_viewer.gd), [`props_card`](../src/ui/props_card.gd), [`refine_dock`](../src/ui/refine_dock.gd), [`row_status`](../src/ui/row_status.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shelf_section`](../src/ui/shelf_section.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`source_window`](../src/ui/source_window.gd), [`status_log`](../src/ui/status_log.gd), [`tag_field`](../src/ui/tag_field.gd), [`text_field`](../src/ui/text_field.gd), [`text_refine`](../src/ui/text_refine.gd), [`touch_text`](../src/ui/touch_text.gd), [`volume_knob`](../src/ui/volume_knob.gd)
+[`agent_pick`](../src/ui/agent_pick.gd), [`armed_delete`](../src/ui/armed_delete.gd), [`card`](../src/ui/card.gd), [`card_row`](../src/ui/card_row.gd), [`curve_edit`](../src/ui/curve_edit.gd), [`dex_window`](../src/ui/dex_window.gd), [`direction_card`](../src/ui/direction_card.gd), [`entry_card`](../src/ui/entry_card.gd), [`find_bar`](../src/ui/find_bar.gd), [`graphics_panel`](../src/ui/graphics_panel.gd), [`icons`](../src/ui/icons.gd), [`keys_window`](../src/ui/keys_window.gd), [`level_meter`](../src/ui/level_meter.gd), [`note_cards`](../src/ui/note_cards.gd), [`note_editor`](../src/ui/note_editor.gd), [`note_grid`](../src/ui/note_grid.gd), [`note_kept`](../src/ui/note_kept.gd), [`note_tile`](../src/ui/note_tile.gd), [`panel_deck`](../src/ui/panel_deck.gd), [`picture_window`](../src/ui/picture_window.gd), [`pipeline_card`](../src/ui/pipeline_card.gd), [`prop_refine`](../src/ui/prop_refine.gd), [`prop_refining`](../src/ui/prop_refining.gd), [`prop_section`](../src/ui/prop_section.gd), [`prop_versions`](../src/ui/prop_versions.gd), [`prop_viewer`](../src/ui/prop_viewer.gd), [`props_card`](../src/ui/props_card.gd), [`refine_dock`](../src/ui/refine_dock.gd), [`row_status`](../src/ui/row_status.gd), [`schema_form`](../src/ui/schema_form.gd), [`script_highlighter`](../src/ui/script_highlighter.gd), [`script_writer`](../src/ui/script_writer.gd), [`shelf_section`](../src/ui/shelf_section.gd), [`shell`](../src/ui/shell.gd), [`side_panel`](../src/ui/side_panel.gd), [`source_window`](../src/ui/source_window.gd), [`status_log`](../src/ui/status_log.gd), [`tag_field`](../src/ui/tag_field.gd), [`text_field`](../src/ui/text_field.gd), [`text_refine`](../src/ui/text_refine.gd), [`touch_text`](../src/ui/touch_text.gd), [`volume_knob`](../src/ui/volume_knob.gd)
 
 ### `voice/` - Synthesis (voice)
 
@@ -123,7 +123,7 @@ Text to narrated audio in two paths: ghost's own formant synthesizer (no models,
 
 What the show is carried on: the `Medium` base and its registry, each medium ([media.md](media.md)), the layouts they set (comic pages, a novel, a notebook, a tablet's pages), the films and pictures they show, and where a reading is in its document.
 
-[`auto`](../src/media/auto.gd), [`book`](../src/media/book.gd), [`book_layout`](../src/media/book_layout.gd), [`comic`](../src/media/comic.gd), [`comic_camera`](../src/media/comic_camera.gd), [`comic_page`](../src/media/comic_page.gd), [`comic_spread`](../src/media/comic_spread.gd), [`film`](../src/media/film.gd), [`films`](../src/media/films.gd), [`full`](../src/media/full.gd), [`illustration_panel`](../src/media/illustration_panel.gd), [`illustrations`](../src/media/illustrations.gd), [`medium`](../src/media/medium.gd), [`notebook`](../src/media/notebook.gd), [`notebook_layout`](../src/media/notebook_layout.gd), [`page_capture`](../src/media/page_capture.gd), [`reading_follower`](../src/media/reading_follower.gd), [`screen_film`](../src/media/screen_film.gd), [`tablet`](../src/media/tablet.gd), [`tablet_chrome`](../src/media/tablet_chrome.gd), [`tablet_page`](../src/media/tablet_page.gd), [`tablet_script`](../src/media/tablet_script.gd)
+[`auto`](../src/media/auto.gd), [`book`](../src/media/book.gd), [`book_layout`](../src/media/book_layout.gd), [`comic`](../src/media/comic.gd), [`comic_camera`](../src/media/comic_camera.gd), [`comic_page`](../src/media/comic_page.gd), [`comic_spread`](../src/media/comic_spread.gd), [`film`](../src/media/film.gd), [`films`](../src/media/films.gd), [`full`](../src/media/full.gd), [`illustration_panel`](../src/media/illustration_panel.gd), [`illustrations`](../src/media/illustrations.gd), [`medium`](../src/media/medium.gd), [`notebook`](../src/media/notebook.gd), [`notebook_layout`](../src/media/notebook_layout.gd), [`page_capture`](../src/media/page_capture.gd), [`popup_layout`](../src/media/popup_layout.gd), [`reading_follower`](../src/media/reading_follower.gd), [`screen_film`](../src/media/screen_film.gd), [`tablet`](../src/media/tablet.gd), [`tablet_chrome`](../src/media/tablet_chrome.gd), [`tablet_page`](../src/media/tablet_page.gd), [`tablet_script`](../src/media/tablet_script.gd)
 
 ### `show/` - The show
 
@@ -177,7 +177,7 @@ A show at a table nobody writes: a show's brief, its episodes - each planned, de
 
 A desk a letter is written at, seen and heard: the legal pad, the pen that moves by itself and writes what the voice says as it says it, the letter's own hand (journal fonts, no TeX), what it says and writes, and the medium that puts them on the stage. Its room is built from the table's parts. Design: next/letter.md, next/proof.md.
 
-[`desk`](../src/desk/desk.gd), [`desk_format`](../src/desk/desk_format.gd), [`desk_light`](../src/desk/desk_light.gd), [`desk_look`](../src/desk/desk_look.gd), [`desk_props`](../src/desk/desk_props.gd), [`desk_recipes`](../src/desk/desk_recipes.gd), [`desk_rows`](../src/desk/desk_rows.gd), [`desk_script`](../src/desk/desk_script.gd), [`episode_desk`](../src/desk/episode_desk.gd), [`legal_pad`](../src/desk/legal_pad.gd), [`letter`](../src/desk/letter.gd), [`letter_script`](../src/desk/letter_script.gd), [`make_shelf`](../src/desk/make_shelf.gd), [`pen_pace`](../src/desk/pen_pace.gd), [`prop_makes`](../src/desk/prop_makes.gd), [`role_design`](../src/desk/role_design.gd)
+[`desk`](../src/desk/desk.gd), [`desk_format`](../src/desk/desk_format.gd), [`desk_light`](../src/desk/desk_light.gd), [`desk_look`](../src/desk/desk_look.gd), [`desk_props`](../src/desk/desk_props.gd), [`desk_recipes`](../src/desk/desk_recipes.gd), [`desk_rows`](../src/desk/desk_rows.gd), [`desk_script`](../src/desk/desk_script.gd), [`episode_desk`](../src/desk/episode_desk.gd), [`legal_pad`](../src/desk/legal_pad.gd), [`letter`](../src/desk/letter.gd), [`letter_script`](../src/desk/letter_script.gd), [`make_shelf`](../src/desk/make_shelf.gd), [`pen_pace`](../src/desk/pen_pace.gd), [`popup`](../src/desk/popup.gd), [`popup_design`](../src/desk/popup_design.gd), [`popup_engineer`](../src/desk/popup_engineer.gd), [`popup_format`](../src/desk/popup_format.gd), [`popup_studio`](../src/desk/popup_studio.gd), [`popup_tools`](../src/desk/popup_tools.gd), [`popup_walk`](../src/desk/popup_walk.gd), [`prop_makes`](../src/desk/prop_makes.gd), [`role_design`](../src/desk/role_design.gd)
 
 ### `letter/` - Letter
 
@@ -225,5 +225,5 @@ Godot compiles a script with every script it names by class or preload, wherever
 
 | launch | builds | scripts | lines | budget |
 | --- | --- | --- | --- | --- |
-| the phone shell | `app/main`, `app/phone_shell` | 81 | 32,330 | 40,000 |
-| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 126 | 54,367 | 65,000 |
+| the phone shell | `app/main`, `app/phone_shell` | 81 | 32,600 | 40,000 |
+| the desktop's notes list | `app/main`, `app/chrome`, `app/notes_list`, `app/showcase`, `app/auto_docs` | 128 | 54,956 | 65,000 |

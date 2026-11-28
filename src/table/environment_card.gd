@@ -35,6 +35,10 @@ var note_path := ""
 ## What a Test plays, and the element it plays (-1 none).
 var tester := SoundTest.new()
 var _test_i := -1
+## Its Level over everything heard round the scene, shown while anything is ([method _hears]), looked at again each second.
+var _level_row: HBoxContainer
+var _level: HSlider
+var _since := 1.0
 
 
 ## This card for a note's panel, from what the panel says of itself ([method NoteCards.make]): its workspace, which is handed the
@@ -55,6 +59,8 @@ static func for_note(ctx: Dictionary) -> EnvironmentCard:
 
 func _init() -> void:
 	add_theme_constant_override("separation", 8)
+	_level_row = _make_level_row()
+	add_child(_level_row)
 	section = EnvironmentSection.new(self)
 	list = PropsCard.new(sections)
 	add_child(list)
@@ -75,7 +81,69 @@ func capture() -> Dictionary:
 
 func apply(block: Dictionary) -> void:
 	_spec = Surroundings.sanitize(block)
+	_level.set_value_no_signal(Surroundings.level_of(_spec))
+	_level.value_changed.emit(_level.value)
 	list.refresh(true)
+
+
+# --- its Level ---------------------------------------------------------------------------------------------------------
+
+## The Level row: everything heard round the scene turned up or down (dB), kept in the block. The sound is part of the voice's take,
+## so a change makes the take again.
+func _make_level_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var l := Label.new()
+	l.text = "Level"
+	l.custom_minimum_size = Vector2(56, 0)
+	l.add_theme_font_size_override("font_size", 12)
+	row.add_child(l)
+	_level = HSlider.new()
+	_level.min_value = Surroundings.LEVEL_LEAST
+	_level.max_value = Surroundings.LEVEL_MOST
+	_level.step = 0.5
+	# (written once a drag ends - each change makes the take again - so never by the wheel in passing)
+	_level.scrollable = false
+	_level.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_level.tooltip_text = ("How loud everything heard round the scene is, in decibels: 0 as made, -6 about half, +6 about twice. It "
+		+ "is laid into the voice's take, so a change makes the take again (the voice itself is not said again).")
+	row.add_child(_level)
+	var r := Label.new()
+	r.custom_minimum_size = Vector2(56, 0)
+	r.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	r.add_theme_font_size_override("font_size", 12)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(r)
+	var shown := func(v: float) -> void: r.text = ("+%.1f dB" if v > 0.0 else "%.1f dB") % v
+	shown.call(0.0)
+	_level.value_changed.connect(shown)
+	_level.drag_ended.connect(func(changed: bool) -> void:
+		if changed:
+			_set_level(_level.value))
+	row.visible = false
+	return row
+
+
+## Everything heard round the scene [param db] louder from now: kept in the block.
+func _set_level(db: float) -> void:
+	_spec["level"] = db
+	_spec = Surroundings.sanitize(_spec)
+	_changed()
+
+
+## Whether anything is heard round the scene: an element of the note's, or a show's own (the bed it hands the reading).
+func _hears() -> bool:
+	if not Surroundings.in_use(_spec, "sound").is_empty():
+		return true
+	return _panel != null and is_instance_valid(_panel) and _panel.bed.of().has("make")
+
+
+func _process(delta: float) -> void:
+	_since += delta
+	if _since < 1.0:
+		return
+	_since = 0.0
+	_level_row.visible = _hears()
 
 
 # --- what the list does ------------------------------------------------------------------------------------------------
@@ -255,6 +323,9 @@ class Bed extends ReadingBed:
 
 	func level() -> float:
 		return Surroundings.BED_LEVEL
+
+	func gain_db() -> float:
+		return Surroundings.level_of(card._spec)
 
 
 ## The note touched, and a playing scene given the environment at once. "" (nothing went wrong), for the list to say.

@@ -18,11 +18,13 @@ func body(pulled: String) -> String:
 
 ## What the VOICE reads of [param text] and the title it announces first: `{body, title}`.
 ## [param title] is the note's own. A tablet chapter is read off the screen and nothing else - no
-## title announced, skipped text out, link targets out, a rest for every run of taps.
+## title announced, skipped text out, link targets out, a rest for every run of taps. Any other note
+## is read up to its unread line ([method Manuscript.read_part]: its sources, printed by a page), and a
+## source cited in parentheses is printed, never read ([method Manuscript.without_citations]).
 func spoken(text: String, title: String) -> Dictionary:
 	if TabletScript.is_tablet(text):
 		return {"body": TabletScript.speakable(text), "title": ""}
-	return {"body": text, "title": title}
+	return {"body": Manuscript.without_citations(Manuscript.read_part(text)), "title": title}
 
 
 ## The text the cast is derived from (its speaker cues are the tabs) and the live session is

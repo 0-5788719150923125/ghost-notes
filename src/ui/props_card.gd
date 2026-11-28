@@ -18,6 +18,8 @@ const BLURB := "What the scene uses: untick a prop to set it aside, click a pict
 const POLL := 60              # frames between looks
 ## How large a row's picture is drawn (pixels).
 const PICTURE := Vector2(88, 66)
+## How many lines an entry's line is always given ([method EntryCard.hold_lines]).
+const LINE_LINES := 3
 
 var _sections: Callable       # () -> Array of PropSection
 var _box: VBoxContainer
@@ -167,6 +169,8 @@ func _row(sec: PropSection, r: Dictionary, live: Dictionary) -> Control:
 	var key := String(r["key"])
 	var id := "%d:%s" % [sec.get_instance_id(), key]
 	var e := EntryCard.new(String(r.get("name", key)), String(r.get("line", "")), String(r.get("tip", r.get("name", key))))
+	# (its line always three lines tall: what it says - an agent refining it, most of all - never moves the buttons under it)
+	e.hold_lines(LINE_LINES)
 	_entries[id] = e
 	if r.has("picture"):
 		var pic := TextureRect.new()

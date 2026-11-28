@@ -14,8 +14,9 @@ class_name HeadPlan
 ## there, so the voice is heard from where it really is ([method feel_of] `home`). The close is calmed only once the last word is
 ## known, so a plan made as the words arrive performs what the plan of all of them does.
 ##
-## How a head moves, kept: a move is minimum-jerk along a bowed path; the turn leads it and the lean lags it, each on its own clock, with
-## a swing of its own on the way; a held head drifts and breathes ([method Gesture.idle]). Space is the microphone's listener frame, in
+## How a head moves, kept: a move is minimum-jerk along a bowed path, never faster than the Pace allows ([constant MOVE_SPEED],
+## [constant TURN_SPEED]); the turn leads it and the lean lags it, each on its own clock, with a swing of its own on the way; a held
+## head drifts and breathes ([method Gesture.idle]), its eyes wavering with it even while they are held on the lens or the screen. Space is the microphone's listener frame, in
 ## meters: the capsule at the origin, x toward the viewer's right, y up, +z toward the chair; the mouth stays where a seated head can be
 ## ([method bounded]). A pure function of its calls, words, bank and number: no tree, no clock. Gate: tests/motion/head_plan_check.gd.
 ##
@@ -59,6 +60,12 @@ const SIDEWAYS := 0.42
 const HOME := Vector3(0.0, 0.088, 0.57)
 ## The eyes from the mouth (m, the head's own frame: y up, -z the way it faces).
 const EYES := Vector3(0.0, 0.075, 0.02)
+## How fast the head goes at Pace 1, at most: the mouth round the microphone (m/s) and the head turned or tipped (degrees/s) - a
+## slower Pace slower still.
+const MOVE_SPEED := 0.3
+const TURN_SPEED := 90.0
+## Which way the head moves, as the take's voice is placed by it (in the take's signature: a change places the voice again).
+const MOTION := "speed-limited"
 ## How long the opening and the close keep the head near home (s, from the first word and to the last), and how near.
 const OPENING := 30.0
 const CLOSING := 35.0
@@ -181,7 +188,7 @@ static func make(calls: Array, words: Array, bank: Array, seed: int, targets := 
 			t = rest_to
 			slot += 1
 			continue
-		var length := _draw(phrase["length"], rng) / clampf(float(how["pace"]), 0.1, 4.0)
+		var length := _draw(phrase["length"], rng) / clampf(float(how["pace"]), 0.05, 4.0)
 		# a called phrase runs to the next call at most; one the performer picked gives way to a call that comes
 		var stop := float((sorted[ci] as Dictionary)["at"]) if ci < sorted.size() else INF
 		var dur := minf(length, stop - start) if stop > start + 0.5 else length
@@ -199,7 +206,8 @@ static func make(calls: Array, words: Array, bank: Array, seed: int, targets := 
 		var own := RandomNumberGenerator.new()
 		own.seed = hash([seed, key, int(seen[key]), called])
 		_perform(plan, phrase, start, dur, own, stresses, ends, length)
-		t = start + dur
+		# (a move slowed past the phrase's end is waited out)
+		t = maxf(start + dur, float((keys[keys.size() - 1] as Dictionary)["t"]))
 		slot += 1
 	return plan
 
@@ -289,7 +297,17 @@ static func _perform(plan: Dictionary, phrase: Dictionary, start: float, dur: fl
 		var home: Vector3 = plan.get("home", HOME)
 		var mouth := bounded(home + (Vector3(sin(side) * flat, rise, cos(side) * flat) - home) * keep)
 		var swing := rng.randf_range(-12.0, 12.0) * spin
-		keys.append(_key(reach, mouth, _draw(m["turn"], rng) * spin, _draw(m["tilt"], rng) * spin, _draw(m["roll"], rng) * spin, String(m["look"]), swing))
+		var turn := _draw(m["turn"], rng) * spin
+		var tilt := _draw(m["tilt"], rng) * spin
+		var roll := _draw(m["roll"], rng) * spin
+		# never there sooner than a head goes that far at this pace: the way round the microphone and the turn each take their time
+		var prev: Dictionary = keys[keys.size() - 1]
+		var pace := clampf(float(feel["pace"]), 0.05, 4.0)
+		var least := maxf((prev["mouth"] as Vector3).distance_to(mouth) / (MOVE_SPEED * pace),
+			maxf(absf(turn - float(prev["turn"])), absf(tilt - float(prev["tilt"]))) / (TURN_SPEED * pace))
+		reach = maxf(reach, float(prev["t"]) + least)
+		arrive = maxf(arrive, reach)
+		keys.append(_key(reach, mouth, turn, tilt, roll, String(m["look"]), swing))
 		if arrive - reach > 0.05:
 			var held: Dictionary = (keys[keys.size() - 1] as Dictionary).duplicate()
 			held["t"] = arrive
@@ -343,14 +361,14 @@ static func pose_at(plan: Dictionary, t: float) -> Dictionary:
 	var keys: Array = plan.get("keys", [])
 	var seed := int(plan.get("seed", 1))
 	if keys.is_empty():
-		return _posed(plan.get("home", HOME), 0.0, 0.0, 0.0, "", seed, t, plan)
+		return _posed(plan.get("home", HOME), 0.0, 0.0, 0.0, "", "", 0.0, seed, t, plan)
 	var j := keys.bsearch_custom(t, func(k: Variant, x: Variant) -> bool: return float((k as Dictionary)["t"]) < float(x))
 	if j <= 0:
 		var k0: Dictionary = keys[0]
-		return _posed(k0["mouth"], float(k0["turn"]), float(k0["tilt"]), float(k0["roll"]), String(k0["look"]), seed, t, plan)
+		return _posed(k0["mouth"], float(k0["turn"]), float(k0["tilt"]), float(k0["roll"]), String(k0["look"]), String(k0["look"]), 0.0, seed, t, plan)
 	if j >= keys.size():
 		var kl: Dictionary = keys[keys.size() - 1]
-		return _posed(kl["mouth"], float(kl["turn"]), float(kl["tilt"]), float(kl["roll"]), String(kl["look"]), seed, t, plan)
+		return _posed(kl["mouth"], float(kl["turn"]), float(kl["tilt"]), float(kl["roll"]), String(kl["look"]), String(kl["look"]), 0.0, seed, t, plan)
 	var a: Dictionary = keys[j - 1]
 	var b: Dictionary = keys[j]
 	var span := maxf(float(b["t"]) - float(a["t"]), 1e-4)
@@ -367,17 +385,22 @@ static func pose_at(plan: Dictionary, t: float) -> Dictionary:
 	var turn := lerpf(float(a["turn"]), float(b["turn"]), s_turn) + float(b["swing"]) * Gesture.bump(u)
 	var tilt := lerpf(float(a["tilt"]), float(b["tilt"]), s) + float(b["swing"]) * 0.35 * Gesture.bump(clampf(u * 1.2, 0.0, 1.0))
 	var roll := lerpf(float(a["roll"]), float(b["roll"]), s_roll)
-	return _posed(mouth, turn, tilt, roll, String(b["look"]) if s > 0.5 else String(a["look"]), seed, t, plan)
+	# (the eyes go from what they looked at to what they look at next with the turn, never in one frame)
+	return _posed(mouth, turn, tilt, roll, String(a["look"]), String(b["look"]), s_turn, seed, t, plan)
 
 
 ## The pose from where the mouth is and how the head is turned, drifting and breathing: the eyes, the way they look and the head's up.
-static func _posed(mouth_in: Vector3, turn_in: float, tilt_in: float, roll_in: float, look_at: String, seed: int, t: float, plan: Dictionary) -> Dictionary:
+## The eyes look [param k] of the way from [param look_from] to [param look_to] (each a target's name, "" where the head faces).
+static func _posed(mouth_in: Vector3, turn_in: float, tilt_in: float, roll_in: float, look_from: String, look_to: String, k: float,
+		seed: int, t: float, plan: Dictionary) -> Dictionary:
 	var feel: Dictionary = plan.get("feel", FEEL)
 	var sway := clampf(float(feel.get("sway", 1.0)), 0.0, 3.0)
 	var spin := clampf(float(feel.get("turns", 1.0)), 0.0, 2.0) * sway
 	var mouth := bounded(mouth_in + (Gesture.idle(seed, t, 0.004) + Vector3(0.0, 0.0025 * sin(TAU * t / 4.1), 0.0)) * sway)
-	var turn := turn_in + 2.0 * spin * Gesture.wave(seed + 5, t, 7.0, 2.5)
-	var tilt := tilt_in + 1.5 * spin * Gesture.wave(seed + 9, t, 6.0, 2.0)
+	var waver_turn := 2.0 * spin * Gesture.wave(seed + 5, t, 7.0, 2.5)
+	var waver_tilt := 1.5 * spin * Gesture.wave(seed + 9, t, 6.0, 2.0)
+	var turn := turn_in + waver_turn
+	var tilt := tilt_in + waver_tilt
 	var roll := roll_in + 1.2 * spin * Gesture.wave(seed + 13, t, 8.0, 3.0)
 	var facing := -mouth.normalized() if mouth.length() > 0.001 else Vector3.FORWARD
 	var face := Basis.looking_at(facing, Vector3.UP)
@@ -386,10 +409,21 @@ static func _posed(mouth_in: Vector3, turn_in: float, tilt_in: float, roll_in: f
 	var up := head * Vector3.UP
 	var eyes := mouth + face * EYES
 	var targets: Dictionary = plan.get("targets", {})
-	if not look_at.is_empty() and targets.get(look_at) is Vector3:
-		look = ((targets[look_at] as Vector3) - eyes).normalized()
+	var ahead := look.normalized()
+	# (eyes held on a target still waver as the held head does: never locked still)
+	var waver := Basis(Vector3.UP, -deg_to_rad(waver_turn)) * Basis(Vector3.RIGHT, deg_to_rad(waver_tilt))
+	var from := _wavered(((targets[look_from] as Vector3) - eyes).normalized(), waver) if targets.get(look_from) is Vector3 else ahead
+	var to := _wavered(((targets[look_to] as Vector3) - eyes).normalized(), waver) if targets.get(look_to) is Vector3 else ahead
+	look = from.slerp(to, clampf(k, 0.0, 1.0)) if from.dot(to) > -0.999 else to
 	return {"mouth": mouth, "eyes": eyes, "look": look.normalized(), "up": up.normalized(), "facing": (head * Vector3.FORWARD).normalized(),
 		"turn": turn, "tilt": tilt, "roll": roll}
+
+
+## The way [param dir] (a unit vector) turned by [param waver] in its own frame.
+static func _wavered(dir: Vector3, waver: Basis) -> Vector3:
+	if absf(dir.dot(Vector3.UP)) > 0.999:
+		return dir
+	return (Basis.looking_at(dir, Vector3.UP) * waver * Vector3.FORWARD).normalized()
 
 
 ## What the voice does at time [param t] of [param plan], heard at the microphone: `x` its pan (-1 the left ear to 1 the right, from

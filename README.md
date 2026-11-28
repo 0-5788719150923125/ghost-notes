@@ -30,7 +30,7 @@ Ghost Notes is built from registries. Each page below is generated from one, lis
 
 - [Components](docs/components.md) (18 components, 4 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](docs/scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
-- [Media](docs/media.md) (12) - what the show is carried on.
+- [Media](docs/media.md) (13) - what the show is carried on.
 - [Look filters](docs/filters.md) (9) - the post-process over the whole picture.
 - [Layers](docs/layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](docs/forces.md) (8) - the physics primitives particles compose.
@@ -39,7 +39,7 @@ Ghost Notes is built from registries. Each page below is generated from one, lis
 - [Props and the library](docs/props.md) (22 shapes, 18 materials, 29 roles) - the library of props and voices, the Dex, the Props card, roles any make can play, refining a prop into versions, and what every prop is made of.
 - [The Environment](docs/surroundings.md) (20 kinds, 6 lights) - what is round the scene a note is shown in, a list of elements: its light, shafts through its haze, what drifts in its air, what is heard - each with properties a person sets or Roll draws - and how strongly each lit thing shines.
 - [Masking effects](docs/masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
-- [Script marks](docs/script.md) (91) - every mark a script may carry - the script editor's palette.
+- [Script marks](docs/script.md) (95) - every mark a script may carry - the script editor's palette.
 - [Delivery](docs/delivery.md) (128 deliveries, 17 acts) - how a script says its words are said: expressions, axes, ramps, shapes and word acts, on words, stretches and paragraphs.
 - [Agents](docs/agents.md) (4 writers, 3 painters, 3 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
 

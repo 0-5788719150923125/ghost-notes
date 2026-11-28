@@ -108,6 +108,15 @@ var bookend_baked := false
 ## not the player: the analyzer runs before the bus volume, so the ramp is heard and recorded without
 ## dimming what the scenes see.
 var fade_audio := true
+## The most the Master bus lets out (dBFS): a limiter there catches what would clip, and nothing under it.
+const CEILING_DB := -0.3
+## How loud what plays is heard (dB, 0 as made): a reading's take at its input gain and Level ([ReadingCast]) - read from its
+## sidecar's `take_db` as it begins, so a render hears it too. Reset with the session.
+var take_db := 0.0:
+	set(v):
+		take_db = v
+		if _player != null:
+			_player.volume_db = v
 
 ## The conductor (next/notes.md, "The transport"): whatever plays the show's audio when it is not a
 ## plain file (a live reading), and so whatever the transport's play, pause, stop and
@@ -629,6 +638,7 @@ func stop() -> void:
 		_player.stream_paused = false
 		_player.stop()
 		_player.volume_db = 0.0      # a mid-fade session end must not mute the next
+	take_db = 0.0
 	_has_audio = false
 	_idle_time = 0.0
 	_last_time = 0.0
@@ -679,6 +689,10 @@ func _adopt_baked_bookend() -> void:
 	lead_in = maxf(0.0, float((bk as Dictionary).get("in", 0.0)))
 	tail = maxf(0.0, float((bk as Dictionary).get("out", 0.0)))
 	bookend_baked = lead_in > 0.001 or tail > 0.001
+	# ...and how loud it is heard (its input gain and its Level, written beside it): the same live and in a render
+	var tdb: Variant = (parsed as Dictionary).get("take_db")
+	if tdb is float or tdb is int:
+		take_db = clampf(float(tdb), -40.0, 40.0)
 
 
 ## What a composed song's file says of itself in its sidecar (`SongBake.write_sidecar`): its grid ([member known]) and
@@ -837,6 +851,10 @@ func _setup_analyzer() -> void:
 	AudioServer.add_bus_effect(bus, fx)
 	var idx := AudioServer.get_bus_effect_count(bus) - 1
 	_analyzer = AudioServer.get_bus_effect_instance(bus, idx)
+	# what is heard never clips: a limiter last on the Master bus, its ceiling just under full scale (it only acts on what would clip)
+	var lim := AudioEffectHardLimiter.new()
+	lim.ceiling_db = CEILING_DB
+	AudioServer.add_bus_effect(bus, lim)
 	if LIVE_TAP or OS.get_cmdline_user_args().has("--live-tap"):
 		_tap = AudioEffectCapture.new()
 		_tap.buffer_length = 0.5

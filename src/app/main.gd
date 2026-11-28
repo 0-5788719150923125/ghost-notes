@@ -468,6 +468,7 @@ func _open_note_panel(path: String) -> void:
 	if _chrome.exporter != null:
 		_chrome.exporter.upload_provider = panel.upload_meta
 		_chrome.exporter.show_provider = panel.show_plan
+		_chrome.exporter.blocked_provider = Callable()
 		# a Sound's song is made for the export where no file plays (a composed one, heard live as it is made)
 		if panel.has_sound():
 			_chrome.exporter.take_provider = panel.export_song
@@ -1036,6 +1037,7 @@ func _open_reading(workspace := "reading") -> void:
 		_chrome.exporter.name_provider = editor.export_name
 		_chrome.exporter.upload_provider = editor.upload_meta
 		_chrome.exporter.show_provider = editor.show_plan
+		_chrome.exporter.blocked_provider = editor.export_blocked
 	_feedback = _chrome.attach_feedback()
 	_entered_mode()
 

@@ -10,6 +10,10 @@ class_name Manuscript
 ##     <!-- hesitation: 2.5 -->          ...the same, for exactly this many seconds
 ##     <!-- image: a wolf in a coat -->  an illustration, described; placed where it sits
 ##     <!-- sketch: a wiring diagram -->   a drawing made on the page, in the writer's own ink
+##     <!-- popup: a lighthouse -->      a picture cut out of its ground and stood up off the page
+##     <!-- spread: a harbor at dawn --> what a pop-up book's spread shows, for its paper engineer to make in layers
+##     <!-- image (cover): a lighthouse -->   the book's front cover, painted; its title and author set over it
+##     <!-- unread -->                   a line of its own: what follows is printed, never read (sources)
 ##
 ## One parser, several readers: the Generative panel (speakers, hesitations), the book medium (page blocks) and
 ## the illustration library (image prompts). Speakers are names, not numbers (`<!-- speaker: 2 -->` parses, but
@@ -27,8 +31,19 @@ const HESITATION := "<!--\\s*hesitation\\s*(?::\\s*([0-9]*\\.?[0-9]+)\\s*(?:s|se
 ## generated without the book's style or references, drawn with the white taken out so it lies on the paper).
 ## A sketch's pin may instead be a time, `(10s)`: how long a letter takes to draw it at the most ([method
 ## LetterScript.drawn_in_of]); a page leaves it be, and on an image it is no pin.
-## Group 1 is which of the two, 2 the pin, 3 the description.
-const IMAGE := "<!--\\s*(image|sketch)\\s*(?:\\(\\s*(full|inline|left|right|screen|[0-9]*\\.?[0-9]+\\s*(?:s|secs?|seconds)?)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->"
+## A pop-up is the same marker with `popup`: a picture painted on a flat ground and cut out of it, which a pop-up
+## book stands up off its spread ([PopupMedium]) and any other page prints as a picture.
+## A spread is the same marker with `spread`: a brief for a pop-up book's spread - what it shows, never painted itself - which
+## its paper engineer makes in layers of its own ([PopupEngineer]); any other page prints it as a picture.
+## Group 1 is which kind, 2 the pin, 3 the description.
+const IMAGE := "<!--\\s*(image|sketch|popup|spread)\\s*(?:\\(\\s*(full|inline|left|right|screen|cover|floor|[0-9]*\\.?[0-9]+\\s*(?:s|secs?|seconds)?)\\s*\\))?\\s*:\\s*([\\s\\S]*?)\\s*-->"
+## Where the read part of a note ends: a line of its own, and what follows it (a paper's references, a book's
+## credits) is printed by a page and never read ([method read_part], [method unread_part]).
+const UNREAD := "(?m)^[ \\t]*<!--\\s*unread\\s*-->[ \\t]*$"
+## A source cited in parentheses, author and year (`(Leavitt et al., 2015)`, `(Jeffery, 2021, p. 4)`, two
+## joined by a semicolon): printed with the words, never read ([method without_citations]). An author's name
+## starts with a capital and the year is four digits (a letter after it allowed) or `n.d.`.
+const CITATION := "[ \\t]*\\((?:[A-Z][^()\\n]*?,\\s*(?:\\d{4}[a-z]?|n\\.d\\.)(?:,\\s*(?:pp?\\.|para\\.)\\s*[0-9-]+)?\\s*;?\\s*)+\\)"
 ## A time that opens a paragraph (a log entry, "21:40 The subject has been moved...") is followed by a
 ## hesitation, as if the author had written `<!-- hesitation -->` after it, so it does not sound like the
 ## sentence's first words. Only at the start of a line, and never where the author put a hesitation of their
@@ -152,6 +167,28 @@ static func strip_frontmatter(body: String) -> String:
 ## line); otherwise a cue or hesitation is read aloud.
 static func unspoken(text: String) -> String:
 	return plain(_rx(COMMENT).sub(text, "", true))
+
+
+## [param text] up to its [constant UNREAD] line: what is read (all of it where there is none).
+static func read_part(text: String) -> String:
+	var m := _rx(UNREAD).search(text)
+	return text if m == null else text.substr(0, m.get_start())
+
+
+## What follows [param text]'s [constant UNREAD] line, printed and never read ("" where there is none).
+static func unread_part(text: String) -> String:
+	var m := _rx(UNREAD).search(text)
+	return "" if m == null else text.substr(m.get_end())
+
+
+## [param text] with every parenthetical citation ([constant CITATION]) taken out, and the space before it: what the
+## voice reads of a sentence a page prints with its source. Frontmatter is left as it is.
+static func without_citations(text: String) -> String:
+	if not text.contains("("):
+		return text
+	var body := strip_frontmatter(text)
+	var head := text.substr(0, text.length() - body.length())
+	return head + _rx(CITATION).sub(body, "", true)
 
 
 ## [param text] with every `[words]{terms}` ([constant DELIVERED]) a closed delivery mark round its words - the form every
@@ -302,6 +339,7 @@ static func images(body: String) -> Array:
 ##                                          (the page ignores them; they keep offsets lined up with speech)
 ##     {kind: "image", prompt, key, placement, side, ordinal}   - placement "full" or "inline"
 ##     {kind: "image", prompt, key, placement: "sketch", sketch: true, ordinal}
+##     {kind: "image", prompt, key, placement: "popup", popup: true, ordinal}
 ##     {kind: "rule"}
 ##
 ## Speaker cues are consumed but every paragraph records whose voice reads it. Authoring notes other than
@@ -321,7 +359,7 @@ static func blocks(body: String) -> Array:
 		flat += text.substr(cursor, m.get_start() - cursor)
 		flat += "\n\uE0F0IMG%d\uE0F0\n" % imgs.size()
 		imgs.append({"prompt": m.get_string(3).strip_edges(), "pin": m.get_string(2),
-			"sketch": m.get_string(1) == "sketch"})
+			"sketch": m.get_string(1) == "sketch", "popup": m.get_string(1) == "popup", "brief": m.get_string(1) == "spread"})
 		cursor = m.get_end()
 	flat += text.substr(cursor)
 
@@ -345,6 +383,16 @@ static func blocks(body: String) -> Array:
 				blk["key"] = image_key("sketch: " + String(im["prompt"]))
 				blk["placement"] = "sketch"
 				blk["sketch"] = true
+			elif bool(im["brief"]):
+				#a brief: what a pop-up spread shows, made in layers by its engineer, never painted as it is in a pop-up book
+				blk["key"] = image_key("spread: " + String(im["prompt"]))
+				blk["placement"] = "brief"
+				blk["brief"] = true
+			elif bool(im["popup"]):
+				#its own key too: a pop-up is painted on a flat ground and cut out of it
+				blk["key"] = image_key("popup: " + String(im["prompt"]))
+				blk["placement"] = "popup"
+				blk["popup"] = true
 			out.append(blk)
 			continue
 		if s.is_empty():
@@ -413,7 +461,7 @@ static func _place_images(blocks_out: Array) -> void:
 			continue
 		if kind != "image":
 			continue
-		if bool(b.get("sketch", false)):
+		if bool(b.get("sketch", false)) or bool(b.get("popup", false)) or bool(b.get("brief", false)):
 			b.erase("pin")
 			continue
 		var pin := String(b.get("pin", ""))
@@ -422,6 +470,11 @@ static func _place_images(blocks_out: Array) -> void:
 			#A picture over the whole screen, for a medium that shows one so (a letter's, LetterScript)
 		if pin == "screen":
 			b["placement"] = "screen"
+			b.erase("pin")
+			continue
+		#The book's own cover, printed on no page ([BookLayout.cover]); a pop-up spread's floor, seen from above
+		if pin == "cover" or pin == "floor":
+			b["placement"] = pin
 			b.erase("pin")
 			continue
 		var full := false

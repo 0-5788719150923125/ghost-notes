@@ -45,7 +45,7 @@ func _init(b: Dictionary) -> void:
 				mine.append(l)
 				lit_by[l] = true
 		_works.append({"name": String(w.get("name", "")), "node": wn, "w": w, "kind": String((w.get("joint", {}) as Dictionary).get("kind", "")),
-			"mats": mats, "lights": mine, "rest": _in_node(wn)})
+			"mats": mats, "lights": mine, "rest": _in_holder(wn)})
 	for f in (b.get("faces", []) if b.get("faces") is Array else []):
 		var nm := String((f as Dictionary).get("name", ""))
 		if not nm.is_empty() and not _faces.has(nm):
@@ -253,8 +253,9 @@ func point(name: String) -> Variant:
 
 
 ## Point [param name] as the prop language writes it ([method Motions.describe_parts]): in the thing's own space whatever part it is
-## on - as built it is where it is written, and it moves as its part has moved since. Where it is now in the thing's node (meters);
-## null where there is none. What an agent designs for a role is read so ([RoleDesign]).
+## on - as built it is where it is written, shifted and sized as the build stood the whole thing on its foot (its holder), and it moves
+## as its part has moved since. Where it is now in the thing's node (meters); null where there is none. What an agent designs for a
+## role is read so ([RoleDesign]).
 func point_in_thing(name: String) -> Variant:
 	for wk in _works:
 		var pts: Dictionary = ((wk as Dictionary)["w"] as Dictionary).get("points", {})
@@ -398,6 +399,18 @@ func _scale(wi: int) -> Transform3D:
 
 
 ## Where [param n] stands in the thing's node ([member node]), through every node between.
+## Where [param n] is under the thing's holder (the node [method Props.build] shifts onto its foot and sizes): its place as the thing
+## is written, before that shift - what a point written in the thing's own space is undone by ([method point_in_thing]).
+func _in_holder(n: Node3D) -> Transform3D:
+	var xf := Transform3D.IDENTITY
+	var at: Node = n
+	while at != null and at != node and at is Node3D and at.get_parent() != node:
+		xf = (at as Node3D).transform * xf
+		at = at.get_parent()
+	# (a part straight under the thing's node, with no holder between: its place is all of it)
+	return xf if at != n else _in_node(n)
+
+
 func _in_node(n: Node3D) -> Transform3D:
 	var xf := Transform3D.IDENTITY
 	var at: Node = n

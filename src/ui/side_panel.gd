@@ -40,6 +40,8 @@ var body: VBoxContainer
 ## The chips for this panel's cards, under its heading ([CardRow]); null until
 ## [method add_card_row] is called.
 var card_row: CardRow
+## The meter of everything heard, over a note's panel ([method add_component_row]); null on a panel without one.
+var meter: LevelMeter
 ## The "+" before the chips ([method add_component_row]); null on a panel without one.
 var plus: MenuButton
 ## The panel's own name in its cards' keys ("<prefix>.<card>", see [Card]).
@@ -72,6 +74,7 @@ var _claimed: WeakRef = null        # the shell it claimed the show's room from,
 var _row: HBoxContainer             # the cards' column, and beside it...
 var _dock: VBoxContainer            # ...a Refine opened from one of them ([method dock]), hidden while none is
 var _width := 380.0                 # its own width, without a Refine
+var _dock_x: Control                # the Refine's own ×, over it ([method _dock_bar])
 
 
 func _init(width := 380.0) -> void:
@@ -88,6 +91,7 @@ func _init(width := 380.0) -> void:
 	_dock = VBoxContainer.new()
 	_dock.visible = false
 	_row.add_child(_dock)
+	_dock.add_child(_dock_bar())
 	_scroll = ScrollContainer.new()
 	# Horizontal scrolling off: with it on, the scroll view's minimum width collapses and the panel
 	# narrows to nothing rather than staying as wide as its widest row.
@@ -137,6 +141,10 @@ func add_card_row() -> CardRow:
 ## ([method Components.attach_menu]: the impossible left out; the not-ready, the unmet and what there is
 ## no room for grayed with the reason), and hands the key of the one picked to [param attach].
 func add_component_row(attached: Callable, attach: Callable) -> CardRow:
+	# what is heard, metered over everything on a note's panel, pinned where it never scrolls away ([LevelMeter])
+	if meter == null:
+		meter = LevelMeter.new()
+		pin_header(meter)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	body.add_child(row)
@@ -446,7 +454,7 @@ func dock(panel: Control, width: int) -> void:
 			panel.get_parent().remove_child(panel)
 		_dock.add_child(panel)
 	for c in _dock.get_children():
-		(c as Control).visible = c == panel
+		(c as Control).visible = c == panel or c == _dock_x
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	if not _dock.visible:
@@ -457,11 +465,38 @@ func dock(panel: Control, width: int) -> void:
 	_fit()
 
 
+## The bar over a docked Refine: its × at the right, styled as a card's, folding away the Refine it stands over ([method
+## RefineDock.close], which lets go of its button too).
+func _dock_bar() -> Control:
+	var bar := HBoxContainer.new()
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.add_child(gap)
+	var x := Button.new()
+	x.text = "×"
+	x.flat = true
+	x.focus_mode = Control.FOCUS_NONE
+	x.add_theme_font_size_override("font_size", 14)
+	var snug := StyleBoxEmpty.new()
+	snug.content_margin_left = 4
+	snug.content_margin_right = 4
+	for st in ["normal", "hover", "pressed", "disabled", "focus"]:
+		x.add_theme_stylebox_override(st, snug)
+	x.tooltip_text = "Close this Refine. The conversation is kept, and opens again as it was."
+	x.pressed.connect(func() -> void:
+		for c in _dock.get_children():
+			if c != _dock_x and (c as Control).visible:
+				RefineDock.close(c as Control))
+	bar.add_child(x)
+	_dock_x = bar
+	return bar
+
+
 ## [param panel] folded away: the panel back to its own width once no Refine stands beside its cards.
 func undock(panel: Control) -> void:
 	panel.hide()
 	for c in _dock.get_children():
-		if (c as Control).visible:
+		if c != _dock_x and (c as Control).visible:
 			return
 	_dock.hide()
 	custom_minimum_size.x = _width

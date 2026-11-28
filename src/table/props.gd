@@ -338,6 +338,11 @@ const LIGHT_KINDS := ["spot", "point"]
 const LIGHT_REACH := 600.0
 
 const _SHADER := preload("res://shaders/prop.gdshader")
+## How far each part's faces are pushed out along themselves past the one before it (m, each copy of a part a step, [constant
+## Tris.NUDGE_COPIES] a part): never seen - under a tenth of a millimeter at a thing's most parts, far less than any gap a designer
+## leaves (a screen set a third of a millimeter proud of its housing) - but two parts' faces in one plane (trim meeting at a corner)
+## never fight for the depth buffer and flicker. A face that shows a picture is pushed out past them all.
+const NUDGE := 0.0000005
 ## A PANE ([method _pane]): how much of its surface is flat, and how square to its thinnest way that means (5 degrees)
 const PANE_FLAT := 0.85
 const PANE_SQUARE := 0.996
@@ -1259,6 +1264,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 	# What a scene plays ([PropRig]): each face where it shows something, and each light, built dark
 	var faces: Array = []
 	var lights: Array = []
+	var rank := -1           # each part with geometry in turn, for how far its faces are pushed out ([constant NUDGE])
 	for leaf in leaves:
 		var part: Dictionary = leaf["part"]
 		var geos: Array = leaf["geos"]
@@ -1266,6 +1272,7 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 		var salt: Variant = leaf["salt"]
 		if xforms.is_empty():
 			continue
+		rank += 1
 		if leaf.has("grains"):
 			var gch: Array = leaf["chains"]
 			for ci in xforms.size():
@@ -1305,7 +1312,11 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 				var mine: Array = []
 				for ci in ids:
 					mine.append(xforms[ci])
-				var merged := g.placed(mine, ids)
+				# (a part's faces pushed out a hair more than the parts before it: two parts' faces in one plane - trim meeting at a
+				# corner - never fight for the depth buffer; hairs stay as they are, and a face that shows a picture is pushed out past
+				# them all, below)
+				var push := 0.0 if String(part.get("shape", "")) == "tuft" else NUDGE * float(rank * Tris.NUDGE_COPIES + 1)
+				var merged := g.placed(mine, ids, push, NUDGE)
 				var m: Dictionary = materials.get(nm, sanitize_material({}, "#808080"))
 				var mi := MeshInstance3D.new()
 				mi.mesh = merged.mesh()
@@ -1317,7 +1328,8 @@ static func build(thing: Dictionary, materials: Dictionary, seed: int, keep := f
 					mi.set_meta("xform", mine[0])
 				# a face is one panel whose node stands where it is - its frame a scene shows a picture in ([PropRig]): its first copy alone
 				if String(part.get("shape", "")) == "face":
-					mi.mesh = g.placed([Transform3D.IDENTITY], [0]).mesh()
+					# (pushed out past every other part, so it is never covered by what it is set on)
+					mi.mesh = g.placed([Transform3D.IDENTITY], [0], NUDGE * float(MAX_PARTS * Tris.NUDGE_COPIES + 2)).mesh()
 					mi.transform = mine[0]
 					mi.set_meta("size", (part["size"] as Vector2) * 0.01)
 				var hid := ((takers[tk] as Dictionary)["holder"] as Node3D).get_instance_id()
@@ -5671,6 +5683,8 @@ static func _hull(pts: PackedVector3Array, below: float) -> PackedVector2Array:
 ## of it where a wick goes.
 class Tris:
 	extends RefCounted
+	## How many steps a part's copies are pushed out by between its own and the next part's ([method placed]).
+	const NUDGE_COPIES := 4
 	var v := PackedVector3Array()
 	var n := PackedVector3Array()
 	var uv := PackedVector2Array()
@@ -5729,7 +5743,7 @@ class Tris:
 
 	## Every copy of this geometry at [param xforms], as one - each vertex carrying its copy's middle
 	## and number ([member copy]; [param ids] are the copies' places among the part's own).
-	func placed(xforms: Array, ids: Array = []) -> Tris:
+	func placed(xforms: Array, ids: Array = [], nudge := 0.0, step := 0.0) -> Tris:
 		var out := Tris.new()
 		out.girth = girth
 		out.height = height
@@ -5743,18 +5757,23 @@ class Tris:
 		for k in xforms.size():
 			var t: Transform3D = xforms[k]
 			var nb := t.basis.inverse().transposed()
+			# (each copy pushed out along its own faces by [param nudge] and [param step] more a copy: two copies' faces in one plane never
+			# fight for the depth buffer)
+			var d := nudge + step * float(k % NUDGE_COPIES) if nudge > 0.0 else 0.0
 			# a mirrored copy keeps its faces turned out: each triangle wound the other way
 			if t.basis.determinant() < 0.0:
 				for i in v.size():
 					var j := _unwound(i)
-					out.v.append(t * v[j])
-					out.n.append((nb * n[j]).normalized())
+					var nj := (nb * n[j]).normalized()
+					out.v.append(t * v[j] + nj * d)
+					out.n.append(nj)
 					out.uv.append(uv[j])
 					out.uv2.append(uv2[j])
 			else:
 				for i in v.size():
-					out.v.append(t * v[i])
-					out.n.append((nb * n[i]).normalized())
+					var ni := (nb * n[i]).normalized()
+					out.v.append(t * v[i] + ni * d)
+					out.n.append(ni)
 				out.uv.append_array(uv)
 				out.uv2.append_array(uv2)
 			var c := t * mid

@@ -49,6 +49,38 @@ as written; `StudioFormat.chat_for`); every sound MADE ON ITS OWN as soon as it 
 work round the windscreen's own middle (`fur_c`), the capsule where the sound is heard; the head camera's SWAY (a held head's drift,
 breath and waver between moves).
 
+Also built: A THING IS HANDED ON, never dropped: an act that takes up what another act still holds brings it from there, and what no
+act holds floats back to where it rests (`StudioMedium._thing_at`); the blocks are held one in each hand, so whatever is done to them
+takes both (`StudioActs.THINGS` `both`); the brush's hairs bend as it is dragged and pressed (its `tuft` parts, `Bristles`,
+`StudioMedium._bend_bristles`), its tip placed where its make says (`brush_tip_v`), kept to the glass on the lens; the eyes go from
+what they looked at to the lens or the flip screen with the turn, never in a frame, and waver with the held head while they rest
+there (`HeadPlan._posed`); no head move goes faster than its Pace allows (`HeadPlan.MOVE_SPEED`, `TURN_SPEED`); each act's sound has a LEVEL
+AND A MUFFLE on the Sound card, and all of them at once (kept in the block's `levels`), which its Refine writer may also say in its
+words (`-6 dB`, `muffled`, `StudioScript.MUFFLES`) - heard as it plays, nothing made again (`StudioSounds.muffled`); the voice's
+take has a Level on the Voice card, heard as it plays (`Spectrum.take_db`). THE CAMERA'S METERS SHOW WHAT THE MICROPHONE RECEIVES:
+the voice as the head at the capsule hears it, measured in the take's own pass before any echo, room, ambience or bed
+(`VoiceFX.meter`, kept in the take's book as `mic_voice`), with the hands' sounds and the room tone (`StudioMedium._mic_levels`) -
+peaks, as a camera's meters read: green, amber past -12, red past -3, each ear's peak held a moment, and a scale (`StudioScreen`,
+drawn by `LevelMeter`). THE TAKE HAS A RECORDER'S INPUT GAIN: its voice
+brought to -16 dBFS of programme loudness when it is made (`ReadingPanel.VOICE_LOUDNESS`, `loudness_of`), kept in its sidecar
+(`gain_db`, and `take_db` with the Voice card's Level, which Spectrum reads as the take begins - live and in a render), the hands'
+sounds brought up by the same gain (the book's `mic_gain`); a limiter last on the Master bus catches what would clip. A thing's
+place changes are each logged with what made them (`StudioFormat.set_place`'s `why`) and undone a step at a time (Undo move); a
+re-read of the note that changes one says so. The head camera's eyes rest where its Tilt and Pan say (eyes alone, never the voice).
+A paused studio looked over from outside its room sees in: what stands between the eye and the room's inside is cut away
+(prop.gdshader's `cut_on`, `StudioMedium._cut_room`). A THING IS STOOD BY ITS POINTS AS IT IS DRAWN: a named point is read through the
+holder the build stands the thing on its foot with (`PropRig._in_holder`), so the lens, the ring's middle and the capsule are where
+their parts are drawn. A kept take's document is brought to the note as it stands when it plays (`ReadingPanel.freshen_document`). THE ENVIRONMENT DRESSES THE
+STUDIO: its brightness, shafts through the room's air, fog and what drifts (haze far off behind the camera, motes round the work), from
+the note's elements and the episode's table (`StudioMedium._dress_environment`); its sounds are the bed under the voice. Held blocks keep
+clear of the eye by their nearest surface, pushed one way only, out in front toward the camera, the push and the windscreen's bound
+worked out together and averaged over a while either side so nothing flips (`EYE_CLEAR`, `CLEAR_AHEAD`, `FRONT`, `PUSH_MOST`,
+`FUR_CLEAR`; the pair's middle kept round the windscreen, `_round_the_fur`), and sway gently as held hands do, the pair as one (`HELD_DRIFT`,
+`HELD_TURN`); they rest low under the microphone and are brought one hand after the other, drifting in (`BLOCK_COME`, `HANDS_APART`,
+`CARRY_EASE`), handed from act to act the same way, never put back first where the next act takes them soon after (`held_until`,
+`_next_taker`); a block comes down edge first (`_landing`) and the held one gives under each blow (`_bump_at`); a prop's parts are each pushed out a hair so faces in one plane never flicker (`Props.NUDGE`). The flip screen is built again when a stopped show plays with its set
+still standing (`StudioMedium._mount_screen`).
+
 Open for the user: the first episode Table makes, by ear (the fur first) and by eye; the things its agents design; the head's moves
 by eye and ear; the fur's color.
 

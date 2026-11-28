@@ -351,13 +351,13 @@ func _parsers_agree() -> void:
 				var m := RegEx.create_from_string("const HUM_SECONDS := \\{([^}]*)\\}").search(src)
 				_ok(m != null and m.get_string(1).contains("\"%s\":" % word),
 					"the hum example is not a held hum")
-			"image", "image_full", "image_left", "sketch":
+			"image", "image_full", "image_left", "image_cover", "sketch", "popup", "spread":
 				var imgs := Manuscript.images("Prose.\n\n%s\n\nMore prose.\n" % ex)
 				_ok(imgs.size() == 1 and String(imgs[0]["prompt"]) == fill,
 					"%s is not a picture of '%s': %s" % [k, fill, imgs])
 				if imgs.size() == 1:
 					var want: String = {"image": "inline", "image_full": "full", "image_left": "inline",
-						"sketch": "sketch"}[k]
+						"image_cover": "cover", "sketch": "sketch", "popup": "popup", "spread": "brief"}[k]
 					_ok(String(imgs[0]["placement"]) == want,
 						"%s is placed %s, not %s" % [k, imgs[0]["placement"], want])
 					if k == "image_left":
@@ -443,6 +443,18 @@ func _parsers_agree() -> void:
 						lit = true
 				_ok(lit, "%s does not reach the subtitle as emphasis" % k)
 				_ok(not "".join(spoken).contains("*"), "%s's marks are spoken" % k)
+			"unread":
+				# what follows is printed (a page's blocks) and never read (the walk's body); a citation is printed, never read
+				var src := "Read this (Leavitt et al., 2015).\n\n%s\n\nNot this.\n" % ex
+				var sp := String(TextWalk.new().spoken(src, "")["body"])
+				_ok(sp.contains("Read this") and not sp.contains("Not this"), "an unread line does not stop the reading")
+				_ok(not sp.contains("Leavitt") and sp.contains("this."), "a citation is read aloud, or its sentence lost")
+				_ok(String(TextWalk.new().spoken("Read this (Leavitt et al., 2015).\n\nAnd this.\n", "")["body"]).contains("And this"),
+					"a note with no unread line is cut")
+				var printed := ""
+				for blk in Manuscript.blocks(Manuscript.unread_part(src)):
+					printed += String((blk as Dictionary).get("text", ""))
+				_ok(printed.contains("Not this") and not printed.contains("unread"), "the unread part is not what follows the line")
 			"rule":
 				var b := Manuscript.blocks("One.\n\n%s\n\nTwo.\n" % ex)
 				_ok(b.size() == 3 and String(b[1]["kind"]) == "rule", "a scene break is not a rule")

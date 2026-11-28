@@ -10,7 +10,7 @@ class_name FreeLook
 const SETTLE := 0.9
 ## How far ahead of the eye it turns about (m), and the nearest and farthest it is drawn (times as far).
 const PIVOT := 0.9
-const REACH := Vector2(0.25, 4.0)
+const REACH := Vector2(0.25, 12.0)
 
 var yaw := 0.0
 var pitch := 0.0

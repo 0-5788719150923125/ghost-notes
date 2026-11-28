@@ -60,6 +60,8 @@ func rows() -> Array:
 func _verbs(role: String) -> Array:
 	var out: Array = [{"key": "choose", "label": "Choose…", "opens": true,
 		"tip": "Pick another to play this part, from your library. Whichever it is, the studio works it the same way."}]
+	if _format.can_undo_place(role):
+		out.append({"key": "undo", "label": "Undo move", "tip": "Its last move, turn or size taken back, one at a time."})
 	if not _format.place_of(role).is_empty():
 		out.append({"key": "home", "label": "Studio's place", "tip": "Back where the studio stands it: its move, turn and size undone."})
 	return out
@@ -70,7 +72,9 @@ func act(key: String, verb: String) -> String:
 	if role.is_empty() or _format == null:
 		return "nothing here does that"
 	if verb == "home":
-		return _format.set_place(role, {})
+		return _format.set_place(role, {}, "put back where the studio stands it")
+	if verb == "undo":
+		return _format.undo_place(role)
 	return "nothing here does that"
 
 
@@ -84,7 +88,7 @@ func set_field(key: String, field: String, value: Variant) -> String:
 		place.erase(field)
 	else:
 		place[field] = value
-	return _format.set_place(role, place)
+	return _format.set_place(role, place, "its %s set on the Props card" % field)
 
 
 ## The studio a thing stands in, for a refine that may place it ([method PropSection.scene_of]): where it is, how to place it and the
@@ -99,8 +103,8 @@ func scene_of(key: String) -> Dictionary:
 		roles.append({"role": String(r), "label": String((PropMakes.ROLES[r] as Dictionary)["label"]).to_lower(), "now": fmt.place_of(String(r))})
 	return {"role": role, "now": fmt.place_of(role), "fields": StudioSet.PLACE_FIELDS, "roles": roles, "needs": RoleDesign.needs_text(role),
 		"lacks": func(thing: Dictionary) -> PackedStringArray: return PropMakes.missing(role, thing, true),
-		"place": func(place: Dictionary) -> String: return fmt.set_place(role, place),
-		"place_role": func(other: String, place: Dictionary) -> String: return fmt.set_place(other, place),
+		"place": func(place: Dictionary) -> String: return fmt.set_place(role, place, "by a refine of the %s" % role),
+		"place_role": func(other: String, place: Dictionary) -> String: return fmt.set_place(other, place, "by a refine of the %s" % role),
 		"look": func(dir: String) -> Dictionary: return await StudioScene.look(fmt.make_of_all(), fmt.places_all(), role, dir)}
 
 

@@ -14,11 +14,12 @@ class_name DeskLight
 ## The desk's camera looks nearly straight down, where a standing flame quad would be seen edge on; here it faces the
 ## camera, foreshortened only to [constant FLAME_SQUAT].
 ##
-## A part of the desk ([DeskMedium]): reads the scene, camera and environment through [member medium]; a function of
-## show time ([method tick]).
+## A part of the desk ([DeskMedium], or a book set on the desk, [PopupMedium]): reads the scene, camera and environment
+## through [member medium]; a function of show time ([method tick]).
 
-## The [DeskMedium] this is a part of.
-var medium: DeskMedium
+## The medium this is a part of: anything with the desk's world (`_root3`), its camera (`_cam`) and its environment
+## (`_env`) - a [DeskMedium] or a [PopupMedium].
+var medium
 
 ## The candles' light: a key's and a fill's energy at most, and the most a page may be lit (the paper's linear
 ## lightness times the light on it; the lamp's is about 1).
@@ -106,7 +107,7 @@ func tick(t: float) -> void:
 		_rig.tick(t)
 	if _candles.is_empty():
 		return
-	var cb := medium._cam.transform.basis
+	var cb: Basis = (medium._cam as Camera3D).transform.basis
 	var squat := clampf(cb.y.dot(Vector3.UP), FLAME_SQUAT, 1.0)
 	for c in _candles:
 		var bright := 0.0

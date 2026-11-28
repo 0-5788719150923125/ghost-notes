@@ -38,7 +38,7 @@ core. The commitments:
 
 - [Components](components.md) (18 components, 4 workspaces) - what a note can carry, the room each part takes, which panel runs it, and what each part asks of the platform.
 - [Scenes](scenes.md) (55) - the visualizer scenes in the rotation, each from its own doc comment.
-- [Media](media.md) (12) - what the show is carried on.
+- [Media](media.md) (13) - what the show is carried on.
 - [Look filters](filters.md) (9) - the post-process over the whole picture.
 - [Layers](layers.md) (22) - the visual components scenes compose - weather, skies, atmosphere.
 - [Forces](forces.md) (8) - the physics primitives particles compose.
@@ -47,7 +47,7 @@ core. The commitments:
 - [Props and the library](props.md) (22 shapes, 18 materials, 29 roles) - the library of props and voices, the Dex, the Props card, roles any make can play, refining a prop into versions, and what every prop is made of.
 - [The Environment](surroundings.md) (20 kinds, 6 lights) - what is round the scene a note is shown in, a list of elements: its light, shafts through its haze, what drifts in its air, what is heard - each with properties a person sets or Roll draws - and how strongly each lit thing shines.
 - [Masking effects](masking.md) (21) - the video effects editor: its model, its effects and its headless tools.
-- [Script marks](script.md) (91) - every mark a script may carry - the script editor's palette.
+- [Script marks](script.md) (95) - every mark a script may carry - the script editor's palette.
 - [Delivery](delivery.md) (128 deliveries, 17 acts) - how a script says its words are said: expressions, axes, ramps, shapes and word acts, on words, stretches and paragraphs.
 - [Agents](agents.md) (4 writers, 3 painters, 3 assistants) - the AI command-line tools Ghost Notes hands its words, pictures and fixes to: which does what, how each is run, and how to install one.
 
@@ -272,6 +272,7 @@ What every note's panel is built from, and what it asks of the window it is in: 
 - [`graphics_panel.gd`](../src/ui/graphics_panel.gd) **GraphicsPanel** - how finely the picture is drawn, live and in an export, above the bottom-right row (Chrome's framed-picture button, beside the Environment's).
 - [`icons.gd`](../src/ui/icons.gd) **Icons** - the few pictures a button wears in place of words. Drawn, never imported: each is a stroke path on a 24-unit square, made into a texture at the size it is asked for (`texture`), so a phone's button is as sharp as a desktop's and a new icon is a row, with no file for the import step to miss ...
 - [`keys_window.gd`](../src/ui/keys_window.gd) **KeysWindow** - every keyboard shortcut, in a small window: F1 anywhere, or the "?" on a note's panel (`SidePanel.pin_title_row`).
+- [`level_meter.gd`](../src/ui/level_meter.gd) **LevelMeter** - a meter of what is heard, as a recorder's or a mixer's reads: each ear's peak, green, then amber past `AMBER`, red past `RED`; each ear's highest held a moment (`HOLD`); and a scale. Where speech belongs is the amber's edge: its peaks around -12 to -6, red too loud.
 - [`note_cards.gd`](../src/ui/note_cards.gd) **NoteCards** - a note's component cards, built one way on whichever panel shows the note, and the two edits that change what a note is made of: attach and detach.
 - [`note_editor.gd`](../src/ui/note_editor.gd) **NoteEditor** - a note opened as a notes app opens one: its `NoteTile` grown into a card over the grid, its Title and its words both written in place - no Edit, no window.
 - [`note_grid.gd`](../src/ui/note_grid.gd) **NoteGrid** - the notes, as a notes app shows them: the name, a search field with the owner's icon buttons beside it (`actions`, `Icons`), and every note as a square `NoteTile` in a centered grid that scrolls up and down, newest first (`NoteStore.list`). The desktop's `NotesList` and the phone's ...
@@ -350,6 +351,7 @@ What the show is carried on: the `Medium` base and its registry, each medium ([m
 - [`notebook.gd`](../src/media/notebook.gd) **NotebookMedium** - the reading as a research notebook, written by hand, open on a desk.
 - [`notebook_layout.gd`](../src/media/notebook_layout.gd) **NotebookLayout** - a chapter written by hand into a ruled notebook, for `NotebookMedium`.
 - [`page_capture.gd`](../src/media/page_capture.gd) **PageCapture** - a real web page captured as one tall picture, for the tablet medium.
+- [`popup_layout.gd`](../src/media/popup_layout.gd) **PopupLayout** - a chapter set as a pop-up book, one scene a spread, for `PopupMedium`.
 - [`reading_follower.gd`](../src/media/reading_follower.gd) **ReadingFollower** - where the voice is in a document, and when each of its words was said.
 - [`screen_film.gd`](../src/media/screen_film.gd) **ScreenFilm** - a film played on a screen in a scene (a Dispatch desk's terminal, its little monitors): its picture a texture of the frame at a moment of the film, its sound heard in step. A pure function of the film's time: a scrub lands on the frame there, and a render shows the frame a live show showed.
 - [`tablet.gd`](../src/media/tablet.gd) **TabletMedium** - the reading as somebody browsing on a tablet lying on a desk.
@@ -620,6 +622,13 @@ A desk a letter is written at, seen and heard: the legal pad, the pen that moves
 - [`letter_script.gd`](../src/desk/letter_script.gd) **LetterScript** - a letter as the voice reads it and the desk writes it (next/letter.md).
 - [`make_shelf.gd`](../src/desk/make_shelf.gd) **MakeShelf** - the makes that may play one role on the Dex (`PropMakes`): the role's own (its recipe drawn from many numbers, or the prop it is shipped as), and every prop kept or seen (`LibraryProps`) that has the faces the scene shows something on, the Dex first filtered by the role's words. Use hands the one ...
 - [`pen_pace.gd`](../src/desk/pen_pace.gd) **PenPace** - when a pen writing by itself draws what the voice says (an episode at the desk, `EpisodeDesk`; next/desk.md), pure: one write's ink against its voice's words, in three steps.
+- [`popup.gd`](../src/desk/popup.gd) **PopupMedium** - the reading as a pop-up book open on the Letter's desk, one scene a spread (`PopupLayout`).
+- [`popup_design.gd`](../src/desk/popup_design.gd) **PopupDesign** - how a pop-up book's spreads are made, layer by layer (`PopupMedium`): the note's own, kept in its folder as JSON (`FILE`, `folder_of`) and carried to the book in the reading's document (`popup`). Written by the paper engineer (`PopupEngineer`), who makes each scene from the script's ...
+- [`popup_engineer.gd`](../src/desk/popup_engineer.gd) **PopupEngineer** - a pop-up book's paper engineer at work (`PopupTools`; rules/popup/engineer.yaml): an agent that makes each scene's spread in layers of its own from the script's brief, has each layer's picture painted, looks at every spread as the show sees it, and refines it in rounds. One at a time a note; it ...
+- [`popup_format.gd`](../src/desk/popup_format.gd) **PopupFormat** - the pop-up book's own rows on the Medium card (`PopupMedium`; next/popup.md): the Letter's desk rows (`DeskRows`: which desk by number and the index cards' words; what is on it ticked on the Props card, `DeskProps`), kept in the note's `medium:` block and carried to the book in the reading's ...
+- [`popup_studio.gd`](../src/desk/popup_studio.gd) **PopupStudio** - a pop-up book's spread photographed for whoever designs it (`PopupTools`): the book drawn from `doc` (the reading's document - its words, its design, its desk and its light) in a viewport of its own, open on the scene's spread with nothing moving, and taken from the views asked: as the show ...
+- [`popup_tools.gd`](../src/desk/popup_tools.gd) **PopupTools** - what the paper engineer (`PopupEngineer`) can do while it makes a pop-up book's spreads in layers: read each scene (its words and the script's brief for its spread), stand a scene's layers - each a picture of its own words, painted as a cut-out, as scenery or as a floor (`PopupDesign`) - wait while ...
+- [`popup_walk.gd`](../src/desk/popup_walk.gd) **PopupWalk** - what the voice reads of a pop-up book (`PopupMedium`): the note's words up to its unread line, its citations out (as `TextWalk` reads any note), with the book's rests in them - one after the title while the cover opens and the first scene stands up (`OPEN_REST`), and one at each later ...
 - [`prop_makes.gd`](../src/desk/prop_makes.gd) **PropMakes** - the parts a scene gives a prop to play (a role: the desk's mug, its terminal, a phone), and the make chosen to play one, built (next/working_props.md). What a role does is the scene's - a mug is lifted to the mouth, a terminal shows its program on its screen - and any make of it is built in the ...
 - [`role_design.gd`](../src/desk/role_design.gd) **RoleDesign** - a role's make designed by an agent from words (`PropMakes` `designed`; next/studio.md, "The studio's things"). The agent is told what the role is and what the scene does with it, what the scene works on any make of it (`faces`, `needs`), how tall it stands, the show it stands in and the scene's ...
 

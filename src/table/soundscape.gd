@@ -833,11 +833,12 @@ func mix(voice: PackedVector2Array) -> PackedVector2Array:
 	var ol := _ol
 	var orr := _or
 	var at := _oat
+	var lift := db_to_linear(gain_db)
 	for i in n:
 		var v := voice[i]
 		var a := maxf(absf(v.x), absf(v.y))
 		d += (a - d) * (ka if a > d else kr)
-		var g := 1.0 - DUCK * minf(1.0, d * 5.0)
+		var g := (1.0 - DUCK * minf(1.0, d * 5.0)) * lift
 		var x := v.x + ol[at + i] * g
 		var y := v.y + orr[at + i] * g
 		# a soft knee above 0.9, so a crash under a loud word bends rather than clips

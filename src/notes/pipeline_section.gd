@@ -103,6 +103,12 @@ func missing() -> bool:
 	return true
 
 
+## Why an export may not be made yet, "" where nothing here holds it back: what the show plays still missing or being made (an
+## export renders what is made, and cannot make it then). Nothing by default.
+func export_blocked() -> String:
+	return ""
+
+
 ## The panel is going: stop what must not outlive it. A card's own producer is the card's to stop.
 func leave() -> void:
 	pass

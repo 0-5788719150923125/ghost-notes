@@ -322,6 +322,10 @@ class Bed extends ReadingBed:
 	func level() -> float:
 		return under.level() if _gave_way else Surroundings.BED_LEVEL
 
+	## The Environment's Level over the episode's sound as over its own (the card that lists both).
+	func gain_db() -> float:
+		return under.gain_db() if under != null else 0.0
+
 
 ## What the episode is paced by (its Pacing rows, [EpisodePacing]): the numbers that pace the laws its acts use ([method
 ## TableTune.fields]: a show that paints nothing is offered no brush's), told in the show's block (`tune:`). The laws are read

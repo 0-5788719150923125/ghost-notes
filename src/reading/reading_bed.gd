@@ -25,3 +25,8 @@ func of(_export := false) -> Dictionary:
 ## How far up the bed sits under the voice, 0-1 (see [method SoundBed.set_level]).
 func level() -> float:
 	return 0.0
+
+
+## Its gain over that (dB, [member SoundBed.gain_db]): the Environment's Level, where a card hands one.
+func gain_db() -> float:
+	return 0.0

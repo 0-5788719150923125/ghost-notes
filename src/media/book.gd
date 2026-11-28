@@ -17,6 +17,9 @@ class_name BookMedium
 ## [BookMedium.PageCanvas], redrawn only when what is printed or lit on it changes. Four page targets
 ## cover the worst case, a turn (old left, old right, new left and new right all in shot).
 ##
+## A cover painted for the chapter (`<!-- image (cover): -->`, [member BookLayout.cover]) is laid on the front board, its
+## title, subtitle and author set over it by [method draw_cover] - never painted - in place of the gilt on cloth.
+##
 ## A gentle camera, unlike the comic's: a wide view of the spread most of the time, drifting toward the
 ## page and then the lines being read, changing framing on a slow schedule drawn from the session seed and
 ## the show clock (so an export frames the same shots). Every channel follows by the one follow every flown
@@ -177,9 +180,12 @@ var _sent_lo := {}               # subtitle sentence id -> first layout word
 var _sent_hi := {}
 
 var _root3: Node3D
+var _book: Node3D                # the book itself (desk, case, pages): a medium that sets it on another desk scales it
+var _desk_plane: MeshInstance3D  # the plain desk under it
 var _cam: Camera3D
 var _env: Environment
 var _lamp: SpotLight3D
+var _fill: DirectionalLight3D
 var _leaf_l: MeshInstance3D
 var _leaf_r: MeshInstance3D
 var _leaf_t: MeshInstance3D
@@ -190,6 +196,14 @@ var _cover_l: MeshInstance3D     # the left half - the FRONT cover, carried by _
 var _pivot: Node3D               # hinges the whole left half of the book at the spine
 var _cover_label: Label3D        # the book's name, on the outside of the front cover
 var _cover_author: Label3D       # ...and its author, smaller, at the foot of the cover
+var _cover_plate: MeshInstance3D # a painted cover on the front board, under the pivot (hidden without one)
+var _cover_vp: SubViewport       # ...drawn here, once a painting, title or author changes
+var _cover_title := ""
+var _cover_by := ""
+var _cover_sub := ""             # the note's `subtitle`, set small under the title
+var _cover_drawn := ""           # what the cover was last drawn from
+var _cover_tex: Texture2D
+var _cover_face: Font
 var _placeholder: GhostScene
 
 var _paper := Color(0.95, 0.925, 0.87)
@@ -229,11 +243,23 @@ func mount(st: SubViewport) -> void:
 		_vps.append(vp)
 		_canvases.append(c)
 	_build_world()
+	_cover_vp = SubViewport.new()
+	_cover_vp.size = Vector2i(COVER_PX)
+	_cover_vp.transparent_bg = false
+	_cover_vp.disable_3d = true
+	_cover_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	add_child(_cover_vp)
+	var cc := CoverCanvas.new()
+	cc.book = self
+	_cover_vp.add_child(cc)
+	(_cover_plate.material_override as StandardMaterial3D).albedo_texture = _cover_vp.get_texture()
 
 
 func _build_world() -> void:
 	_root3 = Node3D.new()
 	add_child(_root3)
+	_book = Node3D.new()
+	_root3.add_child(_book)
 	_env = Environment.new()
 	_env.background_mode = Environment.BG_COLOR
 	_env.background_color = Color(0.02, 0.018, 0.016)
@@ -261,11 +287,11 @@ func _build_world() -> void:
 	_root3.add_child(_lamp)
 	_lamp.position = Vector3(-1.4, 3.6, 1.2)
 	_lamp.look_at_from_position(_lamp.position, Vector3(0.1, 0.0, 0.0), Vector3.UP)
-	var fill := DirectionalLight3D.new()
-	fill.light_color = Color(0.7, 0.75, 0.9)
-	fill.light_energy = 0.18
-	_root3.add_child(fill)
-	fill.rotation_degrees = Vector3(-55.0, 30.0, 0.0)
+	_fill = DirectionalLight3D.new()
+	_fill.light_color = Color(0.7, 0.75, 0.9)
+	_fill.light_energy = 0.18
+	_root3.add_child(_fill)
+	_fill.rotation_degrees = Vector3(-55.0, 30.0, 0.0)
 
 	var desk := MeshInstance3D.new()
 	var dm := PlaneMesh.new()
@@ -283,7 +309,8 @@ func _build_world() -> void:
 	dmat.roughness_texture = dmat.albedo_texture
 	desk.material_override = dmat
 	desk.position = Vector3(0.0, -0.075, 0.0)
-	_root3.add_child(desk)
+	_book.add_child(desk)
+	_desk_plane = desk
 
 	# The case in two halves, because the book opens: the left half (front cover, left-hand stack and left
 	# leaf) hangs off one pivot at the spine, folded over the right half at the start of a session and
@@ -301,9 +328,9 @@ func _build_world() -> void:
 	_cover.mesh = cm
 	_cover.material_override = cmat
 	_cover.position = Vector3(0.53, -0.058, 0.0)
-	_root3.add_child(_cover)
+	_book.add_child(_cover)
 	_pivot = Node3D.new()
-	_root3.add_child(_pivot)
+	_book.add_child(_pivot)
 	_cover_l = MeshInstance3D.new()
 	_cover_l.mesh = cm
 	_cover_l.material_override = cmat          # one material: begin_session colors both
@@ -336,12 +363,25 @@ func _build_world() -> void:
 	_cover_author.transform = Transform3D(Basis(Vector3(-1, 0, 0), Vector3(0, 0, -1),
 		Vector3(0, -1, 0)), Vector3(-0.53, -0.0745, 0.56))
 	_pivot.add_child(_cover_author)
+	# A painted cover: a plate on the board's underside, turned over with it (a half turn about z, so it reads the
+	# right way round once the pivot folds the half over).
+	_cover_plate = MeshInstance3D.new()
+	var plm := PlaneMesh.new()
+	plm.size = COVER_SIZE
+	_cover_plate.mesh = plm
+	var plmat := StandardMaterial3D.new()
+	plmat.roughness = 0.62
+	plmat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+	_cover_plate.material_override = plmat
+	_cover_plate.transform = Transform3D(Basis(Vector3(0.0, 0.0, 1.0), PI), Vector3(-0.53, -0.0741, 0.0))
+	_cover_plate.visible = false
+	_pivot.add_child(_cover_plate)
 
 	_stack_l = _stack()
 	_stack_r = _stack()
 	_leaf_l = _leaf(-1.0)
 	for m in [_stack_l, _leaf_l]:
-		_root3.remove_child(m)
+		_book.remove_child(m)
 		_pivot.add_child(m)
 	_leaf_r = _leaf(1.0)
 	_leaf_t = _leaf(1.0)
@@ -383,7 +423,7 @@ func _stack() -> MeshInstance3D:
 	mat.albedo_color = Color(0.86, 0.83, 0.76)
 	mat.roughness = 0.95
 	m.material_override = mat
-	_root3.add_child(m)
+	_book.add_child(m)
 	return m
 
 
@@ -406,7 +446,7 @@ func _leaf(side: float) -> MeshInstance3D:
 	m.material_override = mat
 	# The shader moves every vertex; without a generous AABB the leaf is culled mid-turn.
 	m.custom_aabb = AABB(Vector3(-1.2, -0.2, -PAGE_H), Vector3(2.4, 1.5, PAGE_H * 2.0))
-	_root3.add_child(m)
+	_book.add_child(m)
 	return m
 
 
@@ -480,7 +520,7 @@ func advance(_features, delta: float, bookend: float) -> void:
 	# Director's value still brings the ending down.
 	var t := maxf(feed.show_time(), 0.0)
 	var slen := feed.show_length()
-	var b := bookend
+	var b := _fade_out(bookend)
 	if slen <= 0.0 or t < slen * 0.5:
 		b = clampf(t / FADE_IN, 0.0, 1.0)
 	# a live reading's outro mark fades the picture with the voice
@@ -488,6 +528,7 @@ func advance(_features, delta: float, bookend: float) -> void:
 	_ensure_layout()
 	if _layout == null:
 		return
+	_refresh_cover()
 	_extend_map()
 	_tick_turn(delta)
 	_tick_camera(delta)
@@ -512,6 +553,9 @@ func _ensure_layout() -> void:
 			title = FrontMatter.field_of(src, "title")
 		var bk := String(doc.get("book", ""))
 		var au := String(doc.get("author", ""))
+		_cover_sub = String(doc.get("subtitle", ""))
+		if _cover_sub.is_empty():
+			_cover_sub = FrontMatter.field_of(src, "subtitle")
 		_set_cover(bk if not bk.is_empty() else FrontMatter.field_of(src, "book"),
 			au if not au.is_empty() else FrontMatter.field_of(src, "author"))
 	if src.is_empty() and not words.is_empty():
@@ -763,8 +807,9 @@ func _tick_turn(delta: float) -> void:
 		if ni < _map.size() and int(_map[ni]) >= 0:
 			var ns := _spread_of_word(int(_map[ni]))
 			var t0 := float((_subs.words[ni] as Dictionary).get("t0", 0.0))
-			if ns > want and _subs.now() >= t0 - TURN_LEAD:
+			if ns > want and _subs.now() >= t0 - _turn_lead():
 				want = ns
+	want = _spread_wanted(want)
 	if want == _spread:
 		return
 	if want == _spread + 1:
@@ -777,7 +822,8 @@ func _tick_turn(delta: float) -> void:
 
 
 ## The book starts closed and opens to the first spread: 0 closed, 1 open. A pure function of show time,
-## so a render opens as the live session did. It fades in over [constant FADE_IN], sits closed until
+## so a render opens as the live session did. A medium that closes the book again at the end, or times the opening
+## by the words, overrides it; the leaves, the cover and the camera all follow it. It fades in over [constant FADE_IN], sits closed until
 ## [constant OPEN_DELAY] so the cover is seen, then opens over [constant OPEN_TIME].
 const FADE_IN := 1.5
 const OPEN_DELAY := 3.5
@@ -789,6 +835,8 @@ func _open_now() -> float:
 
 
 func _set_cover(title: String, author: String) -> void:
+	_cover_title = title
+	_cover_by = author
 	if _cover_label != null and _cover_label.text != title:
 		_cover_label.text = title
 	if _cover_author != null and _cover_author.text != author:
@@ -833,11 +881,9 @@ func _place_leaves() -> void:
 		var a := PI * k
 		var mat := _leaf_t.material_override as ShaderMaterial
 		mat.set_shader_parameter("angle", a)
-		mat.set_shader_parameter("curl", 1.1 * sin(a))
-		# The swell is along the leaf's own normal, which points down once the leaf is past vertical, so
-		# the lift is signed by side (0 at vertical, so continuous); unsigned it sank the landing leaf under
-		# the page it covers.
-		mat.set_shader_parameter("lift", 0.05 * (1.0 - sin(a)) * (1.0 if a < PI * 0.5 else -1.0))
+		var bend := _leaf_bend(a)
+		mat.set_shader_parameter("curl", bend.x)
+		mat.set_shader_parameter("lift", bend.y)
 		_bind(_leaf_t, _spread * 2 + 1, _turn_to * 2, lerpf(yr, yl, k) + 0.003)
 	# The opening: fold the left half over the right about a hinge just above both blocks, so closed it
 	# rests on top of the right-hand pages, cover up; open it lies flat on the left. A leaf turning about
@@ -1117,6 +1163,95 @@ func _draw_sketch(ci: CanvasItem, im: Dictionary) -> void:
 	ci.draw_texture_rect(tex, Rect2(rect.get_center() - sz * 0.5, sz), false)
 
 
+# --- the painted cover ------------------------------------------------------------------
+
+## The painted cover's size on the board (world, a hair inside the board so its cloth edge shows) and in pixels.
+const COVER_SIZE := Vector2(1.03, PAGE_H + 0.07)
+const COVER_PX := Vector2(1100, 1100.0 * (PAGE_H + 0.07) / 1.03)
+## The set type: cream, outlined and shadowed in a dark brown so it reads over any painting.
+const COVER_TYPE := Color(0.99, 0.95, 0.85)
+const COVER_EDGE := Color(0.14, 0.09, 0.05, 0.92)
+
+## Draw the cover again when its painting, title, subtitle or author changed; show it in place of the gilt while there
+## is a painting, and the gilt on cloth while there is none.
+func _refresh_cover() -> void:
+	var key := String(_layout.cover.get("key", ""))
+	var tex := _texture_for(key) if not key.is_empty() else null
+	var state := "%s|%s|%s|%s|%d" % [key, _cover_title, _cover_sub, _cover_by, tex.get_instance_id() if tex != null else 0]
+	if state == _cover_drawn:
+		return
+	_cover_drawn = state
+	_cover_tex = tex
+	_cover_plate.visible = tex != null
+	_cover_label.visible = tex == null
+	_cover_author.visible = tex == null
+	if tex != null:
+		(_cover_vp.get_child(0) as CanvasItem).queue_redraw()
+		_cover_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+
+
+## The cover: the painting edge to edge (cropped evenly to the board), a breath of shade behind the type, a thin rule
+## inset from the edge, the title large across the top (shrunk to fit), the subtitle under it and the author at the foot.
+func draw_cover(ci: CanvasItem) -> void:
+	var size := COVER_PX
+	ci.draw_rect(Rect2(Vector2.ZERO, size), Color(0.2, 0.12, 0.08))
+	if _cover_tex == null:
+		return
+	var ts := Vector2(_cover_tex.get_size())
+	var want := size.x / size.y
+	var src := Rect2(Vector2.ZERO, ts)
+	if ts.x / ts.y > want:
+		src = Rect2((ts.x - ts.y * want) * 0.5, 0.0, ts.y * want, ts.y)
+	else:
+		src = Rect2(0.0, (ts.y - ts.x / want) * 0.5, ts.x, ts.x / want)
+	ci.draw_texture_rect_region(_cover_tex, Rect2(Vector2.ZERO, size), src)
+	_shade(ci, 0.0, size.y * 0.32, 0.34)
+	_shade(ci, size.y, size.y - size.y * 0.16, 0.3)
+	ci.draw_rect(Rect2(Vector2(36.0, 36.0), size - Vector2(72.0, 72.0)), Color(COVER_TYPE, 0.75), false, 3.0)
+	if _cover_face == null:
+		var f := SystemFont.new()
+		f.font_names = PackedStringArray(BookLayout.SERIFS)
+		f.font_weight = 700
+		_cover_face = f
+	var room := size.x * 0.84
+	var fs := 190
+	while fs > 60 and _cover_face.get_string_size(_cover_title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > room:
+		fs -= 4
+	var y := size.y * 0.06 + float(fs) * 0.95
+	_set_type(ci, _cover_title, y, fs, _cover_face)
+	if not _cover_sub.is_empty():
+		var sfs := 50
+		while sfs > 26 and _cover_face.get_string_size(_cover_sub, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs).x > room:
+			sfs -= 2
+		_set_type(ci, _cover_sub, y + float(fs) * 0.42 + float(sfs), sfs, _cover_face)
+	if not _cover_by.is_empty():
+		_set_type(ci, _cover_by, size.y * 0.93, 60, _cover_face)
+
+
+## A shade over the cover's whole width from [param from] (darkest, [param most]) to [param to] (clear), eased: a few
+## stacked gradients, so it falls off softly and never bands.
+func _shade(ci: CanvasItem, from: float, to: float, most: float) -> void:
+	var w := COVER_PX.x
+	for i in 6:
+		var a := float(i) / 6.0
+		var b := float(i + 1) / 6.0
+		var ya := lerpf(from, to, a)
+		var yb := lerpf(from, to, b)
+		var ca := Color(0.0, 0.0, 0.0, most * (1.0 - a) * (1.0 - a))
+		var cb := Color(0.0, 0.0, 0.0, most * (1.0 - b) * (1.0 - b))
+		ci.draw_polygon(PackedVector2Array([Vector2(0.0, ya), Vector2(w, ya), Vector2(w, yb), Vector2(0.0, yb)]),
+			PackedColorArray([ca, ca, cb, cb]))
+
+
+## One line of the cover's type centered at baseline [param y]: a soft shadow, a dark outline, the cream face.
+func _set_type(ci: CanvasItem, text: String, y: float, fs: int, f: Font) -> void:
+	var w := COVER_PX.x
+	var o := maxi(4, fs / 11)
+	ci.draw_string(f, Vector2(0.0, y) + Vector2(o, o) * 0.8, text, HORIZONTAL_ALIGNMENT_CENTER, w, fs, Color(0.0, 0.0, 0.0, 0.45))
+	ci.draw_string_outline(f, Vector2(0.0, y), text, HORIZONTAL_ALIGNMENT_CENTER, w, fs, o, COVER_EDGE)
+	ci.draw_string(f, Vector2(0.0, y), text, HORIZONTAL_ALIGNMENT_CENTER, w, fs, COVER_TYPE)
+
+
 # --- hooks for a medium in another hand ----------------------------------------------
 
 ## Pixels of transparent margin around a page texture, past its outer and top/bottom edges: room for
@@ -1166,6 +1301,38 @@ func _page_state(_page: int) -> String:
 ## The color word [param _w] is set in. One ink, in print.
 func _ink_for(_w: Dictionary) -> Color:
 	return _ink
+
+
+## How a turning leaf bends at angle [param a] (0 lying right, PI lying left): `(curl, lift)` - paper curls over the
+## spine and swells off it. The swell is along the leaf's own normal, which points down once the leaf is past
+## vertical, so the lift is signed by side (0 at vertical, so continuous); unsigned it sank the landing leaf under
+## the page it covers.
+func _leaf_bend(a: float) -> Vector2:
+	return Vector2(1.1 * sin(a), 0.05 * (1.0 - sin(a)) * (1.0 if a < PI * 0.5 else -1.0))
+
+
+## How long before the next spread's first word the leaf starts to turn: [constant TURN_LEAD], so it lands as the word
+## is said. A medium that rests the voice for its turn starts it earlier, as the rest begins.
+func _turn_lead() -> float:
+	return TURN_LEAD
+
+
+## The spread to show, given [param want], the one the reading is on. That one, in print; a medium with pages the
+## voice never reads (a pop-up book's sources) turns to them once the reading is done.
+func _spread_wanted(want: int) -> int:
+	return want
+
+
+## A shot of the closed book's cover, eased from as it opens (and back to, if it closes): `{aim, dist, pitch}`, or {}
+## for the novel's own (the spread framed half as wide and shifted onto the closed half).
+func _cover_view() -> Dictionary:
+	return {}
+
+
+## The picture's brightness through the second half of the show, given the Director's [param bookend] (its fade over
+## the whole outro hold). That, in print; a medium with something to show at the end keeps it lit until then.
+func _fade_out(bookend: float) -> float:
+	return bookend
 
 
 ## May the leaf turn now? Always, in print. A medium with something lifted off the page (a notebook's
@@ -1223,7 +1390,8 @@ func _arc() -> float:
 		return 0.0                  # a spread of pictures has no text to close in on
 	var at := float(int(r["layout"]) - lo) + float(r["frac"])
 	var p := clampf(at / float(hi - lo + 1), 0.0, 1.0)
-	return smoothstep(0.0, ARC_IN, p) * (1.0 - smoothstep(1.0 - ARC_OUT, 1.0, p))
+	var arc := _arc_shares()
+	return smoothstep(0.0, arc.x, p) * (1.0 - smoothstep(1.0 - arc.y, 1.0, p))
 
 
 func _hash01(i: int, salt: int) -> float:
@@ -1265,12 +1433,40 @@ func _local_dist() -> float:
 	return float(LOCAL["dist"])
 
 
+## The wide view of the spread: `{dist, pitch}` and where it aims (`aim`, world). The whole spread, from well above.
+func _wide_view() -> Dictionary:
+	return {"dist": WIDE["dist"], "pitch": WIDE["pitch"], "aim": Vector3(0.0, 0.0, 0.06)}
+
+
+## The close view's `{pitch}` (its distance is [method _local_dist]).
+func _local_view() -> Dictionary:
+	return LOCAL
+
+
+## Where the close view aims, given the page the reading is on ([param page_x]: -0.5 left, 0.5 right) and its line
+## ([param line_z], world z, smoothed): at that line on its own page.
+func _local_aim(page_x: float, line_z: float) -> Vector3:
+	return Vector3(page_x * 0.9, 0.0, clampf(line_z, -0.45, 0.5) + 0.05)
+
+
+## How much of its own angle each spread is seen at (its yaw, roll and tilt, [constant YAW_SPREAD]): all of it, in print.
+func _spread_tilt() -> float:
+	return 1.0
+
+
+## The shares of a spread's words the camera spends closing in and pulling back: `(in, out)`.
+func _arc_shares() -> Vector2:
+	return Vector2(ARC_IN, ARC_OUT)
+
+
 func _tick_camera(delta: float) -> void:
 	var t := maxf(feed.show_time(), 0.0)
 	var sev := _sev()
 	var k := _arc()
+	var wide := _wide_view()
+	var close := _local_view()
 	# Where the reading is on the spread: its page and its line, as world coordinates.
-	var aim := Vector3(0.0, 0.0, 0.06)
+	var aim: Vector3 = wide.get("aim", Vector3(0.0, 0.0, 0.06))
 	var li := _camera_word()
 	var page_x := 0.0
 	var line_z := 0.0
@@ -1283,25 +1479,37 @@ func _tick_camera(delta: float) -> void:
 	var zk := 1.0 - exp(-maxf(delta, 0.0) / 4.0)
 	_reading_z = lerpf(_reading_z, line_z, zk)
 	# Wide aims at the middle of the spread; local at the line being read on its own page.
-	var local := Vector3(page_x * 0.9, 0.0, clampf(_reading_z, -0.45, 0.5) + 0.05)
+	var local := _local_aim(page_x, _reading_z)
 	var opened := _open_now()
 	k *= opened                      # no closing-in on text that is still under a cover
 	aim = aim.lerp(local, k)
-	# A closed book is half as wide and sits on the right: frame IT, then widen as it opens.
-	aim.x += 0.5 * (1.0 - opened)
+	# A closed book is half as wide and sits on the right: frame IT, then widen as it opens (or, where the medium has
+	# a shot of its cover, ease from that to the spread: below).
+	var cover := _cover_view()
+	if cover.is_empty():
+		aim.x += 0.5 * (1.0 - opened)
 	# The book's place is never constant and never noticeably moving: each spread sits at its own angle
 	# (hashed, so a render matches), reached through a spring several times slower than the framing, plus
 	# a wander with a period of minutes.
-	var yaw := (_hash01(_spread, 41) - 0.5) * 2.0 * YAW_SPREAD \
+	var tilted := _spread_tilt()
+	var yaw := (_hash01(_spread, 41) - 0.5) * 2.0 * YAW_SPREAD * tilted \
 		+ sin(t * 0.021 + float(_seed % 97)) * YAW_WANDER * sev
 	# How close "local" is scales with the Camera dial; wide is always the whole spread.
-	var near := lerpf(float(WIDE["dist"]), _local_dist(), clampf(0.55 + 0.3 * sev, 0.0, 1.0))
-	var pitch := lerpf(float(WIDE["pitch"]), float(LOCAL["pitch"]), k) + sin(t * 0.029 + 1.3) * 1.5 * sev
-	var dist := lerpf(float(WIDE["dist"]), near, k) * (1.0 + 0.015 * sin(t * 0.033 + 2.1) * sev)
-	dist *= lerpf(1.02, 1.0, opened)
-	var roll := (_hash01(_spread, 53) - 0.5) * 2.0 * ROLL_SPREAD \
+	var near := lerpf(float(wide["dist"]), _local_dist(), clampf(0.55 + 0.3 * sev, 0.0, 1.0))
+	var pitch := lerpf(float(wide["pitch"]), float(close["pitch"]), k) + sin(t * 0.029 + 1.3) * 1.5 * sev
+	var dist := lerpf(float(wide["dist"]), near, k) * (1.0 + 0.015 * sin(t * 0.033 + 2.1) * sev)
+	if cover.is_empty():
+		dist *= lerpf(1.02, 1.0, opened)
+	var roll := (_hash01(_spread, 53) - 0.5) * 2.0 * ROLL_SPREAD * tilted \
 		+ sin(t * 0.047 + 0.7) * ROLL_WANDER * sev
-	pitch += (_hash01(_spread, 67) - 0.5) * 2.0 * TILT_SPREAD + sin(t * 0.037 + 2.4) * TILT_WANDER * sev
+	pitch += (_hash01(_spread, 67) - 0.5) * 2.0 * TILT_SPREAD * tilted + sin(t * 0.037 + 2.4) * TILT_WANDER * sev
+	if not cover.is_empty():
+		var shut := smoothstep(0.0, 1.0, 1.0 - opened)
+		aim = aim.lerp(cover["aim"] as Vector3, shut)
+		dist = lerpf(dist, float(cover["dist"]), shut)
+		pitch = lerpf(pitch, float(cover["pitch"]), shut)
+		yaw = lerpf(yaw, 0.0, shut)
+		roll = lerpf(roll, 0.0, shut)
 	# the Camera dial: a severe camera's springs quicker, a gentle one's slower
 	_follow.configure(camera_follow())
 	var to := [aim, dist, pitch, yaw, roll]
@@ -1317,8 +1525,10 @@ func _tick_camera(delta: float) -> void:
 	var p := deg_to_rad(_c_pitch)
 	var y := deg_to_rad(_c_yaw)
 	var dir := Vector3(sin(y) * cos(p), sin(p), cos(y) * cos(p))
-	_cam.position = _c_aim + dir * _c_dist
-	_cam.look_at(_c_aim, Vector3.UP)
+	# the camera is worked out in the book's own units and placed where the book stands in the world
+	var w := _book.scale.x
+	_cam.position = _book.position + (_c_aim + dir * _c_dist) * w
+	_cam.look_at(_book.position + _c_aim * w, Vector3.UP)
 	_cam.rotate_object_local(Vector3.FORWARD, deg_to_rad(_c_roll))
 	if not _cam.current:
 		_cam.make_current()
@@ -1331,6 +1541,16 @@ func debug_line() -> String:
 	var r := _reading()
 	return "spread %d/%d turn %.2f arc %.2f reading %s" % [_spread, _layout.spreads(),
 		_turn_k(), _arc(), str(r)]
+
+
+## The painted cover's drawing surface: the medium draws it.
+class CoverCanvas:
+	extends Node2D
+	var book = null
+
+	func _draw() -> void:
+		if book != null:
+			book.draw_cover(self)
 
 
 ## One page target's drawing surface. It holds no state of its own beyond which page and

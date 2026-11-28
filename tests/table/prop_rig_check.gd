@@ -173,8 +173,9 @@ func _run() -> void:
 	quit(1 if _fails > 0 else 0)
 
 
-## A point read in the thing's own space (as an agent designing a role is told) stands where it is written, on a part standing off the
-## origin or in a raised, turned group (control: one on a plain part at the origin, likewise).
+## A point read in the thing's own space (as an agent designing a role is told) stands where it is written, as the build stood the whole
+## thing on its foot (its holder's shift), on a part standing off the origin or in a raised, turned group (control: one on a plain part
+## at the origin, likewise) - and the holder here is shifted, so a point read as written, the shift lost, fails.
 func _points_in_thing() -> void:
 	var spec := {"things": [{"name": "a raised thing", "parts": [
 		{"shape": "box", "size": [4, 2, 4], "material": "m", "points": {"plain": [1.0, 2.0, 0.0]}},
@@ -186,7 +187,9 @@ func _points_in_thing() -> void:
 	var top: Variant = rig.point_in_thing("top")
 	var lens: Variant = rig.point_in_thing("lens")
 	var plain: Variant = rig.point_in_thing("plain")
-	_ok(top is Vector3 and (top as Vector3).is_equal_approx(Vector3(0.0, 0.11, 0.02)) and lens is Vector3 and (lens as Vector3).is_equal_approx(Vector3(0.0, 0.12, 0.03))
-		and plain is Vector3 and (plain as Vector3).is_equal_approx(Vector3(0.01, 0.02, 0.0)),
-		"read in the thing's space, a point stands where it is written, on a part off the origin (%s) or in a raised group (%s); control %s" % [str(top), str(lens), str(plain)])
+	var held: Transform3D = (rig.built["inner"] as Node3D).transform
+	_ok(not held.origin.is_zero_approx(), "the build stood this thing on its foot, its holder shifted (%s)" % str(held.origin))
+	_ok(top is Vector3 and (top as Vector3).is_equal_approx(held * Vector3(0.0, 0.11, 0.02)) and lens is Vector3 and (lens as Vector3).is_equal_approx(held * Vector3(0.0, 0.12, 0.03))
+		and plain is Vector3 and (plain as Vector3).is_equal_approx(held * Vector3(0.01, 0.02, 0.0)),
+		"read in the thing's space, a point stands where it is written as the thing stands, on a part off the origin (%s) or in a raised group (%s); control %s" % [str(top), str(lens), str(plain)])
 	rig.node.free()

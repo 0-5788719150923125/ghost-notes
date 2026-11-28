@@ -53,6 +53,8 @@ var pages: Array = []
 ## `base` is the baseline origin draw_string wants; `rect` is the box a highlight covers.
 var words: Array = []
 var title := ""
+## The front cover's picture, `{key, prompt}` (`<!-- image (cover): -->`), or {}: printed on no page.
+var cover := {}
 ## The body size. A variable so a layout in another hand ([NotebookLayout]) can set its own.
 var body_fs := BODY_FS
 ## Whose voice reads the block being set; every word records it (a notebook inks by it).
@@ -108,7 +110,7 @@ func build(source: String, image_size: Callable, title_override := "") -> void:
 	_pending_full = []
 	_pending_float = []
 	title = title_override if not title_override.is_empty() else _title_of(source)
-	var blocks: Array = Manuscript.blocks(source)
+	var blocks: Array = _take_cover(Manuscript.blocks(source))
 	# Page 0 is the left of the first spread and a chapter opens on the right: an opening full-page
 	# picture takes that page as a frontispiece; otherwise the left page is the blank verso.
 	var first := 0
@@ -172,6 +174,19 @@ func build(source: String, image_size: Callable, title_override := "") -> void:
 
 func spreads() -> int:
 	return pages.size() / 2
+
+
+## [param blocks] without the cover's picture, which becomes [member cover] (the first, if several are pinned so).
+func _take_cover(blocks: Array) -> Array:
+	cover = {}
+	var out: Array = []
+	for b in blocks:
+		if String((b as Dictionary).get("placement", "")) == "cover":
+			if cover.is_empty():
+				cover = {"key": String(b["key"]), "prompt": String(b["prompt"])}
+			continue
+		out.append(b)
+	return out
 
 
 static func _title_of(source: String) -> String:

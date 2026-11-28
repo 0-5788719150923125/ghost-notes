@@ -26,6 +26,9 @@ class_name Illustrations
 ## painted as a loop, one sheet of cells cut into frames ([method generate], [method _keep_loop]). Its frames are a version
 ## like any other, the first one its still.
 ##
+## A pop-up ([constant POPUP]) is painted on a flat magenta ground and cut out of it by the puppet host before it is kept
+## (`rig.py sticker`, [method _start_cut]): the version is the cut picture, its painting kept beside it.
+##
 ## A version can be shown flipped left to right ([method set_flipped]): a post-process, its mirrored copy kept beside what
 ## was made, which is never changed. [method path_for] and [method clip_of] hand out the copy, so whatever shows a picture
 ## shows it flipped.
@@ -58,6 +61,9 @@ static var _jobs := {}
 static var _queue: Array = []
 ## key -> the last failure, for the panel. Session-only: a failure is news, not state.
 static var _errors := {}
+## key -> a pop-up's painting being cut out of its ground: `{pid, dir, painted, rec, description, placement}` (pid 0
+## while the puppet environment is still being installed).
+static var _cutting := {}
 
 # The test seam, as in Films.use_for_test: an in-memory store instead of the author's settings, and a
 # flag because an empty library is a state worth testing.
@@ -77,6 +83,7 @@ static func use_for_test(store := {}, read_only := false) -> void:
 	_queue = []
 	_errors = {}
 	_decoding = {}
+	_cutting = {}
 	for file in _flipping.keys():
 		_stop_flip(String(file))
 	_chapter = []
@@ -552,6 +559,31 @@ static func placement_guide(placement: String) -> String:
 			+ "further along one smooth movement in each cell, so that the step after the last cell is the first again and "
 			+ "the cells play as a seamless loop. Each cell is composed to read on the screen of a small old television, "
 			+ "nearly square.") % [LOOP_CELLS.x * LOOP_CELLS.y, LOOP_CELLS.x, LOOP_CELLS.y]
+	if placement == POPUP:
+		return ("ONE subject for a pop-up book - a figure, a group, a building or a thing, drawn WHOLE and standing, "
+			+ "nothing cropped by the edges - SEEN STRAIGHT ON FROM THE FRONT AT EYE LEVEL, never from above or below: no "
+			+ "top of anything showing, its verticals upright and parallel, its base a level line along the bottom where it "
+			+ "stands - on a perfectly FLAT, EVEN, VIVID MAGENTA ground (#FF00FF) that fills all the "
+			+ "rest of the picture: no scenery, no floor, no cast shadow, no gradient and no paper texture on the ground, "
+			+ "and no magenta, pink or purple anywhere in the subject itself. The magenta is cut away afterwards along the "
+			+ "subject's outline and the subject is stood up off the page as a cardboard cut-out, folded down its "
+			+ "vertical middle, so keep a face off that center line. Leave a clear margin of magenta all round. "
+			+ "LANDSCAPE, 3:2 (1536x1024) for a wide subject, or SQUARE (1024x1024).")
+	if placement == COVER:
+		return ("the FRONT COVER painting of a picture book, PORTRAIT, 2:3 (1024x1536), edge to edge: one strong, simple, "
+			+ "inviting image that says what the book is about, painted with care as a cover is. The book's title is set over "
+			+ "its TOP FIFTH and the author's name over its BOTTOM TENTH afterwards, so keep those two bands calm and open - "
+			+ "sky, a plain wall, ground - with nothing important in them. No title, lettering or text of any kind.")
+	if placement == SPREAD:
+		return ("the SCENERY of a pop-up book's spread: a painted backdrop that stands up at the back of the open book, "
+			+ "behind the cut-outs, as a theater's painted flat does, LANDSCAPE, 3:2 (1536x1024). The scene's far setting "
+			+ "seen straight on at eye level - its sky, a room's far wall, a landscape - with its ground line low, in the "
+			+ "bottom fifth, where the cut-outs stand in front of it, and NO figure or main thing in its middle third: it is "
+			+ "folded gently down its vertical center. Composed so its top and bottom can be cropped.")
+	if placement == FLOOR:
+		return ("the FLOOR of a pop-up book's spread, printed flat on the open pages under the cut-outs that stand on it: "
+			+ "the scene's ground SEEN FROM DIRECTLY ABOVE, as a map is - grass, boards, pavement, earth - an even surface "
+			+ "with no horizon, no sky, no standing thing and no shadow of one, LANDSCAPE, 3:2 (1536x1024), edge to edge.")
 	if placement == "screen":
 		return ("a picture that fills a widescreen video frame edge to edge, LANDSCAPE, 3:2 "
 			+ "(1536x1024), composed so it still reads when its top and bottom are cropped to 16:9 "
@@ -561,6 +593,21 @@ static func placement_guide(placement: String) -> String:
 
 
 # --- the index ---------------------------------------------------------------
+
+## A pop-up's placement ([method Manuscript.blocks]): painted on flat magenta, then cut out of it.
+const POPUP := "popup"
+## A picture a pop-up book prints across a spread behind its pop-ups ([method PopupMedium.pictures_in]).
+const SPREAD := "spread"
+## A book's front cover (`<!-- image (cover): -->`, [BookLayout.cover]): its title and author are set over it.
+const COVER := "cover"
+## A pop-up spread's floor (`<!-- image (floor): -->`), printed under its pop-ups and seen from above.
+const FLOOR := "floor"
+## The puppet host that cuts a pop-up out of its ground, and its environment ([Deps] row).
+const CUT_HOST := "res://hosts/puppet/rig.py"
+const CUT_VENV := "user://puppet_venv"
+const CUT_DEP := "puppet_venv"
+const CUT_TIMEOUT_S := 120
+
 
 ## The stored record for [param key]: {prompt, placement, versions: [{file, sig, at}], current}.
 static func entry(key: String) -> Dictionary:
@@ -630,6 +677,8 @@ static func delete_version(key: String, i: int) -> bool:
 		_remove_tree(ProjectSettings.globalize_path(file.get_base_dir()))     # a clip's frames are its folder
 	else:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(file))
+		# a pop-up's painting, kept beside its cut
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(file).get_basename() + ".painted.png")
 	var at := current_index(key)
 	vs.remove_at(i)
 	var e := entry(key)
@@ -658,7 +707,7 @@ static func is_stale(key: String) -> bool:
 
 ## "missing", "queued", "running", "ready" or "error".
 static func status(key: String) -> String:
-	if _jobs.has(key) or _decoding.has(key) or PageCapture.busy(key):
+	if _jobs.has(key) or _decoding.has(key) or _cutting.has(key) or PageCapture.busy(key):
 		return "running"
 	for q in _queue:
 		if String((q as Dictionary)["key"]) == key:
@@ -675,6 +724,9 @@ static func activity(key: String) -> String:
 		return TextGen.status_of(_jobs[key])
 	if _decoding.has(key):
 		return "decoding %s" % String((_decoding[key] as Dictionary)["name"])
+	if _cutting.has(key):
+		return "cutting it out of its ground" if int((_cutting[key] as Dictionary)["pid"]) > 0 \
+			else "waiting for the puppet environment to be installed, to cut it out"
 	for q in _queue:
 		if String((q as Dictionary)["key"]) == key:
 			return "waiting its turn"
@@ -687,7 +739,7 @@ static func error_of(key: String) -> String:
 
 
 static func busy() -> int:
-	return _jobs.size() + _queue.size() + PageCapture.pending()
+	return _jobs.size() + _queue.size() + _cutting.size() + PageCapture.pending()
 
 
 ## Capture A real page as [param image]'s picture - a tablet page with a `url` (see
@@ -789,6 +841,9 @@ static func stop(keys: Array) -> void:
 	for key in keys:
 		if _decoding.has(key):
 			_drop_decode(String(key))
+		if _cutting.has(key):
+			Subprocess.stop(int((_cutting[key] as Dictionary)["pid"]))
+			_cutting.erase(key)
 		if not _jobs.has(key):
 			continue
 		Subprocess.stop(int((_jobs[key] as Dictionary)["pid"]))
@@ -818,6 +873,7 @@ static func pump() -> void:
 	_advance_clips()
 	_advance_flips()
 	_advance_jobs()
+	_advance_cuts()
 	while _jobs.size() < MAX_JOBS:
 		var i := _next_startable()
 		if i < 0:
@@ -964,6 +1020,11 @@ static func _land(key: String, job: Dictionary) -> void:
 		rec["refined"] = String(job["refine"])
 	if job.has("imported"):
 		rec["imported"] = job["imported"]
+	if String(job["placement"]) == POPUP and not job.has("imported"):
+		var why := _start_cut(key, img, rec, job)
+		if not why.is_empty():
+			_errors[key] = why
+		return
 	var err := _add_version(key, img, rec, String(job["description"]), String(job["placement"]))
 	if not err.is_empty():
 		_errors[key] = err
@@ -972,6 +1033,94 @@ static func _land(key: String, job: Dictionary) -> void:
 	# The job's scratch is done with once the picture is in the library; a failed job keeps its
 	# directory (its event log is the only record of why).
 	_remove_tree(String(job.get("dir", "")))
+
+
+## Pop-up [param key]'s painting [param img] cut out of its flat ground by the puppet host, its job [param job] and
+## version record [param rec] carried until the cut lands ([method _advance_cuts]). "" when started (or owed while the
+## environment installs), else why not.
+static func _start_cut(key: String, img: Image, rec: Dictionary, job: Dictionary) -> String:
+	var dir := String(job.get("dir", ""))
+	if dir.is_empty():
+		dir = _root.path_join("jobs").path_join("%s_cut_%d" % [key, Time.get_ticks_msec()])
+	var abs_dir := ProjectSettings.globalize_path(dir)
+	DirAccess.make_dir_recursive_absolute(abs_dir)
+	var painted := abs_dir.path_join("painted.png")
+	if img.save_png(painted) != OK:
+		return "could not keep the painting to cut it out (%s)" % painted
+	_cutting[key] = {"pid": 0, "dir": abs_dir, "painted": painted, "rec": rec,
+		"description": String(job["description"]), "placement": String(job["placement"]), "started": 0}
+	return _run_cut(key)
+
+
+## Start [param key]'s owed cut, if the puppet environment is there; "" when started or still owed, else why not.
+static func _run_cut(key: String) -> String:
+	var c: Dictionary = _cutting[key]
+	if not Provision.ensure(CUT_DEP):
+		return ""                  # being installed: tried again each pump
+	var py := Deps.venv_bin(CUT_VENV, "python")
+	var host := BundledHosts.path(CUT_HOST)
+	if not FileAccess.file_exists(py) or host.is_empty():
+		_cutting.erase(key)
+		return "the puppet environment is not installed, so the pop-up cannot be cut out"
+	var dir := String(c["dir"])
+	DirAccess.remove_absolute(dir.path_join("done.json"))
+	var spec := dir.path_join("cut.json")
+	var f := FileAccess.open(spec, FileAccess.WRITE)
+	if f == null:
+		_cutting.erase(key)
+		return "could not write the cut's spec"
+	f.store_string(JSON.stringify({"src": c["painted"], "out": dir.path_join("cut.png"), "dir": dir}))
+	f.close()
+	var pid := Subprocess.start_logged(py, PackedStringArray(["-I", host, "sticker", spec]), dir.path_join("cut.log"),
+		"popup cut " + key)
+	if pid <= 0:
+		_cutting.erase(key)
+		return "could not start the puppet host to cut the pop-up out"
+	c["pid"] = pid
+	c["started"] = int(Time.get_unix_time_from_system())
+	print("ghost: cutting pop-up %s out of its ground" % key)
+	return ""
+
+
+## Notice which cuts ended: the cut picture kept as the pop-up's newest version, its painting beside it, or why not.
+static func _advance_cuts() -> void:
+	for key in _cutting.keys():
+		var c: Dictionary = _cutting[key]
+		var pid := int(c["pid"])
+		if pid <= 0:
+			var why := _run_cut(String(key))
+			if not why.is_empty():
+				_errors[key] = why
+			continue
+		if Subprocess.alive(pid):
+			if int(Time.get_unix_time_from_system()) - int(c["started"]) > CUT_TIMEOUT_S:
+				Subprocess.stop(pid)
+				_errors[key] = "the cut timed out after %d s" % CUT_TIMEOUT_S
+				_cutting.erase(key)
+			continue
+		Subprocess.forget(pid)
+		_cutting.erase(key)
+		var dir := String(c["dir"])
+		var done: Variant = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join("done.json"))) \
+			if FileAccess.file_exists(dir.path_join("done.json")) else null
+		if not (done is Dictionary) or not bool((done as Dictionary).get("ok", false)):
+			_errors[key] = "the pop-up could not be cut out: %s" % (String((done as Dictionary).get("error", "")) \
+				if done is Dictionary else "the cut left no answer (%s)" % dir.path_join("cut.log"))
+			continue
+		var cut := Image.new()
+		if cut.load(dir.path_join("cut.png")) != OK:
+			_errors[key] = "the cut picture could not be read"
+			continue
+		var rec: Dictionary = c["rec"]
+		var err := _add_version(String(key), cut, rec, String(c["description"]), String(c["placement"]))
+		if not err.is_empty():
+			_errors[key] = err
+			continue
+		# the painting is kept beside its cut, so a cut can be made again without painting it again
+		var file := ProjectSettings.globalize_path(String(rec["file"]))
+		DirAccess.copy_absolute(String(c["painted"]), file.get_basename() + ".painted.png")
+		print("ghost: pop-up %s cut out (v%d)" % [key, versions(String(key)).size()])
+		_remove_tree(dir)
 
 
 ## [param img] into the library as [param key]'s newest version, chosen. [param rec] is the

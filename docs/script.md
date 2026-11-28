@@ -11,7 +11,7 @@ An entry does not implement its mark. The parsers of record stay where they are 
 
 A table brief is not a script, and has marks of its own: a show's document is the brief its agents work from, never read aloud, so a mark in it does something only where the code reads it out of the brief or an agent is told to honor it. Those are offered ("table" in `modes`), each saying what it does there (`blurbs`): a speaker cue gives the show another voice, a `## Cards` section is its deck, a macro reads as its default and a note to self is taken out before any agent sees the brief (`TablePrompts.brief`), and a hesitation, a delivery or a stressed word stands in a line the brief gives the host word for word (rules/table/reader.yaml, `spoken`). The marks of a page or a tablet (pictures, scene lines, web pages) and the inline pronunciation are not offered: the table is the only medium there, and a reader's passage keeps no bracket but a word said a way's (`TableProducer.clean_spoken`).
 
-Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (91 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
+Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/script_marks.gd) (95 entries). Each one is proven against the parser that reads it by `tests/notes/script_marks_check.gd`.
 
 ## Voices
 
@@ -35,6 +35,7 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | Log-entry time | `21:40` | Generative | A time opening a paragraph is read as its heading, with a hesitation after it. The Notebook sets it in the margin. |
 | Thinking hum | `Hmm.` | Generative | Hm, Hmm, Mmm as a sentence of their own are held to most of a second, settling and falling in pitch, instead of read as a clipped syllable. |
 | Outro starts here | `<!-- outro -->` | Generative | The end begins at this point: the reading carries on but fades out - voice and picture together, over the Outro setting - and whatever text is left is cut. Own line or mid-sentence; the first one counts. |
+| Printed, not read | `<!-- unread -->` | Generative | A line of its own: everything after it is printed and never read - a paper's references, a book's credits. A page sets it as back matter; a source cited in parentheses, (Author, 2015), is printed and never read wherever it sits. |
 
 ## Pictures
 
@@ -43,7 +44,10 @@ Registry: `ScriptMarks.REGISTRY` in [src/notes/script_marks.gd](../src/notes/scr
 | Picture | `<!-- image: what the picture shows -->` | Generative | An illustration, described, placed where it sits: a full page when it opens the chapter or a scene, beside the text otherwise. Painted on the Pictures card, or with the rest by the Pipeline card's Generate. |
 | Full-page picture | `<!-- image (full): what the picture shows -->` | Generative | A picture pinned to a page of its own, wherever it sits. |
 | Picture, left edge | `<!-- image (left): what the picture shows -->` | Generative | A picture beside the text, pinned to the left edge. (right) and (inline) pin it the other ways. |
+| Cover picture | `<!-- image (cover): what the cover shows -->` | Generative | The book's front cover, painted: a novel, a notebook or a pop-up book lays it on its front board and sets the note's title (its `book`), `subtitle` and `author` over it. Printed on no page. |
 | Sketch | `<!-- sketch: a wiring diagram -->` | Generative | A drawing made on the page in the writer's own ink, black on white, without the book's style or references. |
+| Pop-up | `<!-- popup: a lighthouse on a rock -->` | Generative | A picture painted on a flat ground and cut out of it: in a pop-up book it stands up off the spread as the page opens, folded flat as it turns (the first beside the words is the farthest back); any other page prints it as a picture. |
+| Pop-up spread | `<!-- spread: a harbor at dawn, a lighthouse in front -->` | Generative | What a pop-up book's spread shows, said for its paper engineer: it makes the spread in layers of its own (scenery, cut-outs, a floor), each painted and looked at, guided by these words but free to depart from them. Never painted as written in a pop-up book; any other page prints it as a picture. |
 
 ## Pronunciation
 

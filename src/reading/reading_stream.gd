@@ -224,6 +224,8 @@ func _play_take(path: String) -> bool:
 		_reset_playback()
 	if not bool(panel.begin_take.call(path)):
 		return false
+	# (what the show is drawn with is the note as it stands now, never as it stood when the take was made)
+	panel.freshen_document()
 	take_path = path
 	take_done = false
 	stale = false
@@ -1144,6 +1146,7 @@ func _open_environment(t0: float) -> void:
 	if env == null or not env.active():
 		return
 	env.set_level(panel.bed.level())
+	env.gain_db = panel.bed.gain_db()
 	env.prefetch()
 	_env = env
 
@@ -1160,6 +1163,7 @@ func _close_environment() -> void:
 func _tick_environment(delta: float) -> void:
 	if _env != null:
 		_env.set_level(panel.bed.level())
+		_env.gain_db = panel.bed.gain_db()
 		_env.prefetch()
 	if not _stream_open:
 		return

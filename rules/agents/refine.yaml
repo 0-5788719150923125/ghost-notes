@@ -51,6 +51,13 @@ system:
       must be one of these, and nothing else:
   - when: act
     insert: vocabulary
+  - when: act
+    say: >-
+      How it is heard, beside what the hands do (these change only how its sound plays, never the motion): a level in
+      decibels, written as a number and dB (-6 dB about half as loud, +3 dB louder, -12 dB much quieter; one level only),
+      and a muffle - slightly muffled, muffled, very muffled, or muffled and a number from 0 to 1 - as if heard through
+      cloth, darker and a little quieter. Asked to make it quieter, louder, softer to the ear, duller or more muffled, use
+      these and leave the rest of its words as they are.
   # An episode's script (EpisodeScript): what was really played and said, its table marks shown with what each is
   - when: episode
     say: >-

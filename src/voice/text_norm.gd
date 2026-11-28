@@ -463,10 +463,16 @@ static func _under_thousand(n: int) -> String:
 	return h if n % 100 == 0 else h + " " + _under_thousand(n % 100)
 
 
-## Any non-negative integer, spoken the way a reader would say it.
+## Any non-negative integer, spoken the way a reader would say it. Past the largest scale it names (an identifier's run of
+## digits, a reference number), digit by digit.
 static func cardinal(n: int) -> String:
 	if n == 0:
 		return "zero"
+	if n >= int(SCALES[0][0]) * 1000:
+		var digits := PackedStringArray()
+		for c in str(n):
+			digits.append(String(ONES[int(c)]))
+		return " ".join(digits)
 	var parts: Array = []
 	var rest := n
 	for pair in SCALES:
@@ -489,6 +495,21 @@ static func ordinal(n: int) -> String:
 	if tail.ends_with("y"):                      # twenty -> twentieth
 		return head + tail.substr(0, tail.length() - 1) + "ieth"
 	return head + tail + "th"
+
+
+## [param n] said as a plural, as a decade or a century is ("the 1890s", "the 1800s", "the '60s"): the year's words (a
+## four-digit [param as_year]) or the number's, its last word made plural - "eighteen nineties", "eighteen hundreds",
+## "two thousands", "sixties".
+static func plural_number(n: int, as_year: bool) -> String:
+	var words := year(n) if as_year else cardinal(n)
+	var idx := words.rfind(" ")
+	var head := words.substr(0, idx + 1) if idx >= 0 else ""
+	var tail := words.substr(idx + 1)
+	if tail.ends_with("y"):
+		return head + tail.substr(0, tail.length() - 1) + "ies"
+	if tail.ends_with("x"):
+		return head + tail + "es"
+	return head + tail + "s"
 
 
 ## A four-digit year reads as two pairs - "nineteen eighty five", not "one thousand nine hundred and
@@ -675,6 +696,10 @@ static func _expand_core(tok: String) -> String:
 			for piece in pieces:
 				parts.append(_expand_core(String(piece)))
 			return " ".join(parts)
+	# a decade or a run of years said as a plural: 1890s, 1800s, 2000s, '60s (the apostrophe peeled off above), 1980's
+	var dec := tok.trim_suffix("'s") if tok.ends_with("'s") else (tok.trim_suffix("s") if tok.ends_with("s") else "")
+	if not dec.is_empty() and _is_digits(dec):
+		return plural_number(int(dec), dec.length() == 4)
 	# bare digits: a plausible year reads as pairs, everything else as a cardinal
 	if _is_digits(tok):
 		var n := int(tok)

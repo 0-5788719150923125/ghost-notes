@@ -7,14 +7,16 @@ class_name StudioScript
 ## An act is a mark, `<!-- VERB: words -->` ([constant StudioActs.VERBS]), on a line of its own or inside a paragraph (there
 ## it comes where it is written). Its words, split at commas, in any order: a thing ([constant StudioActs.THINGS]), a side
 ## ([constant StudioActs.SIDES]), a hand ([constant StudioActs.HANDS]), a number of seconds, paces ([constant StudioActs.PACES]),
-## a pressure, a pattern, a tool (nails, fingertips) and `alone`. A word it does not know is named ([method parse]'s `unknown`),
-## never guessed at.
+## a pressure, a pattern, a tool (nails, fingertips) and `alone` - and how it is heard: a level (`-6 dB`) and a muffle ([constant
+## MUFFLES], `muffled 0.3`), which change its sound as it plays and never what the hands do. A word it does not know is named
+## ([method parse]'s `unknown`), never guessed at.
 ##
 ## AN ACT GOES ON UNDER THE WORDS until it ends: at its closing mark (`<!-- /VERB -->`, or `<!-- /VERB: left hand -->` where both
 ## hands do it), after its seconds where it names a number, when another act takes its hand, or at the end of the script. The
 ## voice talks over it; an act said `alone` (with its seconds) is heard on its own, the voice waiting it out. TWO HANDS: an act
 ## takes the hand it names, else the one on the side it works (left of the microphone, the left), else a free one; cupping,
-## scraping and knocking take both. An act that names no side works its hand's side.
+## scraping and knocking take both, as does anything done to a thing held in both (the blocks, [constant StudioActs.THINGS] `both`).
+## An act that names no side works its hand's side.
 ##
 ## Pure: a function of the note's words. Gate: tests/studio/studio_script_check.gd.
 
@@ -26,6 +28,8 @@ const CLOSE := "<!--\\s*/\\s*(rub|brush|scratch|tap|scrape|knock|cup)\\s*(?::\\s
 const EITHER := "<!--\\s*(/?)\\s*(rub|brush|scratch|tap|scrape|knock|cup)\\s*(?::\\s*([^>]*?))?\\s*-->"
 ## What an act left open runs on past the last word (s).
 const PAST_LAST := 2.0
+## The words that muffle an act's sound, and how much (0 as made, 1 through thick cloth): how it is heard, not what the hands do.
+const MUFFLES := {"slightly muffled": 0.25, "a little muffled": 0.25, "muffled": 0.5, "very muffled": 0.85, "unmuffled": 0.0, "clear": 0.0}
 ## How long the studio is seen before the first word (s), and the rest left after an act before the words go on (s).
 const OPENING := 2.5
 const AFTER := 0.5
@@ -119,7 +123,10 @@ static func hands_and_ends(acts: Array, closes: Array) -> PackedStringArray:
 			break
 		var a: Dictionary = acts[i]
 		var hand := String(a["hand"])
-		if hand.is_empty():
+		# (a thing held in both hands takes both, whichever hand the mark names)
+		if bool((StudioActs.THINGS.get(String(a["thing"]), {}) as Dictionary).get("both", false)):
+			hand = "both"
+		elif hand.is_empty():
 			if StudioActs.BOTH_HANDS.has(String(a["verb"])):
 				hand = "both"
 			else:
@@ -205,7 +212,8 @@ static func speakable(body: String) -> String:
 static func act_of(verb: String, words: String, unknown: Array, index := 0) -> Dictionary:
 	var row: Dictionary = StudioActs.VERBS[verb]
 	var act := {"verb": verb, "thing": "", "side": "back", "side_named": false, "hand": "", "secs": float(row["secs"]), "timed": false,
-		"alone": false, "under": true, "paces": [], "press": "", "pattern": "", "tool": "", "end": -1, "ends": "", "words": words.strip_edges()}
+		"alone": false, "under": true, "paces": [], "press": "", "pattern": "", "tool": "", "end": -1, "ends": "", "words": words.strip_edges(),
+		"db": 0.0, "muffle": 0.0}
 	for piece in words.split(",", false):
 		var p := String(piece).strip_edges().to_lower()
 		if p.is_empty():
@@ -235,6 +243,16 @@ static func _take(act: Dictionary, p: String, _verb: String) -> bool:
 		return true
 	if StudioActs.HANDS.has(p):
 		act["hand"] = String(StudioActs.HANDS[p])
+		return true
+	# how it is heard, never what the hands do: a level (`-6 dB`) and a muffle (`muffled`, `very muffled`, `muffled 0.3`)
+	if p.ends_with("db") and p.trim_suffix("db").strip_edges().is_valid_float():
+		act["db"] = clampf(float(p.trim_suffix("db").strip_edges()), -30.0, 12.0)
+		return true
+	if MUFFLES.has(p):
+		act["muffle"] = float(MUFFLES[p])
+		return true
+	if p.begins_with("muffled ") and p.trim_prefix("muffled ").strip_edges().is_valid_float():
+		act["muffle"] = clampf(float(p.trim_prefix("muffled ").strip_edges()), 0.0, 1.0)
 		return true
 	var num := p.trim_suffix("seconds").trim_suffix("second").trim_suffix("secs").trim_suffix("s").strip_edges()
 	if num.is_valid_float():

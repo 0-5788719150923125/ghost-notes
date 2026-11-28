@@ -181,6 +181,15 @@ func busy() -> bool:
 	return false
 
 
+## Why an export may not be made yet: each section's reason ([method PipelineSection.export_blocked]), "" where none holds it back.
+func export_blocked() -> String:
+	for s in sections():
+		var why := (s as PipelineSection).export_blocked()
+		if not why.is_empty():
+			return why
+	return ""
+
+
 ## Whether Generate is walking: only rows whose owners accept queued requests can be refreshed.
 func walking() -> bool:
 	return not _queue.is_empty()

@@ -115,10 +115,14 @@ const REGISTRY := {
 				"blurb": "How far each move goes round the microphone: 0 sat still at home, 1 the show's own. The voice goes with it, from ear to ear and near or far."},
 			"turns": {"label": "Turns", "type": "float", "min": 0.0, "max": 1.5, "step": 0.05, "default": 1.0,
 				"blurb": "How far the head turns, tips and leans: 0 always facing the microphone, 1 the show's own. A turning eye is the hardest to watch."},
-			"pace": {"label": "Pace", "type": "float", "min": 0.25, "max": 1.5, "step": 0.05, "default": 1.0,
+			"pace": {"label": "Pace", "type": "float", "min": 0.05, "max": 1.5, "step": 0.05, "default": 1.0,
 				"blurb": "How often it moves: 1 the show's own; 0.5 each move twice as long, and half as many."},
 			"sway": {"label": "Sway", "type": "float", "min": 0.0, "max": 3.0, "step": 0.05, "default": 1.0,
 				"blurb": "How unsteady it is at rest, between moves - drifting, breathing, wavering: 0 still, 1 the show's own; more is restless."},
+			"tilt": {"label": "Tilt (°)", "type": "float", "min": -30.0, "max": 30.0, "step": 0.5, "default": 0.0,
+				"blurb": "Where the eyes rest, up (down, less than 0), in degrees, under every move. Only the eyes: the voice is heard from where it is."},
+			"pan": {"label": "Pan (°)", "type": "float", "min": -30.0, "max": 30.0, "step": 0.5, "default": 0.0,
+				"blurb": "Where the eyes rest, to the right (left, less than 0), in degrees, under every move. Only the eyes: the voice is heard from where it is."},
 		}},
 }
 ## How long a cut between two cameras takes (seconds): every change of camera is a move, never a jump.

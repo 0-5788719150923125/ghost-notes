@@ -23,13 +23,17 @@ class_name StudioFormat
 ## Its keys in the Medium's block: each act made again, its own number (as text) -> its take; each thing's make, its role -> its
 ## choice ([PropMakes]); and where each thing is moved from where the studio stands it, its role -> its place ([constant
 ## StudioSet.PLACE_FIELDS]).
-const KNOBS := {"takes": {}, "makes": {}, "places": {}, "marks": {}}
+const KNOBS := {"takes": {}, "makes": {}, "places": {}, "marks": {}, "levels": {}}
+## How many of a thing's place changes can be undone.
+const PLACE_UNDO := 40
 ## What a make an agent designed is asked once it is looked at in the studio.
 const CHECK_ASK := "You designed this for the studio. Look at it where the studio stands it: are its named points where they belong (the scene puts it by them), is its size right beside the others, does it rest on what it should and pass into nothing? Put right whatever is wrong - its points and parts as a new version, where it stands as a place - and change nothing that is right."
 ## How often it looks at the episode up now and its script (seconds).
 const LOOK_EVERY := 0.5
 
 var _knobs := KNOBS.duplicate(true)
+var _place_undo := {}                   # role -> its places before each change, the latest last ([method undo_place])
+var _places_read := {}                  # the places as this card last held them when the block was read
 var _panel: ReadingPanel = null
 var _section: Section
 var _maker := StudioSounds.new()
@@ -125,7 +129,7 @@ func _process(delta: float) -> void:
 		return
 	_look_t = LOOK_EVERY
 	_read_script()
-	var of := _script + JSON.stringify(_knobs["takes"]) + JSON.stringify(_knobs["marks"]) + _geo_for
+	var of := _script + JSON.stringify(_knobs["takes"]) + JSON.stringify(_knobs["marks"]) + _geo_for + _take_stamp()
 	if not _geo.is_empty() and _plan_task < 0 and of != _planned_of:
 		_planned_of = of
 		_acts = StudioScript.with_takes(StudioScript.parse(_script, _knobs["marks"])["acts"], _knobs["takes"])
@@ -135,8 +139,60 @@ func _process(delta: float) -> void:
 		var geo := _geo
 		# an act that goes on is made as long as a steady voice would take to reach where it ends; the playing studio makes more
 		# where the words run longer
-		var horizons := StudioScript.lengths(StudioScript.parse(_script, _knobs["marks"]))
-		_plan_task = WorkerThreadPool.add_task(func() -> void: box.merge(StudioSounds.make_all(acts, geo, horizons), true))
+		var parsed := StudioScript.parse(_script, _knobs["marks"])
+		var horizons := StudioScript.lengths(parsed)
+		var take := _take_path()
+		_plan_task = WorkerThreadPool.add_task(func() -> void:
+			# ...and, where the episode has a take, as long as the playing studio will make it from the take's own timing (and a step
+			# more), so every window an export plays is made here - a window does not change with how long its act is made
+			var timed := take_lengths(parsed, take)
+			for k in timed:
+				horizons[k] = maxf(float(horizons.get(k, 0.0)), float(timed[k]))
+			box.merge(StudioSounds.make_all(acts, geo, horizons), true))
+
+
+## The episode's take kept, "" for none ([method EpisodeFeed.take]).
+func _take_path() -> String:
+	var feed: EpisodeFeed = _panel.episode_feed() if _panel != null and is_instance_valid(_panel) else null
+	var path := feed.take() if feed != null else ""
+	return path if not path.is_empty() and FileAccess.file_exists(path) else ""
+
+
+## The take as one value to tell a change by: its file and when it was written.
+func _take_stamp() -> String:
+	var path := _take_path()
+	return "%s@%d" % [path, FileAccess.get_modified_time(path)] if not path.is_empty() else ""
+
+
+## How long each act that goes on ([param parsed]'s, by its index) is made by the playing studio when the voice is the take at
+## [param take] (its sidecar's words): from the word it begins at to the word it ends at (or past the last), less nothing and with
+## the studio's own spare, rounded up to its steps and one step more ([constant StudioMedium.HORIZON_SPARE], [constant
+## StudioMedium.HORIZON_STEP]). `{}` with no take. Pure; a worker's.
+static func take_lengths(parsed: Dictionary, take: String) -> Dictionary:
+	var out := {}
+	if take.is_empty() or not FileAccess.file_exists(take.get_basename() + ".json"):
+		return out
+	var side: Variant = JSON.parse_string(FileAccess.get_file_as_string(take.get_basename() + ".json"))
+	if not (side is Dictionary) or not ((side as Dictionary).get("words") is Array):
+		return out
+	var f := ReadingFollower.new()
+	f.reset(parsed["spoken"])
+	f.extend((side as Dictionary)["words"])
+	var n := f.said0.size()
+	if n == 0:
+		return out
+	var last := f.st1[n - 1] if f.st1[n - 1] != ReadingFollower.NO_TIME else 0.0
+	for a in parsed["acts"]:
+		var d: Dictionary = a
+		if bool(d["timed"]):
+			continue
+		var w := int(d["after"])
+		var t0 := f.said0[w] if w < n and f.said0[w] != ReadingFollower.NO_TIME else last
+		var e := int(d["end"])
+		var t1 := f.said0[e] if e >= 0 and e < n and f.said0[e] != ReadingFollower.NO_TIME else last + StudioScript.PAST_LAST
+		var need := maxf(t1 - t0, 0.0) + StudioSounds.RELEASE + 1.0
+		out[int(d["i"])] = ceilf((need + StudioMedium.HORIZON_SPARE) / StudioMedium.HORIZON_STEP) * StudioMedium.HORIZON_STEP + StudioMedium.HORIZON_STEP
+	return out
 
 
 ## The episode up now's script (its folder's `script.md`), read again where the file changed; "" while there is none.
@@ -155,7 +211,7 @@ func _read_script() -> void:
 
 func capture() -> Dictionary:
 	var out := {}
-	for k in ["takes", "makes", "places", "marks"]:
+	for k in ["takes", "makes", "places", "marks", "levels"]:
 		if not (_knobs[k] as Dictionary).is_empty():
 			out[k] = (_knobs[k] as Dictionary).duplicate(true)
 	return out
@@ -169,8 +225,16 @@ func apply(cfg: Dictionary) -> void:
 			if n > 0:
 				_knobs["takes"][String(k)] = n
 	_knobs["makes"] = StudioMedium.makes_of(cfg)
+	var was: Dictionary = _places_read
 	_knobs["places"] = StudioSet.places_of(cfg)
+	_places_read = (_knobs["places"] as Dictionary).duplicate(true)
+	# (a place the note's file says otherwise than this card held, said in the log: what a re-read changed)
+	for role in StudioSet.ROLES:
+		if not was.is_empty() and JSON.stringify(was.get(role, {})) != JSON.stringify(_places_read.get(role, {})):
+			print("ghost: studio: %s placed %s, read from the note (it was %s)" % [role, JSON.stringify(_places_read.get(role, {})),
+				JSON.stringify(was.get(role, {}))])
 	_knobs["marks"] = StudioMedium.marks_of(cfg)
+	_knobs["levels"] = StudioMedium.levels_of(cfg)
 
 
 # --- the studio's things ---------------------------------------------------------------------------------------------
@@ -241,18 +305,47 @@ func place_of(role: String) -> Dictionary:
 
 ## Role [param role]'s thing placed at [param place] from now (no version of its prop: the place is this note's): kept in the block,
 ## the playing studio stood again with it. "" done, else why not.
-func set_place(role: String, place: Dictionary) -> String:
+func set_place(role: String, place: Dictionary, why := "by hand") -> String:
 	if not StudioSet.ROLES.has(role):
 		return "nothing here takes that"
 	var p := StudioSet.place_of(place)
+	var was := place_of(role)
+	if JSON.stringify(p) == JSON.stringify(was):
+		return ""
+	# (each change kept to be undone, a thing at a time, and said in the log with what made it)
+	var back: Array = _place_undo.get(role, [])
+	back.append(was)
+	if back.size() > PLACE_UNDO:
+		back.pop_front()
+	_place_undo[role] = back
+	print("ghost: studio: %s placed %s, %s (it was %s)" % [role, JSON.stringify(p) if not p.is_empty() else "where the studio stands it", why,
+		JSON.stringify(was) if not was.is_empty() else "where the studio stands it"])
 	if p.is_empty():
 		(_knobs["places"] as Dictionary).erase(role)
 	else:
 		_knobs["places"][role] = p
+	_places_read = (_knobs["places"] as Dictionary).duplicate(true)
 	if _panel != null:
 		_panel.touch()
 	_redress_live()
 	return ""
+
+
+## Whether role [param role]'s last place change can be undone.
+func can_undo_place(role: String) -> bool:
+	return not (_place_undo.get(role, []) as Array).is_empty()
+
+
+## Role [param role]'s last place change undone: back where it was before it. "" done, else why not.
+func undo_place(role: String) -> String:
+	var back: Array = _place_undo.get(role, [])
+	if back.is_empty():
+		return "nothing to undo"
+	var p: Dictionary = back.pop_back()
+	var err := set_place(role, p, "undone")
+	# (the undo is no change to be undone itself)
+	(_place_undo[role] as Array).pop_back()
+	return err
 
 
 ## Whether role [param role] has a make that can play it now.
@@ -401,6 +494,35 @@ func set_words(own: String, words: String) -> void:
 	_ask_after_plan = true
 
 
+## How loud and how muffled act [param i]'s sound is heard (-1: every act's): `{db, muffle}` ([method StudioMedium.levels_of]).
+func level_of(i: int) -> Dictionary:
+	var d: Dictionary = (_knobs["levels"] as Dictionary).get(_level_key(i), {})
+	return {"db": float(d.get("db", 0.0)), "muffle": float(d.get("muffle", 0.0))}
+
+
+## Act [param i]'s sound (-1: every act's) heard [param db] louder and [param muffle] muffled from now: kept in the block, heard at
+## once, nothing made again.
+func set_level(i: int, db: float, muffle: float) -> void:
+	var k := _level_key(i)
+	if k.is_empty():
+		return
+	var levels: Dictionary = _knobs["levels"]
+	levels[k] = {"db": db, "muffle": muffle}
+	_knobs["levels"] = StudioMedium.levels_of({"levels": levels})
+	if _panel != null:
+		_panel.touch()
+	_redress_live()
+
+
+## The key act [param i]'s level is kept under: its own number, "all" for -1, "" for none.
+func _level_key(i: int) -> String:
+	if i < 0:
+		return "all"
+	if i >= _acts.size():
+		return ""
+	return str(int((_acts[i] as Dictionary).get("own", (_acts[i] as Dictionary)["seed"])))
+
+
 ## Act [param i] made again: its next take, kept in the block and played at once.
 func _another_take(i: int) -> void:
 	if i < 0 or i >= _acts.size():
@@ -426,6 +548,7 @@ func _redress_live() -> void:
 	block["makes"] = (_knobs["makes"] as Dictionary).duplicate(true)
 	block["places"] = (_knobs["places"] as Dictionary).duplicate(true)
 	block["marks"] = (_knobs["marks"] as Dictionary).duplicate(true)
+	block["levels"] = (_knobs["levels"] as Dictionary).duplicate(true)
 	doc["medium"] = block
 
 
@@ -449,6 +572,12 @@ class Heard extends ShowSounds:
 
 	func chat_of(key: String) -> WriterChat:
 		return card.chat_for(int(key.trim_prefix("act:")) - 1) if key.begins_with("act:") else null
+
+	func level_of(key: String) -> Dictionary:
+		return card.level_of(int(key.trim_prefix("act:")) - 1 if key.begins_with("act:") else -1)
+
+	func set_level(key: String, db: float, muffle: float) -> void:
+		card.set_level(int(key.trim_prefix("act:")) - 1 if key.begins_with("act:") else -1, db, muffle)
 
 	func sounds() -> Array:
 		var out: Array = []
@@ -587,6 +716,15 @@ class Section extends PipelineSection:
 			if RoleDesign.running.has(card._design_key(String(role))):
 				return true
 		return card._maker.busy()
+
+	func export_blocked() -> String:
+		var waiting := 0
+		for i in card._keys.size():
+			if card.state_of_act(i) != "made":
+				waiting += 1
+		if waiting > 0 or card._maker.busy() or card.planning():
+			return "the studio's sounds are still being made (%d act%s waiting): an export plays only what is made - wait for the Pipeline's studio rows, or press Generate" % [waiting, "" if waiting == 1 else "s"]
+		return ""
 
 	func missing() -> bool:
 		if not card.head_designed():

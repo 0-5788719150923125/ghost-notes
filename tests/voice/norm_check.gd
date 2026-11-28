@@ -80,6 +80,14 @@ const CASES := [
 	["We met at 9:30.", "nine thirty"],
 	["Meet me at 6:00.", "o'clock"],
 	["The 1939-1945 war.", "nineteen thirty nine"],
+	# decades and centuries said as plurals - these read as "one thousand eight hundred ninety ess"
+	["Gone after the 1890s.", "eighteen nineties"],
+	["Frozen in the 1800s.", "eighteen hundreds"],
+	["In the early 1900s.", "nineteen hundreds"],
+	["Since the 2000s.", "two thousands"],
+	["Back in the 1980's.", "nineteen eighties"],
+	["Songs of the '60s.", "sixties"],
+	["A reference 1948550619898556.", "one nine four eight"],
 	# typographic punctuation - these used to break dictionary lookup
 	["“Go away,” she said.", "\"Go away,\" she said."],
 	["It’s his.", "It's his."],

@@ -266,6 +266,10 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_process_persist()
 	_plan_landed()
+	# the take heard at its input gain and as loud as the Voice card's Level says, the moment it says it
+	var heard_db := _take_gain() + _cast.level_db()
+	if not is_equal_approx(Spectrum.take_db, heard_db):
+		Spectrum.take_db = heard_db
 		# the audition whether or not a reading plays: it is not part of one, and would otherwise never be noticed to
 		# have finished
 	_audition.tick()
@@ -1036,6 +1040,27 @@ func book_document(body := "") -> Dictionary:
 	return d
 
 
+## The playing take's document ([member subtitles]'s, its sidecar's book as it was when the take was made) brought to the note as it
+## stands: every card's part now ([method book_document]: the medium's places, makes and levels, the environment, the head's phrases,
+## the table) over it, the take's own kept - its words and the night they were filled for, where it starts, and the voice as the
+## microphone received it ([constant TAKE_OWN]). Without it a show stood again would stand as it did when the take was made.
+func freshen_document() -> void:
+	if subtitles == null or not is_instance_valid(subtitles) or not (subtitles.get("document") is Dictionary):
+		return
+	var was: Dictionary = subtitles.get("document")
+	var now := book_document()
+	for k in TAKE_OWN:
+		if was.has(k):
+			now[k] = was[k]
+		else:
+			now.erase(k)
+	subtitles.set("document", now)
+
+
+## What of a take's document is the take's own, never the note's as it stands ([method freshen_document]).
+const TAKE_OWN := ["source", "night", "start_words", "start_index", "start_time", MIC_VOICE, MIC_GAIN]
+
+
 ## The line under the title on the title screen: the note's Byline, its macros filled from its own names ([method Macros.line]),
 ## else its Author. A show hands its own ([method ReadingPublish.book]).
 func _byline_of(src: String) -> String:
@@ -1434,7 +1459,14 @@ func _kept_copy(kept: String, body: String) -> String:
 	if DirAccess.copy_absolute(kept, path) != OK:
 		return ""
 	(side as Dictionary)["opening"] = Director.opening_shown()
+	# (the voice as the microphone received it is the take's own: kept from the book it was rendered with)
+	var was: Variant = (side as Dictionary).get("book")
 	(side as Dictionary)["book"] = book_document(body)
+	for k in [MIC_VOICE, MIC_GAIN]:
+		if was is Dictionary and (was as Dictionary).has(k):
+			(side as Dictionary)["book"][k] = (was as Dictionary)[k]
+	# ...heard at its input gain and the Level as it is now
+	(side as Dictionary)["take_db"] = float((side as Dictionary).get("gain_db", 0.0)) + _cast.level_db()
 	var f := FileAccess.open(path.get_basename() + ".json", FileAccess.WRITE)
 	if f == null:
 		return ""
@@ -1455,6 +1487,8 @@ func take_sig(body := "") -> String:
 		# asks this at every refresh (panel_fit_check)
 	var b := (Macros.dated(walk.body(_doc.shown() if _doc != null else "")) if body.is_empty() else body).strip_edges()
 	var cast := _cast.capture()
+	# (the Level is the take's as it is heard, never in it)
+	cast.erase("level")
 	var records := {}
 	var voices: Dictionary = cast.get("voices", {}) if cast.get("voices") is Dictionary else {}
 	for name in voices:
@@ -1465,6 +1499,9 @@ func take_sig(body := "") -> String:
 				records[id] = v
 	var place := bed.of(true)
 	var parts := [b, cast, records, Director.intro_hold, Director.outro_hold, String(place.get("key", "")), bed.level()]
+	# ...and the Environment's Level, where it is set (the bed is in the take)
+	if absf(bed.gain_db()) > 0.001:
+		parts.append(["bed gain", bed.gain_db()])
 	# ...and how the note says its words where the words read do not say them (an episode's script is read with its brief's `say:`
 	# marks, [method _plan_ask]): a mark added to the brief says the take again
 	var told := ReadingPlan.said_in(_text.text if _text != null else "")
@@ -1480,12 +1517,44 @@ func take_sig(body := "") -> String:
 		parts.append(bank)
 		# ...by the head that hears the mouth where it is (its front toward the chair), as gently as the Camera card's head camera
 		# has it performed
-		parts.append([VoiceFX.PLACE_SHARE, VoiceFX.EAR_HEAD, VoiceFX.EAR_BACK_DARK, VoiceFX.EAR_ALPHA_LEAST, "front: chair"])
+		parts.append([VoiceFX.PLACE_SHARE, VoiceFX.EAR_HEAD, VoiceFX.EAR_BACK_DARK, VoiceFX.EAR_ALPHA_LEAST, "front: chair", HeadPlan.MOTION])
 		if head_feel() != HeadPlan.FEEL:
 			parts.append(head_feel())
 	_sig_parts = parts.map(func(p: Variant) -> String: return JSON.stringify(p).sha256_text().left(10))
 	return JSON.stringify(parts).sha256_text()
 
+
+## The input gain of the take playing (its sidecar's `gain_db`; 0 for none, or for one made before takes had one), read once a take.
+func _take_gain() -> float:
+	var path := _stream.take_path if _stream != null else ""
+	if path != _gain_of:
+		_gain_of = path
+		_gain = 0.0
+		var side: Variant = JSON.parse_string(FileAccess.get_file_as_string(path.get_basename() + ".json")) \
+			if not path.is_empty() and FileAccess.file_exists(path.get_basename() + ".json") else null
+		if side is Dictionary and ((side as Dictionary).get("gain_db") is float or (side as Dictionary).get("gain_db") is int):
+			_gain = float((side as Dictionary)["gain_db"])
+	return _gain
+
+var _gain_of := "-"
+var _gain := 0.0
+
+
+## Why an export of this note may not be made yet ([method PipelineCard.export_blocked]): "" where nothing holds it back.
+func export_blocked() -> String:
+	return _pipeline.export_blocked() if _pipeline != null else ""
+
+
+## The key of a take's book ([method book_document], in its sidecar) holding the voice as the microphone received it: each ear's
+## level [constant VoiceFX.METER_RATE] times a second ([member VoiceFX.meter], base64), what a medium's meters show of the voice.
+const MIC_VOICE := "mic_voice"
+## ...and the take's input gain (dB), what a medium brings what it records beside the voice up by.
+const MIC_GAIN := "mic_gain"
+## How loud a take's voice is brought, as a recorder's input gain brings it (dBFS, [method loudness_of]), and the least and most gain
+## that may take (dB). Set hot: a Level turns down what is too loud.
+const VOICE_LOUDNESS := -16.0
+const GAIN_LEAST := -12.0
+const GAIN_MOST := 18.0
 
 ## Each part of the last [method take_sig] worked out, as a short digest - written in a take's sidecar (`sig_parts`) so a take found
 ## changed can say which of them did ([method sig_changes]).
@@ -1604,6 +1673,7 @@ func _render_take(stop: Dictionary = {}) -> String:
 		env = (place["make"] as Callable).call(_sr, 0.0)
 		if env != null and env.active():
 			env.set_level(bed.level())
+			env.gain_db = bed.gain_db()
 		else:
 			env = null
 	for who in join_speakers(chunks):
@@ -1647,9 +1717,17 @@ func _render_take(stop: Dictionary = {}) -> String:
 				# The book rides along: a medium that typesets pages needs the chapter those words came from (see BookMedium).
 				# ...and the phones, each sound timed as the words are, for a medium whose mouth says them
 				# ...and the opening it was rendered with ([Openings]): a thumbnail of its title screen asks the take
+				# ...and the voice as the microphone received it ([member VoiceFX.meter]), in the book: what a medium's meters show
+				# ...and its input gain ([constant VOICE_LOUDNESS]): in the book for a medium (what it records beside the voice is
+				# brought up as the voice is) and, with the Level, as the take is heard (`take_db`, [member Spectrum.take_db])
+		var book := book_document(body)
+		var gain := float(box.get("gain_db", 0.0))
+		if not String(box.get("meter", "")).is_empty():
+			book[MIC_VOICE] = String(box["meter"])
+		book[MIC_GAIN] = gain
 		side.store_string(JSON.stringify({
 			"words": words, "phones": phones, "bookend": {"in": intro, "out": outro}, "sig": take_sig(body), "sig_parts": _sig_parts.duplicate(),
-			"opening": Director.opening_shown(), "book": book_document(body)}))
+			"opening": Director.opening_shown(), "book": book, "gain_db": gain, "take_db": gain + _cast.level_db()}))
 		side.close()
 	_set_status("Rendered %.1fs for export (%.0fs intro, %.0fs outro)." % [spoken, intro, outro])
 	return abs_path
@@ -1730,6 +1808,7 @@ static func _join_take(job: Dictionary, box: Dictionary) -> void:
 	var fx := VoiceFX.new()
 	fx.pad_seed = int(job["seed"])
 	fx.setup(sr)
+	fx.metering = true
 		# Seed the key, or the intro is silent anyway: the pad picks its tonic from the voice's tracked pitch, which is 0
 		# on silence, so during a leading pad of zeros `_start_tone` refuses to schedule anything and the bed would only
 		# begin after the narration. Measuring the voice first and handing the chain its key up front lets the bed play
@@ -1767,6 +1846,9 @@ static func _join_take(job: Dictionary, box: Dictionary) -> void:
 			wet.append_array(fx.process_stereo(pcm.slice(a, b)))
 		box["whole"] = float(pcm.size()) / float(job["sr"])
 		box["placed"] = float(b) / float(job["sr"])
+	# the recorder's input gain: the voice brought to [constant VOICE_LOUDNESS] as a microphone's gain would bring it (what is laid
+	# under it after is not what it is set by)
+	box["gain_db"] = clampf(VOICE_LOUDNESS - loudness_of(wet, int(job["sr"])), GAIN_LEAST, GAIN_MOST)
 	var env: SoundBed = job["env"]
 	if env != null:
 		box["mixing"] = true
@@ -1781,4 +1863,35 @@ static func _join_take(job: Dictionary, box: Dictionary) -> void:
 			wet[i] *= 0.0 if u >= 1.0 else 0.5 + 0.5 * cos(PI * u)
 
 	var abs_path := Splice.write_wav(String(job["path"]), wet, 2 if leans else 1, sr)
-	box.merge({"abs_path": abs_path, "words": words, "phones": phones, "spoken": spoken, "outro": outro}, true)
+	box.merge({"abs_path": abs_path, "words": words, "phones": phones, "spoken": spoken, "outro": outro,
+		"meter": Marshalls.raw_to_base64(fx.meter)}, true)
+
+
+## How loud [param frames] (at [param sr]) are over all, as a meter of programme loudness reads it: the mean power of its 400 ms
+## blocks, the silent ones and those far under the rest left out (an absolute gate at -70 dB, then one 10 dB under the mean) - dBFS.
+## Pure; a worker's.
+static func loudness_of(frames: PackedVector2Array, sr: int) -> float:
+	var n := maxi(int(0.4 * float(sr)), 1)
+	var blocks := PackedFloat32Array()
+	var i := 0
+	while i + n <= frames.size():
+		var e := 0.0
+		for j in range(i, i + n):
+			var v := frames[j]
+			e += (v.x * v.x + v.y * v.y) * 0.5
+		blocks.append(e / float(n))
+		i += n
+	var gate := func(floor_ms: float) -> Array:
+		var sum := 0.0
+		var k := 0
+		for b in blocks:
+			if b > floor_ms:
+				sum += b
+				k += 1
+		return [sum, k]
+	var g1: Array = gate.call(db_to_linear(-70.0) ** 2)
+	if int(g1[1]) == 0:
+		return -70.0
+	var mean := float(g1[0]) / float(g1[1])
+	var g2: Array = gate.call(mean * db_to_linear(-10.0) ** 2)
+	return 10.0 * log(maxf(float(g2[0]) / float(maxi(int(g2[1]), 1)), 1e-12)) / log(10.0)
