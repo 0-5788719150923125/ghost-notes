@@ -406,20 +406,14 @@ func _end_fade() -> float:
 	return ShowOpening.fade_out(_now, _last_sound(), feed.tail())
 
 
-## When the footage's last sound ends (show time, s): the last word, or the end of an act written after it - INF until the last word
-## is heard. The hands at work as the words end go on under the outro and fade with it ([method _end_of]).
+## Where the close begins (show time, s): the end of the last word - INF until it is heard. The picture and every sound fade to black
+## over the outro from there; the hands at work go on under it and fade with it ([method _end_of]), never holding it.
 func _last_sound() -> float:
 	var last := _follower.known_last()
 	if _spoken_n == 0 or last < _spoken_n - 1:
 		return INF
-	var t := _follower.st1[last]
-	# (the hands at work as the words end go on through the outro, fading with it: only an act written after the last word holds it)
-	for i in mini(_t0.size(), _acts.size()):
-		if _t0[i] < INF and int((_acts[i] as Dictionary)["after"]) >= _spoken_n:
-			if _t1[i] == INF:
-				return INF
-			t = maxf(t, _t1[i] + StudioSounds.RELEASE)
-	return t
+	# (nothing the hands do holds it: they go on under the outro and fade with it)
+	return _follower.st1[last]
 
 
 ## The studio opens a settle before its first word: INF until it is heard.
@@ -699,8 +693,8 @@ func _end_of(a: Dictionary, t0: float) -> float:
 		out = _follower.st1[_spoken_n - 1] + StudioScript.PAST_LAST
 	if bool(a["timed"]):
 		out = minf(out, t0 + float(a["secs"]))
-	# one begun before the last word ends with the outro at the latest, faded out with the picture
-	if int(a["after"]) < _spoken_n and _spoken_n > 0 and last >= _spoken_n - 1:
+	# every act ends with the outro at the latest, faded out with the picture
+	if _spoken_n > 0 and last >= _spoken_n - 1:
 		out = minf(out, _follower.st1[_spoken_n - 1] + maxf(feed.tail() if feed != null else 0.0, 0.5))
 	return maxf(out, t0 + 0.5)
 

@@ -155,6 +155,33 @@ func _parsers_agree() -> void:
 				_ok(seen.size() == 2 and ReadingJoin.overlaps(seen[1]), "%s does not bring its turn in over the last" % k)
 				if k == "over" and seen.size() == 2:
 					_ok(is_equal_approx(float((seen[1] as Dictionary)["over"]), float(fill)), "an over's seconds are not the ones it says")
+			"head":
+				# the parser of record names its phrase at the word after it, timed there in a take (the control: the same words
+				# with no mark place nothing); performing a phrase is head_lane_check's. Its words are never spoken or printed
+				var text := "Hush now, %s come closer." % ex
+				var d := HeadMarks.read(text)
+				_ok((d["marks"] as Array).size() == 1 and int(d["marks"][0]["after"]) == 2 and String(d["marks"][0]["words"]) == fill,
+					"a head mark is not read at the word after it, naming %s (%s)" % [fill, str(d["marks"])])
+				var take: Array = []
+				for i in 4:
+					take.append({"text": ["Hush", "now,", "come", "closer."][i], "t0": 1.0 + 0.4 * i, "t1": 1.3 + 0.4 * i})
+				var timed := HeadMarks.timed(text, take)
+				_ok(timed.size() == 1 and is_equal_approx(float(timed[0]["at"]), 1.8) and String(timed[0]["name"]) == fill,
+					"a head mark is not timed at the word after it (%s)" % str(timed))
+				_ok(not HeadMarks.has_marks("Hush now, come closer.") and HeadMarks.timed("Hush now, come closer.", take).is_empty(),
+					"the control: words with no head mark place the head")
+				var said := _words(Manuscript.unspoken(text))
+				var made := ReadingPlan.make(text + "\n", "", {"reader": "Narrator", "hesitate": true, "bare": 1.0, "outro": 0.0})["chunks"] as Array
+				var shown := ""
+				for c in made:
+					for w in (c as Dictionary)["words"]:
+						shown += String((w as Dictionary)["text"]) + " "
+				var page := ""
+				for blk in Manuscript.blocks(text + "\n"):
+					page += String((blk as Dictionary).get("text", ""))
+				_ok(not said.has("lean") and said.has("closer") and not shown.contains("lean") and shown.contains("closer")
+						and not page.contains("lean") and page.contains("closer"),
+					"a head mark is spoken, captioned or printed (%s | %s | %s)" % [str(said), shown, page])
 			"heard":
 				var heard := ReadingPlan.make("<!-- speaker: Narrator -->\nIn the room.\n\n<!-- speaker: Bea -->\n%s\nOver the air." % ex, "", {"reader": "Narrator", "hesitate": true, "bare": 1.0, "outro": 0.0})["chunks"] as Array
 				_ok(heard.size() == 2 and String((heard[0] as Dictionary).get("heard", "")).is_empty()

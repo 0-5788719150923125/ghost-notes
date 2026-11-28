@@ -1483,7 +1483,28 @@ func take_sig(body := "") -> String:
 		parts.append([VoiceFX.PLACE_SHARE, VoiceFX.EAR_HEAD, VoiceFX.EAR_BACK_DARK, VoiceFX.EAR_ALPHA_LEAST, "front: chair"])
 		if head_feel() != HeadPlan.FEEL:
 			parts.append(head_feel())
+	_sig_parts = parts.map(func(p: Variant) -> String: return JSON.stringify(p).sha256_text().left(10))
 	return JSON.stringify(parts).sha256_text()
+
+
+## Each part of the last [method take_sig] worked out, as a short digest - written in a take's sidecar (`sig_parts`) so a take found
+## changed can say which of them did ([method sig_changes]).
+var _sig_parts: Array = []
+
+## Which parts of [param body]'s take signature differ from those a take kept at [param side_path] was made with: their names, for the log.
+func sig_changes(body: String, side_path: String) -> PackedStringArray:
+	var names := ["words", "voices", "voice records", "intro hold", "outro hold", "place", "place level", "said", "head phrases", "ears", "head feel"]
+	take_sig(body)
+	var side: Variant = JSON.parse_string(FileAccess.get_file_as_string(side_path)) if FileAccess.file_exists(side_path) else null
+	var was: Array = (side as Dictionary).get("sig_parts", []) if side is Dictionary and (side as Dictionary).get("sig_parts") is Array else []
+	var out := PackedStringArray()
+	if was.is_empty():
+		out.append("(a take from before its parts were kept)")
+		return out
+	for i in maxi(was.size(), _sig_parts.size()):
+		if i >= was.size() or i >= _sig_parts.size() or String(was[i]) != String(_sig_parts[i]):
+			out.append(String(names[i]) if i < names.size() else "part %d" % i)
+	return out
 
 
 ## The take kept for [param body]: the episode's ([method EpisodeFeed.take]) where it was said from these words in
@@ -1599,8 +1620,11 @@ func _render_take(stop: Dictionary = {}) -> String:
 	_take_threads.append(thread)
 	thread.start(func() -> void: _join_take(job, box), Thread.PRIORITY_LOW)
 	while thread.is_alive():
+		# (the sentences are joined quickly; the voice placed and the room laid under it is the long part, told in the take's own time)
+		var placed := float(box.get("placed", -1.0))
 		_set_status(("Mixing in the place's sound...") if bool(box["mixing"]) else
-			"Rendering for export: %d of %d…" % [mini(int(box["at"]) + 1, chunks.size()), chunks.size()])
+			("Placing the voice: %s of %s…" % [Clock.text(placed), Clock.text(float(box.get("whole", 0.0)))]) if placed >= 0.0 else
+			"Joining the take: %d of %d…" % [mini(int(box["at"]) + 1, chunks.size()), chunks.size()])
 		await get_tree().process_frame
 	thread.wait_to_finish()
 	_take_threads.erase(thread)
@@ -1624,7 +1648,7 @@ func _render_take(stop: Dictionary = {}) -> String:
 				# ...and the phones, each sound timed as the words are, for a medium whose mouth says them
 				# ...and the opening it was rendered with ([Openings]): a thumbnail of its title screen asks the take
 		side.store_string(JSON.stringify({
-			"words": words, "phones": phones, "bookend": {"in": intro, "out": outro}, "sig": take_sig(body),
+			"words": words, "phones": phones, "bookend": {"in": intro, "out": outro}, "sig": take_sig(body), "sig_parts": _sig_parts.duplicate(),
 			"opening": Director.opening_shown(), "book": book_document(body)}))
 		side.close()
 	_set_status("Rendered %.1fs for export (%.0fs intro, %.0fs outro)." % [spoken, intro, outro])
@@ -1741,6 +1765,8 @@ static func _join_take(job: Dictionary, box: Dictionary) -> void:
 			fx.place = HeadMarks.lane(head_plan, a, b, int(job["sr"]))
 			fx.ears_at = HeadMarks.mouths(head_plan, a, b, int(job["sr"]))
 			wet.append_array(fx.process_stereo(pcm.slice(a, b)))
+		box["whole"] = float(pcm.size()) / float(job["sr"])
+		box["placed"] = float(b) / float(job["sr"])
 	var env: SoundBed = job["env"]
 	if env != null:
 		box["mixing"] = true

@@ -1384,7 +1384,9 @@ func _keep_take() -> void:
 	var now := _take_now()
 	if bool(now["matches"]) or String(now["sig"]) == _take_failed:
 		return
-	print("ghost: table take - the script or a voice changed, the take is said again")
+	var what: PackedStringArray = reading.sig_changes("", _episode.take_file().get_basename() + ".json") \
+		if _episode.take_matches() else PackedStringArray(["the script"])
+	print("ghost: table take - %s changed, the take is said again" % ", ".join(what))
 	_make_take()
 
 

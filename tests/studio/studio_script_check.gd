@@ -20,7 +20,7 @@ extends SceneTree
 ##   presses it.
 ## - the reader is told its passage's planned work and about how long its sound runs (control: with none planned, none told);
 ## - the studio follows the voice with no act in its script: the title stands until the first word is heard (control: before it,
-##   it stands) and the close fades after the last; an act the hands go on with past the last word holds the fade until it ends,
+##   it stands) and the close fades after the last; no act the hands go on with holds it (they fade with it),
 ##   and the studio's sound goes down with the picture (control: with the end not known, it plays on);
 ## - every studio thing is a role an agent designs ([RoleDesign]): a make lacking what the studio works on it (a point, a named part,
 ##   fur on the windscreen) cannot play it and is named (control: one with all of it fits); the designer is told every need, its
@@ -206,7 +206,7 @@ func _check_ends() -> void:
 	var said := StudioScript.rehearsal(StudioScript.parse(past))
 	m.take_words(said)
 	var said_end := float((said[said.size() - 1] as Dictionary)["t1"])
-	_ok(m._last_sound() >= said_end + 19.9, "an act past the last word holds the close until it ends (%.2f after the last word)" % (m._last_sound() - said_end))
+	_ok(is_equal_approx(m._last_sound(), said_end), "an act past the last word never holds the close: it begins where the words end (%.2f after them)" % (m._last_sound() - said_end))
 	var going := "Hello there.\n<!-- rub: fur, left, 45 -->\nGoodbye now, sleep well."
 	m.load_script(going)
 	var heard := StudioScript.rehearsal(StudioScript.parse(going))
